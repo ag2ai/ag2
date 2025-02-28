@@ -381,6 +381,10 @@ class ReasoningAgent(AssistantAgent):
 
         self._reason_config: dict[str, Any] = reason_config or {}
         self._method: Literal["beam_search", "mcts", "lats", "dfs"] = reason_config.get("method", "beam_search")
+        if self._method not in ["beam_search", "mcts", "lats", "dfs"]:
+            raise ValueError(
+                f"Invalid reasoning method specified: '{self._method}'. Should be one of 'beam_search', 'mcts', 'lats', or 'dfs'."
+            )
 
         self._beam_size: int = 1
         if self._method in ["beam_search", "dfs"]:
@@ -389,7 +393,7 @@ class ReasoningAgent(AssistantAgent):
             self._answer_approach: Literal["pool", "best"] = reason_config.get("answer_approach", answer_approach)
             if self._answer_approach not in ["pool", "best"]:
                 raise ValueError(
-                    f"Invalid answer_approach specified: '{self._answer_approach}'. Should be 'pool' or 'best'."
+                    f"Invalid answer_approach specified: '{self._answer_approach}'. Should be one of 'pool' or 'best'."
                 )
         elif self._method in ["mcts", "lats"]:
             self._nsim: int = reason_config.get("nsim", 3)
