@@ -9,7 +9,6 @@ from contextlib import contextmanager, suppress
 from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
-from unittest.mock import MagicMock
 
 __all__ = [
     "optional_import_block",
@@ -345,10 +344,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
         missing_modules = get_missing_imports(modules)
 
         if isinstance(o, type):
-            wrapped = MagicMock(spec=o)
-            wrapped.side_effect = ImportError(
-                f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
-            )
+            wrapped = require_optional_import(modules, dep_target)(o)
         else:
 
             @wraps(o)
@@ -359,7 +355,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
                     )
                 return o(*args, **kwargs)
 
-        pytest_mark_o: G = _mark_object(wrapped, dep_target)
+        pytest_mark_o: G = _mark_object(wrapped, dep_target)  # type: ignore[assignment]
 
         return pytest_mark_o
 
