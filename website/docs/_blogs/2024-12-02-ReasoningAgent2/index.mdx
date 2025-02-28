@@ -81,11 +81,11 @@ import os
 from autogen import (
     AssistantAgent,
     UserProxyAgent,
+)
+from autogen.agents.experimental import (
     ReasoningAgent,
     ThinkNode,
-    visualize_tree
 )
-
 
 # Configure the model
 config_list = [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
@@ -178,7 +178,7 @@ ReasoningAgent includes built-in visualization support using graphviz:
 
 ```python
 # After running a query, visualize the reasoning tree
-visualize_tree(reason_agent._root)
+reason_agent.visualize_tree()
 ```
 
 This generates a tree diagram showing:
@@ -217,10 +217,8 @@ new_node = pickle.load(open("reasoning_tree.pkl", "rb"))
 This step finds the best trajectory in the thought tree and converts it to a SFT dataset as a sequence of strings. The best trajectory is determined by following the highest-scoring path from root to leaf.
 
 ```python
-from autogen.agentchat.contrib.reasoning_agent import extract_sft_dataset
-
 # Example usage
-sft_data = extract_sft_dataset(reason_agent._root)
+sft_data = reason_agent.extract_sft_dataset()
 json.dump(sft_data, open("sft_data.json", "w"), indent=2)
 ```
 
@@ -228,10 +226,8 @@ json.dump(sft_data, open("sft_data.json", "w"), indent=2)
 This step generates preference pairs by comparing sibling nodes in the tree. For each parent node with multiple children, we create training pairs where the higher-scored response is marked as preferred over the lower-scored one.
 
 ```python
-from autogen.agentchat.contrib.reasoning_agent import extract_rlhf_preference_dataset
-
 # Example usage
-rlhf_data = extract_rlhf_preference_dataset(reason_agent._root)
+rlhf_data = reason_agent.extract_rlhf_preference_dataset()
 
 print(f"There are {len(rlhf_data)} pairs of data\n\n")
 json.dump(rlhf_data, open("rlhf_data.json", "w"), indent=2)

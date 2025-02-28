@@ -1,21 +1,22 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+import copy
 import math
 import random
 import re
 import warnings
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Tuple
 
-from ...doc_utils import export_module
-from ...import_utils import optional_import_block
-from ..agent import Agent
-from ..assistant_agent import AssistantAgent
-from ..user_proxy_agent import UserProxyAgent
+from .... import Agent, AssistantAgent, UserProxyAgent
+from ....doc_utils import export_module
+from ....import_utils import optional_import_block
+
+__all__ = ["ReasoningAgent", "ThinkNode"]
 
 EPSILON = 1e-6
 
-TreeofThought_message = """
+TREEOFTHOUGHT_MESSAGE = """
 Role: Expert Planning AI Assistant
 
 Task: Given a question and a list of previous steps (the plan trajectory), generate at least four innovative options for the next step. The user would not answer you anything.
@@ -57,7 +58,7 @@ Option 5: Perform Y.
 """
 
 
-@export_module("autogen")
+@export_module("autogen.agents.experimental")
 class ThinkNode:
     def __init__(self, content: str, parent: Optional["ThinkNode"] = None) -> None:
         """A node in a tree structure representing a step in the reasoning process.
@@ -72,12 +73,12 @@ class ThinkNode:
 
         Attributes:
             content (str): The text content/description for this reasoning step.
-            value (Optional[float]): A numeric score/value assigned to this node.
+            value (float): A numeric score/value assigned to this node.
             parent (Optional[ThinkNode]): Reference to the parent node.
             reflection (str): A string containing reflections on the reasoning process.
             rating_details (str): A string providing details about the rating of this node.
             depth (int): The depth of this node in the tree (root = 0).
-            children (List[ThinkNode]): List of child nodes.
+            children (list[ThinkNode]): list of child nodes.
             visits (int): Number of times this node has been visited during search.
 
         The node automatically maintains the tree structure by:
@@ -85,14 +86,14 @@ class ThinkNode:
         - Adding itself to the parent's children list if the parent exists.
         - Providing trajectory utilities to get the full path from root to this node.
         """
-        self.content = content
-        self.value = 0
-        self.parent = parent
-        self.reflection = ""
-        self.rating_details = ""
-        self.depth = self.parent.depth + 1 if parent else 0
-        self.children = []
-        self.visits = 0
+        self.content: str = content
+        self.value: float = 0.0
+        self.parent: Optional[ThinkNode] = parent
+        self.reflection: str = ""
+        self.rating_details: str = ""
+        self.depth: int = parent.depth + 1 if parent is not None else 0
+        self.children: list[ThinkNode] = []
+        self.visits: int = 0
         if self.parent:
             self.parent.children.append(self)
 
@@ -101,7 +102,7 @@ class ThinkNode:
         """Gets the full path from root to this node as a list of strings.
 
         Returns:
-            List[str]: List containing the content of each node from root to current node
+            list[str]: list containing the content of each node from root to current node
         """
         if self.parent:
             return self.parent._trajectory_arr + [self.content]
@@ -126,8 +127,8 @@ class ThinkNode:
         Args:
             reward (float): The reward to backpropagate up the tree.
         """
-        node = self
-        while node:
+        node: Optional[ThinkNode] = self
+        while node is not None:
             node.visits += 1
             node.value = (node.value * (node.visits - 1) + reward) / node.visits
             node = node.parent
@@ -138,11 +139,11 @@ class ThinkNode:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert ThinkNode to dictionary representation.
 
         Returns:
-            Dict: Dictionary containing all node attributes and recursive children
+            dict[str, Any]: dictionary containing all node attributes and recursive children
         """
         return {
             "content": self.content,
@@ -159,7 +160,7 @@ class ThinkNode:
         """Create ThinkNode from dictionary representation.
 
         Args:
-            data (Dict): Dictionary containing node data
+            data (dict[str, Any]): dictionary containing node data
             parent (Optional[ThinkNode]): Parent node to attach to
 
         Returns:
@@ -178,46 +179,44 @@ class ThinkNode:
 
         return node
 
+    def visualize_tree(self) -> None:
+        """Visualize the tree of thoughts using graphviz.
 
-@export_module("autogen")
-def visualize_tree(root: ThinkNode) -> None:
-    """Visualize the tree of thoughts using graphviz.
+        Args:
+            root (ThinkNode): The root node of the tree.
+        """
+        with optional_import_block() as result:
+            from graphviz import Digraph
 
-    Args:
-        root (ThinkNode): The root node of the tree.
-    """
-    with optional_import_block() as result:
-        from graphviz import Digraph
+        if not result.is_successful:
+            print("Please install graphviz: pip install graphviz")
+            return
 
-    if not result.is_successful:
-        print("Please install graphviz: pip install graphviz")
-        return
+        dot = Digraph(comment="Tree of Thoughts")
+        dot.attr(rankdir="TB")  # Top to Bottom direction
 
-    dot = Digraph(comment="Tree of Thoughts")
-    dot.attr(rankdir="TB")  # Top to Bottom direction
+        def add_nodes(node: ThinkNode, node_id: str = "0") -> None:
+            # Truncate long content for better visualization
+            display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
 
-    def add_nodes(node: ThinkNode, node_id: str = "0"):
-        # Truncate long content for better visualization
-        display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
+            # Add node with stats
+            label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
+            dot.node(node_id, label)
 
-        # Add node with stats
-        label = f"{display_content}\n visits: {node.visits}\n value: {node.value}"
-        dot.node(node_id, label)
+            # Recursively add children
+            for i, child in enumerate(node.children):
+                child_id = f"{node_id}_{i}"
+                add_nodes(child, child_id)
+                dot.edge(node_id, child_id)
 
-        # Recursively add children
-        for i, child in enumerate(node.children):
-            child_id = f"{node_id}_{i}"
-            add_nodes(child, child_id)
-            dot.edge(node_id, child_id)
+        add_nodes(self)
 
-    add_nodes(root)
-
-    # Render the graph
-    try:
-        dot.render("tree_of_thoughts", view=False, format="png", cleanup=True)
-    except Exception as e:
-        print(f"Error rendering graph: {e}")
-        print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
+        # Render the graph
+        try:
+            dot.render("tree_of_thoughts", view=False, format="png", cleanup=True)
+        except Exception as e:
+            print(f"Error rendering graph: {e}")
+            print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
 def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
@@ -227,12 +226,12 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
         root (ThinkNonde): The root node of the tree.
 
     Returns:
-        List[Dict]: List of best trajectories, each one is a pair of instruction and response.
+        list[dict]: list of best trajectories, each one is a pair of instruction and response.
     """
     instruction = root.content
     idx = len("# Question: ") + len(root.content) + 1
 
-    def _find_leaf_nodes(node):
+    def _find_leaf_nodes(node: ThinkNode) -> list[ThinkNode]:
         """Recursively find all leaf nodes."""
         if not node.children:
             return [node]
@@ -265,7 +264,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
             one is positive and another is negative.
 
     Returns:
-        List[Dict]: List of preference pairs, where each pair contains two responses and
+        list[dict]: list of preference pairs, where each pair contains two responses and
         indicates which one is preferred.
     """
     preference_pairs = []
@@ -273,7 +272,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     assert contrastive_threshold > 0
     assert contrastive_threshold < 1
 
-    def traverse_tree(node) -> None:
+    def traverse_tree(node: ThinkNode) -> None:
         """Traverse the tree to compare sibling nodes and collect preferences."""
         if not node.children:
             return  # Leaf node, no comparisons needed
@@ -312,7 +311,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     return preference_pairs
 
 
-@export_module("autogen")
+@export_module("autogen.agents.experimental")
 class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
@@ -321,7 +320,7 @@ class ReasoningAgent(AssistantAgent):
         grader_llm_config: Optional[dict[str, Any]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
-        answer_approach: str = "pool",
+        answer_approach: Literal["pool", "best"] = "pool",
         reason_config: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
@@ -334,8 +333,7 @@ class ReasoningAgent(AssistantAgent):
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
-
-            reason_config (dict): Configuration for the reasoning method. Supported parameters:
+            reason_config (Optional[dict[str, Any]]): Configuration for the reasoning method.
                 method (str): The search strategy to use. Options:
                     - "beam_search" (default): Uses beam search with parallel paths
                     - "mcts": Uses Monte Carlo Tree Search for exploration
@@ -359,10 +357,10 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
+            **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
         if "verbose" in kwargs:
-            # deprecate warning
             warnings.warn(
                 "The parameter `verbose` in ReasoningAgent has been deprecated. "
                 "Please use the `silent` parameter as other AG2 agents.",
@@ -371,69 +369,76 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config = llm_config
-        self._grader_llm_config = grader_llm_config if grader_llm_config else llm_config
+        self._llm_config: dict[str, Any] = llm_config
+        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
-            # deprecate warning
             warnings.warn(
                 "The parameters max_depth, beam_size, and answer_approach have been deprecated. "
                 "Please use the reason_config dictionary to configure these settings instead.",
                 DeprecationWarning,
             )
 
-        if reason_config is None:
-            reason_config = {}
-        self._reason_config = reason_config
+        self._reason_config: dict[str, Any] = reason_config or {}
+        self._method: Literal["beam_search", "mcts", "lats", "dfs"] = reason_config.get("method", "beam_search")
+        if self._method not in ["beam_search", "mcts", "lats", "dfs"]:
+            raise ValueError(
+                f"Invalid reasoning method specified: '{self._method}'. Should be one of 'beam_search', 'mcts', 'lats', or 'dfs'."
+            )
 
-        self._method = reason_config.get("method", "beam_search")
+        self._beam_size: int = 1
         if self._method in ["beam_search", "dfs"]:
-            if self._method == "dfs":
-                self._beam_size = 1
-            else:
+            if self._method != "dfs":
                 self._beam_size = reason_config.get("beam_size", beam_size)
-            self._answer_approach = reason_config.get("answer_approach", answer_approach)
-            assert self._answer_approach in ["pool", "best"]
+            self._answer_approach: Literal["pool", "best"] = reason_config.get("answer_approach", answer_approach)
+            if self._answer_approach not in ["pool", "best"]:
+                raise ValueError(
+                    f"Invalid answer_approach specified: '{self._answer_approach}'. Should be one of 'pool' or 'best'."
+                )
         elif self._method in ["mcts", "lats"]:
-            self._nsim = reason_config.get("nsim", 3)
-            self._exploration_constant = reason_config.get("exploration_constant", 1.41)
+            self._nsim: int = reason_config.get("nsim", 3)
+            self._exploration_constant: float = reason_config.get("exploration_constant", 1.41)
 
-        self._max_depth = reason_config.get("max_depth", max_depth)
-        self._forest_size = reason_config.get("forest_size", 1)  # We default use only 1 tree.
-        self._rating_scale = reason_config.get("rating_scale", 10)
+        self._max_depth: int = reason_config.get("max_depth", max_depth)
+        self._forest_size: int = reason_config.get("forest_size", 1)
+        self._rating_scale: int = reason_config.get("rating_scale", 10)
 
-        self._root = None
+        self._root: Optional[ThinkNode] = None
+        self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
-        tot_msg = TreeofThought_message
-        if self._code_execution_config:
+        tot_msg = TREEOFTHOUGHT_MESSAGE
+        self._user_proxy: Optional[UserProxyAgent] = None
+
+        if self._code_execution_config is not None:
+            self._code_execution_config = False
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
                 code_execution_config=self._code_execution_config,
                 max_consecutive_auto_reply=1,
             )
-            self._code_execution_config = False  # the reasoning agent itself should not execute code.
         else:
-            self._user_proxy = None
-            # `code_execution_config` is not given, we should remove instructions with python execution
-            # This line of code filters out lines from the `tot_msg` string that contain the words 'python' or '```' (indicating Python code blocks).
             tot_msg = "\n".join([
                 line for line in tot_msg.split("\n") if not re.compile(r".*(python|```).*").search(line)
             ])
 
         self._thinker = AssistantAgent(name="tot_thinker", system_message=tot_msg, llm_config=self._llm_config)
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
+        self._prompt_rewriter = AssistantAgent(name="prompt_rewriter", llm_config=self._llm_config)
 
     def generate_forest_response(
-        self, messages: list[dict[str, Any]], sender: Agent, config: Optional[dict[str, Any]] = None
+        self,
+        messages: Optional[list[dict[str, Any]]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
         Args:
-            messages (List[Dict[str, Any]]): Input messages to respond to
-            sender (Agent): Agent sending the messages
-            config (Optional[Dict[str, Any]]): Optional configuration
+            messages (Optional[list[dict[str, Any]]]): Input messages to respond to
+            sender (Optional[Agent]): Agent sending the messages
+            config (Optional[dict[str, Any]]): Optional configuration
 
         Returns:
             Tuple[bool, str]: Success flag and generated response
@@ -444,7 +449,7 @@ class ReasoningAgent(AssistantAgent):
         if not prompt:
             return True, "TERMINATE"
 
-        forest_answers = []
+        forest_answers: list[str] = []
         for _ in range(self._forest_size):
             if self._method in ["beam_search", "dfs"]:
                 response = self._beam_reply(prompt, ground_truth)
@@ -458,20 +463,24 @@ class ReasoningAgent(AssistantAgent):
         if len(forest_answers) == 1:
             return True, forest_answers[0]
         else:
+            forest_answers_str = "-" + "\n-".join(forest_answers)
             self.send(
-                message=f"Answer the question {prompt}. Here are some students' different answers:\n{{'\n-'.join(forest_answers)}}",
+                message=f"Answer the question {prompt}. Here are some students' different answers:\n{forest_answers_str}",
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
             )
-            return True, self.last_message(self)["content"].strip()
+            last_msg: Optional[dict[str, Any]] = self.last_message(self)
+            if last_msg is None:
+                return True, ""
+            return True, last_msg["content"].strip()
 
-    def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
+    def rate_node(self, node: ThinkNode, ground_truth: Optional[str] = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path or the final answer using the grader agent.
 
         Args:
             node (ThinkNode): Node containing the reasoning trajectory to evaluate
-            ground_truth (str): Optional ground truth to provide to the grader
+            ground_truth (Optional[str]): Optional ground truth to provide to the grader
             is_outcome (bool): indicates whether the rating is for an outcome (final answer) or a process (thinking trajectory).
 
         Returns:
@@ -535,7 +544,10 @@ Please provide your rating along with a brief explanation of your assessment.
             request_reply=True,
             silent=self.silent,
         )
-        rating = self._grader.last_message()["content"].strip()
+        rating: str = ""
+        last_message: Optional[dict[str, Any]] = self._grader.last_message()
+        if last_message is not None:
+            rating = last_message["content"].strip()
         node.rating_details = rating
 
         try:
@@ -545,36 +557,72 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
-    def _process_prompt(self, messages: list[dict[str, Any]], sender: Agent) -> tuple[Optional[str], Optional[str]]:
+    def _process_prompt(
+        self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
-        This method checks if the provided messages are None and retrieves the last message's content.
-        It also looks for a specific keyword "GROUND_TRUTH" in the prompt to separate the main prompt
-        from the ground truth for evaluation purposes.
+        This method checks if the provided messages are None and identifies the prompt.
+        If there is only one message, it uses that as the prompt. Otherwise, it asks the question in the messages including also the important information from the previous messages.
+        It also looks for a specific keyword "GROUND_TRUTH" in any of the messages to separate the ground truth for evaluation purposes.
 
         Args:
-            messages (List[Dict[str, Any]]): A list of message dictionaries containing the content to process.
-            sender (Agent): The agent sending the messages.
+            messages (Optional[list[dict[str, Any]]]): A list of message dictionaries containing the content to process.
+            sender (Optional[Agent]): The agent sending the messages.
 
         Returns:
             Tuple[Optional[str], Optional[str]]: A tuple containing the processed prompt and the ground truth.
             If the prompt is empty, returns (None, None).
         """
         messages = self._oai_messages[sender] if messages is None else messages
-        prompt = messages[-1]["content"].strip()
-        if not prompt:
-            return None, None
+        messages_copy = copy.deepcopy(messages)
 
         # Extract the ground truth for more accurate evaluation.
         # TODO: in the future, allow user to pass a callable (func) to calculate reward.
-        if "GROUND_TRUTH" in prompt:
-            idx = prompt.find("GROUND_TRUTH")
-            prompt, ground_truth = prompt[:idx].rstrip(), prompt[idx:]
+        ground_truth = None
+        for i, message in enumerate(messages_copy):
+            if "GROUND_TRUTH" in message["content"]:
+                idx = message["content"].find("GROUND_TRUTH")
+                messages_copy[i]["content"], ground_truth = message["content"][:idx].rstrip(), message["content"][idx:]
+                break
+
+        if len(messages) == 1:
+            # First message, no previous context
+            prompt = messages_copy[0]["content"]
         else:
-            ground_truth = None
+            rewriter_message = f"""
+Task: Given a list of messages including a previous discussion, write a prompt that summarizes the discussion, including all the useful information, and asks a question.
+
+**Messages:**
+{messages_copy}
+
+**Format of Output:**
+QUESTION: *Write the initial question asked by the user here.*
+SUMMARY: *summarize the existing discussions.*
+
+ACTIVITY LOG:
+- *Action 1 performed*
+- *Action 2 performed*
+- ...
+
+CURRENT_QUESTION: *Write the current/last question to be addressed here. In case the task has been completed, write: "The task has now been completed, write the final response and terminate the task."*
+"""
+            self._prompt_rewriter.clear_history()
+            self.send(
+                message=rewriter_message,
+                recipient=self._prompt_rewriter,
+                request_reply=True,
+                silent=self.silent,
+            )
+            last_msg: Optional[dict[str, Any]] = self._prompt_rewriter.last_message()
+            prompt = last_msg["content"].strip() if last_msg is not None else ""
+
+        if not prompt:
+            return None, None
+
         return prompt, ground_truth
 
-    def _beam_reply(self, prompt: str, ground_truth: str = "") -> str:
+    def _beam_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
         """Generate a response using tree-of-thought reasoning.
 
         Implements beam search through a tree of reasoning steps, using the thinker
@@ -582,19 +630,18 @@ Please provide your rating along with a brief explanation of your assessment.
 
         Args:
             prompt (str): The question or prompt to generate a response for.
-            ground_truth (str): The ground truth or correct answer for evaluation.
+            ground_truth (Optional[str]): The ground truth or correct answer for evaluation.
 
         Returns:
             str: The generated response based on the reasoning process.
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
-        prev_leafs = [root]
-
-        final_answers = set()  # store the final answers
+        prev_leafs: list[ThinkNode] = [root]
+        final_answers: set[ThinkNode] = set()  # store the final answers
 
         while prev_leafs and len(final_answers) < self._beam_size:
-            new_leafs = []
+            new_leafs: list[ThinkNode] = []
             for node in prev_leafs:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
@@ -621,11 +668,11 @@ Please provide your rating along with a brief explanation of your assessment.
                 ]
 
         assert final_answers, "No final answers found."
-        final_answers = list(final_answers)
+        final_answers_list = list(final_answers)
 
         if self._answer_approach == "best":
             # Best the final answers
-            best_leaf = max(final_answers, key=lambda x: x.value)
+            best_leaf = max(final_answers_list, key=lambda x: x.value)
             self.send(
                 message=f"Answer the question {prompt}. Here is my thinking processes:\n{best_leaf.trajectory}",
                 recipient=self,
@@ -634,7 +681,7 @@ Please provide your rating along with a brief explanation of your assessment.
             )
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join([
-                f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)
+                f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers_list)
             ])
             self.send(
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
@@ -643,22 +690,23 @@ Please provide your rating along with a brief explanation of your assessment.
                 silent=self.silent,
             )
 
-        final_answer = self.chat_messages[self][-1]["content"].strip()
+        last_msg: Optional[dict[str, Any]] = self.last_message(self)
+        final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
 
-    def _mtcs_reply(self, prompt: str, ground_truth: str = "") -> str:
+    def _mtcs_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
         """Generate a response using Monte Carlo Tree Search (MCTS) reasoning.
 
         Args:
             prompt (str): The question or prompt to generate a response for.
-            ground_truth (str): The ground truth or correct answer for evaluation.
+            ground_truth (Optional[str]): The ground truth or correct answer for evaluation.
 
         Returns:
             str: The generated response based on the reasoning process.
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
-        answer_nodes = []
+        answer_nodes: list[ThinkNode] = []
 
         self._lats_context = "## Here are some previous trajectories and reflections\n\n"  # Store LATS's reflections
 
@@ -668,16 +716,9 @@ Please provide your rating along with a brief explanation of your assessment.
 
             # Selection
             while not self._is_terminal(node) and len(node.children) > 0:
-                # NOTE: In the original UCT formula, child.value represents the win ratio.
-                # Here, we use the average rating rather than the win ratio.
-                # The rating might be biased from the LLM, which could affect the bounds of this vanilla UCT equation.
-                # More intensive analysis is needed in the future.
                 choices_weights = [
-                    # exploitation term +
                     (child.value / (child.visits + EPSILON))
-                    +
-                    # exploration term
-                    self._exploration_constant
+                    + self._exploration_constant
                     * math.sqrt(2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))
                     for child in node.children
                 ]
@@ -699,22 +740,19 @@ Please provide your rating along with a brief explanation of your assessment.
                 request_reply=True,
                 silent=self.silent,
             )
-            _answer = self.last_message(self)["content"].strip()
-            # We add the answer (as a node) to the leaf to help
-            # future logging and debugging.
+            last_msg: Optional[dict[str, Any]] = self.last_message(self)
+            _answer: str = last_msg["content"].strip() if last_msg is not None else ""
             _ans_node = ThinkNode(content=_answer, parent=node)
             reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
             _ans_node.value = reward
             answer_nodes.append(_ans_node)
             self._lats_context += f"### Previous Tries:\n{node.trajectory}\n\nRating:{_ans_node.rating_details}\n\n"
-            # Backpropagation
             node.backpropagate(reward)
 
-        # Best action
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return best_ans_node.content
 
-    def _expand(self, node: ThinkNode) -> list:
+    def _expand(self, node: ThinkNode) -> list[ThinkNode]:
         """Expand the node by generating possible next steps based on the current trajectory.
 
         This method sends a message to the thinker agent, asking for possible next steps
@@ -726,7 +764,7 @@ Please provide your rating along with a brief explanation of your assessment.
             node (ThinkNode): The node to expand, representing the current state in the reasoning process.
 
         Returns:
-            List[ThinkNode]: A list of new ThinkNode instances created from the options provided by the thinker.
+            list[ThinkNode]: A list of new ThinkNode instances created from the options provided by the thinker.
         """
         self._thinker.clear_history()
 
@@ -741,20 +779,16 @@ Please provide your rating along with a brief explanation of your assessment.
             request_reply=True,
             silent=self.silent,
         )
-        reply = self._thinker.last_message()["content"].strip()
+        last_msg: Optional[dict[str, Any]] = self._thinker.last_message()
+        reply: str = last_msg["content"].strip() if last_msg is not None else ""
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:
             node.reflection += str(reflection[0].strip())
-        # Extract options from reply using regex:
-        # - Matches text between "Option N:" and either next "Option N:" or end of string
-        # - (?=...) is a lookahead to match option boundary without including it
-        # - re.DOTALL allows . to match newlines
         options = re.findall(r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL)
 
         option_nodes = [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
 
         for node in option_nodes:
-            # use self._user_proxy to execute code if needed.
             if self._user_proxy and "```python" in node.content:
                 self._user_proxy.clear_history()
                 self.send(
@@ -763,7 +797,11 @@ Please provide your rating along with a brief explanation of your assessment.
                     request_reply=True,
                     silent=self.silent,
                 )
-                node.content += "\n\n---\nCode Execution Result:\n" + self._user_proxy.last_message(self)["content"]
+                user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
+                user_proxy_last_msg_content: str = (
+                    user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
+                )
+                node.content += "\n\n---\nCode Execution Result:\n" + user_proxy_last_msg_content
         return option_nodes
 
     def _is_terminal(self, node: ThinkNode) -> bool:
@@ -778,5 +816,54 @@ Please provide your rating along with a brief explanation of your assessment.
         return node.depth >= self._max_depth or "TERMINATE" in node.content
 
     @property
-    def method(self):
+    def method(self) -> str:
+        """Get the reasoning method being used.
+
+        Returns:
+            str: The name of the reasoning method
+        """
         return self._method
+
+    def visualize_tree(self) -> None:
+        """Visualize the tree of thoughts using graphviz.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            self._root.visualize_tree()
+        else:
+            raise RuntimeError("No tree to visualize. Run the reasoning process first.")
+
+    def extract_sft_dataset(self) -> list[dict[str, Any]]:
+        """Extract the best trajectory or multiple equally good trajectories for SFT training.
+
+        Returns:
+            list[dict]: list of best trajectories, each one is a pair of instruction and response.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            return extract_sft_dataset(self._root)
+        else:
+            raise RuntimeError("No tree to extract dataset from. Run the reasoning process first.")
+
+    def extract_rlhf_preference_dataset(self, contrastive_threshold: float = 0.2) -> list[dict[str, Any]]:
+        """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
+
+        Args:
+            contrastive_threshold (float): between (0, 1), a distance measure that we are confident to call
+                one is positive and another is negative.
+
+        Returns:
+            list[dict]: list of preference pairs, where each pair contains two responses and
+            indicates which one is preferred.
+
+        Raises:
+            RuntimeError: If the tree has not been generated yet.
+        """
+        if self._root:
+            return extract_rlhf_preference_dataset(self._root, contrastive_threshold)
+        else:
+            raise RuntimeError("No tree to extract dataset from. Run the reasoning process first.")
