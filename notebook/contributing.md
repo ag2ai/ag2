@@ -38,7 +38,7 @@ You don't need to explain in depth how to install AG2. Unless there are specific
 :::info Requirements
 Install `autogen`:
 ```bash
-pip install autogen
+pip install autogen[openai]
 ```
 
 For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
@@ -54,7 +54,7 @@ Or if extras are needed:
 Some extra dependencies are needed for this notebook, which can be installed via pip:
 
 ```bash
-pip install autogen[retrievechat] flaml[automl]
+pip install autogen[openai,retrievechat] flaml[automl]
 ```
 
 For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
