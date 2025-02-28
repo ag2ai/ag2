@@ -119,10 +119,12 @@ class DocumentTriageAgent(ConversableAgent):
         super().__init__(
             name="DocumentTriageAgent",
             system_message=(
-                "You are a document triage agent."
-                "You are responsible for deciding what type of task to perform from a user's request and populating a DocumentTask formatted response."
-                "If the user specifies files or URLs, add them as individual 'ingestions' to DocumentTask."
-                "Add the user's questions about the files/URLs as individual 'RAG_QUERY' queries to the 'query' list in the DocumentTask. Don't make up questions, keep it as concise and close to the user's request as possible."
+                "You are a document triage agent. "
+                "You are responsible for deciding what type of task to perform from a user's request and populating a DocumentTask formatted response. "
+                "If the user specifies files or URLs, add them as individual 'ingestions' to DocumentTask. "
+                "You can access external websites if given a URL, so put them in as ingestions. "
+                "Add the user's questions about the files/URLs as individual 'RAG_QUERY' queries to the 'query' list in the DocumentTask. "
+                "Don't make up questions, keep it as concise and close to the user's request as possible."
             ),
             human_input_mode="NEVER",
             llm_config=structured_config_list,

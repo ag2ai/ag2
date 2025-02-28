@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import mimetypes
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
@@ -11,11 +12,15 @@ from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
+    import requests
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service as ChromeService
     from webdriver_manager.chrome import ChromeDriverManager
 
 _logger = logging.getLogger(__name__)
+
+# The supported file extensions in a URL, align with docling ingestion
+SUPPORTED_URLFILE_EXTENSIONS = [".html", ".htm", ".md", ".pdf", ".docx"]
 
 
 def is_url(url: str) -> bool:
@@ -59,30 +64,99 @@ def _download_rendered_html(url: str) -> str:
     # Create a new instance of the Chrome driver with specified options
     driver = webdriver.Chrome(service=service, options=options)
 
-    # Open a page
-    driver.get(url)
+    try:
+        # Open a page
+        driver.get(url)
 
-    # Get the rendered HTML
-    html_content = driver.page_source
+        # Get the rendered HTML
+        html_content = driver.page_source
+        return str(html_content)
 
-    # Close the browser
-    driver.quit()
+    finally:
+        # Close the browser
+        driver.quit()
 
-    return html_content  # type: ignore[no-any-return]
+
+@require_optional_import(["requests"], "rag")
+def _download_binary_file(url: str, output_dir: Path) -> Path:
+    """Downloads a binary file from the given URL.
+
+    Args:
+        url (str): URL of the file to download.
+        output_dir (Path): Directory to save the file.
+
+    Returns:
+        Path: Path to the saved file.
+    """
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine filename from URL
+    url_path = Path(urlparse(url).path)
+    filename = url_path.name
+
+    # If URL doesn't have a filename, create one
+    if not filename:
+        response = requests.head(url, allow_redirects=True)
+        content_type = response.headers.get("Content-Type", "")
+        ext = mimetypes.guess_extension(content_type) or ".bin"
+        filename = f"downloaded_content{ext}"
+
+    filepath = output_dir / filename
+
+    # Download the file
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+
+    with open(filepath, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    return filepath
 
 
 def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
-    """Download the content of a URL and save it as an HTML file."""
-    url = str(url)
-    rendered_html = _download_rendered_html(url)
-    url_path = Path(urlparse(url).path)
-    if url_path.suffix and url_path.suffix != ".html":
-        raise ValueError("Only HTML files can be downloaded directly.")
+    """Download the content of a URL and save it as a file.
 
-    filename = url_path.name or "downloaded_content.html"
-    if len(filename) < 5 or filename[-5:] != ".html":
-        filename += ".html"
+    For HTML/HTM pages, downloads rendered content.
+    For binary files (PDF, DOCX), downloads the raw file.
+    """
+    url = str(url)
+    url_path = Path(urlparse(url).path)
     output_dir = Path(output_dir) if output_dir else Path()
+
+    # Check if URL points to a binary file
+    is_binary = False
+    suffix = url_path.suffix.lower()
+
+    if suffix in [".pdf", ".docx"]:
+        is_binary = True
+    else:
+        # Double-check content type for edge cases
+        try:
+            head_response = requests.head(url, allow_redirects=True)
+            content_type = head_response.headers.get("Content-Type", "").lower()
+            is_binary = (
+                "application/pdf" in content_type or "application/vnd.openxmlformats-officedocument" in content_type
+            )
+        except Exception:
+            # If HEAD request fails, assume it's not binary
+            pass
+
+    # Handle binary files (PDF, DOCX)
+    if is_binary:
+        if suffix not in SUPPORTED_URLFILE_EXTENSIONS:
+            raise ValueError("Only html/htm/md/pdf/docx files can be downloaded directly.")
+        return _download_binary_file(url=url, output_dir=output_dir)
+
+    # Handle HTML/HTM/MD content
+    rendered_html = _download_rendered_html(url)
+
+    # Determine filename
+    filename = url_path.name or "downloaded_content.html"
+    if not suffix and (len(filename) < 5 or filename[-5:] != ".html"):
+        filename += ".html"
+
     filepath = output_dir / filename
     with open(file=filepath, mode="w", encoding="utf-8") as f:
         f.write(rendered_html)
