@@ -147,6 +147,7 @@ jobs:
           OPTIONAL_DEPENDENCIES="${{ matrix.optional-dependencies }}"
           MARKER="${OPTIONAL_DEPENDENCIES//-/_}"
           # openai mark actually means that we need OpenAI API key, not just the package installed
+          echo pytest -m "(not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras) and ($MARKER))"
           pytest -m "(not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras) and ($MARKER))"
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
