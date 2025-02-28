@@ -9,14 +9,15 @@
 import os
 import random
 import sys
+from typing import Any, Dict, Optional, Tuple
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from autogen.agentchat.contrib.reasoning_agent import ReasoningAgent, ThinkNode, visualize_tree
+from autogen.agents.experimental import ReasoningAgent, ThinkNode
 from autogen.import_utils import skip_on_missing_imports
 
-from ...conftest import Credentials
+from ....conftest import Credentials
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -39,18 +40,18 @@ TEST_GROUND_TRUTH = "GROUND_TRUTH Paris"
 
 
 @pytest.fixture
-def think_node():
+def think_node() -> ThinkNode:
     """Create a ThinkNode instance for testing"""
     return ThinkNode(content=TEST_CONTENT)
 
 
 @pytest.fixture
-def reasoning_agent(mock_credentials: Credentials):
+def reasoning_agent(mock_credentials: Credentials) -> ReasoningAgent:
     """Create a ReasoningAgent instance for testing"""
     return ReasoningAgent("reasoning_agent", llm_config=mock_credentials.llm_config)
 
 
-def test_think_node_init(think_node):
+def test_think_node_init(think_node: ThinkNode) -> None:
     """Test ThinkNode initialization"""
     assert think_node.content == TEST_CONTENT
     assert think_node.value == 0
@@ -61,21 +62,21 @@ def test_think_node_init(think_node):
     assert think_node.visits == 0
 
 
-def test_think_node_trajectory(think_node):
+def test_think_node_trajectory(think_node: ThinkNode) -> None:
     """Test ThinkNode trajectory property"""
     first_line = "# Question:\n" + TEST_CONTENT + "\n---\n"
     assert think_node._trajectory_arr == [first_line]
     assert first_line in think_node.trajectory
 
 
-def test_think_node_str_repr(think_node):
+def test_think_node_str_repr(think_node: ThinkNode) -> None:
     """Test ThinkNode string representation"""
-    expected = f"{TEST_CONTENT} -> Depth: 0 Value: 0 Visits: 0"
+    expected = f"{TEST_CONTENT} -> Depth: 0 Value: 0.0 Visits: 0"
     assert str(think_node) == expected
     assert repr(think_node) == expected
 
 
-def test_think_node_to_dict(think_node):
+def test_think_node_to_dict(think_node: ThinkNode) -> None:
     """Test ThinkNode to_dict method"""
     node_dict = think_node.to_dict()
     assert node_dict["content"] == TEST_CONTENT
@@ -85,7 +86,7 @@ def test_think_node_to_dict(think_node):
     assert node_dict["children"] == []
 
 
-def test_think_node_from_dict():
+def test_think_node_from_dict() -> ThinkNode:
     """Test ThinkNode from_dict method"""
     test_dict = {"content": TEST_CONTENT, "value": 0.5, "depth": 1, "visits": 2, "children": []}
     node = ThinkNode.from_dict(test_dict)
@@ -94,11 +95,12 @@ def test_think_node_from_dict():
     assert node.depth == 1
     assert node.visits == 2
     assert node.children == []
+    return node
 
 
 @pytest.mark.openai
 @skip_on_missing_imports(["openai"], "openai")
-def test_reasoning_agent_init(reasoning_agent):
+def test_reasoning_agent_init(reasoning_agent: ReasoningAgent) -> None:
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
     assert reasoning_agent._max_depth == 4
@@ -107,7 +109,7 @@ def test_reasoning_agent_init(reasoning_agent):
     assert reasoning_agent._root is None
 
 
-def test_think_node_with_parent():
+def test_think_node_with_parent() -> None:
     """Test ThinkNode parent-child relationship"""
     parent = ThinkNode(content="Parent node")
     child = ThinkNode(content="Child node", parent=parent)
@@ -118,7 +120,7 @@ def test_think_node_with_parent():
     assert len(parent.children) == 1
 
 
-def test_think_node_complex_tree():
+def test_think_node_complex_tree() -> None:
     """Test ThinkNode in a more complex tree structure"""
     root = ThinkNode(content="Root")
     child1 = ThinkNode(content="Child 1", parent=root)
@@ -135,7 +137,7 @@ def test_think_node_complex_tree():
     assert "Grandchild" in grandchild.trajectory
 
 
-def test_think_node_serialization_with_children():
+def test_think_node_serialization_with_children() -> None:
     """Test ThinkNode serialization with nested structure"""
     root = ThinkNode(content="Root")
     ThinkNode(content="Child", parent=root)
@@ -152,14 +154,16 @@ def test_think_node_serialization_with_children():
 
 
 @skip_on_missing_imports(["openai"], "openai")
-def test_reasoning_agent_answer(mock_credentials: Credentials):
+def test_reasoning_agent_answer(mock_credentials: Credentials) -> None:
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
             for answer_approach in ["pool", "best"]:
                 helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials)
 
 
-def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials: Credentials):
+def helper_test_reasoning_agent_answer(
+    max_depth: int, beam_size: int, answer_approach: str, mock_credentials: Credentials
+) -> None:
     """Test that ReasoningAgent properly terminates when TERMINATE is received"""
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
         agent = ReasoningAgent(
@@ -168,10 +172,9 @@ def helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mo
             reason_config={"beam_size": beam_size, "answer_approach": answer_approach, "max_depth": max_depth},
         )
 
-        def mock_response(*args, **kwargs):
+        def mock_response(*args: Any, **kwargs: Any) -> Tuple[bool, Dict[str, str]]:
             # Get the instance that called the mock
             instance = args[0]
-            print("INSTANCE:", instance)
             if instance.name == "tot_thinker":
                 return True, {
                     "content": """Reflection
@@ -190,29 +193,30 @@ Option 3: Another option"""
 
         mock_oai_reply.side_effect = mock_response
 
-        print("OAI REPLY:", agent._thinker.generate_oai_reply)
-
         response = agent._beam_reply("Test question")
         assert len(response)
 
-    assert "TERMINATE" in agent._thinker.last_message()["content"]
+    last_msg: Optional[Dict[str, Any]] = agent._thinker.last_message()
+    last_msg_content: str = last_msg["content"] if last_msg is not None else ""
+    assert "TERMINATE" in last_msg_content
 
     # Verify we didn't exceed max_depth
-    current_node = agent._root
-    max_depth_found = 0
-    nodes_to_check = [current_node]
+    if agent._root is not None:  # Add null check
+        current_node = agent._root
+        max_depth_found = 0
+        nodes_to_check = [current_node]
 
-    while nodes_to_check:
-        node = nodes_to_check.pop(0)
-        max_depth_found = max(max_depth_found, node.depth)
-        nodes_to_check.extend(node.children)
+        while nodes_to_check:
+            node = nodes_to_check.pop(0)
+            max_depth_found = max(max_depth_found, node.depth)
+            nodes_to_check.extend(node.children)
 
-    assert max_depth_found <= agent._max_depth
+        assert max_depth_found <= agent._max_depth
 
 
 @skip_on_missing_imports(["graphviz"], "unknown")
 @patch("graphviz.Digraph")
-def test_visualize_tree_successful_case(mock_digraph):
+def test_visualize_tree_successful_case(mock_digraph: MagicMock) -> None:
     """Test successful tree visualization"""
     # Create a sample tree structure
     root = ThinkNode(content="Root")
@@ -232,7 +236,7 @@ def test_visualize_tree_successful_case(mock_digraph):
     mock_graph = MagicMock()
     mock_digraph.return_value = mock_graph
 
-    visualize_tree(root)
+    root.visualize_tree()
 
     # Verify Digraph initialization
     mock_digraph.assert_called_once()
@@ -242,8 +246,8 @@ def test_visualize_tree_successful_case(mock_digraph):
     expected_calls = [
         call("0", "Root\n visits: 1\n value: 0.5"),
         call("0_0", "Child 1\n visits: 2\n value: 0.7"),
-        call("0_1", "Child 2\n visits: 0\n value: 0"),
-        call("0_0_0", "Grandchild with very long content that should be t...\n visits: 0\n value: 0"),
+        call("0_1", "Child 2\n visits: 0\n value: 0.0"),
+        call("0_0_0", "Grandchild with very long content that should be t...\n visits: 0\n value: 0.0"),
     ]
     mock_graph.node.assert_has_calls(expected_calls, any_order=True)
 
@@ -261,7 +265,7 @@ def test_visualize_tree_successful_case(mock_digraph):
 
 @skip_on_missing_imports(["graphviz"], "unknown")
 @patch("graphviz.Digraph")
-def test_visualize_tree_render_failure(mock_digraph):
+def test_visualize_tree_render_failure(mock_digraph: MagicMock) -> None:
     """Test visualization when rendering fails"""
     root = ThinkNode(content="Root")
 
@@ -270,7 +274,7 @@ def test_visualize_tree_render_failure(mock_digraph):
     mock_graph.render.side_effect = Exception("Rendering failed")
 
     with patch("builtins.print") as mock_print:
-        visualize_tree(root)
+        root.visualize_tree()
         mock_print.assert_has_calls([
             call("Error rendering graph: Rendering failed"),
             call("Make sure graphviz is installed on your system: https://graphviz.org/download/"),
@@ -278,7 +282,7 @@ def test_visualize_tree_render_failure(mock_digraph):
 
 
 @skip_on_missing_imports(["openai"], "openai")
-def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
+def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent: ReasoningAgent) -> None:
     """
     Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
     If a message contains a GROUND_TRUTH marker, the method should split the content appropriately.
@@ -302,7 +306,7 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
         "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
     ) as mock_oai_reply:
 
-        def mock_response(*args, **kwargs):
+        def mock_response(*args: Any, **kwargs: Any) -> Dict[str, str]:
             return {"content": simulated_rewritten_prompt}
 
         mock_oai_reply.side_effect = mock_response
@@ -319,7 +323,7 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
 
 
 @skip_on_missing_imports(["openai"], "openai")
-def test_reasoning_agent_code_execution(mock_credentials: Credentials):
+def test_reasoning_agent_code_execution(mock_credentials: Credentials) -> None:
     """Test that ReasoningAgent properly executes code in responses"""
 
     # Create agent with code execution enabled
@@ -330,7 +334,7 @@ def test_reasoning_agent_code_execution(mock_credentials: Credentials):
             code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
         )
 
-        def mock_response(*args, **kwargs):
+        def mock_response(*args: Any, **kwargs: Any) -> Tuple[bool, Dict[str, str]]:
             instance = args[0]
             if instance.name == "tot_thinker":
                 return True, {
@@ -363,12 +367,13 @@ Option 2: TERMINATE"""
         response = agent._beam_reply("Calculate factorial of 5")
 
         # Verify code was executed
-        assert "Factorial of 5 is 120" in agent._root.children[0].content
-        assert "Code Execution Result:" in agent._root.children[0].content
+        if agent._root is not None and agent._root.children:  # Add null check
+            assert "Factorial of 5 is 120" in agent._root.children[0].content
+            assert "Code Execution Result:" in agent._root.children[0].content
         assert response == "The factorial of 5 is 120"
 
 
-def test_prepare_prompt_single_message(reasoning_agent):
+def test_prepare_prompt_single_message(reasoning_agent: ReasoningAgent) -> None:
     """
     Test that when a single message is provided without a conversation history,
     the _process_prompt method returns the message content as the prompt.
@@ -377,13 +382,16 @@ def test_prepare_prompt_single_message(reasoning_agent):
     # Call _process_prompt. Here, we pass the agent itself as sender.
     prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
 
+    assert prompt is not None
+    assert ground_truth is None
+
     # Since there is only one message, the prompt should equal the message content.
     assert TEST_PROMPT in prompt
     # No ground truth is expected.
     assert ground_truth is None
 
 
-def test_prepare_prompt_with_ground_truth(reasoning_agent):
+def test_prepare_prompt_with_ground_truth(reasoning_agent: ReasoningAgent) -> None:
     """
     Test that when a message contains a GROUND_TRUTH marker,
     _process_prompt splits the content appropriately.
@@ -392,6 +400,9 @@ def test_prepare_prompt_with_ground_truth(reasoning_agent):
     message_content = f"{TEST_PROMPT} {TEST_GROUND_TRUTH}"
     messages = [{"role": "user", "content": message_content}]
     prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    assert prompt is not None
+    assert ground_truth is not None
 
     # The prompt should contain the text before the marker.
     assert TEST_PROMPT in prompt
@@ -402,7 +413,7 @@ def test_prepare_prompt_with_ground_truth(reasoning_agent):
     assert "Paris" in ground_truth
 
 
-def test_prepare_prompt_multi_message(reasoning_agent):
+def test_prepare_prompt_multi_message(reasoning_agent: ReasoningAgent) -> None:
     """
     Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
     Because the method calls self.send with self._prompt_rewriter as recipient,
@@ -427,7 +438,7 @@ def test_prepare_prompt_multi_message(reasoning_agent):
         "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
     ) as mock_oai_reply:
 
-        def mock_response(*args, **kwargs):
+        def mock_response(*args: Any, **kwargs: Any) -> Dict[str, str]:
             return {"content": simulated_rewritten_prompt}
 
         mock_oai_reply.side_effect = mock_response

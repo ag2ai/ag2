@@ -153,8 +153,8 @@ Steps:
 response = user_proxy.initiate_chat(mcts_agent, message=prompt)
 
 # After running queries...
-sft_data = extract_sft_dataset(mcts_agent._root)
-rlhf_data = extract_rlhf_preference_dataset(mcts_agent._root)
+sft_data = mcts_agent.extract_sft_dataset()
+rlhf_data = mcts_agent.extract_rlhf_preference_dataset()
 ```
 
 ### 3. Forest of Trees
@@ -200,10 +200,8 @@ forest_agent = ReasoningAgent(
 Visualize the reasoning tree using graphviz:
 
 ```python
-from autogen.agentchat.contrib.reasoning_agent import visualize_tree
-
 # After running queries...
-visualize_tree(mcts_agent._root)
+mcts_agent.visualize_tree()
 ```
 
 ### 2. Custom Evaluation
@@ -231,7 +229,7 @@ with open("reasoning_tree.json", "w") as f:
     json.dump(data, f)
 
 # Load tree
-from autogen.agentchat.contrib.reasoning_agent import ThinkNode
+from autogen.agents.experimental import ThinkNode
 loaded_tree = ThinkNode.from_dict(json.load(open("reasoning_tree.json")))
 ```
 
