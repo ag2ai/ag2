@@ -131,7 +131,7 @@ jobs:
           uv pip install --system -e .[retrievechat-qdrant]
       - name: Install pgvector when on linux
         run: |
-          uv pip install --system -e .[test,retrievechat-pgvector,retrievechat-mongodb]
+          uv pip install --system -e .[test,retrievechat-pgvector,retrievechat-mongodb,openai]
       - name: Install couchbase when on linux
         run: |
           uv pip install --system -e .[retrievechat-couchbase]
