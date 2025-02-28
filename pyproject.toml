@@ -319,6 +319,8 @@ markers = [
     "redis",
     "docker",
     "docs",
+    "rag",
+    "cosmosdb",
     # optional deps
     "jupyter_executor",
     "retrievechat",
