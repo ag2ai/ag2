@@ -8,11 +8,11 @@ import re
 import warnings
 from typing import Any, Optional
 
-from ...agentchat.agent import Agent
-from ...agentchat.assistant_agent import AssistantAgent
-from ...agentchat.user_proxy_agent import UserProxyAgent
-from ...doc_utils import export_module
-from ...import_utils import optional_import_block
+from ....agentchat.agent import Agent
+from ....agentchat.assistant_agent import AssistantAgent
+from ....agentchat.user_proxy_agent import UserProxyAgent
+from ....doc_utils import export_module
+from ....import_utils import optional_import_block
 
 EPSILON = 1e-6
 
@@ -73,7 +73,7 @@ class ThinkNode:
 
         Attributes:
             content (str): The text content/description for this reasoning step.
-            value (Optional[float]): A numeric score/value assigned to this node.
+            value (float): A numeric score/value assigned to this node.
             parent (Optional[ThinkNode]): Reference to the parent node.
             reflection (str): A string containing reflections on the reasoning process.
             rating_details (str): A string providing details about the rating of this node.
@@ -86,14 +86,14 @@ class ThinkNode:
         - Adding itself to the parent's children list if the parent exists.
         - Providing trajectory utilities to get the full path from root to this node.
         """
-        self.content = content
-        self.value = 0
-        self.parent = parent
-        self.reflection = ""
-        self.rating_details = ""
-        self.depth = self.parent.depth + 1 if parent else 0
-        self.children = []
-        self.visits = 0
+        self.content: str = content
+        self.value: float = 0.0
+        self.parent: Optional[ThinkNode] = parent
+        self.reflection: str = ""
+        self.rating_details: str = ""
+        self.depth: int = parent.depth + 1 if parent is not None else 0
+        self.children: list[ThinkNode] = []
+        self.visits: int = 0
         if self.parent:
             self.parent.children.append(self)
 
@@ -128,7 +128,7 @@ class ThinkNode:
             reward (float): The reward to backpropagate up the tree.
         """
         node = self
-        while node:
+        while node is not None:
             node.visits += 1
             node.value = (node.value * (node.visits - 1) + reward) / node.visits
             node = node.parent
@@ -139,11 +139,11 @@ class ThinkNode:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert ThinkNode to dictionary representation.
 
         Returns:
-            Dict: Dictionary containing all node attributes and recursive children
+            Dict[str, Any]: Dictionary containing all node attributes and recursive children
         """
         return {
             "content": self.content,
@@ -160,7 +160,7 @@ class ThinkNode:
         """Create ThinkNode from dictionary representation.
 
         Args:
-            data (Dict): Dictionary containing node data
+            data (Dict[str, Any]): Dictionary containing node data
             parent (Optional[ThinkNode]): Parent node to attach to
 
         Returns:
@@ -197,7 +197,7 @@ def visualize_tree(root: ThinkNode) -> None:
     dot = Digraph(comment="Tree of Thoughts")
     dot.attr(rankdir="TB")  # Top to Bottom direction
 
-    def add_nodes(node: ThinkNode, node_id: str = "0"):
+    def add_nodes(node: ThinkNode, node_id: str = "0") -> None:
         # Truncate long content for better visualization
         display_content = (node.content[:50] + "...") if len(node.content) > 50 else node.content
 
@@ -233,7 +233,7 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     instruction = root.content
     idx = len("# Question: ") + len(root.content) + 1
 
-    def _find_leaf_nodes(node):
+    def _find_leaf_nodes(node: ThinkNode) -> list[ThinkNode]:
         """Recursively find all leaf nodes."""
         if not node.children:
             return [node]
@@ -335,8 +335,7 @@ class ReasoningAgent(AssistantAgent):
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
-
-            reason_config (dict): Configuration for the reasoning method. Supported parameters:
+            reason_config (Optional[dict[str, Any]]): Configuration for the reasoning method.
                 method (str): The search strategy to use. Options:
                     - "beam_search" (default): Uses beam search with parallel paths
                     - "mcts": Uses Monte Carlo Tree Search for exploration
@@ -360,10 +359,10 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
+            **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
         if "verbose" in kwargs:
-            # deprecate warning
             warnings.warn(
                 "The parameter `verbose` in ReasoningAgent has been deprecated. "
                 "Please use the `silent` parameter as other AG2 agents.",
@@ -372,38 +371,36 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config = llm_config
-        self._grader_llm_config = grader_llm_config if grader_llm_config else llm_config
+        self._llm_config: dict[str, Any] = llm_config
+        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
-            # deprecate warning
             warnings.warn(
                 "The parameters max_depth, beam_size, and answer_approach have been deprecated. "
                 "Please use the reason_config dictionary to configure these settings instead.",
                 DeprecationWarning,
             )
 
-        if reason_config is None:
-            reason_config = {}
-        self._reason_config = reason_config
+        self._reason_config: dict[str, Any] = reason_config or {}
+        self._method: str = reason_config.get("method", "beam_search")
 
-        self._method = reason_config.get("method", "beam_search")
         if self._method in ["beam_search", "dfs"]:
             if self._method == "dfs":
-                self._beam_size = 1
+                self._beam_size: int = 1
             else:
-                self._beam_size = reason_config.get("beam_size", beam_size)
-            self._answer_approach = reason_config.get("answer_approach", answer_approach)
+                self._beam_size: int = reason_config.get("beam_size", beam_size)
+            self._answer_approach: str = reason_config.get("answer_approach", answer_approach)
             assert self._answer_approach in ["pool", "best"]
         elif self._method in ["mcts", "lats"]:
-            self._nsim = reason_config.get("nsim", 3)
-            self._exploration_constant = reason_config.get("exploration_constant", 1.41)
+            self._nsim: int = reason_config.get("nsim", 3)
+            self._exploration_constant: float = reason_config.get("exploration_constant", 1.41)
 
-        self._max_depth = reason_config.get("max_depth", max_depth)
-        self._forest_size = reason_config.get("forest_size", 1)  # We default use only 1 tree.
-        self._rating_scale = reason_config.get("rating_scale", 10)
+        self._max_depth: int = reason_config.get("max_depth", max_depth)
+        self._forest_size: int = reason_config.get("forest_size", 1)
+        self._rating_scale: int = reason_config.get("rating_scale", 10)
 
-        self._root = None
+        self._root: Optional[ThinkNode] = None
+        self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
         tot_msg = TreeofThought_message
@@ -414,11 +411,9 @@ class ReasoningAgent(AssistantAgent):
                 code_execution_config=self._code_execution_config,
                 max_consecutive_auto_reply=1,
             )
-            self._code_execution_config = False  # the reasoning agent itself should not execute code.
+            self._code_execution_config = False
         else:
             self._user_proxy = None
-            # `code_execution_config` is not given, we should remove instructions with python execution
-            # This line of code filters out lines from the `tot_msg` string that contain the words 'python' or '```' (indicating Python code blocks).
             tot_msg = "\n".join([
                 line for line in tot_msg.split("\n") if not re.compile(r".*(python|```).*").search(line)
             ])
@@ -428,13 +423,16 @@ class ReasoningAgent(AssistantAgent):
         self._prompt_rewriter = AssistantAgent(name="prompt_rewriter", llm_config=self._llm_config)
 
     def generate_forest_response(
-        self, messages: list[dict[str, Any]], sender: Agent, config: Optional[dict[str, Any]] = None
+        self,
+        messages: Optional[list[dict[str, Any]]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
         Args:
-            messages (List[Dict[str, Any]]): Input messages to respond to
-            sender (Agent): Agent sending the messages
+            messages (Optional[List[Dict[str, Any]]]): Input messages to respond to
+            sender (Optional[Agent]): Agent sending the messages
             config (Optional[Dict[str, Any]]): Optional configuration
 
         Returns:
@@ -446,7 +444,7 @@ class ReasoningAgent(AssistantAgent):
         if not prompt:
             return True, "TERMINATE"
 
-        forest_answers = []
+        forest_answers: list[str] = []
         for _ in range(self._forest_size):
             if self._method in ["beam_search", "dfs"]:
                 response = self._beam_reply(prompt, ground_truth)
@@ -469,12 +467,12 @@ class ReasoningAgent(AssistantAgent):
             )
             return True, self.last_message(self)["content"].strip()
 
-    def rate_node(self, node: ThinkNode, ground_truth: str = None, is_outcome: bool = False) -> float:
+    def rate_node(self, node: ThinkNode, ground_truth: Optional[str] = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path or the final answer using the grader agent.
 
         Args:
             node (ThinkNode): Node containing the reasoning trajectory to evaluate
-            ground_truth (str): Optional ground truth to provide to the grader
+            ground_truth (Optional[str]): Optional ground truth to provide to the grader
             is_outcome (bool): indicates whether the rating is for an outcome (final answer) or a process (thinking trajectory).
 
         Returns:
@@ -610,7 +608,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
         return prompt, ground_truth
 
-    def _beam_reply(self, prompt: str, ground_truth: str = "") -> str:
+    def _beam_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
         """Generate a response using tree-of-thought reasoning.
 
         Implements beam search through a tree of reasoning steps, using the thinker
@@ -618,19 +616,18 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
         Args:
             prompt (str): The question or prompt to generate a response for.
-            ground_truth (str): The ground truth or correct answer for evaluation.
+            ground_truth (Optional[str]): The ground truth or correct answer for evaluation.
 
         Returns:
             str: The generated response based on the reasoning process.
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
-        prev_leafs = [root]
-
-        final_answers = set()  # store the final answers
+        prev_leafs: list[ThinkNode] = [root]
+        final_answers: set[ThinkNode] = set()  # store the final answers
 
         while prev_leafs and len(final_answers) < self._beam_size:
-            new_leafs = []
+            new_leafs: list[ThinkNode] = []
             for node in prev_leafs:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
@@ -657,11 +654,11 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 ]
 
         assert final_answers, "No final answers found."
-        final_answers = list(final_answers)
+        final_answers_list = list(final_answers)
 
         if self._answer_approach == "best":
             # Best the final answers
-            best_leaf = max(final_answers, key=lambda x: x.value)
+            best_leaf = max(final_answers_list, key=lambda x: x.value)
             self.send(
                 message=f"Answer the question {prompt}. Here is my thinking processes:\n{best_leaf.trajectory}",
                 recipient=self,
@@ -670,7 +667,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
             )
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join([
-                f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers)
+                f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers_list)
             ])
             self.send(
                 message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
@@ -682,19 +679,19 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         final_answer = self.chat_messages[self][-1]["content"].strip()
         return final_answer
 
-    def _mtcs_reply(self, prompt: str, ground_truth: str = "") -> str:
+    def _mtcs_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
         """Generate a response using Monte Carlo Tree Search (MCTS) reasoning.
 
         Args:
             prompt (str): The question or prompt to generate a response for.
-            ground_truth (str): The ground truth or correct answer for evaluation.
+            ground_truth (Optional[str]): The ground truth or correct answer for evaluation.
 
         Returns:
             str: The generated response based on the reasoning process.
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
-        answer_nodes = []
+        answer_nodes: list[ThinkNode] = []
 
         self._lats_context = "## Here are some previous trajectories and reflections\n\n"  # Store LATS's reflections
 
@@ -704,16 +701,9 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
             # Selection
             while not self._is_terminal(node) and len(node.children) > 0:
-                # NOTE: In the original UCT formula, child.value represents the win ratio.
-                # Here, we use the average rating rather than the win ratio.
-                # The rating might be biased from the LLM, which could affect the bounds of this vanilla UCT equation.
-                # More intensive analysis is needed in the future.
                 choices_weights = [
-                    # exploitation term +
                     (child.value / (child.visits + EPSILON))
-                    +
-                    # exploration term
-                    self._exploration_constant
+                    + self._exploration_constant
                     * math.sqrt(2 * math.log(node.visits + EPSILON) / (child.visits + EPSILON))
                     for child in node.children
                 ]
@@ -736,21 +726,17 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 silent=self.silent,
             )
             _answer = self.last_message(self)["content"].strip()
-            # We add the answer (as a node) to the leaf to help
-            # future logging and debugging.
             _ans_node = ThinkNode(content=_answer, parent=node)
             reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
             _ans_node.value = reward
             answer_nodes.append(_ans_node)
             self._lats_context += f"### Previous Tries:\n{node.trajectory}\n\nRating:{_ans_node.rating_details}\n\n"
-            # Backpropagation
             node.backpropagate(reward)
 
-        # Best action
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return best_ans_node.content
 
-    def _expand(self, node: ThinkNode) -> list:
+    def _expand(self, node: ThinkNode) -> list[ThinkNode]:
         """Expand the node by generating possible next steps based on the current trajectory.
 
         This method sends a message to the thinker agent, asking for possible next steps
@@ -781,16 +767,11 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:
             node.reflection += str(reflection[0].strip())
-        # Extract options from reply using regex:
-        # - Matches text between "Option N:" and either next "Option N:" or end of string
-        # - (?=...) is a lookahead to match option boundary without including it
-        # - re.DOTALL allows . to match newlines
         options = re.findall(r"Option \d+:(.+?)(?=Option \d+:|$)", reply, re.DOTALL)
 
         option_nodes = [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
 
         for node in option_nodes:
-            # use self._user_proxy to execute code if needed.
             if self._user_proxy and "```python" in node.content:
                 self._user_proxy.clear_history()
                 self.send(
@@ -814,5 +795,10 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         return node.depth >= self._max_depth or "TERMINATE" in node.content
 
     @property
-    def method(self):
+    def method(self) -> str:
+        """Get the reasoning method being used.
+
+        Returns:
+            str: The name of the reasoning method
+        """
         return self._method
