@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
+from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.contrib.swarm_agent import (
     AfterWork,
     AfterWorkOption,
@@ -23,7 +24,6 @@ from ....doc_utils import export_module
 from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
-from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DocAgent"]
 
@@ -144,7 +144,7 @@ class DocAgent(ConversableAgent):
         system_message: Optional[str] = None,
         parsed_docs_path: Optional[Union[str, Path]] = None,
         collection_name: Optional[str] = None,
-        query_engine: Optional[Union[VectorChromaQueryEngine, InMemoryQueryEngine]] = None,
+        query_engine: Optional[RAGQueryEngine] = None,
     ):
         """Initialize the DocAgent.
 
@@ -154,6 +154,7 @@ class DocAgent(ConversableAgent):
             system_message (Optional[str]): The system message for the DocAgent.
             parsed_docs_path (Union[str, Path]): The path where parsed documents will be stored.
             collection_name (Optional[str]): The unique name for the data store collection. If omitted, a random name will be used. Populate this to reuse previous ingested data.
+            query_engine (Optional[RAGQueryEngine]): The query engine to use for querying documents, defaults to VectorChromaQueryEngine if none provided.
 
         The DocAgent is responsible for generating a group of agents to solve a task.
 

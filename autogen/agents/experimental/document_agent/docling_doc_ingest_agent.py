@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Literal, Optional, Union
 
 from .... import ConversableAgent
+from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.contrib.swarm_agent import SwarmResult
 from ....doc_utils import export_module
 from ..document_agent.parser_utils import docling_parse_docs
 from .chroma_query_engine import VectorChromaQueryEngine
 from .document_utils import preprocess_path
-from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DoclingDocIngestAgent"]
 
@@ -36,7 +36,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         name: Optional[str] = None,
         llm_config: Optional[Union[dict, Literal[False]]] = None,  # type: ignore[type-arg]
         parsed_docs_path: Optional[Union[Path, str]] = None,
-        query_engine: Optional[Union[VectorChromaQueryEngine, InMemoryQueryEngine]] = None,
+        query_engine: Optional[RAGQueryEngine] = None,
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "ErrorManagerAgent",
         collection_name: Optional[str] = None,

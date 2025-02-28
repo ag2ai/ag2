@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
-class VectorChromaQueryEngine:
+class VectorChromaQueryEngine(RAGQueryEngine):
     """
     This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
@@ -228,3 +229,27 @@ class VectorChromaQueryEngine:
         """Ensures an index exists"""
         if not hasattr(self, "index"):
             raise Exception("Query index is not initialized. Please ingest some documents before querying.")
+
+    def add_records(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[list[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for VectorChromaQueryEngine"""
+        raise NotImplementedError("Method, add_records, not required nor implemented for VectorChromaQueryEngine")
+
+    def init_db(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths: Optional[list[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for VectorChromaQueryEngine"""
+        raise NotImplementedError("Method, init_db, not required nor implemented for VectorChromaQuery")
+
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
+        """Not required nor implemented for VectorChromeQueryEngine"""
+        raise NotImplementedError("Method, connect_db, not required nor implemented for VectorChromaQueryEngine")

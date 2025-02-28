@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 from pydantic import BaseModel
 
 from ....agentchat import ConversableAgent
+from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 
 # REPLIES
 QUERY_NO_INGESTIONS_REPLY = "Sorry, please ingest some documents/URLs before querying."  # Default response for queries without ingested documents
@@ -31,7 +32,7 @@ class QueryAnswer(BaseModel):
     answer: str
 
 
-class InMemoryQueryEngine:
+class InMemoryQueryEngine(RAGQueryEngine):
     """
     This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
     """
@@ -102,7 +103,11 @@ class InMemoryQueryEngine:
             return ERROR_RESPONSE_REPLY + str(e)
 
     def add_docs(
-        self, new_doc_dir: Optional[Union[Path, str]] = None, new_doc_paths: Optional[list[Union[Path, str]]] = None
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths: Optional[list[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Add additional documents to the in-memory store
@@ -181,3 +186,17 @@ class InMemoryQueryEngine:
             self._ingested_documents.append(document)
         except Exception as e:
             raise ValueError(f"Error reading file {file_path}: {str(e)}")
+
+    def add_records(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[list[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for InMemoryQueryEngine"""
+        raise NotImplementedError("Method, add_records, not required nor implemented for InMemoryQueryEngine")
+
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
+        """Not required nor implemented for InMemoryQueryEngine"""
+        raise NotImplementedError("Method, connect_db, not required nor implemented for InMemoryQueryEngine")
