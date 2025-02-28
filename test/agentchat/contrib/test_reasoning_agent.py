@@ -291,7 +291,11 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent):
     # Monkey-patch the prompt rewriter's last_message to return a predetermined prompt.
     simulated_rewritten_prompt = (
         "QUESTION: What is the capital of France?\n\n"
-        "STEPS ALREADY EXECUTED:\n- Asked about the capital\n- Received a hint that it might be Paris"
+        "SUMMARY: The user asked about the capital, and a hint was received suggesting it might be Paris.\n\n"
+        "ACTIVITY LOG:\n"
+        "- Asked about the capital\n"
+        "- Received a hint that it might be Paris\n\n"
+        "CURRENT_QUESTION: What is the capital of France?"
     )
 
     with patch(
@@ -412,7 +416,11 @@ def test_prepare_prompt_multi_message(reasoning_agent):
     # Monkey-patch the prompt rewriter's last_message to return a predetermined prompt.
     simulated_rewritten_prompt = (
         "QUESTION: What is the capital of France?\n\n"
-        "STEPS ALREADY EXECUTED:\n- Asked about the capital\n- Received a hint that it might be Paris"
+        "SUMMARY: The user asked about the capital, and a hint was received suggesting it might be Paris.\n\n"
+        "ACTIVITY LOG:\n"
+        "- Asked about the capital\n"
+        "- Received a hint that it might be Paris\n\n"
+        "CURRENT_QUESTION: What is the capital of France?"
     )
 
     with patch(
