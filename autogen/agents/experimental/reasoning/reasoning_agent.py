@@ -6,7 +6,7 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ....agentchat.agent import Agent
 from ....agentchat.assistant_agent import AssistantAgent
@@ -92,13 +92,13 @@ class ThinkNode:
         self.reflection: str = ""
         self.rating_details: str = ""
         self.depth: int = parent.depth + 1 if parent is not None else 0
-        self.children: list[ThinkNode] = []
+        self.children: List[ThinkNode] = []
         self.visits: int = 0
         if self.parent:
             self.parent.children.append(self)
 
     @property
-    def _trajectory_arr(self) -> list[str]:
+    def _trajectory_arr(self) -> List[str]:
         """Gets the full path from root to this node as a list of strings.
 
         Returns:
@@ -127,7 +127,7 @@ class ThinkNode:
         Args:
             reward (float): The reward to backpropagate up the tree.
         """
-        node = self
+        node: ThinkNode | None = self
         while node is not None:
             node.visits += 1
             node.value = (node.value * (node.visits - 1) + reward) / node.visits
@@ -139,7 +139,7 @@ class ThinkNode:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert ThinkNode to dictionary representation.
 
         Returns:
@@ -156,8 +156,8 @@ class ThinkNode:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
-        """Create ThinkNode from dictionary representation.
+    def from_dict(cls, data: Dict[str, Any], parent: Optional["ThinkNode"] = None) -> "ThinkNode":
+        """Create ThinkNode from Dictionary representation.
 
         Args:
             data (Dict[str, Any]): Dictionary containing node data
@@ -221,7 +221,7 @@ def visualize_tree(root: ThinkNode) -> None:
         print("Make sure graphviz is installed on your system: https://graphviz.org/download/")
 
 
-def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
+def extract_sft_dataset(root: ThinkNode) -> List[Dict[str, Any]]:
     """Extract the best trajectory or multiple equally good trajectories for SFT training.
 
     Args:
@@ -233,7 +233,7 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     instruction = root.content
     idx = len("# Question: ") + len(root.content) + 1
 
-    def _find_leaf_nodes(node: ThinkNode) -> list[ThinkNode]:
+    def _find_leaf_nodes(node: ThinkNode) -> List[ThinkNode]:
         """Recursively find all leaf nodes."""
         if not node.children:
             return [node]
@@ -257,7 +257,7 @@ def extract_sft_dataset(root: ThinkNode) -> list[dict[str, Any]]:
     return best_trajectories
 
 
-def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> list[dict[str, Any]]:
+def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: float = 0.2) -> List[Dict[str, Any]]:
     """Extract and generate preference pairs for RLHF training by comparing sibling nodes.
 
     Args:
@@ -274,7 +274,7 @@ def extract_rlhf_preference_dataset(root: ThinkNode, contrastive_threshold: floa
     assert contrastive_threshold > 0
     assert contrastive_threshold < 1
 
-    def traverse_tree(node) -> None:
+    def traverse_tree(node: ThinkNode) -> None:
         """Traverse the tree to compare sibling nodes and collect preferences."""
         if not node.children:
             return  # Leaf node, no comparisons needed
@@ -318,12 +318,12 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: dict[str, Any],
-        grader_llm_config: Optional[dict[str, Any]] = None,
+        llm_config: Dict[str, Any],
+        grader_llm_config: Optional[Dict[str, Any]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: str = "pool",
-        reason_config: Optional[dict[str, Any]] = None,
+        reason_config: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -371,8 +371,8 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config: dict[str, Any] = llm_config
-        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
+        self._llm_config: Dict[str, Any] = llm_config
+        self._grader_llm_config: Dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
             warnings.warn(
@@ -381,14 +381,13 @@ class ReasoningAgent(AssistantAgent):
                 DeprecationWarning,
             )
 
-        self._reason_config: dict[str, Any] = reason_config or {}
+        self._reason_config: Dict[str, Any] = reason_config or {}
         self._method: str = reason_config.get("method", "beam_search")
 
+        self._beam_size: int = 1
         if self._method in ["beam_search", "dfs"]:
-            if self._method == "dfs":
-                self._beam_size: int = 1
-            else:
-                self._beam_size: int = reason_config.get("beam_size", beam_size)
+            if self._method != "dfs":
+                self._beam_size = reason_config.get("beam_size", beam_size)
             self._answer_approach: str = reason_config.get("answer_approach", answer_approach)
             assert self._answer_approach in ["pool", "best"]
         elif self._method in ["mcts", "lats"]:
@@ -404,16 +403,17 @@ class ReasoningAgent(AssistantAgent):
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
         tot_msg = TreeofThought_message
-        if self._code_execution_config:
+        self._user_proxy: Optional[UserProxyAgent] = None
+
+        if self._code_execution_config is not None:
+            self._code_execution_config: Dict[str, Any] = False
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
                 code_execution_config=self._code_execution_config,
                 max_consecutive_auto_reply=1,
             )
-            self._code_execution_config = False
         else:
-            self._user_proxy = None
             tot_msg = "\n".join([
                 line for line in tot_msg.split("\n") if not re.compile(r".*(python|```).*").search(line)
             ])
@@ -424,9 +424,9 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[List[Dict[str, Any]]] = None,
         sender: Optional[Agent] = None,
-        config: Optional[dict[str, Any]] = None,
+        config: Optional[Dict[str, Any]] = None,
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
@@ -444,7 +444,7 @@ class ReasoningAgent(AssistantAgent):
         if not prompt:
             return True, "TERMINATE"
 
-        forest_answers: list[str] = []
+        forest_answers: List[str] = []
         for _ in range(self._forest_size):
             if self._method in ["beam_search", "dfs"]:
                 response = self._beam_reply(prompt, ground_truth)
@@ -465,7 +465,10 @@ class ReasoningAgent(AssistantAgent):
                 request_reply=True,
                 silent=self.silent,
             )
-            return True, self.last_message(self)["content"].strip()
+            last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+            if last_msg is None:
+                return True, ""
+            return True, last_msg["content"].strip()
 
     def rate_node(self, node: ThinkNode, ground_truth: Optional[str] = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path or the final answer using the grader agent.
@@ -536,7 +539,10 @@ Please provide your rating along with a brief explanation of your assessment.
             request_reply=True,
             silent=self.silent,
         )
-        rating = self._grader.last_message()["content"].strip()
+        rating: str = ""
+        last_message: Optional[Dict[str, Any]] = self._grader.last_message()
+        if last_message is not None:
+            rating = last_message["content"].strip()
         node.rating_details = rating
 
         try:
@@ -546,7 +552,9 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
-    def _process_prompt(self, messages: list[dict[str, Any]], sender: Agent) -> tuple[Optional[str], Optional[str]]:
+    def _process_prompt(
+        self, messages: List[Dict[str, Any]] | None, sender: Agent | None
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
         This method checks if the provided messages are None and identifies the prompt.
@@ -601,7 +609,8 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 request_reply=True,
                 silent=self.silent,
             )
-            prompt = self._prompt_rewriter.last_message()["content"].strip()
+            last_msg: Optional[Dict[str, Any]] = self._prompt_rewriter.last_message()
+            prompt = last_msg["content"].strip() if last_msg is not None else ""
 
         if not prompt:
             return None, None
@@ -623,11 +632,11 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root  # save the root node for later visualization
-        prev_leafs: list[ThinkNode] = [root]
+        prev_leafs: List[ThinkNode] = [root]
         final_answers: set[ThinkNode] = set()  # store the final answers
 
         while prev_leafs and len(final_answers) < self._beam_size:
-            new_leafs: list[ThinkNode] = []
+            new_leafs: List[ThinkNode] = []
             for node in prev_leafs:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
@@ -676,7 +685,8 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 silent=self.silent,
             )
 
-        final_answer = self.chat_messages[self][-1]["content"].strip()
+        last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+        final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
 
     def _mtcs_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
@@ -691,7 +701,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         """
         root = ThinkNode(content=prompt, parent=None)
         self._root = root
-        answer_nodes: list[ThinkNode] = []
+        answer_nodes: List[ThinkNode] = []
 
         self._lats_context = "## Here are some previous trajectories and reflections\n\n"  # Store LATS's reflections
 
@@ -725,7 +735,8 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 request_reply=True,
                 silent=self.silent,
             )
-            _answer = self.last_message(self)["content"].strip()
+            last_msg: Optional[Dict[str, Any]] = self.last_message(self)
+            _answer: str = last_msg["content"].strip() if last_msg is not None else ""
             _ans_node = ThinkNode(content=_answer, parent=node)
             reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
             _ans_node.value = reward
@@ -736,7 +747,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         best_ans_node = max(answer_nodes, key=lambda node: node.value)
         return best_ans_node.content
 
-    def _expand(self, node: ThinkNode) -> list[ThinkNode]:
+    def _expand(self, node: ThinkNode) -> List[ThinkNode]:
         """Expand the node by generating possible next steps based on the current trajectory.
 
         This method sends a message to the thinker agent, asking for possible next steps
@@ -763,7 +774,8 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
             request_reply=True,
             silent=self.silent,
         )
-        reply = self._thinker.last_message()["content"].strip()
+        last_msg: Optional[Dict[str, Any]] = self._thinker.last_message()
+        reply: str = last_msg["content"].strip() if last_msg is not None else ""
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:
             node.reflection += str(reflection[0].strip())
@@ -780,7 +792,11 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     request_reply=True,
                     silent=self.silent,
                 )
-                node.content += "\n\n---\nCode Execution Result:\n" + self._user_proxy.last_message(self)["content"]
+                user_proxy_last_msg: Optional[Dict[str, Any]] = self._user_proxy.last_message(self)
+                user_proxy_last_msg_content: str = (
+                    user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
+                )
+                node.content += "\n\n---\nCode Execution Result:\n" + user_proxy_last_msg_content
         return option_nodes
 
     def _is_terminal(self, node: ThinkNode) -> bool:

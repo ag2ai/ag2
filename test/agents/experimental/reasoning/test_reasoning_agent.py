@@ -9,7 +9,7 @@
 import os
 import random
 import sys
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -196,7 +196,9 @@ Option 3: Another option"""
         response = agent._beam_reply("Test question")
         assert len(response)
 
-    assert "TERMINATE" in agent._thinker.last_message()["content"]
+    last_msg: Optional[Dict[str, Any]] = agent._thinker.last_message()
+    last_msg_content: str = last_msg["content"] if last_msg is not None else ""
+    assert "TERMINATE" in last_msg_content
 
     # Verify we didn't exceed max_depth
     if agent._root is not None:  # Add null check
@@ -380,6 +382,9 @@ def test_prepare_prompt_single_message(reasoning_agent: ReasoningAgent) -> None:
     # Call _process_prompt. Here, we pass the agent itself as sender.
     prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
 
+    assert prompt is not None
+    assert ground_truth is None
+
     # Since there is only one message, the prompt should equal the message content.
     assert TEST_PROMPT in prompt
     # No ground truth is expected.
@@ -395,6 +400,9 @@ def test_prepare_prompt_with_ground_truth(reasoning_agent: ReasoningAgent) -> No
     message_content = f"{TEST_PROMPT} {TEST_GROUND_TRUTH}"
     messages = [{"role": "user", "content": message_content}]
     prompt, ground_truth = reasoning_agent._process_prompt(messages, sender=reasoning_agent)
+
+    assert prompt is not None
+    assert ground_truth is not None
 
     # The prompt should contain the text before the marker.
     assert TEST_PROMPT in prompt
