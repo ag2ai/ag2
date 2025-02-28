@@ -33,11 +33,8 @@ def is_url(url: str) -> bool:
         result = urlparse(url)
         # urlparse will not raise an exception for invalid URLs, so we need to check the components
         return_bool = bool(result.scheme and result.netloc)
-        if not return_bool:
-            _logger.info(f"Error when checking if {url} is a valid URL: Invalid URL.")
         return return_bool
     except Exception as e:
-        _logger.info(f"Error when checking if {url} is a valid URL: {e}")
         return False
 
 
