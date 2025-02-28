@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import mimetypes
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
@@ -20,7 +19,21 @@ with optional_import_block():
 _logger = logging.getLogger(__name__)
 
 # The supported file extensions in a URL, align with docling ingestion
-SUPPORTED_URLFILE_EXTENSIONS = [".html", ".htm", ".md", ".pdf", ".docx"]
+SUPPORTED_URLFILE_EXTENSIONS = [
+    ".html",
+    ".htm",
+    ".md",
+    ".pdf",
+    ".docx",
+    ".csv",
+    ".pptx",
+    ".png",
+    ".jpeg",
+    ".tiff",
+    ".bmp",
+    ".jpg",
+    ".xlsx",
+]
 
 
 def is_url(url: str) -> bool:
@@ -34,7 +47,7 @@ def is_url(url: str) -> bool:
         # urlparse will not raise an exception for invalid URLs, so we need to check the components
         return_bool = bool(result.scheme and result.netloc)
         return return_bool
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -76,7 +89,10 @@ def _download_rendered_html(url: str) -> str:
 
 @require_optional_import(["requests"], "rag")
 def _download_binary_file(url: str, output_dir: Path) -> Path:
-    """Downloads a binary file from the given URL.
+    """Downloads a file directly from the given URL.
+
+    Works only for file types defined in SUPPORTED_URLFILE_EXTENSIONS.
+    Uses appropriate mode (binary/text) based on file extension or content type.
 
     Args:
         url (str): URL of the file to download.
@@ -88,26 +104,165 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine filename from URL
-    url_path = Path(urlparse(url).path)
+    # Follow redirects and get final URL and headers
+    try:
+        # Set a longer timeout for link services that might be slow
+        head_response = requests.head(url, allow_redirects=True, timeout=30)
+        content_type = head_response.headers.get("Content-Type", "").lower()
+
+        # Get the final URL after following redirects
+        final_url = head_response.url
+        _logger.info(f"Original URL: {url}")
+        _logger.info(f"Final URL after redirects: {final_url}")
+        _logger.info(f"Detected content type: {content_type}")
+
+        # If the final URL is different, use it for further processing
+        if final_url != url:
+            url = final_url
+    except Exception as e:
+        _logger.warning(f"Failed to follow redirects: {e}")
+        content_type = ""
+        final_url = url
+
+    # Parse URL components from the final URL
+    parsed_url = urlparse(final_url)
+    url_path = Path(parsed_url.path)
+
+    # Extract filename and extension from URL
     filename = url_path.name
+    suffix = url_path.suffix.lower()
 
-    # If URL doesn't have a filename, create one
-    if not filename:
-        response = requests.head(url, allow_redirects=True)
-        content_type = response.headers.get("Content-Type", "")
-        ext = mimetypes.guess_extension(content_type) or ".bin"
-        filename = f"downloaded_content{ext}"
+    # Check if the extension is directly supported
+    if suffix and suffix in SUPPORTED_URLFILE_EXTENSIONS:
+        _logger.info(f"Found supported extension in URL: {suffix}")
+    elif suffix:
+        # We have an extension but it's not supported
+        raise ValueError(f"File extension {suffix} is not in the supported list: {SUPPORTED_URLFILE_EXTENSIONS}")
 
+    # For URLs without proper filename/extension, or with generic content types like application/octet-stream
+    # we need to do more investigation
+    if not suffix or "." not in filename or content_type == "application/octet-stream":
+        # Map content types to our supported extensions
+        mime_to_ext_mapping = {
+            "image/jpeg": ".jpeg",
+            "image/jpg": ".jpeg",
+            "image/png": ".png",
+            "image/tiff": ".tiff",
+            "image/bmp": ".bmp",
+            "application/pdf": ".pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+            "text/csv": ".csv",
+            "text/markdown": ".md",
+            "text/html": ".html",
+        }
+
+        # For application/octet-stream, try to get more information
+        if content_type == "application/octet-stream":
+            # Check if there's a Content-Disposition header which might have filename info
+            content_disp = head_response.headers.get("Content-Disposition", "")
+            if "filename=" in content_disp:
+                try:
+                    # Extract filename from Content-Disposition
+                    import re
+
+                    filename_match = re.search(r'filename=["\']?([^"\';]+)', content_disp)
+                    if filename_match:
+                        detected_filename = filename_match.group(1)
+                        detected_suffix = Path(detected_filename).suffix.lower()
+                        if detected_suffix in SUPPORTED_URLFILE_EXTENSIONS:
+                            suffix = detected_suffix
+                            filename = detected_filename
+                            _logger.info(f"Found filename in Content-Disposition: {filename} with extension {suffix}")
+                except Exception as e:
+                    _logger.warning(f"Error parsing Content-Disposition: {e}")
+
+            # If we still don't have a supported extension, try to sample the content
+            if not suffix or suffix not in SUPPORTED_URLFILE_EXTENSIONS:
+                try:
+                    # Download first few bytes to try to detect file type
+                    sample_response = requests.get(url, stream=True, timeout=30)
+                    sample_bytes = b""
+                    for chunk in sample_response.iter_content(chunk_size=1024):
+                        sample_bytes += chunk
+                        if len(sample_bytes) >= 1024:
+                            break
+
+                    # Check for common file signatures
+                    if sample_bytes.startswith(b"%PDF"):
+                        suffix = ".pdf"
+                        _logger.info("Detected PDF from file signature")
+                    elif sample_bytes[0:4] == b"\x50\x4b\x03\x04":  # PK magic number for ZIP files
+                        # This could be docx, xlsx, pptx (all Office Open XML formats)
+                        # Default to PDF for now, later we can add more specific detection
+                        suffix = ".pdf"  # Default for unknown
+                        _logger.info("Detected ZIP-based format (possibly Office document)")
+
+                    # Close the sample response to avoid keeping the connection open
+                    sample_response.close()
+                except Exception as e:
+                    _logger.warning(f"Error sampling file content: {e}")
+
+        # Get extension based on content type
+        ext = None
+        if suffix and suffix in SUPPORTED_URLFILE_EXTENSIONS:
+            ext = suffix
+        else:
+            for mime, extension in mime_to_ext_mapping.items():
+                if mime in content_type:
+                    ext = extension
+                    break
+
+        # If we still couldn't determine a supported extension, raise an error
+        if not ext:
+            raise ValueError(
+                f"Content type '{content_type}' does not map to any supported file type: {SUPPORTED_URLFILE_EXTENSIONS}"
+            )
+
+        # If we didn't get a filename from the URL or Content-Disposition
+        if not filename or filename == "":
+            # Create filename using URL hash for uniqueness
+            unique_id = abs(hash(url)) % 10000
+
+            # Prefix based on content type
+            prefix = "image" if ext in [".jpeg", ".png", ".tiff", ".bmp"] else "download"
+            filename = f"{prefix}_{unique_id}{ext}"
+        elif not filename.endswith(ext):
+            # Ensure filename has the correct extension
+            filename = f"{Path(filename).stem}{ext}"
+
+        _logger.info(f"Created filename: {filename} for URL: {url}")
+
+    # Create final filepath
     filepath = output_dir / filename
+    _logger.info(f"Saving to: {filepath}")
 
-    # Download the file
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
+    # Determine if this is binary or text based on extension
+    text_extensions = [".md", ".txt", ".csv", ".html", ".htm"]
+    is_binary = suffix not in text_extensions
 
-    with open(filepath, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+    # Download with appropriate mode
+    try:
+        if not is_binary:
+            _logger.info(f"Downloading as text file: {url}")
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(response.text)
+        else:
+            _logger.info(f"Downloading as binary file: {url}")
+            response = requests.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            with open(filepath, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:  # Filter out keep-alive chunks
+                        f.write(chunk)
+    except Exception as e:
+        _logger.error(f"Download failed: {e}")
+        raise
 
     return filepath
 
@@ -115,50 +270,51 @@ def _download_binary_file(url: str, output_dir: Path) -> Path:
 def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
     """Download the content of a URL and save it as a file.
 
-    For HTML/HTM pages, downloads rendered content.
-    For binary files (PDF, DOCX), downloads the raw file.
+    For direct file URLs (.md, .pdf, .docx, etc.), downloads the raw file.
+    For web pages without file extensions or .html/.htm extensions, uses Selenium to render the content.
     """
     url = str(url)
     url_path = Path(urlparse(url).path)
     output_dir = Path(output_dir) if output_dir else Path()
 
-    # Check if URL points to a binary file
-    is_binary = False
+    # Get the file extension (if any)
     suffix = url_path.suffix.lower()
 
-    if suffix in [".pdf", ".docx"]:
-        is_binary = True
-    else:
-        # Double-check content type for edge cases
-        try:
-            head_response = requests.head(url, allow_redirects=True)
-            content_type = head_response.headers.get("Content-Type", "").lower()
-            is_binary = (
-                "application/pdf" in content_type or "application/vnd.openxmlformats-officedocument" in content_type
-            )
-        except Exception:
-            # If HEAD request fails, assume it's not binary
-            pass
+    # Determine if we should use direct download (vs. Selenium)
+    needs_rendering = False
 
-    # Handle binary files (PDF, DOCX)
-    if is_binary:
-        if suffix not in SUPPORTED_URLFILE_EXTENSIONS:
-            raise ValueError("Only html/htm/md/pdf/docx files can be downloaded directly.")
+    # No file extension or specifically .html/.htm - might need rendering
+    if not suffix or suffix in [".html", ".htm"]:
+        # Check content type to confirm
+        try:
+            head_response = requests.head(url, allow_redirects=True, timeout=10)
+            content_type = head_response.headers.get("Content-Type", "").lower()
+            # Only use rendering for HTML content types
+            needs_rendering = "text/html" in content_type
+        except Exception:
+            # If HEAD request fails, assume it's a webpage that needs rendering
+            needs_rendering = True
+
+    # If it has a supported extension that's not .html/.htm, download directly
+    if suffix and suffix in SUPPORTED_URLFILE_EXTENSIONS and suffix not in [".html", ".htm"]:
         return _download_binary_file(url=url, output_dir=output_dir)
 
-    # Handle HTML/HTM/MD content
-    rendered_html = _download_rendered_html(url)
+    # If it needs rendering, use Selenium
+    if needs_rendering:
+        rendered_html = _download_rendered_html(url)
 
-    # Determine filename
-    filename = url_path.name or "downloaded_content.html"
-    if not suffix and (len(filename) < 5 or filename[-5:] != ".html"):
-        filename += ".html"
+        # Determine filename
+        filename = url_path.name or "downloaded_content.html"
+        if not suffix:
+            filename += ".html"
 
-    filepath = output_dir / filename
-    with open(file=filepath, mode="w", encoding="utf-8") as f:
-        f.write(rendered_html)
+        filepath = output_dir / filename
+        with open(file=filepath, mode="w", encoding="utf-8") as f:
+            f.write(rendered_html)
+        return filepath
 
-    return filepath
+    # Otherwise, download directly
+    return _download_binary_file(url=url, output_dir=output_dir)
 
 
 def list_files(directory: Union[Path, str]) -> list[Path]:
