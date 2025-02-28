@@ -23,6 +23,7 @@ from autogen.import_utils import optional_import_block
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 MOCK_OPEN_AI_API_KEY = "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+MOCK_AZURE_API_KEY = "mockazureAPIkeysinexpectedformatsfortestingonly"
 
 reason = "requested to skip"
 
@@ -334,6 +335,23 @@ def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
 @pytest.fixture
 def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
+
+
+@pytest.fixture
+def mock_azure_credentials() -> Credentials:
+    llm_config = {
+        "config_list": [
+            {
+                "api_type": "azure",
+                "model": "gpt-40",
+                "api_key": MOCK_AZURE_API_KEY,
+                "base_url": "https://my_models.azure.com/v1",
+            },
+        ],
+        "temperature": 0.6,
+    }
+
+    return Credentials(llm_config=llm_config)
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:

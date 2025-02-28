@@ -96,7 +96,7 @@ def collection_name():
     return f"{COUCHBASE_COLLECTION}_{collection_id}"
 
 
-@run_for_optional_imports(["couchbase"], "retrievechat-couchbase")
+@run_for_optional_imports(["couchbase.auth", "couchbase.cluster", "couchbase.option"], "retrievechat-couchbase")
 def test_couchbase(db, collection_name):
     with pytest.raises(Exception):
         curr_col = db.get_collection(collection_name)
