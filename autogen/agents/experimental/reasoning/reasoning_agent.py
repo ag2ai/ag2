@@ -8,9 +8,7 @@ import re
 import warnings
 from typing import Any, Literal, Optional, Tuple
 
-from ....agentchat.agent import Agent
-from ....agentchat.assistant_agent import AssistantAgent
-from ....agentchat.user_proxy_agent import UserProxyAgent
+from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
 
@@ -18,7 +16,7 @@ __all__ = ["ReasoningAgent", "ThinkNode"]
 
 EPSILON = 1e-6
 
-TreeofThought_message = """
+TREEOFTHOUGHT_MESSAGE = """
 Role: Expert Planning AI Assistant
 
 Task: Given a question and a list of previous steps (the plan trajectory), generate at least four innovative options for the next step. The user would not answer you anything.
@@ -129,7 +127,7 @@ class ThinkNode:
         Args:
             reward (float): The reward to backpropagate up the tree.
         """
-        node: ThinkNode | None = self
+        node: Optional[ThinkNode] = self
         while node is not None:
             node.visits += 1
             node.value = (node.value * (node.visits - 1) + reward) / node.visits
@@ -405,7 +403,7 @@ class ReasoningAgent(AssistantAgent):
         self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
-        tot_msg = TreeofThought_message
+        tot_msg = TREEOFTHOUGHT_MESSAGE
         self._user_proxy: Optional[UserProxyAgent] = None
 
         if self._code_execution_config is not None:
@@ -556,7 +554,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return reward
 
     def _process_prompt(
-        self, messages: list[dict[str, Any]] | None, sender: Agent | None
+        self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
     ) -> Tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
@@ -565,8 +563,8 @@ Please provide your rating along with a brief explanation of your assessment.
         It also looks for a specific keyword "GROUND_TRUTH" in any of the messages to separate the ground truth for evaluation purposes.
 
         Args:
-            messages (list[dict[str, Any]]): A list of message dictionaries containing the content to process.
-            sender (Agent): The agent sending the messages.
+            messages (Optional[list[dict[str, Any]]]): A list of message dictionaries containing the content to process.
+            sender (Optional[Agent]): The agent sending the messages.
 
         Returns:
             Tuple[Optional[str], Optional[str]]: A tuple containing the processed prompt and the ground truth.
