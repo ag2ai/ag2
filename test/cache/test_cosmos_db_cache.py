@@ -10,14 +10,16 @@ import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autogen.cache.cosmos_db_cache import CosmosDBCache
-from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
     from azure.cosmos.exceptions import CosmosResourceNotFoundError
 
 
-@run_for_optional_imports(["azure.cosmos"], "cosmosdb")
+@pytest.mark.cosmosdb
 class TestCosmosDBCache(unittest.TestCase):
     def setUp(self):
         self.seed = "42"

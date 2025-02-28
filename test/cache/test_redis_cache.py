@@ -13,11 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.cache.redis_cache import RedisCache
-from autogen.import_utils import run_for_optional_imports
 
 
 @pytest.mark.redis
-@run_for_optional_imports(["redis"], "redis")
 class TestRedisCache(unittest.TestCase):
     def setUp(self):
         self.seed = "test_seed"
