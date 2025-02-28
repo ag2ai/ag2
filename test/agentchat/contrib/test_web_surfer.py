@@ -91,7 +91,7 @@ def test_web_surfer() -> None:
             response = function_map["summarize_page"]()
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["markdownify", "pathvalidate", "pdfminer", "requests", "bs4"], "websurfer")
 def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o: Credentials) -> None:
     llm_config = {"config_list": credentials_gpt_4o.config_list, "timeout": 180, "cache_seed": 42}

@@ -115,7 +115,7 @@ def neo4j_query_engine_auto() -> Neo4jGraphQueryEngine:
     return query_engine
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -134,7 +134,7 @@ def test_neo4j_query_engine(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -158,7 +158,7 @@ def test_neo4j_add_records(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("Keanu Reeves") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -174,7 +174,7 @@ def test_neo4j_auto(neo4j_query_engine_auto: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],

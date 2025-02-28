@@ -8,8 +8,6 @@
 
 import os
 
-import pytest
-
 from autogen import AssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
@@ -26,7 +24,7 @@ with optional_import_block() as result:
 test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb", "pgvector", "IPython", "sentence_transformers"], "retrievechat-pgvector")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}

@@ -18,7 +18,7 @@ from autogen.import_utils import run_for_optional_imports
 from ..conftest import Credentials, suppress_gemini_resource_exhausted
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_legacy_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")
@@ -72,7 +72,7 @@ def _test_redis_cache(credentials: Credentials):
 
 
 @pytest.mark.skip(reason="Currently not working")
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.redis
 @run_for_optional_imports(["openai", "redis"], "redis")
 def test_redis_cache(credentials_gpt_4o_mini: Credentials):
@@ -96,7 +96,7 @@ def test_redis_cache_anthropic(credentials_anthropic_claude_sonnet: Credentials)
     _test_redis_cache(credentials_anthropic_claude_sonnet)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_disk_cache(credentials_gpt_4o_mini: Credentials):
     random_cache_seed = int.from_bytes(os.urandom(2), "big")

@@ -88,7 +88,7 @@ def image_gen_capability():
     return generate_images.ImageGeneration(image_generator)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports("PIL", "unknown")
 @run_for_optional_imports(["openai"], "openai")
 def test_dalle_image_generator(dalle_config: dict[str, Any]):

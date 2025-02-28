@@ -68,7 +68,7 @@ class TestCrewAIInteroperability:
 
             assert tool.func(args=args) == "Hello, World!"
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_with_llm(
         self, tool: Tool, credentials_gpt_4o_mini: Credentials, user_proxy: UserProxyAgent, tmp_path: Path
     ) -> None:

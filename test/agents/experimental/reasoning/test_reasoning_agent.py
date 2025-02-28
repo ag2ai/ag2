@@ -98,7 +98,7 @@ def test_think_node_from_dict() -> ThinkNode:
     return node
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_init(reasoning_agent: ReasoningAgent) -> None:
     """Test ReasoningAgent initialization"""

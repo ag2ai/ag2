@@ -48,7 +48,7 @@ def builder() -> AgentBuilder:
     )
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_build(builder: AgentBuilder):
     building_task = (
@@ -74,7 +74,7 @@ def test_build(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb", "huggingface_hub"], "autobuild")
 @run_for_optional_imports(["openai"], "openai")
 def test_build_from_library(builder: AgentBuilder):
@@ -122,7 +122,7 @@ def test_build_from_library(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_save(builder: AgentBuilder):
     building_task = (
@@ -153,7 +153,7 @@ def test_save(builder: AgentBuilder):
         _config_check(saved_configs)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_load(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -174,7 +174,7 @@ def test_load(builder: AgentBuilder):
         _config_check(loaded_agent_configs)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_clear_agent(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:

@@ -19,7 +19,7 @@ from autogen.math_utils import eval_math_responses
 from ..conftest import Credentials, reason
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     functions = [
@@ -213,7 +213,7 @@ async def test_a_execute_function():
     assert (await user.a_execute_function(func_call))[1]["content"] == "42"
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.10"),
     reason=reason,

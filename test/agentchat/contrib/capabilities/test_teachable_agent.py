@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-import pytest
 
 from autogen import ConversableAgent
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
@@ -122,7 +121,7 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     return num_errors, num_tests
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb"], "teachable")
 @run_for_optional_imports(["openai"], "openai")
 def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
@@ -152,7 +151,7 @@ def test_teachability_code_paths(credentials_gpt_4o_mini: Credentials):
         )
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb"], "teachable")
 @run_for_optional_imports(["openai"], "openai")
 def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):

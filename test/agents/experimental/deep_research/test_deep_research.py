@@ -44,7 +44,7 @@ class TestDeepResearchAgent:
         assert agent.llm_config["tools"] == expected_tools
 
     @pytest.mark.skip(reason="The test takes too long to run.")
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_end2end(self, credentials_gpt_4o: Credentials) -> None:
         def is_termination_msg(message: Any) -> bool:
             content = message.get("content", "")

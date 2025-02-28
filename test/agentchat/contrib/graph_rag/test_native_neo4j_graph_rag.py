@@ -102,7 +102,7 @@ def neo4j_native_query_engine_auto() -> Neo4jNativeGraphQueryEngine:
     return query_engine
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
@@ -118,7 +118,7 @@ def test_neo4j_native_query_engine(neo4j_native_query_engine: Neo4jNativeGraphQu
     assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],

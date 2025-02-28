@@ -73,7 +73,7 @@ class TestCrawl4AITool:
         else:
             assert config.extraction_strategy.schema is None
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
     async def test_with_llm(self, credentials_gpt_4o_mini: Credentials) -> None:
         tool_with_llm = Crawl4AITool(llm_config=credentials_gpt_4o_mini.llm_config)
@@ -84,7 +84,7 @@ class TestCrawl4AITool:
         )
         assert isinstance(result, str)
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.asyncio
     async def test_with_llm_and_extraction_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
         class Product(BaseModel):

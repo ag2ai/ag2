@@ -25,7 +25,7 @@ with optional_import_block() as result:
     from qdrant_client import QdrantClient
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
@@ -64,7 +64,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     print(conversations)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_filter():
     client = QdrantClient(":memory:")
@@ -80,7 +80,7 @@ def test_qdrant_filter():
     assert len(results["ids"][0]) == 4
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["qdrant_client", "fastembed"], "retrievechat-qdrant")
 def test_qdrant_search():
     test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")

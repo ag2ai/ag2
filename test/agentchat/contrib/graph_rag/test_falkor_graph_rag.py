@@ -21,7 +21,7 @@ with optional_import_block() as result:
 reason = "do not run on MacOS or windows OR dependency is not installed"
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,

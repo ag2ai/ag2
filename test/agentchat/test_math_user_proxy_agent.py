@@ -20,7 +20,7 @@ from autogen.import_utils import run_for_optional_imports
 from ..conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,

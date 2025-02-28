@@ -1528,7 +1528,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
         user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_context_variables():
     # Test initialization with context_variables
     initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}

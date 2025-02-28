@@ -53,7 +53,7 @@ def test_generate_criteria(credentials_azure: Credentials, task: Task):
 
 
 @run_for_optional_imports("openai", "openai")
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
     criteria = open(criteria_file).read()  # noqa: SIM115
