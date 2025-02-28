@@ -6,6 +6,15 @@ Your AG2 agents are likely to need an LLM and you can configure one, or more, fo
 
 AG2's agents can use LLMs through OpenAI, Anthropic, Google, Amazon, Mistral AI, Cerebras, Together AI, and Groq. Locally hosted models can also be used through Ollama, LiteLLM, and LM Studio.
 
+<Warning>
+**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
+
+Install AG2 with your preferred model provider(s), for example:
+- `pip install ag2[openai]`
+- `pip install ag2[gemini]`
+- `pip install ag2[anthropic,cohere,mistral]`
+</Warning>
+
 First, we define our configuration with the API type, model, and, if necessary, the key.
 
 ```python
