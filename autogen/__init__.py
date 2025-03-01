@@ -19,10 +19,8 @@ from .agentchat import (
     GroupChat,
     GroupChatManager,
     OnCondition,
-    ReasoningAgent,
     SwarmAgent,
     SwarmResult,
-    ThinkNode,
     UpdateSystemMessage,
     UserProxyAgent,
     a_initiate_swarm_chat,
@@ -31,7 +29,6 @@ from .agentchat import (
     initiate_swarm_chat,
     register_function,
     register_hand_off,
-    visualize_tree,
 )
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
 from .exception_utils import (
@@ -85,11 +82,9 @@ __all__ = [
     "NoEligibleSpeakerError",
     "OnCondition",
     "OpenAIWrapper",
-    "ReasoningAgent",
     "SenderRequiredError",
     "SwarmAgent",
     "SwarmResult",
-    "ThinkNode",
     "UndefinedNextAgentError",
     "UpdateSystemMessage",
     "UserProxyAgent",
@@ -107,5 +102,4 @@ __all__ = [
     "initiate_swarm_chat",
     "register_function",
     "register_hand_off",
-    "visualize_tree",
 ]

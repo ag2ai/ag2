@@ -127,7 +127,7 @@ def _generate_api_docs_for_module(docs_path: Path, module_name: str) -> str:
     api_summary = _get_api_summary(members_with_submodules)
 
     api_root = docs_path / "docs" / "api-reference"
-    shutil.rmtree(api_root / module_name, ignore_errors=True)
+    shutil.rmtree(api_root, ignore_errors=True)
     api_root.mkdir(parents=True, exist_ok=True)
 
     (api_root / ".meta.yml").write_text(API_META)
