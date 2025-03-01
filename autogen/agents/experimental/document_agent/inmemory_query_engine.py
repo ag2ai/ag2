@@ -17,7 +17,7 @@ from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 QUERY_NO_INGESTIONS_REPLY = "Sorry, please ingest some documents/URLs before querying."  # Default response for queries without ingested documents
 EMPTY_RESPONSE_REPLY = "Sorry, I couldn't find any information on that. If you haven't ingested any documents, please try that."  # Default response for queries without results
 ERROR_RESPONSE_REPLY = "Sorry, there was an error processing your query: "  # Default response for queries with errors
-COULD_NOT_ANSWER_REPLY = "Sorry, I couldn't answer that question from the ingested documents/URLs."  # Default response for queries that could not be answered
+COULD_NOT_ANSWER_REPLY = "Sorry, I couldn't answer that question from the ingested documents/URLs"  # Default response for queries that could not be answered
 
 
 # Documents and Content structure
@@ -96,7 +96,10 @@ class InMemoryQueryEngine(RAGQueryEngine):
             if answer_object.could_answer:
                 return answer_object.answer
             else:
-                return COULD_NOT_ANSWER_REPLY
+                if answer_object.answer:
+                    return COULD_NOT_ANSWER_REPLY + ": " + answer_object.answer
+                else:
+                    return COULD_NOT_ANSWER_REPLY
 
         except Exception as e:
             # Error converting the response to the structured output
