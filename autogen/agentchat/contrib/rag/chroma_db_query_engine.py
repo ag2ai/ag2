@@ -51,8 +51,8 @@ class ChromaDBQueryEngine:
         host: Optional[str] = "localhost",
         port: Optional[int] = 8000,
         settings: Optional[Settings] = None,
-        tenant: Optional[str] = DEFAULT_TENANT,
-        database: Optional[str] = DEFAULT_DATABASE,
+        tenant: Optional[str] = None,
+        database: Optional[str] = None,
         embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
         metadata: Optional[dict[str, Any]] = None,
         llm: Optional["LLM"] = None,
@@ -87,8 +87,8 @@ class ChromaDBQueryEngine:
                     host=host,
                     port=port,
                     settings=settings,
-                    tenant=tenant,  # type: ignore[arg-type]
-                    database=database,  # type: ignore[arg-type]
+                    tenant=tenant if tenant else DEFAULT_TENANT,  # type: ignore[arg-type, no-any-unimported]
+                    database=database if database else DEFAULT_DATABASE,  # type: ignore[arg-type, no-any-unimported]
                 )
             except Exception as e:
                 raise ValueError(f"Failed to connect to the ChromaDB client: {e}")
