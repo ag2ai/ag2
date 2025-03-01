@@ -36,14 +36,12 @@ import time
 import warnings
 from typing import Any, Optional, Type
 
-from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
-from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
+from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     from cohere import ClientV2 as CohereV2

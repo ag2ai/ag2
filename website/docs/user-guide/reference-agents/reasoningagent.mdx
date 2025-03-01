@@ -923,7 +923,7 @@ To visualize the reasoning tree, you need to install Graphviz. Please note that 
 
 ### To save the visualization as "tree_of_thoughts.png", run the following command:
 ```python
-visualize_tree(mcts_agent._root)
+mcts_agent.visualize_tree()
 ```
 
 ## Utilizing ReasoningAgent for Nested Chat Interactions
@@ -1035,10 +1035,8 @@ with open("reasoning_tree.json", "w") as f:
 # recover the node
 new_node = ThinkNode.from_dict(json.load(open("reasoning_tree.json")))  # noqa: SIM115
 
-from autogen.agentchat.contrib.reasoning_agent import extract_rlhf_preference_dataset, extract_sft_dataset
-
-sft_data = extract_sft_dataset(reason_agent._root)
-rlhf_data = extract_rlhf_preference_dataset(reason_agent._root)
+sft_data = reason_agent.extract_sft_dataset()
+rlhf_data = reason_agent.extract_rlhf_preference_dataset()
 
 print(rlhf_data)
 ```

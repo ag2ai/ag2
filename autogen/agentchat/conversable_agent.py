@@ -27,8 +27,6 @@ from typing import (
     Union,
 )
 
-from openai import BadRequestError
-
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -311,7 +309,7 @@ class ConversableAgent(LLMAgent):
                 raise ValueError("code_execution_config must be a dict or False.")
 
             # We have got a valid code_execution_config.
-            self._code_execution_config = code_execution_config
+            self._code_execution_config: Union[dict[str, Any], Literal[False]] = code_execution_config
 
             if self._code_execution_config.get("executor") is not None:
                 if "use_docker" in self._code_execution_config:
@@ -1659,7 +1657,7 @@ class ConversableAgent(LLMAgent):
             summary = sender._reflection_with_llm(
                 prompt, msg_list, llm_agent=agent, cache=summary_args.get("cache"), role=role
             )
-        except BadRequestError as e:
+        except Exception as e:
             warnings.warn(
                 f"Cannot extract summary using reflection_with_llm: {e}. Using an empty str as summary.", UserWarning
             )
@@ -2973,7 +2971,20 @@ class ConversableAgent(LLMAgent):
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
             else:
-                self.llm_config["tools"] = [tool for tool in self.llm_config["tools"] if tool != tool_sig]
+                current_tools = self.llm_config["tools"]
+                filtered_tools = []
+
+                # Loop through and rebuild tools list without the tool to remove
+                for tool in current_tools:
+                    tool_name = tool["function"]["name"]
+
+                    # Match by tool name, or by tool signature
+                    is_different = tool_name != tool_sig if isinstance(tool_sig, str) else tool != tool_sig
+
+                    if is_different:
+                        filtered_tools.append(tool)
+
+                self.llm_config["tools"] = filtered_tools
         else:
             if not isinstance(tool_sig, dict):
                 raise ValueError(

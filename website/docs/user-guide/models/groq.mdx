@@ -5,11 +5,33 @@ sidebarTitle: Groq
 
 [Groq](https://groq.com/) is a cloud based platform serving a number of popular open weight models at high inference speeds. Models include Meta's Llama 3, Mistral AI's Mixtral, and Google's Gemma.
 
-Although Groq's API is aligned well with OpenAI's, which is the native API used by AG2, this library provides the ability to set specific parameters as well as track API costs.
+Although Groq's API is aligned well with OpenAI's, AG2's library provides the ability to set specific parameters as well as track API costs.
 
 You will need a Groq account and create an API key. [See their website for further details](https://groq.com/).
 
 Groq provides a number of models to use, included below. See the list of [models here (requires login)](https://console.groq.com/docs/models).
+
+## Requirements
+
+To get started, ensure you meet the following requirements:
+
+1. Install the AG2 package with the OpenAI package as Groq utilizes it:
+    - Run the following command to install the [AG2](https://pypi.org/project/ag2/) package:
+    ```bash
+    pip install ag2[openai]
+    ```
+
+    <Tip>
+    If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    ```bash
+    pip install -U autogen[openai]
+    ```
+    or
+    ```bash
+    pip install -U pyautogen[openai]
+    ```
+    as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+    </Tip>
 
 See the sample `OAI_CONFIG_LIST` below showing how the Groq client class is used by specifying the `api_type` as `groq`.
 

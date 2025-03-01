@@ -266,7 +266,7 @@ To use manual tool calling set `native_tool_calls` to `False`.
 
 ## Reducing repetitive tool calls
 
-By incorporating tools into a conversation, LLMs can often continually recommend them to be called, even after they've been called and a result returned. This can lead to a never ending cycle of tool calls.
+By incorporating tools into a conversation, LLMs can often continually recommend them to be called, even after they've been called and a result returned. This can lead to a never-ending cycle of tool calls.
 
 To remove the chance of an LLM recommending a tool call, an additional parameter called `hide_tools` can be used to specify when tools are hidden from the LLM. The string values for the parameter are:
 

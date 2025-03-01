@@ -1,0 +1,492 @@
+---
+title: Hooks
+---
+
+API Reference: [ConversableAgent.register_hook](/docs/api-reference/autogen/ConversableAgent#register-hook)
+
+Hooks are a means to update/review agent state before replying, and messages before sending and replying.
+
+You can define functions and associate them with these hooks and they will execute at certain points in the workflow, see the [initiate_chat](./initiate-chat) page to see where these occur (blue circles).
+
+### How to register a hook
+
+Use the [ConversableAgent.register_hook](/docs/api-reference/autogen/ConversableAgent#register-hook) method to register a function for a hook using the hook's string name.
+
+```python
+my_agent.register_hook("THE_HOOK_NAME", my_function)
+```
+
+There are **four hooks** available on a ConversableAgent, let's look at them and how you use them.
+
+### 1. "process_message_before_send"
+
+This hook is the only hook not in ConversableAgent's [generate_reply](./generate-reply) method and is designed to intercept a message before it is sent to another agent.
+
+You can change the message with the hook and the change will be permanent. This is because this hook is called before a message is displayed or added to the message list.
+
+Signature:
+```python
+def your_function_name(
+    sender: ConversableAgent,
+    message: Union[dict[str, Any], str],
+    recipient: Agent,
+    silent: bool) -> Union[dict[str, Any], str]:
+```
+
+Let's look at how we could prepend a message with who is sending the message (sender) and to whom it's going (recipient).
+
+In this example, our `Mike` agent will have this hook registered, so all their messages will have this text added.
+
+```python
+from autogen import ConversableAgent, Agent
+from typing import Any, Union
+
+llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+
+agent_mike = ConversableAgent(name="Mike", llm_config=llm_config)
+
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+
+# Our function associated with the hook
+def update_message_before_send(
+    sender: ConversableAgent,
+    message: Union[dict[str, Any], str],
+    recipient: Agent,
+    silent: bool) -> Union[dict[str, Any], str]:
+
+    if isinstance(message, dict):
+        msg_text = message.get("content", message)
+    else:
+        msg_text = message
+
+    # Here we prepend the message with "<Mike said to Bob>"
+    msg_text = f"<{sender.name} said to {recipient.name}> " + msg_text
+
+    if isinstance(message, dict):
+        message["content"] = msg_text
+    else:
+        message = msg_text
+
+    # Return the updated message, this will be a permanent change to the message
+    return message
+
+# Register the hook with the Mike agent
+agent_mike.register_hook("process_message_before_send", update_message_before_send)
+
+# Run the chat
+chat_result = agent_mike.initiate_chat(
+    recipient=agent_bob,
+    message="Hello Bob, tell me a joke!",
+    max_turns=2
+)
+
+print(chat_result.chat_history)
+```
+
+Here's the output, you can see Mike's messages (including the initial message) now have our text prepended and the chat history has the permanently changed messages:
+
+```console
+Mike (to Bob):
+
+<Mike said to Bob> Hello Bob, tell me a joke!
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Bob (to Mike):
+
+Sure, here’s a joke for you:
+
+Why did the scarecrow win an award?
+
+Because he was outstanding in his field!
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Mike (to Bob):
+
+<Mike said to Bob> That's a good one, Bob! Here's one for you:
+
+What do you call fake spaghetti?
+
+An impasta!
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Bob (to Mike):
+
+:Bob
+Haha, that's a great one, Mike! How about this:
+
+Why don’t skeletons fight each other?
+
+They don’t have the guts!
+
+--------------------------------------------------------------------------------
+Chat History:
+[
+  {
+    "content": "<Mike said to Bob> Hello Bob, tell me a joke!",
+    "role": "assistant",
+    "name": "Mike"
+  },
+  {
+    "content": "Sure, here\u2019s a joke for you:\n\nWhy did the scarecrow win an award?\n\nBecause he was outstanding in his field!",
+    "role": "user",
+    "name": "Bob"
+  },
+  {
+    "content": "<Mike said to Bob> That's a good one, Bob! Here's one for you:\n\nWhat do you call fake spaghetti?\n\nAn impasta!",
+    "role": "assistant",
+    "name": "Mike"
+  },
+  {
+    "content": ":Bob  \nHaha, that's a great one, Mike! How about this:\n\nWhy don\u2019t skeletons fight each other?\n\nThey don\u2019t have the guts!",
+    "role": "user",
+    "name": "Bob"
+  }
+]
+```
+
+This is a good hook if you need to edit the message before it is added to the messages list, such as for redacting text.
+
+
+### 2. "update_agent_state"
+
+The first of three hooks that run in the [ConversableAgent.generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method before the reply functions are evaluated.
+
+This hook is designed to be used to update an agent's state, typically their system message, before replying.
+
+As the system message is a key message for an LLM to consider, it's useful to be able to make sure that pertinent information is there.
+
+A couple of examples of where it is used:
+- DocAgent to update the internal summary agent's system message with the context from the ingestions and queries.
+- Swarms to hide/show conditional hand-offs.
+
+Signature:
+```python
+def my_update_function(
+    agent: ConversableAgent,
+    messages: list[dict[str, Any]]
+    ) -> None:
+```
+
+In the following example we will update an agent's system message to have the current date in it.
+
+```python
+from autogen import ConversableAgent
+from typing import Any
+
+llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+
+calendar_prompt = ("You are a calendar agent who answers questions on the date and day.\n"
+                   "The current date is: [CURRENT_DATE]\n"
+                   "The current day is: [CURRENT_DAY]"
+)
+
+# Our calendar agent, we won't set a system_message here as we will set it with the hook
+agent_calendar = ConversableAgent(name="Calendar_Agent", llm_config=llm_config)
+
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+
+# Our function to update the agent's system message, this will be attached to the hook
+def update_my_agent_state(
+    agent: ConversableAgent,
+    messages: list[dict[str, Any]]
+    ) -> None:
+
+    from datetime import datetime
+    now = datetime.now()
+
+    # Format the date as string (e.g., "2025-02-25")
+    current_date = now.strftime("%Y-%m-%d")
+
+    # Get day of week as a string (e.g., "Tuesday")
+    day_of_week = now.strftime("%A")
+
+    # Update the agent's system message using the prompt template and the current date and day
+    agent.update_system_message(calendar_prompt.replace("[CURRENT_DATE]", current_date).replace("[CURRENT_DAY]", day_of_week))
+
+# Register the hook with the Calendar agent
+agent_calendar.register_hook("update_agent_state", update_my_agent_state)
+
+chat_result = agent_bob.initiate_chat(
+    recipient=agent_calendar,
+    message="What's the date today and what's the day?",
+    max_turns=1
+)
+
+print(f"Calendar_Agent's system message is:\n{agent_calendar.system_message}")
+```
+
+We can see from the output that `Calendar_Agent` is able to provide the current date and time. Furthermore, their system message is updated.
+
+```console
+Bob (to Calendar_Agent):
+
+What's the date today and what's the day?
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Calendar_Agent (to Bob):
+
+Today's date is February 24, 2025, and it's a Monday.
+
+--------------------------------------------------------------------------------
+Calendar_Agent's system message is:
+You are a calendar agent who answers questions on the date and day.
+The current date is: 2025-02-24
+The current day is: Monday
+```
+
+### 3. "process_last_received_message"
+
+This is the second of the three hooks that run in the [ConversableAgent.generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method before the reply functions are evaluated.
+
+This hook is used to process the last message in the messages list (as opposed to all messages, handled by the next hook).
+
+If the last message is a function call or is "exit" then it will not execute the associated function.
+
+Changing the message will result in permanent changes to the chat messages of the agent with the hook, but not other agents. So, changes to the messages will be present in future [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) calls for the agent with the hook, but not other agent's calls to [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply).
+
+A couple of examples of where it is used:
+- The [Teachability capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/teachability/Teachability) appends any relevant memos to the last message.
+- The [Vision capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/vision_capability/VisionCapability) will update the last message if it contains an image with a caption for the image using an LLM call.
+
+Signature:
+```python
+def my_processing_function(
+    content: Union[str, list[dict[str, Any]]]
+    ) -> str:
+```
+
+Here's an example that changes any instances of the word "blue" to "red" in the last message.
+
+```python
+from autogen import ConversableAgent
+from typing import Any, Union
+
+llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+
+agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
+
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+
+# Our function for the hook, to replace "blue" with "red" in the last received message
+def replace_blue_with_red(
+    message: Union[str, list[dict[str, Any]]]
+    ) -> str:
+
+    if isinstance(message, list):
+        msg_text = message[-1].get("content")
+    else:
+        msg_text = message
+
+    # Replace "blue" with "red" in the message
+    msg_text = msg_text.replace("blue", "red")
+
+    return msg_text
+
+# Register the hook with the Scientist agent
+agent_scientist.register_hook("process_last_received_message", replace_blue_with_red)
+
+chat_result = agent_bob.initiate_chat(
+    recipient=agent_scientist,
+    message="In one sentence, why is the sky blue?",
+    max_turns=1
+)
+
+print(f"Chat Result first message:\n{chat_result.chat_history[0]}\n\n")
+print(f"Scientist agent's first chat message with Bob:\n{agent_scientist.chat_messages[agent_bob][0]}")
+```
+We can see from the output that although the question asks why the sky is blue, it is updated and changed to red before the LLM responds.
+
+We can see the main chat messages are unchanged but the Scientist's chat history with Bob shows that the question was changed to red.
+
+```console
+Bob (to scientist):
+
+In one sentence, why is the sky blue?
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+scientist (to Bob):
+
+The sky appears red during sunrise or sunset due to the scattering of sunlight by the atmosphere, which causes shorter blue wavelengths to dissipate and allows longer red wavelengths to dominate.
+
+--------------------------------------------------------------------------------
+Chat Result first message:
+{'content': 'In one sentence, why is the sky blue?', 'role': 'assistant', 'name': 'Bob'}
+
+
+Scientist agent's first chat message with Bob:
+{'content': 'In one sentence, why is the sky red?', 'role': 'user', 'name': 'Bob'}
+```
+
+### 4. "process_all_messages_before_reply"
+
+The final hook that runs in the [ConversableAgent.generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method before the reply functions are evaluated.
+
+This hook is used to work on all messages before replying.
+
+The changes to these messages will be used for the replying but will not persist beyond the [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) call.
+
+An example of the use of this hook is the [TransformMessages](/docs/api-reference/autogen/agentchat/contrib/capabilities/transform_messages/TransformMessages) capability where it carries out all transforms (such as limiting the number messages, filtering sensitive information, truncating individual messages) on messages before an agent replies.
+
+Signature:
+```python
+def your_function_name(
+    messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+```
+
+Here's an example that adds the agent's name to the start of each message.
+
+```python
+from autogen import ConversableAgent
+from typing import Any
+import json
+
+llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+
+agent_mike = ConversableAgent(name="Mike", llm_config=llm_config, system_message="You are a comedian.")
+
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config, system_message="You are a comedian.")
+
+# Our function for the hook, to prepend the agent's name on each message
+def prepend_name(
+    messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+
+    for message in messages:
+        if "name" in message:
+            message["content"] = f"{message['name']} said: {message['content']}"
+
+    # Print out the updated messages so we can see what has changed before the agent replies
+    print(f"\n[Updated messages]:")
+    print(json.dumps(messages, indent=2))
+    print()
+
+    return messages
+
+# Register the hook with the Mike agent
+agent_mike.register_hook("process_all_messages_before_reply", prepend_name)
+
+chat_result = agent_bob.initiate_chat(
+    recipient=agent_mike,
+    message="Let's tell some jokes!",
+    max_turns=2
+)
+
+print(f"Chat Result messages:\n{json.dumps(chat_result.chat_history, indent=2)}\n\n")
+```
+
+From the output we can observe:
+- The messages are updated before Mike replies.
+- The ChatResult's chat history does not include these temporary changes.
+- LLMs have an inclination to mimic formats used, so we can see the LLM added ":Mike  \nMike said:" to the last message it created (this wasn't created by our hook).
+
+```console
+Bob (to Mike):
+
+Let's tell some jokes!
+
+--------------------------------------------------------------------------------
+
+[Updated messages]:
+[
+  {
+    "content": "Bob said: Let's tell some jokes!",
+    "role": "user",
+    "name": "Bob"
+  }
+]
+
+
+>>>>>>>> USING AUTO REPLY...
+Mike (to Bob):
+
+Sure, Bob! Here’s one to kick things off:
+
+Why don’t scientists trust atoms?
+
+Because they make up everything!
+
+Got any favorite topics you’d like me to joke about?
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+Bob (to Mike):
+
+Oh, that’s a classic! How about we dive into the world of tech? Here’s one for you:
+
+Why did the computer go to therapy?
+
+Because it had too many bytes of depression!
+
+Got any other themes in mind?
+
+--------------------------------------------------------------------------------
+
+[Updated messages]:
+[
+  {
+    "content": "Bob said: Bob said: Let's tell some jokes!",
+    "role": "user",
+    "name": "Bob"
+  },
+  {
+    "content": "Mike said: Sure, Bob! Here\u2019s one to kick things off:\n\nWhy don\u2019t scientists trust atoms?\n\nBecause they make up everything! \n\nGot any favorite topics you\u2019d like me to joke about?",
+    "role": "assistant",
+    "name": "Mike"
+  },
+  {
+    "content": "Bob said: Oh, that\u2019s a classic! How about we dive into the world of tech? Here\u2019s one for you:\n\nWhy did the computer go to therapy?\n\nBecause it had too many bytes of depression! \n\nGot any other themes in mind?",
+    "role": "user",
+    "name": "Bob"
+  }
+]
+
+
+>>>>>>>> USING AUTO REPLY...
+Mike (to Bob):
+
+:Mike
+Mike said: Great one, Bob! How about we switch gears to animals? Here’s one for you:
+
+Why don’t seagulls fly over the bay?
+
+Because then they’d be bagels!
+
+What do you think? Want to stick with animals, or explore another theme?
+
+--------------------------------------------------------------------------------
+Chat Result messages:
+[
+  {
+    "content": "Let's tell some jokes!",
+    "role": "assistant",
+    "name": "Bob"
+  },
+  {
+    "content": "Sure, Bob! Here\u2019s one to kick things off:\n\nWhy don\u2019t scientists trust atoms?\n\nBecause they make up everything! \n\nGot any favorite topics you\u2019d like me to joke about?",
+    "role": "user",
+    "name": "Mike"
+  },
+  {
+    "content": "Oh, that\u2019s a classic! How about we dive into the world of tech? Here\u2019s one for you:\n\nWhy did the computer go to therapy?\n\nBecause it had too many bytes of depression! \n\nGot any other themes in mind?",
+    "role": "assistant",
+    "name": "Bob"
+  },
+  {
+    "content": ":Mike  \nMike said: Great one, Bob! How about we switch gears to animals? Here\u2019s one for you: \n\nWhy don\u2019t seagulls fly over the bay?\n\nBecause then they\u2019d be bagels! \n\nWhat do you think? Want to stick with animals, or explore another theme?",
+    "role": "user",
+    "name": "Mike"
+  }
+]
+```

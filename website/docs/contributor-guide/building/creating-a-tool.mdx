@@ -1,0 +1,214 @@
+---
+title: Creating a new tool
+---
+
+```python
+# Are you wanting to create your own AG2 tool?
+# You're in the right place.
+my_tool = MyAmazingTool()
+```
+
+<Tip>
+We'll be getting into the AG2 code-base, it's useful to understand how AG2 works under the hood, [see this section](/docs/contributor-guide/how-ag2-works/overview) for the rundown.
+</Tip>
+
+Creating a new tool in AG2 is easy and empowers any [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)-based agent in AG2.
+
+## How a tool is created
+
+Let's look at how the [Crawl4AITool](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) tool was implemented.
+
+The Crawl4AITool uses a 3rd party package to crawl a website and extract information, returning the crawled data as its response.
+
+Here's some code from the Crawl4AITool with annotations added ([current code here](https://github.com/ag2ai/ag2/blob/main/autogen/tools/experimental/crawl4ai/crawl4ai.py)):
+
+```python
+# Imports from 3rd party packages are handled with this context manager
+with optional_import_block():
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+    from crawl4ai.extraction_strategy import LLMExtractionStrategy
+
+__all__ = ["Crawl4AITool"]
+
+# Denote that this requires a 3rd party package, with "crawl4ai"
+# being the namespace. Our AG2 'extra' is called "crawl4ai".
+@require_optional_import(["crawl4ai"], "crawl4ai")
+@export_module("autogen.tools.experimental")
+# Indicates where this appears in the API Reference documentation
+# autogen > tools > experimental > Crawl4AITool
+class Crawl4AITool(Tool): # Built on the Tool class
+    """
+    Crawl a website and extract information using the crawl4ai library.
+    """
+    # Ensure there's a docstring for the tool for documentation
+
+    def __init__(
+        self,
+        llm_config: Optional[dict[str, Any]] = None,
+        extraction_model: Optional[type[BaseModel]] = None,
+        llm_strategy_kwargs: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """
+        Initialize the Crawl4AITool.
+
+        Args:
+            llm_config: The config dictionary for the LLM model. If None, the tool will run without LLM.
+            extraction_model: The Pydantic model to use for extraction. If None, the tool will use the default schema.
+            llm_strategy_kwargs: The keyword arguments to pass to the LLM extraction strategy.
+        """ # Follow this docstring format
+        Crawl4AITool._validate_llm_strategy_kwargs(llm_strategy_kwargs, llm_config_provided=(llm_config is not None))
+
+        # Helper function inside init
+        async def crawl4ai_helper(  # type: ignore[no-any-unimported]
+            url: str,
+            browser_cfg: Optional["BrowserConfig"] = None,
+            crawl_config: Optional["CrawlerRunConfig"] = None,
+        ) -> Any:
+            async with AsyncWebCrawler(config=browser_cfg) as crawler:
+                result = await crawler.arun(
+                    url=url,
+                    config=crawl_config,
+                )
+
+            if crawl_config is None:
+                response = result.markdown
+            else:
+                response = result.extracted_content if result.success else result.error_message
+
+            return response
+
+        # Crawl without an LLM
+        async def crawl4ai_without_llm(
+            url: Annotated[str, "The url to crawl and extract information from."],
+        ) -> Any:
+            return await crawl4ai_helper(url=url)
+
+        # Crawl with an LLM, using the LLM configuration passed in
+        async def crawl4ai_with_llm(
+            url: Annotated[str, "The url to crawl and extract information from."],
+            instruction: Annotated[str, "The instruction to provide on how and what to extract."],
+            llm_config: Annotated[Any, Depends(on(llm_config))],
+            llm_strategy_kwargs: Annotated[Optional[dict[str, Any]], Depends(on(llm_strategy_kwargs))],
+            extraction_model: Annotated[Optional[type[BaseModel]], Depends(on(extraction_model))],
+        ) -> Any:
+            browser_cfg = BrowserConfig(headless=True)
+            crawl_config = Crawl4AITool._get_crawl_config(
+                llm_config=llm_config,
+                instruction=instruction,
+                extraction_model=extraction_model,
+                llm_strategy_kwargs=llm_strategy_kwargs,
+            )
+
+            return await crawl4ai_helper(url=url, browser_cfg=browser_cfg, crawl_config=crawl_config)
+
+        # Initialise the base Tool class with the LLM description
+        # and the function to call
+        super().__init__(
+            name="crawl4ai",
+            description="Crawl a website and extract information.",
+            func_or_tool=crawl4ai_without_llm if llm_config is None else crawl4ai_with_llm,
+        )
+```
+
+And this tool can now be registered with any [ConversableAgent](/docs/api-reference/autogen/ConversableAgent)-based agent.
+
+Here's how to use the Crawl4AITool:
+
+```python
+from autogen import ConversableAgent
+
+# Import the Tool
+from autogen.tools.experimental import Crawl4AITool
+
+config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
+llm_config = {"config_list": config_list}
+
+# Agent for LLM tool recommendation
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+
+# Agent for tool execution
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+
+# Create the tool, with defaults
+crawlai_tool = Crawl4AITool()
+
+# Register it for LLM recommendation and execution
+crawlai_tool.register_for_llm(assistant)
+crawlai_tool.register_for_execution(user_proxy)
+
+result = user_proxy.initiate_chat(
+    recipient=assistant,
+    message="Get info from https://docs.ag2.ai/docs/Home",
+    max_turns=2,
+)
+```
+
+## Protecting secrets
+
+Secrets such as password, tokens, or personal information needs to be protected from capture. AG2 provides dependency injection as a way to secure this sensitive information while still allowing agents to perform their tasks effectively, even when working with large language models (LLMs).
+
+See the DiscordSendTool example in the [Creating an Agent](/docs/contributor-guide/building/creating-an-agent#how-a-tool-based-agent-is-created) documentation to see how it is implemented for a tool.
+
+See [Tools with Secrets](/docs/user-guide/advanced-concepts/tools-with-secrets) for guidance.
+
+## Where to put your code
+
+Decide on a folder name that matches your tool name, use underscores to separate words, e.g. `deep_research`.
+
+Create your tool code in a folder under [`autogen/tools/contrib/`](https://github.com/ag2ai/ag2/tree/main/autogen/tools/contrib).
+
+Put your tool tests in a folder under [`test/tools/contrib`](https://github.com/ag2ai/ag2/tree/main/test/tools/contrib).
+
+## Documentation
+
+As a way for other developers to learn about and understand how to use your tool, it is recommended to create a Jupyter notebook that:
+- Explains what the tool is
+- How to install AG2 for the tool (e.g. with extras)
+- Has sample codes, simple to advanced
+- Notes on capabilities and limitations
+
+As an example, here's the [notebook](/docs/use-cases/notebooks/notebooks/tools_crawl4ai) for the Crawl4AI tool.
+
+## 3rd party packages
+
+If your tool requires a 3rd party package to be installed, add an extra in the [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.toml) file, for example:
+
+```text
+twilio = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.6,<1",
+    "twilio>=9.3.2,<10>"
+]
+```
+
+Put the current version of the packages as the minimum version and the next major version for the **less than** value.
+
+Changes to [pyproject.toml](https://github.com/ag2ai/ag2/blob/main/pyproject.toml) cover `pyautogen`, `autogen`, and `ag2` packages because they propagate automatically to [setup_ag2.py](https://github.com/ag2ai/ag2/blob/main/setup_ag2.py) and [setup_autogen.py](https://github.com/ag2ai/ag2/blob/main/setup_autogen.py).
+
+## Tests
+
+It's critical that tests are created for each piece of functionality within your tool.
+
+See this [test file](https://github.com/ag2ai/ag2/blob/main/test/tools/experimental/browser_use/test_browser_use.py) for the [BrowserUseTool](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) as an example.
+
+See this documentation for how to run [tests locally and coverage](/docs/contributor-guide/tests).
+
+## Create a Pull Request
+
+We're excited to review and test your new AG2 tool! Create your Pull Request (PR) [here](https://github.com/ag2ai/ag2/pulls).
+
+Set the PR as a Draft PR if you're not ready for it to be merged into the AG2 repository.
+
+See our [Contributor Guide](/docs/contributor-guide/contributing) for more guidance.
+
+## Encapsulating the tools in an agent
+
+If it makes sense to have an agent pre-built with your tool(s), consider creating a [tool-based agent](/docs/contributor-guide/building/creating-an-agent#how-a-tool-based-agent-is-created). Now, when you need your tool you can just add the agent to your workflow.
+
+## Help me get started...
+
+Two basic agents and a tool are available in the agents and tools `contrib` namespaces that you can look at and use as a starting point for your own agents and tools.
+
+- TimeReplyAgent (reply-based Agent) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/contrib/time/time_reply_agent.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/agents/contrib/time/test_timereplyagent.py)
+- TimeToolAgent (tool-based Agent) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/contrib/time/time_tool_agent.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/agents/contrib/time/test_timetoolagent.py)
+- TimeTool (Tool) - [source code](https://github.com/ag2ai/ag2/blob/main/autogen/tools/contrib/time/time.py), [test code](https://github.com/ag2ai/ag2/blob/main/test/tools/contrib/time/test_time.py)

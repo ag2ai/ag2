@@ -20,6 +20,7 @@ class LessonPlan(BaseModel):
 
 # 2. Add our lesson plan structure to the LLM configuration
 llm_config = {
+    "api_type": "openai",
     "model": "gpt-4o-mini",
     "response_format": LessonPlan,
 }

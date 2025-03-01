@@ -46,7 +46,7 @@ When installing AG2 locally, we recommend using a virtual environment for the in
   <Tab title="Poetry">
     <p><a href="https://python-poetry.org/docs/#installation" target="_blank" rel="noopener noreferrer">Install Poetry</a> if you have not already.</p>
 
-    <p>Create and active:</p>
+    <p>Create and activate:</p>
     ```bash
     poetry init
     poetry shell
@@ -68,17 +68,17 @@ When installing AG2 locally, we recommend using a virtual environment for the in
 AG2 requires **Python version >= 3.9, < 3.14**. It can be installed from pip:
 
 ```bash
-pip install ag2
+pip install ag2[openai]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen
+pip install -U autogen[openai]
 ```
 or
 ```bash
-pip install -U pyautogen
+pip install -U pyautogen[openai]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>

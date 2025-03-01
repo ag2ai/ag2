@@ -11,10 +11,10 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
-from openai import AzureOpenAI, OpenAI
-from openai.types.chat import ChatCompletion
-
 if TYPE_CHECKING:
+    from openai import AzureOpenAI, OpenAI
+    from openai.types.chat import ChatCompletion
+
     from .. import Agent, ConversableAgent, OpenAIWrapper
 
 F = TypeVar("F", bound=Callable[..., Any])

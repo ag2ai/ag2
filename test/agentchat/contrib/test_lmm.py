@@ -27,6 +27,7 @@ base64_encoded_image = (
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 class TestMultimodalConversableAgent(unittest.TestCase):
     def setUp(self):
         self.agent = MultimodalConversableAgent(
@@ -90,6 +91,7 @@ class TestMultimodalConversableAgent(unittest.TestCase):
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 def test_group_chat_with_lmm(monkeypatch: MonkeyPatch):
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.

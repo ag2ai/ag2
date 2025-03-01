@@ -10,10 +10,14 @@ from textwrap import dedent
 import pytest
 
 from autogen._website.generate_mkdocs import (
+    add_api_ref_to_mkdocs_template,
     filter_excluded_files,
+    fix_asset_path,
     format_navigation,
     generate_mkdocs_navigation,
     process_and_copy_files,
+    transform_card_grp_component,
+    transform_tab_component,
 )
 from autogen._website.utils import NavigationGroup
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
@@ -57,6 +61,9 @@ def test_process_and_copy_files() -> None:
         quick_start_content = dedent("""
             <Tip>
             It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
+            ```bash
+            pip install -U autogen
+            ```
             </Tip>
 
             <Warning>
@@ -97,6 +104,9 @@ def test_process_and_copy_files() -> None:
         expected_quick_start_content = dedent("""
             !!! tip
                 It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
+                ```bash
+                pip install -U autogen
+                ```
 
             !!! warning
                 It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
@@ -112,6 +122,133 @@ def test_process_and_copy_files() -> None:
             actual_quick_start_content = f.read()
 
         assert actual_quick_start_content == expected_quick_start_content
+
+
+def test_transform_tab_component() -> None:
+    content = dedent("""This is a sample quick start page.
+<Tabs>
+    <Tab title="Chat with an agent">
+```python
+# 1. Import our agent class
+from autogen import ConversableAgent
+
+# 2. Define our LLM configuration for OpenAI's GPT-4o mini
+#    uses the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+# 3. Create our LLM agent
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    llm_config=llm_config,
+    system_message="You are a poetic AI assistant, respond in rhyme.",
+)
+
+# 4. Run the agent with a prompt
+chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+
+# 5. Print the chat
+print(chat_result.chat_history)
+```
+    </Tab>
+    <Tab title="Two agent chat">
+    example code
+```python
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+```
+
+
+    </Tab>
+</Tabs>
+
+Some conclusion
+""")
+
+    expected = dedent("""This is a sample quick start page.
+=== "Chat with an agent"
+    ```python
+    # 1. Import our agent class
+    from autogen import ConversableAgent
+
+    # 2. Define our LLM configuration for OpenAI's GPT-4o mini
+    #    uses the OPENAI_API_KEY environment variable
+    llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+    # 3. Create our LLM agent
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        llm_config=llm_config,
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+    )
+
+    # 4. Run the agent with a prompt
+    chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+
+    # 5. Print the chat
+    print(chat_result.chat_history)
+    ```
+
+=== "Two agent chat"
+    example code
+    ```python
+    llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+    ```
+
+Some conclusion
+""")
+    actual = transform_tab_component(content)
+    assert actual == expected
+
+
+def test_transform_card_grp_component() -> None:
+    content = dedent("""This is a sample quick start page.
+        <div class="popular-resources">
+            <div class="card-group not-prose grid gap-x-4 sm:grid-cols-2">
+                <CardGroup cols={2}>
+                <Card>
+                    <p>Hello World</p>
+                </Card>
+                <Card title="Quick Start" href="/docs/home/quick-start">
+                    <p>Hello World</p>
+                </Card>
+                </CardGroup>
+            </div>
+        </div>
+        """)
+
+    expected = dedent("""This is a sample quick start page.
+        <div class="popular-resources">
+            <div class="card-group not-prose grid gap-x-4 sm:grid-cols-2">
+                <div class="card">
+                    <p>Hello World</p>
+                </div>
+                <a class="card" href="/docs/home/quick-start">
+<h2>Quick Start</h2>
+                    <p>Hello World</p>
+                </a>
+            </div>
+        </div>
+        """)
+    actual = transform_card_grp_component(content)
+    assert actual == expected
+
+
+def test_fix_asset_path() -> None:
+    content = dedent("""This is a sample quick start page.
+<div class="key-feature">
+    <img noZoom src="/static/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/docs/home/quick-start">
+        <div>Getting Started - 3 Minute</div>
+    </a>
+</div>""")
+    expected = dedent("""This is a sample quick start page.
+<div class="key-feature">
+    <img noZoom src="/ag2/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/ag2/docs/home/quick-start">
+        <div>Getting Started - 3 Minute</div>
+    </a>
+</div>""")
+    actual = fix_asset_path(content)
+    assert actual == expected
 
 
 @pytest.fixture
@@ -147,7 +284,7 @@ def navigation() -> list[NavigationGroup]:
             ],
         },
         {
-            "group": "Contributing",
+            "group": "Contributor Guide",
             "pages": [
                 "docs/contributing/contributing",
             ],
@@ -157,7 +294,7 @@ def navigation() -> list[NavigationGroup]:
 
 @pytest.fixture
 def expected_nav() -> str:
-    return """- Home
+    return """- [Home](index.md)
     - [Home](docs/home/home.md)
     - [Quick Start](docs/home/quick-start.md)
 - User Guide
@@ -173,7 +310,7 @@ def expected_nav() -> str:
             - [Sequential Chat](docs/user-guide/basic-concepts/orchestration/sequential-chat.md)
     - Advanced Concepts
         - [RAG](docs/user-guide/advanced-concepts/rag.md)
-- Contributing
+- Contributor Guide
     - [Contributing](docs/contributing/contributing.md)"""
 
 
@@ -182,9 +319,37 @@ def test_format_navigation(navigation: list[NavigationGroup], expected_nav: str)
     assert actual == expected_nav
 
 
-# The commented out code `# @skip_on_missing_imports(["jinja2"], "docs")` is likely a decorator that
-# is used to skip a test if certain imports are missing. In this case, it seems to be checking if the
-# `jinja2` library is missing before running the test function `test_generate_mkdocs_navigation`.
+def test_add_api_ref_to_mkdocs_template() -> None:
+    mkdocs_nav = """- Home
+    - [Home](docs/home/home.md)
+- User Guide
+    - Basic Concepts
+        - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
+        - LLM Configuration
+            - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
+        - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+"""
+
+    expected = """- Home
+    - [Home](docs/home/home.md)
+- User Guide
+    - Basic Concepts
+        - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
+        - LLM Configuration
+            - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
+        - [Websurferagent](docs/user-guide/reference-agents/websurferagent.md)
+- API References
+{api}
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+"""
+    section_to_follow = "Contributor Guide"
+    actual = add_api_ref_to_mkdocs_template(mkdocs_nav, section_to_follow)
+    assert actual == expected
+
+
 @skip_on_missing_imports(["jinja2"], "docs")
 def test_generate_mkdocs_navigation(navigation: list[NavigationGroup], expected_nav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -215,7 +380,7 @@ def test_generate_mkdocs_navigation(navigation: list[NavigationGroup], expected_
 
         mintlify_nav_template_path.write_text(mintlify_nav_content)
 
-        nav_exclusions = ["Contributing"]
+        nav_exclusions = ["Contributor Guide"]
         generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
         actual = mkdocs_nav_path.read_text()
         expected = (
@@ -226,7 +391,7 @@ search:
 """
             + expected_nav.replace(
                 """
-- Contributing
+- Contributor Guide
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )

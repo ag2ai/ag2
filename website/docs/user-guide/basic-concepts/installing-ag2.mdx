@@ -5,20 +5,30 @@ title: Installing AG2
 We recommended using a virtual environment for your project to keep your packages contained. See [venv](https://docs.python.org/3/library/venv.html).
 </Tip>
 
+<Warning>
+**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
+
+Install AG2 with your preferred model provider(s), for example:
+- `pip install ag2[openai]`
+- `pip install ag2[gemini]`
+- `pip install ag2[anthropic,cohere,mistral]`
+</Warning>
+
+
 Install AG2 on your machine:
 
 ```bash
-pip install ag2
+pip install ag2[openai]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen
+pip install -U autogen[openai]
 ```
 or
 ```bash
-pip install -U pyautogen
+pip install -U pyautogen[openai]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>

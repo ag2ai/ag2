@@ -36,7 +36,7 @@ from typing import Any, Dict, List
 from autogen import (
     AfterWork,
     OnCondition,
-    UPDATE_SYSTEM_MESSAGE,
+    UpdateSystemMessage,
     AfterWorkOption,
     AssistantAgent,
     SwarmResult,
@@ -225,7 +225,7 @@ Enquiring for Order ID: {order_id}
 order_triage_agent = AssistantAgent(
     name="order_triage_agent",
     update_agent_state_before_reply=[
-        UPDATE_SYSTEM_MESSAGE(order_triage_prompt),
+        UpdateSystemMessage(order_triage_prompt),
     ],
     functions=[check_order_id, record_order_id],
     llm_config=llm_config,
@@ -255,7 +255,7 @@ Enquiring for Order ID: {order_id}
 order_mgmt_agent = AssistantAgent(
     name="order_mgmt_agent",
     update_agent_state_before_reply=[
-        UPDATE_SYSTEM_MESSAGE(order_management_prompt),
+        UpdateSystemMessage(order_management_prompt),
     ],
     functions=[check_order_id, record_order_id],
     llm_config=llm_config,

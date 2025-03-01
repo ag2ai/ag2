@@ -1,0 +1,48 @@
+---
+title: Installation
+sidebarTitle: Installation
+---
+
+[LiteLLM Proxy Server](https://docs.litellm.ai/docs/simple_proxy) is an open-source, self-hosted proxy server that offers an OpenAI-compatible API, enabling seamless interaction with multiple LLM providers like OpenAI, Azure, IBM WatsonX etc.
+It simplifies model integration, providing a unified interface for diverse AI backends.
+
+This guide will walk you through integrating **LiteLLM Proxy Server** with **AG2**, ensuring efficient AI agent orchestration with minimal setup.
+
+## Prerequisites
+
+Before proceeding, ensure the following:
+
+- **Docker** is installed. Refer to the [Docker installation guide](https://docs.docker.com/get-docker/)
+- **(Optional)** Install **Postman** for easier API request testing.
+
+## Installation
+
+### Install AG2
+
+**AG2** is a powerful framework designed to simplify AI agent orchestration.
+
+To install `AG2`, simply run the following command:
+```bash
+pip install ag2[openai]
+```
+
+<Tip>
+If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[openai]
+```
+or
+```bash
+pip install -U pyautogen[openai]
+```
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+### Install LiteLLM
+LiteLLM runs as a lightweight proxy server, making it easier to integrate different LLM providers.
+
+To install LiteLLM, download the latest Docker image:
+
+```bash
+docker pull ghcr.io/berriai/litellm:main-latest
+```

@@ -40,12 +40,14 @@ def conversable_agent():
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 def test_add_to_conversable_agent(vision_capability, conversable_agent):
     vision_capability.add_to_agent(conversable_agent)
     assert hasattr(conversable_agent, "process_last_received_message")
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 @patch("autogen.oai.client.OpenAIWrapper")
 def test_process_last_received_message_text(mock_lmm_client, vision_capability):
     mock_lmm_client.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="A description"))])
@@ -64,6 +66,7 @@ def test_process_last_received_message_text(mock_lmm_client, vision_capability):
     return_value="A sample image caption.",
 )
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 def test_process_last_received_message_with_image(
     mock_get_caption, mock_convert_base64, mock_get_image_data, vision_capability
 ):
@@ -90,6 +93,7 @@ def custom_caption_func():
 
 
 @skip_on_missing_imports(["PIL"], "unknown")
+@skip_on_missing_imports(["openai"], "openai")
 class TestCustomCaptionFunc:
     def test_custom_caption_func_with_valid_url(self, custom_caption_func):
         """Test custom caption function with a valid image URL."""

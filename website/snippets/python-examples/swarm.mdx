@@ -1,15 +1,15 @@
 ```python
 from autogen import (
-    AFTER_WORK,
-    ON_CONDITION,
+    AfterWork,
+    OnCondition,
     AfterWorkOption,
-    SwarmAgent,
+    ConversableAgent,
     SwarmResult,
     initiate_swarm_chat,
     register_hand_off,
 )
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}
+llm_config = {"api_type": "openai", "model": "gpt-4o", "cache_seed": None}
 
 # 1. Context
 shared_context = {
@@ -57,7 +57,7 @@ lesson_planner = ConversableAgent(
 reviewer_message = """You are a classroom lesson reviewer.
 You compare the lesson plan to the fourth grade curriculum
 and provide a maximum of 3 recommended changes for each review.
-Make sure you provide recommendations each time the plan is updated.
+Always provide feedback for the current lesson plan.
 """
 
 lesson_reviewer = ConversableAgent(
@@ -81,12 +81,12 @@ teacher = ConversableAgent(
 # allowing reviews. After that's done, transition to the teacher.
 register_hand_off(lesson_planner,
     [
-        ON_CONDITION(
+        OnCondition(
             target=lesson_reviewer,
             condition="After creating/updating and recording the plan, it must be reviewed.",
             available="reviews_left",
         ),
-        AFTER_WORK(agent=teacher),
+        AfterWork(agent=teacher),
     ]
 )
 
@@ -94,10 +94,10 @@ register_hand_off(lesson_planner,
 # no plan to review, otherwise it will provide a review and
 register_hand_off(lesson_reviewer,
     [
-        ON_CONDITION(
+        OnCondition(
             target=lesson_planner, condition="After new feedback has been made and recorded, the plan must be updated."
         ),
-        AFTER_WORK(agent=teacher),
+        AfterWork(agent=teacher),
     ]
 )
 
@@ -105,8 +105,8 @@ register_hand_off(lesson_reviewer,
 # a plan exists, they'll end the swarm.
 register_hand_off(teacher,
     [
-        ON_CONDITION(target=lesson_planner, condition="Create a lesson plan.", available="reviews_left"),
-        AFTER_WORK(AfterWorkOption.TERMINATE),
+        OnCondition(target=lesson_planner, condition="Create a lesson plan.", available="reviews_left"),
+        AfterWork(AfterWorkOption.TERMINATE),
     ]
 )
 

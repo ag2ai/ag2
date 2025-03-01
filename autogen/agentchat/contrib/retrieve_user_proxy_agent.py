@@ -192,7 +192,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `update_context` (Optional, bool) - if False, will not apply `Update Context` for
                     interactive retrieval. Default is True.
                 - `collection_name` (Optional, str) - the name of the collection.
-                    If key not provided, a default name `autogen-docs` will be used.
+                    If key not provided, a default name `ag2-docs` will be used.
                 - `get_or_create` (Optional, bool) - Whether to get the collection if it exists. Default is False.
                 - `overwrite` (Optional, bool) - Whether to overwrite the collection if it exists. Default is False.
                     Case 1. if the collection does not exist, create the collection.
@@ -261,7 +261,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
         self._docs_path = self._retrieve_config.get("docs_path", None)
         self._extra_docs = self._retrieve_config.get("extra_docs", False)
         self._new_docs = self._retrieve_config.get("new_docs", True)
-        self._collection_name = self._retrieve_config.get("collection_name", "autogen-docs")
+        self._collection_name = self._retrieve_config.get("collection_name", "ag2-docs")
         if "docs_path" not in self._retrieve_config:
             logger.warning(
                 "docs_path is not provided in retrieve_config. "

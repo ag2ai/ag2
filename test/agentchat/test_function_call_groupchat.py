@@ -71,7 +71,7 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
         llm_config=llm_config_no_function,
     )
     groupchat = autogen.GroupChat(
-        agents=[player, user_proxy, observer], messages=[], max_round=7, speaker_selection_method="round_robin"
+        agents=[player, user_proxy, observer], max_round=7, speaker_selection_method="round_robin"
     )
 
     # pass in llm_config with functions

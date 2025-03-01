@@ -4,19 +4,28 @@ title: "Quick Start"
 
 AG2 (formerly AutoGen) is an open-source programming framework for building AI agents and facilitating their cooperation to solve tasks. AG2 supports tool use, autonomous and human-in-the-loop workflows, and multi-agent conversation patterns.
 
+<Warning>
+**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
+
+Install AG2 with your preferred model provider(s), for example:
+- `pip install ag2[openai]`
+- `pip install ag2[gemini]`
+- `pip install ag2[anthropic,cohere,mistral]`
+</Warning>
+
 ### Let's go
 
 ```sh
-pip install ag2
+pip install ag2[openai]
 ```
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen
+pip install -U autogen[openai]
 ```
 or
 ```bash
-pip install -U pyautogen
+pip install -U pyautogen[openai]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -161,12 +170,10 @@ print(chat_result.chat_history)
 
 </Tabs>
 
-<div class="tip">
-  <Tip>
+<Tip>
     Learn more about configuring LLMs for agents
     [here](/docs/user-guide/basic-concepts/llm-configuration).
-  </Tip>
-</div>
+</Tip>
 
 ### Where to Go Next?
 
@@ -176,7 +183,7 @@ print(chat_result.chat_history)
 - Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
 - Follow on [X](https://x.com/ag2oss)
 
-If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](/contributor-guide/contributing).
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](/docs/contributor-guide/contributing).
 
 <iframe
   src="https://ghbtns.com/github-btn.html?user=ag2ai&amp;repo=ag2&amp;type=star&amp;count=true&amp;size=large"
