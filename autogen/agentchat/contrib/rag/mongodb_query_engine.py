@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 class MongoDBQueryEngine:
     """
     A query engine backed by MongoDB Atlas that supports document insertion and querying.
+    This is a autogen.agentchat.contrib.rag.RAGQueryEngine.
 
     This engine initializes a vector database, builds an index from input documents,
     and allows querying using the chat engine interface.
