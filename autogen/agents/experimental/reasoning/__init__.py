@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .reasoning_agent import ReasoningAgent, ThinkNode
 
-__version__ = "0.8.0b1"
+__all__ = ["ReasoningAgent", "ThinkNode"]

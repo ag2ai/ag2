@@ -3,9 +3,6 @@ title: "Key Features"
 mode: "wide"
 ---
 
-import { PopularResources } from '/snippets/components/PopularResources.mdx';
-import { ExploreContent } from '/snippets/components/ExploreContent.mdx';
-
 <div class="homepage-hero-section">
   <div class="hero-content">
     <div class="hero-logo-section">
@@ -34,14 +31,14 @@ import { ExploreContent } from '/snippets/components/ExploreContent.mdx';
         </Card>
         <Card>
             <div class="key-feature">
-                <img noZoom src='/static/img/autogen_app.svg' alt='Easily Build Diverse Applications' />
+                <img noZoom src="/static/img/autogen_app.svg" alt='Easily Build Diverse Applications' />
                 <b>Easily Build Diverse Applications</b>
                 <p>AG2 offers a collection of working systems spanning a wide range of applications from various domains and complexities.</p>
             </div>
         </Card>
         <Card>
             <div class="key-feature">
-                <img noZoom src='/static/img/extend.svg' alt='Enhanced LLM Inference & Optimization' />
+                <img noZoom src="/static/img/extend.svg" alt='Enhanced LLM Inference & Optimization' />
                 <b>Enhanced LLM Inference & Optimization</b>
                 <p>AG2 supports enhanced LLM inference APIs, which can be used to improve inference performance and reduce cost.</p>
             </div>
@@ -50,7 +47,66 @@ import { ExploreContent } from '/snippets/components/ExploreContent.mdx';
 </div>
 
 ### Explore content
-<ExploreContent />
+<div class="explore-content">
+  <div class="explore-content-grid-container">
+    <CardGroup cols={2}>
+      <Card title="Quick Start" href="/docs/home/quick-start">
+        Start building your AG2 application.
+      </Card>
+      <Card title="Concepts" href="/docs/user-guide/basic-concepts/installing-ag2">
+        Work through the key concepts of AG2 including ConversableAgent, GroupChat, Swarm, and tools.
+      </Card>
+      <Card title="Advanced Concepts" href="/docs/user-guide/advanced-concepts/rag">
+        Advance to RAG, Code Execution, and more complex GroupChats and Swarms.
+      </Card>
+      <Card title="Use Cases" href="/docs/use-cases/use-cases/">
+        Try out use case workflows including Customer Service, Travel Planning, and Game Design.
+      </Card>
+      <Card title="Notebook Examples" href="/docs/use-cases/notebooks/Notebooks">
+        A collection of interactive notebooks across all AG2 topics.
+      </Card>
+      <Card title="API Reference" href="/docs/api-reference/autogen">
+        Delve into the AG2 API reference.
+      </Card>
+      <Card title="How to Contribute" href="/docs/contributor-guide/contributing">
+        Get involved with AG2 by adding what you need and making the framework even better!
+      </Card>
+    </CardGroup>
+  </div>
+</div>
 
 ### Popular resources
-<PopularResources />
+<div class="popular-resources">
+  <CardGroup cols={2}>
+    <Card>
+      <div class="youtube-video">
+        <iframe
+          class="w-full aspect-video rounded-md"
+          src="https://www.youtube.com/embed/RLwyXRVvlNk"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+        <a target="_blank" href="https://www.youtube.com/watch?v=RLwyXRVvlNk">
+          Foundation Capital Interview with Dr. Chi Wang
+        </a>
+      </div>
+    </Card>
+    <Card>
+      <div class="youtube-video">
+        <iframe
+          class="w-full aspect-video rounded-md"
+          src="https://www.youtube.com/embed/TBNTH-fwGPE"
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+        <a target="_blank" href="https://www.youtube.com/watch?v=TBNTH-fwGPE">
+          Learn AG2 on DeepLearningAI
+        </a>
+      </div>
+    </Card>
+  </CardGroup>
+</div>

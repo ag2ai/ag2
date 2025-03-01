@@ -9,17 +9,17 @@ This notebook demonstrates how to use AG2 with Gemini via Vertex AI, which enabl
 
 Install AG2 with Gemini features:
 ```bash
-pip install ag2[openai,gemini]
+pip install ag2[gemini]
 ```
 
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[openai,gemini]
+pip install -U autogen[gemini]
 ```
 or
 ```bash
-pip install -U pyautogen[openai,gemini]
+pip install -U pyautogen[gemini]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -313,6 +313,7 @@ Gemini Vision (to user_proxy):
 
 # Use Gemini via the OpenAI Library in AG2
 Using Gemini via the OpenAI library is also possible once you are already authenticated. <br/>
+Be sure to install the `openai` package to do this.<br/>
 Run `gcloud auth application-default login` to set up application default credentials locally for the example below.<br/>
 Also set the Google cloud project on the CLI if you have not done so far: <br/>
 ```bash
