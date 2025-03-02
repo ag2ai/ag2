@@ -107,6 +107,30 @@ class DocumentTask(BaseModel):
     ingestions: list[Ingest] = Field(description="The list of documents to ingest.")
     queries: list[Query] = Field(description="The list of queries to perform.")
 
+    def format(self) -> str:
+        """Format the DocumentTask as a string for the TaskManager to work with."""
+        if len(self.ingestions) == 0 and len(self.queries) == 0:
+            return "There were no ingestion or query tasks detected."
+
+        instructions = "Tasks:\n\n"
+        order = 1
+
+        if len(self.ingestions) > 0:
+            instructions += "Ingestions:\n"
+            for ingestion in self.ingestions:
+                instructions += f"{order}: {ingestion.path_or_url}\n"
+                order += 1
+
+            instructions += "\n"
+
+        if len(self.queries) > 0:
+            instructions += "Queries:\n"
+            for query in self.queries:
+                instructions += f"{order}: {query.query}\n"
+                order += 1
+
+        return instructions
+
 
 class DocumentTriageAgent(ConversableAgent):
     """The DocumentTriageAgent is responsible for deciding what type of task to perform from user requests."""
@@ -174,6 +198,7 @@ class DocAgent(ConversableAgent):
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
 
+        # Default Query Engine will be ChromaDB
         if query_engine is None:
             query_engine = VectorChromaQueryEngine(collection_name=collection_name)
 
@@ -292,6 +317,9 @@ class DocAgent(ConversableAgent):
 
             system_message = (
                 "You are a summary agent and you provide a summary of all completed tasks and the list of queries and their answers. "
+                "Output two sections: 'Ingestions:' and 'Queries:' with the results of the tasks. Number the ingestions and queries. "
+                "If there are no ingestions output 'No ingestions', if there are no queries output 'No queries' under their respective sections. "
+                "Don't add markdown formatting. "
                 "Format the Query and Answers as 'Query:\nAnswer:'. Add a number to each query if more than one. Use the context below:\n"
                 f"Documents ingested: {agent.get_context('DocumentsIngested')}\n"
                 f"Documents left to ingest: {len(agent.get_context('DocumentsToIngest'))}\n"
@@ -311,8 +339,8 @@ class DocAgent(ConversableAgent):
             logger.debug("has_ingest_tasks context_variables:", agent._context_variables)
             return len(agent.get_context("DocumentsToIngest")) > 0
 
-        def has_query_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
-            logger.debug("has_query_tasks context_variables:", agent._context_variables)
+        def has_only_query_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+            logger.debug("has_only_query_tasks context_variables:", agent._context_variables)
             if len(agent.get_context("DocumentsToIngest")) > 0:
                 return False
             return len(agent.get_context("QueriesToRun")) > 0
@@ -335,7 +363,7 @@ class DocAgent(ConversableAgent):
                 OnCondition(
                     self._query_agent,
                     "If there are any QueriesToRun in context variables and no DocumentsToIngest, transfer to query_agent",
-                    available=has_query_tasks,
+                    available=has_only_query_tasks,
                 ),
                 OnCondition(
                     self._summary_agent,
