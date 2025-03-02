@@ -53,16 +53,6 @@ class RAGQueryEngine(Protocol):
         """Add new documents to the underlying data store."""
         ...
 
-    def add_records(
-        self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[list[Union[Path, str]]] = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> bool:
-        """Add new documents to the underlying database and add to the index."""
-        ...
-
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """Connect to the database.
         Args:
