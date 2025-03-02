@@ -266,7 +266,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
 
         # Save the rendered HTML
         filepath = output_dir / filename
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(file=filepath, mode="w", encoding="utf-8") as f:
             f.write(rendered_html)
 
         return filepath
