@@ -38,6 +38,8 @@ class VectorChromaQueryEngine(RAGQueryEngine):
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. The Chromadb collection serves as the storage layer, while
     the collection name uniquely identifies the set of documents within the persistent database.
+
+    This is a autogen.agentchat.contrib.rag.RAGQueryEngine.
     """
 
     def __init__(  # type: ignore
@@ -72,9 +74,9 @@ class VectorChromaQueryEngine(RAGQueryEngine):
         self.client = chromadb.PersistentClient(path=db_path or "./chroma")
         self.collection_name: Optional[str] = collection_name
 
-        self.establish_db()
+        self.connect_db()
 
-    def establish_db(self) -> None:
+    def connect_db(self) -> None:
         """
         Establish a connection to the Chromadb database and initialize the collection.
         """
