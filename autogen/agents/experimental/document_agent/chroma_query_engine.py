@@ -76,7 +76,7 @@ class VectorChromaQueryEngine(RAGQueryEngine):
 
         self.connect_db()
 
-    def connect_db(self) -> None:
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
         Establish a connection to the Chromadb database and initialize the collection.
         """
@@ -95,6 +95,8 @@ class VectorChromaQueryEngine(RAGQueryEngine):
             get_or_create=True,  # If collection already exists, get the collection
         )
         self.index = self._create_index(self.collection)
+
+        return True
 
     def query(self, question: str) -> str:
         """
@@ -251,7 +253,3 @@ class VectorChromaQueryEngine(RAGQueryEngine):
     ) -> bool:
         """Not required nor implemented for VectorChromaQueryEngine"""
         raise NotImplementedError("Method, init_db, not required nor implemented for VectorChromaQuery")
-
-    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
-        """Not required nor implemented for VectorChromeQueryEngine"""
-        raise NotImplementedError("Method, connect_db, not required nor implemented for VectorChromaQueryEngine")
