@@ -22,6 +22,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.import_utils import skip_on_missing_imports
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -1618,6 +1619,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
 
 @pytest.mark.deepseek
 @suppress_json_decoder_error
+@skip_on_missing_imports(["openai"], "openai")
 def test_conversable_agent_with_deepseek_reasoner(
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
@@ -1734,6 +1736,30 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
 
     # Verify tool was removed from internal list
     assert len(agent._tools) == 0
+
+    # Verify tool was unregistered from LLM
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    print(mock_tool.name)
+    print(tool_schemas)
+    assert mock_tool.name not in tool_schemas
+
+
+def test_remove_tool_by_name_for_llm(mock_credentials: Credentials):
+    """Test removing a tool."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    mock_tool = Tool(name="test_tool", description="A test tool", func_or_tool=sample_tool_func)
+
+    agent.register_for_llm()(mock_tool)
+
+    # Remove the tool by name
+    agent.update_tool_signature(tool_sig="test_tool", is_remove=True)
+
+    # Verify tool was removed from internal list
+    assert "tools" not in mock_credentials.llm_config
 
     # Verify tool was unregistered from LLM
     tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]

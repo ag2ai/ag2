@@ -16,6 +16,7 @@ from ...conftest import MOCK_OPEN_AI_API_KEY
 
 
 @skip_on_missing_imports(["replicate"], "lmm")
+@skip_on_missing_imports(["openai"], "openai")
 class TestLLaVAAgent(unittest.TestCase):
     def setUp(self):
         self.agent = LLaVAAgent(

@@ -91,6 +91,13 @@ a.internal-link::after {
     content: "\00A0↪";
 }
 
+.md-header, .md-tabs {
+    background-color: #000;
+}
+[data-md-color-scheme=slate] .md-header, [data-md-color-scheme=slate] .md-tabs {
+    background-color: #323A52;
+}
+
 .md-typeset h1,
 .md-typeset h2,
 .md-typeset h3,
@@ -145,6 +152,7 @@ a.internal-link::after {
     font-size: 1.5rem;
     line-height: 1.5rem;
     margin: 0px;
+    color: #000000de;
 }
 
 .md-typeset h2.hero-subtitle {
@@ -156,6 +164,7 @@ a.internal-link::after {
 
 p.hero-subtitle {
     margin: 0 0 1.25em;
+    color: #000000de;
 }
 
 .md-typeset a.hero-btn {
@@ -254,9 +263,15 @@ p.hero-subtitle {
 /* Home page key features section starts */
 
 @media (min-width: 640px) {
-    .md-typeset .grid.sm\:grid-cols-3 {
+    .md-typeset .key-features {
+        display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+}
+
+.md-typeset .key-features .card .key-feature > b {
+    display: block;
+    font-size: 0.75em;
 }
 
 .md-typeset .key-features.grid>.card {
@@ -301,12 +316,16 @@ p.hero-subtitle {
 
 /* Home page popular resources section starts */
 @media (min-width: 640px) {
-	.md-typeset .grid.sm\:grid-cols-2 {
+	.md-typeset .popular-resources {
+        display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-gap: .4rem;
+        display: grid;
+        margin: 1em 0;
 	}
 }
 
-.md-typeset .popular-resources .grid>.card {
+.md-typeset .popular-resources .card {
 	padding: 0;
 	box-shadow: none;
 	border: none;
@@ -344,14 +363,28 @@ p.hero-subtitle {
 
 /* Home page explore content section starts */
 
-.explore-content .card {
+.md-typeset .explore-content .explore-content-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-gap: .4rem;
+    margin: 1em 0;
+}
+.md-typeset .explore-content .explore-content-grid-container .card {
 	/* border: 2px #000 solid; */
-	border-radius: 0;
-	padding: 0;
-	color: var(--md-typeset-color);
+
+    border: .05rem solid var(--md-default-fg-color--lightest);
+    border-radius: .1rem;
+    display: block;
+    margin: 0;
+    padding: .8rem;
+    transition: border .25s, box-shadow .25s;
+    color: var(--md-typeset-color);
+    font-size: .65rem;
+    line-height: 1.25rem;
+    padding-right: 1.5rem;
 }
 
-.md-typeset .explore-content .grid>.card:hover {
+.md-typeset .explore-content .explore-content-grid-container>.card:hover {
 	color: var(--md-typeset-color);
 }
 

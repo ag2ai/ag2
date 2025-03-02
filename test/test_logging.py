@@ -13,7 +13,13 @@ from typing import Any, Callable
 from unittest.mock import Mock, patch
 
 import pytest
-from openai import AzureOpenAI
+
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
+
+with optional_import_block() as result:
+    import openai  # noqa: F401
+    from openai import AzureOpenAI
+
 
 import autogen.runtime_logging
 from autogen.logger.logger_utils import get_current_ts, to_dict
@@ -154,6 +160,7 @@ def test_log_function_use(db_connection):
         assert row["returns"] == json.dumps(returns)
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_log_new_agent(db_connection):
     from autogen import AssistantAgent
 
@@ -179,6 +186,7 @@ def test_log_new_agent(db_connection):
         assert row["init_args"] == json.dumps(init_args)
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_log_oai_wrapper(db_connection):
     from autogen import OpenAIWrapper
 
@@ -205,6 +213,7 @@ def test_log_oai_wrapper(db_connection):
         assert "base_config" in saved_init_args
 
 
+@skip_on_missing_imports(["openai"], "openai")
 def test_log_oai_client(db_connection):
     cur = db_connection.cursor()
 

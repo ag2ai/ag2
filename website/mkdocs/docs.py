@@ -214,14 +214,14 @@ def build_api_docs():
 
 
 def _build():
-    # build_api_docs()
+    generate_files_for_mkdocs()
+    build_api_docs()
     # update_readme()
     # update_contributing()
 
     # typer.echo("Updating Release Notes")
     # update_release_notes(realease_notes_path=EN_DOCS_DIR / "release.md")
 
-    generate_files_for_mkdocs()
     subprocess.run(["mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
 
 
