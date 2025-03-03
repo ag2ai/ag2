@@ -375,8 +375,7 @@ class TestAddBlogsToNavigation:
 
 
 class TestUpdateNavigation:
-    @pytest.fixture(autouse=True)
-    def setup(self, tmp_path: Path) -> None:
+    def _setup(self, tmp_path: Path) -> None:
         """Set up test files in the temporary directory."""
         # Create directories
         snippets_dir = tmp_path / "snippets" / "data"
@@ -454,7 +453,7 @@ class TestUpdateNavigation:
     def test_extract_example_group(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            self.setup(tmp_path)
+            self._setup(tmp_path)
 
             # Run the function
             metadata_path = tmp_path / "snippets" / "data" / "NotebooksMetadata.mdx"
