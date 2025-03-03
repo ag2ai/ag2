@@ -8,7 +8,7 @@ sidebarTitle: Google Gemini
 Install AG2 with Gemini features:
 
 ```bash
-pip install ag2[openai,gemini]
+pip install ag2[gemini]
 ```
 
 ## Dependencies of This Notebook
@@ -16,16 +16,16 @@ pip install ag2[openai,gemini]
 In this notebook, we will explore how to use Gemini in AG2 alongside other tools. Install the necessary dependencies with the following command:
 
 ```bash
-pip install ag2[openai,gemini,retrievechat,lmm]
+pip install ag2[gemini,retrievechat,lmm]
 ```
 <Tip>
 If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[openai,gemini,retrievechat,lmm]
+pip install -U autogen[gemini,retrievechat,lmm]
 ```
 or
 ```bash
-pip install -U pyautogen[openai,gemini,retrievechat,lmm]
+pip install -U pyautogen[gemini,retrievechat,lmm]
 ```
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>

@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
+from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
@@ -122,8 +123,36 @@ def test_build_from_library(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
+@pytest.mark.openai
+def test_build_with_agent_configs(builder: AgentBuilder):
+    conf = {
+        "building_task": "Generate one TextAnalyzerAgent to analyze text",
+        "agent_configs": [
+            {
+                "name": "TextAnalyzerAgent",
+                "model": ["gpt-4o"],
+                "description": "A helpful assistant to analyze text. Ask them to analyze any text, and they will provide you with the analysis.",
+                "system_message": "",
+                "agent_path": "autogen/agentchat/contrib/text_analyzer_agent/TextAnalyzerAgent",
+            }
+        ],
+        "coding": True,
+        "default_llm_config": {"temperature": 0},
+        "code_execution_config": {"work_dir": ".", "use_docker": False, "timeout": 60, "last_n_messages": 2},
+    }
+
+    agents, _ = builder.build(**conf)
+
+    is_agent_found = False
+    for agent in agents:
+        if isinstance(agent, TextAnalyzerAgent):
+            is_agent_found = True
+            break
+
+    assert is_agent_found, "TextAnalyzerAgent not found in agents"
+
+
+@pytest.mark.openai
 def test_save(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -154,7 +183,6 @@ def test_save(builder: AgentBuilder):
 
 
 @run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
 def test_load(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         config_save_path = f"{here}/example_test_agent_builder_config.json"
@@ -175,7 +203,6 @@ def test_load(builder: AgentBuilder):
 
 
 @run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
 def test_clear_agent(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         config_save_path = f"{here}/example_test_agent_builder_config.json"
