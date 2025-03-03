@@ -13,7 +13,7 @@ import tempfile
 import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
-from autogen.agents.experimental.websurfer.websurfer import WebSurferAgent
+from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
@@ -125,19 +125,16 @@ def test_build_from_library(builder: AgentBuilder):
 
 @pytest.mark.openai
 @skip_on_missing_imports(["openai"], "openai")
-@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
 def test_build_with_agent_configs(builder: AgentBuilder):
     conf = {
-        "building_task": "Generate one WebSurferAgent for scraping wikipedia",
+        "building_task": "Generate one TextAnalyzerAgent to analyze text",
         "agent_configs": [
             {
-                "name": "WebSurferAgent",
+                "name": "TextAnalyzerAgent",
                 "model": ["gpt-4o"],
-                "description": "A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.",
+                "description": "A helpful assistant to analyze text. Ask them to analyze any text, and they will provide you with the analysis.",
                 "system_message": "",
-                "agent_path": "autogen/agents/experimental/websurfer/websurfer/WebSurferAgent",
-                # "agent_path": "autogen.agents.experimental.WebSurferAgent",
-                "web_tool_kwargs": {"agent_kwargs": {"max_steps": 100}},
+                "agent_path": "autogen/agentchat/contrib/text_analyzer_agent/TextAnalyzerAgent",
             }
         ],
         "coding": True,
@@ -147,13 +144,13 @@ def test_build_with_agent_configs(builder: AgentBuilder):
 
     agents, _ = builder.build(**conf)
 
-    websurfer_in_agents = False
+    is_agent_found = False
     for agent in agents:
-        if isinstance(agent, WebSurferAgent):
-            websurfer_in_agents = True
+        if isinstance(agent, TextAnalyzerAgent):
+            is_agent_found = True
             break
 
-    assert websurfer_in_agents, "WebSurferAgent not found in agents"
+    assert is_agent_found, "TextAnalyzerAgent not found in agents"
 
 
 @pytest.mark.openai
