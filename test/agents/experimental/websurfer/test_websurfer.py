@@ -80,11 +80,8 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
         super().test_init(mock_credentials, "crawl4ai", expected)
 
     @run_for_optional_imports("openai", "openai")
-    @pytest.mark.skip(reason="This failing, TODO: fix it")
     @pytest.mark.parametrize("web_tool", ["crawl4ai"])
-    def test_end2end(
-        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"] = "crawl4ai"
-    ) -> None:
+    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
