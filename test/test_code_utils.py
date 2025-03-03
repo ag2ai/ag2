@@ -428,7 +428,7 @@ class TestContentStr:
 
     def test_invalid_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "wrong_type", "url": "http://example.com/image.png"}]
-        with pytest.raises(ValueError) as context:
+        with pytest.raises(ValueError):
             content_str(content)
 
     def test_empty_list(self):
