@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
+from autogen.agents.experimental.websurfer.websurfer import WebSurferAgent
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
@@ -120,6 +121,39 @@ def test_build_from_library(builder: AgentBuilder):
 
     # check number of agents
     assert len(agent_config["agent_configs"]) <= builder.max_agents
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["openai"], "openai")
+@skip_on_missing_imports(["langchain_openai", "browser_use"], "browser-use")
+def test_build_with_agent_configs(builder: AgentBuilder):
+    conf = {
+        "building_task": "Generate one WebSurferAgent for scraping wikipedia",
+        "agent_configs": [
+            {
+                "name": "WebSurferAgent",
+                "model": ["gpt-4o"],
+                "description": "A helpful assistant with access to a web browser. Ask them to perform web searches, open pages, navigate to Wikipedia, answer questions from pages, and or generate summaries.",
+                "system_message": "",
+                "agent_path": "autogen/agents/experimental/websurfer/websurfer/WebSurferAgent",
+                # "agent_path": "autogen.agents.experimental.WebSurferAgent",
+                "web_tool_kwargs": {"agent_kwargs": {"max_steps": 100}},
+            }
+        ],
+        "coding": True,
+        "default_llm_config": {"temperature": 0},
+        "code_execution_config": {"work_dir": ".", "use_docker": False, "timeout": 60, "last_n_messages": 2},
+    }
+
+    agents, _ = builder.build(**conf)
+
+    websurfer_in_agents = False
+    for agent in agents:
+        if isinstance(agent, WebSurferAgent):
+            websurfer_in_agents = True
+            break
+
+    assert websurfer_in_agents, "WebSurferAgent not found in agents"
 
 
 @pytest.mark.openai
