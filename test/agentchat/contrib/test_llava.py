@@ -9,14 +9,14 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
-from autogen.import_utils import run_for_optional_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
 
-@run_for_optional_imports(["replicate"], "lmm")
-@run_for_optional_imports(["openai"], "openai")
+@pytest.mark.lmm
 class TestLLaVAAgent(unittest.TestCase):
     def setUp(self):
         self.agent = LLaVAAgent(
@@ -38,7 +38,7 @@ class TestLLaVAAgent(unittest.TestCase):
         self.assertIsInstance(self.agent, LLaVAAgent)
 
 
-@run_for_optional_imports(["replicate"], "lmm")
+@pytest.mark.lmm
 class TestLLavaCallBinaryWithConfig(unittest.TestCase):
     @patch("requests.post")
     def test_local_mode(self, mock_post):
@@ -96,7 +96,7 @@ class TestLLavaCallBinaryWithConfig(unittest.TestCase):
         )
 
 
-@run_for_optional_imports(["replicate"], "lmm")
+@pytest.mark.lmm
 class TestLLavaCall(unittest.TestCase):
     @patch("autogen.agentchat.contrib.llava_agent.llava_formatter")
     @patch("autogen.agentchat.contrib.llava_agent.llava_call_binary")

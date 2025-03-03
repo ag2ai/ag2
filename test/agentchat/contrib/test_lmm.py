@@ -9,6 +9,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+import pytest
 from pytest import MonkeyPatch
 
 import autogen
@@ -27,7 +28,7 @@ base64_encoded_image = (
 
 
 @run_for_optional_imports(["PIL"], "unknown")
-@run_for_optional_imports(["openai"], "openai")
+@pytest.mark.lmm
 class TestMultimodalConversableAgent(unittest.TestCase):
     def setUp(self):
         self.agent = MultimodalConversableAgent(
@@ -91,7 +92,7 @@ class TestMultimodalConversableAgent(unittest.TestCase):
 
 
 @run_for_optional_imports(["PIL"], "unknown")
-@run_for_optional_imports(["openai"], "openai")
+@pytest.mark.lmm
 def test_group_chat_with_lmm(monkeypatch: MonkeyPatch):
     """Tests the group chat functionality with two MultimodalConversable Agents.
     Verifies that the chat is correctly limited by the max_round parameter.

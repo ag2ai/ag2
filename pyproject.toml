@@ -337,6 +337,7 @@ markers = [
     "commsagent_discord",
     "commsagent_slack",
     "commsagent-telegram",
+    "lmm",
 ]
 
 [tool.black]
