@@ -344,8 +344,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
         missing_modules = get_missing_imports(modules)
 
         if isinstance(o, type):
-            wrapped = o
-            # wrapped = require_optional_import(modules, dep_target)(o)
+            wrapped = require_optional_import(modules, dep_target)(o)
         else:
 
             @wraps(o)
