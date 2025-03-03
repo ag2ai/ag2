@@ -15,13 +15,13 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _add_print_to_last_line,
     _remove_print,
 )
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):

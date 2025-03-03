@@ -10,6 +10,7 @@ from anyio import move_on_after
 
 from autogen.agentchat.realtime.experimental.clients import GeminiRealtimeClient, RealtimeClientProtocol
 from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials, suppress_gemini_resource_exhausted
 
@@ -30,7 +31,7 @@ class TestGeminiRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
-    @pytest.mark.gemini
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio()
     async def test_not_connected(self, client: GeminiRealtimeClient) -> None:
@@ -41,8 +42,7 @@ class TestGeminiRealtimeClient:
 
         assert not scope.cancelled_caught
 
-    @pytest.mark.skip
-    @pytest.mark.gemini
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: GeminiRealtimeClient) -> None:
@@ -66,7 +66,7 @@ class TestGeminiRealtimeClient:
         assert isinstance(calls_args[0][0], SessionCreated)
 
     @pytest.mark.skip
-    @pytest.mark.gemini
+    @run_for_optional_imports(["websockets"], "gemini-realtime")
     @suppress_gemini_resource_exhausted
     @pytest.mark.asyncio
     async def test_send_text(self, client: GeminiRealtimeClient) -> None:

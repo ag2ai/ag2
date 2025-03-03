@@ -28,7 +28,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llm: ["openai", "gemini", "anthropic", "deepseek"]
+        llm: ["openai", "openai-realtime", "gemini", "gemini-realtime", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
         python-version: ["3.9"]
         os: [ubuntu-latest]
       fail-fast: false
@@ -72,6 +72,10 @@ jobs:
         run: |
           docker --version
           uv pip install --system -e ".[test,redis,${{ matrix.llm }}]"
+      - name: Install openai if testing gemini-realtime
+        if: ${{ matrix.llm == 'gemini-realtime' }}
+        run: |
+          uv pip install --system -e ".[openai]"
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -81,7 +85,10 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
-        run: bash scripts/test-core-llm.sh -m "${{ matrix.llm }}"
+        run: |
+          llm_fixed="${{ matrix.llm }}" # Use the matrix variable
+          llm_fixed="${llm_fixed//-/_}" # Replace hyphen with underscore
+          bash scripts/test-core-llm.sh -m "$llm_fixed"
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov

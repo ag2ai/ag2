@@ -9,17 +9,17 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
-from autogen.import_utils import skip_on_missing_imports
 
 from ...conftest import MOCK_OPEN_AI_API_KEY
 
 
-@skip_on_missing_imports(["replicate"], "lmm")
-@skip_on_missing_imports(["openai"], "openai")
-class TestLLaVAAgent(unittest.TestCase):
-    def setUp(self):
-        self.agent = LLaVAAgent(
+@pytest.mark.lmm
+class TestLLaVAAgent:
+    def test_init(self):
+        agent = LLaVAAgent(
             name="TestAgent",
             llm_config={
                 "timeout": 600,
@@ -33,13 +33,11 @@ class TestLLaVAAgent(unittest.TestCase):
                 ],
             },
         )
-
-    def test_init(self):
-        self.assertIsInstance(self.agent, LLaVAAgent)
+        assert isinstance(agent, LLaVAAgent)
 
 
-@skip_on_missing_imports(["replicate"], "lmm")
-class TestLLavaCallBinaryWithConfig(unittest.TestCase):
+@pytest.mark.lmm
+class TestLLavaCallBinaryWithConfig:
     @patch("requests.post")
     def test_local_mode(self, mock_post):
         # Mocking the response of requests.post
@@ -58,7 +56,7 @@ class TestLLavaCallBinaryWithConfig(unittest.TestCase):
         )
 
         # Verifying the results
-        self.assertEqual(output, "response text")
+        assert output == "response text"
         mock_post.assert_called_once_with(
             "http://0.0.0.0/api/worker_generate_stream",
             headers={"User-Agent": "LLaVA Client"},
@@ -89,15 +87,15 @@ class TestLLavaCallBinaryWithConfig(unittest.TestCase):
         )
 
         # Verifying the results
-        self.assertEqual(output, "response text")
+        assert output == "response text"
         mock_run.assert_called_once_with(
             "http://remote/api",
             input={"image": "data:image/jpeg;base64,image_data", "prompt": "Test Prompt", "seed": 1},
         )
 
 
-@skip_on_missing_imports(["replicate"], "lmm")
-class TestLLavaCall(unittest.TestCase):
+@pytest.mark.lmm
+class TestLLavaCall:
     @patch("autogen.agentchat.contrib.llava_agent.llava_formatter")
     @patch("autogen.agentchat.contrib.llava_agent.llava_call_binary")
     def test_llava_call(self, mock_llava_call_binary, mock_llava_formatter):
@@ -126,7 +124,7 @@ class TestLLavaCall(unittest.TestCase):
             temperature=0.5,
             seed=1,
         )
-        self.assertEqual(result, "Generated Text")
+        assert result == "Generated Text"
 
 
 if __name__ == "__main__":

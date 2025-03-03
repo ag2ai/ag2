@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     import openai  # noqa: F401
@@ -160,7 +160,7 @@ def test_log_function_use(db_connection):
         assert row["returns"] == json.dumps(returns)
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_log_new_agent(db_connection):
     from autogen import AssistantAgent
 
@@ -186,7 +186,7 @@ def test_log_new_agent(db_connection):
         assert row["init_args"] == json.dumps(init_args)
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_log_oai_wrapper(db_connection):
     from autogen import OpenAIWrapper
 
@@ -213,7 +213,7 @@ def test_log_oai_wrapper(db_connection):
         assert "base_config" in saved_init_args
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_log_oai_client(db_connection):
     cur = db_connection.cursor()
 

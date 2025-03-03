@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 import os
 import random
+import sys
 from datetime import timedelta
 from time import sleep
 
@@ -13,7 +14,7 @@ import pytest
 from dotenv import load_dotenv
 
 from autogen.agentchat.contrib.vectordb.couchbase import CouchbaseVectorDB
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     from couchbase.auth import PasswordAuthenticator
@@ -66,22 +67,25 @@ def _empty_collections_and_delete_indexes(cluster: "Cluster", bucket_name, scope
 
 @pytest.fixture
 def db():
-    cluster = Cluster.connect(
-        COUCHBASE_HOST, ClusterOptions(PasswordAuthenticator(COUCHBASE_USERNAME, COUCHBASE_PASSWORD))
-    )
-    cluster.wait_until_ready(timedelta(seconds=5))
-    _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
-    vectorstore = CouchbaseVectorDB(
-        connection_string=COUCHBASE_HOST,
-        username=COUCHBASE_USERNAME,
-        password=COUCHBASE_PASSWORD,
-        bucket_name=COUCHBASE_BUCKET,
-        scope_name=COUCHBASE_SCOPE,
-        collection_name=COUCHBASE_COLLECTION,
-        index_name=COUCHBASE_INDEX,
-    )
-    yield vectorstore
-    _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
+    if sys.platform.startswith("darwin") or sys.platform.startswith("win"):
+        pass
+    else:
+        cluster = Cluster.connect(
+            COUCHBASE_HOST, ClusterOptions(PasswordAuthenticator(COUCHBASE_USERNAME, COUCHBASE_PASSWORD))
+        )
+        cluster.wait_until_ready(timedelta(seconds=5))
+        _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
+        vectorstore = CouchbaseVectorDB(
+            connection_string=COUCHBASE_HOST,
+            username=COUCHBASE_USERNAME,
+            password=COUCHBASE_PASSWORD,
+            bucket_name=COUCHBASE_BUCKET,
+            scope_name=COUCHBASE_SCOPE,
+            collection_name=COUCHBASE_COLLECTION,
+            index_name=COUCHBASE_INDEX,
+        )
+        yield vectorstore
+        _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
 
 
 _COLLECTION_NAMING_CACHE = []
@@ -96,7 +100,12 @@ def collection_name():
     return f"{COUCHBASE_COLLECTION}_{collection_id}"
 
 
-@skip_on_missing_imports(["couchbase"], "retrievechat-couchbase")
+# Skip if not linux
+@pytest.mark.skipif(
+    sys.platform.startswith("darwin") or sys.platform.startswith("win"),
+    reason="Test is not applicable on macOS or Windows.",
+)
+@run_for_optional_imports(["couchbase.auth", "couchbase.cluster", "couchbase.options"], "retrievechat-couchbase")
 def test_couchbase(db, collection_name):
     with pytest.raises(Exception):
         curr_col = db.get_collection(collection_name)

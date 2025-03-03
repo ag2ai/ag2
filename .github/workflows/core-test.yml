@@ -81,7 +81,7 @@ jobs:
         shell: bash
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets]
+          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
       - name: Install optional dependencies for code executors
         run: |
           uv pip install --system -e ".[jupyter-executor]"

@@ -8,10 +8,9 @@
 
 from typing import Annotated
 
-import pytest
-
 import autogen
 from autogen.agentchat.contrib.society_of_mind_agent import SocietyOfMindAgent
+from autogen.import_utils import run_for_optional_imports
 
 from ...conftest import Credentials
 
@@ -206,7 +205,7 @@ def test_custom_preparer():
     assert external_agent.chat_messages[soc][-1]["content"] == "All tests passed."
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_function_calling(credentials_all: Credentials):
     llm_config = {"config_list": credentials_all.config_list}
     inner_llm_config = {
@@ -281,7 +280,7 @@ def test_function_calling(credentials_all: Credentials):
     )
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_tool_use(credentials_all: Credentials):
     llm_config = credentials_all.llm_config
     inner_llm_config = credentials_all.llm_config

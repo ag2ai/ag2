@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.agents.experimental import TelegramAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from .....conftest import Credentials
 
 
-@skip_on_missing_imports("telethon", "commsagent-telegram")
+@run_for_optional_imports("telethon", "commsagent-telegram")
 class TestTelegramAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         telegram_agent = TelegramAgent(

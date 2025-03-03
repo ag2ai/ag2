@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 
 from autogen.agents.experimental import DeepResearchAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import DeepResearchTool
 
 from ....conftest import Credentials
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     ["langchain_openai", "browser_use"],
     "browser-use",
 )
@@ -44,7 +44,7 @@ class TestDeepResearchAgent:
         assert agent.llm_config["tools"] == expected_tools
 
     @pytest.mark.skip(reason="The test takes too long to run.")
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_end2end(self, credentials_gpt_4o: Credentials) -> None:
         def is_termination_msg(message: Any) -> bool:
             content = message.get("content", "")

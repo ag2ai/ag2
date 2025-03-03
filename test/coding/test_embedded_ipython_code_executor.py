@@ -27,7 +27,7 @@ from autogen.coding.jupyter import (
     LocalJupyterServer,
 )
 from autogen.coding.jupyter.import_utils import skip_on_missing_jupyter_kernel_gateway
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ..conftest import MOCK_OPEN_AI_API_KEY
 
@@ -63,7 +63,7 @@ if not skip_docker_test:
     classes_to_test.append(DockerJupyterExecutor)
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     [
         "websocket",
         "requests",

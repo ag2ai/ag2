@@ -5,17 +5,15 @@
 from typing import Annotated, Any, Callable
 from unittest.mock import patch
 
-import pytest
-
 from autogen.agentchat import AssistantAgent
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.dependency_injection import Depends, on
 from autogen.tools.experimental import DeepResearchTool
 
 from ....conftest import Credentials
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     ["langchain_openai", "browser_use"],
     "browser-use",
 )
@@ -100,7 +98,7 @@ class TestDeepResearchTool:
         assert assistant.llm_config["tools"] == expected_tools, assistant.llm_config["tools"]  # type: ignore[index]
 
     # gpt-4o-mini isn't good enough to answer this question
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_answer_question(self, credentials_gpt_4o: Credentials) -> None:
         result = DeepResearchTool._answer_question(
             question="Who are the founders of the AG2 framework?",
@@ -113,7 +111,7 @@ class TestDeepResearchTool:
         result = result.lower()
         assert "wang" in result or "wu" in result
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_get_split_question_and_answer_subquestions(self, credentials_gpt_4o_mini: Credentials) -> None:
         max_web_steps = 30
         split_question_and_answer_subquestions = DeepResearchTool._get_split_question_and_answer_subquestions(
@@ -136,7 +134,7 @@ class TestDeepResearchTool:
 
         mock_answer_question.assert_called()
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_delegate_research_task(self, credentials_gpt_4o_mini: Credentials) -> None:
         expected_max_web_steps = 30
 

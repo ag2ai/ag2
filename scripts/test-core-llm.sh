@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Default mark if none is provided
-DEFAULT_MARK="openai or gemini or anthropic or deepseek"
+DEFAULT_MARK="openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek"
 
 # Initialize MARK as the default value
 MARK="$DEFAULT_MARK"
@@ -22,6 +22,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# MARK="(not aux_neg_flag) or ($MARK)"
+
+echo "Running tests with mark: $MARK"
 
 # Call the test script with the correct mark and any remaining arguments
 bash scripts/test.sh "$@" -m "$MARK" --ignore=test/agentchat/contrib

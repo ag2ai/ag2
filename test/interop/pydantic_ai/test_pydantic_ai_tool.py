@@ -5,7 +5,7 @@
 import pytest
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 with optional_import_block():
@@ -13,7 +13,7 @@ with optional_import_block():
 
 
 @pytest.mark.interop
-@skip_on_missing_imports("pydantic_ai", "interop-pydantic-ai")
+@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAITool:
     def test_register_for_llm(self) -> None:
         def foobar(a: int, b: str, c: dict[str, list[float]]) -> str:  # type: ignore[misc]

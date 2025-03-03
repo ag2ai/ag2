@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from autogen import OpenAIWrapper
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 TEST_COST = 20000000
 TEST_CUSTOM_RESPONSE = "This is a custom response."
@@ -20,7 +20,7 @@ TEST_OTHER_PARAMS_VAL = "other_params"
 TEST_MAX_LENGTH = 1000
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_custom_model_client():
     class CustomModel:
         def __init__(self, config: dict[str, Any], test_hook):
@@ -89,7 +89,7 @@ def test_custom_model_client():
     assert test_hook["max_length"] == TEST_MAX_LENGTH
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_registering_with_wrong_class_name_raises_error():
     class CustomModel:
         def __init__(self, config: dict):
@@ -120,7 +120,7 @@ def test_registering_with_wrong_class_name_raises_error():
         client.register_model_client(model_client_cls=CustomModel)
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_not_all_clients_registered_raises_error():
     class CustomModel:
         def __init__(self, config: dict):
@@ -168,7 +168,7 @@ def test_not_all_clients_registered_raises_error():
         client.create(messages=[{"role": "user", "content": "2+2="}], cache_seed=None)
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_registering_with_extra_config_args():
     class CustomModel:
         def __init__(self, config: dict[str, Any], test_hook):
