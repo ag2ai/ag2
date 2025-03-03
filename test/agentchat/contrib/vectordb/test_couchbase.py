@@ -66,25 +66,22 @@ def _empty_collections_and_delete_indexes(cluster: "Cluster", bucket_name, scope
 
 @pytest.fixture
 def db():
-    if not COUCHBASE_INSTALLED:
-        cluster = Cluster.connect(
-            COUCHBASE_HOST, ClusterOptions(PasswordAuthenticator(COUCHBASE_USERNAME, COUCHBASE_PASSWORD))
-        )
-        cluster.wait_until_ready(timedelta(seconds=5))
-        _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
-        vectorstore = CouchbaseVectorDB(
-            connection_string=COUCHBASE_HOST,
-            username=COUCHBASE_USERNAME,
-            password=COUCHBASE_PASSWORD,
-            bucket_name=COUCHBASE_BUCKET,
-            scope_name=COUCHBASE_SCOPE,
-            collection_name=COUCHBASE_COLLECTION,
-            index_name=COUCHBASE_INDEX,
-        )
-        yield vectorstore
-        _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
-    else:
-        yield None
+    cluster = Cluster.connect(
+        COUCHBASE_HOST, ClusterOptions(PasswordAuthenticator(COUCHBASE_USERNAME, COUCHBASE_PASSWORD))
+    )
+    cluster.wait_until_ready(timedelta(seconds=5))
+    _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
+    vectorstore = CouchbaseVectorDB(
+        connection_string=COUCHBASE_HOST,
+        username=COUCHBASE_USERNAME,
+        password=COUCHBASE_PASSWORD,
+        bucket_name=COUCHBASE_BUCKET,
+        scope_name=COUCHBASE_SCOPE,
+        collection_name=COUCHBASE_COLLECTION,
+        index_name=COUCHBASE_INDEX,
+    )
+    yield vectorstore
+    _empty_collections_and_delete_indexes(cluster, COUCHBASE_BUCKET, COUCHBASE_SCOPE)
 
 
 _COLLECTION_NAMING_CACHE = []
