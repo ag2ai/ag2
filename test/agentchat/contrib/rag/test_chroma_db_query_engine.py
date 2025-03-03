@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from autogen.agentchat.contrib.rag.chroma_db_query_engine import ChromaDBQueryEngine
+from autogen.agentchat.contrib.rag.query_engine import RAGQueryEngine
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import reason
@@ -35,7 +36,7 @@ def chroma_query_engine() -> ChromaDBQueryEngine:
         host="172.17.03",  #
         port=8000,
     )
-    ret = engine.init_db(new_doc_paths_or_urls=input_docs)
+    ret = engine.init_db(new_doc_paths_or_urls=input_docs)  # type: ignore[arg-type]
     assert ret is True
     return engine
 
@@ -85,10 +86,13 @@ def test_chroma_db_query_engine_connect_db(chroma_query_engine: ChromaDBQueryEng
 def test_chroma_db_query_engine_add_records(chroma_query_engine: ChromaDBQueryEngine) -> None:
     """Test adding records with add_records to the existing collection."""
     logger.info("Testing add_records of ChromaDBQueryEngine")
-    ret = chroma_query_engine.add_records(new_doc_paths_or_urls=docs_to_add)
-    assert ret is True
+    chroma_query_engine.add_docs(new_doc_paths_or_urls=docs_to_add)
 
     question = "How much money did Toast earn in 2024?"
     answer = chroma_query_engine.query(question)
     logger.info("Query answer: %s", answer)
     assert answer.find("$56 million") != -1 or answer.find("$13 million") != -1
+
+
+def test_implements_protocol() -> None:
+    assert issubclass(ChromaDBQueryEngine, RAGQueryEngine)

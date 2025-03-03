@@ -5,7 +5,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.import_utils import optional_import_block, require_optional_import
@@ -99,7 +99,7 @@ class ChromaDBQueryEngine:
     def init_db(
         self,
         new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[list[Union[Path, str]]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -113,7 +113,7 @@ class ChromaDBQueryEngine:
         Args:
             new_doc_dir: a dir of input documents that are used to create the records in database.
             new_doc_paths_or_urls:
-                a list of input documents that are used to create the records in database.
+                a sequence of input documents that are used to create the records in database.
                 a document can be a path to a file or a url.
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments
@@ -150,31 +150,27 @@ class ChromaDBQueryEngine:
 
         return True
 
-    def add_records(
+    def add_docs(
         self,
         new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[list[Union[Path, str]]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> bool:
+    ) -> None:
         """Add new documents to the underlying database and add to the index.
 
         Args:
             new_doc_dir: a dir of input documents that are used to create the records in database.
             new_doc_paths:
-                a list of input documents that are used to create the records in database.
+                a sequence of input documents that are used to create the records in database.
                 a document can be a path to a file or a url.
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments
-
-        Returns:
-            bool: True if all documents are added successfully
         """
         self._validate_query_index()
         documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
         for doc in documents:
             self.index.insert(doc)
-        return True
 
     def query(self, question: str) -> str:
         """
@@ -225,22 +221,22 @@ class ChromaDBQueryEngine:
         self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
-    def _load_doc(  # type: ignore
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
-    ) -> list["LlamaDocument"]:
+    def _load_doc(  # type: ignore[no-any-unimported]
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+    ) -> Sequence["LlamaDocument"]:
         """
-        Load documents from a directory and/or a list of file paths.
+        Load documents from a directory and/or a sequence of file paths.
 
         It uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
 
         Args:
             input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.
                 If provided, all files in the directory will be considered.
-            input_docs (Optional[list[Union[Path, str]]]): A list of individual file paths to load.
+            input_docs (Optional[Sequence[Union[Path, str]]]): A sequence of individual file paths to load.
                 Each path must point to an existing file.
 
         Returns:
-            A list of documents loaded as LlamaDocument objects.
+            A sequence of documents loaded as LlamaDocument objects.
 
         Raises:
             ValueError: If the specified directory does not exist.
@@ -259,9 +255,17 @@ class ChromaDBQueryEngine:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())
+            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())  # type: ignore[arg-type]
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
 
         return loaded_documents
+
+
+# mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
+if TYPE_CHECKING:
+    from .query_engine import RAGQueryEngine
+
+    def _check_implement_protocol(o: ChromaDBQueryEngine) -> RAGQueryEngine:
+        return o

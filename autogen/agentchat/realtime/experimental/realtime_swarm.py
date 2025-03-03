@@ -453,7 +453,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 @export_module("autogen.agentchat.realtime.experimental")
 def register_swarm(
     *,
-    realtime_agent: "RealtimeAgent",  # type: ignore
+    realtime_agent: "RealtimeAgent",
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
     system_message: Optional[str] = None,
