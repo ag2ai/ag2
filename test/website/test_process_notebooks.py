@@ -374,40 +374,39 @@ class TestAddBlogsToNavigation:
             assert actual == expected, actual
 
 
-class TestUpdateNavigation:
-    def _setup(self, tmp_path: Path) -> None:
-        """Set up test files in the temporary directory."""
-        # Create directories
-        snippets_dir = tmp_path / "snippets" / "data"
-        snippets_dir.mkdir(parents=True, exist_ok=True)
+def setup_test_files(tmp_path: Path) -> None:
+    """Set up test files in the temporary directory."""
+    # Create directories
+    snippets_dir = tmp_path / "snippets" / "data"
+    snippets_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create mint.json content
-        mint_json_content = {
-            "name": "AG2",
-            "logo": {"dark": "/logo/ag2-white.svg", "light": "/logo/ag2.svg"},
-            "navigation": [
-                {"group": "", "pages": ["docs/Home", "docs/Getting-Started"]},
-                {
-                    "group": "Installation",
-                    "pages": [
-                        "docs/installation/Installation",
-                        "docs/installation/Optional-Dependencies",
-                    ],
-                },
-                {"group": "API Reference", "pages": ["PLACEHOLDER"]},
-                # {
-                #     "group": "AutoGen Studio",
-                #     "pages": [
-                #         "docs/autogen-studio/getting-started",
-                #         "docs/autogen-studio/usage",
-                #         "docs/autogen-studio/faqs",
-                #     ],
-                # },
-            ],
-        }
+    # Create mint.json content
+    mint_json_content = {
+        "name": "AG2",
+        "logo": {"dark": "/logo/ag2-white.svg", "light": "/logo/ag2.svg"},
+        "navigation": [
+            {"group": "", "pages": ["docs/Home", "docs/Getting-Started"]},
+            {
+                "group": "Installation",
+                "pages": [
+                    "docs/installation/Installation",
+                    "docs/installation/Optional-Dependencies",
+                ],
+            },
+            {"group": "API Reference", "pages": ["PLACEHOLDER"]},
+            # {
+            #     "group": "AutoGen Studio",
+            #     "pages": [
+            #         "docs/autogen-studio/getting-started",
+            #         "docs/autogen-studio/usage",
+            #         "docs/autogen-studio/faqs",
+            #     ],
+            # },
+        ],
+    }
 
-        # Create NotebooksMetadata.mdx content
-        notebooks_metadata_content = """{/*
+    # Create NotebooksMetadata.mdx content
+    notebooks_metadata_content = """{/*
     Auto-generated file - DO NOT EDIT
     Please edit the add_front_matter_to_metadata_mdx function in process_notebooks.py
     */}
@@ -440,20 +439,22 @@ class TestUpdateNavigation:
             "source": "/notebook/JSON_mode_example.ipynb"
         }];"""
 
-        # Write files
-        mint_json_path = tmp_path / "mint.json"
-        with open(mint_json_path, "w", encoding="utf-8") as f:
-            json.dump(mint_json_content, f, indent=2)
-            f.write("\n")
+    # Write files
+    mint_json_path = tmp_path / "mint.json"
+    with open(mint_json_path, "w", encoding="utf-8") as f:
+        json.dump(mint_json_content, f, indent=2)
+        f.write("\n")
 
-        metadata_path = snippets_dir / "NotebooksMetadata.mdx"
-        with open(metadata_path, "w", encoding="utf-8") as f:
-            f.write(notebooks_metadata_content)
+    metadata_path = snippets_dir / "NotebooksMetadata.mdx"
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        f.write(notebooks_metadata_content)
 
+
+class TestUpdateNavigation:
     def test_extract_example_group(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            self._setup(tmp_path)
+            setup_test_files(tmp_path)
 
             # Run the function
             metadata_path = tmp_path / "snippets" / "data" / "NotebooksMetadata.mdx"
