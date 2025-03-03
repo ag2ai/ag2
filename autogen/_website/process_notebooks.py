@@ -265,7 +265,7 @@ NB_VERSION = 4
 @require_quarto_bin
 @require_optional_import("nbclient", "docs")
 def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
-    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore
+    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore[arg-type]
 
     if "skip_test" in nb.metadata:
         return notebook_path, NotebookSkip(reason=nb.metadata.skip_test)

@@ -46,7 +46,7 @@ class ChromaDBQueryEngine:
 
     """
 
-    def __init__(  # type: ignore
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         host: Optional[str] = "localhost",
         port: Optional[int] = 8000,
