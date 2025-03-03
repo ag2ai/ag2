@@ -397,7 +397,7 @@ Match roles in the role set to each expert in expert set.
         if max_agents is None:
             max_agents = self.max_agents
 
-        agent_configs = []
+        agent_configs = kwargs.get("agent_configs", [])
         self.building_task = building_task
 
         print(colored("==> Generating agents...", "green"), flush=True)
