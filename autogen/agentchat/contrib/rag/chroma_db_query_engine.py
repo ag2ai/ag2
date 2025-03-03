@@ -50,7 +50,7 @@ class ChromaDBQueryEngine:
         self,
         host: Optional[str] = "localhost",
         port: Optional[int] = 8000,
-        settings: Optional[Settings] = None,
+        settings: Optional["Settings"] = None,
         tenant: Optional[str] = None,
         database: Optional[str] = None,
         embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
