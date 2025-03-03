@@ -7,9 +7,9 @@ Agents gain significant utility through tools as they provide access to external
 
 In AG2, using tools is done in two parts, an agent *suggests* which tools to use (via their LLM) and another *executes* the tool.
 
-<Note>In a conversation the executor agent must follow the agent that suggests a tool.</Note>
+Typically, you'll create two agents, one to decide which tool to use and another to execute it.
 
-In the swarm example above, we attached tools to our agents and, as part of the swarm, AG2 created a tool executor agent to run recommended tools. Typically, you'll create two agents, one to decide which tool to use and another to execute it.
+<Note>In a conversation the executor agent must follow the agent that suggests a tool.</Note>
 
 import Example from "/snippets/python-examples/toolregister.mdx";
 
@@ -17,13 +17,13 @@ import Example from "/snippets/python-examples/toolregister.mdx";
 
 1. Here's the tool, a function, that we'll attach to our agents, the `Annotated` parameter will be  included in the call to the LLM so it understands what the `date_string` needs.
 
-2. The date_agent will determine whether to use the tool, using its LLM.
+2. The `date_agent` will determine whether to use the tool, using its LLM.
 
-3. The executor_agent will run the tool and return the output as its reply.
+3. The `executor_agent` will run the tool and return the output as its reply.
 
 4. Registering the tool with the agents and giving it a description to help the LLM determine.
 
-5. We have a two-way chat, so after the date_agent the executor_agent will run and, if it sees that the date_agent suggested the use of the tool, it will execute it.
+5. We have a two-way chat, so after the `date_agent` the `executor_agent` will run and, if it sees that the `date_agent` suggested the use of the tool, it will execute it.
 
     ```console
     executor_agent (to date_agent):
@@ -61,7 +61,7 @@ import Example from "/snippets/python-examples/toolregister.mdx";
     --------------------------------------------------------------------------------
     ```
 
-Alternatively, you can use decorators to register a tool. So, instead of using `register_function`, you can register them with the function definition.
+Alternatively, you can use decorators [`register_for_execution`](/docs/api-reference/autogen/ConversableAgent#register-for-execution) and [`register_for_llm`](/docs/api-reference/autogen/ConversableAgent#register-for-llm) to register a tool. So, instead of using [`register_function`](/docs/api-reference/autogen/register_function), you can register them with the function definition.
 ```python
 @date_agent.register_for_llm(description="Get the day of the week for a given date")
 @executor_agent.register_for_execution()
