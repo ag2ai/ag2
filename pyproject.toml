@@ -306,22 +306,26 @@ addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not cond
 testpaths = [
     "test",
 ]
+
 markers = [
     "conda: test related to conda forge distribution",
     "all",
-    "aux_neg_flag",
     "openai",
     "openai_realtime",
     "gemini",
     "gemini_realtime",
     "anthropic",
     "deepseek",
+    "cosmosdb",
+    "ollama",
+    "bedrock",
+    "cerebras",
+    "aux_neg_flag",
+    # optional deps
     "redis",
     "docker",
     "docs",
     "rag",
-    "cosmosdb",
-    # optional deps
     "jupyter_executor",
     "retrievechat",
     "retrievechat_pgvector",

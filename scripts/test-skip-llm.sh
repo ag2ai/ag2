@@ -4,7 +4,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-base_filter="not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)"
+llm_filter="not (openai or openai_realtime or gemini or gemini_realtime or anthropic or deepseek or ollama or bedrock or cerebras)"
+optional_deps_filter="not (redis or docker or docs or rag or jupyter_executor or retrievechat or retrievechat_pgvector or retrievechat_mongodb or retrievechat_qdrant or graph_rag_falkor_db or neo4j or twilio or interop or browser_use or crawl4ai or websockets or commsagent_discord or commsagent_slack or commsagent-telegram or lmm)"
+base_filter="$llm_filter and $optional_deps_filter"
 args=()
 while [[ $# -gt 0 ]]; do
 	if [[ "$1" == "-m" ]]; then
