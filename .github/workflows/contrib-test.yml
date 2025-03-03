@@ -357,7 +357,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for LMM
         run: |
-          uv pip install --system -e .[test,lmm, openai]
+          uv pip install --system -e .[test,lmm,openai]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
