@@ -20,7 +20,7 @@ with optional_import_block() as result:
 
 
 @pytest.mark.cosmosdb
-class TestCosmosDBCache(unittest.TestCase):
+class TestCosmosDBCache:
     def setUp(self):
         self.seed = "42"
         self.connection_string = "AccountEndpoint=https://example.documents.azure.com:443/;"
@@ -33,7 +33,7 @@ class TestCosmosDBCache(unittest.TestCase):
         cache = CosmosDBCache.from_connection_string(
             self.seed, self.connection_string, self.database_id, self.container_id
         )
-        self.assertEqual(cache.seed, self.seed)
+        cache.seed == self.seed
         mock_from_connection_string.assert_called_with(self.connection_string)
 
     def test_get(self):
@@ -50,11 +50,11 @@ class TestCosmosDBCache(unittest.TestCase):
             },
         )
         cache.container.read_item.return_value = {"data": serialized_value}
-        self.assertEqual(cache.get(key), value)
+        cache.get(key) == value
         cache.container.read_item.assert_called_with(item=key, partition_key=str(self.seed))
 
         cache.container.read_item.side_effect = CosmosResourceNotFoundError(status_code=404, message="Item not found")
-        self.assertIsNone(cache.get(key, default=None))
+        cache.get(key, default=None) is None
 
     def test_set(self):
         key = "key"
@@ -84,7 +84,7 @@ class TestCosmosDBCache(unittest.TestCase):
                     "client": self.client,
                 },
             ) as cache:
-                self.assertIsInstance(cache, CosmosDBCache)
+                assert isinstance(cache, CosmosDBCache)
             mock_close.assert_called()
 
 

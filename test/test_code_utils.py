@@ -8,7 +8,6 @@
 
 import os
 import tempfile
-import unittest
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -415,41 +414,42 @@ def _test_improve(credentials_all: Credentials):
         f.write(improvement)
 
 
-class TestContentStr(unittest.TestCase):
+class TestContentStr:
     def test_string_content(self):
-        self.assertEqual(content_str("simple string"), "simple string")
+        assert content_str("simple string") == "simple string"
 
     def test_list_of_text_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "text", "text": " world"}]
-        self.assertEqual(content_str(content), "hello world")
+        assert content_str(content) == "hello world"
 
     def test_mixed_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "image_url", "url": "http://example.com/image.png"}]
-        self.assertEqual(content_str(content), "hello<image>")
+        assert content_str(content) == "hello<image>"
 
     def test_invalid_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "wrong_type", "url": "http://example.com/image.png"}]
-        with self.assertRaises(ValueError) as context:
+        with pytest.raises(ValueError) as context:
             content_str(content)
-        self.assertIn("Wrong content format", str(context.exception))
+
+        assert "Wrong content format" in str(context.exception)
 
     def test_empty_list(self):
-        self.assertEqual(content_str([]), "")
+        assert content_str([]) == ""
 
     def test_non_dict_in_list(self):
         content = ["string", {"type": "text", "text": "text"}]
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             content_str(content)
 
 
-class TestGetPowerShellCommand(unittest.TestCase):
+class TestGetPowerShellCommand:
     @patch("subprocess.run")
     def test_get_powershell_command_powershell(self, mock_subprocess_run):
         # Set up the mock to return a successful result for 'powershell'
         mock_subprocess_run.return_value.returncode = 0
         mock_subprocess_run.return_value.stdout = StringIO("5")
 
-        self.assertEqual(get_powershell_command(), "powershell")
+        assert get_powershell_command() == "powershell"
 
     @patch("subprocess.run")
     def test_get_powershell_command_pwsh(self, mock_subprocess_run):
@@ -458,18 +458,18 @@ class TestGetPowerShellCommand(unittest.TestCase):
         mock_subprocess_run.return_value.returncode = 0
         mock_subprocess_run.return_value.stdout = StringIO("7")
 
-        self.assertEqual(get_powershell_command(), "pwsh")
+        assert get_powershell_command() == "pwsh"
 
     @patch("subprocess.run")
     def test_get_powershell_command_not_found(self, mock_subprocess_run):
         mock_subprocess_run.side_effect = [FileNotFoundError, FileNotFoundError]
-        with self.assertRaises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError):
             get_powershell_command()
 
     @patch("subprocess.run")
     def test_get_powershell_command_no_permission(self, mock_subprocess_run):
         mock_subprocess_run.side_effect = [PermissionError, FileNotFoundError]
-        with self.assertRaises(PermissionError):
+        with pytest.raises(PermissionError):
             get_powershell_command()
 
 

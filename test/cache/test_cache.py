@@ -18,7 +18,7 @@ with optional_import_block() as result:
     from azure.cosmos import CosmosClient
 
 
-class TestCache(unittest.TestCase):
+class TestCache:
     def setUp(self):
         self.redis_config = {
             "cache_seed": "test_seed",
@@ -39,14 +39,14 @@ class TestCache(unittest.TestCase):
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
     def test_redis_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.redis_config)
-        self.assertIsInstance(cache.cache, MagicMock)
+        assert isinstance(cache.cache, MagicMock)
         mock_cache_factory.assert_called()
 
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
     @run_for_optional_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmosdb_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.cosmos_config)
-        self.assertIsInstance(cache.cache, MagicMock)
+        assert isinstance(cache.cache, MagicMock)
         mock_cache_factory.assert_called_with(
             seed="42",
             redis_url=None,
@@ -64,7 +64,7 @@ class TestCache(unittest.TestCase):
         mock_cache_instance = MagicMock()
         with patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=mock_cache_instance):
             with Cache(config) as cache:
-                self.assertIsInstance(cache, MagicMock)
+                assert isinstance(cache, MagicMock)
 
             mock_cache_instance.__enter__.assert_called()
             mock_cache_instance.__exit__.assert_called()
