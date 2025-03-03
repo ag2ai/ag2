@@ -19,6 +19,7 @@ with optional_import_block() as result:
 
 
 class TestCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.redis_config = {
             "cache_seed": "test_seed",

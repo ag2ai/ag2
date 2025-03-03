@@ -21,6 +21,7 @@ with optional_import_block() as result:
 
 @pytest.mark.cosmosdb
 class TestCosmosDBCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.seed = "42"
         self.connection_string = "AccountEndpoint=https://example.documents.azure.com:443/;"

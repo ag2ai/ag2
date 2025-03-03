@@ -375,6 +375,7 @@ class TestAddBlogsToNavigation:
 
 
 class TestUpdateNavigation:
+    @pytest.fixture(autouse=True)
     def setup(self, temp_dir: Path) -> None:
         """Set up test files in the temporary directory."""
         # Create directories

@@ -17,6 +17,7 @@ from autogen.cache.redis_cache import RedisCache
 
 @pytest.mark.redis
 class TestRedisCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.seed = "test_seed"
         self.redis_url = "redis://localhost:6379/0"

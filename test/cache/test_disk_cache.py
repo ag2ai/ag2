@@ -9,10 +9,13 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autogen.cache.disk_cache import DiskCache
 
 
 class TestDiskCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.seed = "test_seed"
 

@@ -30,6 +30,7 @@ base64_encoded_image = (
 @run_for_optional_imports(["PIL"], "unknown")
 @pytest.mark.lmm
 class TestMultimodalConversableAgent:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.agent = MultimodalConversableAgent(
             name="TestAgent",
