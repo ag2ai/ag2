@@ -6,7 +6,7 @@ In the realm of AI and automation, handling documents and extracting information
 [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
 
 <Tip>
-DocAgent is new and keen to support your RAG needs. However, as a first iteration it has been kept simple and uses a local vector database (Chroma).
+DocAgent is new and keen to support your RAG needs. In the first iterations it has been kept simple and uses either local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine).
 
 DocAgent will continue to be developed to a production-ready standard and your feedback and [contributions](https://docs.ag2.ai/docs/contributor-guide/contributing) are most welcome!
 </Tip>
@@ -349,6 +349,39 @@ The fiscal year 2024 financial summary for Toast, Inc. is as follows:
 --------------------------------------------------------------------------------
 ```
 
+## DocAgent Performance
+
+How does it perform? See our [DocAgent Performance](./docagent-performance) page for the full breakdown on how it handles different tasks.
+
+If you have tasks you'd like DocAgent to perform, please share them as an [Issue](https://github.com/ag2ai/ag2/issues) on our GitHub repo.
+
+Summary:
+
+| # | Task | Ingested | In-memory Query Engine | Chroma Query Engine |
+| :---: | --- | :---: | :---: | :---: |
+| 1 | URL to Markdown file, query to summarize | ✅ | ✅ | ✅ |
+| 2 | URL to Microsoft Word document, query highlights | ✅ | ✅ | ✅ |
+| 3 | URL to PDF annual report, query specific figures | ✅ | ✅ | ✅ |
+| 4 | URL to PDF document, query to explain | ✅ | ✅ | ✅ |
+| 5 | Local file, PDF, query to explain | ✅ | ✅ | ✅ |
+| 6 | URL to JPG of scanned invoice, query a figure | ❌ | 🔶 | 🔶 |
+| 7 | Local file, PNG of scanned invoice, query a figure | ❌ | ❌ | ❌ |
+| 8 | URL to XLSX using a redirect URL, query table | ✅ | 🔶 | 🔶 |
+| 9 | URL to XLSX, query data | ❌ | 🔶 | ✅ |
+| 10 | URL to CSV, query a figure | ❌ | N/A | N/A |
+| 11 | URL to CSV, query to summarize | ✅ | ✅ | ✅ |
+| 12 | URL with CSV, query unrelated | ✅ | ✅ | ✅ |
+| 13 | Local files, 2 x Markdowns, Query to compare | ✅ | ✅ | ✅ |
+| 14 | Local file, Markdown, unrelated query | ✅ | ✅ | ✅ |
+| 15 | Local file, Markdown, unrelated query but general knowledge | ✅ | ✅ | ✅ |
+| 16 | No files to ingest but has query | N/A | ✅ | ✅ |
+| 17 | Local file, PDF of annual report, query a figure | ✅ | ✅ | ✅ |
+| 18 | Local file, Microsoft Word, query a figure | ✅ | ✅ | ❌ |
+| 19 | URL to web page with query to summarize | ✅ | ✅ | ✅ |
+| 20a | Local files, PDF and DOCX, one query to cover both | ✅ | ✅ | ✅ |
+| 20b | Follow-up query to DocAgent| N/A | ✅ | ❌ |
+
+
 ## Collections
 
 By default, [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) will ingest documents into the same collection. Every time you run the agent it will utilise this collection, enabling you to keep documents ingested across different runs.
@@ -375,13 +408,6 @@ document_agent_nvidia = DocAgent(
 ...
 
 ```
-
-## Performance
-
-DocAgent performance is continuing to be analyzed and if you have any use-cases you would like DocAgent to handle, please raise an [issue](https://github.com/ag2ai/ag2/issues) so we can continue to improve it.
-
-We have compiled a list of examples and the results to show the performance we are seeing with DocAgent:
-
 
 ## Further examples
 
