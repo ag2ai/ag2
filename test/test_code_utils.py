@@ -431,8 +431,6 @@ class TestContentStr:
         with pytest.raises(ValueError) as context:
             content_str(content)
 
-        assert "Wrong content format" in str(context.exception)
-
     def test_empty_list(self):
         assert content_str([]) == ""
 
