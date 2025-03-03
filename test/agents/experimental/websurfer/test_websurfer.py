@@ -4,6 +4,8 @@
 
 from typing import Any, Literal
 
+import pytest
+
 from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.chat import ChatResult
 from autogen.agents.experimental import WebSurferAgent
@@ -48,11 +50,12 @@ class WebSurferTestHelper:
 
 @run_for_optional_imports(["crawl4ai"], "crawl4ai")
 class TestCrawl4AIWebSurfer(WebSurferTestHelper):
+    @pytest.mark.parametrize("web_tool", ["crawl4ai"])
     def test_init(
         self,
         mock_credentials: Credentials,
-        web_tool: Literal["browser_use", "crawl4ai"],
         expected: list[dict[str, Any]],
+        web_tool: Literal["browser_use", "crawl4ai"],
     ) -> None:
         expected = [
             {
@@ -77,17 +80,21 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
         super().test_init(mock_credentials, "crawl4ai", expected)
 
     @run_for_optional_imports("openai", "openai")
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
+    @pytest.mark.parametrize("web_tool", ["crawl4ai"])
+    def test_end2end(
+        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"] = "crawl4ai"
+    ) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
 @run_for_optional_imports(["langchain_openai", "browser_use"], "browser-use")
 class TestBrowserUseWebSurfer(WebSurferTestHelper):
+    @pytest.mark.parametrize("web_tool", ["browser_use"])
     def test_init(
         self,
         mock_credentials: Credentials,
-        web_tool: Literal["browser_use", "crawl4ai"],
         expected: list[dict[str, Any]],
+        web_tool: Literal["browser_use", "crawl4ai"],
     ) -> None:
         expected = [
             {
@@ -106,5 +113,6 @@ class TestBrowserUseWebSurfer(WebSurferTestHelper):
         super().test_init(mock_credentials, "browser_use", expected)
 
     @run_for_optional_imports("openai", "openai")
+    @pytest.mark.parametrize("web_tool", ["browser_use"])
     def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "browser_use")

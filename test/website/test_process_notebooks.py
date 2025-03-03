@@ -376,10 +376,10 @@ class TestAddBlogsToNavigation:
 
 class TestUpdateNavigation:
     @pytest.fixture(autouse=True)
-    def setup(self, temp_dir: Path) -> None:
+    def setup(self, tmp_path: Path) -> None:
         """Set up test files in the temporary directory."""
         # Create directories
-        snippets_dir = temp_dir / "snippets" / "data"
+        snippets_dir = tmp_path / "snippets" / "data"
         snippets_dir.mkdir(parents=True, exist_ok=True)
 
         # Create mint.json content
@@ -442,7 +442,7 @@ class TestUpdateNavigation:
         }];"""
 
         # Write files
-        mint_json_path = temp_dir / "mint.json"
+        mint_json_path = tmp_path / "mint.json"
         with open(mint_json_path, "w", encoding="utf-8") as f:
             json.dump(mint_json_content, f, indent=2)
             f.write("\n")
