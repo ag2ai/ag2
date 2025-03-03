@@ -18,8 +18,8 @@ from ...conftest import MOCK_OPEN_AI_API_KEY
 
 @pytest.mark.lmm
 class TestLLaVAAgent:
-    def setUp(self):
-        self.agent = LLaVAAgent(
+    def test_init(self):
+        agent = LLaVAAgent(
             name="TestAgent",
             llm_config={
                 "timeout": 600,
@@ -33,9 +33,7 @@ class TestLLaVAAgent:
                 ],
             },
         )
-
-    def test_init(self):
-        assert isinstance(self.agent, LLaVAAgent)
+        assert isinstance(agent, LLaVAAgent)
 
 
 @pytest.mark.lmm
