@@ -321,7 +321,7 @@ class MongoDBAtlasVectorDB(VectorDB):
                     size = 0
                 i += 1  # noqa: SIM113
             if text_batch:
-                result_ids.update(self._insert_batch(collection, text_batch, metadata_batch, id_batch))  # type: ignore
+                result_ids.update(self._insert_batch(collection, text_batch, metadata_batch, id_batch))
                 input_ids.update(id_batch)
 
             if result_ids != input_ids:
@@ -363,7 +363,7 @@ class MongoDBAtlasVectorDB(VectorDB):
             for i, t, m, e in zip(ids, texts, metadatas, embeddings)
         ]
         # insert the documents in MongoDB Atlas
-        insert_result = collection.insert_many(to_insert)  # type: ignore
+        insert_result = collection.insert_many(to_insert)  # type: ignore[union-attr]
         return insert_result.inserted_ids  # TODO Remove this. Replace by log like update_docs
 
     def update_docs(self, docs: list[Document], collection_name: str = None, **kwargs: Any) -> None:

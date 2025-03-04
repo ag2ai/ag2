@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
-from typing import Any, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Optional, Protocol, Sequence, Union, runtime_checkable
 
 from ....doc_utils import export_module
 
@@ -21,7 +21,7 @@ class RAGQueryEngine(Protocol):
     def init_db(
         self,
         new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths: Optional[list[Union[Path, str]]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -46,7 +46,7 @@ class RAGQueryEngine(Protocol):
     def add_docs(
         self,
         new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths: Optional[list[Union[Path, str]]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
