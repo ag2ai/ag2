@@ -17,6 +17,7 @@ with optional_import_block():
     from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
+__all__ = ["docling_parse_docs"]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

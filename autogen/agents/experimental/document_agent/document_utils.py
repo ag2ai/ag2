@@ -17,6 +17,8 @@ with optional_import_block():
     from selenium.webdriver.chrome.service import Service as ChromeService
     from webdriver_manager.chrome import ChromeDriverManager
 
+__all__ = ["handle_input", "preprocess_path"]
+
 _logger = logging.getLogger(__name__)
 
 
@@ -315,6 +317,7 @@ def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = ".
         raise ValueError("The input provided is neither a URL, directory, nor a file path.")
 
 
+@export_module("autogen.agents.experimental.document_agent")
 def preprocess_path(
     str_or_path: Union[Path, str], mk_path: bool = False, is_file: bool = False, is_dir: bool = True
 ) -> Path:

@@ -10,8 +10,11 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from pydantic import BaseModel
 
-from ....agentchat import ConversableAgent
-from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+from .... import ConversableAgent
+from ....agentchat.contrib.rag import RAGQueryEngine
+from ....doc_utils import export_module
+
+__all__ = ["InMemoryQueryEngine"]
 
 # REPLIES
 QUERY_NO_INGESTIONS_REPLY = "Sorry, please ingest some documents/URLs before querying."  # Default response for queries without ingested documents
@@ -32,6 +35,7 @@ class QueryAnswer(BaseModel):
     answer: str
 
 
+@export_module("autogen.agents.experimental")
 class InMemoryQueryEngine:
     """
     This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
