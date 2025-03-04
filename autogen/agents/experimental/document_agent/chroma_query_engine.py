@@ -5,7 +5,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 
@@ -75,7 +75,7 @@ class VectorChromaQueryEngine:
 
         self.connect_db()
 
-    def connect_db(self) -> None:
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
         Establish a connection to the Chromadb database and initialize the collection.
         """
@@ -94,6 +94,8 @@ class VectorChromaQueryEngine:
             get_or_create=True,  # If collection already exists, get the collection
         )
         self.index = self._create_index(self.collection)
+
+        return True
 
     def query(self, question: str) -> str:
         """
@@ -115,7 +117,11 @@ class VectorChromaQueryEngine:
         return str(response)
 
     def add_docs(
-        self, new_doc_dir: Optional[Union[Path, str]] = None, new_doc_paths: Optional[list[Union[Path, str]]] = None
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Add additional documents to the existing vector index.
@@ -126,18 +132,18 @@ class VectorChromaQueryEngine:
         Args:
             new_doc_dir: The directory path from which to load additional documents.
                 If provided, all eligible files in this directory are loaded.
-            new_doc_paths: A list of file paths specifying additional documents to load.
+            new_doc_paths_or_urls: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
         self.validate_query_index()
         new_doc_dir = new_doc_dir or ""
-        new_doc_paths = new_doc_paths or []
+        new_doc_paths = new_doc_paths_or_urls or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
         for doc in new_docs:
             self.index.insert(doc)
 
     def _load_doc(  # type: ignore[no-any-unimported]
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
     ) -> list["LlamaDocument"]:
         """
         Load documents from a directory and/or a list of file paths.
@@ -230,6 +236,16 @@ class VectorChromaQueryEngine:
         """Ensures an index exists"""
         if not hasattr(self, "index"):
             raise Exception("Query index is not initialized. Please ingest some documents before querying.")
+
+    def init_db(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for VectorChromaQueryEngine"""
+        raise NotImplementedError("Method, init_db, not required nor implemented for VectorChromaQueryEngine")
 
 
 # mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
