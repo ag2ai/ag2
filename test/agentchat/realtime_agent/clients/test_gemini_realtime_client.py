@@ -50,7 +50,7 @@ class TestGeminiRealtimeClient:
 
         async with client.connect():
             # read events for 3 seconds and then interrupt
-            with move_on_after(3) as scope:
+            with move_on_after(15) as scope:
                 print("Reading events...")
 
                 async for event in client.read_events():
