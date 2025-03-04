@@ -154,10 +154,10 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.19",
+    "llama-index==0.12.22",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.19",
-    "llama-index-readers-web==0.3.5",
+    "llama-index-core==0.12.22",
+    "llama-index-readers-web==0.3.7",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
