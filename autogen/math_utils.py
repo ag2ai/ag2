@@ -6,14 +6,6 @@
 # SPDX-License-Identifier: MIT
 from typing import Optional
 
-from . import DEFAULT_MODEL
-
-_MATH_PROMPT = "{problem} Solve the problem carefully. Simplify your answer as much as possible. Put the final answer in \\boxed{{}}."
-_MATH_CONFIG = {
-    "model": DEFAULT_MODEL,
-    "prompt": _MATH_PROMPT,
-}
-
 
 def remove_boxed(string: str) -> Optional[str]:
     """Source: https://github.com/hendrycks/math
