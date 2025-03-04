@@ -8,7 +8,7 @@
 
 import pytest
 
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.token_count_utils import (
     _num_token_from_messages,
     count_token,
@@ -89,7 +89,7 @@ def test_num_token_from_messages(model: str, expected_count: int) -> None:
     assert _num_token_from_messages(messages=messages, model=model) == expected_count
 
 
-@skip_on_missing_imports("PIL", "unknown")
+@run_for_optional_imports("PIL", "unknown")
 def test_num_tokens_from_gpt_image():
     # mock num_tokens_from_gpt_image function
     base64_encoded_image = (

@@ -36,7 +36,7 @@ class InMemoryQueryEngine:
     This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
     """
 
-    def __init__(  # type: ignore
+    def __init__(
         self,
         llm_config: dict[str, Any],
     ) -> None:
@@ -120,9 +120,7 @@ class InMemoryQueryEngine:
         new_doc_paths = new_doc_paths or []
         self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
 
-    def _load_doc(  # type: ignore
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
-    ) -> None:
+    def _load_doc(self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]) -> None:
         """
         Load documents from a directory and/or a list of file paths into the in-memory store.
 

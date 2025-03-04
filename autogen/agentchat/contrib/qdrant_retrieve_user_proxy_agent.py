@@ -285,7 +285,7 @@ def query_qdrant(
         qdrant_client_options: (Optional, dict): the options for instantiating the qdrant client. Reference: https://github.com/qdrant/qdrant-client/blob/master/qdrant_client/qdrant_client.py#L36-L58.
 
     Returns:
-        List[List[QueryResponse]]: the query result. The format is:
+        list[list[QueryResponse]]: the query result. The format is:
             class QueryResponse(BaseModel, extra="forbid"):  # type: ignore
                 id: Union[str, int]
                 embedding: Optional[List[float]]

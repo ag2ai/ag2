@@ -1,28 +1,31 @@
 ---
 title: Tools
+sidebarTitle: Tools Basics
 ---
 
-Agents gain significant utility through tools as they provide access to external data, APIs, and functionality.
+Agents significantly enhance their capabilities by leveraging tools, which provide access to external data, APIs, and additional functionality.
 
-In AG2, using tools is done in two parts, an agent *suggests* which tools to use (via their LLM) and another *executes* the tool.
+In **AG2**, tool usage happens in two stages:
+- An agent suggests which tool to use (via its LLM).
+- Another agent executes the selected tool.
 
-<Note>In a conversation the executor agent must follow the agent that suggests a tool.</Note>
+Typically, you'll create two agents. One to determine the appropriate tool and another to carry out the execution.
 
-In the swarm example above, we attached tools to our agents and, as part of the swarm, AG2 created a tool executor agent to run recommended tools. Typically, you'll create two agents, one to decide which tool to use and another to execute it.
+<Note>In a conversation, the executor agent must always follow the agent that suggests a tool.</Note>
 
 import Example from "/snippets/python-examples/toolregister.mdx";
 
 <Example/>
 
-1. Here's the tool, a function, that we'll attach to our agents, the `Annotated` parameter will be  included in the call to the LLM so it understands what the `date_string` needs.
+1. We define a tool, a function that will be attached to our agents. The `Annotated` parameter is included in the LLM call to ensure it understands the purpose of `date_string`.
 
-2. The date_agent will determine whether to use the tool, using its LLM.
+2. The `date_agent` decides whether to use the tool based on its LLM reasoning.
 
-3. The executor_agent will run the tool and return the output as its reply.
+3. The `executor_agent` executes the tool and returns the output as its response.
 
-4. Registering the tool with the agents and giving it a description to help the LLM determine.
+4. We register the tool with the agents and provide a description to help the LLM determine when to use it.
 
-5. We have a two-way chat, so after the date_agent the executor_agent will run and, if it sees that the date_agent suggested the use of the tool, it will execute it.
+5. Since this is a two-way conversation, the `executor_agent` follows the `date_agent`. If the `date_agent` suggests using the tool, the `executor_agent` executes it accordingly.
 
     ```console
     executor_agent (to date_agent):
@@ -60,7 +63,7 @@ import Example from "/snippets/python-examples/toolregister.mdx";
     --------------------------------------------------------------------------------
     ```
 
-Alternatively, you can use decorators to register a tool. So, instead of using `register_function`, you can register them with the function definition.
+Alternatively, you can use decorators [`register_for_execution`](/docs/api-reference/autogen/ConversableAgent#register-for-execution) and [`register_for_llm`](/docs/api-reference/autogen/ConversableAgent#register-for-llm) to register a tool. So, instead of using [`register_function`](/docs/api-reference/autogen/register_function), you can register them with the function definition.
 ```python
 @date_agent.register_for_llm(description="Get the day of the week for a given date")
 @executor_agent.register_for_execution()

@@ -55,8 +55,8 @@ class PydanticAIInteroperability:
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore
-        tool_typed: PydanticAITool[Any] = tool  # type: ignore
+        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore[no-any-unimported]
+        tool_typed: PydanticAITool[Any] = tool  # type: ignore[no-any-unimported]
 
         max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
         f = tool_typed.function

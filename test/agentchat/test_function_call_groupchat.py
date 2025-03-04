@@ -11,6 +11,7 @@ import asyncio
 import pytest
 
 import autogen
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
@@ -24,7 +25,7 @@ func_def = {
 }
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.parametrize(
     "key, value, sync",
     [

@@ -11,11 +11,12 @@ import asyncio
 import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.asyncio
 async def test_async_chats(credentials_gpt_4o_mini: Credentials):
     config_list_4omini = credentials_gpt_4o_mini.config_list

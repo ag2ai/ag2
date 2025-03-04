@@ -12,7 +12,7 @@ from autogen.agentchat.contrib.graph_rag import Document, DocumentType, GraphSto
 from autogen.agentchat.contrib.graph_rag.falkor_graph_query_engine import (
     FalkorGraphQueryEngine,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     from graphrag_sdk import Attribute, AttributeType, Entity, Ontology, Relation
@@ -21,12 +21,12 @@ with optional_import_block() as result:
 reason = "do not run on MacOS or windows OR dependency is not installed"
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["falkordb", "graphrag_sdk"], "neo4j")
+@run_for_optional_imports(["falkordb", "graphrag_sdk"], "neo4j")
 def test_falkor_db_query_engine() -> None:
     """Test FalkorDB Query Engine.
     1. create a test FalkorDB Query Engine with a schema.

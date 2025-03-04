@@ -23,7 +23,7 @@ import autogen
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials, suppress_json_decoder_error
 
@@ -2248,7 +2248,7 @@ def test_manager_resume_message_assignment():
 
 @pytest.mark.deepseek
 @suppress_json_decoder_error
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "deepseek")
 def test_groupchat_with_deepseek_reasoner(
     credentials_gpt_4o_mini: Credentials,
     credentials_deepseek_reasoner: Credentials,
