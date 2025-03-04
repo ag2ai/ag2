@@ -143,13 +143,13 @@ rag = [
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.5",
+    "crawl4ai>=0.4.247,<0.6",
 ]
 
 browser-use = [
     # ToDo: Restrict browser-use to a specific version
     # browser-use>0.1.38 moved langchain-google-genai, aws, etc to its dev dependencies
-    "browser-use==0.1.37",
+    "browser-use==0.1.40",
 ]
 
 neo4j = [
@@ -230,7 +230,7 @@ test = [
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
     "pytest==8.3.5",
-    "mock==5.1.0",
+    "mock==5.2.0",
     "pandas==2.2.3",
     "fastapi==0.115.11",
 ]
