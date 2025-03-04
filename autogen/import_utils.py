@@ -346,14 +346,25 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
         if isinstance(o, type):
             wrapped = require_optional_import(modules, dep_target)(o)
         else:
+            if inspect.iscoroutinefunction(o):
 
-            @wraps(o)
-            def wrapped(*args: Any, **kwargs: Any) -> Any:
-                if missing_modules:
-                    raise ImportError(
-                        f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
-                    )
-                return o(*args, **kwargs)
+                @wraps(o)
+                async def wrapped(*args: Any, **kwargs: Any) -> Any:
+                    if missing_modules:
+                        raise ImportError(
+                            f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+                        )
+                    return await o(*args, **kwargs)
+
+            else:
+
+                @wraps(o)
+                def wrapped(*args: Any, **kwargs: Any) -> Any:
+                    if missing_modules:
+                        raise ImportError(
+                            f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
+                        )
+                    return o(*args, **kwargs)
 
         pytest_mark_o: G = _mark_object(wrapped, dep_target)  # type: ignore[assignment]
 
