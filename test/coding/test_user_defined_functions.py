@@ -11,7 +11,7 @@ import pytest
 from autogen.coding.base import CodeBlock
 from autogen.coding.func_with_reqs import FunctionWithRequirements, with_requirements
 from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     import pandas
@@ -55,7 +55,7 @@ def function_missing_reqs() -> "pandas.DataFrame":
 
 
 @pytest.mark.parametrize("cls", classes_to_test)
-@skip_on_missing_imports(["pandas"], "test")
+@run_for_optional_imports(["pandas"], "test")
 def test_can_load_function_with_reqs(cls) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         executor = cls(work_dir=temp_dir, functions=[load_data])
@@ -75,7 +75,7 @@ print(load_data().iloc[0]['name'])"""
 
 
 @pytest.mark.parametrize("cls", classes_to_test)
-@skip_on_missing_imports(["pandas"], "test")
+@run_for_optional_imports(["pandas"], "test")
 def test_can_load_function(cls) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         executor = cls(work_dir=temp_dir, functions=[add_two_numbers])
@@ -110,7 +110,7 @@ print(add_two_numbers(1, 2))"""
 
 
 @pytest.mark.parametrize("cls", classes_to_test)
-@skip_on_missing_imports(["pandas"], "test")
+@run_for_optional_imports(["pandas"], "test")
 def test_fails_for_function_incorrect_import(cls) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         executor = cls(work_dir=temp_dir, functions=[function_incorrect_import])
@@ -126,7 +126,7 @@ function_incorrect_import()"""
 
 
 @pytest.mark.parametrize("cls", classes_to_test)
-@skip_on_missing_imports(["pandas"], "test")
+@run_for_optional_imports(["pandas"], "test")
 def test_fails_for_function_incorrect_dep(cls) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         executor = cls(work_dir=temp_dir, functions=[function_incorrect_dep])

@@ -11,7 +11,7 @@ import pytest
 
 from autogen.agentchat.contrib.capabilities.vision_capability import VisionCapability
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     from PIL import Image  # noqa: F401
@@ -39,15 +39,15 @@ def conversable_agent():
     return ConversableAgent(name="conversable_agent", llm_config=False)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 def test_add_to_conversable_agent(vision_capability, conversable_agent):
     vision_capability.add_to_agent(conversable_agent)
     assert hasattr(conversable_agent, "process_last_received_message")
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 @patch("autogen.oai.client.OpenAIWrapper")
 def test_process_last_received_message_text(mock_lmm_client, vision_capability):
     mock_lmm_client.create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content="A description"))])
@@ -65,8 +65,8 @@ def test_process_last_received_message_text(mock_lmm_client, vision_capability):
     "autogen.agentchat.contrib.capabilities.vision_capability.VisionCapability._get_image_caption",
     return_value="A sample image caption.",
 )
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 def test_process_last_received_message_with_image(
     mock_get_caption, mock_convert_base64, mock_get_image_data, vision_capability
 ):
@@ -92,8 +92,8 @@ def custom_caption_func():
     return caption_func
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["openai"], "openai")
 class TestCustomCaptionFunc:
     def test_custom_caption_func_with_valid_url(self, custom_caption_func):
         """Test custom caption function with a valid image URL."""

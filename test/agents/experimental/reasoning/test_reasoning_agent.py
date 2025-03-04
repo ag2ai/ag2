@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 
 from ....conftest import Credentials
 
@@ -98,8 +98,8 @@ def test_think_node_from_dict() -> ThinkNode:
     return node
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_init(reasoning_agent: ReasoningAgent) -> None:
     """Test ReasoningAgent initialization"""
     assert reasoning_agent.name == "reasoning_agent"
@@ -153,7 +153,7 @@ def test_think_node_serialization_with_children() -> None:
     assert new_root.children[0].content == "Child"
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_answer(mock_credentials: Credentials) -> None:
     for max_depth in range(1, 10):
         for beam_size in range(1, 10):
@@ -281,7 +281,7 @@ def test_visualize_tree_render_failure(mock_digraph: MagicMock) -> None:
         ])
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent: ReasoningAgent) -> None:
     """
     Test that when multiple messages are provided, _process_prompt uses the prompt rewriter.
@@ -322,7 +322,7 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent: Reasoni
     assert "Paris" in ground_truth
 
 
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials) -> None:
     """Test that ReasoningAgent properly executes code in responses"""
 

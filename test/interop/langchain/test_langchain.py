@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import Interoperable
 from autogen.interop.langchain import LangChainInteroperability
 
@@ -20,7 +20,7 @@ with optional_import_block():
 
 # skip if python version is not >= 3.9
 @pytest.mark.interop
-@skip_on_missing_imports("langchain", "interop-langchain")
+@run_for_optional_imports("langchain", "interop-langchain")
 class TestLangChainInteroperability:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -56,7 +56,7 @@ class TestLangChainInteroperability:
         tool_input = model_type(query="LangChain")  # type: ignore[misc]
         assert self.tool.func(tool_input=tool_input) == "LangChain Integration"
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_with_llm(self, credentials_gpt_4o: Credentials, user_proxy: UserProxyAgent) -> None:
         llm_config = credentials_gpt_4o.llm_config
 
@@ -76,7 +76,7 @@ class TestLangChainInteroperability:
         assert LangChainInteroperability.get_unsupported_reason() is None
 
 
-@skip_on_missing_imports("langchain", "interop-langchain")
+@run_for_optional_imports("langchain", "interop-langchain")
 class TestLangChainInteroperabilityWithoutPydanticInput:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -101,7 +101,7 @@ class TestLangChainInteroperabilityWithoutPydanticInput:
         tool_input = model_type(query="LangChain", max_length=100)
         assert self.tool.func(tool_input=tool_input) == "LangChain Integration, max_length: 100"
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_with_llm(self, credentials_gpt_4o: Credentials, user_proxy: UserProxyAgent) -> None:
         llm_config = credentials_gpt_4o.llm_config
         chatbot = AssistantAgent(

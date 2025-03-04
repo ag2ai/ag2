@@ -14,7 +14,7 @@ from autogen import AssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ....conftest import Credentials, reason
 
@@ -26,12 +26,12 @@ with optional_import_block() as result:
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["chromadb", "IPython", "openai"], "retrievechat")
+@run_for_optional_imports(["chromadb", "IPython", "openai"], "retrievechat")
 def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)  # deprecated in v0.2
@@ -75,7 +75,7 @@ def test_retrievechat(credentials_gpt_4o_mini: Credentials):
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["chromadb", "IPython", "openai"], "retrievechat")
+@run_for_optional_imports(["chromadb", "IPython", "openai"], "retrievechat")
 def test_retrieve_config():
     # test warning message when no docs_path is provided
     ragproxyagent = RetrieveUserProxyAgent(

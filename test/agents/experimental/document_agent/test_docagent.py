@@ -4,19 +4,17 @@
 
 from pathlib import Path
 
-import pytest
-
 from autogen.agents.experimental.document_agent.document_agent import (
     DocAgent,
     DocumentTask,
     DocumentTriageAgent,
 )
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 
 from ....conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports(["openai"], "openai")
 def test_document_triage_agent_init(credentials_gpt_4o_mini: Credentials) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config
     triage_agent = DocumentTriageAgent(llm_config)

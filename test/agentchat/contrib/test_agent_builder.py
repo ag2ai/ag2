@@ -14,7 +14,7 @@ import pytest
 
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST
 
@@ -49,8 +49,8 @@ def builder() -> AgentBuilder:
     )
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_build(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -75,9 +75,9 @@ def test_build(builder: AgentBuilder):
     assert len(agent_config["agent_configs"]) <= builder.max_agents
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["chromadb", "huggingface_hub"], "autobuild")
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["chromadb", "huggingface_hub"], "autobuild")
+@run_for_optional_imports(["openai"], "openai")
 def test_build_from_library(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -124,7 +124,6 @@ def test_build_from_library(builder: AgentBuilder):
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
 def test_build_with_agent_configs(builder: AgentBuilder):
     conf = {
         "building_task": "Generate one TextAnalyzerAgent to analyze text",
@@ -154,7 +153,6 @@ def test_build_with_agent_configs(builder: AgentBuilder):
 
 
 @pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
 def test_save(builder: AgentBuilder):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
@@ -184,8 +182,7 @@ def test_save(builder: AgentBuilder):
         _config_check(saved_configs)
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports("openai", "openai")
 def test_load(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         config_save_path = f"{here}/example_test_agent_builder_config.json"
@@ -205,8 +202,7 @@ def test_load(builder: AgentBuilder):
         _config_check(loaded_agent_configs)
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"], "openai")
+@run_for_optional_imports("openai", "openai")
 def test_clear_agent(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         config_save_path = f"{here}/example_test_agent_builder_config.json"
