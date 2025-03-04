@@ -84,7 +84,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                     if output_files:
                         output_file = output_files[0]
                         if output_file.suffix == ".md":
-                            self._query_engine.add_docs(new_doc_paths=[output_file])
+                            self._query_engine.add_docs(new_doc_paths_or_urls=[output_file])
 
                     # Keep track of documents ingested
                     context_variables["DocumentsIngested"].append(input_file_path)
