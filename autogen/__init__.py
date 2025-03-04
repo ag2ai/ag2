@@ -40,8 +40,6 @@ from .exception_utils import (
 )
 from .oai import (
     Cache,
-    ChatCompletion,
-    Completion,
     ModelClient,
     OpenAIWrapper,
     config_list_from_dotenv,
@@ -71,9 +69,7 @@ __all__ = [
     "AgentNameConflictError",
     "AssistantAgent",
     "Cache",
-    "ChatCompletion",
     "ChatResult",
-    "Completion",
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
