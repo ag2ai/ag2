@@ -21,6 +21,7 @@ from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
+from ..utils import ContextExpression
 
 __all__ = [
     "AFTER_WORK",
@@ -142,9 +143,11 @@ class OnCondition:  # noqa: N801
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
                 def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
-        available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
-            If a string, it will look up the value of the context variable with that name.
-            If the string starts with "!", it will negate the value of the context variable (e.g., "!logged_in" means the condition is available when NOT logged_in).
+        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
+            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not('logged_in' and 'is_admin') or ('guest_checkout')")
+                Example with comparison: ContextExpression("'attempts' >= 3 or 'is_premium' == True")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
@@ -152,7 +155,7 @@ class OnCondition:  # noqa: N801
 
     target: Union[ConversableAgent, dict[str, Any]] = None
     condition: Union[str, ContextStr, Callable[..., Any]] = ""
-    available: Optional[Union[Callable, str]] = None
+    available: Optional[Union[Callable, str, ContextExpression]] = None
 
     def __post_init__(self):
         # Ensure valid types
@@ -168,7 +171,9 @@ class OnCondition:  # noqa: N801
             )
 
         if self.available is not None:
-            assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
+            assert isinstance(self.available, (Callable, str, ContextExpression)), (
+                "'available' must be a callable, a string, or a ContextExpression"
+            )
 
 
 class ON_CONDITION(OnCondition):  # noqa: N801
@@ -954,11 +959,9 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             if isinstance(on_condition.available, Callable):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
             elif isinstance(on_condition.available, str):
-                if on_condition.available.startswith("!"):  # Indicates Not
-                    key_name = on_condition.available[1:]
-                    is_available = not (agent.get_context(key_name) or False)
-                else:
-                    is_available = agent.get_context(on_condition.available) or False
+                is_available = agent.get_context(on_condition.available) or False
+            elif isinstance(on_condition.available, ContextExpression):
+                is_available = on_condition.available.evaluate(agent._context_variables)
 
         # first remove the function if it exists
         if func_name in agent._function_map:

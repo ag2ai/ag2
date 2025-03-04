@@ -30,6 +30,7 @@ from autogen.agentchat.contrib.swarm_agent import (
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
+from autogen.agentchat.utils import ContextExpression
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.tool import Tool
 
@@ -1440,7 +1441,9 @@ def test_on_condition_available():
 
     register_hand_off(
         agent1,
-        hand_to=OnCondition(target=agent2, condition="my_condition_is_true", available="!context_var_is_false"),
+        hand_to=OnCondition(
+            target=agent2, condition="my_condition_is_true", available=ContextExpression("not(${context_var_is_false})")
+        ),
     )
 
     # Evaluate hand-offs

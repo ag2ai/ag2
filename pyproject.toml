@@ -426,6 +426,7 @@ files = [
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/realtime_agent",
+    "autogen/agentchat/utils.py",
     "autogen/agents",
     "autogen/coding",
     "autogen/exception_utils.py",
