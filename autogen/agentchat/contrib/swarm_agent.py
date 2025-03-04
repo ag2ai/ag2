@@ -143,7 +143,8 @@ class OnCondition:  # noqa: N801
             The Callable signature is:
                 def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
-            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            If a string, it will look up the value of the context variable with that name.
+            If the string starts with "!", it will negate the value of the context variable (e.g., "!logged_in" means the condition is available when NOT logged_in).
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
@@ -953,7 +954,11 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             if isinstance(on_condition.available, Callable):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
             elif isinstance(on_condition.available, str):
-                is_available = agent.get_context(on_condition.available) or False
+                if on_condition.available.startswith("!"):  # Indicates Not
+                    key_name = on_condition.available[1:]
+                    is_available = not (agent.get_context(key_name) or False)
+                else:
+                    is_available = agent.get_context(on_condition.available) or False
 
         # first remove the function if it exists
         if func_name in agent._function_map:

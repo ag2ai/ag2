@@ -21,6 +21,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     _prepare_swarm_agents,
     _process_initial_messages,
     _setup_context_variables,
+    _update_conditional_functions,
     a_initiate_swarm_chat,
     initiate_swarm_chat,
     make_remove_function,
@@ -1372,6 +1373,97 @@ def test_swarmresult_afterworkoption_tool_swarmresult():
         dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
     )
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+
+def test_on_condition_available():
+    """Test OnCondition's available parameter"""
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=testing_llm_config)
+
+    # Test container to capture condition
+    class ConditionContainer:
+        def __init__(self):
+            self.captured_condition = None
+
+    # 1. Test with no available parameter
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(target=agent2, condition="my_condition_is_true"),
+    )
+
+    # Evaluate hand-offs
+    _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert len(agent1.llm_config["tools"]) == 1  # Is available
+
+    # 2. Test with an available parameter that equates to True
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent1.set_context("context_var_is_true", True)
+
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(target=agent2, condition="my_condition_is_true", available="context_var_is_true"),
+    )
+
+    # Evaluate hand-offs
+    _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert len(agent1.llm_config["tools"]) == 1  # Is available
+
+    # 3. Test with an available parameter that equates to False
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent1.set_context("context_var_is_false", False)
+
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(target=agent2, condition="my_condition_is_true", available="context_var_is_false"),
+    )
+
+    # Evaluate hand-offs
+    _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert "tools" not in agent1.llm_config  # Is not available
+
+    # 4. Test with an available parameter that equates to True using NOT operator "!"
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent1.set_context("context_var_is_false", False)
+
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(target=agent2, condition="my_condition_is_true", available="!context_var_is_false"),
+    )
+
+    # Evaluate hand-offs
+    _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert len(agent1.llm_config["tools"]) == 1  # Is available (Not False)
+
+    # 5. Test with an available parameter using a Callable
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent1._oai_messages[agent2].append({"role": "user", "content": "Test"})
+
+    def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    register_hand_off(
+        agent1,
+        hand_to=OnCondition(target=agent2, condition="my_condition_is_true", available=is_available),
+    )
+
+    # Evaluate hand-offs
+    _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert len(agent1.llm_config["tools"]) == 1  # Is available
 
 
 if __name__ == "__main__":
