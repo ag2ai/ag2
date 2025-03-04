@@ -80,7 +80,7 @@ openai = [
 ]
 
 openai-realtime = [
-    "autogen[openai]",
+    "pyautogen[openai]",
     "openai[realtime]",
 ]
 
@@ -154,10 +154,10 @@ browser-use = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.19",
+    "llama-index==0.12.22",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.19",
-    "llama-index-readers-web==0.3.5",
+    "llama-index-core==0.12.22",
+    "llama-index-readers-web==0.3.7",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -172,7 +172,7 @@ interop-crewai = [
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.24"]
+interop-pydantic-ai = ["pydantic-ai==0.0.31"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
@@ -197,15 +197,15 @@ gemini = [
 ]
 
 gemini-realtime = [
-    "autogen[gemini]",
-    "autogen[websockets]",
+    "pyautogen[gemini]",
+    "pyautogen[websockets]",
 ]
 
 together = ["together>=1.2"]
 websurfer = ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"]
 redis = ["redis"]
 cosmosdb = ["azure-cosmos>=4.2.0"]
-websockets = ["websockets>=14.0,<15"]
+websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.23.1"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
@@ -214,9 +214,9 @@ groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
 ollama = ["ollama>=0.4.5", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
-deepseek = ["autogen[openai]"]
+deepseek = ["pyautogen[openai]"]
 
-commsagent-discord = ["discord.py>=2.4.0,<2.5"]
+commsagent-discord = ["discord.py>=2.4.0,<2.6"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
 commsagent-telegram = ["telethon>=1.38.1, <2"]
 
@@ -229,20 +229,20 @@ test = [
     "nbformat==5.10.4",
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
-    "pytest==8.3.4",
+    "pytest==8.3.5",
     "mock==5.1.0",
     "pandas==2.2.3",
-    "fastapi==0.115.8",
+    "fastapi==0.115.11",
 ]
 
 docs = [
-    "mkdocs-material==9.6.4",
-    "mkdocstrings[python]==0.28.1",
+    "mkdocs-material==9.6.7",
+    "mkdocstrings[python]==0.28.2",
     "mkdocs-literate-nav==0.6.1",
     "mdx-include==1.4.2",
     "mkdocs-git-revision-date-localized-plugin==1.3.0",
     "mike==2.1.3",
-    "typer==0.15.1",
+    "typer==0.15.2",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.3.7",  # includes with variables
     "mkdocs-glightbox==0.4.0",  # img zoom
@@ -261,7 +261,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.7",
+    "ruff==0.9.9",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -271,7 +271,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.2",
+    "uv==0.6.4",
 ]
 
 
