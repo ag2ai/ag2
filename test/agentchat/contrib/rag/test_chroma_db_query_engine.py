@@ -7,8 +7,7 @@ import sys
 
 import pytest
 
-from autogen.agentchat.contrib.rag.chroma_db_query_engine import ChromaDBQueryEngine
-from autogen.agentchat.contrib.rag.query_engine import RAGQueryEngine
+from autogen.agentchat.contrib.rag import ChromaDBQueryEngine, RAGQueryEngine
 from autogen.import_utils import skip_on_missing_imports
 
 from ....conftest import reason

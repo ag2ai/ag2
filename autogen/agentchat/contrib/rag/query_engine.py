@@ -26,16 +26,16 @@ class RAGQueryEngine(Protocol):
         **kwargs: Any,
     ) -> bool:
         """Initialize the database with the input documents or records.
+
         This method initializes database with the input documents or records.
-        Usually, it takes the following steps,
+        Usually, it takes the following steps:
         1. connecting to a database.
         2. insert records
         3. build indexes etc.
+
         Args:
-            new_doc_dir: a dir of input documents that are used to create the records in database.
-            new_doc_paths:
-                a list of input documents that are used to create the records in database.
-                a document can be a path to a file or a url.
+            new_doc_dir (Optional[Union[Path, str]]): A directory containing documents to be ingested.
+            new_doc_paths_or_urls (Optional[Sequence[Union[Path, str]]]): A list of paths or URLs to documents to be ingested.
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments
         Returns:

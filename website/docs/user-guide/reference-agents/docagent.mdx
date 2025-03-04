@@ -6,7 +6,7 @@ In the realm of AI and automation, handling documents and extracting information
 [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
 
 <Tip>
-DocAgent is new and keen to support your RAG needs. However, as a first iteration it has been kept simple and uses a local vector database (Chroma).
+DocAgent is new and keen to support your RAG needs. In the first iterations it has been kept simple and uses either local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine).
 
 DocAgent will continue to be developed to a production-ready standard and your feedback and [contributions](https://docs.ag2.ai/docs/contributor-guide/contributing) are most welcome!
 </Tip>
@@ -24,16 +24,21 @@ pip install ag2[openai,rag]
 The document agent can perform the following tasks:
 1. Ingest documents from a local file or URL. Supported formats:
     - PDF
-    - IMAGE
-    - DOCX
+    - DOCX (DOCX, DOTX, DOCM, DOTM)
+    - XLSX
+    - PPTX (PPTX, POTX, PPSX, PPTM, POTM, PPSM)
     - HTML
-    - PPTX
-    - ASCIIDOC
-    - MD
+    - ASCIIDOC (ADOC, ASCIIDOC, ASC)
+    - MD (MD, MARKDOWN)
+    - XML (XML, NXML)
+    - TXT
+    - JSON
+    - CSV
+    - IMAGE (BMP, JPG, JPEG, PNG, TIFF, TIF)
 2. Answer questions with RAG capability
 
 <Tip>
-Currently, DocAgent answers questions only related to ingested documents. If it can't find relevant information it will respond with that note.
+DocAgent answers questions only related to ingested documents, even if it using an LLM it won't answer general knowledge questions.
 </Tip>
 
 ## Internal Swarm
@@ -60,6 +65,62 @@ Here's a breakdown of how the internal swarm chat is used within the [`DocAgent`
 4. **Data Ingestion**: The `Data Ingestion Agent` processes the documents.
 5. **Query Execution**: The `Query Agent` answers the user's questions.
 6. **Summary Generation**: The `Summary Agent` generates a summary of the completed tasks.
+
+## Parsing documents and web pages
+
+Internally, DocAgent uses [Docling](https://github.com/DS4SD/docling) to convert documents into Markdown files, which are then using for ingestion into a data store (which is then used for querying).
+
+For files (whether local files or URLs that point to files), DocAgent will download those files for Docling to convert. If it's a web page, DocAgent will use [Selenium](https://github.com/SeleniumHQ/Selenium) to browse to the page and extract the content.
+
+## Data Store and Query Engine
+
+DocAgent can currently use two different data stores and query engines.
+
+### Vector Store: Chroma database
+
+[Chroma](https://www.trychroma.com/) is a popular, open-source, vector database. DocAgent will take the Markdown and embed and store the data into the vector database.
+
+This requires the `OPENAI_API_KEY` environment variable as OpenAI's GPT 4o model is used to create the embeddings.
+
+DocAgent will use [LlamaIndex](https://github.com/run-llama/llama_index)'s vector store library to embed and query the Chroma database.
+
+This is the default data store and query engine, so you do not need to create it and pass it to the DocAgent.
+
+See the section on Collections below to understand how to use them effectively.
+
+### In-memory
+
+DocAgent can also store the Docling Markdown in memory when digesting documents.
+
+When it comes time to query, DocAgent will inject the Markdown into the system message of an internal query agent and use an LLM to respond to the question.
+
+Import notes about using the in-memory query engine:
+- The full Markdown content, from the ingested documents, is put into the context window, so be cautious of putting too much content in as it may be too much for the LLM.
+- The Markdown is put into the start of the system message to maximize the chance of utilizing the LLM's caching ability and reduce cost. However, adding more documents in subsequent messages will change the system message and the cache will not be effective, so try to ingest all the documents before querying.
+- As it's in-memory, ingestion content will be lost when the agent is destroyed.
+- LLMs can be better at answering some queries than the vector store as they are processing all of the context to answer the query. However, this does come at the cost of more token usage.
+
+To use the in-memory query engine, you will need to create it and pass it to the DocAgent, see the following example:
+
+```python
+from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
+
+# Example LLM Config
+llm_config_list = {"config_list": {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}}
+
+# Create our In-Memory Query Engine
+inmemory_qe = InMemoryQueryEngine(llm_config=llm_config_list)
+
+# Include the Query Engine when creating your DocAgent
+doc_agent = DocAgent(
+    name="doc_agent",
+    llm_config=llm_config,
+    query_engine=inmemory_qe,
+)
+
+...
+
+```
 
 ## Example
 
@@ -349,6 +410,39 @@ The fiscal year 2024 financial summary for Toast, Inc. is as follows:
 --------------------------------------------------------------------------------
 ```
 
+## DocAgent Performance
+
+How does it perform? See our [DocAgent Performance](./docagent-performance) page for the full breakdown on how it handles different tasks.
+
+If you have tasks you'd like DocAgent to perform, please share them as an [Issue](https://github.com/ag2ai/ag2/issues) on our GitHub repo.
+
+Summary:
+
+| # | Task | Ingested | In-memory Query Engine | Chroma Query Engine |
+| :---: | --- | :---: | :---: | :---: |
+| 1 | URL to Markdown file, query to summarize | ✅ | ✅ | ✅ |
+| 2 | URL to Microsoft Word document, query highlights | ✅ | ✅ | ✅ |
+| 3 | URL to PDF annual report, query specific figures | ✅ | ✅ | ✅ |
+| 4 | URL to PDF document, query to explain | ✅ | ✅ | ✅ |
+| 5 | Local file, PDF, query to explain | ✅ | ✅ | ✅ |
+| 6 | URL to JPG of scanned invoice, query a figure | ❌ | 🔶 | 🔶 |
+| 7 | Local file, PNG of scanned invoice, query a figure | ❌ | ❌ | ❌ |
+| 8 | URL to XLSX using a redirect URL, query table | ✅ | 🔶 | 🔶 |
+| 9 | URL to XLSX, query data | ❌ | 🔶 | ✅ |
+| 10 | URL to CSV, query a figure | ❌ | N/A | N/A |
+| 11 | URL to CSV, query to summarize | ✅ | ✅ | ✅ |
+| 12 | URL with CSV, query unrelated | ✅ | ✅ | ✅ |
+| 13 | Local files, 2 x Markdowns, Query to compare | ✅ | ✅ | ✅ |
+| 14 | Local file, Markdown, unrelated query | ✅ | ✅ | ✅ |
+| 15 | Local file, Markdown, unrelated query but general knowledge | ✅ | ✅ | ✅ |
+| 16 | No files to ingest but has query | N/A | ✅ | ✅ |
+| 17 | Local file, PDF of annual report, query a figure | ✅ | ✅ | ✅ |
+| 18 | Local file, Microsoft Word, query a figure | ✅ | ✅ | ❌ |
+| 19 | URL to web page with query to summarize | ✅ | ✅ | ✅ |
+| 20a | Local files, PDF and DOCX, one query to cover both | ✅ | ✅ | ✅ |
+| 20b | Follow-up query to DocAgent| N/A | ✅ | ❌ |
+
+
 ## Collections
 
 By default, [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) will ingest documents into the same collection. Every time you run the agent it will utilise this collection, enabling you to keep documents ingested across different runs.
@@ -378,4 +472,4 @@ document_agent_nvidia = DocAgent(
 
 ## Further examples
 
-See this [notebook](/docs/use-cases/notebooks/notebooks/agents_document_agent) for more examples of using document agent.
+See this [notebook](/docs/use-cases/notebooks/notebooks/agents_docagent) for more examples of using document agent.
