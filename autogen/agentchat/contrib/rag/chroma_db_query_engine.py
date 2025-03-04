@@ -69,7 +69,7 @@ class ChromaDBQueryEngine:
             embedding_function: A callable that converts text into vector embeddings. Default embedding uses Sentence Transformers model all-MiniLM-L6-v2.
                 For more embeddings that ChromaDB support, please refer to [embeddings](https://docs.trychroma.com/docs/embeddings/embedding-functions)
             metadata: A dictionary containing configuration parameters for the Chromadb collection.
-                This metadata is typically used to configure the HNSW indexing algorithm.
+                This metadata is typically used to configure the HNSW indexing algorithm. Defaults to `{"hnsw:space": "ip", "hnsw:construction_ef": 30, "hnsw:M": 32}`
                 For more details about the default metadata, please refer to [HNSW configuration](https://cookbook.chromadb.dev/core/configuration/#hnsw-configuration)
             llm: LLM model used by LlamaIndex for query processing.
                  You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
