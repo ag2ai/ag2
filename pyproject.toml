@@ -139,6 +139,7 @@ rag = [
     "chromadb>=0.5,<1",
     "llama-index>=0.12,<1",
     "llama-index-vector-stores-chroma==0.4.1",
+    "requests>=2.32.3,<3",
 ]
 
 
