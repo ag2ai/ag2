@@ -6,7 +6,7 @@ import copy
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel
 
@@ -32,9 +32,11 @@ class QueryAnswer(BaseModel):
     answer: str
 
 
-class InMemoryQueryEngine(RAGQueryEngine):
+class InMemoryQueryEngine:
     """
     This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
+
+    This implements the autogen.agentchat.contrib.rag.RAGQueryEngine protocol.
     """
 
     def __init__(
@@ -201,3 +203,11 @@ class InMemoryQueryEngine(RAGQueryEngine):
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """Not required nor implemented for InMemoryQueryEngine"""
         raise NotImplementedError("Method, connect_db, not required nor implemented for InMemoryQueryEngine")
+
+
+# mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
+if TYPE_CHECKING:
+    from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+
+    def _check_implement_protocol(o: InMemoryQueryEngine) -> RAGQueryEngine:
+        return o

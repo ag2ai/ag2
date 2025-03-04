@@ -206,22 +206,24 @@ class TestDoclingParseDocs:
         """Test that the function uses './output' as the default output directory path when None is provided."""
         input_file_path = tmp_path / "input_file_path"
 
-        with patch(
-            "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
-        ) as mock_handle_input:
-            with patch(
+        with (
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
                 "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
                 return_value=iter([mock_conversion_result]),
-            ) as mock_convert:
-                with patch("pathlib.Path.mkdir") as mock_mkdir:
-                    with patch("builtins.open", mock_open()) as mock_file:
-                        # Call the function with output_dir_path=None
-                        docling_parse_docs(input_file_path, output_dir_path=None)
+            ),
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
+            # Call the function with output_dir_path=None
+            docling_parse_docs(input_file_path, output_dir_path=None)
 
-                        # Check that Path('./output') was created
-                        mock_mkdir.assert_called_with(parents=True, exist_ok=True)
+            # Check that Path('./output') was created
+            mock_mkdir.assert_called_with(parents=True, exist_ok=True)
 
-                        # Verify that the correct output directory was used
-                        file_open_calls = [call[0][0] for call in mock_file.call_args_list]
-                        for file_path in file_open_calls:
-                            assert str(file_path).startswith(str(Path("./output")))
+            # Verify that the correct output directory was used
+            file_open_calls = [call[0][0] for call in mock_file.call_args_list]
+            for file_path in file_open_calls:
+                assert str(file_path).startswith(str(Path("./output")))
