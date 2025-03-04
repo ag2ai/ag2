@@ -28,11 +28,11 @@ from ..conftest import (
 credentials_structured_output = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,
-        marks=pytest.mark.openai,
+        marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_gemini_flash.__name__,
-        marks=pytest.mark.gemini,
+        marks=[pytest.mark.gemini, pytest.mark.aux_neg_flag],
     ),
 ]
 

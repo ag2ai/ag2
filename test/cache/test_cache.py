@@ -12,13 +12,14 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block() as result:
     from azure.cosmos import CosmosClient
 
 
-class TestCache(unittest.TestCase):
+class TestCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.redis_config = {
             "cache_seed": "test_seed",
@@ -39,14 +40,14 @@ class TestCache(unittest.TestCase):
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
     def test_redis_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.redis_config)
-        self.assertIsInstance(cache.cache, MagicMock)
+        assert isinstance(cache.cache, MagicMock)
         mock_cache_factory.assert_called()
 
     @patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=MagicMock())
-    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
+    @run_for_optional_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmosdb_cache_initialization(self, mock_cache_factory):
         cache = Cache(self.cosmos_config)
-        self.assertIsInstance(cache.cache, MagicMock)
+        assert isinstance(cache.cache, MagicMock)
         mock_cache_factory.assert_called_with(
             seed="42",
             redis_url=None,
@@ -64,7 +65,7 @@ class TestCache(unittest.TestCase):
         mock_cache_instance = MagicMock()
         with patch("autogen.cache.cache_factory.CacheFactory.cache_factory", return_value=mock_cache_instance):
             with Cache(config) as cache:
-                self.assertIsInstance(cache, MagicMock)
+                assert isinstance(cache, MagicMock)
 
             mock_cache_instance.__enter__.assert_called()
             mock_cache_instance.__exit__.assert_called()
@@ -73,7 +74,7 @@ class TestCache(unittest.TestCase):
     def test_redis_context_manager(self):
         self.context_manager_common(self.redis_config)
 
-    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
+    @run_for_optional_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_context_manager(self):
         self.context_manager_common(self.cosmos_config)
 
@@ -93,7 +94,7 @@ class TestCache(unittest.TestCase):
     def test_redis_get_set(self):
         self.get_set_common(self.redis_config)
 
-    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
+    @run_for_optional_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_get_set(self):
         self.get_set_common(self.cosmos_config)
 
@@ -108,7 +109,7 @@ class TestCache(unittest.TestCase):
     def test_redis_close(self):
         self.close_common(self.redis_config)
 
-    @skip_on_missing_imports(["azure.cosmos"], "cosmosdb")
+    @run_for_optional_imports(["azure.cosmos"], "cosmosdb")
     def test_cosmos_close(self):
         self.close_common(self.cosmos_config)
 

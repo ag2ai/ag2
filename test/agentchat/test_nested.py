@@ -10,6 +10,7 @@ import pytest
 
 import autogen
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
+from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
 
@@ -31,7 +32,7 @@ class MockAgentReplies(AgentCapability):
         agent.register_reply([autogen.Agent, None], mock_reply, position=2)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_nested(
     credentials_gpt_4o_mini: Credentials,
     credentials_gpt_4o: Credentials,

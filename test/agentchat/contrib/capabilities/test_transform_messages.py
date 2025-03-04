@@ -6,16 +6,15 @@
 # SPDX-License-Identifier: MIT
 import tempfile
 
-import pytest
-
 import autogen
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
 from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter, MessageTokenLimiter
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> None:
     """Test the TransformMessages capability to handle long contexts.
 

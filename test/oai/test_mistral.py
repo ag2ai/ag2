@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
 
 
@@ -32,7 +32,7 @@ def mistral_client():
 
 
 # Test initialization and configuration
-@skip_on_missing_imports(["mistralai"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_initialization():
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
@@ -48,13 +48,13 @@ def test_initialization():
 
 
 # Test standard initialization
-@skip_on_missing_imports(["mistralai"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_valid_initialization(mistral_client):
     assert mistral_client.api_key == "fake_api_key", "Config api_key should be correctly set"
 
 
 # Test cost calculation
-@skip_on_missing_imports(["mistralai"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_cost_calculation(mock_response):
     response = mock_response(
         text="Example response",
@@ -69,7 +69,7 @@ def test_cost_calculation(mock_response):
 
 
 # Test text generation
-@skip_on_missing_imports(["mistralai"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
@@ -103,7 +103,7 @@ def test_create_response(mock_chat, mistral_client):
 
 
 # Test functions/tools
-@skip_on_missing_imports(["mistralai"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response_with_tool_call(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`

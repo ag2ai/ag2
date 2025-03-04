@@ -8,7 +8,7 @@ from typing import Callable
 import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
 
 from ....conftest import Credentials, credentials_browser_use
@@ -17,7 +17,7 @@ with optional_import_block():
     from browser_use import Controller
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     [
         "langchain_anthropic",
         "langchain_google_genai",
@@ -78,7 +78,7 @@ class TestBrowserUseToolOpenai:
         controller = BrowserUseTool._get_controller(llm_config=mock_credentials.llm_config)
         assert isinstance(controller, Controller)
 
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_end2end(self, browser_use_tool: BrowserUseTool, credentials_gpt_4o: Credentials) -> None:
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
         assistant = AssistantAgent(name="assistant", llm_config=credentials_gpt_4o.llm_config)

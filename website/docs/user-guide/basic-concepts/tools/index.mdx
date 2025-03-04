@@ -1,0 +1,35 @@
+---
+title: Overview
+---
+
+Agents in AG2 leverage tools to extend their functionality, allowing them to interact with external systems, fetch real-time data, and execute complex tasks beyond the scope of a language model's internal knowledge. This enables a structured approach where agents decide which tool to use and then execute it accordingly.
+
+## How Tool Usage Works in AG2
+
+In AG2, tool execution follows a two-step process:
+1. **Selection**: An agent (driven by its LLM) decides which tool is appropriate based on the given task.
+2. **Execution**: A separate executor agent invokes the tool and returns the results.
+
+To ensure smooth execution, AG2 enforces a structure where the **executor agent** follows the **selector agent** in a conversation flow.
+
+🔗 [Explore the Walk-through](/docs/user-guide/basic-concepts/tools/basics)
+
+## Secure Tool Usage with Secrets
+
+When tools require sensitive information like API keys or credentials, AG2 employs **dependency injection** to keep such data secure. This method ensures that private information is not exposed to the LLM while still allowing seamless execution of agent tasks. Some key benefits include:
+- **Enhanced Security**: Keeps secrets out of LLM interactions and telemetry.
+- **Simplified Development**: Securely passes credentials without hardcoding them.
+- **Flexible Integration**: Allows agents to access necessary credentials while maintaining security.
+
+🔗 [Explore the Walk-through](/docs/user-guide/basic-concepts/tools/tools-with-secrets)
+
+## Interoperability with External Frameworks
+
+AG2 supports interoperability with popular LLM tool frameworks, making it easier to integrate a wide range of tools:
+- **LangChain**: Provides numerous pre-built tools for API calls, web scraping, and more.
+- **CrewAI**: Offers specialized tools for web scraping, search, and automation.
+- **PydanticAI**: Supports structured data handling and dependency injection for context-driven tool execution.
+
+Each of these frameworks can be easily installed and configured to work with AG2, allowing developers to enhance their agents with powerful capabilities.
+
+🔗 [Explore the Walk-through](/docs/user-guide/basic-concepts/tools/interop)

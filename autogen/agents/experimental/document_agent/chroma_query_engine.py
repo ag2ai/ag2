@@ -42,7 +42,7 @@ class VectorChromaQueryEngine(RAGQueryEngine):
     This is a autogen.agentchat.contrib.rag.RAGQueryEngine.
     """
 
-    def __init__(  # type: ignore
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         db_path: Optional[str] = None,
         embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
@@ -139,7 +139,7 @@ class VectorChromaQueryEngine(RAGQueryEngine):
         for doc in new_docs:
             self.index.insert(doc)
 
-    def _load_doc(  # type: ignore
+    def _load_doc(  # type: ignore[no-any-unimported]
         self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
     ) -> list["LlamaDocument"]:
         """
@@ -182,7 +182,7 @@ class VectorChromaQueryEngine(RAGQueryEngine):
 
         return loaded_documents
 
-    def _create_index(  # type: ignore
+    def _create_index(  # type: ignore[no-any-unimported]
         self, collection: "Collection"
     ) -> "VectorStoreIndex":
         """

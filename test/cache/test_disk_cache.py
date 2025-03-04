@@ -9,17 +9,20 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autogen.cache.disk_cache import DiskCache
 
 
-class TestDiskCache(unittest.TestCase):
+class TestDiskCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.seed = "test_seed"
 
     @patch("autogen.cache.disk_cache.diskcache.Cache", return_value=MagicMock())
     def test_init(self, mock_cache):
         cache = DiskCache(self.seed)
-        self.assertIsInstance(cache.cache, MagicMock)
+        assert isinstance(cache.cache, MagicMock)
         mock_cache.assert_called_with(self.seed)
 
     @patch("autogen.cache.disk_cache.diskcache.Cache", return_value=MagicMock())
@@ -28,11 +31,11 @@ class TestDiskCache(unittest.TestCase):
         value = "value"
         cache = DiskCache(self.seed)
         cache.cache.get.return_value = value
-        self.assertEqual(cache.get(key), value)
+        assert cache.get(key) == value
         cache.cache.get.assert_called_with(key, None)
 
         cache.cache.get.return_value = None
-        self.assertIsNone(cache.get(key, None))
+        assert cache.get(key, None) is None
 
     @patch("autogen.cache.disk_cache.diskcache.Cache", return_value=MagicMock())
     def test_set(self, mock_cache):
@@ -45,7 +48,7 @@ class TestDiskCache(unittest.TestCase):
     @patch("autogen.cache.disk_cache.diskcache.Cache", return_value=MagicMock())
     def test_context_manager(self, mock_cache):
         with DiskCache(self.seed) as cache:
-            self.assertIsInstance(cache, DiskCache)
+            assert isinstance(cache, DiskCache)
             mock_cache_instance = cache.cache
         mock_cache_instance.close.assert_called()
 

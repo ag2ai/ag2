@@ -9,6 +9,7 @@ from anyio import move_on_after
 
 from autogen.agentchat.realtime.experimental.clients import OpenAIRealtimeClient, RealtimeClientProtocol
 from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated, SessionUpdated
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials
 
@@ -29,7 +30,7 @@ class TestOAIRealtimeClient:
         )
         assert isinstance(client, RealtimeClientProtocol)
 
-    @pytest.mark.openai
+    @run_for_optional_imports(["openai", "websockets"], "openai-realtime")
     @pytest.mark.asyncio
     async def test_not_connected(self, client: OpenAIRealtimeClient) -> None:
         with pytest.raises(RuntimeError, match=r"Client is not connected, call connect\(\) first."):
@@ -40,7 +41,7 @@ class TestOAIRealtimeClient:
         assert not scope.cancelled_caught
 
     @pytest.mark.skip
-    @pytest.mark.openai
+    @run_for_optional_imports(["openai-realtime"], "openai-realtime")
     @pytest.mark.asyncio
     async def test_start_read_events(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()
@@ -64,7 +65,7 @@ class TestOAIRealtimeClient:
         assert isinstance(calls_kwargs[1][0], SessionUpdated)
 
     @pytest.mark.skip
-    @pytest.mark.openai
+    @run_for_optional_imports(["openai-realtime"], "openai-realtime")
     @pytest.mark.asyncio
     async def test_send_text(self, client: OpenAIRealtimeClient) -> None:
         mock = MagicMock()

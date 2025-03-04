@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.oai.together import TogetherClient, calculate_together_cost
 
 
@@ -31,7 +31,7 @@ def together_client():
     return TogetherClient(api_key="fake_api_key")
 
 
-@skip_on_missing_imports("together", "together")
+@run_for_optional_imports("together", "together")
 class TestTogether:
     # Test initialization and configuration
     def test_initialization(self) -> None:
