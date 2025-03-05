@@ -430,20 +430,20 @@ def test_context_variables_updating_multi_tools_including_pydantic_object():
         ]
     }
 
-    # Starting context variable, this will increment in the swarm
+    # Starting pydantic context variable, this will increment in the swarm
     class MyKey(BaseModel):
         key: int = 0
 
     test_context_variables = {"my_key": MyKey(key=0)}
 
-    # Increment the context variable
+    # Increment the pydantic context variable
     def test_func_1(context_variables: dict[str, Any], param1: str) -> str:
         a = json.loads(context_variables["my_key"])
         a["key"] += 1
         context_variables["my_key"] = json.dumps(a)
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
-    # Increment the context variable
+    # Increment the pydantic context variable
     def test_func_2(context_variables: dict[str, Any], param2: str) -> str:
         a = json.loads(context_variables["my_key"])
         a["key"] += 100
