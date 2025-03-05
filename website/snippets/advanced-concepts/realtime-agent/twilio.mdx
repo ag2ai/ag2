@@ -103,10 +103,13 @@ To connect Twilio with your [**`RealtimeAgent`**](/docs/reference/agentchat/real
 1. **Create a Twilio Account**
    If you don’t already have a Twilio account, you can [sign up here](https://login.twilio.com/u/signup). Twilio offers trial accounts, which are perfect for testing purposes.
 
-2. **Access Your Voice-Enabled Number**
+2. **Navigate to Phone Numbers**
+![Twilio endpoint config](/snippets/advanced-concepts/realtime-agent/img/twilio_phone_numbers.png)
+
+3. **Access Your Voice-Enabled Number**
    Log in to the **Twilio Console** and select your **Voice-enabled phone number**.
 
-3. **Configure the Webhook**
+4. **Configure the Webhook**
    - Navigate to the **Voice & Fax** section under your number’s settings.
    - Set the **A CALL COMES IN** webhook to your public **ngrok** URL.
    - Append `/incoming-call` to the URL. For example:
@@ -114,7 +117,7 @@ To connect Twilio with your [**`RealtimeAgent`**](/docs/reference/agentchat/real
        `https://abc123.ngrok.app/incoming-call`
 ![Twilio endpoint config](/snippets/advanced-concepts/realtime-agent/img/twilio_endpoint_config.png)
 
-4. **Save Changes**
+5. **Save Changes**
    Once the webhook URL is set, save your changes.
 
 You’re now ready to test the integration between Twilio and your [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent)!
