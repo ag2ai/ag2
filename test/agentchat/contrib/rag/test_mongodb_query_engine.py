@@ -16,14 +16,12 @@ logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
 
 # Real file paths provided for testing.
-input_dir = "/workspace/ag2/test/agents/experimental/document_agent/pdf_parsed/"
+input_dir = "/root/ag2/test/agents/experimental/document_agent/pdf_parsed/"
 input_docs = [os.path.join(input_dir, "nvidia_10k_2024.md")]
 docs_to_add = [os.path.join(input_dir, "Toast_financial_report.md")]
 
 # Use the connection string from an environment variable or fallback to the given connection string.
-MONGO_CONN_STR = os.getenv(
-    "MONGODB_CONNECTION_STRING", "mongodb+srv://huyvo6812:Poohuynh183!!!!@database.eppfmdq.mongodb.net/"
-)
+MONGO_CONN_STR = "mongodb+srv://<username>:<password>!!!!@<database_uri>/"
 
 
 @pytest.fixture(scope="module")

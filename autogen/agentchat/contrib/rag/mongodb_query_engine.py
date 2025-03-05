@@ -34,7 +34,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["pymongo", "llama_index", "langchain_openai"], "rag")
+@require_optional_import(["pymongo", "llama_index"], "rag")
 @export_module("autogen.agentchat.contrib.rag")
 class MongoDBQueryEngine:
     """
