@@ -220,11 +220,14 @@ class ContextExpression:
             - Supported operators:
                 - Logical: not/!, and/&, or/|
                 - Comparison: >, <, >=, <=, ==, !=
+            - Supported functions:
+                - len(${var_name}): Gets the length of a list, string, or other collection
             - Parentheses can be used for grouping
             - Examples:
                 - "not ${logged_in} and ${is_admin} or ${guest_checkout}"
                 - "!${logged_in} & ${is_admin} | ${guest_checkout}"
-                - "${attempts} > 3 | ${is_admin} == True"
+                - "len(${orders}) > 0 & ${user_active}"
+                - "len(${cart_items}) == 0 | ${checkout_started}"
 
     Raises:
         SyntaxError: If the expression cannot be parsed
@@ -332,10 +335,19 @@ class ContextExpression:
             # Support for string literals
             ast.Str,
             ast.Constant,
+            # Support for function calls (specifically len())
+            ast.Call,
         )
 
         if not isinstance(node, allowed_node_types):
             raise ValueError(f"Operation type {type(node).__name__} is not allowed in logical expressions")
+
+        # Special validation for function calls - only allow len()
+        if isinstance(node, ast.Call):
+            if not (isinstance(node.func, ast.Name) and node.func.id == "len"):
+                raise ValueError(f"Only the len() function is allowed, got: {getattr(node.func, 'id', 'unknown')}")
+            if len(node.args) != 1:
+                raise ValueError(f"len() function must have exactly one argument, got {len(node.args)}")
 
         # Special validation for Compare nodes
         if isinstance(node, ast.Compare):
@@ -359,8 +371,32 @@ class ContextExpression:
         # Create a modified expression that we can safely evaluate
         eval_expr = self._python_expr  # Use the Python-syntax version
 
-        # Replace all variable references ${var_name} with their actual values
+        # First, handle len() functions with variable references inside
+        len_pattern = r"len\(\${([^}]*)}\)"
+        len_matches = list(re.finditer(len_pattern, eval_expr))
+
+        # Process all len() operations first
+        for match in len_matches:
+            var_name = match.group(1)
+            var_value = context_variables.get(var_name, [])
+
+            # Calculate the length - works for lists, strings, dictionaries, etc.
+            try:
+                length_value = len(var_value)
+            except TypeError:
+                # If the value doesn't support len(), treat as 0
+                length_value = 0
+
+            # Replace the len() expression with the actual length
+            full_match = match.group(0)
+            eval_expr = eval_expr.replace(full_match, str(length_value))
+
+        # Then replace remaining variable references with their values
         for var_name in self._variable_names:
+            # Skip variables that were already processed in len() expressions
+            if any(m.group(1) == var_name for m in len_matches):
+                continue
+
             # Get the value from context, defaulting to False if not found
             var_value = context_variables.get(var_name, False)
 
@@ -369,6 +405,9 @@ class ContextExpression:
                 formatted_value = str(var_value)
             elif isinstance(var_value, str):
                 formatted_value = f"'{var_value}'"  # Quote strings
+            elif isinstance(var_value, (list, dict, tuple)):
+                # For collections, convert to their boolean evaluation
+                formatted_value = str(bool(var_value))
             else:
                 formatted_value = str(var_value)
 
