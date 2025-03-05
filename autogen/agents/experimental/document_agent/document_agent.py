@@ -38,7 +38,7 @@ DEFAULT_SYSTEM_MESSAGE = """
 """
 TASK_MANAGER_NAME = "TaskManagerAgent"
 TASK_MANAGER_SYSTEM_MESSAGE = """
-    You are a task manager agent. You can do one of 4 tasks:
+    You are a task manager agent. You have 2 priorities:
     1. You initiate the tasks which updates the context variables based on the task decisions (DocumentTask) from the DocumentTriageAgent.
     If the DocumentTriageAgent has suggested any ingestions or queries, call initiate_tasks to record them.
     Put all ingestion and query tasks into the one tool call.
@@ -62,9 +62,7 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
                 }
             ]
         }
-    2. You hand off control to the ingest agent if there are any documents to ingest.
-    3. If there are no documents to ingest and there are queries to run, hand control off to the query agent.
-    4. If there are no documents to ingest and no queries to run, hand control off to the summary agent.
+    2. If there are no documents to ingest and no queries to run, hand control off to the summary agent.
 
     Put all file paths and URLs into the ingestions. A http/https URL is also a valid path and should be ingested.
 
@@ -72,10 +70,9 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
 
     New ingestations and queries may be raised from time to time, so use the initiate_tasks again if you see new ingestions/queries.
 
-    Use tools to transfer to the ingest agent, query agent, or summary agent based on the context variables.
-
-    IF CALLING A TOOL, ONLY CALL TOOLS ONCE IN YOUR ENTIRE RESPONSE.
+    Transfer to the summary agent if all ingestion and query tasks are done.
     """
+
 DEFAULT_ERROR_SWARM_MESSAGE: str = """
 Document Agent failed to perform task.
 """
@@ -419,6 +416,7 @@ class DocAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        """Reply function that generates the inner swarm reply for the DocAgent."""
         context_variables = {
             "CompletedTaskCount": 0,
             "DocumentsToIngest": [],
@@ -451,6 +449,7 @@ class DocAgent(ConversableAgent):
         return True, chat_result.summary
 
     def _get_document_input_message(self, messages: Optional[Union[list[dict[str, Any]], str]]) -> str:  # type: ignore[type-arg]
+        """Gets and validates the input message(s) for the document agent."""
         if isinstance(messages, str):
             return messages
         elif (
