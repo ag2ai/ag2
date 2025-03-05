@@ -217,11 +217,14 @@ class ContextExpression:
         expression (str): A string containing a logical expression with context variable references.
             - Variable references use ${var_name} syntax: ${logged_in}, ${attempts}
             - String literals can use normal quotes: 'hello', "world"
-            - Supported operators: not (NOT), and (AND), or (OR)
-            - Comparison operators: >, <, >=, <=, ==, !=
+            - Supported operators:
+                - Logical: not/!, and/&, or/|
+                - Comparison: >, <, >=, <=, ==, !=
             - Parentheses can be used for grouping
-            - Example: "not(${logged_in} and ${is_admin}) or ${guest_checkout}"
-            - Example with comparisons: "${attempts} > 3 or ${is_admin} == True"
+            - Examples:
+                - "not ${logged_in} and ${is_admin} or ${guest_checkout}"
+                - "!${logged_in} & ${is_admin} | ${guest_checkout}"
+                - "${attempts} > 3 | ${is_admin} == True"
 
     Raises:
         SyntaxError: If the expression cannot be parsed
@@ -235,13 +238,22 @@ class ContextExpression:
         try:
             # Extract variable references and replace with placeholders
             self._variable_names = self._extract_variable_names(self.expression)
-            sanitized_expr = self._prepare_for_ast(self.expression)
+
+            # Convert symbolic operators to Python keywords
+            python_expr = self._convert_to_python_syntax(self.expression)
+
+            # Sanitize for AST parsing
+            sanitized_expr = self._prepare_for_ast(python_expr)
 
             # Use ast to parse and validate the expression
             self._ast = ast.parse(sanitized_expr, mode="eval")
 
             # Verify it only contains allowed operations
             self._validate_operations(self._ast.body)
+
+            # Store the Python-syntax version for evaluation
+            self._python_expr = python_expr
+
         except SyntaxError as e:
             raise SyntaxError(f"Invalid expression syntax in '{self.expression}': {str(e)}")
         except Exception as e:
@@ -252,6 +264,33 @@ class ContextExpression:
         # Find all patterns like ${var_name}
         matches = re.findall(r"\${([^}]*)}", expr)
         return matches
+
+    def _convert_to_python_syntax(self, expr: str) -> str:
+        """Convert symbolic operators to Python keywords."""
+        # We need to be careful about operators inside string literals
+        # First, temporarily replace string literals with placeholders
+        string_literals = []
+
+        def replace_string_literal(match: re.Match[str]) -> str:
+            string_literals.append(match.group(0))
+            return f"__STRING_LITERAL_{len(string_literals) - 1}__"
+
+        # Replace both single and double quoted strings
+        expr_without_strings = re.sub(r"'[^']*'|\"[^\"]*\"", replace_string_literal, expr)
+
+        # Handle the NOT operator (!) - no parentheses handling needed
+        # Replace standalone ! before variables or expressions
+        expr_without_strings = re.sub(r"!\s*(\${|\()", "not \\1", expr_without_strings)
+
+        # Handle AND and OR operators - simpler approach without parentheses handling
+        expr_without_strings = re.sub(r"\s+&\s+", " and ", expr_without_strings)
+        expr_without_strings = re.sub(r"\s+\|\s+", " or ", expr_without_strings)
+
+        # Now put string literals back
+        for i, literal in enumerate(string_literals):
+            expr_without_strings = expr_without_strings.replace(f"__STRING_LITERAL_{i}__", literal)
+
+        return expr_without_strings
 
     def _prepare_for_ast(self, expr: str) -> str:
         """Convert the expression to valid Python for AST parsing by replacing variables with placeholders."""
@@ -318,7 +357,7 @@ class ContextExpression:
             bool: The result of evaluating the expression
         """
         # Create a modified expression that we can safely evaluate
-        eval_expr = self.expression
+        eval_expr = self._python_expr  # Use the Python-syntax version
 
         # Replace all variable references ${var_name} with their actual values
         for var_name in self._variable_names:

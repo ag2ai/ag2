@@ -30,6 +30,7 @@ __all__ = [
     "AfterWorkOption",
     "ContextStr",
     "OnCondition",
+    "OnContextCondition",
     "SwarmAgent",
     "a_initiate_swarm_chat",
     "create_swarm_transition",
@@ -136,7 +137,11 @@ class AFTER_WORK(AfterWork):  # noqa: N801
 @dataclass
 @export_module("autogen")
 class OnCondition:  # noqa: N801
-    """Defines a condition for transitioning to another agent or nested chats
+    """Defines a condition for transitioning to another agent or nested chats.
+
+    This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
+
+    These are evaluated after the OnCondition conditions but before the AfterWork conditions.
 
     Args:
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
@@ -150,8 +155,8 @@ class OnCondition:  # noqa: N801
         available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
-                Example: ContextExpression("not('logged_in' and 'is_admin') or ('guest_checkout')")
-                Example with comparison: ContextExpression("'attempts' >= 3 or 'is_premium' == True")
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
@@ -192,6 +197,62 @@ class ON_CONDITION(OnCondition):  # noqa: N801
         super().__init__(*args, **kwargs)
 
 
+@dataclass
+@export_module("autogen")
+class OnContextCondition:  # noqa: N801
+    """Defines a condition for transitioning to another agent or nested chats using context variables and the ContextExpression class.
+
+    This is for context variable-based condition evaluation (does not use the agent's LLM).
+
+    These are evaluated before the OnCondition and AfterWork conditions.
+
+    Args:
+        target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
+            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
+            Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
+        condition (Union[str, ContextExpression]): The condition for transitioning to the target agent, evaluated by the LLM.
+            If a string, it needs to represent a context variable key and the value will be evaluated as a boolean
+            If a ContextExpression, it will evaluate the logical expression against the context variables. If it is True, the transition will occur.
+                Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
+        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnContextCondition is included for the LLM to evaluate.
+            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
+            The Callable signature is:
+                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
+
+    """
+
+    target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
+    condition: Optional[Union[str, ContextExpression]] = None
+    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]] = None
+
+    def __post_init__(self) -> None:
+        # Ensure valid types
+        if (self.target is not None) and (not isinstance(self.target, (ConversableAgent, dict))):
+            raise ValueError("'target' must be a ConversableAgent or a dict")
+
+        # Ensure they have a condition
+        if isinstance(self.condition, str):
+            if not self.condition.strip():
+                raise ValueError("'condition' must be a non-empty string")
+
+            self._context_condition = ContextExpression("${" + self.condition + "}")
+        else:
+            if not isinstance(self.condition, ContextExpression):
+                raise ValueError("'condition' must be a string on ContextExpression")
+
+            self._context_condition = self.condition
+
+        if (self.available is not None) and (
+            not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
+        ):
+            raise ValueError("'available' must be a callable, a string, or a ContextExpression")
+
+
 def _establish_swarm_agent(agent: ConversableAgent) -> None:
     """Establish the swarm agent with the swarm-related attributes and hooks. Not for the tool executor.
 
@@ -213,11 +274,14 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
     agent._swarm_conditional_functions = {}  # type: ignore[attr-defined]
 
-    # Store the Python function-based OnConditions for evaluation (list[OnCondition])
-    agent._swarm_func_onconditions = []  # type: ignore[attr-defined]
-
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
+
+    # Store the OnContextConditions for evaluation (list[OnContextCondition])
+    agent._swarm_oncontextconditions = []  # type: ignore[attr-defined]
+
+    # Register a reply function to run Python function-based OnConditions before any other reply function
+    agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
 
     agent._get_display_name = MethodType(_swarm_agent_str, agent)  # type: ignore[method-assign]
 
@@ -236,6 +300,43 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
     for agent in agents:
         if agent.name not in [__TOOL_EXECUTOR_NAME__]:
             agent._swarm_manager = group_chat_manager  # type: ignore[attr-defined]
+
+
+def _run_oncontextconditions(
+    agent: ConversableAgent,
+    messages: Optional[list[dict[str, Any]]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+    """Run OnContextConditions for an agent before any other reply function."""
+    for on_condition in agent._swarm_oncontextconditions:  # type: ignore[attr-defined]
+        is_available = True
+
+        if on_condition.available is not None:
+            if callable(on_condition.available):
+                is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
+            elif isinstance(on_condition.available, str):
+                is_available = agent.get_context(on_condition.available) or False
+            elif isinstance(on_condition.available, ContextExpression):
+                is_available = on_condition.available.evaluate(agent._context_variables)
+
+        if is_available and on_condition._context_condition.evaluate(agent._context_variables):
+            # Condition has been met, we'll set the Tool Executor's _swarm_next_agent
+            # attribute and that will be picked up on the next iteration when
+            # _determine_next_agent is called
+            for agent in agent._swarm_manager.groupchat.agents:  # type: ignore[attr-defined]
+                if agent.name == __TOOL_EXECUTOR_NAME__:
+                    agent._swarm_next_agent = on_condition.target  # type: ignore[attr-defined]
+                    break
+
+            if isinstance(on_condition.target, ConversableAgent):
+                transfer_name = on_condition.target.name
+            else:
+                transfer_name = "a nested chat"
+
+            return True, "[Handing off to " + transfer_name + "]"
+
+    return False, None
 
 
 def _prepare_swarm_agents(
@@ -312,11 +413,17 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         agent (ConversableAgent): The agent to create nested chat agents for, including registering the hand offs.
         nested_chat_agents (list[ConversableAgent]): List for all nested chat agents, appends to this.
     """
-    for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):  # type: ignore[attr-defined]
-        nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
-        condition = nested_chat_handoff["condition"]
-        available = nested_chat_handoff["available"]
 
+    def create_nested_chat_agent(agent: ConversableAgent, nested_chats: dict[str, Any]) -> ConversableAgent:
+        """Create a nested chat agent for a nested chat configuration.
+
+        Args:
+            agent (ConversableAgent): The agent to create the nested chat agent for.
+            nested_chat (dict[str, Any]): The nested chat configuration.
+
+        Returns:
+            ConversableAgent: The created nested chat agent.
+        """
         # Create a nested chat agent specifically for this nested chat
         nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
 
@@ -333,10 +440,30 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         # After the nested chat is complete, transfer back to the parent agent
         register_hand_off(nested_chat_agent, AfterWork(agent=agent))
 
+        return nested_chat_agent
+
+    for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):  # type: ignore[attr-defined]
+        llm_nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
+
+        # Create nested chat agent
+        nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
         nested_chat_agents.append(nested_chat_agent)
 
         # Nested chat is triggered through an agent transfer to this nested chat agent
+        condition = nested_chat_handoff["condition"]
+        available = nested_chat_handoff["available"]
         register_hand_off(agent, OnCondition(target=nested_chat_agent, condition=condition, available=available))
+
+    for i, nested_chat_context_handoff in enumerate(agent._swarm_oncontextconditions):  # type: ignore[attr-defined]
+        if isinstance(nested_chat_context_handoff.target, dict):
+            context_nested_chats: dict[str, Any] = nested_chat_context_handoff.target
+
+            # Create nested chat agent
+            nested_chat_agent = create_nested_chat_agent(agent, context_nested_chats)
+            nested_chat_agents.append(nested_chat_agent)
+
+            # Update the OnContextCondition, replacing the nested chat dictionary with the nested chat agent
+            nested_chat_context_handoff.target = nested_chat_agent
 
 
 def _process_initial_messages(
@@ -932,7 +1059,8 @@ def _set_to_tool_execution(agent: ConversableAgent) -> None:
 
 
 def register_hand_off(
-    agent: ConversableAgent, hand_to: Union[list[Union[OnCondition, AfterWork]], OnCondition, AfterWork]
+    agent: ConversableAgent,
+    hand_to: Union[list[Union[OnCondition, OnContextCondition, AfterWork]], OnCondition, OnContextCondition, AfterWork],
 ) -> None:
     """Register a function to hand off to another agent.
 
@@ -951,10 +1079,10 @@ def register_hand_off(
         _establish_swarm_agent(agent)
 
     # Ensure that hand_to is a list or OnCondition or AfterWork
-    if not isinstance(hand_to, (list, OnCondition, AfterWork)):
-        raise ValueError("hand_to must be a list of OnCondition or AfterWork")
+    if not isinstance(hand_to, (list, OnCondition, OnContextCondition, AfterWork)):
+        raise ValueError("hand_to must be a list of OnCondition, OnContextCondition, or AfterWork")
 
-    if isinstance(hand_to, (OnCondition, AfterWork)):
+    if isinstance(hand_to, (OnCondition, OnContextCondition, AfterWork)):
         hand_to = [hand_to]
 
     for transit in hand_to:
@@ -997,6 +1125,9 @@ def register_hand_off(
                     "condition": transit.condition,
                     "available": transit.available,
                 })
+
+        elif isinstance(transit, OnContextCondition):
+            agent._swarm_oncontextconditions.append(transit)  # type: ignore[attr-defined]
 
         else:
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")

@@ -15,12 +15,15 @@ from autogen.agentchat.contrib.swarm_agent import (
     AfterWorkOption,
     ContextStr,
     OnCondition,
+    OnContextCondition,
     SwarmResult,
     _cleanup_temp_user_messages,
     _create_nested_chats,
     _determine_next_agent,
     _prepare_swarm_agents,
     _process_initial_messages,
+    _run_oncontextconditions,
+    _set_to_tool_execution,
     _setup_context_variables,
     _update_conditional_functions,
     a_initiate_swarm_chat,
@@ -505,7 +508,7 @@ def test_non_swarm_in_hand_off() -> None:
     with pytest.raises(ValueError, match="'target' must be a ConversableAgent or a dict"):
         register_hand_off(agent1, hand_to=OnCondition(target=bad_agent, condition="Testing"))  # type: ignore[arg-type]
 
-    with pytest.raises(ValueError, match="hand_to must be a list of OnCondition or AfterWork"):
+    with pytest.raises(ValueError, match="hand_to must be a list of OnCondition, OnContextCondition, or AfterWork"):
         register_hand_off(agent1, 0)  # type: ignore[arg-type]
 
 
@@ -1487,6 +1490,189 @@ def test_on_condition_available() -> None:
 
     assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
     assert len(agent1.llm_config["tools"]) == 1  # Is available
+
+
+def test_on_context_condition() -> None:
+    """Test OnContextCondition initialisation and validation."""
+
+    # Test valid initialisation with a string condition
+    test_conversable_agent = ConversableAgent("test_agent")
+    on_context_condition = OnContextCondition(target=test_conversable_agent, condition="is_valid")
+
+    # Check that the condition was converted to a ContextExpression
+    assert isinstance(on_context_condition._context_condition, ContextExpression)
+
+    # Test valid initialisation with a ContextExpression condition
+    context_expression = ContextExpression("${is_valid} and ${is_ready}")
+    on_context_condition = OnContextCondition(target=test_conversable_agent, condition=context_expression)
+
+    # Check that the condition was stored correctly
+    assert on_context_condition._context_condition == context_expression
+
+    # Test invalid target
+    test_invalid_agent = invalid_agent("invalid_agent")
+    with pytest.raises(ValueError, match="'target' must be a ConversableAgent or a dict"):
+        OnContextCondition(target=test_invalid_agent, condition="is_valid")  # type: ignore[arg-type]
+
+    # Test invalid condition type
+    with pytest.raises(ValueError, match="'condition' must be a string on ContextExpression"):
+        OnContextCondition(target=test_conversable_agent, condition=123)  # type: ignore[arg-type]
+
+    # Test empty string condition
+    with pytest.raises(ValueError, match="'condition' must be a non-empty string"):
+        OnContextCondition(target=test_conversable_agent, condition="")
+
+    # Test invalid available parameter
+    with pytest.raises(ValueError, match="'available' must be a callable, a string, or a ContextExpression"):
+        OnContextCondition(target=test_conversable_agent, condition="is_valid", available=123)  # type: ignore[arg-type]
+
+
+def test_register_hand_off_on_context_condition() -> None:
+    """Test registering OnContextCondition with register_hand_off."""
+
+    # Create test agents
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
+
+    # Register an OnContextCondition handoff
+    context_expr = ContextExpression("${is_valid}")
+    on_context_condition = OnContextCondition(target=agent2, condition=context_expr)
+    register_hand_off(agent1, hand_to=on_context_condition)
+
+    # Check that the OnContextCondition was added to the agent's _swarm_oncontextconditions
+    assert len(agent1._swarm_oncontextconditions) == 1  # type: ignore[attr-defined]
+    assert agent1._swarm_oncontextconditions[0] == on_context_condition  # type: ignore[attr-defined]
+
+
+def test_on_context_condition_run() -> None:
+    """Test the _run_oncontextconditions function directly."""
+
+    # Create test agents
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
+    tool_executor = ConversableAgent(__TOOL_EXECUTOR_NAME__)
+    _set_to_tool_execution(tool_executor)
+
+    # Create a group chat with these agents
+    groupchat = GroupChat(agents=[agent1, agent2, tool_executor], messages=[])
+    manager = GroupChatManager(groupchat)
+
+    # Link agent1 to the swarm manager
+    agent1._swarm_manager = manager  # type: ignore[attr-defined]
+
+    # Add an OnContextCondition to agent1
+    agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_to_agent2")]  # type: ignore[attr-defined]
+
+    # Set up context variables for agent1
+    agent1._context_variables = {"transfer_to_agent2": True}
+
+    # Call _run_oncontextconditions
+    result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+
+    # Check that the function returns True and a message
+    assert result is True
+    assert message == "[Handing off to agent2]"
+
+    # Check that the tool executor's _swarm_next_agent attribute is set to agent2
+    assert tool_executor._swarm_next_agent == agent2  # type: ignore[attr-defined]
+
+    # Check that the function returns False when the condition is not met
+    agent1._context_variables = {"transfer_to_agent2": False}
+    tool_executor._swarm_next_agent = None  # type: ignore[attr-defined]
+
+    result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert result is False
+    assert message is None
+    assert tool_executor._swarm_next_agent is None  # type: ignore[attr-defined]
+
+    # Test with a nested chat target
+    nested_chat_config = {
+        "chat_queue": [],
+        "reply_func_from_nested_chats": "summary_from_nested_chats",
+        "config": None,
+        "use_async": False,
+    }
+
+    agent1._swarm_oncontextconditions = [OnContextCondition(target=nested_chat_config, condition="transfer_to_nested")]  # type: ignore[attr-defined]
+    agent1._context_variables = {"transfer_to_nested": True}
+
+    result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+
+    assert result is True
+    assert message == "[Handing off to a nested chat]"
+    assert tool_executor._swarm_next_agent == nested_chat_config  # type: ignore[attr-defined]
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_on_context_condition_available() -> None:
+    """Test OnContextCondition's available parameter."""
+
+    # Create test agents
+    agent1 = ConversableAgent("agent1")
+    agent2 = ConversableAgent("agent2")
+    tool_executor = ConversableAgent(__TOOL_EXECUTOR_NAME__)
+    _set_to_tool_execution(tool_executor)
+
+    # Create a group chat with these agents
+    groupchat = GroupChat(agents=[agent1, agent2, tool_executor], messages=[])
+    manager = GroupChatManager(groupchat)
+
+    # Link agent1 to the swarm manager
+    agent1._swarm_manager = manager  # type: ignore[attr-defined]
+
+    # 1. Test with no available parameter (should be available)
+    agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_condition")]  # type: ignore[attr-defined]
+
+    agent1._context_variables = {"transfer_condition": True}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is True
+
+    # 2. Test with string available parameter that's True
+    agent1._swarm_oncontextconditions = [  # type: ignore[attr-defined]
+        OnContextCondition(target=agent2, condition="transfer_condition", available="is_available")
+    ]
+
+    agent1._context_variables = {"transfer_condition": True, "is_available": True}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is True
+
+    # 3. Test with string available parameter that's False
+    agent1._context_variables = {"transfer_condition": True, "is_available": False}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is False
+
+    # 4. Test with ContextExpression available parameter that's True
+    expr = ContextExpression("${feature_enabled} and ${user_authorized}")
+    agent1._swarm_oncontextconditions = [  # type: ignore[attr-defined]
+        OnContextCondition(target=agent2, condition="transfer_condition", available=expr)
+    ]
+
+    agent1._context_variables = {"transfer_condition": True, "feature_enabled": True, "user_authorized": True}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is True
+
+    # 5. Test with ContextExpression available parameter that's False
+    agent1._context_variables = {"transfer_condition": True, "feature_enabled": True, "user_authorized": False}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is False
+
+    # 6. Test with callable available parameter
+    def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return agent._context_variables.get("dynamic_availability", False)  # type: ignore[no-any-return]
+
+    agent1._swarm_oncontextconditions = [  # type: ignore[attr-defined]
+        OnContextCondition(target=agent2, condition="transfer_condition", available=is_available)
+    ]
+
+    agent1._context_variables = {"transfer_condition": True, "dynamic_availability": True}
+    agent1._oai_messages[agent2].append({"role": "user", "content": "Test"})
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is True
+
+    agent1._context_variables = {"transfer_condition": True, "dynamic_availability": False}
+    result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
+    assert result is False
 
 
 if __name__ == "__main__":
