@@ -207,7 +207,7 @@ class OnContextCondition:  # noqa: N801
     These are evaluated before the OnCondition and AfterWork conditions.
 
     Args:
-        target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
+        target (Union[ConversableAgent, dict[str, Any]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
         condition (Union[str, ContextExpression]): The condition for transitioning to the target agent, evaluated by the LLM.
