@@ -7,8 +7,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
-from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
-from autogen.import_utils import optional_import_block, require_optional_import
+from ....doc_utils import export_module
+from ....import_utils import optional_import_block, require_optional_import
+from ..vectordb.base import VectorDBFactory
 
 with optional_import_block():
     from chromadb import HttpClient
@@ -20,6 +21,7 @@ with optional_import_block():
     from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
+__all__ = ["ChromaDBQueryEngine"]
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
 EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
@@ -33,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
+@export_module("autogen.agentchat.contrib.rag")
 class ChromaDBQueryEngine:
     """
     This engine leverages Chromadb to persist document embeddings in a named collection
