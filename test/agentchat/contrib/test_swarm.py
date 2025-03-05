@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.contrib.swarm_agent import (
@@ -415,6 +416,76 @@ def test_context_variables_updating_multi_tools():
     # in both tools, updated values should traverse
     # 0 + 1 (func 1) + 100 (func 2) = 101
     assert context_vars["my_key"] == 101
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_context_variables_updating_multi_tools_including_pydantic_object():
+    """Test context variables handling in tool calls"""
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+            }
+        ]
+    }
+
+    # Starting pydantic context variable, this will increment in the swarm
+    class MyKey(BaseModel):
+        key: int = 0
+
+    test_context_variables = {"my_key": MyKey(key=0)}
+
+    # Increment the pydantic context variable
+    def test_func_1(context_variables: dict[str, Any], param1: str) -> str:
+        a = json.loads(context_variables["my_key"])
+        a["key"] += 1
+        context_variables["my_key"] = json.dumps(a)
+        return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
+
+    # Increment the pydantic context variable
+    def test_func_2(context_variables: dict[str, Any], param2: str) -> str:
+        a = json.loads(context_variables["my_key"])
+        a["key"] += 100
+        context_variables["my_key"] = json.dumps(a)
+        return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
+
+    agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
+    agent2 = ConversableAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
+
+    # Fake generate_oai_reply
+    def mock_generate_oai_reply(*args, **kwargs):
+        return True, "This is a mock response from the agent."
+
+    # Fake generate_oai_reply
+    def mock_generate_oai_reply_tool(*args, **kwargs):
+        return True, {
+            "role": "assistant",
+            "name": "agent1",
+            "tool_calls": [
+                {"type": "function", "function": {"name": "test_func_1", "arguments": '{"param1": "test"}'}},
+                {"type": "function", "function": {"name": "test_func_2", "arguments": '{"param2": "test"}'}},
+            ],
+        }
+
+    # Mock LLM responses
+    agent1.register_reply([ConversableAgent, None], mock_generate_oai_reply)
+    agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply_tool)
+
+    chat_result, context_vars, last_speaker = initiate_swarm_chat(
+        initial_agent=agent2,
+        messages=TEST_MESSAGES,
+        agents=[agent1, agent2],
+        context_variables=test_context_variables,
+        max_rounds=3,
+    )
+    assert chat_result
+    assert last_speaker
+
+    # Ensure we've incremented the context variable
+    # in both tools, updated values should traverse
+    # 0 + 1 (func 1) + 100 (func 2) = 101
+    assert json.loads(context_vars["my_key"]) == {"key": 101}
 
 
 @run_for_optional_imports(["openai"], "openai")
