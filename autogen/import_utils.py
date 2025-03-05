@@ -314,7 +314,7 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: Opti
     """Decorator to skip a test if an optional module is missing
 
     Args:
-        module: Module name
+        modules: Module name or list of module names required
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
     missing_modules = get_missing_imports(modules)

@@ -126,10 +126,10 @@ def transform_card_grp_component(content: str) -> str:
 
 def fix_asset_path(content: str) -> str:
     # Replace static/img paths with ag2/assets/img
-    modified_content = re.sub(r'src="/static/img/([^"]+)"', r'src="/ag2/assets/img/\1"', content)
+    modified_content = re.sub(r'src="/static/img/([^"]+)"', r'src="/assets/img/\1"', content)
 
     # Replace docs paths with ag2/docs
-    modified_content = re.sub(r'href="/docs/([^"]+)"', r'href="/ag2/docs/\1"', modified_content)
+    modified_content = re.sub(r'href="/docs/([^"]+)"', r'href="/docs/\1"', modified_content)
 
     return modified_content
 

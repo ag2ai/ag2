@@ -220,9 +220,8 @@ class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
-            voice (str): The voice to use.
-            system_message (str): The system message to use.
+            llm_config (dict[str, Any]): The LLM config for the client.
+            logger (Logger): The logger for the client.
             kwargs (Any): Additional arguments.
 
         Returns:

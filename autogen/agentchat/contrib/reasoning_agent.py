@@ -329,8 +329,8 @@ class ReasoningAgent(AssistantAgent):
 
         Args:
             name (str): Name of the agent
-            llm_config(dict): Configuration for the language model
-            grader_llm_config(Optional[dict[str, Any]]): Optional separate configuration for the grader model. If not provided, uses llm_config
+            llm_config (dict): Configuration for the language model
+            grader_llm_config (Optional[dict[str, Any]]): Optional separate configuration for the grader model. If not provided, uses llm_config
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer

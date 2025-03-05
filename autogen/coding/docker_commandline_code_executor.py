@@ -92,8 +92,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
             work_dir (Union[Path, str], optional): The working directory for the code
                 execution. Defaults to Path(".").
             bind_dir (Union[Path, str], optional): The directory that will be bound
-            to the code executor container. Useful for cases where you want to spawn
-            the container from within a container. Defaults to work_dir.
+                to the code executor container. Useful for cases where you want to spawn
+                the container from within a container. Defaults to work_dir.
             auto_remove (bool, optional): If true, will automatically remove the Docker
                 container when it is stopped. Defaults to True.
             stop_container (bool, optional): If true, will automatically stop the

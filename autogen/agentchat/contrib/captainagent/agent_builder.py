@@ -197,7 +197,6 @@ Match roles in the role set to each expert in expert set.
             config_file_or_env: path or environment of the OpenAI api configs.
             builder_model: specify a model as the backbone of build manager.
             agent_model: specify a model as the backbone of participant agents.
-            endpoint_building_timeout: timeout for building up an endpoint server.
             max_agents: max agents for each task.
         """
         builder_model = builder_model if isinstance(builder_model, list) else [builder_model]

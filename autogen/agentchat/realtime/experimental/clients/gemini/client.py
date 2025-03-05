@@ -254,7 +254,7 @@ class GeminiRealtimeClient(RealtimeClientBase):
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
+            llm_config (dict[str, Any]): The LLM config for the client.
             logger (Logger): The logger for the client.
             kwargs (Any): Additional arguments.
 

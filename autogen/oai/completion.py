@@ -162,7 +162,7 @@ class Completion(OpenAICompletion):
         Args:
             seed (int, Optional): The integer identifier for the pseudo seed.
                 Results corresponding to different seeds will be cached in different places.
-            cache_path (str, Optional): The root path for the cache.
+            cache_path_root (str, Optional): The root path for the cache.
                 The complete cache path will be {cache_path_root}/{seed}.
         """
         cls.cache_seed = seed
@@ -175,7 +175,7 @@ class Completion(OpenAICompletion):
         Args:
             seed (int, Optional): The integer identifier for the pseudo seed.
                 If omitted, all caches under cache_path_root will be cleared.
-            cache_path (str, Optional): The root path for the cache.
+            cache_path_root (str, Optional): The root path for the cache.
                 The complete cache path will be {cache_path_root}/{seed}.
         """
         if seed is None:
@@ -547,7 +547,7 @@ class Completion(OpenAICompletion):
         num_samples: Optional[int] = 1,
         logging_level: Optional[int] = logging.WARNING,
         **config,
-    ):
+    ) -> dict[Any, Any]:
         """Tune the parameters for the OpenAI API call.
 
         TODO: support parallel tuning with ray or spark.
@@ -561,20 +561,20 @@ class Completion(OpenAICompletion):
                 The function should take a list of responses and a data point as input,
                 and return a dict of metrics. For example,
 
-        ```python
-        def eval_func(responses, **data):
-            solution = data["solution"]
-            success_list = []
-            n = len(responses)
-            for i in range(n):
-                response = responses[i]
-                succeed = is_equiv_chain_of_thought(response, solution)
-                success_list.append(succeed)
-            return {
-                "expected_success": 1 - pow(1 - sum(success_list) / n, n),
-                "success": any(s for s in success_list),
-            }
-        ```
+                ```python
+                def eval_func(responses, **data):
+                    solution = data["solution"]
+                    success_list = []
+                    n = len(responses)
+                    for i in range(n):
+                        response = responses[i]
+                        succeed = is_equiv_chain_of_thought(response, solution)
+                        success_list.append(succeed)
+                    return {
+                        "expected_success": 1 - pow(1 - sum(success_list) / n, n),
+                        "success": any(s for s in success_list),
+                    }
+                ```
 
             log_file_name (str, optional): The log file.
             inference_budget (float, optional): The inference budget, dollar per instance.
@@ -743,8 +743,8 @@ class Completion(OpenAICompletion):
         filter_func: Optional[Callable[[dict[str, Any], dict[str, Any]], bool]] = None,
         raise_on_ratelimit_or_timeout: Optional[bool] = True,
         allow_format_str_template: Optional[bool] = False,
-        **config,
-    ):
+        **config: Any,
+    ) -> dict[str, Any]:
         """Make a completion for a given context.
 
         Args:
@@ -927,7 +927,7 @@ class Completion(OpenAICompletion):
         return_responses_and_per_instance_result=False,
         logging_level=logging.WARNING,
         **config,
-    ):
+    ) -> Optional[dict[str, Any]]:
         """Evaluate the responses created with the config for the OpenAI API call.
 
         Args:
@@ -940,39 +940,39 @@ class Completion(OpenAICompletion):
                 In the latter case we will use the eval_func provided via tune function.
                 Defaults to None.
 
-        ```python
-        def eval_func(responses, **data):
-            solution = data["solution"]
-            success_list = []
-            n = len(responses)
-            for i in range(n):
-                response = responses[i]
-                succeed = is_equiv_chain_of_thought(response, solution)
-                success_list.append(succeed)
-            return {
-                "expected_success": 1 - pow(1 - sum(success_list) / n, n),
-                "success": any(s for s in success_list),
-            }
-        ```
-            use_cache (bool, Optional): Whether to use cached responses. Defaults to True.
-            agg_method (str, Callable or a dict of Callable): Result aggregation method (across
-                multiple instances) for each of the metrics. Defaults to 'avg'.
-                An example agg_method in str:
+                ```python
+                def eval_func(responses, **data):
+                    solution = data["solution"]
+                    success_list = []
+                    n = len(responses)
+                    for i in range(n):
+                        response = responses[i]
+                        succeed = is_equiv_chain_of_thought(response, solution)
+                        success_list.append(succeed)
+                    return {
+                        "expected_success": 1 - pow(1 - sum(success_list) / n, n),
+                        "success": any(s for s in success_list),
+                    }
+                ```
+                    use_cache (bool, Optional): Whether to use cached responses. Defaults to True.
+                    agg_method (str, Callable or a dict of Callable): Result aggregation method (across
+                        multiple instances) for each of the metrics. Defaults to 'avg'.
+                        An example agg_method in str:
 
-        ```python
-        agg_method = "median"
-        ```
-                An example agg_method in a Callable:
+                ```python
+                agg_method = "median"
+                ```
+                        An example agg_method in a Callable:
 
-        ```python
-        agg_method = np.median
-        ```
+                ```python
+                agg_method = np.median
+                ```
 
-                An example agg_method in a dict of Callable:
+                        An example agg_method in a dict of Callable:
 
-        ```python
-        agg_method = {"median_success": np.median, "avg_success": np.mean}
-        ```
+                ```python
+                agg_method = {"median_success": np.median, "avg_success": np.mean}
+                ```
 
             return_responses_and_per_instance_result (bool): Whether to also return responses
                 and per instance results in addition to the aggregated results.
@@ -1054,7 +1054,7 @@ class Completion(OpenAICompletion):
             return result_agg
 
     @classmethod
-    def cost(cls, response: dict):
+    def cost(cls, response: dict) -> float:
         """Compute the cost of an API call.
 
         Args:
