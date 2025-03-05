@@ -1015,7 +1015,7 @@ def _generate_swarm_tool_reply(
                     if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
                         current_args = json.loads(tool_call["function"]["arguments"])
                         current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = agent._context_variables
-                        tool_call["function"]["arguments"] = json.dumps(current_args)
+                        tool_call["function"]["arguments"] = json.dumps(current_args, default=BaseModel.model_dump_json)
 
             # Ensure we are only executing the one tool at a time
             message_copy["tool_calls"] = [tool_call]
