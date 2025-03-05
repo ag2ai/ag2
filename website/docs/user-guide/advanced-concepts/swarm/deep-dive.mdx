@@ -89,10 +89,12 @@ The syntax for creating an using [`OnContextCondition`](/docs/api-reference/auto
   - Logical: `not, !, and, &, or, |`
   - Comparison: `>, <, >=, <=, ==, !=`
 - Parentheses can be used for grouping
+- Supports `len(${var_name})`: Gets the length of a list, string, or other collection
 - Examples:
     - `not ${logged_in} and ${is_admin} or ${guest_checkout}`
     - `!${logged_in} & ${is_admin} | ${guest_checkout}`
     - `${attempts} > 3 | ${is_admin} == True`
+    - `len(${search_results}) > 5`
 
 ```python
 register_hand_off(
@@ -100,7 +102,7 @@ register_hand_off(
     hand_to=[
         OnContextCondition(
             target=agent_2,
-            condition=ContextExpression("(${account_level} > 2 and ${budget_remaining} > 0) or ${account_tier} == 'Gold'"),
+            condition=ContextExpression("(${account_level} > 2 and ${budget_remaining} > 0) or ${account_tier} == 'Gold' or len(${order_count}) > 10"),
             available="logged_in"),
         OnCondition(target=agent_3, condition="condition_2"), # LLM-based, evaluated after OnContextCondition's
     ]
