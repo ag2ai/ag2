@@ -18,7 +18,7 @@ import pytest
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.oai.client import (
     AOPENAI_FALLBACK_KWARGS,
     LEGACY_CACHE_DIR,
@@ -40,8 +40,8 @@ with optional_import_block() as result:
         TOOL_ENABLED = True
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     config_list = credentials_azure_gpt_35_turbo.config_list
     client = OpenAIWrapper(config_list=config_list)
@@ -59,16 +59,16 @@ def test_aoai_chat_completion(credentials_azure_gpt_35_turbo: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_fallback_kwargs():
     assert set(inspect.getfullargspec(OpenAI.__init__).kwonlyargs) == OPENAI_FALLBACK_KWARGS
     assert set(inspect.getfullargspec(AzureOpenAI.__init__).kwonlyargs) == AOPENAI_FALLBACK_KWARGS
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(not TOOL_ENABLED, reason="openai>=1.1.0 not installed")
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(
@@ -100,8 +100,8 @@ def test_oai_tool_calling_extraction(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     response = client.create(messages=[{"role": "user", "content": "1+1="}])
@@ -109,8 +109,8 @@ def test_chat_completion(credentials_gpt_4o_mini: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+1=")
@@ -118,8 +118,8 @@ def test_completion(credentials_azure_gpt_35_turbo_instruct: Credentials):
     print(client.extract_text_or_completion_object(response))
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 @pytest.mark.parametrize(
     "cache_seed",
     [
@@ -133,8 +133,8 @@ def test_cost(credentials_azure_gpt_35_turbo_instruct: Credentials, cache_seed):
     print(response.cost)
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     config_list = credentials_azure_gpt_35_turbo_instruct.config_list
     for config in config_list:
@@ -146,8 +146,8 @@ def test_customized_cost(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
     response = client.create(prompt="1+3=", cache_seed=None)
@@ -178,7 +178,7 @@ def test_usage_summary(credentials_azure_gpt_35_turbo_instruct: Credentials):
     )
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest.MonkeyPatch):
     chat_completion = ChatCompletion(**{
         "id": "chatcmpl-B2ZfaI387UgmnNXS69egxeKbDWc0u",
@@ -234,8 +234,8 @@ def test_log_cache_seed_value(mock_credentials: Credentials, monkeypatch: pytest
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of human civilization."
@@ -298,8 +298,8 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["openai"], "openai")
 def test_cache(credentials_gpt_4o_mini: Credentials):
     # Prompt to use for testing.
     prompt = "Write a 100 word summary on the topic of the history of artificial intelligence."
@@ -362,7 +362,7 @@ def test_cache(credentials_gpt_4o_mini: Credentials):
         assert not os.path.exists(os.path.join(cache_dir, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
-@skip_on_missing_imports(["openai"])
+@run_for_optional_imports(["openai"], "openai")
 def test_convert_system_role_to_user() -> None:
     messages = [
         {"content": "Your name is Jack and you are a comedian in a two-person comedy show.", "role": "system"},
@@ -635,7 +635,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     def test_completion_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_mini_client, messages)
 
@@ -646,7 +646,7 @@ class TestO1:
             [{"role": "user", "content": "2+2="}],
         ],
     )
-    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)

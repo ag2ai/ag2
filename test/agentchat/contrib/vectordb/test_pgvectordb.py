@@ -11,7 +11,7 @@ import urllib.parse
 import pytest
 
 from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ....conftest import reason
 
@@ -35,7 +35,7 @@ def is_postgres_accessible():
     sys.platform in ["darwin", "win32"] or not is_postgres_accessible(),
     reason=reason,
 )
-@skip_on_missing_imports(["pgvector", "psycopg", "sentence_transformers"], "retrievechat-pgvector")
+@run_for_optional_imports(["pgvector", "psycopg", "sentence_transformers"], "retrievechat-pgvector")
 def test_pgvector():
     # test db config
     db_config = {

@@ -8,7 +8,7 @@
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.oai.anthropic import AnthropicClient, _calculate_cost
 
 with optional_import_block() as result:
@@ -50,7 +50,7 @@ def anthropic_client():
     return AnthropicClient(api_key="dummy_api_key")
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_initialization_missing_api_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("AWS_ACCESS_KEY", raising=False)
@@ -82,12 +82,12 @@ def anthropic_client_with_vertexai_credentials():
     )
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_intialization(anthropic_client):
     assert anthropic_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_intialization_with_aws_credentials(anthropic_client_with_aws_credentials):
     assert anthropic_client_with_aws_credentials.aws_access_key == "dummy_access_key", (
         "`aws_access_key` should be correctly set in the config"
@@ -103,7 +103,7 @@ def test_intialization_with_aws_credentials(anthropic_client_with_aws_credential
     )
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai_credentials):
     assert anthropic_client_with_vertexai_credentials.gcp_project_id == "dummy_project_id", (
         "`gcp_project_id` should be correctly set in the config"
@@ -117,7 +117,7 @@ def test_initialization_with_vertexai_credentials(anthropic_client_with_vertexai
 
 
 # Test cost calculation
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_cost_calculation(mock_completion):
     completion = mock_completion(
         completion="Hi! My name is Claude.",
@@ -130,7 +130,7 @@ def test_cost_calculation(mock_completion):
     ), "Cost should be $0.002025"
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
         "model": "claude-3-5-sonnet-latest",
@@ -152,7 +152,7 @@ def test_load_config(anthropic_client):
     assert result == expected_params, "Config should be correctly loaded"
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_extract_json_response(anthropic_client):
     # Define test Pydantic model
     class Step(BaseModel):
@@ -266,7 +266,7 @@ def test_extract_json_response(anthropic_client):
         anthropic_client._extract_json_response(no_json_response)
 
 
-@skip_on_missing_imports(["anthropic"], "anthropic")
+@run_for_optional_imports(["anthropic"], "anthropic")
 def test_convert_tools_to_functions(anthropic_client):
     tools = [
         {

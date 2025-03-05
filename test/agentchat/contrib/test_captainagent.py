@@ -3,11 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 
-import pytest
-
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials
 
@@ -16,7 +14,7 @@ with optional_import_block() as result:
     import huggingface_hub  # noqa: F401
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_captain_agent_from_scratch(credentials_all: Credentials):
     config_list = credentials_all.config_list
     llm_config = {
@@ -55,8 +53,8 @@ def test_captain_agent_from_scratch(credentials_all: Credentials):
     print(result)
 
 
-@pytest.mark.openai
-@skip_on_missing_imports(["chromadb", "huggingface_hub"], "autobuild")
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports(["chromadb", "huggingface_hub"], "autobuild")
 def test_captain_agent_with_library(credentials_all: Credentials):
     config_list = credentials_all.config_list
     llm_config = {

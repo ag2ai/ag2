@@ -12,7 +12,7 @@ import pytest
 
 from autogen.agentchat.contrib.graph_rag import Document, DocumentType, GraphStoreQueryResult
 from autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine import Neo4jGraphQueryEngine
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import reason
 
@@ -25,7 +25,7 @@ reason = "do not run on MacOS or windows OR dependency is not installed OR " + r
 
 # Test fixture for creating and initializing a query engine with a JSON input file
 @pytest.fixture(scope="module")
-@skip_on_missing_imports(["llama_index"], "neo4j")
+@run_for_optional_imports(["llama_index"], "neo4j")
 def neo4j_query_engine_with_json() -> Neo4jGraphQueryEngine:
     input_path = "./test/agentchat/contrib/graph_rag/layout_parser_paper_parsed_elements.json"
     input_documents = [Document(doctype=DocumentType.JSON, path_or_url=input_path)]
@@ -115,13 +115,13 @@ def neo4j_query_engine_auto() -> Neo4jGraphQueryEngine:
     return query_engine
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["llama_index"], "neo4j")
+@run_for_optional_imports(["llama_index"], "neo4j")
 def test_neo4j_query_engine(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     """Test querying functionality of the Neo4j Query Engine."""
     question = "Which company is the employer?"
@@ -134,13 +134,13 @@ def test_neo4j_query_engine(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["llama_index"], "neo4j")
+@run_for_optional_imports(["llama_index"], "neo4j")
 def test_neo4j_add_records(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     """Test the add_records functionality of the Neo4j Query Engine."""
     input_path = "./test/agentchat/contrib/graph_rag/the_matrix.txt"
@@ -158,13 +158,13 @@ def test_neo4j_add_records(neo4j_query_engine: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("Keanu Reeves") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["llama_index"], "neo4j")
+@run_for_optional_imports(["llama_index"], "neo4j")
 def test_neo4j_auto(neo4j_query_engine_auto: Neo4jGraphQueryEngine) -> None:
     """Test querying with auto-generated property graph"""
     question = "Which company is the employer?"
@@ -174,13 +174,13 @@ def test_neo4j_auto(neo4j_query_engine_auto: Neo4jGraphQueryEngine) -> None:
     assert query_result.answer.find("BUZZ") >= 0  # type: ignore[union-attr]
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.neo4j
 @pytest.mark.skipif(
     sys.platform in ["darwin", "win32"],
     reason=reason,
 )
-@skip_on_missing_imports(["llama_index"], "neo4j")
+@run_for_optional_imports(["llama_index"], "neo4j")
 def test_neo4j_json_auto(neo4j_query_engine_with_json: Neo4jGraphQueryEngine) -> None:
     """Test querying with auto-generated property graph from a JSON file."""
     question = "What are current layout detection models in the LayoutParser model zoo?"

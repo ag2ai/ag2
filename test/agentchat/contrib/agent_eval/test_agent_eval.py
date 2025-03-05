@@ -13,6 +13,7 @@ import pytest
 from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, quantify_criteria
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
+from autogen.import_utils import run_for_optional_imports
 
 from ....conftest import Credentials
 
@@ -41,7 +42,7 @@ def task() -> Task:
     return task
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_generate_criteria(credentials_azure: Credentials, task: Task):
     criteria = generate_criteria(task=task, llm_config={"config_list": credentials_azure.config_list})
     assert criteria
@@ -51,7 +52,8 @@ def test_generate_criteria(credentials_azure: Credentials, task: Task):
     assert criteria[0].accepted_values
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
+@run_for_optional_imports("openai", "openai")
 def test_quantify_criteria(credentials_azure: Credentials, task: Task):
     criteria_file = "test/test_files/agenteval-in-out/samples/sample_math_criteria.json"
     criteria = open(criteria_file).read()  # noqa: SIM115

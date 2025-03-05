@@ -42,7 +42,7 @@ class Collection:
     def __init__(
         self,
         client: Optional[Any] = None,
-        collection_name: str = "autogen-docs",
+        collection_name: str = "ag2-docs",
         embedding_function: Optional[Callable[..., Any]] = None,
         metadata: Optional[Any] = None,
         get_or_create: Optional[Any] = None,

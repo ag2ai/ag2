@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -17,6 +17,7 @@ with optional_import_block():
     from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
+__all__ = ["docling_parse_docs"]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,9 +26,9 @@ logger.setLevel(logging.DEBUG)
 @require_optional_import(["docling"], "rag")
 @export_module("autogen.agents.experimental.document_agent")
 def docling_parse_docs(  # type: ignore[no-any-unimported]
-    input_file_path: Union[Path, str],
-    output_dir_path: Optional[Union[Path, str]] = None,
-    output_formats: Optional[list[str]] = None,
+    input_file_path: Annotated[Union[Path, str], "Path to the input file or directory"],
+    output_dir_path: Annotated[Optional[Union[Path, str]], "Path to the output directory"] = None,
+    output_formats: Annotated[Optional[list[str]], "List of output formats (markdown, json)"] = None,
 ) -> list[Path]:
     """Convert documents into a Deep Search document format using EasyOCR
     with CPU only, and export the document and its tables to the specified
