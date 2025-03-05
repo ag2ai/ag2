@@ -424,9 +424,12 @@ convention = "google"
 
 [tool.mypy]
 files = [
+    "autogen/agentchat/agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
+    "autogen/agentchat/contrib/swarm_agent.py",
     "autogen/agentchat/realtime_agent",
+    "autogen/agentchat/utils.py",
     "autogen/agents",
     "autogen/coding",
     "autogen/exception_utils.py",
@@ -441,6 +444,7 @@ files = [
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
+    "test/agentchat/contrib/test_swarm.py",
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",

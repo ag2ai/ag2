@@ -318,6 +318,12 @@ Together with the ability to put context into an agent's system message ([`Updat
 
 Here we can see the use of context variable keys in the `available` parameter as well as the `has_order_in_context` function as an alternative to context variables. You will notice that the function does the same as using a context variable key string in this case.
 
+<Tip>
+When using context variable keys in the `available` parameter of OnCondition, by default it must evaluate to `True` for the condition to become available.
+
+If you want to do the opposite, make it available if the context variable equates to `False`, you can put an exclamation before the context variable key value, e.g. `available="!is_logged_in"`.
+</Tip>
+
 ```python
 # HANDOFFS
 register_hand_off(
