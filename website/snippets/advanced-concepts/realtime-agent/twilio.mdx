@@ -1,0 +1,347 @@
+Traditionally, conversational AI tasks have focused on asynchronous interactions, such as text-based chats. However, the demand for **real-time voice agents** has surged in domains like customer support, healthcare, and virtual assistance. With this update, AG2 takes a leap forward by enabling agents to:
+
+1. **Support Real-Time Voice Interactions**
+   Engage in real-time conversations with users.
+
+2. **Leverage Swarm Teams for Task Delegation**
+   Delegate complex tasks to AG2 Swarm teams during a voice interaction, ensuring efficient task management.
+
+3. **Provide Developer-Friendly Integration**
+   Tutorial and streamlined API to make setting up real-time agents more straightforward for developers.
+
+
+### **Key Features of RealtimeAgent**
+
+1. **[**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)**
+    - Acts as the central interface for handling real-time interactions.
+    - Bridges voice input/output with AG2’s task-handling capabilities.
+
+2. RealtimeAgent swarm integration
+    - Seamless integration of [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) into Swarm
+
+3. [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter)
+    - Connects agents to Twilio for telephony support.
+    - Simplifies the process of handling voice calls with clear API methods.
+
+
+### **Real-World Applications**
+
+Here’s how [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) transforms use cases:
+
+- **Customer Support**: Enable agents to answer customer queries in real time while delegating complex tasks to a Swarm team.
+- **Healthcare**: Facilitate real-time interactions between patients and medical AI assistants with immediate task handoffs.
+- **Virtual Assistance**: Create voice-activated personal assistants that can handle scheduling, reminders, and more.
+
+
+### **Tutorial: Integrating RealtimeAgent with Swarm Teams**
+
+In this tutorial, we’ll demonstrate how to implement OpenAI's [Airline Customer Service Example](https://github.com/openai/swarm/tree/main/examples/airline) using AG2's new [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent). By leveraging real-time capabilities, you can create a seamless voice-driven experience for customer service tasks, enhanced with Swarm's task orchestration for efficient problem-solving.
+
+This guide will walk you through the setup, implementation, and connection process, ensuring you’re ready to build real-time conversational agents with ease.
+
+#### General overview
+
+To illustrate the system, the diagram below provides a high-level view of how the Realtime Agent collaborates with a swarm of specialized agents to handle customer service tasks.
+
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/realtime_agent_swarm.png)
+
+1. **Twilio Integration:**
+   The user begins the interaction by placing a voice call via Twilio. Twilio handles the audio transmission and forwards the conversation to the Realtime Agent, enabling real-time processing of the user’s request.
+
+2. **Realtime Agent Coordination:**
+   At the heart of the system, the Realtime Agent leverages OpenAI’s Realtime API to understand and manage the user’s intent dynamically. It facilitates the conversation and ensures the user’s query is routed correctly within the swarm.
+
+3. **Specialized Agents in the Swarm:**
+   - The **Triage Agent** acts as the gateway, identifying the nature of the request—such as a flight change or cancellation—and handing it off to the relevant specialized agent.
+   - For example, a **Flight Change Agent** processes requests to modify a booking, while a **Flight Cancellation Agent** handles cancellations and refunds.
+
+4. **Interactive Feedback Loop:**
+   Throughout the interaction, agents communicate with the user through the Realtime Agent, asking clarifying questions or providing status updates. Each agent follows strict policies to ensure consistent and reliable service.
+
+5. **Task Completion:**
+   Once the task is complete—such as changing a flight or issuing a refund—the system confirms the resolution with the user and ensures there are no additional queries before closing the case.
+
+#### **Prerequisites**
+Before we begin, ensure you have the following set up:
+
+1. [**Ngrok**](https://ngrok.com/): Exposing your local service to the web for Twilio integration.
+2. [**Twilio**](https://www.twilio.com/): Setting up Twilio for telephony connectivity.
+
+#### Ngrok setup
+
+To enable Twilio to interact with your local server, you’ll need to expose it to the public internet. Twilio requires a public URL to send requests to your server and receive real-time instructions.
+
+For this guide, we’ll use **ngrok**, a popular tunneling service, to make your local server accessible. Alternatively, you can use other reverse proxy or tunneling options, such as a virtual private server (VPS).
+
+##### **Step 1: Install Ngrok**
+If you haven’t already, download and install **ngrok** from their [official website](https://ngrok.com/downloads). Follow the instructions for your operating system to set it up.
+
+##### **Step 2: Start the Tunnel**
+Run the following command to expose your local server on port `5050` (or the port your server uses):
+
+```bash
+ngrok http 5050
+```
+
+If you’ve configured your server to use a different port, replace `5050` with the correct port number in the command.
+
+##### **Step 3: Retrieve Your Public URL**
+After running the command, **ngrok** will display a public URL in your terminal. It will look something like this:
+
+```plaintext
+Forwarding                    https://abc123.ngrok.io -> http://localhost:5050
+```
+
+Copy this public URL (e.g., `https://abc123.ngrok.io`). You will use it in Twilio’s configuration to route incoming requests to your server.
+
+With your public URL set up, you’re ready to configure Twilio to send requests to your server!
+
+#### **Twilio Setup**
+
+To connect Twilio with your [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), follow these steps:
+
+1. **Create a Twilio Account**
+   If you don’t already have a Twilio account, you can [sign up here](https://login.twilio.com/u/signup). Twilio offers trial accounts, which are perfect for testing purposes.
+
+2. **Navigate to Phone Numbers**
+![Twilio endpoint config](/snippets/advanced-concepts/realtime-agent/img/twilio_phone_numbers.png)
+
+3. **Access Your Voice-Enabled Number**
+   Log in to the **Twilio Console** and select your **Voice-enabled phone number**.
+
+4. **Configure the Webhook**
+   - Navigate to the **Voice & Fax** section under your number’s settings.
+   - Set the **A CALL COMES IN** webhook to your public **ngrok** URL.
+   - Append `/incoming-call` to the URL. For example:
+     - If your ngrok URL is `https://abc123.ngrok.app`, the webhook URL should be:
+       `https://abc123.ngrok.app/incoming-call`
+![Twilio endpoint config](/snippets/advanced-concepts/realtime-agent/img/twilio_endpoint_config.png)
+
+5. **Save Changes**
+   Once the webhook URL is set, save your changes.
+
+You’re now ready to test the integration between Twilio and your [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)!
+
+### **Swarm Implementation for Airline Customer Service**
+In this section, we’ll configure a Swarm to handle airline customer service tasks, such as flight changes and cancellations. This implementation builds upon the [original Swarm example notebook](/docs/use-cases/notebooks/notebooks/agentchat_swarm), which we’ve adapted to work seamlessly with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) acting as a [**`UserProxyAgent`**](/docs/api-reference/autogen/UserProxyAgent).
+
+You can explore and run the complete implementation of the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) demonstrated here by visiting [this notebook](/docs/use-cases/notebooks/notebooks/agentchat_realtime_swarm).
+
+For the sake of brevity, we’ll focus on the key sections of the Swarm setup in this blog post, highlighting the essential components.
+
+Below are the key parts of the Swarm setup, accompanied by concise comments to clarify their purpose and functionality.
+
+#### **Policy Definitions**
+```python
+FLIGHT_CANCELLATION_POLICY = """
+1. Confirm which flight the customer is asking to cancel.
+2. Confirm refund or flight credits and proceed accordingly.
+...
+"""
+```
+- **Purpose:** Defines the detailed step-by-step process for specific tasks like flight cancellations.
+- **Usage:** Used as part of the agent's `system_message` to guide its behavior.
+
+#### **Agents Definition**
+```python
+triage_agent = ConversableAgent(
+    name="Triage_Agent",
+    system_message=triage_instructions(context_variables=context_variables),
+    llm_config=llm_config,
+    functions=[non_flight_enquiry],
+)
+```
+- **Triage Agent:** Routes the user's request to the appropriate specialized agent based on the topic.
+
+```python
+flight_cancel = ConversableAgent(
+    name="Flight_Cancel_Traversal",
+    system_message=STARTER_PROMPT + FLIGHT_CANCELLATION_POLICY,
+    llm_config=llm_config,
+    functions=[initiate_refund, initiate_flight_credits, case_resolved, escalate_to_agent],
+)
+```
+- **Flight Cancel Agent:** Handles cancellations, including refunds and flight credits, while ensuring policy steps are strictly followed.
+
+```python
+register_hand_off(
+    agent=flight_modification,
+    hand_to=[
+        OnCondition(flight_cancel, "To cancel a flight"),
+        OnCondition(flight_change, "To change a flight"),
+    ]
+)
+```
+- **Nested Handoffs:** Further refines routing, enabling deeper task-specific flows like cancellations or changes.
+
+#### **Utility Functions**
+```python
+def escalate_to_agent(reason: str = None) -> str:
+    """Escalates the interaction to a human agent if required."""
+    return f"Escalating to agent: {reason}" if reason else "Escalating to agent"
+```
+- **Purpose:** Ensures seamless fallback to human agents when automated handling is insufficient.
+
+```python
+def initiate_refund() -> str:
+    """Handles initiating a refund process."""
+    return "Refund initiated"
+```
+- **Task-Specific:** Simplifies complex actions into modular, reusable functions.
+
+### **Connecting the Swarm to the RealtimeAgent**
+
+In this section, we will connect the Swarm to the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), enabling real-time voice interaction and task delegation. To achieve this, we use FastAPI to create a lightweight server that acts as a bridge between Twilio and the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent).
+
+The key functionalities of this implementation include:
+
+1. **Setting Up a REST Endpoint**
+   We define a REST API endpoint, `/incoming-call`, to handle incoming voice calls from Twilio. This endpoint returns a Twilio Markup Language (TwiML) response, connecting the call to Twilio’s Media Stream for real-time audio data transfer.
+
+```python
+app.api_route("/incoming-call", methods=["GET", "POST"])
+async def handle_incoming_call(request: Request):
+    """Handle incoming call and return TwiML response to connect to Media Stream."""
+    response = VoiceResponse()
+    response.say("Please wait while we connect your call to the AI voice assistant.")
+    response.pause(length=1)
+    response.say("O.K. you can start talking!")
+    host = request.url.hostname
+    connect = Connect()
+    connect.stream(url=f"wss://{host}/media-stream")
+    response.append(connect)
+    return HTMLResponse(content=str(response), media_type="application/xml")
+```
+2. **WebSocket Media Stream**
+   A WebSocket endpoint, `/media-stream`, is established to manage real-time audio communication between Twilio and a realtime model inference client such as OpenAI's realtime API. This allows audio data to flow seamlessly, enabling the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) to process and respond to user queries.
+```python
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket):
+    """Handle WebSocket connections between Twilio and realtime model inference client."""
+    await websocket.accept()
+    ...
+```
+3. **Initializing the RealtimeAgent**
+   Inside the WebSocket handler, we instantiate the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) with the following components:
+   - **Name**: The identifier for the agent (e.g., `Customer_service_Bot`).
+   - **LLM Configuration**: The configuration for the underlying realtime model inference client that powers the agent.
+   - **Audio Adapter**: A TwilioAudioAdapter is used to handle audio streaming between Twilio and the agent.
+```python
+   audio_adapter = TwilioAudioAdapter(websocket)
+
+   realtime_agent = RealtimeAgent(
+        name="Customer_service_Bot",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+   )
+```
+4. **Registering the Swarm**
+   The [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) can be patched using `register_swarm` to be integrated into a swarm of agents.
+   - `realtime_agent`: [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) which we want to include in the swarm.
+   - `initial_agent`: The first agent to process incoming queries (e.g., a triage agent).
+   - `agents`: A list of specialized agents for handling specific tasks like flight modifications, cancellations, or lost baggage.
+```python
+   register_swarm(
+        realtime_agent=realtime_agent,
+        initial_agent=triage_agent,
+        agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
+    )
+```
+5. **Running the RealtimeAgent**
+   The `run()` method is invoked to start the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), enabling it to handle real-time voice interactions and delegate tasks to the registered Swarm agents.
+```python
+   await realtime_agent.run()
+```
+Here is the full code for this integration:
+
+```python
+app = FastAPI(title="Realtime Swarm Agent Chat", version="0.1.0")
+
+
+@app.get("/", response_class=JSONResponse)
+async def index_page():
+    return {"message": "Twilio Media Stream Server is running!"}
+
+
+@app.api_route("/incoming-call", methods=["GET", "POST"])
+async def handle_incoming_call(request: Request):
+    """Handle incoming call and return TwiML response to connect to Media Stream."""
+    response = VoiceResponse()
+    response.say("Please wait while we connect your call to the AI voice assistant.")
+    response.pause(length=1)
+    response.say("O.K. you can start talking!")
+    host = request.url.hostname
+    connect = Connect()
+    connect.stream(url=f"wss://{host}/media-stream")
+    response.append(connect)
+    return HTMLResponse(content=str(response), media_type="application/xml")
+
+
+@app.websocket("/media-stream")
+async def handle_media_stream(websocket: WebSocket):
+    """Handle WebSocket connections between Twilio and realtime model inference client."""
+    await websocket.accept()
+
+    audio_adapter = TwilioAudioAdapter(websocket)
+
+    realtime_agent = RealtimeAgent(
+        name="Customer_service_Bot",
+        llm_config=realtime_llm_config,
+        audio_adapter=audio_adapter,
+    )
+
+    register_swarm(
+        realtime_agent=realtime_agent,
+        initial_agent=triage_agent,
+        agents=[triage_agent, flight_modification, flight_cancel, flight_change, lost_baggage],
+    )
+
+    await realtime_agent.run()
+```
+
+### **Results: Running the Service**
+
+With everything set up, it’s time to put your [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) to the test! Follow these steps to make your first call and interact with the AI system:
+
+1. **Ensure Everything is Running**
+   - Verify that your **ngrok** session is still active and providing a public URL.
+   - Confirm that your FastAPI server is up and running, as outlined in the previous chapters.
+
+2. **Place a Call**
+   - Use a cell phone or landline to call your **Twilio number**.
+   - Alternatively, you can use [twilllo dev phone](https://www.twilio.com/docs/labs/dev-phone) to call your **Twilio number**
+
+3. **Watch the Magic Happen**
+   - Start speaking! You’ll hear the AI system’s initial message and then be able to interact with it in real-time.
+
+#### **Realtime Agent and Swarm Workflow in Action**
+
+The following images showcase the seamless interaction between the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) and the Swarm of agents as they work together to handle a live customer request. Here's how the process unfolds:
+
+1. **Service Initialization**
+   Our service starts successfully, ready to handle incoming calls and process real-time interactions.
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/1_service_running.png)
+
+2. **Incoming Call**
+   A call comes in, and the **RealtimeAgent** greets us with an audio prompt:
+   *“What do you need assistance with today?”*
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/2_incoming_call.png)
+
+3. **Request Relay to Swarm**
+   We respond via audio, requesting to cancel our flight. The **RealtimeAgent** processes this request and relays it to the Swarm team for further action.
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/3_request_for_flight_cancellation.png)
+
+4. **Clarification from Swarm**
+   The Swarm requires additional information, asking for the flight number we want to cancel. The **RealtimeAgent** gathers this detail from us and passes it back to the Swarm.
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/4_flight_number_name.png)
+
+5. **Policy Confirmation**
+   The Swarm then queries us about the refund policy preference (e.g., refund vs. flight credits). The **RealtimeAgent** conveys this question, and after receiving our preference (flight credits), it informs the Swarm.
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/5_refund_policy.png)
+
+6. **Successful Resolution**
+   The Swarm successfully processes the cancellation and initiates the refund. The **RealtimeAgent** communicates this resolution to us over audio:
+   *“Your refund has been successfully initiated.”*
+![Realtime Agent Swarm](/snippets/advanced-concepts/realtime-agent/img/6_flight_refunded.png)
+
+This flow highlights the power of integrating real-time audio interaction with the collaborative capabilities of a Swarm of AI agents, providing efficient and user-friendly solutions to complex tasks.
