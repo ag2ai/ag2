@@ -16,10 +16,12 @@ from ....agentchat.contrib.swarm_agent import (
     AfterWork,
     AfterWorkOption,
     OnCondition,
+    OnContextCondition,
     SwarmResult,
     initiate_swarm_chat,
     register_hand_off,
 )
+from ....agentchat.utils import ContextExpression
 from ....doc_utils import export_module
 from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
@@ -355,19 +357,23 @@ class DocAgent(ConversableAgent):
         register_hand_off(
             agent=self._task_manager_agent,
             hand_to=[
-                OnCondition(
-                    self._data_ingestion_agent,
-                    "If there are any DocumentsToIngest in context variables, transfer to data ingestion agent",
-                    available=has_ingest_tasks,
+                OnContextCondition(  # Go straight to data ingestion agent if we have documents to ingest
+                    target=self._data_ingestion_agent,
+                    condition=ContextExpression("len(${DocumentsToIngest}) > 0"),
                 ),
-                OnCondition(
-                    self._query_agent,
-                    "If there are any QueriesToRun in context variables and no DocumentsToIngest, transfer to query_agent",
-                    available=has_only_query_tasks,
+                OnContextCondition(  # Go to Query agent if we have queries to run (ingestion above run first)
+                    target=self._query_agent,
+                    condition=ContextExpression("len(${QueriesToRun}) > 0"),
+                ),
+                OnContextCondition(  # Go to Summary agent if no documents or queries left to run and we have query results
+                    target=self._summary_agent,
+                    condition=ContextExpression(
+                        "len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
+                    ),
                 ),
                 OnCondition(
                     self._summary_agent,
-                    "Call this function as work is done and a summary will be created",
+                    "Call this function if all work is done and a summary will be created",
                     available=summary_task,
                 ),
                 AfterWork(AfterWorkOption.STAY),
