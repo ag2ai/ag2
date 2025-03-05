@@ -26,7 +26,7 @@ MONGO_CONN_STR = "mongodb+srv://<username>:<password>!!!!@<database_uri>/"
 
 @pytest.fixture(scope="module")
 @pytest.mark.openai
-@skip_on_missing_imports(["pymongo", "llama_index", "langchain_openai"], "mongodb_query_engine")
+@skip_on_missing_imports(["pymongo", "llama_index"], "mongodb_query_engine")
 def mongodb_query_engine() -> MongoDBQueryEngine:
     """
     Fixture that creates a MongoDBQueryEngine instance and initializes it using real document files.
