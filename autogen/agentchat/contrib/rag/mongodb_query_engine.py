@@ -5,10 +5,11 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
+from autogen.doc_utils import export_module
 from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -19,6 +20,9 @@ with optional_import_block():
     from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
     from pymongo import MongoClient
+    from sentence_transformers import SentenceTransformer
+
+__all__ = ["MongoDBQueryEngine"]
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
 EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
@@ -30,7 +34,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["pymongo", "llama_index"], "rag")
+@require_optional_import(["pymongo", "llama_index", "langchain_openai"], "rag")
+@export_module("autogen.agentchat.contrib.rag")
 class MongoDBQueryEngine:
     """
     A query engine backed by MongoDB Atlas that supports document insertion and querying.
@@ -42,7 +47,7 @@ class MongoDBQueryEngine:
         vector_db (MongoDBAtlasVectorDB): The MongoDB vector database instance.
         vector_search_engine (MongoDBAtlasVectorSearch): The vector search engine.
         storage_context (StorageContext): The storage context for the vector store.
-        indexer (Optional[VectorStoreIndex]): The index built from the documents.
+        index (Optional[VectorStoreIndex]): The index built from the documents.
     """
 
     def __init__(  # type: ignore[no-any-unimported]
@@ -50,22 +55,35 @@ class MongoDBQueryEngine:
         connection_string: str,
         llm: Optional[LLM] = None,
         database_name: Optional[str] = None,
-        embedding_function: "Optional[BaseEmbedding]" = None,
+        embedding_function: "Optional[BaseEmbedding | Callable]" = None,  # type: ignore[type-arg]
+        embedding_model: "Optional[BaseEmbedding | str]" = None,
         collection_name: Optional[str] = DEFAULT_COLLECTION_NAME,
     ):
         """
-        Initialize the MongoDBQueryEngine.
+        Initializes a MongoDBQueryEngine instance.
 
-        Note: The actual connection and creation of the vector database is deferred to
-        connect_db (to use an existing collection) or init_db (to create a new collection).
+        Args:
+            connection_string (str): Connection string used to connect to MongoDB.
+            llm (Optional[LLM]): Language model for querying. Defaults to an OpenAI model if not provided.
+            database_name (Optional[str]): Name of the MongoDB database.
+            embedding_function (Optional[BaseEmbedding | Callable]): Custom embedding function. If not provided,
+                defaults to SentenceTransformer encoding.
+            embedding_model (Optional[BaseEmbedding | str]): Embedding model identifier or instance. Defaults to
+                "local:all-MiniLM-L6-v2".
+            collection_name (Optional[str]): Name of the MongoDB collection. Defaults to DEFAULT_COLLECTION_NAME.
+
+        Raises:
+            ValueError: If no connection string is provided.
         """
         if not connection_string:
             raise ValueError("Connection string is required to connect to MongoDB.")
 
         self.connection_string = connection_string
         self.database_name = database_name
-        self.embedding_function = embedding_function
         self.collection_name = collection_name
+        self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
+        self.embedding_model = embedding_model or "local:all-MiniLM-L6-v2"  # type: ignore[no-any-unimported]
+        self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None
@@ -73,16 +91,17 @@ class MongoDBQueryEngine:
         self.storage_context = None
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
-        self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
-
     def _set_up(self, overwrite: bool) -> None:
         """
-        Helper method to create the vector database, vector search engine, and storage context.
+        Sets up the MongoDB vector database, search engine, and storage context.
+
+        This method initializes the vector database using the provided connection details,
+        creates a vector search engine instance, and sets the storage context for indexing.
 
         Args:
-            overwrite (bool): If True, create a new collection (overwriting if exists). If False, use an existing collection.
+            overwrite (bool): Flag indicating whether to overwrite the existing collection.
         """
-        # Pass the overwrite flag to the factory if supported.
+        logger.info("Setting up the database.")
         self.vector_db: MongoDBAtlasVectorDB = VectorDBFactory.create_vector_db(  # type: ignore[assignment, no-redef]
             db_type="mongodb",
             connection_string=self.connection_string,
@@ -91,16 +110,18 @@ class MongoDBQueryEngine:
             collection_name=self.collection_name,
             overwrite=overwrite,  # new parameter to control creation behavior
         )
+        logger.info("Vector database created.")
         self.vector_search_engine = MongoDBAtlasVectorSearch(
             mongodb_client=self.vector_db.client,  # type: ignore[union-attr]
             db_name=self.database_name,
             collection_name=self.collection_name,
         )
+        logger.info("Vector search engine created.")
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_search_engine)
 
     def _check_existing_collection(self) -> bool:
         """
-        Check if the collection already exists in the database.
+        Checks if the specified collection exists in the MongoDB database.
 
         Returns:
             bool: True if the collection exists; False otherwise.
@@ -111,14 +132,13 @@ class MongoDBQueryEngine:
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
-        Connect to the MongoDB database by issuing a ping using an existing collection.
-        This method first checks if the target database and collection exist.
-        - If not, it raises an error instructing the user to run init_db.
-        - If the collection exists and overwrite is True, it reinitializes the database.
-        - Otherwise, it uses the existing collection.
+        Connects to the MongoDB database and initializes the query index from the existing collection.
+
+        This method verifies the existence of the collection, sets up the database connection,
+        builds the vector store index, and pings the MongoDB server.
 
         Returns:
-            bool: True if the connection is successful; False otherwise.
+            bool: True if connection is successful; False otherwise.
         """
         try:
             # Check if the target collection exists.
@@ -127,11 +147,15 @@ class MongoDBQueryEngine:
                     f"Collection '{self.collection_name}' not found in database '{self.database_name}'. "
                     "Please run init_db to create a new collection."
                 )
-            # Reinitialize if the caller requested overwrite.
+            # Reinitialize without overwriting the existing collection.
             self._set_up(overwrite=False)
+
             self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_search_engine, storage_context=self.storage_context
+                vector_store=self.vector_search_engine,
+                storage_context=self.storage_context,
+                embed_model=self.embedding_model,
             )
+
             self.vector_db.client.admin.command("ping")  # type: ignore[union-attr]
             logger.info("Connected to MongoDB successfully.")
             return True
@@ -147,31 +171,40 @@ class MongoDBQueryEngine:
         **kwargs: Any,
     ) -> bool:
         """
-        Initialize the database by loading documents from the given directory or file paths,
-        then building an index. This method is intended for first-time creation of the database,
-        so it expects that the collection does not already exist (i.e. overwrite is False).
+        Initializes the MongoDB database by creating or overwriting the collection and indexing documents.
+
+        This method loads documents from a directory or provided file paths, sets up the database (optionally
+        overwriting any existing collection), builds the vector store index, and inserts the documents.
 
         Args:
-            new_doc_dir (Optional[Union[str, Path]]): Directory containing input documents.
-            new_doc_paths (Optional[List[Union[str, Path]]]): List of document paths or URLs.
+            new_doc_dir (Optional[Union[Path, str]]): Directory containing documents to be indexed.
+            new_doc_paths_or_urls (Optional[Sequence[Union[Path, str]]]): List of file paths or URLs for documents.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
 
         Returns:
-            bool: True if initialization is successful; False otherwise.
+            bool: True if the database is successfully initialized; False otherwise.
         """
         try:
             # Check if the collection already exists.
             if self._check_existing_collection():
                 logger.warning(
-                    f"Collection '{self.collection_name}' already exists in database '{self.database_name}."
-                    "Please use connect_db to connect to the existing collection."
-                    "Or else this function will overwrite the collection."
+                    f"Collection '{self.collection_name}' already exists in database '{self.database_name}'. "
+                    "Please use connect_db to connect to the existing collection or use init_db to overwrite it."
                 )
             # Set up the database with overwriting.
             self._set_up(overwrite=True)
             self.vector_db.client.admin.command("ping")  # type: ignore[union-attr]
             # Gather document paths.
+            logger.info("Setting up the database with existing collection.")
             documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
-            self.index = VectorStoreIndex.from_documents(documents, storage_context=self.storage_context)
+            self.index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_search_engine,
+                storage_context=self.storage_context,
+                embed_model=self.embedding_model,
+            )
+            for doc in documents:
+                self.index.insert(doc)
             logger.info("Database initialized with %d documents.", len(documents))
             return True
         except Exception as e:
@@ -179,7 +212,12 @@ class MongoDBQueryEngine:
             return False
 
     def _validate_query_index(self) -> None:
-        """Ensures an index exists"""
+        """
+        Validates that the query index is initialized.
+
+        Raises:
+            Exception: If the query index is not initialized.
+        """
         if not hasattr(self, "index"):
             raise Exception("Query index is not initialized. Please call init_db or connect_db first.")
 
@@ -187,38 +225,31 @@ class MongoDBQueryEngine:
         self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
     ) -> Sequence["LlamaDocument"]:
         """
-        Load documents from a directory and/or a sequence of file paths.
-
-        It uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
+        Loads documents from a directory or a list of file paths.
 
         Args:
-            input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.
-                If provided, all files in the directory will be considered.
-            input_docs (Optional[Sequence[Union[Path, str]]]): A sequence of individual file paths to load.
-                Each path must point to an existing file.
+            input_dir (Optional[Union[Path, str]]): Directory from which to load documents.
+            input_docs (Optional[Sequence[Union[Path, str]]]): List of document file paths or URLs.
 
         Returns:
-            A sequence of documents loaded as LlamaDocument objects.
+            Sequence[LlamaDocument]: A sequence of loaded LlamaDocument objects.
 
         Raises:
-            ValueError: If the specified directory does not exist.
-            ValueError: If any provided file path does not exist.
-            ValueError: If neither input_dir nor input_docs is provided.
+            ValueError: If the input directory or any specified document file does not exist.
         """
         loaded_documents = []
         if input_dir:
-            logger.info(f"Loading docs from directory: {input_dir}")
+            logger.info("Loading docs from directory: %s", input_dir)
             if not os.path.exists(input_dir):
                 raise ValueError(f"Input directory not found: {input_dir}")
             loaded_documents.extend(SimpleDirectoryReader(input_dir=input_dir).load_data())
 
         if input_docs:
             for doc in input_docs:
-                logger.info(f"Loading input doc: {doc}")
+                logger.info("Loading input doc: %s", doc)
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
             loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())  # type: ignore[arg-type]
-
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
 
@@ -232,14 +263,16 @@ class MongoDBQueryEngine:
         **kwargs: Any,
     ) -> None:
         """
-        Load, parse, and insert documents into the index.
+        Adds new documents to the existing vector store index.
 
-        This method uses a SentenceSplitter to break documents into chunks before insertion.
+        This method validates that the index exists, loads documents from the specified directory or file paths,
+        and inserts them into the vector store index.
 
         Args:
-            new_doc_dir (Optional[Union[str, Path]]): Directory containing input documents.
-            new_doc_paths_or_urls (Optional[Union[List[Union[str, Path]], Union[str, Path]]]):
-                List of document paths or a single document path/URL.
+            new_doc_dir (Optional[Union[Path, str]]): Directory containing new documents.
+            new_doc_paths_or_urls (Optional[Sequence[Union[Path, str]]]): List of file paths or URLs for new documents.
+            *args (Any): Additional positional arguments.
+            **kwargs (Any): Additional keyword arguments.
         """
         self._validate_query_index()
         documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
@@ -248,14 +281,16 @@ class MongoDBQueryEngine:
 
     def query(self, question: str, *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
         """
-        Query the index using the given question.
+        Queries the indexed documents using the provided question.
+
+        This method validates that the query index is initialized, creates a query engine from the vector store index,
+        and executes the query. If the response is empty, a default reply is returned.
 
         Args:
-            question (str): The query string.
-            llm (Union[str, LLM, BaseLanguageModel]): The language model to use.
+            question (str): The query question.
 
         Returns:
-            Any: The response from the chat engine, or None if an error occurs.
+            Any: The query response as a string, or a default reply if no results are found.
         """
         self._validate_query_index()
         self.query_engine = self.index.as_query_engine(llm=self.llm)  # type: ignore[union-attr]
@@ -268,10 +303,13 @@ class MongoDBQueryEngine:
 
     def get_collection_name(self) -> str:
         """
-        Get the name of the collection used by the query engine.
+        Retrieves the name of the MongoDB collection.
 
         Returns:
-            The name of the collection.
+            str: The collection name.
+
+        Raises:
+            ValueError: If the collection name is not set.
         """
         if self.collection_name:
             return self.collection_name
