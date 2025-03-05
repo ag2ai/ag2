@@ -1465,6 +1465,7 @@ def test_swarmresult_afterworkoption_tool_swarmresult() -> None:
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
+@run_for_optional_imports(["openai"], "openai")
 def test_on_condition_available() -> None:
     """Test OnCondition's available parameter"""
 
