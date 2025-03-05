@@ -12,19 +12,19 @@ tags: [Realtime API, Voice Agents, AI Tools]
 ![Realtime agent communication over websocket](/snippets/advanced-concepts/realtime-agent/img/websocket_communication_diagram.png)
 
 **TL;DR:**
-- **Demo implementation**: Implement a website using websockets and communicate using voice with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent)
+- **Demo implementation**: Implement a website using websockets and communicate using voice with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)
 - **Introducing [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter)**: Stream audio directly from your browser using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/).
 - **Simplified Development**: Connect to real-time agents quickly and effortlessly with minimal setup.
 
 # **Realtime over WebSockets**
 
-In our [previous blog post](/docs/blog/2024-12-20-RealtimeAgent/index), we introduced a way to interact with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) using [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter). While effective, this approach required a setup-intensive process involving [Twilio](https://www.twilio.com/) integration, account configuration, number forwarding, and other complexities. Today, we're excited to introduce the[**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter), a streamlined approach to real-time audio streaming directly via a web browser.
+In our [previous blog post](/docs/blog/2024-12-20-RealtimeAgent/index), we introduced a way to interact with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) using [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter). While effective, this approach required a setup-intensive process involving [Twilio](https://www.twilio.com/) integration, account configuration, number forwarding, and other complexities. Today, we're excited to introduce the[**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter), a streamlined approach to real-time audio streaming directly via a web browser.
 
 This post explores the features, benefits, and implementation of the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter), showing how it transforms the way we connect with real-time agents.
 
 ## **Why We Built the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter)**
 ### **Challenges with Existing Solutions**
-Previously introduced [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter) provides a robust way to cennect to your [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent), it comes with challenges:
+Previously introduced [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter) provides a robust way to connect to your [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), but it comes with challenges:
 - **Browser Limitations**: For teams building web-first applications, integrating with a telephony platform can feel redundant.
 - **Complex Setup**: Configuring Twilio accounts, verifying numbers, and setting up forwarding can be time-consuming.
 - **Platform Dependency**: This solution requires developers to rely on external API, which adds latency and costs.

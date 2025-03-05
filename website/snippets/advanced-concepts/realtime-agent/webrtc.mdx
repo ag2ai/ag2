@@ -195,7 +195,7 @@ async def handle_media_stream(websocket: WebSocket):
     )
 ```
 
-This [WebSocket](https://fastapi.tiangolo.com/advanced/websockets/) endpoint establishes a connection and creates a [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) that will manage interactions with OpenAI’s Realtime API. It also includes logging for monitoring the process.
+This [WebSocket](https://fastapi.tiangolo.com/advanced/websockets/) endpoint establishes a connection and creates a [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) that will manage interactions with OpenAI’s Realtime API. It also includes logging for monitoring the process.
 
 #### Register and implement real-time functions
 
@@ -212,11 +212,11 @@ Define custom real-time functions that can be called from the client side, such 
         )
 ```
 
-Here, a weather-related function is registered with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent). It responds with a simple weather message based on the input city.
+Here, a weather-related function is registered with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent). It responds with a simple weather message based on the input city.
 
 #### Run the RealtimeAgent
 
-Finally, run the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) to start handling the [WebSocket](https://fastapi.tiangolo.com/advanced/websockets/) interactions.
+Finally, run the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) to start handling the [WebSocket](https://fastapi.tiangolo.com/advanced/websockets/) interactions.
 
 ```python
     await realtime_agent.run()

@@ -1,5 +1,5 @@
 ## **How It Works**
-At its core, the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) leverages [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent) agent processes them.
+At its core, the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) leverages [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to handle real-time audio streaming. This means your browser becomes the communication bridge, sending audio packets to a server where a [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) agent processes them.
 
 Here’s a quick overview of its components and how they fit together:
 
@@ -11,7 +11,7 @@ Here’s a quick overview of its components and how they fit together:
    - Using Python's [FastAPI](https://fastapi.tiangolo.com/) framework, developers can easily set up endpoints for handling  [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) traffic.
 
 3. **Powered by Realtime Agents**:
-   - The audio adapter integrates with an AI-powered [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent), allowing the agent to process audio inputs and respond intelligently.
+   - The audio adapter integrates with an AI-powered [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), allowing the agent to process audio inputs and respond intelligently.
 
 ## **Key Features**
 ### **1. Simplified Setup**
@@ -43,7 +43,7 @@ Create a `OAI_CONFIG_LIST` file based on the provided `OAI_CONFIG_LIST_sample`:
 ```bash
 cp OAI_CONFIG_LIST_sample OAI_CONFIG_LIST
 ```
-In the OAI_CONFIG_LIST file, update the `api_key` to your OpenAI API key.
+In the OAI_CONFIG_LIST file, update the `api_key` to your OpenAI and/or Gemini API keys.
 
 ### (Optional) Create and use a virtual environment
 
@@ -76,7 +76,7 @@ INFO:     Uvicorn running on http://0.0.0.0:5050 (Press CTRL+C to quit)
 ```
 
 ### Ready to Chat? 🚀
-Now you can simply open [**localhost:5050/start-chat**](http://localhost:5050/start-chat) in your browser, and dive into an interactive conversation with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent)! 🎤✨
+Now you can simply open [**localhost:5050/start-chat**](http://localhost:5050/start-chat) in your browser, and dive into an interactive conversation with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)! 🎤✨
 
 ![Realtime agent chat](/snippets/advanced-concepts/realtime-agent/img/websocket_chat.png)
 
@@ -141,7 +141,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
     logger = getLogger("uvicorn.error")
 ```
 3. **Set Up the `WebSocketAudioAdapter`**
-   The [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) bridges the client’s audio stream with the [**`RealtimeAgent`**](/docs/reference/agentchat/realtime_agent/realtime_agent). It streams audio data over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) in real time, ensuring seamless communication between the browser and the agent.
+   The [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter) bridges the client’s audio stream with the [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent). It streams audio data over [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) in real time, ensuring seamless communication between the browser and the agent.
 
 ```python
     audio_adapter = WebSocketAudioAdapter(websocket, logger=logger)
