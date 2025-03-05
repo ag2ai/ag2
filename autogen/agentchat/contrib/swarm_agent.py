@@ -10,7 +10,7 @@ from enum import Enum
 from functools import partial
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -21,6 +21,7 @@ from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
+from ..utils import ContextExpression
 
 __all__ = [
     "AFTER_WORK",
@@ -29,6 +30,7 @@ __all__ = [
     "AfterWorkOption",
     "ContextStr",
     "OnCondition",
+    "OnContextCondition",
     "SwarmAgent",
     "a_initiate_swarm_chat",
     "create_swarm_transition",
@@ -53,7 +55,7 @@ class ContextStr:
     def __init__(self, template: str):
         self.template = template
 
-    def format(self, context_variables: dict[str, Any]) -> str:
+    def format(self, context_variables: dict[str, Any]) -> Optional[str]:
         """Substitute context variables into the string.
 
         Args:
@@ -89,23 +91,27 @@ class AfterWork:  # noqa: N801
     Args:
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def my_after_work_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
         next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
-    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]] = None
+    next_agent_selection_msg: Optional[
+        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
+    ] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.agent, str):
             self.agent = AfterWorkOption(self.agent.upper())
 
         # next_agent_selection_msg is only valid for when agent is AfterWorkOption.SWARM_MANAGER, but isn't mandatory
         if self.next_agent_selection_msg is not None:
-            if not isinstance(self.next_agent_selection_msg, (str, ContextStr, Callable)):
+            if not (
+                isinstance(self.next_agent_selection_msg, (str, ContextStr)) or callable(self.next_agent_selection_msg)
+            ):
                 raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
 
             if self.agent != AfterWorkOption.SWARM_MANAGER:
@@ -119,7 +125,7 @@ class AfterWork:  # noqa: N801
 class AFTER_WORK(AfterWork):  # noqa: N801
     """Deprecated: Use AfterWork instead. This class will be removed in a future version (TBD)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
             "AFTER_WORK is deprecated and will be removed in a future version (TBD). Use AfterWork instead.",
             DeprecationWarning,
@@ -131,7 +137,11 @@ class AFTER_WORK(AfterWork):  # noqa: N801
 @dataclass
 @export_module("autogen")
 class OnCondition:  # noqa: N801
-    """Defines a condition for transitioning to another agent or nested chats
+    """Defines a condition for transitioning to another agent or nested chats.
+
+    This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
+
+    These are evaluated after the OnCondition conditions but before the AfterWork conditions.
 
     Args:
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
@@ -142,38 +152,43 @@ class OnCondition:  # noqa: N801
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
                 def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
-        available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
+        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
     """
 
-    target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Union[str, ContextStr, Callable[..., Any]] = ""
-    available: Optional[Union[Callable, str]] = None
+    target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
+    condition: Optional[Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]] = None
+    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Ensure valid types
-        if self.target is not None:
-            assert isinstance(self.target, (ConversableAgent, dict)), "'target' must be a ConversableAgent or a dict"
+        if (self.target is not None) and (not isinstance(self.target, (ConversableAgent, dict))):
+            raise ValueError("'target' must be a ConversableAgent or a dict")
 
         # Ensure they have a condition
         if isinstance(self.condition, str):
-            assert self.condition.strip(), "'condition' must be a non-empty string"
+            if not self.condition.strip():
+                raise ValueError("'condition' must be a non-empty string")
         else:
-            assert isinstance(self.condition, (ContextStr, Callable)), (
-                "'condition' must be a string, ContextStr, or callable"
-            )
+            if not isinstance(self.condition, ContextStr) and not callable(self.condition):
+                raise ValueError("'condition' must be a string, ContextStr, or callable")
 
-        if self.available is not None:
-            assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
+        if (self.available is not None) and (
+            not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
+        ):
+            raise ValueError("'available' must be a callable, a string, or a ContextExpression")
 
 
 class ON_CONDITION(OnCondition):  # noqa: N801
     """Deprecated: Use OnCondition instead. This class will be removed in a future version (TBD)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         warnings.warn(
             "ON_CONDITION is deprecated and will be removed in a future version (TBD). Use OnCondition instead.",
             DeprecationWarning,
@@ -182,7 +197,63 @@ class ON_CONDITION(OnCondition):  # noqa: N801
         super().__init__(*args, **kwargs)
 
 
-def _establish_swarm_agent(agent: ConversableAgent):
+@dataclass
+@export_module("autogen")
+class OnContextCondition:  # noqa: N801
+    """Defines a condition for transitioning to another agent or nested chats using context variables and the ContextExpression class.
+
+    This is for context variable-based condition evaluation (does not use the agent's LLM).
+
+    These are evaluated before the OnCondition and AfterWork conditions.
+
+    Args:
+        target (Union[ConversableAgent, dict[str, Any]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
+            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
+            Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
+        condition (Union[str, ContextExpression]): The condition for transitioning to the target agent, evaluated by the LLM.
+            If a string, it needs to represent a context variable key and the value will be evaluated as a boolean
+            If a ContextExpression, it will evaluate the logical expression against the context variables. If it is True, the transition will occur.
+                Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
+        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnContextCondition is included for the LLM to evaluate.
+            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
+            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
+                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
+                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
+            The Callable signature is:
+                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
+
+    """
+
+    target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
+    condition: Optional[Union[str, ContextExpression]] = None
+    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]] = None
+
+    def __post_init__(self) -> None:
+        # Ensure valid types
+        if (self.target is not None) and (not isinstance(self.target, (ConversableAgent, dict))):
+            raise ValueError("'target' must be a ConversableAgent or a dict")
+
+        # Ensure they have a condition
+        if isinstance(self.condition, str):
+            if not self.condition.strip():
+                raise ValueError("'condition' must be a non-empty string")
+
+            self._context_condition = ContextExpression("${" + self.condition + "}")
+        else:
+            if not isinstance(self.condition, ContextExpression):
+                raise ValueError("'condition' must be a string on ContextExpression")
+
+            self._context_condition = self.condition
+
+        if (self.available is not None) and (
+            not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
+        ):
+            raise ValueError("'available' must be a callable, a string, or a ContextExpression")
+
+
+def _establish_swarm_agent(agent: ConversableAgent) -> None:
     """Establish the swarm agent with the swarm-related attributes and hooks. Not for the tool executor.
 
     Args:
@@ -193,23 +264,79 @@ def _establish_swarm_agent(agent: ConversableAgent):
         """Customise the __str__ method to show the agent name for transition messages."""
         return f"Swarm agent --> {self.name}"
 
-    agent._swarm_after_work = None
-    agent._swarm_after_work_selection_msg = None
+    agent._swarm_after_work = None  # type: ignore[attr-defined]
+    agent._swarm_after_work_selection_msg = None  # type: ignore[attr-defined]
 
     # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
     # List of Dictionaries containing the nested_chats and condition
-    agent._swarm_nested_chat_handoffs = []
+    agent._swarm_nested_chat_handoffs = []  # type: ignore[attr-defined]
 
     # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
-    agent._swarm_conditional_functions = {}
+    agent._swarm_conditional_functions = {}  # type: ignore[attr-defined]
 
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
 
-    agent._get_display_name = MethodType(_swarm_agent_str, agent)
+    # Store the OnContextConditions for evaluation (list[OnContextCondition])
+    agent._swarm_oncontextconditions = []  # type: ignore[attr-defined]
+
+    # Register a reply function to run Python function-based OnConditions before any other reply function
+    agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
+
+    agent._get_display_name = MethodType(_swarm_agent_str, agent)  # type: ignore[method-assign]
 
     # Mark this agent as established as a swarm agent
-    agent._swarm_is_established = True
+    agent._swarm_is_established = True  # type: ignore[attr-defined]
+
+
+def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
+    """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
+
+    This is primarily used so that agents can set the tool executor's _swarm_next_agent attribute to control
+    the next agent programmatically.
+
+    Does not link the Tool Executor agent.
+    """
+    for agent in agents:
+        if agent.name not in [__TOOL_EXECUTOR_NAME__]:
+            agent._swarm_manager = group_chat_manager  # type: ignore[attr-defined]
+
+
+def _run_oncontextconditions(
+    agent: ConversableAgent,
+    messages: Optional[list[dict[str, Any]]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+    """Run OnContextConditions for an agent before any other reply function."""
+    for on_condition in agent._swarm_oncontextconditions:  # type: ignore[attr-defined]
+        is_available = True
+
+        if on_condition.available is not None:
+            if callable(on_condition.available):
+                is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
+            elif isinstance(on_condition.available, str):
+                is_available = agent.get_context(on_condition.available) or False
+            elif isinstance(on_condition.available, ContextExpression):
+                is_available = on_condition.available.evaluate(agent._context_variables)
+
+        if is_available and on_condition._context_condition.evaluate(agent._context_variables):
+            # Condition has been met, we'll set the Tool Executor's _swarm_next_agent
+            # attribute and that will be picked up on the next iteration when
+            # _determine_next_agent is called
+            for agent in agent._swarm_manager.groupchat.agents:  # type: ignore[attr-defined]
+                if agent.name == __TOOL_EXECUTOR_NAME__:
+                    agent._swarm_next_agent = on_condition.target  # type: ignore[attr-defined]
+                    break
+
+            if isinstance(on_condition.target, ConversableAgent):
+                transfer_name = on_condition.target.name
+            else:
+                transfer_name = "a nested chat"
+
+            return True, "[Handing off to " + transfer_name + "]"
+
+    return False, None
 
 
 def _prepare_swarm_agents(
@@ -227,8 +354,10 @@ def _prepare_swarm_agents(
         ConversableAgent: The tool executor agent.
         list[ConversableAgent]: List of nested chat agents.
     """
-    assert isinstance(initial_agent, ConversableAgent), "initial_agent must be a ConversableAgent"
-    assert all(isinstance(agent, ConversableAgent) for agent in agents), "Agents must be a list of ConversableAgents"
+    if not isinstance(initial_agent, ConversableAgent):
+        raise ValueError("initial_agent must be a ConversableAgent")
+    if not all(isinstance(agent, ConversableAgent) for agent in agents):
+        raise ValueError("Agents must be a list of ConversableAgents")
 
     # Initialize all agents as swarm agents
     for agent in agents:
@@ -237,8 +366,10 @@ def _prepare_swarm_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     for agent in agents:
-        if agent._swarm_after_work is not None and isinstance(agent._swarm_after_work.agent, ConversableAgent):
-            assert agent._swarm_after_work.agent in agents, "Agent in hand-off must be in the agents list"
+        if (agent._swarm_after_work is not None and isinstance(agent._swarm_after_work.agent, ConversableAgent)) and (  # type: ignore[attr-defined]
+            agent._swarm_after_work.agent not in agents  # type: ignore[attr-defined]
+        ):
+            raise ValueError("Agent in hand-off must be in the agents list")
 
     tool_execution = ConversableAgent(
         name=__TOOL_EXECUTOR_NAME__,
@@ -246,7 +377,7 @@ def _prepare_swarm_agents(
     )
     _set_to_tool_execution(tool_execution)
 
-    nested_chat_agents = []
+    nested_chat_agents: list[ConversableAgent] = []
     for agent in agents:
         _create_nested_chats(agent, nested_chat_agents)
 
@@ -254,7 +385,7 @@ def _prepare_swarm_agents(
     for agent in agents + nested_chat_agents:
         tool_execution._function_map.update(agent._function_map)
         # Add conditional functions to the tool_execution agent
-        for func_name, (func, _) in agent._swarm_conditional_functions.items():
+        for func_name, (func, _) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
             tool_execution._function_map[func_name] = func
 
         # Register tools from the tools property
@@ -275,18 +406,24 @@ def _prepare_swarm_agents(
     return tool_execution, nested_chat_agents
 
 
-def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[ConversableAgent]):
+def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[ConversableAgent]) -> None:
     """Create nested chat agents and register nested chats.
 
     Args:
         agent (ConversableAgent): The agent to create nested chat agents for, including registering the hand offs.
         nested_chat_agents (list[ConversableAgent]): List for all nested chat agents, appends to this.
     """
-    for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):
-        nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
-        condition = nested_chat_handoff["condition"]
-        available = nested_chat_handoff["available"]
 
+    def create_nested_chat_agent(agent: ConversableAgent, nested_chats: dict[str, Any]) -> ConversableAgent:
+        """Create a nested chat agent for a nested chat configuration.
+
+        Args:
+            agent (ConversableAgent): The agent to create the nested chat agent for.
+            nested_chat (dict[str, Any]): The nested chat configuration.
+
+        Returns:
+            ConversableAgent: The created nested chat agent.
+        """
         # Create a nested chat agent specifically for this nested chat
         nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
 
@@ -303,10 +440,30 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         # After the nested chat is complete, transfer back to the parent agent
         register_hand_off(nested_chat_agent, AfterWork(agent=agent))
 
+        return nested_chat_agent
+
+    for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):  # type: ignore[attr-defined]
+        llm_nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
+
+        # Create nested chat agent
+        nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
         nested_chat_agents.append(nested_chat_agent)
 
         # Nested chat is triggered through an agent transfer to this nested chat agent
-        register_hand_off(agent, OnCondition(nested_chat_agent, condition, available))
+        condition = nested_chat_handoff["condition"]
+        available = nested_chat_handoff["available"]
+        register_hand_off(agent, OnCondition(target=nested_chat_agent, condition=condition, available=available))
+
+    for i, nested_chat_context_handoff in enumerate(agent._swarm_oncontextconditions):  # type: ignore[attr-defined]
+        if isinstance(nested_chat_context_handoff.target, dict):
+            context_nested_chats: dict[str, Any] = nested_chat_context_handoff.target
+
+            # Create nested chat agent
+            nested_chat_agent = create_nested_chat_agent(agent, context_nested_chats)
+            nested_chat_agents.append(nested_chat_agent)
+
+            # Update the OnContextCondition, replacing the nested chat dictionary with the nested chat agent
+            nested_chat_context_handoff.target = nested_chat_agent
 
 
 def _process_initial_messages(
@@ -336,8 +493,9 @@ def _process_initial_messages(
 
     # If there's only one message and there's no identified swarm agent
     # Start with a user proxy agent, creating one if they haven't passed one in
-    temp_user_proxy = None
-    temp_user_list = []
+    last_agent: Optional[Agent]
+    temp_user_proxy: Optional[Agent] = None
+    temp_user_list: list[Agent] = []
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
         temp_user_proxy = UserProxyAgent(name="_User", code_execution_config=False)
         last_agent = temp_user_proxy
@@ -346,7 +504,7 @@ def _process_initial_messages(
         last_message = messages[0]
         if "name" in last_message:
             if last_message["name"] in swarm_agent_names:
-                last_agent = next(agent for agent in agents + nested_chat_agents if agent.name == last_message["name"])
+                last_agent = next(agent for agent in agents + nested_chat_agents if agent.name == last_message["name"])  # type: ignore[assignment]
             elif user_agent and last_message["name"] == user_agent.name:
                 last_agent = user_agent
             else:
@@ -388,7 +546,9 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
     last_swarm_agent: ConversableAgent,
-    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]],
+    after_work_next_agent_selection_msg: Optional[
+        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
+    ],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
@@ -401,7 +561,7 @@ def _prepare_groupchat_auto_speaker(
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -428,10 +588,10 @@ def _prepare_groupchat_auto_speaker(
         agent_list_replaced_string = ContextStr(substitute_agentlist(after_work_next_agent_selection_msg.template))
 
         # Then replace the context variables
-        groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(
+        groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(  # type: ignore[assignment]
             last_swarm_agent._context_variables
         )
-    elif isinstance(after_work_next_agent_selection_msg, Callable):
+    elif callable(after_work_next_agent_selection_msg):
         groupchat.select_speaker_prompt_template = substitute_agentlist(
             after_work_next_agent_selection_msg(last_swarm_agent, groupchat.messages)
         )
@@ -446,7 +606,7 @@ def _determine_next_agent(
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
     swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
-) -> Optional[Agent]:
+) -> Optional[Union[Agent, Literal["auto"]]]:
     """Determine the next agent in the conversation.
 
     Args:
@@ -467,9 +627,9 @@ def _determine_next_agent(
 
     after_work_condition = None
 
-    if tool_execution._swarm_next_agent is not None:
-        next_agent = tool_execution._swarm_next_agent
-        tool_execution._swarm_next_agent = None
+    if tool_execution._swarm_next_agent is not None:  # type: ignore[attr-defined]
+        next_agent: Optional[Agent] = tool_execution._swarm_next_agent  # type: ignore[attr-defined]
+        tool_execution._swarm_next_agent = None  # type: ignore[attr-defined]
 
         if not isinstance(next_agent, AfterWorkOption):
             # Check for string, access agent from group chat.
@@ -508,8 +668,8 @@ def _determine_next_agent(
     if after_work_condition is None:
         # Resolve after_work condition if one hasn't been passed in (agent-level overrides global)
         after_work_condition = (
-            last_swarm_speaker._swarm_after_work
-            if last_swarm_speaker._swarm_after_work is not None
+            last_swarm_speaker._swarm_after_work  # type: ignore[attr-defined]
+            if last_swarm_speaker._swarm_after_work is not None  # type: ignore[attr-defined]
             else swarm_after_work
         )
 
@@ -518,7 +678,7 @@ def _determine_next_agent(
         after_work_condition = after_work_condition.agent
 
     # Evaluate callable after_work
-    if isinstance(after_work_condition, Callable):
+    if callable(after_work_condition):
         after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
 
     if isinstance(after_work_condition, str):  # Agent name in a string
@@ -548,7 +708,7 @@ def create_swarm_transition(
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
     swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
-) -> Callable[[ConversableAgent, GroupChat], Optional[Agent]]:
+) -> Callable[[ConversableAgent, GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
     """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
 
     Args:
@@ -565,7 +725,9 @@ def create_swarm_transition(
     # of swarm_transition
     state = {"use_initial_agent": True}
 
-    def swarm_transition(last_speaker: ConversableAgent, groupchat: GroupChat) -> Optional[Agent]:
+    def swarm_transition(
+        last_speaker: ConversableAgent, groupchat: GroupChat
+    ) -> Optional[Union[Agent, Literal["auto"]]]:
         result = _determine_next_agent(
             last_speaker=last_speaker,
             groupchat=groupchat,
@@ -583,7 +745,7 @@ def create_swarm_transition(
 
 
 def _create_swarm_manager(
-    groupchat: GroupChat, swarm_manager_args: dict[str, Any], agents: list[ConversableAgent]
+    groupchat: GroupChat, swarm_manager_args: Optional[dict[str, Any]], agents: list[ConversableAgent]
 ) -> GroupChatManager:
     """Create a GroupChatManager for the swarm chat utilising any arguments passed in and ensure an LLM Config exists if needed
 
@@ -603,9 +765,9 @@ def _create_swarm_manager(
     if manager.llm_config is False:
         for agent in agents:
             if (
-                agent._swarm_after_work
-                and isinstance(agent._swarm_after_work.agent, AfterWorkOption)
-                and agent._swarm_after_work.agent == AfterWorkOption.SWARM_MANAGER
+                agent._swarm_after_work  # type: ignore[attr-defined]
+                and isinstance(agent._swarm_after_work.agent, AfterWorkOption)  # type: ignore[attr-defined]
+                and agent._swarm_after_work.agent == AfterWorkOption.SWARM_MANAGER  # type: ignore[attr-defined]
             ):
                 raise ValueError(
                     "The swarm manager doesn't have an LLM Config and it is required for AfterWorkOption.SWARM_MANAGER. Use the swarm_manager_args to specify the LLM Config for the swarm manager."
@@ -673,7 +835,14 @@ def initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat
@@ -695,15 +864,16 @@ def initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        Dict[str, Any]: Updated Context variables.
+        dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
+
     tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
@@ -731,6 +901,10 @@ def initiate_swarm_chat(
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables or {})
 
+    # Link all agents with the GroupChatManager to allow access to the group chat
+    # and other agents, particularly the tool executor for setting _swarm_next_agent
+    _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
+
     if len(processed_messages) > 1:
         last_agent, last_message = manager.resume(messages=processed_messages)
         clear_history = False
@@ -738,7 +912,10 @@ def initiate_swarm_chat(
         last_message = processed_messages[0]
         clear_history = True
 
-    chat_result = last_agent.initiate_chat(
+    if last_agent is None:
+        raise ValueError("No agent selected to start the conversation")
+
+    chat_result = last_agent.initiate_chat(  # type: ignore[attr-defined]
         manager,
         message=last_message,
         clear_history=clear_history,
@@ -746,7 +923,7 @@ def initiate_swarm_chat(
 
     _cleanup_temp_user_messages(chat_result)
 
-    return chat_result, context_variables, manager.last_speaker
+    return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
 
 
 @export_module("autogen")
@@ -758,7 +935,14 @@ async def a_initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
@@ -780,13 +964,13 @@ async def a_initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        Dict[str, Any]: Updated Context variables.
+        dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
     tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
@@ -823,7 +1007,10 @@ async def a_initiate_swarm_chat(
         last_message = processed_messages[0]
         clear_history = True
 
-    chat_result = await last_agent.a_initiate_chat(
+    if last_agent is None:
+        raise ValueError("No agent selected to start the conversation")
+
+    chat_result = await last_agent.a_initiate_chat(  # type: ignore[attr-defined]
         manager,
         message=last_message,
         clear_history=clear_history,
@@ -831,7 +1018,7 @@ async def a_initiate_swarm_chat(
 
     _cleanup_temp_user_messages(chat_result)
 
-    return chat_result, context_variables, manager.last_speaker
+    return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
 
 
 class SwarmResult(BaseModel):
@@ -856,25 +1043,25 @@ class SwarmResult(BaseModel):
     class Config:  # Add this inner class
         arbitrary_types_allowed = True
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.values
 
 
-def _set_to_tool_execution(agent: ConversableAgent):
+def _set_to_tool_execution(agent: ConversableAgent) -> None:
     """Set to a special instance of ConversableAgent that is responsible for executing tool calls from other swarm agents.
     This agent will be used internally and should not be visible to the user.
 
     It will execute the tool calls and update the referenced context_variables and next_agent accordingly.
     """
-    agent._swarm_next_agent = None
+    agent._swarm_next_agent = None  # type: ignore[attr-defined]
     agent._reply_func_list.clear()
     agent.register_reply([Agent, None], _generate_swarm_tool_reply)
 
 
 def register_hand_off(
     agent: ConversableAgent,
-    hand_to: Union[list[Union[OnCondition, AfterWork]], OnCondition, AfterWork],
-):
+    hand_to: Union[list[Union[OnCondition, OnContextCondition, AfterWork]], OnCondition, OnContextCondition, AfterWork],
+) -> None:
     """Register a function to hand off to another agent.
 
     Args:
@@ -892,28 +1079,27 @@ def register_hand_off(
         _establish_swarm_agent(agent)
 
     # Ensure that hand_to is a list or OnCondition or AfterWork
-    if not isinstance(hand_to, (list, OnCondition, AfterWork)):
-        raise ValueError("hand_to must be a list of OnCondition or AfterWork")
+    if not isinstance(hand_to, (list, OnCondition, OnContextCondition, AfterWork)):
+        raise ValueError("hand_to must be a list of OnCondition, OnContextCondition, or AfterWork")
 
-    if isinstance(hand_to, (OnCondition, AfterWork)):
+    if isinstance(hand_to, (OnCondition, OnContextCondition, AfterWork)):
         hand_to = [hand_to]
 
     for transit in hand_to:
         if isinstance(transit, AfterWork):
-            assert isinstance(transit.agent, (AfterWorkOption, ConversableAgent, str, Callable)), (
-                "Invalid After Work value"
-            )
-            agent._swarm_after_work = transit
-            agent._swarm_after_work_selection_msg = transit.next_agent_selection_msg
+            if not (isinstance(transit.agent, (AfterWorkOption, ConversableAgent, str)) or callable(transit.agent)):
+                raise ValueError(f"Invalid AfterWork agent: {transit.agent}")
+            agent._swarm_after_work = transit  # type: ignore[attr-defined]
+            agent._swarm_after_work_selection_msg = transit.next_agent_selection_msg  # type: ignore[attr-defined]
         elif isinstance(transit, OnCondition):
             if isinstance(transit.target, ConversableAgent):
                 # Transition to agent
 
                 # Create closure with current loop transit value
                 # to ensure the condition matches the one in the loop
-                def make_transfer_function(current_transit: OnCondition):
+                def make_transfer_function(current_transit: OnCondition) -> Callable[[], ConversableAgent]:
                     def transfer_to_agent() -> ConversableAgent:
-                        return current_transit.target
+                        return current_transit.target  # type: ignore[return-value]
 
                     return transfer_to_agent
 
@@ -924,21 +1110,24 @@ def register_hand_off(
                 base_func_name = f"transfer_{agent.name}_to_{transit.target.name}"
                 func_name = base_func_name
                 count = 2
-                while func_name in agent._swarm_conditional_functions:
+                while func_name in agent._swarm_conditional_functions:  # type: ignore[attr-defined]
                     func_name = f"{base_func_name}_{count}"
                     count += 1
 
                 # Store function to add/remove later based on it being 'available'
-                agent._swarm_conditional_functions[func_name] = (transfer_func, transit)
+                agent._swarm_conditional_functions[func_name] = (transfer_func, transit)  # type: ignore[attr-defined]
 
             elif isinstance(transit.target, dict):
                 # Transition to a nested chat
                 # We will store them here and establish them in the initiate_swarm_chat
-                agent._swarm_nested_chat_handoffs.append({
+                agent._swarm_nested_chat_handoffs.append({  # type: ignore[attr-defined]
                     "nested_chats": transit.target,
                     "condition": transit.condition,
                     "available": transit.available,
                 })
+
+        elif isinstance(transit, OnContextCondition):
+            agent._swarm_oncontextconditions.append(transit)  # type: ignore[attr-defined]
 
         else:
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")
@@ -946,14 +1135,16 @@ def register_hand_off(
 
 def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
     """Updates the agent's functions based on the OnCondition's available condition."""
-    for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():
+    for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
         is_available = True
 
         if on_condition.available is not None:
-            if isinstance(on_condition.available, Callable):
+            if callable(on_condition.available):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
             elif isinstance(on_condition.available, str):
                 is_available = agent.get_context(on_condition.available) or False
+            elif isinstance(on_condition.available, ContextExpression):
+                is_available = on_condition.available.evaluate(agent._context_variables)
 
         # first remove the function if it exists
         if func_name in agent._function_map:
@@ -965,7 +1156,7 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             condition = on_condition.condition
             if isinstance(condition, ContextStr):
                 condition = condition.format(context_variables=agent._context_variables)
-            elif isinstance(condition, Callable):
+            elif callable(condition):
                 condition = condition(agent, messages)
             agent._add_single_function(func, func_name, condition)
 
@@ -975,7 +1166,7 @@ def _generate_swarm_tool_reply(
     messages: Optional[list[dict[str, Any]]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
-) -> tuple[bool, dict[str, Any]]:
+) -> tuple[bool, Optional[dict[str, Any]]]:
     """Pre-processes and generates tool call replies.
 
     This function:
@@ -984,7 +1175,7 @@ def _generate_swarm_tool_reply(
     3. Updates context_variables and next_agent based on the tool call response."""
 
     if config is None:
-        config = agent
+        config = agent  # type: ignore[assignment]
     if messages is None:
         messages = agent._oai_messages[sender]
 
@@ -993,7 +1184,7 @@ def _generate_swarm_tool_reply(
         tool_call_count = len(message["tool_calls"])
 
         # Loop through tool calls individually (so context can be updated after each function call)
-        next_agent = None
+        next_agent: Optional[Agent] = None
         tool_responses_inner = []
         contents = []
         for index in range(tool_call_count):
@@ -1023,6 +1214,9 @@ def _generate_swarm_tool_reply(
             # 2. generate tool calls reply
             _, tool_message = agent.generate_tool_calls_reply([message_copy])
 
+            if tool_message is None:
+                raise ValueError("Tool call did not return a message")
+
             # 3. update context_variables and next_agent, convert content to string
             for tool_response in tool_message["tool_responses"]:
                 content = tool_response.get("content")
@@ -1030,17 +1224,20 @@ def _generate_swarm_tool_reply(
                     if content.context_variables != {}:
                         agent._context_variables.update(content.context_variables)
                     if content.agent is not None:
-                        next_agent = content.agent
+                        next_agent = content.agent  # type: ignore[assignment]
                 elif isinstance(content, Agent):
                     next_agent = content
 
                 tool_responses_inner.append(tool_response)
                 contents.append(str(tool_response["content"]))
 
-        agent._swarm_next_agent = next_agent
+        agent._swarm_next_agent = next_agent  # type: ignore[attr-defined]
 
         # Put the tool responses and content strings back into the response message
         # Caters for multiple tool calls
+        if tool_message is None:
+            raise ValueError("Tool call did not return a message")
+
         tool_message["tool_responses"] = tool_responses_inner
         tool_message["content"] = "\n".join(contents)
 
@@ -1051,7 +1248,7 @@ def _generate_swarm_tool_reply(
 class SwarmAgent(ConversableAgent):
     """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         warnings.warn(
             "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
             DeprecationWarning,
