@@ -401,9 +401,15 @@ class TestContextExpressionNewSyntax:
         assert ContextExpression("!(len(${empty_list}) > 0)").evaluate(context) is True
 
         # Test complex expressions with length
-        assert ContextExpression(
-            "len(${non_empty_list}) > 0 & (len(${empty_list}) == 0 | len(${single_item}) == 1)"
-        ).evaluate(context) is True
-        assert ContextExpression(
-            "len(${empty_dict}) == 0 & len(${non_empty_dict}) == 1 & len(${non_empty_string}) == 5"
-        ).evaluate(context) is True
+        assert (
+            ContextExpression(
+                "len(${non_empty_list}) > 0 & (len(${empty_list}) == 0 | len(${single_item}) == 1)"
+            ).evaluate(context)
+            is True
+        )
+        assert (
+            ContextExpression(
+                "len(${empty_dict}) == 0 & len(${non_empty_dict}) == 1 & len(${non_empty_string}) == 5"
+            ).evaluate(context)
+            is True
+        )
