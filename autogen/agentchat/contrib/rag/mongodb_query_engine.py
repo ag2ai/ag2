@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import os
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
@@ -12,13 +13,20 @@ from autogen.import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+    from llama_index.core.embeddings import BaseEmbedding
+    from llama_index.core.schema import Document as LlamaDocument
     from llama_index.llms.langchain.base import LLM
+    from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
     from pymongo import MongoClient
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
+EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
+EMPTY_RESPONSE_REPLY = "Sorry, I couldn't find any information on that. If you haven't ingested any documents, please try that."  # Default response for queries without results
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -39,12 +47,11 @@ class MongoDBQueryEngine:
 
     def __init__(  # type: ignore[no-any-unimported]
         self,
-        connection_string: str = "",
-        database_name: str = "vector_db",
-        embedding_function: Optional[Callable[..., Any]] = None,
-        collection_name: str = DEFAULT_COLLECTION_NAME,
-        index_name: str = "vector_index",
-        llm: Union[str, LLM] = "gpt-4o",
+        connection_string: str,
+        llm: Optional[LLM] = None,
+        database_name: Optional[str] = None,
+        embedding_function: "Optional[BaseEmbedding]" = None,
+        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME,
     ):
         """
         Initialize the MongoDBQueryEngine.
@@ -52,11 +59,13 @@ class MongoDBQueryEngine:
         Note: The actual connection and creation of the vector database is deferred to
         connect_db (to use an existing collection) or init_db (to create a new collection).
         """
+        if not connection_string:
+            raise ValueError("Connection string is required to connect to MongoDB.")
+
         self.connection_string = connection_string
         self.database_name = database_name
         self.embedding_function = embedding_function
         self.collection_name = collection_name
-        self.index_name = index_name
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None
@@ -64,22 +73,20 @@ class MongoDBQueryEngine:
         self.storage_context = None
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
-        self.llm = llm
+        self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
 
-    def _setup_vector_db(self, overwrite: bool) -> None:
+    def _set_up(self, overwrite: bool) -> None:
         """
         Helper method to create the vector database, vector search engine, and storage context.
 
         Args:
-            overwrite (bool): If True, create a new collection (overwriting if exists).
-                              If False, use an existing collection.
+            overwrite (bool): If True, create a new collection (overwriting if exists). If False, use an existing collection.
         """
         # Pass the overwrite flag to the factory if supported.
         self.vector_db: MongoDBAtlasVectorDB = VectorDBFactory.create_vector_db(  # type: ignore[assignment, no-redef]
             db_type="mongodb",
             connection_string=self.connection_string,
             database_name=self.database_name,
-            index_name=self.index_name,
             embedding_function=self.embedding_function,
             collection_name=self.collection_name,
             overwrite=overwrite,  # new parameter to control creation behavior
@@ -90,9 +97,19 @@ class MongoDBQueryEngine:
             collection_name=self.collection_name,
         )
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_search_engine)
-        self.index = VectorStoreIndex.from_vector_store(self.vector_search_engine, storage_context=self.storage_context)
 
-    def connect_db(self, overwrite: bool = False, *args: Any, **kwargs: Any) -> bool:
+    def _check_existing_collection(self) -> bool:
+        """
+        Check if the collection already exists in the database.
+
+        Returns:
+            bool: True if the collection exists; False otherwise.
+        """
+        client = MongoClient(self.connection_string)
+        db = client[self.database_name]
+        return self.collection_name in db.list_collection_names()
+
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
         Connect to the MongoDB database by issuing a ping using an existing collection.
         This method first checks if the target database and collection exist.
@@ -105,19 +122,16 @@ class MongoDBQueryEngine:
         """
         try:
             # Check if the target collection exists.
-            client = MongoClient(self.connection_string)
-            db = client[self.database_name]
-            if self.collection_name not in db.list_collection_names():
+            if not self._check_existing_collection():
                 raise ValueError(
                     f"Collection '{self.collection_name}' not found in database '{self.database_name}'. "
                     "Please run init_db to create a new collection."
                 )
             # Reinitialize if the caller requested overwrite.
-            if overwrite:
-                logger.info("Overwriting existing collection as requested.")
-                self._setup_vector_db(overwrite=True)
-            else:
-                self._setup_vector_db(overwrite=False)
+            self._set_up(overwrite=False)
+            self.index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_search_engine, storage_context=self.storage_context
+            )
             self.vector_db.client.admin.command("ping")  # type: ignore[union-attr]
             logger.info("Connected to MongoDB successfully.")
             return True
@@ -127,8 +141,8 @@ class MongoDBQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[str, Path]] = None,
-        new_doc_paths: Optional[List[Union[str, Path]]] = None,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -146,28 +160,17 @@ class MongoDBQueryEngine:
         """
         try:
             # Check if the collection already exists.
-            client = MongoClient(self.connection_string)
-            db = client[self.database_name]
-            if self.collection_name in db.list_collection_names():
-                raise ValueError(
-                    f"Collection '{self.collection_name}' already exists in database '{self.database_name}'. "
-                    "Use connect_db with overwrite=True to reinitialize it."
+            if self._check_existing_collection():
+                logger.warning(
+                    f"Collection '{self.collection_name}' already exists in database '{self.database_name}."
+                    "Please use connect_db to connect to the existing collection."
+                    "Or else this function will overwrite the collection."
                 )
-            # Set up the database without overwriting.
-            self._setup_vector_db(overwrite=False)
+            # Set up the database with overwriting.
+            self._set_up(overwrite=True)
             self.vector_db.client.admin.command("ping")  # type: ignore[union-attr]
             # Gather document paths.
-            document_list: List[Union[str, Path]] = []
-            if new_doc_dir:
-                document_list.extend(Path(new_doc_dir).glob("**/*"))
-            if new_doc_paths:
-                document_list.extend(new_doc_paths)
-
-            if not document_list:
-                logger.warning("No input documents provided to initialize the database.")
-                return False
-
-            documents = SimpleDirectoryReader(input_files=document_list).load_data()
+            documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
             self.index = VectorStoreIndex.from_documents(documents, storage_context=self.storage_context)
             logger.info("Database initialized with %d documents.", len(documents))
             return True
@@ -175,10 +178,56 @@ class MongoDBQueryEngine:
             logger.error("Failed to initialize the database: %s", e)
             return False
 
-    def add_records(
+    def _validate_query_index(self) -> None:
+        """Ensures an index exists"""
+        if not hasattr(self, "index"):
+            raise Exception("Query index is not initialized. Please call init_db or connect_db first.")
+
+    def _load_doc(  # type: ignore[no-any-unimported]
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+    ) -> Sequence["LlamaDocument"]:
+        """
+        Load documents from a directory and/or a sequence of file paths.
+
+        It uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
+
+        Args:
+            input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.
+                If provided, all files in the directory will be considered.
+            input_docs (Optional[Sequence[Union[Path, str]]]): A sequence of individual file paths to load.
+                Each path must point to an existing file.
+
+        Returns:
+            A sequence of documents loaded as LlamaDocument objects.
+
+        Raises:
+            ValueError: If the specified directory does not exist.
+            ValueError: If any provided file path does not exist.
+            ValueError: If neither input_dir nor input_docs is provided.
+        """
+        loaded_documents = []
+        if input_dir:
+            logger.info(f"Loading docs from directory: {input_dir}")
+            if not os.path.exists(input_dir):
+                raise ValueError(f"Input directory not found: {input_dir}")
+            loaded_documents.extend(SimpleDirectoryReader(input_dir=input_dir).load_data())
+
+        if input_docs:
+            for doc in input_docs:
+                logger.info(f"Loading input doc: {doc}")
+                if not os.path.exists(doc):
+                    raise ValueError(f"Document file not found: {doc}")
+            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())  # type: ignore[arg-type]
+
+        if not input_dir and not input_docs:
+            raise ValueError("No input directory or docs provided!")
+
+        return loaded_documents
+
+    def add_docs(
         self,
-        new_doc_dir: Optional[Union[str, Path]] = None,
-        new_doc_paths_or_urls: Optional[Union[List[Union[str, Path]], Union[str, Path]]] = None,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -192,36 +241,10 @@ class MongoDBQueryEngine:
             new_doc_paths_or_urls (Optional[Union[List[Union[str, Path]], Union[str, Path]]]):
                 List of document paths or a single document path/URL.
         """
-        # Collect document paths.
-        document_list: List[Union[str, Path]] = []
-        if new_doc_dir:
-            document_list.extend(Path(new_doc_dir).glob("**/*"))
-        if new_doc_paths_or_urls:
-            if isinstance(new_doc_paths_or_urls, (list, tuple)):
-                document_list.extend(new_doc_paths_or_urls)
-            else:
-                document_list.append(new_doc_paths_or_urls)
-
-        if not document_list:
-            logger.warning("No documents found for adding records.")
-            return
-
-        try:
-            raw_documents = SimpleDirectoryReader(input_files=document_list).load_data()
-        except Exception as e:
-            logger.error("Error loading documents: %s", e)
-            return
-
-        if not raw_documents:
-            logger.warning("No document chunks created for insertion.")
-            return
-
-        try:
-            for doc in raw_documents:
-                self.index.insert(doc)  # type: ignore[union-attr]
-            logger.info("Inserted %d document chunks successfully.", len(raw_documents))
-        except Exception as e:
-            logger.error("Error inserting documents into the index: %s", e)
+        self._validate_query_index()
+        documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
+        for doc in documents:
+            self.index.insert(doc)  # type: ignore[union-attr]
 
     def query(self, question: str, *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
         """
@@ -234,9 +257,30 @@ class MongoDBQueryEngine:
         Returns:
             Any: The response from the chat engine, or None if an error occurs.
         """
-        try:
-            response = self.index.as_query_engine(llm=self.llm).query(question)  # type: ignore[union-attr]
-            return response
-        except Exception as e:
-            logger.error("Query failed: %s", e)
-            return None
+        self._validate_query_index()
+        self.query_engine = self.index.as_query_engine(llm=self.llm)  # type: ignore[union-attr]
+        response = self.query_engine.query(question)
+
+        if str(response) == EMPTY_RESPONSE_TEXT:
+            return EMPTY_RESPONSE_REPLY
+
+        return str(response)
+
+    def get_collection_name(self) -> str:
+        """
+        Get the name of the collection used by the query engine.
+
+        Returns:
+            The name of the collection.
+        """
+        if self.collection_name:
+            return self.collection_name
+        else:
+            raise ValueError("Collection name not set.")
+
+
+if TYPE_CHECKING:
+    from .query_engine import RAGQueryEngine
+
+    def _check_implement_protocol(o: MongoDBQueryEngine) -> RAGQueryEngine:
+        return o
