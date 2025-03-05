@@ -43,10 +43,8 @@ class CosmosDBCache(AbstractCache):
         """Initialize the CosmosDBCache instance.
 
         Args:
-            seed (Union[str, int]): A seed or namespace for the cache, used as a partition key.
-            connection_string (str): The connection string for the Cosmos DB account.
-            container_id (str): The container ID to be used for caching.
-            client (Optional[CosmosClient]): An existing CosmosClient instance to be used for caching.
+            seed: A seed or namespace for the cache, used as a partition key.
+            cosmosdb_config: The configuration for the Cosmos DB cache.
         """
         self.seed = str(seed)
         self.client = cosmosdb_config.get("client") or CosmosClient.from_connection_string(

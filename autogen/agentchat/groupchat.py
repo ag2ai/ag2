@@ -703,13 +703,13 @@ class GroupChat:
         5. If we run out of turns and no single agent can be determined, the next speaker in the list of agents is returned
 
         Args:
-            last_speaker Agent: The previous speaker in the group chat
-            selector ConversableAgent:
-            messages Optional[List[Dict]]: Current chat messages
-            agents Optional[List[Agent]]: Valid list of agents for speaker selection
+            last_speaker: The previous speaker in the group chat
+            selector: The ConversableAgent that initiated the speaker selection
+            messages: Current chat messages
+            agents: Valid list of agents for speaker selection
 
         Returns:
-            Dict: a counter for mentioned agents.
+            A counter for mentioned agents.
         """
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
@@ -788,13 +788,13 @@ class GroupChat:
         5. If we run out of turns and no single agent can be determined, the next speaker in the list of agents is returned
 
         Args:
-            last_speaker Agent: The previous speaker in the group chat
-            selector ConversableAgent:
-            messages Optional[List[Dict]]: Current chat messages
-            agents Optional[List[Agent]]: Valid list of agents for speaker selection
+            last_speaker: The previous speaker in the group chat
+            selector: The ConversableAgent that initiated the speaker selection
+            messages: Current chat messages
+            agents: Valid list of agents for speaker selection
 
         Returns:
-            Dict: a counter for mentioned agents.
+            A counter for mentioned agents.
         """
         # If no agents are passed in, assign all the group chat's agents
         if agents is None:
@@ -1301,14 +1301,14 @@ class GroupChatManager(ConversableAgent):
         as per the original group chat.
 
         Args:
-            - messages Union[List[Dict], str]: The content of the previous chat's messages, either as a Json string or a list of message dictionaries.
-            - remove_termination_string (str or function): Remove the termination string from the last message to prevent immediate termination
+            messages: The content of the previous chat's messages, either as a Json string or a list of message dictionaries.
+            remove_termination_string: Remove the termination string from the last message to prevent immediate termination
                 If a string is provided, this string will be removed from last message.
                 If a function is provided, the last message will be passed to this function.
-            - silent (bool or None): (Experimental) whether to print the messages for this conversation. Default is False.
+            silent: (Experimental) whether to print the messages for this conversation. Default is False.
 
         Returns:
-            - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
+            A tuple containing the last agent who spoke and their message
         """
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
@@ -1404,14 +1404,14 @@ class GroupChatManager(ConversableAgent):
         as per the original group chat.
 
         Args:
-            - messages Union[List[Dict], str]: The content of the previous chat's messages, either as a Json string or a list of message dictionaries.
-            - remove_termination_string (str or function): Remove the termination string from the last message to prevent immediate termination
+            messages: The content of the previous chat's messages, either as a Json string or a list of message dictionaries.
+            remove_termination_string: Remove the termination string from the last message to prevent immediate termination
                 If a string is provided, this string will be removed from last message.
                 If a function is provided, the last message will be passed to this function, and the function returns the string after processing.
-            - silent (bool or None): (Experimental) whether to print the messages for this conversation. Default is False.
+            silent: (Experimental) whether to print the messages for this conversation. Default is False.
 
         Returns:
-            - Tuple[ConversableAgent, Dict]: A tuple containing the last agent who spoke and their message
+            A tuple containing the last agent who spoke and their message
         """
         # Convert messages from string to messages list, if needed
         if isinstance(messages, str):
@@ -1527,9 +1527,10 @@ class GroupChatManager(ConversableAgent):
         """Removes termination string, if required, and checks if termination may occur.
 
         Args:
-            remove_termination_string (str or function): Remove the termination string from the last message to prevent immediate termination
+            remove_termination_string: Remove the termination string from the last message to prevent immediate termination
                 If a string is provided, this string will be removed from last message.
                 If a function is provided, the last message will be passed to this function, and the function returns the string after processing.
+            messages: List of chat messages
 
         Returns:
             None
@@ -1556,10 +1557,10 @@ class GroupChatManager(ConversableAgent):
         """Reads the saved state of messages in Json format for resume and returns as a messages list
 
         Args:
-            - message_string: Json string, the saved state
+            message_string: Json string, the saved state
 
         Returns:
-            - List[Dict]: List of messages
+            A list of messages
         """
         try:
             state = json.loads(message_string)
@@ -1573,10 +1574,10 @@ class GroupChatManager(ConversableAgent):
         The state is made up of a list of messages
 
         Args:
-            - messages (List[Dict]): set of messages to convert to a string
+            messages: set of messages to convert to a string
 
         Returns:
-            - str: Json representation of the messages which can be persisted for resuming later
+            A JSON representation of the messages which can be persisted for resuming later
         """
         return json.dumps(messages)
 
