@@ -288,6 +288,8 @@ class MongoDBQueryEngine:
 
         Args:
             question (str): The query question.
+            args (Any): Additional positional arguments.
+            kwargs (Any): Additional keyword arguments.
 
         Returns:
             Any: The query response as a string, or a default reply if no results are found.
