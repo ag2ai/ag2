@@ -2885,7 +2885,8 @@ class ConversableAgent(LLMAgent):
             message (str or None): the message to be processed.
             **kwargs: any additional information. It has the following reserved fields:
                 "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string.
-                If provided, we will combine this carryover with the "message" content when generating the initial chat message.
+                    If provided, we will combine this carryover with the "message" content when generating the initial chat
+                    message.
 
         Returns:
             str or dict: the processed message.
