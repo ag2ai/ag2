@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 from ..cache.cache import Cache
 from .client import ModelClient, OpenAIWrapper
-from .completion import ChatCompletion, Completion
 from .openai_utils import (
     config_list_from_dotenv,
     config_list_from_json,
@@ -20,8 +19,6 @@ from .openai_utils import (
 
 __all__ = [
     "Cache",
-    "ChatCompletion",
-    "Completion",
     "ModelClient",
     "OpenAIWrapper",
     "config_list_from_dotenv",

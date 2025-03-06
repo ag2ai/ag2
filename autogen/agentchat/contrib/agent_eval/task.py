@@ -25,11 +25,11 @@ class Task(BaseModel):
         """
 
     @staticmethod
-    def parse_json_str(task: str):
+    def parse_json_str(task: str) -> "Task":
         """Create a Task object from a json object.
 
         Args:
-            json_data (dict): A dictionary that represents the task.
+            task (str): A json string that represents the task information.
 
         Returns:
             Task: A Task object that represents the json task information.

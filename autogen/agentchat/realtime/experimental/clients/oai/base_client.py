@@ -41,7 +41,8 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         """(Experimental) Client for OpenAI Realtime API.
 
         Args:
-            llm_config (dict[str, Any]): The config for the client.
+            llm_config: The config for the client.
+            logger: the logger to use for logging events
         """
         super().__init__()
         self._llm_config = llm_config
@@ -201,10 +202,9 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
-            voice (str): The voice to use.
-            system_message (str): The system message to use.
-            kwargs (Any): Additional arguments.
+            llm_config: The config for the client.
+            logger: The logger to use for logging events.
+            kwargs: Additional arguments.
 
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern

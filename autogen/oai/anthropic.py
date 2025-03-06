@@ -113,7 +113,7 @@ class AnthropicClient:
         """Initialize the Anthropic API client.
 
         Args:
-            api_key (str): The API key for the Anthropic API or set the `ANTHROPIC_API_KEY` environment variable.
+            **kwargs: The configuration parameters for the client.
         """
         self._api_key = kwargs.get("api_key")
         self._aws_access_key = kwargs.get("aws_access_key")

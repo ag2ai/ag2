@@ -50,7 +50,7 @@ class TogetherClient:
         """Requires api_key or environment variable to be set
 
         Args:
-            api_key (str): The API key for using Together.AI (or environment variable TOGETHER_API_KEY needs to be set)
+            **kwargs: Additional keyword arguments to pass to the client.
         """
         # Ensure we have the api_key upon instantiation
         self.api_key = kwargs.get("api_key")

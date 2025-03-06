@@ -163,10 +163,8 @@ class ChromaDBQueryEngine:
         """Add new documents to the underlying database and add to the index.
 
         Args:
-            new_doc_dir: a dir of input documents that are used to create the records in database.
-            new_doc_paths:
-                a sequence of input documents that are used to create the records in database.
-                a document can be a path to a file or a url.
+            new_doc_dir: A dir of input documents that are used to create the records in database.
+            new_doc_paths_or_urls: A sequence of input documents that are used to create the records in database. A document can be a path to a file or a url.
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments
         """
