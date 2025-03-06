@@ -349,6 +349,7 @@ def _prepare_swarm_agents(
     Args:
         initial_agent (ConversableAgent): The first agent in the conversation.
         agents (list[ConversableAgent]): List of all agents in the conversation.
+        exclude_transit_message (bool): Whether to exclude transit messages from the agents.
 
     Returns:
         ConversableAgent: The tool executor agent.
@@ -527,6 +528,7 @@ def _setup_context_variables(
         tool_execution: The tool execution agent.
         agents: List of all agents in the conversation.
         manager: GroupChatManager instance.
+        context_variables: Context variables to assign to all agents.
     """
     for agent in agents + [tool_execution] + [manager]:
         agent._context_variables = context_variables
@@ -752,6 +754,7 @@ def _create_swarm_manager(
     Args:
         groupchat (GroupChat): Swarm groupchat.
         swarm_manager_args (dict[str, Any]): Swarm manager arguments to create the GroupChatManager.
+        agents (list[ConversableAgent]): List of agents in the swarm.
 
     Returns:
         GroupChatManager: GroupChatManager instance.

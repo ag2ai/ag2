@@ -55,8 +55,7 @@ def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserM
     represented by a placeholder image token. If the content is None, an empty string is returned.
 
     Args:
-        - content (Union[str, List, None]): The content to be processed. Can be a string, a list of dictionaries
-                                      representing text and image URLs, or None.
+        content: The content to be processed. Can be a string, a list of dictionaries representing text and image URLs, or None.
 
     Returns:
         str: A string representation of the input content. Image URLs are replaced with an image token.
@@ -594,13 +593,14 @@ def eval_function_completions(
     """`(openai<1)` Select a response from a list of responses for the function completion task (using generated assertions), and/or evaluate if the task is successful using a gold test.
 
     Args:
-        responses (list): The list of responses.
-        definition (str): The input definition.
-        test (Optional, str): The test code.
-        entry_point (Optional, str): The name of the function.
-        assertions (Optional, str or Callable): The assertion code which serves as a filter of the responses, or an assertion generator.
+        responses: The list of responses.
+        definition: The input definition.
+        test: The test code.
+        entry_point: The name of the function.
+        assertions: The assertion code which serves as a filter of the responses, or an assertion generator.
             When provided, only the responses that pass the assertions will be considered for the actual test (if provided).
-        timeout (Optional, float): The timeout for executing the code.
+        timeout: The timeout for executing the code.
+        use_docker: Whether to use docker for code execution.
 
     Returns:
         dict: The success metrics.

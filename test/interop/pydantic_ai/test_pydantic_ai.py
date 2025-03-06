@@ -142,6 +142,7 @@ class TestPydanticAIInteroperabilityWithContext:
             """Get the player's name.
 
             Args:
+                ctx: The context object.
                 additional_info: Additional information which can be used.
             """
             return f"Name: {ctx.deps.name}, Age: {ctx.deps.age}, Additional info: {additional_info}"  # type: ignore[attr-defined]

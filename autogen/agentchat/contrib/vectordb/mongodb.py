@@ -178,7 +178,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         """Creates a vector search index on the specified collection in MongoDB.
 
         Args:
-            MONGODB_INDEX (str, optional): The name of the vector search index to create. Defaults to "vector_search_index".
+            index_name (str, optional): The name of the vector search index to create. Defaults to "vector_search_index".
             collection (Collection, optional): The MongoDB collection to create the index on. Defaults to None.
         """
         if not self._is_index_ready(collection, index_name):
@@ -277,10 +277,11 @@ class MongoDBAtlasVectorDB(VectorDB):
         For large numbers of Documents, insertion is performed in batches.
 
         Args:
-            docs: List[Document] | A list of documents. Each document is a TypedDict `Document`.
-            collection_name: str | The name of the collection. Default is None.
-            upsert: bool | Whether to update the document if it exists. Default is False.
+            docs: A list of documents. Each document is a TypedDict `Document`.
+            collection_name: The name of the collection. Default is None.
+            upsert: Whether to update the document if it exists. Default is False.
             batch_size: Number of documents to be inserted in each batch
+            **kwargs: Additional keyword arguments.
         """
         if not docs:
             logger.info("No documents to insert.")
@@ -409,8 +410,9 @@ class MongoDBAtlasVectorDB(VectorDB):
         """Delete documents from the collection of the vector database.
 
         Args:
-            ids: List[ItemID] | A list of document ids. Each id is a typed `ItemID`.
-            collection_name: str | The name of the collection. Default is None.
+            ids: A list of document ids. Each id is a typed `ItemID`.
+            collection_name: The name of the collection. Default is None.
+            **kwargs: Additional keyword arguments.
         """
         collection = self.get_collection(collection_name)
         return collection.delete_many({"_id": {"$in": ids}})
@@ -515,9 +517,10 @@ def _vector_search(
         index_name: Name of the vector index
         distance_threshold: Only distance measures smaller than this will be returned.
             Don't filter with it if 1 < x < 0. Default is -1.
-        oversampling_factor: int | This times n_results is 'ef' in the HNSW algorithm.
+        oversampling_factor: This times n_results is 'ef' in the HNSW algorithm.
             It determines the number of nearest neighbor candidates to consider during the search phase.
             A higher value leads to more accuracy, but is slower. Default = 10
+        include_embedding: Whether to include the embedding in the results. Default is False.
 
     Returns:
         List of tuples of length n_results from Collection.

@@ -52,7 +52,7 @@ class GroqClient:
         """Requires api_key or environment variable to be set
 
         Args:
-            api_key (str): The API key for using Groq (or environment variable GROQ_API_KEY needs to be set)
+            **kwargs: Additional parameters to pass to the Groq API
         """
         # Ensure we have the api_key upon instantiation
         self.api_key = kwargs.get("api_key")

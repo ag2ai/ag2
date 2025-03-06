@@ -471,6 +471,8 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_build_dir
 
     Args:
         content (str): The markdown content containing mdx-code-block image syntax
+        rendered_mdx (Path): The path to the rendered mdx file
+        website_build_directory (Path): The path to the website build directory
 
     Returns:
         str: The converted markdown content with standard image syntax
@@ -512,6 +514,7 @@ def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
 
     Args:
         content (str): Content of the file
+        img_rel_path (Path): Relative path to the image directory
 
     Returns:
         str: Content of the file with <img> tag extracted from <figure> tag
@@ -703,6 +706,7 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> dict[
     Args:
         input_dir (Path): Directory to process
         group_header (str): Group header
+        prefix (str): Prefix to prepend to file paths
     """
     sorted_dir_files = get_sorted_files(input_dir, prefix)
 

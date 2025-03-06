@@ -69,7 +69,8 @@ def _delete_search_indexes(collection: "Collection", wait=True):
     """Deletes all indexes in a collection
 
     Args:
-        collection (pymongo.Collection): MongoDB Collection Abstraction
+        collection: MongoDB Collection Abstraction
+        wait: Wait for the indexes to be deleted. Defaults to True.
     """
     for index in collection.list_search_indexes():
         with suppress(OperationFailure):
@@ -82,7 +83,9 @@ def _empty_collections_and_delete_indexes(database, collections=None, wait=True)
     """Empty all collections within the database and remove indexes
 
     Args:
-        database (pymongo.Database): MongoDB Database Abstraction
+        database: MongoDB Database Abstraction
+        collections: List of collection names to empty. Defaults to None.
+        wait: Wait for the indexes to be deleted. Defaults to True.
     """
     for collection_name in collections or database.list_collection_names():
         _delete_search_indexes(database[collection_name], wait)

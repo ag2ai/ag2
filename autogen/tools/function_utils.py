@@ -160,7 +160,7 @@ def get_required_params(typed_signature: inspect.Signature) -> list[str]:
     """Get the required parameters of a function
 
     Args:
-        signature: The signature of the function as returned by inspect.signature
+        typed_signature: The signature of the function as returned by inspect.signature
 
     Returns:
         A list of the required parameters of the function
@@ -172,7 +172,7 @@ def get_default_values(typed_signature: inspect.Signature) -> dict[str, Any]:
     """Get default values of parameters of a function
 
     Args:
-        signature: The signature of the function as returned by inspect.signature
+        typed_signature: The signature of the function as returned by inspect.signature
 
     Returns:
         A dictionary of the default values of the parameters of the function
@@ -189,7 +189,8 @@ def get_parameters(
 
     Args:
         required: The required parameters of the function
-        hints: The type hints of the function as returned by typing.get_type_hints
+        param_annotations: The type annotations of the parameters of the function
+        default_values: The default values of the parameters of the function
 
     Returns:
         A Pydantic model for the parameters of the function

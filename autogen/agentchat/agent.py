@@ -108,6 +108,7 @@ class Agent(Protocol):
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.
@@ -126,6 +127,7 @@ class Agent(Protocol):
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.

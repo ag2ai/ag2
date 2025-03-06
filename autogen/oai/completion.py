@@ -162,7 +162,7 @@ class Completion(OpenAICompletion):
         Args:
             seed (int, Optional): The integer identifier for the pseudo seed.
                 Results corresponding to different seeds will be cached in different places.
-            cache_path (str, Optional): The root path for the cache.
+            cache_path_root (str, Optional): The root path for the cache.
                 The complete cache path will be {cache_path_root}/{seed}.
         """
         cls.cache_seed = seed
@@ -175,7 +175,7 @@ class Completion(OpenAICompletion):
         Args:
             seed (int, Optional): The integer identifier for the pseudo seed.
                 If omitted, all caches under cache_path_root will be cleared.
-            cache_path (str, Optional): The root path for the cache.
+            cache_path_root (str, Optional): The root path for the cache.
                 The complete cache path will be {cache_path_root}/{seed}.
         """
         if seed is None:
