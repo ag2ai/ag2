@@ -395,7 +395,9 @@ search:
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )
+            + "\n- Blog\n    - [Blog](docs/blog)"
             + "\n"
         )
+
         assert actual == expected
         assert summary_md_path.read_text() == expected
