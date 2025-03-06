@@ -35,12 +35,13 @@ class DiscordAgent(ConversableAgent):
         """Initialize the DiscordAgent.
 
         Args:
-            name (str): name of the agent.
-            system_message (str or list): system message for the ChatCompletion inference.
-            bot_token (str): Discord bot token
-            channel_name (str): Channel name where messages will be sent / retrieved
-            guild_name (str): Guild (server) name where the channel is located
-            has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
+            name: name of the agent.
+            system_message: system message for the ChatCompletion inference.
+            bot_token: Discord bot token
+            channel_name: Channel name where messages will be sent / retrieved
+            guild_name: Guild (server) name where the channel is located
+            has_writing_instructions: Whether to add writing instructions to the system message. Defaults to True.
+            **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
         discord_system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE
 

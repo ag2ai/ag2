@@ -399,6 +399,8 @@ select = [
 #    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
+extend-select = ["D417"]
+
 ignore = ["E501", "F403", "C901",
     "E402",
     "E721",

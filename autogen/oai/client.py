@@ -1274,7 +1274,7 @@ class OpenAIWrapper:
         """Update the tool call from the chunk.
 
         Args:
-            tool_call_chunk: The tool call chunk.
+            tool_calls_chunk: The tool call chunk.
             full_tool_call: The full tool call.
             completion_tokens: The number of completion tokens.
 

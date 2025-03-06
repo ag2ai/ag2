@@ -349,6 +349,7 @@ def _prepare_swarm_agents(
     Args:
         initial_agent (ConversableAgent): The first agent in the conversation.
         agents (list[ConversableAgent]): List of all agents in the conversation.
+        exclude_transit_message (bool): Whether to exclude transit messages from the agents.
 
     Returns:
         ConversableAgent: The tool executor agent.
@@ -418,11 +419,11 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         """Create a nested chat agent for a nested chat configuration.
 
         Args:
-            agent (ConversableAgent): The agent to create the nested chat agent for.
-            nested_chat (dict[str, Any]): The nested chat configuration.
+            agent: The agent to create the nested chat agent for.
+            nested_chats: The nested chat configuration.
 
         Returns:
-            ConversableAgent: The created nested chat agent.
+            The created nested chat agent.
         """
         # Create a nested chat agent specifically for this nested chat
         nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
@@ -527,6 +528,7 @@ def _setup_context_variables(
         tool_execution: The tool execution agent.
         agents: List of all agents in the conversation.
         manager: GroupChatManager instance.
+        context_variables: Context variables to assign to all agents.
     """
     for agent in agents + [tool_execution] + [manager]:
         agent._context_variables = context_variables
@@ -752,6 +754,7 @@ def _create_swarm_manager(
     Args:
         groupchat (GroupChat): Swarm groupchat.
         swarm_manager_args (dict[str, Any]): Swarm manager arguments to create the GroupChatManager.
+        agents (list[ConversableAgent]): List of agents in the swarm.
 
     Returns:
         GroupChatManager: GroupChatManager instance.

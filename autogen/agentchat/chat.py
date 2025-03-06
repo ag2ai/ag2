@@ -79,8 +79,8 @@ def __find_async_chat_order(chat_ids: set[int], prerequisites: list[Prerequisite
     """Find chat order for async execution based on the prerequisite chats
 
     Args:
-        num_chats: number of chats
-        prerequisites: List of Prerequisite (prerequisite_chat_id, chat_id)
+        chat_ids: A set of all chat IDs that need to be scheduled
+        prerequisites: A list of tuples (chat_id, prerequisite_chat_id) where each tuple indicates that chat_id depends on prerequisite_chat_id
 
     Returns:
         list: a list of chat_id in order.

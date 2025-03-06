@@ -28,10 +28,11 @@ class WebSurferAgent(ConversableAgent):
         """Initialize the WebSurferAgent.
 
         Args:
-            llm_config (dict[str, Any]): The LLM configuration.
-            web_tool_llm_config (dict[str, Any], optional): The LLM configuration for the web tool. I not provided, the llm_config will be used.
-            web_tool (Literal["browser_use", "crawl4ai"], optional): The web tool to use. Defaults to "browser_use".
-            web_tool_kwargs (dict[str, Any], optional): The keyword arguments for the web tool. Defaults to None.
+            llm_config: The LLM configuration.
+            web_tool_llm_config: The LLM configuration for the web tool. I not provided, the llm_config will be used.
+            web_tool: The web tool to use. Defaults to "browser_use".
+            web_tool_kwargs: The keyword arguments for the web tool. Defaults to None.
+            **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
         web_tool_kwargs = web_tool_kwargs if web_tool_kwargs else {}
         web_tool_llm_config = web_tool_llm_config if web_tool_llm_config else llm_config

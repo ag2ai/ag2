@@ -115,8 +115,6 @@ class InMemoryQueryEngine:
         self,
         new_doc_dir: Optional[Union[Path, str]] = None,
         new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
-        *args: Any,
-        **kwargs: Any,
     ) -> None:
         """
         Add additional documents to the in-memory store

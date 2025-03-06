@@ -323,12 +323,12 @@ def voting_counts(responses):
     return answers
 
 
-def eval_math_responses(responses, solution=None, **args):
+def eval_math_responses(responses, solution=None):
     """Select a response for a math problem using voting, and check if the response is correct if the solution is provided.
 
     Args:
-        responses (list): The list of responses.
-        solution (str): The canonical solution.
+        responses: The list of responses.
+        solution: The canonical solution.
 
     Returns:
         dict: The success metrics.
