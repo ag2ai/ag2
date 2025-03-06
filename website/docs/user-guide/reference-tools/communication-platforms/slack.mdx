@@ -1,0 +1,155 @@
+---
+title: Slack Tools
+---
+
+If you want to add the ability for your agents to send and/or retrieve messages for your Slack channel [`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) and [`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) are easy to add.
+
+<Tip>
+If you haven't had a chance to read about how AG2's Communication Platform agents and tools work, read the [overview](/docs/user-guide/reference-agents/communication-platforms/overview) first.
+</Tip>
+
+## Installation
+
+Install AG2 with the LLM model provider and Slack platform extra.
+
+```bash
+pip install ag2[openai,commsagent-slack]
+```
+
+### Capabilities
+
+[`SlackSendTool`](/docs/api-reference/autogen/tools/experimental/SlackSendTool) can:
+- Construct and send a message to the configured channel. If a message is longer than the platforms permitted message length, they will split the message into multiple messages.
+
+[`SlackRetrieveTool`](/docs/api-reference/autogen/tools/experimental/SlackRetrieveTool) can:
+- Retrieve the latest X messages from a channel.
+- Retrieve messages since a given date.
+- Retrieve messages since a given message ID.
+- Retrieve a message given its ID.
+
+<Tip>
+Consider [`SlackAgent`](/docs/user-guide/reference-agents/communication-platforms/slackagent) if you don't want to build your agent with these tools, it is a ready-to-go AG2 agent that already incorporates the tools and messaging instructions.
+</Tip>
+
+### Platform configuration
+
+Each tool is configured for a specific channel. This configuration is applied when you create the tool.
+
+The tools require authentication (OAuth token) and channel details in order to send/retrieve messages.
+
+Here are the steps to get a token:
+
+- Create an app, from scratch, at https://api.slack.com/apps
+- In your app settings, go to Features > OAuth & Permissions:
+    - Under “Bot Token Scopes”, add these permissions:
+      - chat:write (to send messages)
+      - channels:history
+      - channels:read (to access channel info)
+      - groups:read (for private channels)
+      - im:read (for direct messages)
+      - users:read (to get user info)
+      - files:read (to access file attachments)
+      - groups:history
+      - im:history
+      - mpim:history
+- With your app setup, now install it in your workspace, using the “Install App” menu, to create an OAuth Token.
+
+To get the ID for your channel:
+
+- Open Slack in a browser
+- Navigate to your channel
+- Get the channel ID from the URL (e.g., …/C12345678)
+
+Finally you need to add the bot to your channel:
+
+- In Slack, go to your channel
+- Type `/invite @YourBotName`, e.g. `/invite @ag2commsagent`
+
+Now you should be good to go with your OAuth token, channel ID, and a bot on your channel ready to send and retrieve messages!
+
+### Code example
+
+Here's a simple example using the Slack tools with a [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent)-based agent to send a weather forecast to a Slack channel.
+
+```python
+# Tools are available in the autogen.tools namespace
+from autogen import ConversableAgent, register_function
+from autogen.tools.experimental import SlackRetrieveTool, SlackSendTool
+
+# LLM configuration for our agent to select the tools and craft the message
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+# Our tool executor agent, which will run the tools once recommended by the slack_agent, no LLM required
+executor_agent = ConversableAgent(
+    name="executor_agent",
+    human_input_mode="NEVER",
+)
+
+# The main star of the show, our ConversableAgent-based agent
+# We will attach the tools to this agent
+slack_agent = ConversableAgent(
+    name="slack_agent",
+    llm_config=llm_config,
+)
+
+# Create tools and register them with the agents
+
+_bot_token = "xoxo..."  # CHANGE THIS, OAuth token
+_channel_id = "C1234567"  # CHANGE THIS, ID of the Slack channel
+
+# Create our Send tool
+slack_send_tool = SlackSendTool(bot_token=_bot_token, channel_id=_channel_id)
+
+# Register it for recommendation by our Slack agent
+slack_send_tool.register_for_llm(slack_agent)
+
+# Register it for execution by our executor agent
+slack_send_tool.register_for_execution(executor_agent)
+
+# And the same for our our Retrieve tool
+slack_retrieve_tool = SlackRetrieveTool(bot_token=_bot_token, channel_id=_channel_id)
+slack_retrieve_tool.register_for_llm(slack_agent)
+slack_retrieve_tool.register_for_execution(executor_agent)
+
+# Here we create a dummy weather function that will be used by our agent
+def get_weather():
+    return "The weather today is 25 degrees Celsius and sunny, with a late storm."
+
+# Register it with the slack_agent for LLM tool recommendations
+# and the executor_agent to execute it
+register_function(
+    get_weather,
+    caller=slack_agent,
+    executor=executor_agent,
+    description="Get the current weather forecast",
+)
+
+# Start the conversation
+# The slack_agent suggests the weather and send tools, crafting the Slack message
+# while the executor_agent executes the weather tool and the Slack send tool
+executor_agent.initiate_chat(
+    recipient=slack_agent,
+    message="Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!",
+    max_turns=3,
+)
+```
+
+Here's the message it sent:
+![Slack output](/docs/user-guide/reference-agents/assets/commsplatforms_slack_sentmsg.png)
+
+If you want to retrieve the last 5 messages to give a picture of the weather for the last week.
+
+```python
+executor_agent.initiate_chat(
+    recipient=slack_agent,
+    message="Get the last 5 messages about daily weather from our Slack channel and give me a summary of the week's weather.",
+    max_turns=2,
+)
+```
+
+# Tool execution
+
+In AG2 the tool execution is typically handled by a separate agent that will follow the agent in the conversation (unless its in a swarm whereby tools are executed automatically). So, you will need to register the tools with another agent for execution.
+
+You will see an example of this is the example code above.
