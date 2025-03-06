@@ -41,9 +41,9 @@ class Agent(Protocol):
         """Send a message to another agent.
 
         Args:
-            message (dict or str): the message to send. If a dict, it should be
-            a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            recipient (Agent): the recipient of the message.
+            message: the message to send. If a dict, it should be
+                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            recipient: the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
         ...
@@ -57,10 +57,10 @@ class Agent(Protocol):
         """(Async) Send a message to another agent.
 
         Args:
-            message (dict or str): the message to send. If a dict, it should be
-            a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            recipient (Agent): the recipient of the message.
-            request_reply (bool): whether to request a reply from the recipient.
+            message: the message to send. If a dict, it should be
+                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            recipient: the recipient of the message.
+            request_reply: whether to request a reply from the recipient.
         """
         ...
 
@@ -73,10 +73,10 @@ class Agent(Protocol):
         """Receive a message from another agent.
 
         Args:
-            message (dict or str): the message received. If a dict, it should be
-            a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            sender (Agent): the sender of the message.
-            request_reply (bool): whether the sender requests a reply.
+            message: the message received. If a dict, it should be
+                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            sender: the sender of the message.
+            request_reply: whether the sender requests a reply.
         """
 
     async def a_receive(
@@ -88,10 +88,10 @@ class Agent(Protocol):
         """(Async) Receive a message from another agent.
 
         Args:
-            message (dict or str): the message received. If a dict, it should be
-            a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            sender (Agent): the sender of the message.
-            request_reply (bool): whether the sender requests a reply.
+            message: the message received. If a dict, it should be
+                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            sender: the sender of the message.
+            request_reply: whether the sender requests a reply.
         """
         ...
 

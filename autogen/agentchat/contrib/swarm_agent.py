@@ -420,7 +420,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
 
         Args:
             agent (ConversableAgent): The agent to create the nested chat agent for.
-            nested_chat (dict[str, Any]): The nested chat configuration.
+            nested_chats (dict[str, Any]): The nested chat configuration.
 
         Returns:
             ConversableAgent: The created nested chat agent.
@@ -1025,13 +1025,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """Encapsulates the possible return values for a swarm agent function.
-
-    Args:
-        values (str): The result values as a string.
-        agent (ConversableAgent, AfterWorkOption, str): The agent instance, AfterWorkOption, or agent name as a string, if applicable.
-        context_variables (dict): A dictionary of context variables.
-    """
+    """Encapsulates the possible return values for a swarm agent function."""
 
     values: str = ""
     agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None

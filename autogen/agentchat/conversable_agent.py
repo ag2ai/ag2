@@ -873,7 +873,7 @@ class ConversableAgent(LLMAgent):
         reply_func_from_nested_chats: Union[str, Callable[..., Any]] = "summary_from_nested_chats",
         position: int = 2,
         use_async: Union[bool, None] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Register a nested chat reply function.
 
@@ -883,15 +883,15 @@ class ConversableAgent(LLMAgent):
             reply_func_from_nested_chats (Callable, str): the reply function for the nested chat.
                 The function takes a chat_queue for nested chat, recipient agent, a list of messages, a sender agent and a config as input and returns a reply message.
                 Default to "summary_from_nested_chats", which corresponds to a built-in reply function that get summary from the nested chat_queue.
-            ```python
-            def reply_func_from_nested_chats(
-                chat_queue: List[Dict],
-                recipient: ConversableAgent,
-                messages: Optional[List[Dict]] = None,
-                sender: Optional[Agent] = None,
-                config: Optional[Any] = None,
-            ) -> Tuple[bool, Union[str, Dict, None]]:
-            ```
+                ```python
+                def reply_func_from_nested_chats(
+                    chat_queue: List[Dict],
+                    recipient: ConversableAgent,
+                    messages: Optional[List[Dict]] = None,
+                    sender: Optional[Agent] = None,
+                    config: Optional[Any] = None,
+                ) -> Tuple[bool, Union[str, Dict, None]]:
+                ```
             position (int): Ref to `register_reply` for details. Default to 2. It means we first check the termination and human reply, then check the registered nested chat reply.
             use_async: Uses a_initiate_chats internally to start nested chats. If the original chat is initiated with a_initiate_chats, you may set this to true so nested chats do not run in sync.
             kwargs: Ref to `register_reply` for details.
@@ -1400,21 +1400,21 @@ class ConversableAgent(LLMAgent):
                 If max_turns is set to None, the chat will continue until a termination condition is met. Default is None.
             summary_method (str or callable): a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg".
 
-            Supported strings are "last_msg" and "reflection_with_llm":
-                - when set to "last_msg", it returns the last message of the dialog as the summary.
-                - when set to "reflection_with_llm", it returns a summary extracted using an llm client.
-                    `llm_config` must be set in either the recipient or sender.
+                Supported strings are "last_msg" and "reflection_with_llm":
+                    - when set to "last_msg", it returns the last message of the dialog as the summary.
+                    - when set to "reflection_with_llm", it returns a summary extracted using an llm client.
+                        `llm_config` must be set in either the recipient or sender.
 
-            A callable summary_method should take the recipient and sender agent in a chat as input and return a string of summary. E.g.,
+                A callable summary_method should take the recipient and sender agent in a chat as input and return a string of summary. E.g.,
 
-            ```python
-            def my_summary_method(
-                sender: ConversableAgent,
-                recipient: ConversableAgent,
-                summary_args: dict,
-            ):
-                return recipient.last_message(sender)["content"]
-            ```
+                ```python
+                def my_summary_method(
+                    sender: ConversableAgent,
+                    recipient: ConversableAgent,
+                    summary_args: dict,
+                ):
+                    return recipient.last_message(sender)["content"]
+                ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
                 One example key is "summary_prompt", and value is a string of text used to prompt a LLM-based agent (the sender or recipient agent) to reflect
                 on the conversation and extract a summary when summary_method is "reflection_with_llm".
@@ -1438,27 +1438,31 @@ class ConversableAgent(LLMAgent):
 
                     Example of a callable message (returning a string):
 
-            ```python
-            def my_message(sender: ConversableAgent, recipient: ConversableAgent, context: dict) -> Union[str, Dict]:
-                carryover = context.get("carryover", "")
-                if isinstance(message, list):
-                    carryover = carryover[-1]
-                final_msg = "Write a blogpost." + "\\nContext: \\n" + carryover
-                return final_msg
-            ```
+                    ```python
+                    def my_message(
+                        sender: ConversableAgent, recipient: ConversableAgent, context: dict
+                    ) -> Union[str, Dict]:
+                        carryover = context.get("carryover", "")
+                        if isinstance(message, list):
+                            carryover = carryover[-1]
+                        final_msg = "Write a blogpost." + "\\nContext: \\n" + carryover
+                        return final_msg
+                    ```
 
                     Example of a callable message (returning a dict):
 
-            ```python
-            def my_message(sender: ConversableAgent, recipient: ConversableAgent, context: dict) -> Union[str, Dict]:
-                final_msg = {}
-                carryover = context.get("carryover", "")
-                if isinstance(message, list):
-                    carryover = carryover[-1]
-                final_msg["content"] = "Write a blogpost." + "\\nContext: \\n" + carryover
-                final_msg["context"] = {"prefix": "Today I feel"}
-                return final_msg
-            ```
+                    ```python
+                    def my_message(
+                        sender: ConversableAgent, recipient: ConversableAgent, context: dict
+                    ) -> Union[str, Dict]:
+                        final_msg = {}
+                        carryover = context.get("carryover", "")
+                        if isinstance(message, list):
+                            carryover = carryover[-1]
+                        final_msg["content"] = "Write a blogpost." + "\\nContext: \\n" + carryover
+                        final_msg["context"] = {"prefix": "Today I feel"}
+                        return final_msg
+                    ```
             **kwargs: any additional information. It has the following reserved fields:
                 - "carryover": a string or a list of string to specify the carryover information to be passed to this chat.
                     If provided, we will combine this carryover (by attaching a "context: " string and the carryover content after the message content) with the "message" content when generating the initial chat
@@ -2589,7 +2593,7 @@ class ConversableAgent(LLMAgent):
         reply = await loop.run_in_executor(None, functools.partial(self.get_human_input, prompt))
         return reply
 
-    def run_code(self, code, **kwargs: Any):
+    def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
         """Run the code and return the result.
 
         Override this function to modify the way to run the code.
@@ -2674,7 +2678,7 @@ class ConversableAgent(LLMAgent):
         return "".join(result)
 
     def execute_function(
-        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+        self, func_call: dict[str, Any], call_id: Optional[str] = None, verbose: bool = False
     ) -> tuple[bool, dict[str, Any]]:
         """Execute a function call and return the result.
 
@@ -2739,7 +2743,7 @@ class ConversableAgent(LLMAgent):
         }
 
     async def a_execute_function(
-        self, func_call, call_id: Optional[str] = None, verbose: bool = False
+        self, func_call: dict[str, Any], call_id: Optional[str] = None, verbose: bool = False
     ) -> tuple[bool, dict[str, Any]]:
         """Execute an async function call and return the result.
 
