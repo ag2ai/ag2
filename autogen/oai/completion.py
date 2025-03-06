@@ -920,13 +920,13 @@ class Completion(OpenAICompletion):
     @require_optional_import("numpy", "flaml")
     def test(
         cls,
-        data,
-        eval_func=None,
-        use_cache=True,
-        agg_method="avg",
-        return_responses_and_per_instance_result=False,
-        logging_level=logging.WARNING,
-        **config,
+        data: list[dict[str, Any]],
+        eval_func: Optional[Callable[[list[Any], Any], dict[str, Any]]] = None,
+        use_cache: bool = True,
+        agg_method: Union[str, Callable[[list[Any]], Any], dict[str, Callable[[list[Any]], Any]]] = "avg",
+        return_responses_and_per_instance_result: bool = False,
+        logging_level: int = logging.WARNING,
+        **config: Any,
     ) -> Optional[dict[str, Any]]:
         """Evaluate the responses created with the config for the OpenAI API call.
 

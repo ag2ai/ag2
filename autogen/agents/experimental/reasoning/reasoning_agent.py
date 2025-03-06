@@ -180,11 +180,7 @@ class ThinkNode:
         return node
 
     def visualize_tree(self) -> None:
-        """Visualize the tree of thoughts using graphviz.
-
-        Args:
-            root (ThinkNode): The root node of the tree.
-        """
+        """Visualize the tree of thoughts using graphviz."""
         with optional_import_block() as result:
             from graphviz import Digraph
 
