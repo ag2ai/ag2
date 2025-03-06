@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, runtime_checkable
 
 from ..doc_utils import export_module
 
@@ -130,6 +130,7 @@ class Agent(Protocol):
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.
         """
+        ...
 
 
 @runtime_checkable
@@ -147,3 +148,11 @@ class LLMAgent(Agent, Protocol):
         Args:
             system_message (str): system message for inference.
         """
+
+
+if TYPE_CHECKING:
+    # mypy will fail if Conversible agent does not implement Agent protocol
+    from .conversable_agent import ConversableAgent
+
+    def _check_protocol_implementation(agent: ConversableAgent) -> Agent:
+        return agent
