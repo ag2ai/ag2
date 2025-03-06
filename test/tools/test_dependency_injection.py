@@ -13,7 +13,6 @@ from autogen.tools.dependency_injection import (
     BaseContext,
     ChatContext,
     Depends,
-    Field,
     _is_context_param,
     _is_depends_param,
     _remove_injected_params_from_signature,
@@ -21,6 +20,7 @@ from autogen.tools.dependency_injection import (
     _string_metadata_to_description_field,
     get_context_params,
 )
+from autogen.tools.field import Field
 
 
 class TestRemoveInjectedParamsFromSignature:

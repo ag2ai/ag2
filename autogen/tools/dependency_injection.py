@@ -14,6 +14,7 @@ from fast_depends.dependencies import model
 
 from ..agentchat import Agent
 from ..doc_utils import export_module
+from ..tools.field import Field
 from ..tools.function_utils import fix_staticmethod, remove_params
 
 if TYPE_CHECKING:
@@ -23,7 +24,6 @@ __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
-    "Field",
     "get_context_params",
     "inject_params",
     "on",
@@ -141,26 +141,6 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     remove_params(func, sig, params_to_remove)
     return func
-
-
-class Field:
-    """Represents a description field for use in type annotations.
-
-    This class is used to store a description for an annotated field, often used for
-    documenting or validating fields in a context or data model.
-    """
-
-    def __init__(self, description: str) -> None:
-        """Initializes the Field with a description.
-
-        Args:
-            description: The description text for the field.
-        """
-        self._description = description
-
-    @property
-    def description(self) -> str:
-        return self._description
 
 
 def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:

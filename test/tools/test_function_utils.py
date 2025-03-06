@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal, Optional
 import pytest
 from pydantic import BaseModel, Field
 
-from autogen.tools.dependency_injection import Field as AG2Field
+from autogen.tools.field import Field as AG2Field
 from autogen.tools.function_utils import (
     get_default_values,
     get_function_schema,

@@ -18,7 +18,7 @@ from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Literal, get_args, get_origin
 
 from ..doc_utils import export_module
-from .dependency_injection import Field as AG2Field
+from ..tools.field import Field as AG2Field
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
 
