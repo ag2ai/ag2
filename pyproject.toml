@@ -443,6 +443,7 @@ files = [
     "autogen/oai/oai_models",
     "autogen/oai/openai_utils.py",
     "autogen/tools",
+    "autogen/_website",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",

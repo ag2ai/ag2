@@ -133,7 +133,7 @@ def fix_api_reference_links(content: str) -> str:
     pattern = r"(/docs/api-reference/[^#\)]+#)autogen\.([^\)]+)"
 
     # Replace with the URL part and everything after the last dot
-    def replacement_func(match):
+    def replacement_func(match: re.Match[str]) -> str:
         url_part = match.group(1)
         full_name = match.group(2)
 

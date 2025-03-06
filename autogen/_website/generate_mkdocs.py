@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 from pathlib import Path
+from typing import Optional
 
 from ..import_utils import optional_import_block, require_optional_import
 from .utils import NavigationGroup, copy_files, get_git_tracked_and_untracked_files_in_directory
@@ -58,7 +59,7 @@ def transform_tab_component(content: str) -> str:
     # Find and replace each Tabs section
     pattern = re.compile(r"<Tabs>(.*?)</Tabs>", re.DOTALL)
 
-    def replace_tabs(match):
+    def replace_tabs(match: re.Match[str]) -> str:
         tabs_content = match.group(1)
 
         # Extract all Tab elements
@@ -145,7 +146,7 @@ def transform_content_for_mkdocs(content: str) -> str:
     for html_tag, mkdocs_type in tag_mappings.items():
         pattern = f"<{html_tag}>(.*?)</{html_tag}>"
 
-        def replacement(match):
+        def replacement(match: re.Match[str]) -> str:
             inner_content = match.group(1).strip()
 
             lines = inner_content.split("\n")
@@ -173,7 +174,7 @@ def transform_content_for_mkdocs(content: str) -> str:
     # Clean up style tags with double curly braces
     style_pattern = r"style\s*=\s*{{\s*([^}]+)\s*}}"
 
-    def style_replacement(match):
+    def style_replacement(match: re.Match[str]) -> str:
         style_content = match.group(1).strip()
         return f"style={{ {style_content} }}"
 
@@ -217,7 +218,7 @@ def format_page_entry(page_path: str, indent: str, keywords: dict[str, str]) -> 
     return f"{indent}    - [{title}]({path})"
 
 
-def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: dict[str, str] = None) -> str:
+def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Optional[dict[str, str]] = None) -> str:
     """
     Recursively format navigation structure into markdown-style nested list.
 
