@@ -46,7 +46,7 @@ class ContextStr:
     Use the format method to substitute context variables into the string.
 
     Args:
-        template: The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders
+        template (str): The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders
             and that string format will be able to replace all values.
     """
 
@@ -59,7 +59,10 @@ class ContextStr:
         """Substitute context variables into the string.
 
         Args:
-            context_variables: The context variables to substitute into the string.
+            context_variables (dict[str, Any]): The context variables to substitute into the string.
+
+        Returns:
+            Optional[str]: The formatted string with context variables substituted.
         """
         return OpenAIWrapper.instantiate(
             template=self.template,
@@ -86,13 +89,13 @@ class AfterWorkOption(Enum):
 @dataclass
 @export_module("autogen")
 class AfterWork:  # noqa: N801
-    """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff
+    """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff.
 
     Args:
-        agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
+        agent (Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]): The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
                 def my_after_work_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
-        next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
+        next_agent_selection_msg (Optional[Union[str, Callable[..., Any]]]): Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
                 def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
@@ -144,22 +147,21 @@ class OnCondition:  # noqa: N801
     These are evaluated after the OnCondition conditions but before the AfterWork conditions.
 
     Args:
-        target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
+        target (Optional[Union[ConversableAgent, dict[str, Any]]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Union[str, ContextStr, Callable[..., Any]]): The condition for transitioning to the target agent, evaluated by the LLM.
+        condition (Optional[Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]]): The condition for transitioning to the target agent, evaluated by the LLM.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
                 def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
-        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
+        available (Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
                 Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
                 Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
-
     """
 
     target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
@@ -207,20 +209,18 @@ class OnContextCondition:  # noqa: N801
     These are evaluated before the OnCondition and AfterWork conditions.
 
     Args:
-        target (Union[ConversableAgent, dict[str, Any]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
+        target (Optional[Union[ConversableAgent, dict[str, Any]]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Union[str, ContextExpression]): The condition for transitioning to the target agent, evaluated by the LLM.
+        condition (Optional[Union[str, ContextExpression]]): The condition for transitioning to the target agent, evaluated by the LLM.
             If a string, it needs to represent a context variable key and the value will be evaluated as a boolean
             If a ContextExpression, it will evaluate the logical expression against the context variables. If it is True, the transition will occur.
                 Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
                 Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
                 Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
-        available (Union[Callable, str, ContextExpression]): Optional condition to determine if this OnContextCondition is included for the LLM to evaluate.
+        available (Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]]): Optional condition to determine if this OnContextCondition is included for the LLM to evaluate.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
-                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
-                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
 
@@ -420,10 +420,10 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
 
         Args:
             agent (ConversableAgent): The agent to create the nested chat agent for.
-            nested_chat (dict[str, Any]): The nested chat configuration.
+            nested_chats (dict[str, Any]): The nested chat configuration.
 
         Returns:
-            ConversableAgent: The created nested chat agent.
+            The created nested chat agent.
         """
         # Create a nested chat agent specifically for this nested chat
         nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
@@ -1025,13 +1025,7 @@ async def a_initiate_swarm_chat(
 
 
 class SwarmResult(BaseModel):
-    """Encapsulates the possible return values for a swarm agent function.
-
-    Args:
-        values (str): The result values as a string.
-        agent (ConversableAgent, AfterWorkOption, str): The agent instance, AfterWorkOption, or agent name as a string, if applicable.
-        context_variables (dict): A dictionary of context variables.
-    """
+    """Encapsulates the possible return values for a swarm agent function."""
 
     values: str = ""
     agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
@@ -1252,6 +1246,12 @@ class SwarmAgent(ConversableAgent):
     """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
 
     def __init__(self, *args: Any, **kwargs: Any):
+        """Initializes a new instance of the SwarmAgent class.
+
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+        """
         warnings.warn(
             "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
             DeprecationWarning,

@@ -36,11 +36,12 @@ T = TypeVar("T")
 
 
 def require_jupyter_kernel_gateway_installed() -> Callable[[T], T]:
-    """Decorator to handle optional module dependencies
+    """Decorator that checks if jupyter-kernel-gateway is installed before function execution.
 
-    Args:
-        modules: Module name or list of module names required
-        dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
+    Returns:
+        Callable[[T], T]: A decorator function that either:
+            - Returns the original function unchanged if jupyter-kernel-gateway is installed
+            - Returns a patched version of the function that will raise a helpful error indicating the missing dependency when called
     """
     if is_jupyter_kernel_gateway_installed():
 
@@ -56,12 +57,7 @@ def require_jupyter_kernel_gateway_installed() -> Callable[[T], T]:
 
 
 def skip_on_missing_jupyter_kernel_gateway() -> Callable[[T], T]:
-    """Decorator to skip a test if an optional module is missing
-
-    Args:
-        module: Module name
-        dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
-    """
+    """Decorator to skip a test if an optional module is missing"""
     # Add pytest.mark.jupyter_executor decorator
     mark_name = "jupyter_executor"
 
