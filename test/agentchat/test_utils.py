@@ -354,3 +354,62 @@ class TestContextExpressionNewSyntax:
         # Test complex precedence
         assert ContextExpression("!${a} | ${b} & ${c}").evaluate(context) is False  # (!a) | (b & c)
         assert ContextExpression("!(${a} | ${b}) & ${c}").evaluate(context) is False  # (!(a | b)) & c
+
+    def test_length_operations(self) -> None:
+        """Test length operations with lists and other collections."""
+        context = {
+            "empty_list": [],
+            "non_empty_list": [1, 2, 3],
+            "single_item": ["test"],
+            "empty_string": "",
+            "non_empty_string": "hello",
+            "empty_dict": {},
+            "non_empty_dict": {"key": "value"},
+        }
+
+        # Test length with empty list
+        assert ContextExpression("len(${empty_list}) == 0").evaluate(context) is True
+        assert ContextExpression("len(${empty_list}) != 0").evaluate(context) is False
+        assert ContextExpression("len(${empty_list}) > 0").evaluate(context) is False
+        assert ContextExpression("len(${empty_list}) < 1").evaluate(context) is True
+
+        # Test length with non-empty list
+        assert ContextExpression("len(${non_empty_list}) == 3").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_list}) != 0").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_list}) > 0").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_list}) >= 3").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_list}) < 5").evaluate(context) is True
+
+        # Test length with single item list
+        assert ContextExpression("len(${single_item}) == 1").evaluate(context) is True
+
+        # Test length with strings
+        assert ContextExpression("len(${empty_string}) == 0").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_string}) == 5").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_string}) > len(${empty_string})").evaluate(context) is True
+
+        # Test length with dictionaries
+        assert ContextExpression("len(${empty_dict}) == 0").evaluate(context) is True
+        assert ContextExpression("len(${non_empty_dict}) == 1").evaluate(context) is True
+
+        # Test length with non-existent variables
+        assert ContextExpression("len(${non_existent}) == 0").evaluate(context) is True
+
+        # Test length with symbolic operators
+        assert ContextExpression("len(${non_empty_list}) > 0 & len(${empty_list}) == 0").evaluate(context) is True
+        assert ContextExpression("len(${empty_list}) == 0 | len(${non_empty_list}) == 0").evaluate(context) is True
+        assert ContextExpression("!(len(${empty_list}) > 0)").evaluate(context) is True
+
+        # Test complex expressions with length
+        assert (
+            ContextExpression(
+                "len(${non_empty_list}) > 0 & (len(${empty_list}) == 0 | len(${single_item}) == 1)"
+            ).evaluate(context)
+            is True
+        )
+        assert (
+            ContextExpression(
+                "len(${empty_dict}) == 0 & len(${non_empty_dict}) == 1 & len(${non_empty_string}) == 5"
+            ).evaluate(context)
+            is True
+        )
