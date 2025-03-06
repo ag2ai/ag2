@@ -7,8 +7,10 @@
 import functools
 import inspect
 import json
+import sys
+from functools import wraps
 from logging import getLogger
-from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
+from typing import Annotated, Any, Callable, ForwardRef, Iterable, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, TypeAdapter
 from pydantic._internal._typing_extra import try_eval_type  # type: ignore[attr-defined]
@@ -98,6 +100,25 @@ def get_param_annotations(typed_signature: inspect.Signature) -> dict[str, Union
     return {
         k: v.annotation for k, v in typed_signature.parameters.items() if v.annotation is not inspect.Signature.empty
     }
+
+
+def fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
+    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
+    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
+
+        @wraps(f.__func__)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return f.__func__(*args, **kwargs)  # type: ignore[attr-defined]
+
+        wrapper.__name__ = f.__func__.__name__
+
+        f = wrapper
+    return f
+
+
+def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
+    new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
+    func.__signature__ = new_signature  # type: ignore[attr-defined]
 
 
 class Parameters(BaseModel):

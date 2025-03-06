@@ -58,7 +58,7 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import ChatContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
+from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -418,23 +418,8 @@ class ConversableAgent(LLMAgent):
             # Use function's docstring, strip whitespace, fall back to empty string
             func._description = (func.__doc__ or "").strip()
 
-        f = get_function_schema(func, name=func._name, description=func._description)
-
-        # Remove context_variables parameter from function schema
-        f_no_context = f.copy()
-        if __CONTEXT_VARIABLES_PARAM_NAME__ in f_no_context["function"]["parameters"]["properties"]:
-            del f_no_context["function"]["parameters"]["properties"][__CONTEXT_VARIABLES_PARAM_NAME__]
-        if "required" in f_no_context["function"]["parameters"]:
-            required = f_no_context["function"]["parameters"]["required"]
-            f_no_context["function"]["parameters"]["required"] = [
-                param for param in required if param != __CONTEXT_VARIABLES_PARAM_NAME__
-            ]
-            # If required list is empty, remove it
-            if not f_no_context["function"]["parameters"]["required"]:
-                del f_no_context["function"]["parameters"]["required"]
-
-        self.update_tool_signature(f_no_context, is_remove=False)
-        self.register_function({func._name: func})
+        # Register the function and hide the context variables parameter
+        self.register_for_llm(name=name, description=description, hide_params=[__CONTEXT_VARIABLES_PARAM_NAME__])(func)
 
     def _register_update_agent_state_before_reply(
         self, functions: Optional[Union[list[Callable[..., Any]], Callable[..., Any]]]
@@ -3098,6 +3083,7 @@ class ConversableAgent(LLMAgent):
         name: Optional[str] = None,
         description: Optional[str] = None,
         api_style: Literal["function", "tool"] = "tool",
+        hide_params: Optional[list[str]] = None,
     ) -> Callable[[Union[F, Tool]], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
@@ -3115,6 +3101,9 @@ class ConversableAgent(LLMAgent):
                 `"function"` style will be deprecated. For earlier version use
                 `"function"` if `"tool"` doesn't work.
                 See [Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/function-calling?tabs=python) for details.
+            hide_params: (optional(List[str])): list of parameter names to hide from the LLM (default: None).
+                If you want to hide context variables, include __CONTEXT_VARIABLES_PARAM_NAME__ in this list.
+
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3137,6 +3126,7 @@ class ConversableAgent(LLMAgent):
             ```
 
         """
+        hide_params = hide_params or []
 
         def _decorator(
             func_or_tool: Union[F, Tool], name: Optional[str] = name, description: Optional[str] = description
@@ -3157,6 +3147,10 @@ class ConversableAgent(LLMAgent):
 
             """
             tool = self._create_tool_if_needed(func_or_tool, name, description)
+
+            # Hide parameters from the LLM
+            if hide_params:
+                tool.hide_parameters(hide_params)
 
             self._register_for_llm(tool, api_style)
             self._tools.append(tool)
