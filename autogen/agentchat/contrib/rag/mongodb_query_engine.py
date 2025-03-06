@@ -34,7 +34,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-@require_optional_import(["pymongo", "llama_index"], "rag")
+@require_optional_import(["pymongo", "llama_index", "sentence_transformers"], "rag")
 @export_module("autogen.agentchat.contrib.rag")
 class MongoDBQueryEngine:
     """
@@ -53,11 +53,11 @@ class MongoDBQueryEngine:
     def __init__(  # type: ignore[no-any-unimported]
         self,
         connection_string: str,
-        llm: Optional[LLM] = None,
+        llm: Optional["LLM"] = None,
         database_name: Optional[str] = None,
-        embedding_function: "Optional[BaseEmbedding | Callable]" = None,  # type: ignore[type-arg]
-        embedding_model: "Optional[BaseEmbedding | str]" = None,
-        collection_name: Optional[str] = DEFAULT_COLLECTION_NAME,
+        embedding_function: Optional[Union["BaseEmbedding", Callable[..., Any]]] = None,  # type: ignore[type-arg]
+        embedding_model: Optional[Union["BaseEmbedding", str]] = None,
+        collection_name: Optional[str] = None,
     ):
         """
         Initializes a MongoDBQueryEngine instance.
@@ -66,11 +66,11 @@ class MongoDBQueryEngine:
             connection_string (str): Connection string used to connect to MongoDB.
             llm (Optional[LLM]): Language model for querying. Defaults to an OpenAI model if not provided.
             database_name (Optional[str]): Name of the MongoDB database.
-            embedding_function (Optional[BaseEmbedding | Callable]): Custom embedding function. If not provided,
+            embedding_function (Optional[Union["BaseEmbedding", Callable[..., Any]]]): Custom embedding function. If None (default),
                 defaults to SentenceTransformer encoding.
-            embedding_model (Optional[BaseEmbedding | str]): Embedding model identifier or instance. Defaults to
-                "local:all-MiniLM-L6-v2".
-            collection_name (Optional[str]): Name of the MongoDB collection. Defaults to DEFAULT_COLLECTION_NAME.
+            embedding_model (Optional[Union["BaseEmbedding", str]]): Embedding model identifier or instance. If None (default),
+                "local:all-MiniLM-L6-v2" will be used.
+            collection_name (Optional[str]): Name of the MongoDB collection. If None (default), `DEFAULT_COLLECTION_NAME` will be used.
 
         Raises:
             ValueError: If no connection string is provided.
@@ -80,7 +80,7 @@ class MongoDBQueryEngine:
 
         self.connection_string = connection_string
         self.database_name = database_name
-        self.collection_name = collection_name
+        self.collection_name = collection_name or DEFAULT_COLLECTION_NAME
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.embedding_model = embedding_model or "local:all-MiniLM-L6-v2"  # type: ignore[no-any-unimported]
         self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode
