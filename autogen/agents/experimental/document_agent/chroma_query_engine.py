@@ -182,7 +182,7 @@ class VectorChromaQueryEngine:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())
+            loaded_documents.extend(SimpleDirectoryReader(input_files=list(input_docs)).load_data())
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
