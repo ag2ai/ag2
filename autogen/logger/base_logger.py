@@ -100,8 +100,9 @@ class BaseLogger(ABC):
         """Log the birth of a new OpenAIWrapper.
 
         Args:
-            wrapper (OpenAI):           The OpenAI client to log.
-            init_args (dict):           The arguments passed to the construct the client
+            client: The client to log.
+            wrapper: The wrapper that created the client.
+            init_args: The arguments passed to the construct the client.
         """
         ...
 

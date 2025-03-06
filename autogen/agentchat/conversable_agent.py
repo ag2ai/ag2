@@ -214,11 +214,11 @@ class ConversableAgent(LLMAgent):
                 Note: Will maintain a reference to the passed in context variables (enabling a shared context)
                 Only used in Swarms at this stage:
                 https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
-        functions (List[Callable[..., Any]]): A list of functions to register with the agent.
-            These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
-            If the agent is in a swarm, the swarm's tool executor will execute the function.
-            When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
-        update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
+            functions (List[Callable[..., Any]]): A list of functions to register with the agent.
+                These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
+                If the agent is in a swarm, the swarm's tool executor will execute the function.
+                When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
+            update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -670,6 +670,7 @@ class ConversableAgent(LLMAgent):
             recipient: The recipient agent
             messages: The messages from the parent chat
             sender: The sender agent
+            config: The LLM configuration
             trim_n_messages: The number of latest messages to trim from the messages list
         """
 
@@ -1602,7 +1603,11 @@ class ConversableAgent(LLMAgent):
                 ```
             summary_args (dict): a dictionary of arguments to be passed to the summary_method.
             recipient: the recipient agent in a chat.
-            prompt (str): the prompt used to get a summary when summary_method is "reflection_with_llm".
+            cache: the cache client to be used for this conversation. When provided,
+                the cache will be used to store and retrieve LLM responses when generating
+                summaries, which can improve performance and reduce API costs for
+                repetitive summary requests. The cache is passed to the summary_method
+                via summary_args['cache'].
 
         Returns:
             str: a chat summary from the agent.
@@ -2163,12 +2168,12 @@ class ConversableAgent(LLMAgent):
         for the conversation and prints relevant messages based on the human input received.
 
         Args:
-            - messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
-            - sender (Optional[Agent]): The agent object representing the sender of the message.
-            - config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
+            messages: A list of message dictionaries, representing the conversation history.
+            sender: The agent object representing the sender of the message.
+            config: Configuration object, defaults to the current instance if not provided.
 
         Returns:
-            - Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation
+            A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
         iostream = IOStream.get_default()
@@ -2401,9 +2406,10 @@ class ConversableAgent(LLMAgent):
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-
-        Additional keyword arguments:
-            exclude (List[Callable[..., Any]]): a list of reply functions to be excluded.
+            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
+                - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
+                the reply generation process. Functions in this list will be skipped even if
+                they would normally be triggered.
 
         Returns:
             str or dict or None: reply. None if no reply is generated.
@@ -2474,9 +2480,10 @@ class ConversableAgent(LLMAgent):
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-
-        Additional keyword arguments:
-            exclude (List[Callable[..., Any]]): a list of reply functions to be excluded.
+            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
+                - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
+                the reply generation process. Functions in this list will be skipped even if
+                they would normally be triggered.
 
         Returns:
             str or dict or None: reply. None if no reply is generated.
@@ -2520,15 +2527,15 @@ class ConversableAgent(LLMAgent):
         """Check if the sender matches the trigger.
 
         Args:
-            - trigger (Union[None, str, type, Agent, Callable, List]): The condition to match against the sender.
+            trigger (Union[None, str, type, Agent, Callable, List]): The condition to match against the sender.
             Can be `None`, string, type, `Agent` instance, callable, or a list of these.
-            - sender (Agent): The sender object or type to be matched against the trigger.
+            sender (Agent): The sender object or type to be matched against the trigger.
 
         Returns:
-            - bool: Returns `True` if the sender matches the trigger, otherwise `False`.
+            `True` if the sender matches the trigger, otherwise `False`.
 
         Raises:
-            - ValueError: If the trigger type is unsupported.
+            ValueError: If the trigger type is unsupported.
         """
         if trigger is None:
             return sender is None
@@ -2676,6 +2683,10 @@ class ConversableAgent(LLMAgent):
         Args:
             func_call: a dictionary extracted from openai message at "function_call" or "tool_calls" with keys "name" and "arguments".
             call_id: a string to identify the tool call.
+            verbose (bool): Whether to send messages about the execution details to the
+                output stream. When True, both the function call arguments and the execution
+                result will be displayed. Defaults to False.
+
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2737,6 +2748,9 @@ class ConversableAgent(LLMAgent):
         Args:
             func_call: a dictionary extracted from openai message at key "function_call" or "tool_calls" with keys "name" and "arguments".
             call_id: a string to identify the tool call.
+            verbose (bool): Whether to send messages about the execution details to the
+                output stream. When True, both the function call arguments and the execution
+                result will be displayed. Defaults to False.
 
         Returns:
             A tuple of (is_exec_success, result_dict).
@@ -2865,7 +2879,11 @@ class ConversableAgent(LLMAgent):
         If message is None, input() will be called to get the initial message.
 
         Args:
-            Please refer to `generate_init_message` for the description of the arguments.
+            message (str or None): the message to be processed.
+            **kwargs: any additional information. It has the following reserved fields:
+                "carryover": a string or a list of string to specify the carryover information to be passed to this chat. It can be a string or a list of string.
+                    If provided, we will combine this carryover with the "message" content when generating the initial chat
+                    message.
 
         Returns:
             str or dict: the processed message.
@@ -3123,7 +3141,9 @@ class ConversableAgent(LLMAgent):
             """Decorator for registering a function to be used by an agent.
 
             Args:
-                func: the function to be registered.
+                func_or_tool: The function or the tool to be registered.
+                name: The name of the function or the tool.
+                description: The description of the function or the tool.
 
             Returns:
                 The function to be registered, with the _description attribute set to the function description.
@@ -3164,7 +3184,8 @@ class ConversableAgent(LLMAgent):
         It's return value is used to decorate a function to be registered to the agent.
 
         Args:
-            name (optional(str)): name of the function. If None, the function name will be used (default: None).
+            name: name of the function. If None, the function name will be used (default: None).
+            description: description of the function (default: None).
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3385,6 +3406,7 @@ class ConversableAgent(LLMAgent):
             msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
             clear_history: whether to clear the chat history.
             user_input: the user will be asked for input at their turn.
+            summary_method: the method to summarize the chat.
         """
         with self._create_or_get_executor(
             executor_kwargs=executor_kwargs,
@@ -3435,6 +3457,7 @@ class ConversableAgent(LLMAgent):
             msg_to: which agent is receiving the message and will be the first to reply, defaults to the agent.
             clear_history: whether to clear the chat history.
             user_input: the user will be asked for input at their turn.
+            summary_method: the method to summarize the chat.
         """
         with self._create_or_get_executor(
             executor_kwargs=executor_kwargs,

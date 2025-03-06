@@ -116,8 +116,7 @@ class SlackRetrieveTool(Tool):
 
             Args:
                 bot_token: The bot token to use for Discord. (uses dependency injection)
-                guild_name: The name of the server. (uses dependency injection)
-                channel_name: The name of the channel. (uses dependency injection)
+                channel_id: The ID of the channel. (uses dependency injection)
                 messages_since: ISO format date string OR Slack message ID, to retrieve messages from. If None, retrieves latest messages.
                 maximum_messages: Maximum number of messages to retrieve. If None, retrieves all messages since date.
             """

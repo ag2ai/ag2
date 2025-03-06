@@ -56,6 +56,7 @@ def min_tokens_reached(messages: list[dict[str, Any]], min_tokens: Optional[int]
 
     Args:
         messages (List[Dict]): A list of messages to check.
+        min_tokens (None or int): The minimum number of tokens to check for.
     """
     if not min_tokens:
         return True

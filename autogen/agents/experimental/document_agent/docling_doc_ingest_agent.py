@@ -45,11 +45,13 @@ class DoclingDocIngestAgent(ConversableAgent):
         Initialize the DoclingDocIngestAgent.
 
         Args:
-        name (str): The name of the DoclingDocIngestAgent.
-        llm_config (Optional[Union[dict, Literal[False]]]): The configuration for the LLM.
-        parsed_docs_path (Union[Path, str]): The path where parsed documents will be stored.
-        query_engine (Optional[VectorChromaQueryEngine]): The VectorChromaQueryEngine to use for querying documents.
-        collection_name (Optional[str]): The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
+            name: The name of the DoclingDocIngestAgent.
+            llm_config: The configuration for the LLM.
+            parsed_docs_path: The path where parsed documents will be stored.
+            query_engine: The VectorChromaQueryEngine to use for querying documents.
+            return_agent_success: The agent to return on successful completion of the task.
+            return_agent_error: The agent to return on error.
+            collection_name: The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
         """
         name = name or "DoclingDocIngestAgent"
 
