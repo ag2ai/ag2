@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
 
 # Real file paths provided for testing.
-input_dir = "../../../agents/experimental/document_agent/pdf_parsed"
+input_dir = "test/agents/experimental/document_agent/pdf_parsed/"
 input_docs = [os.path.join(input_dir, "Toast_financial_report.md")]
 docs_to_add = [os.path.join(input_dir, "nvidia_10k_2024.md")]
 
 # Use the connection string from an environment variable or fallback to the given connection string.
-MONGO_CONN_STR = "mongodb://user:pass@localhost:27018/?directConnection=true"
+MONGO_CONN_STR = "mongodb://localhost:27017/?directConnection=true"
 
 
 @pytest.fixture(scope="module")
@@ -54,10 +54,10 @@ def test_get_collection_name(mongodb_query_engine: MongoDBQueryEngine) -> None:
 def test_mongodb_query_engine_query(mongodb_query_engine: MongoDBQueryEngine) -> None:
     """Test the querying functionality of the MongoDBQueryEngine."""
     mongodb_query_engine.add_docs(new_doc_paths_or_urls=input_docs)
-    question = "What is the name of each exchange on which TOST has registered"
+    question = "What is the name of the exchange on which TOST has registered"
     answer = mongodb_query_engine.query(question)
     logger.info("Query answer: %s", answer)
-    assert "documents" in answer
+    assert "New York Stock Exchange" in answer
 
 
 @pytest.mark.openai
