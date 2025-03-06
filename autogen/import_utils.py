@@ -301,6 +301,7 @@ def require_optional_import(
     Args:
         modules: Module name or list of module names required
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
+        except_for: Name or list of names of objects to exclude from patching
     """
     missing_modules = get_missing_imports(modules)
 
@@ -333,7 +334,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
     """Decorator to run a test if and only if optional modules are installed
 
     Args:
-        module: Module name
+        modules: Module name or list of module names
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
     # missing_modules = get_missing_imports(modules)
@@ -377,7 +378,7 @@ def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str)
     """Decorator to skip a test if an optional module is missing
 
     Args:
-        module: Module name
+        modules: Module name or list of module names
         dep_target: Target name for pip installation (e.g. 'test' in pip install ag2[test])
     """
     import pytest

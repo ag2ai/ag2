@@ -77,12 +77,9 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self, **kwargs):
-        """Note that no api_key or environment variable is required for Ollama.
+    def __init__(self):
+        """Note that no api_key or environment variable is required for Ollama."""
 
-        Args:
-            None
-        """
         # Store the response format, if provided (for structured outputs)
         self._response_format: Optional[type[BaseModel]] = None
 

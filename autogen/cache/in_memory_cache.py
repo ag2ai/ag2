@@ -52,7 +52,7 @@ class InMemoryCache(AbstractCache):
 
         Args:
             exc_type: The exception type if an exception was raised in the context.
-            exc_value: The exception value if an exception was raised in the context.
-            traceback: The traceback if an exception was raised in the context.
+            exc_val: The exception value if an exception was raised in the context.
+            exc_tb: The traceback if an exception was raised in the context.
         """
         self.close()

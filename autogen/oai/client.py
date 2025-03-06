@@ -715,7 +715,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -903,7 +903,7 @@ class OpenAIWrapper:
             if logging_enabled():
                 log_new_client(client, self, openai_config)
 
-    def register_model_client(self, model_client_cls: ModelClient, **kwargs):
+    def register_model_client(self, model_client_cls: ModelClient, **kwargs: Any):
         """Register a model client.
 
         Args:
@@ -983,37 +983,11 @@ class OpenAIWrapper:
         The config in each client will be overridden by the config.
 
         Args:
-            - context (Dict | None): The context to instantiate the prompt or messages. Default to None.
-                It needs to contain keys that are used by the prompt template or the filter function.
-                E.g., `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`.
-                The actual prompt will be:
-                "Complete the following sentence: Today I feel".
-            - cache (AbstractCache | None): A Cache object to use for response cache. Default to None.
-                Note that the cache argument overrides the legacy cache_seed argument: if this argument is provided,
-                then the cache_seed argument is ignored. If this argument is not provided or None,
-                then the cache_seed argument is used. If both cache and cache_seed are None,
-                then LEGACY_DEFAULT_CACHE_SEED is used as the cache_seed.
-            - agent (AbstractAgent | None): The object responsible for creating a completion if an agent.
-            - (Legacy) cache_seed (int | None) for using the DiskCache. Default to 41.
-                An integer cache_seed is useful when implementing "controlled randomness" for the completion.
-                None for no caching.
-                Note: this is a legacy argument. It is only used when the cache argument is not provided.
-            - filter_func (Callable | None): A function that takes in the context and the response
-                and returns a boolean to indicate whether the response is valid. E.g.,
-
-        ```python
-        def yes_or_no_filter(context, response):
-            return context.get("yes_or_no_choice", False) is False or any(
-                text in ["Yes.", "No."] for text in client.extract_text_or_completion_object(response)
-            )
-        ```
-
-            - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (Optional[str]): The api version. Default to None. E.g., "2024-02-01".
+            **config: The config for the completion.
 
         Raises:
-            - RuntimeError: If all declared custom model clients are not registered
-            - APIError: If any model client create call raises an APIError
+            RuntimeError: If all declared custom model clients are not registered
+            APIError: If any model client create call raises an APIError
         """
         # if ERROR:
         #     raise ERROR
@@ -1300,7 +1274,7 @@ class OpenAIWrapper:
         """Update the tool call from the chunk.
 
         Args:
-            tool_call_chunk: The tool call chunk.
+            tool_calls_chunk: The tool call chunk.
             full_tool_call: The full tool call.
             completion_tokens: The number of completion tokens.
 

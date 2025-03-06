@@ -189,7 +189,7 @@ lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
     "google-api-core",
-    "google-genai>=1.2.0,<2.0",
+    "google-genai>=1.2.0,<1.4.0",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
@@ -247,6 +247,7 @@ docs = [
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.3.7",  # includes with variables
     "mkdocs-glightbox==0.4.0",  # img zoom
+    "mkdocs-ezlinks-plugin==0.1.14",  # converts abs links to rel links
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
     "pdoc3==0.11.5",
@@ -300,7 +301,6 @@ exclude = ["test", "notebook"]
 [tool.hatch.build.targets.wheel.sources]
 "autogen" = "autogen"
 "autogen/agentchat/contrib/captainagent/tools" = "autogen/agentchat/contrib/captainagent/tools"
-
 
 [tool.pytest.ini_options]
 addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
@@ -399,6 +399,8 @@ select = [
 #    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
+extend-select = ["D417"]
+
 ignore = ["E501", "F403", "C901",
     "E402",
     "E721",
@@ -424,9 +426,12 @@ convention = "google"
 
 [tool.mypy]
 files = [
+    "autogen/agentchat/agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
+    "autogen/agentchat/contrib/swarm_agent.py",
     "autogen/agentchat/realtime_agent",
+    "autogen/agentchat/utils.py",
     "autogen/agents",
     "autogen/coding",
     "autogen/exception_utils.py",
@@ -438,9 +443,11 @@ files = [
     "autogen/oai/oai_models",
     "autogen/oai/openai_utils.py",
     "autogen/tools",
+    "autogen/_website",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
+    "test/agentchat/contrib/test_swarm.py",
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",

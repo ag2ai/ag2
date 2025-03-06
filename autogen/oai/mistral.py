@@ -58,7 +58,7 @@ class MistralAIClient:
         """Requires api_key or environment variable to be set
 
         Args:
-            api_key (str): The API key for using Mistral.AI (or environment variable MISTRAL_API_KEY needs to be set)
+            **kwargs: Additional keyword arguments to pass to the Mistral client.
         """
         # Ensure we have the api_key upon instantiation
         self.api_key = kwargs.get("api_key")

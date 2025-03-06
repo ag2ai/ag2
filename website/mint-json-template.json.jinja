@@ -156,6 +156,7 @@
               "pages":
               [
                 "docs/user-guide/advanced-concepts/groupchat/groupchat",
+                "docs/user-guide/advanced-concepts/groupchat/tools",
                 "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
                 "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
               ]
@@ -175,6 +176,16 @@
                     "docs/user-guide/advanced-concepts/swarm/patterns/hierarchical"
                   ]
                 }
+              ]
+            },
+            {
+              "group": "RealtimeAgent",
+              "pages":
+              [
+                "docs/user-guide/advanced-concepts/realtime-agent/index",
+                "docs/user-guide/advanced-concepts/realtime-agent/twilio",
+                "docs/user-guide/advanced-concepts/realtime-agent/websocket",
+                "docs/user-guide/advanced-concepts/realtime-agent/webrtc"
               ]
             },
             "docs/user-guide/advanced-concepts/code-execution",
@@ -216,7 +227,16 @@
           "pages": [
             "docs/user-guide/reference-agents/index",
             "docs/user-guide/reference-agents/captainagent",
-            "docs/user-guide/reference-agents/communication-agents",
+            {
+              "group": "Communication Platforms",
+              "pages":
+              [
+                "docs/user-guide/reference-agents/communication-platforms/overview",
+                "docs/user-guide/reference-agents/communication-platforms/discordagent",
+                "docs/user-guide/reference-agents/communication-platforms/slackagent",
+                "docs/user-guide/reference-agents/communication-platforms/telegramagent"
+              ]
+            },
             "docs/user-guide/reference-agents/docagent",
             "docs/user-guide/reference-agents/reasoningagent",
             "docs/user-guide/reference-agents/websurferagent",
@@ -229,8 +249,17 @@
           [
             "docs/user-guide/reference-tools/index",
             "docs/user-guide/reference-tools/browser-use",
-            "docs/user-guide/reference-tools/crawl4ai",
-            "docs/user-guide/reference-tools/deep-research"
+            "docs/user-guide/reference-tools/deep-research",
+            {
+              "group": "Communication Platforms",
+              "pages":
+              [
+                "docs/user-guide/reference-tools/communication-platforms/discord",
+                "docs/user-guide/reference-tools/communication-platforms/slack",
+                "docs/user-guide/reference-tools/communication-platforms/telegram"
+              ]
+            },
+            "docs/user-guide/reference-tools/crawl4ai"
           ]
         }
       ]
