@@ -149,9 +149,6 @@ T = TypeVar("T", bound=RealtimeClientProtocol)
 def register_realtime_client() -> Callable[[type[T]], type[T]]:
     """Register a Realtime API client.
 
-    Args:
-        name (str): The name of the Realtime API client.
-
     Returns:
         Callable[[type[T]], type[T]]: The decorator to register the Realtime API client
     """

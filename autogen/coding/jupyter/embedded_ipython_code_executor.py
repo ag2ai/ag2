@@ -42,12 +42,6 @@ class EmbeddedIPythonCodeExecutor(BaseModel):
     this class. The kernel can be installed using the following command:
     `python -m ipykernel install --user --name {kernel_name}`
     where `kernel_name` is the name of the kernel to install.
-
-    Args:
-        timeout (int): The timeout for code execution, by default 60.
-        kernel_name (str): The kernel name to use. Make sure it is installed.
-            By default, it is "python3".
-        output_dir (str): The directory to save output files, by default ".".
     """
 
     timeout: int = Field(default=60, ge=1, description="The timeout for code execution.")
