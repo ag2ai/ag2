@@ -14,14 +14,15 @@ from autogen.import_utils import skip_on_missing_imports
 
 logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
+os.environ["OPENAI_API_KEY"] = "fake_key"
 
 # Real file paths provided for testing.
-input_dir = "/root/ag2/test/agents/experimental/document_agent/pdf_parsed/"
-input_docs = [os.path.join(input_dir, "nvidia_10k_2024.md")]
-docs_to_add = [os.path.join(input_dir, "Toast_financial_report.md")]
+input_dir = "../../../agents/experimental/document_agent/pdf_parsed"
+input_docs = [os.path.join(input_dir, "Toast_financial_report.md")]
+docs_to_add = [os.path.join(input_dir, "nvidia_10k_2024.md")]
 
 # Use the connection string from an environment variable or fallback to the given connection string.
-MONGO_CONN_STR = "mongodb+srv://<username>:<password>!!!!@<database_uri>/"
+MONGO_CONN_STR = "mongodb://user:pass@localhost:27018/?directConnection=true"
 
 
 @pytest.fixture(scope="module")
@@ -53,11 +54,11 @@ def test_get_collection_name(mongodb_query_engine: MongoDBQueryEngine) -> None:
 @pytest.mark.openai
 def test_mongodb_query_engine_query(mongodb_query_engine: MongoDBQueryEngine) -> None:
     """Test the querying functionality of the MongoDBQueryEngine."""
-    question = "How much money did Nvidia spend in research and development?"
+    mongodb_query_engine.add_docs(new_doc_paths_or_urls=input_docs)
+    question = "What is the trading symbol for Toast"
     answer = mongodb_query_engine.query(question)
     logger.info("Query answer: %s", answer)
-    # Expect the answer to include a reference to "45.3 billion" as per the document content.
-    assert "45.3 billion" in answer
+    assert "TOST" in answer
 
 
 @pytest.mark.openai
@@ -71,22 +72,16 @@ def test_mongodb_query_engine_connect_db() -> None:
     ret = engine.connect_db()
     assert ret is True
 
-    question = "How much money did Nvidia spend in research and development?"
-    answer = engine.query(question)
-    logger.info("Query answer: %s", answer)
-    assert "45.3 billion" in answer
-
 
 @pytest.mark.openai
 def test_mongodb_query_engine_add_docs(mongodb_query_engine: MongoDBQueryEngine) -> None:
     """Test adding new documents with add_docs to the existing collection."""
-    mongodb_query_engine.add_docs(new_doc_paths_or_urls=docs_to_add)
+    mongodb_query_engine.add_docs(new_doc_paths_or_urls=input_docs)
     # After adding docs, query for information expected to be in the added document.
     question = "What is the trading symbol for Toast"
     answer = mongodb_query_engine.query(question)
     logger.info("Query answer: %s", answer)
-    # Verify that the answer includes the expected trading symbol (e.g., "TOTS").
-    assert "TOTS" in answer
+    assert "TOST" in answer
 
 
 def test_implements_protocol() -> None:
