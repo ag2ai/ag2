@@ -16,11 +16,10 @@ import venv
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Any, Callable, Optional, Union
+from typing import Callable, Optional, Union
 
 import docker
 
-from . import oai
 from .types import UserMessageImageContentPart, UserMessageTextContentPart
 
 SENTINEL = object()
@@ -142,80 +141,6 @@ def extract_code(
             extracted.append(("", group2.strip()))
 
     return extracted
-
-
-def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> tuple[str, float]:
-    """`(openai<1)` Generate code.
-
-    Args:
-        pattern (Optional, str): The regular expression pattern for finding the code block.
-            The default pattern is for finding a code block in a markdown file.
-        config (Optional, dict): The configuration for the API call.
-
-    Returns:
-        str: The generated code.
-        float: The cost of the generation.
-    """
-    response = oai.Completion.create(**config)
-    return extract_code(oai.Completion.extract_text(response)[0], pattern), response["cost"]
-
-
-_IMPROVE_FUNCTION_CONFIG = {
-    "prompt": """Improve the function '{func_name}' to achieve the objective '{objective}'.
-The current implementation of the function is as follows:
-{file_string}""",
-    "model": DEFAULT_MODEL,
-    "request_timeout": 600,
-}
-
-
-def improve_function(file_name, func_name, objective, **config):
-    """`(openai<1)` Improve the function to achieve the objective."""
-    params = {**_IMPROVE_FUNCTION_CONFIG, **config}
-    # read the entire file into a str
-    with open(file_name) as f:
-        file_string = f.read()
-    response = oai.Completion.create(
-        {"func_name": func_name, "objective": objective, "file_string": file_string}, **params
-    )
-    return oai.Completion.extract_text(response)[0], response["cost"]
-
-
-_IMPROVE_CODE_CONFIG = {
-    "prompt": """Analyze the code in the following files and return a list of suggestions for improvement{followup}, to achieve the objective of '{objective}'.
-{code}
-""",
-    "model": DEFAULT_MODEL,
-    "request_timeout": 900,
-}
-
-
-def improve_code(files, objective, suggest_only=True, **config):
-    """`(openai<1)` Improve the code to achieve a given objective.
-
-    Args:
-        files (list): A list of file names containing the source code.
-        objective (str): The objective to achieve.
-        suggest_only (bool): Whether to return only the suggestions or the improved code.
-        config (Optional, dict): The configuration for the API call.
-
-    Returns:
-        str: The improved code if suggest_only=False; a list of suggestions if suggest_only=True (default).
-        float: The cost of the generation.
-    """
-    code = ""
-    for file_name in files:
-        # read the entire file into a string
-        with open(file_name) as f:
-            file_string = f.read()
-        code += f"""{file_name}:
-{file_string}
-
-"""
-    params = {**_IMPROVE_CODE_CONFIG, **config}
-    followup = "" if suggest_only else " followed by the improved code"
-    response = oai.Completion.create({"objective": objective, "code": code, "followup": followup}, **params)
-    return oai.Completion.extract_text(response)[0], response["cost"]
 
 
 def timeout_handler(signum, frame):
@@ -552,26 +477,6 @@ assertions:""",
 }
 
 
-def generate_assertions(definition: str, **config) -> tuple[str, float]:
-    """`(openai<1)` Generate assertions for a function.
-
-    Args:
-        definition (str): The function definition, including the signature and docstr.
-        config (Optional, dict): The configuration for the API call.
-
-    Returns:
-        str: The generated assertions.
-        float: The cost of the generation.
-    """
-    params = {**_GENERATE_ASSERTIONS_CONFIG, **config}
-    response = oai.Completion.create(
-        {"definition": definition},
-        **params,
-    )
-    assertions = oai.Completion.extract_text(response)[0]
-    return assertions, response["cost"]
-
-
 def _remove_check(response):
     """Remove the check function from the response."""
     # find the position of the check function
@@ -672,62 +577,6 @@ _IMPLEMENT_CONFIGS = [
     {"model": DEFAULT_MODEL, "prompt": _FUNC_COMPLETION_PROMPT, "stop": _FUNC_COMPLETION_STOP, "n": 2, "cache_seed": 2},
     {"model": DEFAULT_MODEL, "prompt": _FUNC_COMPLETION_PROMPT, "stop": _FUNC_COMPLETION_STOP, "n": 1, "cache_seed": 2},
 ]
-
-
-class PassAssertionFilter:
-    def __init__(self, assertions):
-        self._assertions = assertions
-        self.cost = 0
-        self.metrics = self.responses = None
-
-    def pass_assertions(self, context, response, **_):
-        """`(openai<1)` Check if the response passes the assertions."""
-        responses = oai.Completion.extract_text(response)
-        metrics = eval_function_completions(responses, context["definition"], assertions=self._assertions)
-        self._assertions = metrics["assertions"]
-        self.cost += metrics["gen_cost"]
-        self.metrics = metrics
-        self.responses = responses
-        return metrics["succeed_assertions"]
-
-
-def implement(
-    definition: str,
-    configs: Optional[list[dict[str, Any]]] = None,
-    assertions: Optional[Union[str, Callable[[str], tuple[str, float]]]] = generate_assertions,
-) -> tuple[str, float]:
-    """`(openai<1)` Implement a function from a definition.
-
-    Args:
-        definition (str): The function definition, including the signature and docstr.
-        configs (list): The list of configurations for completion.
-        assertions (Optional, str or Callable): The assertion code which serves as a filter of the responses, or an assertion generator.
-
-    Returns:
-        str: The implementation.
-        float: The cost of the implementation.
-        int: The index of the configuration which generates the implementation.
-    """
-    cost = 0
-    configs = configs or _IMPLEMENT_CONFIGS
-    if len(configs) > 1 and callable(assertions):
-        assertions, cost = assertions(definition)
-    assertion_filter = PassAssertionFilter(assertions)
-    response = oai.Completion.create(
-        {"definition": definition}, config_list=configs, filter_func=assertion_filter.pass_assertions
-    )
-    cost += assertion_filter.cost + response["cost"]
-    return assertion_filter.responses[assertion_filter.metrics["index_selected"]], cost, response["config_id"]
-
-    # for i, config in enumerate(configs):
-    #     response = oai.Completion.create({"definition": definition}, **config)
-    #     cost += oai.Completion.cost(response)
-    #     responses = oai.Completion.extract_text(response)
-    #     metrics = eval_function_completions(responses, definition, assertions=assertions)
-    #     assertions = metrics["assertions"]
-    #     cost += metrics["gen_cost"]
-    #     if metrics["succeed_assertions"] or i == len(configs) - 1:
-    #         return responses[metrics["index_selected"]], cost, i
 
 
 def create_virtual_env(dir_path: str, **env_args) -> SimpleNamespace:
