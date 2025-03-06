@@ -160,9 +160,7 @@ class Tool:
             self._func = fix_staticmethod(self._func)
 
         sig = inspect.signature(self._func)
-        params_to_remove = parameter_names
-
-        remove_params(self._func, sig, params_to_remove)
+        remove_params(self._func, sig, parameter_names)
 
 
 @export_module("autogen.tools")
