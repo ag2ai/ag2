@@ -14,7 +14,7 @@ from autogen.import_utils import skip_on_missing_imports
 
 logger = logging.getLogger(__name__)
 reason = "do not run on unsupported platforms or if dependencies are missing"
-os.environ["OPENAI_API_KEY"] = "fake_key"
+os.environ["OPENAI_API_KEY"] = ""
 
 # Real file paths provided for testing.
 input_dir = "../../../agents/experimental/document_agent/pdf_parsed"
