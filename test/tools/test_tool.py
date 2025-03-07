@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from typing import Any
 
 import pytest
 
@@ -61,41 +60,3 @@ class TestTool:
 
     def test__call__(self) -> None:
         assert self.tool("Hello") == "Hello!"
-
-
-class TestRemoveParamsFromSignature:
-    def f_without_the_param(  # type: ignore[misc]
-        a: int,  # noqa: N805
-    ) -> int:
-        return a
-
-    def f_with_the_param(  # type: ignore[misc]
-        a: int,  # noqa: N805
-        context_variables: dict[str, Any] = {},
-    ) -> int:
-        return a
-
-    def test_remove_params(self) -> None:
-        final_schema = {
-            "description": "A test tool",
-            "name": "test_tool",
-            "parameters": {
-                "type": "object",
-                "properties": {"a": {"type": "integer", "description": "a"}},
-                "required": ["a"],
-            },
-        }
-
-        # Test removing parameters that don't exist
-        test_tool = Tool(
-            name="test_tool", description="A test tool", func_or_tool=TestRemoveParamsFromSignature.f_without_the_param
-        )
-        test_tool.hide_parameters(["context_variables"])
-        assert test_tool.function_schema == final_schema
-
-        # Test removing parameter that does exist
-        test_tool = Tool(
-            name="test_tool", description="A test tool", func_or_tool=TestRemoveParamsFromSignature.f_with_the_param
-        )
-        test_tool.hide_parameters(["context_variables"])
-        assert test_tool.function_schema == final_schema

@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-import sys
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ..doc_utils import export_module
-from ..tools.function_utils import fix_staticmethod, get_function_schema, remove_params
+from ..tools.function_utils import get_function_schema
 from .dependency_injection import ChatContext, get_context_params, inject_params
 
 if TYPE_CHECKING:
@@ -149,18 +148,6 @@ class Tool:
         schema = {"type": schema["type"], **schema["function"]}
 
         return schema
-
-    def hide_parameters(self, parameter_names: list[str]) -> None:
-        """Hide parameters from the tool's schema. Applicable for LLM registration.
-
-        Args:
-            parameter_names (list[str]): The names of the parameters to hide.
-        """
-        if sys.version_info >= (3, 9) and isinstance(self._func, staticmethod) and hasattr(self._func, "__func__"):
-            self._func = fix_staticmethod(self._func)
-
-        sig = inspect.signature(self._func)
-        remove_params(self._func, sig, parameter_names)
 
 
 @export_module("autogen.tools")

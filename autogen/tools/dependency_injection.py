@@ -6,7 +6,8 @@ import functools
 import inspect
 import sys
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, get_type_hints
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, Union, get_type_hints
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -14,8 +15,6 @@ from fast_depends.dependencies import model
 
 from ..agentchat import Agent
 from ..doc_utils import export_module
-from ..tools.field import Field
-from ..tools.function_utils import fix_staticmethod, remove_params
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -24,6 +23,7 @@ __all__ = [
     "BaseContext",
     "ChatContext",
     "Depends",
+    "Field",
     "get_context_params",
     "inject_params",
     "on",
@@ -132,15 +132,40 @@ def _is_depends_param(param: inspect.Parameter) -> bool:
     )
 
 
+def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
+    new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
+    func.__signature__ = new_signature  # type: ignore[attr-defined]
+
+
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
     if sys.version_info >= (3, 9) and isinstance(func, staticmethod) and hasattr(func, "__func__"):
-        func = fix_staticmethod(func)
+        func = _fix_staticmethod(func)
 
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
-    remove_params(func, sig, params_to_remove)
+    _remove_params(func, sig, params_to_remove)
     return func
+
+
+class Field:
+    """Represents a description field for use in type annotations.
+
+    This class is used to store a description for an annotated field, often used for
+    documenting or validating fields in a context or data model.
+    """
+
+    def __init__(self, description: str) -> None:
+        """Initializes the Field with a description.
+
+        Args:
+            description: The description text for the field.
+        """
+        self._description = description
+
+    @property
+    def description(self) -> str:
+        return self._description
 
 
 def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -161,6 +186,20 @@ def _string_metadata_to_description_field(func: Callable[..., Any]) -> Callable[
                 # Replace string metadata with Field
                 annotation.__args__[0].__metadata__ = (Field(description=metadata[0]),)
     return func
+
+
+def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
+    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
+    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
+
+        @wraps(f.__func__)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return f.__func__(*args, **kwargs)  # type: ignore[attr-defined]
+
+        wrapper.__name__ = f.__func__.__name__
+
+        f = wrapper
+    return f
 
 
 def _set_return_annotation_to_any(f: Callable[..., Any]) -> Callable[..., Any]:
@@ -202,7 +241,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
     """
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
     if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
-        f = fix_staticmethod(f)
+        f = _fix_staticmethod(f)
 
     f = _string_metadata_to_description_field(f)
     f = _set_return_annotation_to_any(f)
