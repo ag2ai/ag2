@@ -446,16 +446,12 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
 
     # Increment the pydantic context variable
     def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
-        a = json.loads(context_variables["my_key"])
-        a["key"] += 1
-        context_variables["my_key"] = json.dumps(a)
+        context_variables["my_key"].key += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
     # Increment the pydantic context variable
     def test_func_2(context_variables: dict[str, Any], param2: str) -> SwarmResult:
-        a = json.loads(context_variables["my_key"])
-        a["key"] += 100
-        context_variables["my_key"] = json.dumps(a)
+        context_variables["my_key"].key += 100
         return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
 
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
@@ -493,7 +489,7 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     # Ensure we've incremented the context variable
     # in both tools, updated values should traverse
     # 0 + 1 (func 1) + 100 (func 2) = 101
-    assert json.loads(context_vars["my_key"]) == {"key": 101}
+    assert context_vars["my_key"] == MyKey(key=101)
 
 
 @run_for_optional_imports(["openai"], "openai")
