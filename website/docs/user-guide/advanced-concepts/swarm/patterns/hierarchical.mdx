@@ -1,8 +1,8 @@
 ---
-title: Hierarchical
+title: Hierarchical / Tree
 ---
 
-The Hierarchical Orchestration Pattern is a powerful approach to organizing multi-agent workflows, inspired by traditional organizational structures where work and information flow through a well-defined chain of command. This pattern creates a tree-structured arrangement of agents with clear levels of responsibility, specialization, and reporting relationships.
+The Hierarchical, or Tree, Orchestration Pattern is a powerful approach to organizing multi-agent workflows, inspired by traditional organizational structures where work and information flow through a well-defined chain of command. This pattern creates a tree-structured arrangement of agents with clear levels of responsibility, specialization, and reporting relationships.
 
 ### Key Characteristics
 
@@ -14,12 +14,16 @@ The Hierarchical Pattern establishes distinct agent roles across three primary l
 
 3. **Specialist Level** (Bottom): Specialist agents possess deep expertise in narrow areas. They focus exclusively on well-defined, discrete tasks without needing to understand the entire problem context. These agents do the detailed work and report their findings back to their respective managers.
 
+![Hierarchical Pattern](./assets/hierarchical.jpeg)
+
 ### Information Flow
 
 The strength of this pattern comes from its structured information flow:
 
 - **Downstream Flow**: Tasks, requirements, and context flow from the executive to managers to specialists, becoming more specialized and focused at each level.
 - **Upstream Flow**: Results, findings, and completed work flow from specialists to managers to the executive, being aggregated and refined at each level.
+
+![Hierarchical Flow](./assets/hierarchical_flow.jpeg)
 
 ### Implementation
 
@@ -98,7 +102,7 @@ import json
 from autogen import (
     AfterWork,
     AfterWorkOption,
-    AssistantAgent,
+    ConversableAgent,
     OnCondition,
     OnContextCondition,
     ContextExpression,
@@ -230,7 +234,7 @@ def complete_biofuel_research(research_content: str, context_variables: dict) ->
 # SPECIALIST AGENTS
 # ========================
 
-specialist_a1 = AssistantAgent(
+specialist_a1 = ConversableAgent(
     name="solar_specialist",
     system_message="""You are a specialist in solar energy technologies.
     Your task is to research and provide concise information about:
@@ -246,7 +250,7 @@ specialist_a1 = AssistantAgent(
     functions = [complete_solar_research],
 )
 
-specialist_a2 = AssistantAgent(
+specialist_a2 = ConversableAgent(
     name="wind_specialist",
     system_message="""You are a specialist in wind energy technologies.
     Your task is to research and provide concise information about:
@@ -262,7 +266,7 @@ specialist_a2 = AssistantAgent(
     functions = [complete_wind_research],
 )
 
-specialist_b1 = AssistantAgent(
+specialist_b1 = ConversableAgent(
     name="hydro_specialist",
     system_message="""You are a specialist in hydroelectric energy technologies.
     Your task is to research and provide concise information about:
@@ -278,7 +282,7 @@ specialist_b1 = AssistantAgent(
     functions = [complete_hydro_research],
 )
 
-specialist_b2 = AssistantAgent(
+specialist_b2 = ConversableAgent(
     name="geothermal_specialist",
     system_message="""You are a specialist in geothermal energy technologies.
     Your task is to research and provide concise information about:
@@ -294,7 +298,7 @@ specialist_b2 = AssistantAgent(
     functions = [complete_geothermal_research],
 )
 
-specialist_c1 = AssistantAgent(
+specialist_c1 = ConversableAgent(
     name="biofuel_specialist",
     system_message="""You are a specialist in biofuel technologies.
     Your task is to research and provide concise information about:
@@ -375,7 +379,7 @@ def compile_alternative_section(section_content: str, context_variables: dict) -
 # MANAGER AGENTS
 # ========================
 
-renewable_manager = AssistantAgent(
+renewable_manager = ConversableAgent(
     name="renewable_manager",
     system_message="""You are the manager for renewable energy research, specifically overseeing solar and wind energy specialists.
     Your responsibilities include:
@@ -391,7 +395,7 @@ renewable_manager = AssistantAgent(
     functions = [compile_renewable_section]
 )
 
-storage_manager = AssistantAgent(
+storage_manager = ConversableAgent(
     name="storage_manager",
     system_message="""You are the manager for energy storage and hydroelectric technologies, overseeing hydroelectric and geothermal energy specialists.
     Your responsibilities include:
@@ -407,7 +411,7 @@ storage_manager = AssistantAgent(
     functions = [compile_storage_section]
 )
 
-alternative_manager = AssistantAgent(
+alternative_manager = ConversableAgent(
     name="alternative_manager",
     system_message="""You are the manager for alternative energy solutions, overseeing biofuel research.
     Your responsibilities include:
@@ -449,7 +453,7 @@ def compile_final_report(report_content: str, context_variables: dict) -> SwarmR
 # EXECUTIVE AGENT
 # ========================
 
-executive_agent = AssistantAgent(
+executive_agent = ConversableAgent(
     name="executive_agent",
     system_message="""You are the executive overseeing the creation of a comprehensive report on renewable energy technologies.
 
