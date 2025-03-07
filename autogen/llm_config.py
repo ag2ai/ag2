@@ -55,6 +55,24 @@ class LLMConfig:
         print(f"  ===> {value._model=}")
         return hasattr(value, "_model") and self._model == value._model
 
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
+        return getattr(self._model, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self._model, key)
+        except AttributeError:
+            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        setattr(self._model, key, value)
+
+    def __getattr__(self, name: Any) -> Any:
+        try:
+            return getattr(self._model, name)
+        except AttributeError:
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"]], Type[BaseModel]] = {}
 
     @classmethod
@@ -101,6 +119,18 @@ class LLMConfigEntry(BaseModel, ABC):
 
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
+
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        setattr(self, key, value)
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []
