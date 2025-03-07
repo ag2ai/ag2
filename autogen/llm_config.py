@@ -4,7 +4,7 @@
 
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -40,21 +40,17 @@ LLMProvider = Literal[
 ]
 
 
-# class IndividualLLMConfig(BaseModel):
-#     api_type: LLMProvider = "openai"
-#     model: str
-#     api_key: str
-#     base_url: Optional[HttpUrl] = None
-#     tags: Optional[list[str]] = None
-
 _current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
 
+
+LLMConfigItem = Annotated[Union["OpenAILLMConfigEntry", "AzureOpenAILLMConfigEntry", "GeminiLLMConfigEntry"], Field(discriminator="api_type")]
 
 class LLMConfig(BaseModel):
     # class variable not touched by BaseModel
 
     # used by BaseModel to create instance variables
-    config_list: Annotated[list["LLMConfigEntry"], Field(default_factory=list)]
+    # config_list: Annotated[list["LLMConfigEntry"], Field(default_factory=list)]
+    config_listt: Annotated[list[LLMConfigItem], Field(default_factory=list)]
     temperature: Optional[float] = None
     check_every_ms: Optional[int] = None
     max_new_tokens: Optional[int] = None
@@ -112,7 +108,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "gemini"
+    api_type: LLMProvider = "google"
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
