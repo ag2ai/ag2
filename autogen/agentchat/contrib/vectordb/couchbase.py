@@ -18,7 +18,8 @@ with optional_import_block():
     import numpy as np
     from couchbase import search
     from couchbase.auth import PasswordAuthenticator
-    from couchbase.cluster import Cluster, ClusterOptions
+    from couchbase.cluster import Cluster
+    from couchbase.options import ClusterOptions
     from couchbase.collection import Collection
     from couchbase.management.search import SearchIndex
     from couchbase.options import SearchOptions
@@ -66,6 +67,7 @@ class CouchbaseVectorDB(VectorDB):
             wait_until_index_ready (float or None): Blocking call to wait until the database indexes are ready. None means no wait. Default is None.
             wait_until_document_ready (float or None): Blocking call to wait until the database documents are ready. None means no wait. Default is None.
         """
+        
         if embedding_function is None:
             embedding_function = SentenceTransformer("all-MiniLM-L6-v2").encode
         self.embedding_function = embedding_function
@@ -76,7 +78,9 @@ class CouchbaseVectorDB(VectorDB):
 
         try:
             auth = PasswordAuthenticator(username, password)
-            cluster = Cluster(connection_string, ClusterOptions(auth))
+            options = ClusterOptions(auth)
+            options.apply_profile("wan_development")
+            cluster = Cluster(connection_string, options)
             cluster.wait_until_ready(timedelta(seconds=5))
             self.cluster = cluster
 
@@ -276,22 +280,28 @@ class CouchbaseVectorDB(VectorDB):
             raise ValueError("The document content is required.")
         if docs[0].get("id") is None:
             raise ValueError("The document id is required.")
-
+        
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
-            docs_to_upsert = dict()
-            for doc in batch:
-                doc_id = doc["id"]
-                embedding = self.embedding_function([
-                    doc["content"]
-                ]).tolist()  # Gets new embedding even in case of document update
+            docs_to_upsert = {}
+
+            # Extract content and IDs before calling OpenAI embedding function
+            contents = [doc["content"] for doc in batch]
+
+            # Get embeddings for the entire batch at once
+            embeddings = self.embedding_function(contents)
+            if not isinstance(embeddings[0], list):
+                embeddings = [embedding.tolist() for embedding in embeddings]
+
+            # Create doc_content for each document
+            for doc, embedding in zip(batch, embeddings):
                 doc_content = {
                     TEXT_KEY: doc["content"],
                     "metadata": doc.get("metadata", {}),
                     EMBEDDING_KEY: embedding,
-                    "id": doc_id,
+                    "id": doc["id"],
                 }
-                docs_to_upsert[doc_id] = doc_content
+                docs_to_upsert[doc["id"]] = doc_content
             collection.upsert_multi(docs_to_upsert)
 
     def insert_docs(
