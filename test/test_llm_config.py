@@ -4,7 +4,9 @@
 
 import pytest
 
-from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry
+from autogen.llm_config import OpenAILLMConfigEntry, get_LLMConfig
+
+LLMConfig = get_LLMConfig()
 
 # def test_llm_provider():
 #     assert LLMProvider.openai == "openai"
@@ -95,4 +97,5 @@ class TestLLMConfig:
     def test_deserialization(self, openai_llm_config: LLMConfig):
         actual = LLMConfig(**openai_llm_config.model_dump())
         assert actual == openai_llm_config
+        assert actual.model_dump() == openai_llm_config.model_dump()
         assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
