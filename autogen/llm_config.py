@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .oai.client import ModelClient
 
 
-_current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
+_current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
 
 class LLMConfig:
@@ -23,7 +23,7 @@ class LLMConfig:
     # used by BaseModel to create instance variables
     def __enter__(self) -> "LLMConfig":
         # Store previous context and set self as current
-        self._token = _current_llm_config.set(self.model_dump_json(exclude_none=True))
+        self._token = _current_llm_config.set(self)
         return self
 
     def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
@@ -31,11 +31,11 @@ class LLMConfig:
 
     @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return self._model.model_dump(exclude_none=exclude_none, *args, **kwargs)
+        return self._model.model_dump(*args, exclude_none=exclude_none, **kwargs)
 
     @functools.wraps(BaseModel.model_dump_json)
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        return self._model.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
+        return self._model.model_dump_json(*args, exclude_none=exclude_none, **kwargs)
 
     @functools.wraps(BaseModel.model_validate)
     def model_validate(self, *args: Any, **kwargs: Any) -> Any:
@@ -49,7 +49,7 @@ class LLMConfig:
     def model_validate_strings(self, *args: Any, **kwargs: Any) -> Any:
         return self._model.model_validate_strings(*args, **kwargs)
 
-    def __eq__(self, value):
+    def __eq__(self, value: Any) -> bool:
         print(f"{value=}, {hasattr(value, '_model')=}, {self._model=}, {value._model=}")
         print(f"  ===> {self._model=}")
         print(f"  ===> {value._model=}")
@@ -58,7 +58,7 @@ class LLMConfig:
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"]], Type[BaseModel]] = {}
 
     @classmethod
-    def _get_base_model_class(cls) -> Type["LLMConfig"]:
+    def _get_base_model_class(cls) -> Type["BaseModel"]:
         def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry]]) -> Type[BaseModel]:
             if llm_config_classes in LLMConfig._base_model_classes:
                 return LLMConfig._base_model_classes[llm_config_classes]
@@ -80,10 +80,9 @@ class LLMConfig:
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
 
-            print(f"  -> LLMConfig for classes: {llm_config_classes}: {_LLMConfig}")
             return _LLMConfig
 
-        return _get_cls(tuple(_llm_config_classes))
+        return _get_cls(tuple(_llm_config_classes))  # type: ignore[arg-type]
 
 
 class LLMConfigEntry(BaseModel, ABC):
