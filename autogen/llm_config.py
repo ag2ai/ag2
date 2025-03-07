@@ -64,7 +64,7 @@ class LLMConfig(BaseModel):
 
     def __enter__(self):
         # Store previous context and set self as current
-        self._token = LLMConfig._current_llm_config.set(self.model_dump_json())
+        self._token = LLMConfig._current_llm_config.set(self.model_dump_json(exclude_none=True))
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
