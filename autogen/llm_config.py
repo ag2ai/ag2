@@ -70,11 +70,11 @@ class LLMConfig:
         except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-    _base_model_classes: dict[tuple[Type["LLMConfigEntry"]], Type[BaseModel]] = {}
+    _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
 
     @classmethod
     def _get_base_model_class(cls) -> Type["BaseModel"]:
-        def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry]]) -> Type[BaseModel]:
+        def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry], ...]) -> Type[BaseModel]:
             if llm_config_classes in LLMConfig._base_model_classes:
                 return LLMConfig._base_model_classes[llm_config_classes]
 
@@ -89,7 +89,7 @@ class LLMConfig:
                 cache_seed: Optional[int] = None
 
                 config_list: Annotated[  # type: ignore[valid-type]
-                    list[Annotated[Union[*llm_config_classes], Field(discriminator="api_type")]],
+                    list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
                     Field(default_factory=list),
                 ]
 
@@ -97,7 +97,7 @@ class LLMConfig:
 
             return _LLMConfig
 
-        return _get_cls(tuple(_llm_config_classes))  # type: ignore[arg-type]
+        return _get_cls(tuple(_llm_config_classes))
 
 
 class LLMConfigEntry(BaseModel, ABC):
