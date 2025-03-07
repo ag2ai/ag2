@@ -64,3 +64,7 @@ class TestLLMConfig:
             "tags": [],
         }
         assert actual == expected
+
+    def test_deserialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
+        actual = OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump())
+        assert actual == openai_llm_config_entry
