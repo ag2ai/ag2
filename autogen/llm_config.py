@@ -29,15 +29,15 @@ class LLMConfig:
     def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
         _current_llm_config.reset(self._token)
 
-    @functools.wraps(BaseModel.model_dump)
+    # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
         return self._model.model_dump(*args, exclude_none=exclude_none, **kwargs)
 
-    @functools.wraps(BaseModel.model_dump_json)
+    # @functools.wraps(BaseModel.model_dump_json)
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         return self._model.model_dump_json(*args, exclude_none=exclude_none, **kwargs)
 
-    @functools.wraps(BaseModel.model_validate)
+    # @functools.wraps(BaseModel.model_validate)
     def model_validate(self, *args: Any, **kwargs: Any) -> Any:
         return self._model.model_validate(*args, **kwargs)
 
