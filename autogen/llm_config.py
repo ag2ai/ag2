@@ -133,13 +133,6 @@ class LLMConfigEntry(BaseModel, ABC):
 _llm_config_classes: list[Type[LLMConfigEntry]] = []
 
 
-# def _get_LLMConfigItem():
-#     return Annotated[Union[*_llm_config_classes], Field(discriminator="api_type")]
-
-
-# ToDo: Add a decorator to auto gene
-
-
 def register_llm_config(cls: Type[LLMConfigEntry]) -> Type[LLMConfigEntry]:
     if isinstance(cls, type) and issubclass(cls, LLMConfigEntry):
         _llm_config_classes.append(cls)
