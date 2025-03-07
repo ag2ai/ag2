@@ -27,7 +27,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
-@require_optional_import("openai", "openai-realtime", except_for="get_factory")
+@require_optional_import("openai", "openai-realtime", except_for=["get_factory", "__init__"])
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
@@ -41,7 +41,8 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         """(Experimental) Client for OpenAI Realtime API.
 
         Args:
-            llm_config (dict[str, Any]): The config for the client.
+            llm_config: The config for the client.
+            logger: the logger to use for logging events
         """
         super().__init__()
         self._llm_config = llm_config
@@ -49,23 +50,13 @@ class OpenAIRealtimeClient(RealtimeClientBase):
 
         self._connection: Optional["AsyncRealtimeConnection"] = None
 
-        config = llm_config["config_list"][0]
+        self.config = llm_config["config_list"][0]
         # model is passed to self._client.beta.realtime.connect function later
-        self._model: str = config["model"]
-        self._voice: str = config.get("voice", "alloy")
+        self._model: str = self.config["model"]
+        self._voice: str = self.config.get("voice", "alloy")
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
-        self._client = AsyncOpenAI(
-            api_key=config.get("api_key", None),
-            organization=config.get("organization", None),
-            project=config.get("project", None),
-            base_url=config.get("base_url", None),
-            websocket_base_url=config.get("websocket_base_url", None),
-            timeout=config.get("timeout", NOT_GIVEN),
-            max_retries=config.get("max_retries", DEFAULT_MAX_RETRIES),
-            default_headers=config.get("default_headers", None),
-            default_query=config.get("default_query", None),
-        )
+        self._client: Optional["AsyncOpenAI"] = None
 
     @property
     def logger(self) -> Logger:
@@ -155,6 +146,18 @@ class OpenAIRealtimeClient(RealtimeClientBase):
     async def connect(self) -> AsyncGenerator[None, None]:
         """Connect to the OpenAI Realtime API."""
         try:
+            if not self._client:
+                self._client = AsyncOpenAI(
+                    api_key=self.config.get("api_key", None),
+                    organization=self.config.get("organization", None),
+                    project=self.config.get("project", None),
+                    base_url=self.config.get("base_url", None),
+                    websocket_base_url=self.config.get("websocket_base_url", None),
+                    timeout=self.config.get("timeout", NOT_GIVEN),
+                    max_retries=self.config.get("max_retries", DEFAULT_MAX_RETRIES),
+                    default_headers=self.config.get("default_headers", None),
+                    default_query=self.config.get("default_query", None),
+                )
             async with self._client.beta.realtime.connect(
                 model=self._model,
             ) as self._connection:
@@ -199,10 +202,9 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
-            voice (str): The voice to use.
-            system_message (str): The system message to use.
-            kwargs (Any): Additional arguments.
+            llm_config: The config for the client.
+            logger: The logger to use for logging events.
+            kwargs: Additional arguments.
 
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern

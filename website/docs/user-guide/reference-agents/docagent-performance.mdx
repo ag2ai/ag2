@@ -1,0 +1,677 @@
+---
+title: DocAgent Performance
+---
+
+This page is a summary of our testing of DocAgent. The version (or code date) of AG2 is included as a reference.
+
+<Tip>
+If you want to run the test code, install AG2 with the `rag` extra.
+
+```bash
+pip install ag2[rag]
+```
+</Tip>
+
+## Test Results
+
+Code version: As of March 3rd 2025 (will be in version **after** v0.8.0b1)
+
+For InMemory Query Engine the LLM used is OpenAI's GPT-4o mini.
+
+| # | Task | Ingested | In-memory Query Engine | Chroma Query Engine |
+| :---: | --- | :---: | :---: | :---: |
+| 1 | URL to Markdown file, query to summarize | ✅ | ✅ | ✅ |
+| 2 | URL to Microsoft Word document, query highlights | ✅ | ✅ | ✅ |
+| 3 | URL to PDF annual report, query specific figures | ✅ | ✅ | ✅ |
+| 4 | URL to PDF document, query to explain | ✅ | ✅ | ✅ |
+| 5 | Local file, PDF, query to explain | ✅ | ✅ | ✅ |
+| 6 | URL to JPG of scanned invoice, query a figure | ❌ | 🔶 | 🔶 |
+| 7 | Local file, PNG of scanned invoice, query a figure | ❌ | ❌ | ❌ |
+| 8 | URL to XLSX using a redirect URL, query table | ✅ | 🔶 | 🔶 |
+| 9 | URL to XLSX, query data | ❌ | 🔶 | ✅ |
+| 10 | URL to CSV, query a figure | ❌ | N/A | N/A |
+| 11 | URL to CSV, query to summarize | ✅ | ✅ | ✅ |
+| 12 | URL with CSV, query unrelated | ✅ | ✅ | ✅ |
+| 13 | Local files, 2 x Markdowns, Query to compare | ✅ | ✅ | ✅ |
+| 14 | Local file, Markdown, unrelated query | ✅ | ✅ | ✅ |
+| 15 | Local file, Markdown, unrelated query but general knowledge | ✅ | ✅ | ✅ |
+| 16 | No files to ingest but has query | N/A | ✅ | ✅ |
+| 17 | Local file, PDF of annual report, query a figure | ✅ | ✅ | ✅ |
+| 18 | Local file, Microsoft Word, query a figure | ✅ | ✅ | ❌ |
+| 19 | URL to web page with query to summarize | ✅ | ✅ | ✅ |
+| 20a | Local files, PDF and DOCX, one query to cover both | ✅ | ✅ | ✅ |
+| 20b | Follow-up query to DocAgent| N/A | ✅ | ❌ |
+
+### Task 1: URL to Markdown file, query to summarize
+
+Task Message:
+```python
+"Retrieve the document from https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md and summarise it."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Vector Store Query |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+"### Summary of Completed Tasks
+- **Documents Ingested**:
+  - [Integration of FLAML with Spark](https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md)
+
+- **Documents Left to Ingest**: 0
+- **Queries Left to Run**: 0
+
+### Query and Answers
+
+1. **Query**: Please summarize the document.
+   **Answer**: The document discusses the integration of FLAML with Spark for distributed training, focusing on two main aspects: utilizing Spark ML estimators for AutoML and running training in parallel through Spark jobs.
+   - **Spark ML Estimators**: It integrates estimators based on Spark ML models to enable parallel training. Data must be formatted correctly, and a utility function, `to_pandas_on_spark`, is provided for conversion.
+   - **Data Formatting**: Data should be converted to a pandas-on-Spark dataframe or series, with feature columns merged into a single vector column using `VectorAssembler`.
+   - **Estimators**: Models like `lgbm_spark` are available, and users must specify these in the `estimators_list` while using FLAML.
+   - **Parallel Spark Jobs**: To activate Spark as the backend during parallel tuning, the `use_spark` argument should be set to true, except during AutoML for Spark Data since SparkML models inherently run in parallel.
+   - The document also includes code examples for data preparation and FLAML configuration."
+```
+
+### Task 2: URL to Microsoft Word document, query highlights
+
+Task Message:
+```python
+"Retrieve this annual report and tell me the highlights: https://c.s-microsoft.com/en-us/CMSFiles/2023_Annual_Report.docx?version=dfd6ff7f-0999-881d-bedf-c6d9dadab40b"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Vector Store |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+"Summary of Completed Tasks:
+- Ingested the 2023 Annual Report from Microsoft.
+- Executed a query for the highlights of the annual report.
+
+Query and Answers:
+1. Query: What are the highlights of the annual report?
+   Answer: Highlights from the 2023 Annual Report include:
+   1. **Record Financial Performance**: Microsoft achieved a record revenue of $211 billion and over $88 billion in operating income.
+   2. **Significant Growth in Cloud Services**: Microsoft Cloud revenue increased by 22% to $111.6 billion.
+   3. **Office Growth**: Revenue from Office Commercial products and cloud services grew by 10%.
+   4. **LinkedIn Revenue Increase**: LinkedIn's revenue rose by 10%.
+   5. **Dynamics Solutions Expansion**: Dynamics products and cloud services revenue grew by 16%.
+   6. **Azure Growth**: Server products and cloud services revenue increased by 19%, driven by a 29% growth in Azure.
+   7. **Challenges in Personal Computing**: More Personal Computing revenue decreased by 9%, with a notable decline in Windows OEM revenue.
+   8. **Commitment to AI**: Microsoft's focus on AI includes integrating it across products and introducing Copilot features.
+   9. **Sustainability Initiatives**: The company aims to become carbon negative, water positive, and zero waste by 2030."
+```
+
+### Task 3: URL to PDF annual report, query specific figures
+
+Task Message:
+```python
+"Retrieve the quarterly financials from https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/11214202/a56sthg53egr.pdf and tell me what the total subscription revenue was in the latest quarter."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/11214202/a56sthg53egr.pdf
+
+Queries:
+1: What was the total subscription revenue in the latest quarter?
+Answer: The total subscription revenue in the latest quarter (Q4 FY2024) was $5.365 billion.
+```
+
+### Task 4: URL to PDF document, query to explain
+
+Task Message:
+```python
+"What's this document about? https://www.cpaaustralia.com.au/-/media/project/cpa/corporate/documents/tools-and-resources/financial-reporting/guide-to-understanding-annual-reporting.pdf?rev=63cea2139de642f784b47ee2acddf75a"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: https://www.cpaaustralia.com.au/-/media/project/cpa/corporate/documents/tools-and-resources/financial-reporting/guide-to-understanding-annual-reporting.pdf?rev=63cea2139de642f784b47ee2acddf75a
+
+Queries:
+1: What's this document about?
+Answer: The document is a guide titled ""A Guide to Understanding Annual Reports: Australian Listed Companies"" published by CPA Australia in November 2019. It aims to assist existing and prospective shareholders and other providers of capital, who may not have expertise in accounting, in understanding annual reports of listed companies. It covers essential components of an annual report, such as the directors' report, corporate governance statement, financial report, and auditor's report. The guide provides insights on interpreting financial statements, the importance of various reports, and the role of annual reporting in communicating a company's activities, financial results, and strategies to stakeholders.
+```
+
+### Task 5: Local file, PDF, query to explain
+
+Task Message:
+```python
+"What's this document about? /my_folder/guide-to-understanding-annual-reporting.pdf"
+```
+
+Note: This is the same document as Task 4, just stored locally.
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/guide-to-understanding-annual-reporting.pdf
+
+Queries:
+1: What's this document about?
+Answer: The document titled ""A Guide to Understanding Annual Reports: Australian Listed Companies"" provides an overview and explanation of annual reports published by Australian listed companies. It includes details about different components of the reports, such as the directors' report, corporate governance statement, financial report, and auditor's report. The guide aims to assist shareholders and other stakeholders, particularly those without expertise in accounting, in interpreting financial statements and better understanding company performance and strategies. Additionally, it educates readers on the importance of these reports, fundamental concepts of financial statements, best practices for analysis, and guidelines set by the Corporations Act 2001 and the ASX Listing Rules regarding required disclosures in annual reports.
+```
+
+### Task 6: URL to JPG of scanned invoice, query a figure
+
+Task Message:
+```python
+"What's the total due for this invoice? https://user-images.githubusercontent.com/26280625/27857671-e13cf85e-6172-11e7-81dd-c2fe5d1dfd2e.jpg"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ❌ | 🔶 | 🔶 |
+
+**Notes**:
+- During ingestion, the image was downloaded correctly but Docling could not OCR the text correctly, missing a lot of the text and substituting the British Pound symbol as a "2".
+- The InMemoryQueryEngine and VectorChromaQueryEngine successfully read the converted text and provided the correct result based on that, however the result is erroneous.
+
+Sample output:
+```console
+Ingestions:
+1: https://user-images.githubusercontent.com/26280625/27857671-e13cf85e-6172-11e7-81dd-c2fe5d1dfd2e.jpg
+
+Queries:
+1: What's the total due for this invoice?
+Answer: The total due for this invoice is 21,582.82.
+```
+
+### Task 7: Local file, PNG of scanned invoice, query a figure
+
+Task Message:
+```python
+"What's the total due for this invoice? /my_folder/ContosoInvoice.png"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ❌ | ❌ | ❌ |
+
+**Notes**:
+- During ingestion, the image was downloaded correctly but Docling could not OCR the text correctly, missing all the text and tables.
+- The InMemoryQueryEngine and VectorChromaQueryEngine read but could not gather any information from the converted file so they could not answer the question.
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/ContosoInvoice.png
+
+Queries:
+1: What's the total due for this invoice?
+Answer: Sorry, I couldn't answer that question from the ingested documents/URLs: The document does not provide information about the total due for the invoice.
+```
+
+### Task 8: URL to XLSX using a redirect URL, query table
+
+Task Message:
+```python
+"Tell me about the Carretera product in Canada from https://go.microsoft.com/fwlink/?LinkID=521962"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | 🔶 | 🔶 |
+
+**Notes**:
+- The ingested and converted Excel file was correctly interpreted in the Markdown
+- The InMemoryQueryEngine's LLM, GPT-4o mini, was able to pull two rows of data out correctly but could not compile the 20 rows of data based on the broad query.
+- The VectorChromaQueryEngine was able to pull one row of data out correctly but could not compile the 20 rows of data based on the broad query.
+
+Sample output:
+```console
+Ingestions:
+1: https://go.microsoft.com/fwlink/?LinkID=521962
+
+Queries:
+1: Tell me about the Carretera product in Canada.
+Answer: In Canada, the Carretera product has the following sales data:
+- Segment: Government
+  - Units Sold: 1618.5
+  - Manufacturing Price: 3
+  - Sale Price: 20
+  - Gross Sales: 32370
+  - Discounts: 0
+  - Sales: 32370
+  - COGS: 16185
+  - Profit: 16185
+  - Date: 2014-01-01 00:00:00
+
+Another entry for Carretera in Canada under the Channel Partners segment:
+- Segment: Channel Partners
+  - Units Sold: 1818.5
+  - Manufacturing Price: 3
+  - Sale Price: 12
+  - Gross Sales: 27216
+  - Discounts: 0
+  - Sales: 27216
+  - COGS: 7554
+  - Profit: 19662
+```
+
+### Task 9: URL to XLSX, query data
+
+Task Message:
+```python
+"What was the total payment to AECOM Australia consultancy from https://data.sa.gov.au/data/dataset/be2febed-1982-47c6-bd42-e0d600c29b70/resource/0d72c0e3-94c1-4050-a569-d3a1531f29a3/download/2022-2023-ohpsa-annual-report-statistics.xlsx"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ❌ | 🔶 | ✅ |
+
+**Notes**:
+- The ingested Excel file was not correctly converted to Markdown tables, with some end columns being moved to new tables
+- The InMemoryQueryEngine could not answer the question due to the incorrectly parsed Markdown
+- Interestingly, the VectorChromaQueryEngine was able to determine the correct answer
+
+Sample output:
+```console
+Ingestions:
+1: https://data.sa.gov.au/data/dataset/be2febed-1982-47c6-bd42-e0d600c29b70/resource/0d72c0e3-94c1-4050-a569-d3a1531f29a3/download/2022-2023-ohpsa-annual-report-statistics.xlsx
+
+Queries:
+1: What was the total payment to AECOM Australia consultancy?
+Answer: The total payment to AECOM Australia consultancy is not explicitly stated in the provided document content. However, AECOM Australia is listed as one of the consultancies with a contract value above $10,000 each.
+```
+
+### Task 10: URL to CSV, query a figure
+
+Task Message:
+```python
+"What were the number of consultants below $10,000 in the 2018-2019 year from https://data.sa.gov.au/data/dataset/d5152d51-b125-48d8-a561-ec3d9d6610b9/resource/c0943eac-9210-4e9e-b88b-2aa00a58066d/download/country-arts-sa-annual-report-regulatory-data.csv"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ❌ | N/A | N/A |
+
+**Notes**:
+- This URL could not be downloaded correctly, though it works in a browser.
+
+### Task 11: URL to CSV, query to summarize
+
+Task Message:
+```python
+"Summarise this for me, https://www.stats.govt.nz/assets/Uploads/Research-and-development-survey/Research-and-development-survey-2023/Download-data/research-and-development-survey-2023-csv-notes.csv"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+The document titled 'research-and-development-survey-2023-csv-notes.md' contains various notes and footnotes regarding the methodologies, categorizations, and definitions related to a survey on research and development (R&D) conducted in 2023. Key highlights include:
+
+1. **Survey Scope**: The R&D Survey is conducted biennially and focuses on different sectors such as Business, Government, and Higher Education. However, in the years 2019, 2021, and 2023, the survey was only conducted in the business sector (Footnote 2).
+
+2. **Data Handling**: Various footnotes provide information on how data is collected, including the rounding of figures for businesses and employees, and the exclusion of certain sectors or data types, such as licensing of intellectual property and subsidiaries (Footnotes 12, 29, and 30).
+
+3. **Research Types**: There are several definitions related to types of research, including basic research, applied research, and experimental research, which clarify the intent and application of the research being performed (Footnotes 22-26).
+
+4. **Results Handling**: Cautions are advised when interpreting results from specific categories due to small sample sizes, and results are treated with particular caution (Footnotes 3 and 28).
+
+5. **Relative Sampling Errors**: The document mentions relative sampling errors, which quantify variability in results due to sampling, indicating the limitations of the data (Notes section).
+
+6. **Symbols and Notations**: A section at the end outlines various symbols used throughout the data, such as indications for data not collected, confidential data, and figures that are provisional or revised (Symbols section).
+
+Overall, the document serves as a technical note for understanding the R&D survey's data collection methods, definitions, and considerations for interpreting the results.
+```
+
+### Task 12: URL with CSV, query unrelated (should not answer)
+
+Task Message:
+```python
+"What was Microsoft's latest quarter GAAP product revenues, see https://www.stats.govt.nz/assets/Uploads/Research-and-development-survey/Research-and-development-survey-2023/Download-data/research-and-development-survey-2023-csv-notes.csv"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: https://www.stats.govt.nz/assets/Uploads/Research-and-development-survey/Research-and-development-survey-2023/Download-data/research-and-development-survey-2023-csv-notes.csv
+
+Queries:
+1: What was Microsoft's latest quarter GAAP product revenues?
+Answer: Sorry, I couldn't answer that question from the ingested documents/URLs: The document does not contain information regarding Microsoft's latest quarter GAAP product revenues.
+```
+
+### Task 13: Local files, 2 x Markdowns, Query to compare
+
+Task Message:
+```python
+"from /my_folder/ load both docagent_tests_story1.md and docagent_tests_story2.md and compare the two stories."
+```
+
+Files:
+- [docagent_tests_story1.md](./assets/docagent_tests_story1.md)
+- [docagent_tests_story2.md](./assets/docagent_tests_story2.md)
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/docagent_tests_story1.md
+2: /my_folder/docagent_tests_story2.md
+
+Queries:
+1: compare the stories in docagent_tests_story1.md and docagent_tests_story2.md
+Answer: The stories in the documents 'docagent_tests_story1.md' and 'docagent_tests_story2.md' explore themes of memory, loss, and the human condition, but they do so in markedly different contexts and styles.
+
+In docagent_tests_story2.md, the narrative is reflective and philosophical, centered around the essence of Christmas and the interplay of present joys with past aspirations. It discusses the nostalgia of unfulfilled dreams and lost loved ones, particularly during the festive season. The narrator recounts idealized memories of Christmas, contemplating how those who have passed should be remembered and welcomed into the celebration. The text emphasizes forgiveness, the importance of embracing both past and present experiences, and a deep sense of connection with loved ones, both living and deceased. The overall tone is warm, inviting, and imbued with a sense of hope and gratitude.
+
+In contrast, docagent_tests_story1.md presents a more somber and introspective story about Mr. Woodifield and the boss, who reflects on the loss of his son killed in the war. The dialogue between the two characters highlights the loneliness and sorrow that accompany aging and grief. Mr. Woodifield, confined by his circumstances, cherishes his brief time spent away from home, where he shares news about the graves of their sons in Belgium. The boss is deeply affected by the mention of his son’s grave, leading him into a spiral of grief and reflection on his past. The story captures moments of mundane life interrupted by flashes of profound sorrow, focusing on a more immediate portrayal of loss.
+
+In summary, while docagent_tests_story2.md deals broadly with nostalgia and memory during Christmas, encompassing both joys and sorrows in a festive spirit, docagent_tests_story1.md is more tightly focused on personal grief and the impact of loss on daily life, revealing the emotional weight carried by the characters. Both narratives address the interplay between the past and the present but do so through different lenses—one celebratory and inclusive, the other introspective and mournful.
+```
+
+### Task 14: Local file, Markdown, unrelated query (should not answer)
+
+Task Message:
+```python
+"from /my_folder/ load both docagent_tests_story1.md and docagent_tests_story2.md and explain who Bob Billy is."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+"Ingestions:
+1: /my_folder/docagent_tests_story1.md
+2: /my_folder/docagent_tests_story2.md
+
+Queries:
+1: Who is Bob Billy?
+Answer: Sorry, I couldn't answer that question from the ingested documents/URLs: The documents provided do not contain any information about a person named Bob Billy."
+```
+
+### Task 15: Local file, Markdown, unrelated query but general knowledge (should not answer)
+
+Task Message:
+```python
+"from /my_folder/ load both docagent_tests_story1.md and docagent_tests_story2.md and explain who Michael Jackson is."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/docagent_tests_story1.md
+2: /my_folder/docagent_tests_story2.md
+
+Queries:
+1: Explain who Michael Jackson is.
+Answer: Sorry, I couldn't answer that question from the ingested documents/URLs: The available documents do not provide any information about Michael Jackson.
+```
+
+### Task 16: No files to ingest but has query
+
+Task Message:
+```python
+"Compare the two stories ingested."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| N/A | ✅ | ✅ |
+
+Sample output:
+```console
+"Ingestions: No ingestions
+
+Queries:
+1. Query: Compare the two stories ingested.
+   Answer: Sorry, please ingest some documents/URLs before querying."
+```
+
+### Task 17: Local file, PDF of annual report, query a figure
+
+Task Message:
+```python
+"What was net GAAP revenue on products from the document /my_folder/FY25_Q1_Consolidated_Financial_Statements.pdf"
+```
+
+Files used:
+- [Apple First Quarter Results](https://www.apple.com/newsroom/pdfs/fy2025-q1/FY25_Q1_Consolidated_Financial_Statements.pdf)
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/FY25_Q1_Consolidated_Financial_Statements.pdf
+
+Queries:
+1: What was net GAAP revenue on products?
+Answer: The net GAAP revenue on products for the three months ended December 28, 2024, was $97,960 million, while for the three months ended December 30, 2023, it was $96,458 million.
+```
+
+### Task 18: Local file, Microsoft Word, query a figure
+
+Task Message:
+```python
+"What was revenue on products from the document /my_folder/MSFT FY25Q2 10-Q FINAL.docx"
+```
+
+Files used:
+- `MSFT FY25Q2 10-Q FINAL.docx` from [Microsoft Quarterly Report asset package](https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/FY25Q2-zip)
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ❌ |
+
+**Notes**:
+- VectorChromaQueryEngine could not answer the question.
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/MSFT FY25Q2 10-Q FINAL.docx
+
+Queries:
+1: What was revenue on products?
+Answer: For the three months ended December 31, 2024, revenue on products was $16,219 million. For the six months ended December 31, 2024, revenue on products was $31,491 million.
+```
+
+### Task 19: URL to web page with query to summarize
+
+Task Message:
+```python
+"Tell me about the ReasoningAgent, details here https://docs.ag2.ai/docs/user-guide/reference-agents/reasoningagent"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: https://docs.ag2.ai/docs/user-guide/reference-agents/reasoningagent
+
+Queries:
+1: Tell me about the ReasoningAgent.
+Answer: The ReasoningAgent is designed to enhance the reasoning capabilities of language models through a systematic exploration of thought processes, utilizing the Tree of Thoughts (ToT) framework. It enables large language models (LLMs) like GPT-4 and Llama to break down complex problems into manageable steps and explore multiple solution paths simultaneously.
+
+Key Features and Capabilities:
+1. Search Strategies: The ReasoningAgent supports various search strategies for exploring the reasoning space, including Beam Search, Monte Carlo Tree Search (MCTS), and Language Agent Tree Search (LATS).
+2. Core Components: It includes a Thinker Agent, Grader Agent, Tree Structure, Visualization Tools, and Logging Features.
+3. Configuration Options: Highly configurable through a single `reason_config` dictionary.
+4. Chain-of-Thought Reasoning: Employs depth-first search (DFS) for simple linear reasoning.
+
+Overall, the ReasoningAgent is a versatile tool aimed at improving reasoning capabilities within LLMs through structured exploration and evaluation.
+```
+
+### Task 20a: Local files, PDF and DOCX, one query to cover both
+
+Task Message:
+```python
+"Load 'NVIDIAAn.pdf' and 'MSFT FY25Q2 10-Q FINAL.docx' from /my_folder/ and tell me the latest quarter's product revenues for each"
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| ✅ | ✅ | ✅ |
+
+Sample output:
+```console
+Ingestions:
+1: /my_folder/NVIDIAAn.pdf
+2: /my_folder/MSFT FY25Q2 10-Q FINAL.docx
+
+Queries:
+1: What are the latest quarter's product revenues for NVIDIA?
+Answer: For the third quarter of fiscal 2025, NVIDIA reported revenues of $35.1 billion. Specifically, Data Center revenue reached $30.8 billion, representing a significant increase of 17% from the previous quarter and a remarkable 112% increase from the same quarter a year ago.
+
+2: What are the latest quarter's product revenues for Microsoft?
+Answer: For the latest quarter ended December 31, 2024, Microsoft reported total revenues of $69.632 billion, with specific contributions from various segments: Microsoft 365 Commercial products and cloud services revenue increased by 15%, Intelligent Cloud revenue increased driven by Azure and other cloud services, and More Personal Computing revenue remained relatively unchanged.
+```
+
+### Task 20b: Follow-up query to DocAgent
+
+Task Message:
+```python
+"Get Microsoft's operating income for their latest quarter and NVIDIA's GAAP operating income for their latest quarter."
+```
+
+| Ingested | InMemoryQueryEngine Query | Chroma Query Engine |
+| :---: | :---: | :---: |
+| N/A | ✅ | ❌ |
+
+**Notes**:
+- VectorChromaQueryEngine could not correctly answer the Microsoft operating income figure, it could only provide a note about the amount it increased.
+
+Sample output:
+```console
+Ingestions:
+No ingestions
+
+Queries:
+1: What is Microsoft's operating income for their latest quarter?
+Answer: For the latest quarter ended December 31, 2024, Microsoft's operating income was reported as $31.653 billion.
+2: What is NVIDIA's GAAP operating income for their latest quarter?
+Answer: For NVIDIA's latest quarter ended October 27, 2024, the GAAP operating income was $21.869 billion.
+```
+
+### Test Code
+
+Here is a basic Python code in line with the tests above. You will need to have `OPENAI_API_KEY` set in your environment variables.
+
+```python
+from autogen import ConversableAgent
+from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
+import json
+
+llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}
+
+llm_config_list = {"config_list": [llm_config]}
+
+asking_agent = ConversableAgent(name="asking_agent", llm_config=llm_config, human_input_mode="ALWAYS")
+
+# InMemory Query Engine
+inmemory_qe = InMemoryQueryEngine(llm_config=llm_config_list)
+
+doc_agent = DocAgent(
+    name="doc_agent",
+    llm_config=llm_config,
+    query_engine=inmemory_qe, # Comment this out if you want to use the default chroma vector store
+    # collection_name="my_collection_name", # If using chroma, set unique collection names per run/question
+)
+
+# 1. Markdown URL
+task_message = "Retrieve the document from https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md and summarise it."
+
+# 2. DOCX URL
+# task_message = "Retrieve this annual report and tell me the highlights: https://c.s-microsoft.com/en-us/CMSFiles/2023_Annual_Report.docx?version=dfd6ff7f-0999-881d-bedf-c6d9dadab40b"
+
+# 3. PDF URL
+# task_message = "Retrieve the quarterly financials from https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/11214202/a56sthg53egr.pdf and tell me what the total subscription revenue was in the latest quarter."
+
+# 4. PDF URL
+# task_message = "What's this document about? https://www.cpaaustralia.com.au/-/media/project/cpa/corporate/documents/tools-and-resources/financial-reporting/guide-to-understanding-annual-reporting.pdf?rev=63cea2139de642f784b47ee2acddf75a"
+
+# 5. PDF file
+# task_message = "What's this document about? /my_folder/guide-to-understanding-annual-reporting.pdf"
+
+# 6. JPG URL (Invoice)
+# task_message = "What's the total due for this invoice? https://user-images.githubusercontent.com/26280625/27857671-e13cf85e-6172-11e7-81dd-c2fe5d1dfd2e.jpg"
+
+# 7. PNG file (Invoice)
+# task_message = "What's the total due for this invoice? /my_folder/ContosoInvoice.png"
+
+# 8. XLSX redirected URL
+# task_message = "Tell me about the Carretera product in Canada from https://go.microsoft.com/fwlink/?LinkID=521962"
+
+# 9. XLSX URL (multiple tabs)
+# task_message = "What was the total payment to AECOM Australia consultancy from https://data.sa.gov.au/data/dataset/be2febed-1982-47c6-bd42-e0d600c29b70/resource/0d72c0e3-94c1-4050-a569-d3a1531f29a3/download/2022-2023-ohpsa-annual-report-statistics.xlsx"
+
+# 10. CSV URL (should be "3")
+# task_message = "What were the number of consultants below $10,000 in the 2018-2019 year from https://data.sa.gov.au/data/dataset/d5152d51-b125-48d8-a561-ec3d9d6610b9/resource/c0943eac-9210-4e9e-b88b-2aa00a58066d/download/country-arts-sa-annual-report-regulatory-data.csv"
+
+# 11. CSV URL
+# task_message = "Summarise this for me, https://www.stats.govt.nz/assets/Uploads/Research-and-development-survey/Research-and-development-survey-2023/Download-data/research-and-development-survey-2023-csv-notes.csv"
+
+# 12. CSV URL with unrelated query
+# task_message = "What was Microsoft's latest quarter GAAP product revenues, see https://www.stats.govt.nz/assets/Uploads/Research-and-development-survey/Research-and-development-survey-2023/Download-data/research-and-development-survey-2023-csv-notes.csv"
+
+# 13. Ingest Markdown and ask question
+# task_message = "from /my_folder load both test_text.md and test_text_v2.md and compare the two stories."
+
+# 14. Ingest Markdown and ask wrong question (returns the correct message that it doesn't have the knowledge)
+# task_message = "from /my_folder load both test_text.md and test_text_v2.md and explain who Bob Billy is."
+
+# 15. Ingest Markdown and ask wrong question that an LLM could respond to but shouldn't
+# task_message = "from /my_folder load both test_text.md and test_text_v2.md and explain who Michael Jackson is."
+
+# 16. No ingestions and returns a message accordingly
+# task_message = "Compare the two stories ingested."
+
+# 17. PDF file
+# task_message="What was net GAAP revenue on products from the document /my_folder/FY25_Q1_Consolidated_Financial_Statements.pdf"
+
+# 18. DOCX file
+# task_message="What was revenue on products from the document /my_folder/MSFT FY25Q2 10-Q FINAL.docx"
+
+# 19. URL
+# task_message="Tell me about the ReasoningAgent, details here https://docs.ag2.ai/docs/user-guide/reference-agents/reasoningagent"
+
+# 20a. Multiple files and queries
+# task_message="Load 'NVIDIAAn.pdf' and 'MSFT FY25Q2 10-Q FINAL.docx' from /my_folder and tell me the latest quarter's product revenues for each"
+# 20b. Follow-up question using the same collection (if using Chroma otherwise if in memory will just ask in user input):
+# "Get Microsoft's operating income for their latest quarter and NVIDIA's GAAP operating income for their latest quarter."
+
+result = asking_agent.initiate_chat(recipient=doc_agent, message=task_message, max_turns=3)
+
+print(f"RESULT: {json.dumps(result.chat_history, indent=2)}")
+```

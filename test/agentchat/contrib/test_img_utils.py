@@ -23,7 +23,7 @@ from autogen.agentchat.contrib.img_utils import (
     message_formatter_pil_to_b64,
     num_tokens_from_gpt_image,
 )
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import numpy as np
@@ -47,23 +47,23 @@ raw_encoded_image = (
 )
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-@skip_on_missing_imports(["numpy"], "flaml")
-class TestGetPilImage(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+@run_for_optional_imports(["numpy"], "flaml")
+class TestGetPilImage:
     def test_read_local_file(self):
         # Create a small red image for testing
         temp_file = "_temp.png"
         raw_pil_image.save(temp_file)
         img2 = get_pil_image(temp_file)
-        self.assertTrue((np.array(raw_pil_image) == np.array(img2)).all())
+        assert (np.array(raw_pil_image) == np.array(img2)).all()
 
     def test_read_pil(self):
         # Create a small red image for testing
         img2 = get_pil_image(raw_pil_image)
-        self.assertTrue((np.array(raw_pil_image) == np.array(img2)).all())
+        assert (np.array(raw_pil_image) == np.array(img2)).all()
 
 
-@skip_on_missing_imports(["numpy"], "flaml")
+@run_for_optional_imports(["numpy"], "flaml")
 def are_b64_images_equal(x: str, y: str):
     """Asserts that two base64 encoded images are equal."""
     img1 = get_pil_image(x)
@@ -71,8 +71,8 @@ def are_b64_images_equal(x: str, y: str):
     return (np.array(img1) == np.array(img2)).all()
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-class TestGetImageData(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+class TestGetImageData:
     def test_http_image(self):
         with patch("requests.get") as mock_get:
             mock_response = requests.Response()
@@ -81,12 +81,12 @@ class TestGetImageData(unittest.TestCase):
             mock_get.return_value = mock_response
 
             result = get_image_data("http://example.com/image.png")
-            self.assertTrue(are_b64_images_equal(result, raw_encoded_image))
+            assert are_b64_images_equal(result, raw_encoded_image)
 
     def test_base64_encoded_image(self):
         result = get_image_data(base64_encoded_image)
 
-        self.assertTrue(are_b64_images_equal(result, base64_encoded_image.split(",", 1)[1]))
+        assert are_b64_images_equal(result, base64_encoded_image.split(",", 1)[1])
 
     def test_local_image(self):
         # Create a temporary file to simulate a local image file.
@@ -99,18 +99,18 @@ class TestGetImageData(unittest.TestCase):
             temp_image_file.seek(0)
             expected_content = base64.b64encode(temp_image_file.read()).decode("utf-8")
 
-        self.assertEqual(result, expected_content)
+        assert result == expected_content
         os.remove(temp_file)
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-class TestLlavaFormater(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+class TestLlavaFormater:
     def test_no_images(self):
         """Test the llava_formatter function with a prompt containing no images."""
         prompt = "This is a test."
         expected_output = (prompt, [])
         result = llava_formatter(prompt)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     @patch("autogen.agentchat.contrib.img_utils.get_image_data")
     def test_with_images(self, mock_get_image_data):
@@ -121,7 +121,7 @@ class TestLlavaFormater(unittest.TestCase):
         prompt = "This is a test with an image <img http://example.com/image.png>."
         expected_output = ("This is a test with an image <image>.", [raw_encoded_image])
         result = llava_formatter(prompt)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     @patch("autogen.agentchat.contrib.img_utils.get_image_data")
     def test_with_ordered_images(self, mock_get_image_data):
@@ -132,17 +132,17 @@ class TestLlavaFormater(unittest.TestCase):
         prompt = "This is a test with an image <img http://example.com/image.png>."
         expected_output = ("This is a test with an image <image 0>.", [raw_encoded_image])
         result = llava_formatter(prompt, order_image_tokens=True)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-class TestGpt4vFormatter(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+class TestGpt4vFormatter:
     def test_no_images(self):
         """Test the gpt4v_formatter function with a prompt containing no images."""
         prompt = "This is a test."
         expected_output = [{"type": "text", "text": prompt}]
         result = gpt4v_formatter(prompt)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     @patch("autogen.agentchat.contrib.img_utils.get_image_data")
     def test_with_images(self, mock_get_image_data):
@@ -157,7 +157,7 @@ class TestGpt4vFormatter(unittest.TestCase):
             {"type": "text", "text": "."},
         ]
         result = gpt4v_formatter(prompt)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     @patch("autogen.agentchat.contrib.img_utils.get_pil_image")
     def test_with_images_for_pil(self, mock_get_pil_image):
@@ -172,7 +172,7 @@ class TestGpt4vFormatter(unittest.TestCase):
             {"type": "text", "text": "."},
         ]
         result = gpt4v_formatter(prompt, img_format="pil")
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     def test_with_images_for_url(self):
         """Test the gpt4v_formatter function with a prompt containing images."""
@@ -183,7 +183,7 @@ class TestGpt4vFormatter(unittest.TestCase):
             {"type": "text", "text": "."},
         ]
         result = gpt4v_formatter(prompt, img_format="url")
-        self.assertEqual(result, expected_output)
+        assert result, expected_output
 
     @patch("autogen.agentchat.contrib.img_utils.get_image_data")
     def test_multiple_images(self, mock_get_image_data):
@@ -202,17 +202,17 @@ class TestGpt4vFormatter(unittest.TestCase):
             {"type": "text", "text": "."},
         ]
         result = gpt4v_formatter(prompt)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-class TestExtractImgPaths(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+class TestExtractImgPaths:
     def test_no_images(self):
         """Test the extract_img_paths function with a paragraph containing no images."""
         paragraph = "This is a test paragraph with no images."
         expected_output = []
         result = extract_img_paths(paragraph)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     def test_with_images(self):
         """Test the extract_img_paths function with a paragraph containing images."""
@@ -221,25 +221,25 @@ class TestExtractImgPaths(unittest.TestCase):
         )
         expected_output = ["http://example.com/image1.jpg", "http://example.com/image2.png"]
         result = extract_img_paths(paragraph)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     def test_mixed_case(self):
         """Test the extract_img_paths function with mixed case image extensions."""
         paragraph = "Mixed case extensions http://example.com/image.JPG and http://example.com/image.Png."
         expected_output = ["http://example.com/image.JPG", "http://example.com/image.Png"]
         result = extract_img_paths(paragraph)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
     def test_local_paths(self):
         """Test the extract_img_paths function with local file paths."""
         paragraph = "Local paths image1.jpeg and image2.GIF."
         expected_output = ["image1.jpeg", "image2.GIF"]
         result = extract_img_paths(paragraph)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
 
-@skip_on_missing_imports(["PIL"], "unknown")
-class MessageFormatterPILtoB64Test(unittest.TestCase):
+@run_for_optional_imports(["PIL"], "unknown")
+class MessageFormatterPILtoB64Test:
     def test_formatting(self):
         messages = [
             {"content": [{"type": "text", "text": "You are a helpful AI assistant."}], "role": "system"},
@@ -266,41 +266,41 @@ class MessageFormatterPILtoB64Test(unittest.TestCase):
             },
         ]
         result = message_formatter_pil_to_b64(messages)
-        self.assertEqual(result, expected_output)
+        assert result == expected_output
 
 
-class ImageTokenCountTest(unittest.TestCase):
+class ImageTokenCountTest:
     def test_tokens(self):
         # Note: Ground Truth manually fetched from https://openai.com/api/pricing/ in 2024/10/05
         small_image = Image.new("RGB", (10, 10), color="red")
-        self.assertEqual(num_tokens_from_gpt_image(small_image), 85 + 170)
-        self.assertEqual(num_tokens_from_gpt_image(small_image, "gpt-4o"), 255)
-        self.assertEqual(num_tokens_from_gpt_image(small_image, "gpt-4o-mini"), 8500)
+        assert num_tokens_from_gpt_image(small_image) == 85 + 170
+        assert num_tokens_from_gpt_image(small_image, "gpt-4o") == 255
+        assert num_tokens_from_gpt_image(small_image, "gpt-4o-mini") == 8500
 
         med_image = Image.new("RGB", (512, 1025), color="red")
-        self.assertEqual(num_tokens_from_gpt_image(med_image), 85 + 170 * 1 * 3)
-        self.assertEqual(num_tokens_from_gpt_image(med_image, "gpt-4o"), 595)
-        self.assertEqual(num_tokens_from_gpt_image(med_image, "gpt-4o-mini"), 19834)
+        assert num_tokens_from_gpt_image(med_image) == 85 + 170 * 1 * 3
+        assert num_tokens_from_gpt_image(med_image, "gpt-4o") == 595
+        assert num_tokens_from_gpt_image(med_image, "gpt-4o-mini") == 19834
 
         tall_image = Image.new("RGB", (10, 1025), color="red")
-        self.assertEqual(num_tokens_from_gpt_image(tall_image), 85 + 170 * 1 * 3)
-        self.assertEqual(num_tokens_from_gpt_image(tall_image, "gpt-4o"), 595)
-        self.assertEqual(num_tokens_from_gpt_image(tall_image, "gpt-4o-mini"), 19834)
+        assert num_tokens_from_gpt_image(tall_image) == 85 + 170 * 1 * 3
+        assert num_tokens_from_gpt_image(tall_image, "gpt-4o") == 595
+        assert num_tokens_from_gpt_image(tall_image, "gpt-4o-mini") == 19834
 
         huge_image = Image.new("RGB", (10000, 10000), color="red")
-        self.assertEqual(num_tokens_from_gpt_image(huge_image), 85 + 170 * 2 * 2)
-        self.assertEqual(num_tokens_from_gpt_image(huge_image, "gpt-4o"), 765)
-        self.assertEqual(num_tokens_from_gpt_image(huge_image, "gpt-4o-mini"), 25501)
+        assert num_tokens_from_gpt_image(huge_image) == 85 + 170 * 2 * 2
+        assert num_tokens_from_gpt_image(huge_image, "gpt-4o") == 765
+        assert num_tokens_from_gpt_image(huge_image, "gpt-4o-mini") == 25501
 
         huge_wide_image = Image.new("RGB", (10000, 5000), color="red")
-        self.assertEqual(num_tokens_from_gpt_image(huge_wide_image), 85 + 170 * 3 * 2)
-        self.assertEqual(num_tokens_from_gpt_image(huge_wide_image, "gpt-4o"), 1105)
-        self.assertEqual(num_tokens_from_gpt_image(huge_wide_image, "gpt-4o-mini"), 36835)
+        assert num_tokens_from_gpt_image(huge_wide_image) == 85 + 170 * 3 * 2
+        assert num_tokens_from_gpt_image(huge_wide_image, "gpt-4o") == 1105
+        assert num_tokens_from_gpt_image(huge_wide_image, "gpt-4o-mini") == 36835
 
         # Handle low quality
-        self.assertEqual(num_tokens_from_gpt_image(huge_image, "gpt-4-vision", low_quality=True), 85)
-        self.assertEqual(num_tokens_from_gpt_image(huge_wide_image, "gpt-4o", low_quality=True), 85)
-        self.assertEqual(num_tokens_from_gpt_image(huge_wide_image, "gpt-4o-mini", low_quality=True), 2833)
+        assert num_tokens_from_gpt_image(huge_image, "gpt-4-vision", low_quality=True) == 85
+        assert num_tokens_from_gpt_image(huge_wide_image, "gpt-4o", low_quality=True) == 85
+        assert num_tokens_from_gpt_image(huge_wide_image, "gpt-4o-mini", low_quality=True) == 2833
 
 
 if __name__ == "__main__":

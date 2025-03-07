@@ -131,7 +131,7 @@ jobs:
           uv pip install --system -e .[retrievechat-qdrant]
       - name: Install pgvector when on linux
         run: |
-          uv pip install --system -e .[test,retrievechat-pgvector,retrievechat-mongodb]
+          uv pip install --system -e .[test,retrievechat-pgvector,retrievechat-mongodb,retrievechat-qdrant,openai]
       - name: Install couchbase when on linux
         run: |
           uv pip install --system -e .[retrievechat-couchbase]
@@ -357,7 +357,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install packages and dependencies for LMM
         run: |
-          uv pip install --system -e .[test,lmm]
+          uv pip install --system -e .[test,lmm,openai]
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |

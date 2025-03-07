@@ -5,8 +5,9 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
+from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
@@ -20,6 +21,8 @@ with optional_import_block():
     from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
+__all__ = ["VectorChromaQueryEngine"]
+
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
 EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
 EMPTY_RESPONSE_REPLY = "Sorry, I couldn't find any information on that. If you haven't ingested any documents, please try that."  # Default response for queries without results
@@ -31,15 +34,18 @@ logger = logging.getLogger(__name__)
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
+@export_module("autogen.agents.experimental")
 class VectorChromaQueryEngine:
     """
     This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. The Chromadb collection serves as the storage layer, while
     the collection name uniquely identifies the set of documents within the persistent database.
+
+    This implements the autogen.agentchat.contrib.rag.RAGQueryEngine protocol.
     """
 
-    def __init__(  # type: ignore
+    def __init__(  # type: ignore[no-any-unimported]
         self,
         db_path: Optional[str] = None,
         embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
@@ -71,9 +77,9 @@ class VectorChromaQueryEngine:
         self.client = chromadb.PersistentClient(path=db_path or "./chroma")
         self.collection_name: Optional[str] = collection_name
 
-        self.establish_db()
+        self.connect_db()
 
-    def establish_db(self) -> None:
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """
         Establish a connection to the Chromadb database and initialize the collection.
         """
@@ -92,6 +98,8 @@ class VectorChromaQueryEngine:
             get_or_create=True,  # If collection already exists, get the collection
         )
         self.index = self._create_index(self.collection)
+
+        return True
 
     def query(self, question: str) -> str:
         """
@@ -113,7 +121,9 @@ class VectorChromaQueryEngine:
         return str(response)
 
     def add_docs(
-        self, new_doc_dir: Optional[Union[Path, str]] = None, new_doc_paths: Optional[list[Union[Path, str]]] = None
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
     ) -> None:
         """
         Add additional documents to the existing vector index.
@@ -124,18 +134,18 @@ class VectorChromaQueryEngine:
         Args:
             new_doc_dir: The directory path from which to load additional documents.
                 If provided, all eligible files in this directory are loaded.
-            new_doc_paths: A list of file paths specifying additional documents to load.
+            new_doc_paths_or_urls: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
         self.validate_query_index()
         new_doc_dir = new_doc_dir or ""
-        new_doc_paths = new_doc_paths or []
+        new_doc_paths = new_doc_paths_or_urls or []
         new_docs = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
         for doc in new_docs:
             self.index.insert(doc)
 
-    def _load_doc(  # type: ignore
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
+    def _load_doc(  # type: ignore[no-any-unimported]
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
     ) -> list["LlamaDocument"]:
         """
         Load documents from a directory and/or a list of file paths.
@@ -170,14 +180,14 @@ class VectorChromaQueryEngine:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())
+            loaded_documents.extend(SimpleDirectoryReader(input_files=list(input_docs)).load_data())
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
 
         return loaded_documents
 
-    def _create_index(  # type: ignore
+    def _create_index(  # type: ignore[no-any-unimported]
         self, collection: "Collection"
     ) -> "VectorStoreIndex":
         """
@@ -228,3 +238,21 @@ class VectorChromaQueryEngine:
         """Ensures an index exists"""
         if not hasattr(self, "index"):
             raise Exception("Query index is not initialized. Please ingest some documents before querying.")
+
+    def init_db(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for VectorChromaQueryEngine"""
+        raise NotImplementedError("Method, init_db, not required nor implemented for VectorChromaQueryEngine")
+
+
+# mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
+if TYPE_CHECKING:
+    from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+
+    def _check_implement_protocol(o: VectorChromaQueryEngine) -> RAGQueryEngine:
+        return o

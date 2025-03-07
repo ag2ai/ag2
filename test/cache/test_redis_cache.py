@@ -13,12 +13,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.cache.redis_cache import RedisCache
-from autogen.import_utils import skip_on_missing_imports
 
 
 @pytest.mark.redis
-@skip_on_missing_imports(["redis"], "redis")
-class TestRedisCache(unittest.TestCase):
+class TestRedisCache:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self.seed = "test_seed"
         self.redis_url = "redis://localhost:6379/0"
@@ -26,7 +25,7 @@ class TestRedisCache(unittest.TestCase):
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_init(self, mock_redis_from_url):
         cache = RedisCache(self.seed, self.redis_url)
-        self.assertEqual(cache.seed, self.seed)
+        assert cache.seed == self.seed
         mock_redis_from_url.assert_called_with(self.redis_url)
 
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
@@ -34,7 +33,7 @@ class TestRedisCache(unittest.TestCase):
         cache = RedisCache(self.seed, self.redis_url)
         key = "test_key"
         expected_prefixed_key = f"autogen:{self.seed}:{key}"
-        self.assertEqual(cache._prefixed_key(key), expected_prefixed_key)
+        assert cache._prefixed_key(key) == expected_prefixed_key
 
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_get(self, mock_redis_from_url):
@@ -43,11 +42,11 @@ class TestRedisCache(unittest.TestCase):
         serialized_value = pickle.dumps(value)
         cache = RedisCache(self.seed, self.redis_url)
         cache.cache.get.return_value = serialized_value
-        self.assertEqual(cache.get(key), value)
+        assert cache.get(key) == value
         cache.cache.get.assert_called_with(f"autogen:{self.seed}:{key}")
 
         cache.cache.get.return_value = None
-        self.assertIsNone(cache.get(key))
+        assert cache.get(key) is None
 
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_set(self, mock_redis_from_url):
@@ -61,7 +60,7 @@ class TestRedisCache(unittest.TestCase):
     @patch("autogen.cache.redis_cache.redis.Redis.from_url", return_value=MagicMock())
     def test_context_manager(self, mock_redis_from_url):
         with RedisCache(self.seed, self.redis_url) as cache:
-            self.assertIsInstance(cache, RedisCache)
+            assert isinstance(cache, RedisCache)
             mock_redis_instance = cache.cache
         mock_redis_instance.close.assert_called()
 

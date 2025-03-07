@@ -8,7 +8,7 @@ def get_youtube_caption(video_id: str) -> str:
     """Retrieves the captions for a YouTube video.
 
     Args:
-        videoId (str): The ID of the YouTube video.
+        video_id (str): The ID of the YouTube video.
 
     Returns:
         str: The captions of the YouTube video in text format.

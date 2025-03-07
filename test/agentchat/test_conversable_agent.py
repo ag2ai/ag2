@@ -22,7 +22,7 @@ import autogen
 from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -935,7 +935,7 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -1069,7 +1069,7 @@ async def test_function_registration_e2e_async(
     await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -1089,7 +1089,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(res.chat_history) <= 6
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1140,7 +1140,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1528,7 +1528,7 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
         user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
 
 
-@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
 def test_context_variables():
     # Test initialization with context_variables
     initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}

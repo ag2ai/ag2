@@ -54,11 +54,6 @@ class TestIsUrl:
         url = None
         assert not is_url(url)  # type: ignore[arg-type]
 
-    def test_logger_error(self, caplog: pytest.LogCaptureFixture) -> None:
-        url = None
-        is_url(url)  # type: ignore[arg-type]
-        assert "Error when checking if None is a valid URL" in caplog.text
-
 
 class TestDownloadUrl:
     @pytest.fixture

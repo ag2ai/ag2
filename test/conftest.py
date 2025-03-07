@@ -23,6 +23,7 @@ from autogen.import_utils import optional_import_block
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 MOCK_OPEN_AI_API_KEY = "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+MOCK_AZURE_API_KEY = "mockazureAPIkeysinexpectedformatsfortestingonly"
 
 reason = "requested to skip"
 
@@ -336,6 +337,23 @@ def mock_credentials() -> Credentials:
     return get_mock_credentials(model="gpt-4o")
 
 
+@pytest.fixture
+def mock_azure_credentials() -> Credentials:
+    llm_config = {
+        "config_list": [
+            {
+                "api_type": "azure",
+                "model": "gpt-40",
+                "api_key": MOCK_AZURE_API_KEY,
+                "base_url": "https://my_models.azure.com/v1",
+            },
+        ],
+        "temperature": 0.6,
+    }
+
+    return Credentials(llm_config=llm_config)
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Exit status 5 means there were no tests collected
     # so we should set the exit status to 1
@@ -366,35 +384,35 @@ def user_proxy() -> UserProxyAgent:
 credentials_all_llms = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,
-        marks=pytest.mark.openai,
+        marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_gemini_flash.__name__,
-        marks=pytest.mark.gemini,
+        marks=[pytest.mark.gemini, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_anthropic_claude_sonnet.__name__,
-        marks=pytest.mark.anthropic,
+        marks=[pytest.mark.anthropic, pytest.mark.aux_neg_flag],
     ),
 ]
 
 credentials_browser_use = [
     pytest.param(
         credentials_gpt_4o_mini.__name__,
-        marks=pytest.mark.openai,
+        marks=[pytest.mark.openai, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_anthropic_claude_sonnet.__name__,
-        marks=pytest.mark.anthropic,
+        marks=[pytest.mark.anthropic, pytest.mark.aux_neg_flag],
     ),
     pytest.param(
         credentials_gemini_flash_exp.__name__,
-        marks=pytest.mark.gemini,
+        marks=[pytest.mark.gemini, pytest.mark.aux_neg_flag],
     ),
     # Deeseek currently does not work too well with the browser-use
     pytest.param(
         credentials_deepseek_chat.__name__,
-        marks=pytest.mark.deepseek,
+        marks=[pytest.mark.deepseek, pytest.mark.aux_neg_flag],
     ),
 ]
 
@@ -411,10 +429,10 @@ def suppress(
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
-        exception (type[BaseException]): The exception to suppress.
-        retries (Optional[int]): The number of times to retry the function. If None, the function will tried once and just return in case of exception raised. Defaults to None.
-        timeout (int): The time to wait between retries in seconds. Defaults to 60.
-
+        exception: The exception to suppress.
+        retries: The number of times to retry the function. If None, the function will tried once and just return in case of exception raised. Defaults to None.
+        timeout: The time to wait between retries in seconds. Defaults to 60.
+        error_filter: A function that takes an exception as input and returns a boolean indicating whether the exception should be suppressed. Defaults to None.
     """
 
     def decorator(

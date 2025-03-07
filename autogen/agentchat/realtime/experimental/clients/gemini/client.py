@@ -32,7 +32,7 @@ API_VERSION = "v1alpha"
 
 
 @register_realtime_client()
-@require_optional_import("websockets", "gemini", except_for="get_factory")
+@require_optional_import("websockets", "gemini", except_for=["get_factory", "__init__"])
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class GeminiRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for Gemini Realtime API."""
@@ -46,7 +46,8 @@ class GeminiRealtimeClient(RealtimeClientBase):
         """(Experimental) Client for Gemini Realtime API.
 
         Args:
-            llm_config (dict[str, Any]): The config for the client.
+            llm_config: The config for the client.
+            logger: The logger for the client.
         """
         super().__init__()
         self._llm_config = llm_config
@@ -100,8 +101,9 @@ class GeminiRealtimeClient(RealtimeClientBase):
         """Send a text message to the Gemini Realtime API.
 
         Args:
-            role (str): The role of the message.
-            text (str): The text of the message.
+            role: The role of the message.
+            text: The text of the message.
+            turn_complete: A flag indicating if the turn is complete.
         """
         msg = {
             "client_content": {
@@ -254,9 +256,9 @@ class GeminiRealtimeClient(RealtimeClientBase):
         """Create a Realtime API client.
 
         Args:
-            model (str): The model to create the client for.
-            logger (Logger): The logger for the client.
-            kwargs (Any): Additional arguments.
+            llm_config: The LLM config for the client.
+            logger: The logger for the client.
+            **kwargs: Additional arguments.
 
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern

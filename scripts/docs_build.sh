@@ -3,7 +3,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
 set -e
 set -x
 
@@ -24,6 +23,6 @@ docs_build() {
     docs_generate "$force"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]] && [[ "${BASH_SOURCE[0]}" == "$(realpath "$0")" ]]; then
     docs_build "$1"
 fi

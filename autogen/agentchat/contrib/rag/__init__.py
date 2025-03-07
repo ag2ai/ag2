@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .chroma_db_query_engine import ChromaDBQueryEngine
+from .mongodb_query_engine import MongoDBQueryEngine
 from .query_engine import RAGQueryEngine
 
-__all__ = ["RAGQueryEngine"]
+__all__ = ["ChromaDBQueryEngine", "MongoDBQueryEngine", "RAGQueryEngine"]

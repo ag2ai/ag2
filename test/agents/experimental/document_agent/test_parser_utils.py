@@ -4,13 +4,13 @@
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 from pytest import LogCaptureFixture, fixture, raises
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.tool import Tool
 
 from ....conftest import Credentials
@@ -19,7 +19,7 @@ with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument
 
 
-@skip_on_missing_imports("docling", "rag")
+@run_for_optional_imports("docling", "rag")
 class TestDoclingParseDocs:
     @fixture
     def mock_document_input(self) -> MagicMock:
@@ -172,33 +172,58 @@ class TestDoclingParseDocs:
 
         expected_tools = [
             {
+                "type": "function",
                 "function": {
                     "description": "Use this tool to parse and understand text.",
                     "name": "docling_parse_docs",
                     "parameters": {
+                        "type": "object",
                         "properties": {
                             "input_file_path": {
                                 "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}],
-                                "description": "input_file_path",
+                                "description": "Path to the input file or directory",
                             },
                             "output_dir_path": {
-                                "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}],
-                                "description": "output_dir_path",
-                                "default": "./output_dir",
+                                "anyOf": [{"type": "string"}, {"format": "path", "type": "string"}, {"type": "null"}],
+                                "default": None,
+                                "description": "Path to the output directory",
                             },
                             "output_formats": {
-                                "items": {"type": "string"},
-                                "type": "array",
-                                "default": ["markdown"],
-                                "description": "output_formats",
+                                "anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}],
+                                "default": None,
+                                "description": "List of output formats (markdown, json)",
                             },
                         },
                         "required": ["input_file_path"],
-                        "type": "object",
                     },
                 },
-                "type": "function",
             }
         ]
         assert assistant.llm_config and "tools" in assistant.llm_config
         assert assistant.llm_config["tools"] == expected_tools
+
+    def test_default_output_dir_path(self, tmp_path: Path, mock_conversion_result: MagicMock) -> None:
+        """Test that the function uses './output' as the default output directory path when None is provided."""
+        input_file_path = tmp_path / "input_file_path"
+
+        with (
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.handle_input", return_value=[input_file_path]
+            ),
+            patch(
+                "autogen.agents.experimental.document_agent.parser_utils.DocumentConverter.convert_all",
+                return_value=iter([mock_conversion_result]),
+            ),
+            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
+            # Call the function with output_dir_path=None
+            docling_parse_docs(input_file_path, output_dir_path=None)
+
+            # Check that Path('./output') was created
+            mock_mkdir.assert_called_with(parents=True, exist_ok=True)
+
+            # Verify that the correct output directory was used
+            file_open_calls = [call[0][0] for call in mock_file.call_args_list]
+            for file_path in file_open_calls:
+                assert str(file_path).startswith(str(Path("./output")))

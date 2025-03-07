@@ -4,14 +4,18 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import ast
 import re
-from typing import Any, Callable, Union
+from dataclasses import dataclass
+from typing import Any, Optional, Union
 
 from ..doc_utils import export_module
 from .agent import Agent
 
 
-def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
+def consolidate_chat_info(
+    chat_info: Union[dict[str, Any], list[dict[str, Any]]], uniform_sender: Optional[Agent] = None
+) -> None:
     if isinstance(chat_info, dict):
         chat_info = [chat_info]
     for c in chat_info:
@@ -23,9 +27,7 @@ def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
         assert "recipient" in c, "recipient must be provided."
         summary_method = c.get("summary_method")
         assert (
-            summary_method is None
-            or isinstance(summary_method, Callable)
-            or summary_method in ("last_msg", "reflection_with_llm")
+            summary_method is None or callable(summary_method) or summary_method in ("last_msg", "reflection_with_llm")
         ), "summary_method must be a string chosen from 'reflection_with_llm' or 'last_msg' or a callable, or None."
         if summary_method == "reflection_with_llm":
             assert sender.client is not None or c["recipient"].client is not None, (
@@ -34,7 +36,7 @@ def consolidate_chat_info(chat_info, uniform_sender=None) -> None:
 
 
 @export_module("autogen")
-def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+def gather_usage_summary(agents: list[Agent]) -> dict[str, dict[str, Any]]:
     r"""Gather usage summary from all agents.
 
     Args:
@@ -42,8 +44,8 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict[str, Any]],
 
     Returns:
         dictionary: A dictionary containing two keys:
-          - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.
-          - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
+            - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.
+            - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
 
     Example:
     ```python
@@ -92,8 +94,8 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict[str, Any]],
 
     for agent in agents:
         if getattr(agent, "client", None):
-            aggregate_summary(usage_including_cached_inference, agent.client.total_usage_summary)
-            aggregate_summary(usage_excluding_cached_inference, agent.client.actual_usage_summary)
+            aggregate_summary(usage_including_cached_inference, agent.client.total_usage_summary)  # type: ignore[attr-defined]
+            aggregate_summary(usage_excluding_cached_inference, agent.client.actual_usage_summary)  # type: ignore[attr-defined]
 
     return {
         "usage_including_cached_inference": usage_including_cached_inference,
@@ -101,7 +103,7 @@ def gather_usage_summary(agents: list[Agent]) -> dict[dict[str, dict[str, Any]],
     }
 
 
-def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]]) -> list[dict[str, dict[str, str]]]:
+def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     """Parses HTML style tags from message contents.
 
     The parsing is done by looking for patterns in the text that match the format of HTML tags. The tag to be parsed is
@@ -116,11 +118,11 @@ def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]])
 
     Args:
         tag (str): The HTML style tag to be parsed.
-        content (Union[str, List[Dict[str, Any]]]): The message content to parse. Can be a string or a list of content
+        content (Union[str, list[dict[str, Any]]]): The message content to parse. Can be a string or a list of content
             items.
 
     Returns:
-        List[Dict[str, str]]: A list of dictionaries, where each dictionary represents a parsed tag. Each dictionary
+        list[dict[str, str]]: A list of dictionaries, where each dictionary represents a parsed tag. Each dictionary
             contains three key-value pairs: 'type' which is the tag, 'attr' which is a dictionary of the parsed attributes,
             and 'match' which is a regular expression match object.
 
@@ -141,7 +143,7 @@ def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]])
     return results
 
 
-def _parse_tags_from_text(tag: str, text: str) -> list[dict[str, str]]:
+def _parse_tags_from_text(tag: str, text: str) -> list[dict[str, Any]]:
     pattern = re.compile(f"<{tag} (.*?)>")
 
     results = []
@@ -153,18 +155,18 @@ def _parse_tags_from_text(tag: str, text: str) -> list[dict[str, str]]:
     return results
 
 
-def _parse_attributes_from_tags(tag_content: str):
+def _parse_attributes_from_tags(tag_content: str) -> dict[str, str]:
     pattern = r"([^ ]+)"
     attrs = re.findall(pattern, tag_content)
     reconstructed_attrs = _reconstruct_attributes(attrs)
 
-    def _append_src_value(content, value):
+    def _append_src_value(content: dict[str, str], value: Any) -> None:
         if "src" in content:
             content["src"] += f" {value}"
         else:
             content["src"] = value
 
-    content = {}
+    content: dict[str, str] = {}
     for attr in reconstructed_attrs:
         if "=" not in attr:
             _append_src_value(content, attr)
@@ -204,3 +206,218 @@ def _reconstruct_attributes(attrs: list[str]) -> list[str]:
             else:
                 reconstructed.append(attr)
     return reconstructed
+
+
+@dataclass
+@export_module("autogen")
+class ContextExpression:
+    """A class to evaluate logical expressions using context variables.
+
+    Args:
+        expression (str): A string containing a logical expression with context variable references.
+            - Variable references use ${var_name} syntax: ${logged_in}, ${attempts}
+            - String literals can use normal quotes: 'hello', "world"
+            - Supported operators:
+                - Logical: not/!, and/&, or/|
+                - Comparison: >, <, >=, <=, ==, !=
+            - Supported functions:
+                - len(${var_name}): Gets the length of a list, string, or other collection
+            - Parentheses can be used for grouping
+            - Examples:
+                - "not ${logged_in} and ${is_admin} or ${guest_checkout}"
+                - "!${logged_in} & ${is_admin} | ${guest_checkout}"
+                - "len(${orders}) > 0 & ${user_active}"
+                - "len(${cart_items}) == 0 | ${checkout_started}"
+
+    Raises:
+        SyntaxError: If the expression cannot be parsed
+        ValueError: If the expression contains disallowed operations
+    """
+
+    expression: str
+
+    def __post_init__(self) -> None:
+        # Validate the expression immediately upon creation
+        try:
+            # Extract variable references and replace with placeholders
+            self._variable_names = self._extract_variable_names(self.expression)
+
+            # Convert symbolic operators to Python keywords
+            python_expr = self._convert_to_python_syntax(self.expression)
+
+            # Sanitize for AST parsing
+            sanitized_expr = self._prepare_for_ast(python_expr)
+
+            # Use ast to parse and validate the expression
+            self._ast = ast.parse(sanitized_expr, mode="eval")
+
+            # Verify it only contains allowed operations
+            self._validate_operations(self._ast.body)
+
+            # Store the Python-syntax version for evaluation
+            self._python_expr = python_expr
+
+        except SyntaxError as e:
+            raise SyntaxError(f"Invalid expression syntax in '{self.expression}': {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Error validating expression '{self.expression}': {str(e)}")
+
+    def _extract_variable_names(self, expr: str) -> list[str]:
+        """Extract all variable references ${var_name} from the expression."""
+        # Find all patterns like ${var_name}
+        matches = re.findall(r"\${([^}]*)}", expr)
+        return matches
+
+    def _convert_to_python_syntax(self, expr: str) -> str:
+        """Convert symbolic operators to Python keywords."""
+        # We need to be careful about operators inside string literals
+        # First, temporarily replace string literals with placeholders
+        string_literals = []
+
+        def replace_string_literal(match: re.Match[str]) -> str:
+            string_literals.append(match.group(0))
+            return f"__STRING_LITERAL_{len(string_literals) - 1}__"
+
+        # Replace both single and double quoted strings
+        expr_without_strings = re.sub(r"'[^']*'|\"[^\"]*\"", replace_string_literal, expr)
+
+        # Handle the NOT operator (!) - no parentheses handling needed
+        # Replace standalone ! before variables or expressions
+        expr_without_strings = re.sub(r"!\s*(\${|\()", "not \\1", expr_without_strings)
+
+        # Handle AND and OR operators - simpler approach without parentheses handling
+        expr_without_strings = re.sub(r"\s+&\s+", " and ", expr_without_strings)
+        expr_without_strings = re.sub(r"\s+\|\s+", " or ", expr_without_strings)
+
+        # Now put string literals back
+        for i, literal in enumerate(string_literals):
+            expr_without_strings = expr_without_strings.replace(f"__STRING_LITERAL_{i}__", literal)
+
+        return expr_without_strings
+
+    def _prepare_for_ast(self, expr: str) -> str:
+        """Convert the expression to valid Python for AST parsing by replacing variables with placeholders."""
+        # Replace ${var_name} with var_name for AST parsing
+        processed_expr = expr
+        for var_name in self._variable_names:
+            processed_expr = processed_expr.replace(f"${{{var_name}}}", var_name)
+
+        return processed_expr
+
+    def _validate_operations(self, node: ast.AST) -> None:
+        """Recursively validate that only allowed operations exist in the AST."""
+        allowed_node_types = (
+            # Boolean operations
+            ast.BoolOp,
+            ast.UnaryOp,
+            ast.And,
+            ast.Or,
+            ast.Not,
+            # Comparison operations
+            ast.Compare,
+            ast.Eq,
+            ast.NotEq,
+            ast.Lt,
+            ast.LtE,
+            ast.Gt,
+            ast.GtE,
+            # Basic nodes
+            ast.Name,
+            ast.Load,
+            ast.Constant,
+            ast.Expression,
+            # Support for basic numeric operations in comparisons
+            ast.Num,
+            ast.NameConstant,
+            # Support for negative numbers
+            ast.USub,
+            ast.UnaryOp,
+            # Support for string literals
+            ast.Str,
+            ast.Constant,
+            # Support for function calls (specifically len())
+            ast.Call,
+        )
+
+        if not isinstance(node, allowed_node_types):
+            raise ValueError(f"Operation type {type(node).__name__} is not allowed in logical expressions")
+
+        # Special validation for function calls - only allow len()
+        if isinstance(node, ast.Call):
+            if not (isinstance(node.func, ast.Name) and node.func.id == "len"):
+                raise ValueError(f"Only the len() function is allowed, got: {getattr(node.func, 'id', 'unknown')}")
+            if len(node.args) != 1:
+                raise ValueError(f"len() function must have exactly one argument, got {len(node.args)}")
+
+        # Special validation for Compare nodes
+        if isinstance(node, ast.Compare):
+            for op in node.ops:
+                if not isinstance(op, (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+                    raise ValueError(f"Comparison operator {type(op).__name__} is not allowed")
+
+        # Recursively check child nodes
+        for child in ast.iter_child_nodes(node):
+            self._validate_operations(child)
+
+    def evaluate(self, context_variables: dict[str, Any]) -> bool:
+        """Evaluate the expression using the provided context variables.
+
+        Args:
+            context_variables: Dictionary of context variables to use for evaluation
+
+        Returns:
+            bool: The result of evaluating the expression
+        """
+        # Create a modified expression that we can safely evaluate
+        eval_expr = self._python_expr  # Use the Python-syntax version
+
+        # First, handle len() functions with variable references inside
+        len_pattern = r"len\(\${([^}]*)}\)"
+        len_matches = list(re.finditer(len_pattern, eval_expr))
+
+        # Process all len() operations first
+        for match in len_matches:
+            var_name = match.group(1)
+            var_value = context_variables.get(var_name, [])
+
+            # Calculate the length - works for lists, strings, dictionaries, etc.
+            try:
+                length_value = len(var_value)
+            except TypeError:
+                # If the value doesn't support len(), treat as 0
+                length_value = 0
+
+            # Replace the len() expression with the actual length
+            full_match = match.group(0)
+            eval_expr = eval_expr.replace(full_match, str(length_value))
+
+        # Then replace remaining variable references with their values
+        for var_name in self._variable_names:
+            # Skip variables that were already processed in len() expressions
+            if any(m.group(1) == var_name for m in len_matches):
+                continue
+
+            # Get the value from context, defaulting to False if not found
+            var_value = context_variables.get(var_name, False)
+
+            # Format the value appropriately based on its type
+            if isinstance(var_value, (bool, int, float)):
+                formatted_value = str(var_value)
+            elif isinstance(var_value, str):
+                formatted_value = f"'{var_value}'"  # Quote strings
+            elif isinstance(var_value, (list, dict, tuple)):
+                # For collections, convert to their boolean evaluation
+                formatted_value = str(bool(var_value))
+            else:
+                formatted_value = str(var_value)
+
+            # Replace the variable reference with the formatted value
+            eval_expr = eval_expr.replace(f"${{{var_name}}}", formatted_value)
+
+        try:
+            return eval(eval_expr)  # type: ignore[no-any-return]
+        except Exception as e:
+            raise ValueError(f"Error evaluating expression '{self.expression}': {str(e)}")
+
+    def __str__(self) -> str:
+        return f"ContextExpression('{self.expression}')"

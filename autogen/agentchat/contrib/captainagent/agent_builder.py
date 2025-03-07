@@ -194,11 +194,21 @@ Match roles in the role set to each expert in expert set.
         """(These APIs are experimental and may change in the future.)
 
         Args:
-            config_file_or_env: path or environment of the OpenAI api configs.
-            builder_model: specify a model as the backbone of build manager.
-            agent_model: specify a model as the backbone of participant agents.
-            endpoint_building_timeout: timeout for building up an endpoint server.
-            max_agents: max agents for each task.
+            config_file_or_env (Optional[str], optional): Path to the config file or name of the environment
+                variable containing the OpenAI API configurations. Defaults to "OAI_CONFIG_LIST".
+            config_file_location (Optional[str], optional): Location of the config file if not in the
+                current directory. Defaults to "".
+            builder_model (Optional[Union[str, list]], optional): Model identifier(s) to use as the
+                builder/manager model that coordinates agent creation. Can be a string or list of strings.
+                Filters the config list to match these models. Defaults to [].
+            agent_model (Optional[Union[str, list]], optional): Model identifier(s) to use for the
+                generated participant agents. Can be a string or list of strings. Defaults to [].
+            builder_model_tags (Optional[list], optional): Tags to filter which models from the config
+                can be used as builder models. Defaults to [].
+            agent_model_tags (Optional[list], optional): Tags to filter which models from the config
+                can be used as agent models. Defaults to [].
+            max_agents (Optional[int], optional): Maximum number of agents to create for each task.
+                Defaults to 5.
         """
         builder_model = builder_model if isinstance(builder_model, list) else [builder_model]
         builder_filter_dict = {}
@@ -254,9 +264,9 @@ Match roles in the role set to each expert in expert set.
                 2. agent_name: use to identify an agent in the group chat.
                 3. system_message: including persona, task solving instruction, etc.
                 4. description: brief description of an agent that help group chat manager to pick the speaker.
+            member_name: a list of agent names in the group chat.
             llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
-            world_size: the max size of parallel tensors (in most of the cases, this is identical to the amount of GPUs).
 
         Returns:
             agent: a set-up agent.
@@ -376,11 +386,14 @@ Match roles in the role set to each expert in expert set.
 
         Args:
             building_task: instruction that helps build manager (gpt-4) to decide what agent should be built.
+            default_llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
             coding: use to identify if the user proxy (a code interpreter) should be added.
             code_execution_config: specific configs for user proxy (e.g., last_n_messages, work_dir, ...).
-            default_llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
+            max_agents (Optional[int], default=None): Maximum number of agents to create for the task. If None, uses the value from self.max_agents.
+            **kwargs (Any): Additional arguments to pass to _build_agents.
+                - agent_configs: Optional list of predefined agent configurations to use.
 
         Returns:
             agent_list: a list of agents.
@@ -397,7 +410,7 @@ Match roles in the role set to each expert in expert set.
         if max_agents is None:
             max_agents = self.max_agents
 
-        agent_configs = []
+        agent_configs = kwargs.get("agent_configs", [])
         self.building_task = building_task
 
         print(colored("==> Generating agents...", "green"), flush=True)
@@ -506,12 +519,14 @@ Match roles in the role set to each expert in expert set.
             building_task: instruction that helps build manager (gpt-4) to decide what agent should be built.
             library_path_or_json: path or JSON string config of agent library.
             default_llm_config: specific configs for LLM (e.g., config_list, seed, temperature, ...).
+            top_k: number of results to return.
             coding: use to identify if the user proxy (a code interpreter) should be added.
             code_execution_config: specific configs for user proxy (e.g., last_n_messages, work_dir, ...).
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             embedding_model: a Sentence-Transformers model use for embedding similarity to select agents from library.
                 As reference, chromadb use "all-mpnet-base-v2" as default.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
+            **kwargs: Additional arguments to pass to _build_agents.
 
         Returns:
             agent_list: a list of agents.
@@ -659,6 +674,7 @@ Match roles in the role set to each expert in expert set.
         Args:
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
             user_proxy: user proxy's class that can be used to replace the default user proxy.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             agent_list: a list of agents.
@@ -725,6 +741,9 @@ Match roles in the role set to each expert in expert set.
             filepath: filepath or JSON string for the save config.
             config_json: JSON string for the save config.
             use_oai_assistant: use OpenAI assistant api instead of self-constructed agent.
+            **kwargs (Any): Additional arguments to pass to _build_agents:
+                - code_execution_config (Optional[dict[str, Any]]): If provided, overrides the
+                code execution configuration from the loaded config.
 
         Returns:
             agent_list: a list of agents.

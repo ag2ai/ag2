@@ -1,0 +1,14 @@
+---
+title: RealtimeAgent over WebRTC
+sidebarTitle: WebRTC Integration
+---
+
+![Realtime agent communication over WebRTC](/snippets/advanced-concepts/realtime-agent/img/webrtc_communication_diagram.png)
+
+Previously, we introduced the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/WebSocketAudioAdapter#websocketaudioadapter), a simple way to stream real-time audio using [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/). While effective, [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) can face challenges with quality and reliability in high-latency or network-variable scenarios. Enter [WebRTC](https://webrtc.org/).
+
+Now, we will deonstrate how to integrate [OpenAI Realtime API with WebRTC](https://platform.openai.com/docs/guides/realtime-webrtc), leveraging WebRTC’s peer-to-peer communication capabilities to provide a robust, low-latency, high-quality audio streaming experience directly from the browser.
+
+import RealtimeAgent from "/snippets/advanced-concepts/realtime-agent/webrtc.mdx";
+
+<RealtimeAgent/>

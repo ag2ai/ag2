@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.experimental.messageplatform import TelegramRetrieveTool, TelegramSendTool
 
 with optional_import_block():
@@ -16,7 +16,7 @@ with optional_import_block():
     from telethon.tl.types import Message
 
 
-@skip_on_missing_imports(["telethon"], "commsagent-telegram")
+@run_for_optional_imports(["telethon"], "commsagent-telegram")
 class TestTelegramSendTool:
     @pytest.fixture(autouse=True)
     def mock_telegram_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
@@ -215,7 +215,7 @@ class TestTelegramSendTool:
         mock_telegram_client.send_message.assert_not_called()
 
 
-@skip_on_missing_imports(["telethon"], "commsagent-telegram")
+@run_for_optional_imports(["telethon"], "commsagent-telegram")
 class TestTelegramRetrieveTool:
     @pytest.fixture(autouse=True)
     def mock_telegram_client(self, monkeypatch: pytest.MonkeyPatch) -> AsyncMock:

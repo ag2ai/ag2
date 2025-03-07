@@ -197,11 +197,11 @@ def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dic
     """Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:
-        - prompt (str): The input string that may contain image tags like `<img ...>`.
-        - img_format (str): what image format should be used. One of "uri", "url", "pil".
+        prompt (str): The input string that may contain image tags like `<img ...>`.
+        img_format (str): what image format should be used. One of "uri", "url", "pil".
 
     Returns:
-        - List[Union[str, dict[str, Any]]]: A list of alternating text and image dictionary items.
+        List[Union[str, dict[str, Any]]]: A list of alternating text and image dictionary items.
     """
     assert img_format in ["uri", "url", "pil"]
 
@@ -345,9 +345,9 @@ def num_tokens_from_gpt_image(
     Reference: https://openai.com/api/pricing/
 
     Args:
-        image_data : Union[str, Image.Image]: The image data which can either be a base64
-           encoded string, a URL, a file path, or a PIL Image object.
+        image_data : Union[str, Image.Image]: The image data which can either be a base64 encoded string, a URL, a file path, or a PIL Image object.
         model: str: The model being used for image processing. Can be "gpt-4-vision", "gpt-4o", or "gpt-4o-mini".
+        low_quality: bool: Whether to use low-quality processing. Defaults to False.
 
     Returns:
         int: The total number of tokens required for processing the image.

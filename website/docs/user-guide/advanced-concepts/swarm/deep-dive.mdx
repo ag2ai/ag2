@@ -11,7 +11,7 @@ Changes at version >= 0.7.4:
 
 </Tip>
 
-Swarms provide controllable flows between agents that are determined at the agent level. You define hand-off, post-tool, and post-work transitions from one agent to another (or to end the swarm).
+Swarms provide controllable flows between agents that are determined at the agent level. You define handoff, post-tool, and post-work transitions from one agent to another (or to end the swarm).
 
 In this Swarm deep-dive we run through all the components of AG2's Swarm.
 You can learn about Swarm's high-level concepts in the [Basic Concepts](/docs/user-guide/basic-concepts/swarm) section.
@@ -22,8 +22,8 @@ Here are the main components that are needed to create a swarm chat:
 
 1. **Create Agents**: instantiate an `AssistantAgent` to be part of the swarm chat.
     - API Reference: [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent)
-2. **Register Handoffs**: utilize `register_hand_off` to register `OnCondition` and `AfterWork` handoffs.
-    - API Reference: [`register_hand_off`](/docs/api-reference/autogen/register_hand_off),[`OnCondition`](/docs/api-reference/autogen/OnCondition), [`AfterWork`](/docs/api-reference/autogen/AfterWork), [`AfterWorkOption`](/docs/api-reference/autogen/AfterWorkOption), [`SwarmResult`](/docs/api-reference/autogen/SwarmResult)
+2. **Register Handoffs**: utilize `register_hand_off` to register `OnCondition`, `OnContextCondition`, and `AfterWork` handoffs.
+    - API Reference: [`register_hand_off`](/docs/api-reference/autogen/register_hand_off), [`OnCondition`](/docs/api-reference/autogen/OnCondition), [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition), [`AfterWork`](/docs/api-reference/autogen/AfterWork), [`AfterWorkOption`](/docs/api-reference/autogen/AfterWorkOption), [`SwarmResult`](/docs/api-reference/autogen/SwarmResult)
 3. **Update Agent State (Optional)**: update an agent's state before replying.
     - API Reference: [`UpdateSystemMessage`](/docs/api-reference/autogen/UpdateSystemMessage)
 4. **Start Swarm Chat**: initiate the swarm chat with `initiate_swarm_chat` or `a_initiate_swarm_chat` for asynchronous calls.
@@ -58,9 +58,9 @@ agent_1 = AssistantAgent("agent_1", llm_config=llm_config)
 register_hand_off(
     agent = agent_1,
     hand_to=[
- OnCondition(target=agent_2, condition="condition_1"),
- OnCondition(target=agent_3, condition="condition_2"),
- ]
+        OnCondition(target=agent_2, condition="condition_1"),
+        OnCondition(target=agent_3, condition="condition_2"),
+    ]
 )
 
 # --------Option 2---------
@@ -74,6 +74,70 @@ def transfer_to_agent_3():
     return agent_3
 
 agent_1 = AssistantAgent("agent_1", llm_config=llm_config, functions=[transfer_to_agent_2, transfer_to_agent_3])
+```
+
+### Registering Context Variable-based Handoffs to agents
+In the previous section you saw how agent handoffs were created using [`OnCondition`](/docs/api-reference/autogen/OnCondition). These handoffs utilize the agent's LLM and tool calling to determine the next agent. However, if you are able to use the swarm's context variables in an expression, you can create a context variable-based handoff, using [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) and [`ContextExpression`](/docs/api-reference/autogen/ContextExpression), that does not require an LLM.
+
+The syntax for creating an using [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) is very similar to [`OnCondition`](/docs/api-reference/autogen/OnCondition), with the exception being the condition is a [`ContextExpression`](/docs/api-reference/autogen/ContextExpression).
+
+[`ContextExpression`](/docs/api-reference/autogen/ContextExpression) is a powerful expression evaluator that allows you to create complex expressions using context variable keys:
+- Variable references use `${var_name}` syntax: `${logged_in}`, `${attempts}`
+- String literals can be used, e.g. `${customer_tier} == 'gold'`
+- Numeric comparisons, e.g. `${budget} >= 50`
+- Supports a wide range of operators:
+  - Logical: `not, !, and, &, or, |`
+  - Comparison: `>, <, >=, <=, ==, !=`
+- Parentheses can be used for grouping
+- Supports `len(${var_name})`: Gets the length of a list, string, or other collection
+- Examples:
+    - `not ${logged_in} and ${is_admin} or ${guest_checkout}`
+    - `!${logged_in} & ${is_admin} | ${guest_checkout}`
+    - `${attempts} > 3 | ${is_admin} == True`
+    - `len(${search_results}) > 5`
+
+```python
+register_hand_off(
+    agent = agent_1,
+    hand_to=[
+        OnContextCondition(
+            target=agent_2,
+            condition=ContextExpression("(${account_level} > 2 and ${budget_remaining} > 0) or ${account_tier} == 'Gold' or len(${order_count}) > 10"),
+            available="logged_in"),
+        OnCondition(target=agent_3, condition="condition_2"), # LLM-based, evaluated after OnContextCondition's
+    ]
+)
+```
+
+Notes:
+- If you pass a string into the `condition` parameter of [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) it is assumed to be a context variable key and will be put into a [`ContextExpression`](/docs/api-reference/autogen/ContextExpression).
+- [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition)'s are evaluated before [`OnCondition`](/docs/api-reference/autogen/OnCondition) handoffs.
+
+### Enabling/Disabling Handoffs
+You can enable and disable [`OnCondition`](/docs/api-reference/autogen/OnCondition)/[`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) handoffs using their `available` parameter.
+
+This can be a useful mechanism for ensuring handoffs are only evaluated when applicable, such as only when a user is authenticated.
+
+The `available` parameter can take:
+| Type | Description |
+| --- | --- |
+| String | Will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition. |
+| ContextExpression | Will evaluate the logical expression against the context variables (see previous section for examples) |
+| Callable | `def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool` |
+
+
+In the following example the handoff will only be available to `agent_1` when the swarm context variable `has_plan` is `True`.
+
+```python
+register_hand_off(
+    agent = agent_1,
+    hand_to=[
+        OnCondition(
+            target=agent_2,
+            condition="Transfer to the reviewer to evaluate the plan.",
+            available="has_plan"),
+    ]
+)
 ```
 
 ### SwarmResult

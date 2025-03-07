@@ -6,17 +6,21 @@ import copy
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from pydantic import BaseModel
 
-from ....agentchat import ConversableAgent
+from .... import ConversableAgent
+from ....agentchat.contrib.rag import RAGQueryEngine
+from ....doc_utils import export_module
+
+__all__ = ["InMemoryQueryEngine"]
 
 # REPLIES
 QUERY_NO_INGESTIONS_REPLY = "Sorry, please ingest some documents/URLs before querying."  # Default response for queries without ingested documents
 EMPTY_RESPONSE_REPLY = "Sorry, I couldn't find any information on that. If you haven't ingested any documents, please try that."  # Default response for queries without results
 ERROR_RESPONSE_REPLY = "Sorry, there was an error processing your query: "  # Default response for queries with errors
-COULD_NOT_ANSWER_REPLY = "Sorry, I couldn't answer that question from the ingested documents/URLs."  # Default response for queries that could not be answered
+COULD_NOT_ANSWER_REPLY = "Sorry, I couldn't answer that question from the ingested documents/URLs"  # Default response for queries that could not be answered
 
 
 # Documents and Content structure
@@ -31,12 +35,15 @@ class QueryAnswer(BaseModel):
     answer: str
 
 
+@export_module("autogen.agents.experimental")
 class InMemoryQueryEngine:
     """
     This engine stores ingested documents in memory and then injects them into an internal agent's system message for answering queries.
+
+    This implements the autogen.agentchat.contrib.rag.RAGQueryEngine protocol.
     """
 
-    def __init__(  # type: ignore
+    def __init__(
         self,
         llm_config: dict[str, Any],
     ) -> None:
@@ -55,7 +62,7 @@ class InMemoryQueryEngine:
         # In-memory storage for ingested documents
         self._ingested_documents: list[DocumentStore] = []
 
-    def query(self, question: str) -> str:
+    def query(self, question: str, *args: Any, **kwargs: Any) -> str:
         """Run a query against the ingested documents and return the answer."""
 
         # If no documents have been ingested, return an empty response
@@ -95,14 +102,19 @@ class InMemoryQueryEngine:
             if answer_object.could_answer:
                 return answer_object.answer
             else:
-                return COULD_NOT_ANSWER_REPLY
+                if answer_object.answer:
+                    return COULD_NOT_ANSWER_REPLY + ": " + answer_object.answer
+                else:
+                    return COULD_NOT_ANSWER_REPLY
 
         except Exception as e:
             # Error converting the response to the structured output
             return ERROR_RESPONSE_REPLY + str(e)
 
     def add_docs(
-        self, new_doc_dir: Optional[Union[Path, str]] = None, new_doc_paths: Optional[list[Union[Path, str]]] = None
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
     ) -> None:
         """
         Add additional documents to the in-memory store
@@ -113,15 +125,15 @@ class InMemoryQueryEngine:
         Args:
             new_doc_dir: The directory path from which to load additional documents.
                 If provided, all eligible files in this directory are loaded.
-            new_doc_paths: A list of file paths specifying additional documents to load.
+            new_doc_paths_or_urls: A list of file paths specifying additional documents to load.
                 Each file should be a Docling-parsed Markdown file.
         """
         new_doc_dir = new_doc_dir or ""
-        new_doc_paths = new_doc_paths or []
+        new_doc_paths = new_doc_paths_or_urls or []
         self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths)
 
-    def _load_doc(  # type: ignore
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[list[Union[Path, str]]]
+    def _load_doc(
+        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
     ) -> None:
         """
         Load documents from a directory and/or a list of file paths into the in-memory store.
@@ -181,3 +193,25 @@ class InMemoryQueryEngine:
             self._ingested_documents.append(document)
         except Exception as e:
             raise ValueError(f"Error reading file {file_path}: {str(e)}")
+
+    def init_db(
+        self,
+        new_doc_dir: Optional[Union[Path, str]] = None,
+        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """Not required nor implemented for InMemoryQueryEngine"""
+        raise NotImplementedError("Method, init_db, not required nor implemented for InMemoryQueryEngine")
+
+    def connect_db(self, *args: Any, **kwargs: Any) -> bool:
+        """Not required nor implemented for InMemoryQueryEngine"""
+        raise NotImplementedError("Method, connect_db, not required nor implemented for InMemoryQueryEngine")
+
+
+# mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
+if TYPE_CHECKING:
+    from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+
+    def _check_implement_protocol(o: InMemoryQueryEngine) -> RAGQueryEngine:
+        return o

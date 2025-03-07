@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Literal, Optional, Union
 
 from .... import ConversableAgent
+from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.contrib.swarm_agent import SwarmResult
 from ....doc_utils import export_module
 from ..document_agent.parser_utils import docling_parse_docs
 from .chroma_query_engine import VectorChromaQueryEngine
 from .document_utils import preprocess_path
-from .inmemory_query_engine import InMemoryQueryEngine
 
 __all__ = ["DoclingDocIngestAgent"]
 
@@ -36,7 +36,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         name: Optional[str] = None,
         llm_config: Optional[Union[dict, Literal[False]]] = None,  # type: ignore[type-arg]
         parsed_docs_path: Optional[Union[Path, str]] = None,
-        query_engine: Optional[Union[VectorChromaQueryEngine, InMemoryQueryEngine]] = None,
+        query_engine: Optional[RAGQueryEngine] = None,
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "ErrorManagerAgent",
         collection_name: Optional[str] = None,
@@ -45,11 +45,13 @@ class DoclingDocIngestAgent(ConversableAgent):
         Initialize the DoclingDocIngestAgent.
 
         Args:
-        name (str): The name of the DoclingDocIngestAgent.
-        llm_config (Optional[Union[dict, Literal[False]]]): The configuration for the LLM.
-        parsed_docs_path (Union[Path, str]): The path where parsed documents will be stored.
-        query_engine (Optional[VectorChromaQueryEngine]): The VectorChromaQueryEngine to use for querying documents.
-        collection_name (Optional[str]): The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
+            name: The name of the DoclingDocIngestAgent.
+            llm_config: The configuration for the LLM.
+            parsed_docs_path: The path where parsed documents will be stored.
+            query_engine: The VectorChromaQueryEngine to use for querying documents.
+            return_agent_success: The agent to return on successful completion of the task.
+            return_agent_error: The agent to return on error.
+            collection_name: The unique name for the Chromadb collection. Set this to a value to reuse a collection. If a query_engine is provided, this will be ignored.
         """
         name = name or "DoclingDocIngestAgent"
 
@@ -84,7 +86,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                     if output_files:
                         output_file = output_files[0]
                         if output_file.suffix == ".md":
-                            self._query_engine.add_docs(new_doc_paths=[output_file])
+                            self._query_engine.add_docs(new_doc_paths_or_urls=[output_file])
 
                     # Keep track of documents ingested
                     context_variables["DocumentsIngested"].append(input_file_path)

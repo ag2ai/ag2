@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import pytest
 
-from autogen.import_utils import optional_import_block, skip_on_missing_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
@@ -14,7 +14,7 @@ with optional_import_block():
     from autogen.interop.langchain.langchain_chat_model_factory import ChatOpenAIFactory, LangChainChatModelFactory
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
     "browser-use",
 )
@@ -127,7 +127,7 @@ class TestLangchainFactory:
             LangChainChatModelFactory.create_base_chat_model(llm_config={"config_list": config_list})
 
 
-@skip_on_missing_imports(
+@run_for_optional_imports(
     ["langchain_anthropic", "langchain_google_genai", "langchain_ollama", "langchain_openai", "langchain_core"],
     "browser-use",
 )

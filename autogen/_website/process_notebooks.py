@@ -78,7 +78,7 @@ def require_quarto_bin(f: C) -> C:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return ImportError("Quarto is not installed")
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
 
 class Result:
@@ -265,7 +265,7 @@ NB_VERSION = 4
 @require_quarto_bin
 @require_optional_import("nbclient", "docs")
 def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
-    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore
+    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore[arg-type,no-untyped-call]
 
     if "skip_test" in nb.metadata:
         return notebook_path, NotebookSkip(reason=nb.metadata.skip_test)
@@ -471,6 +471,8 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_build_dir
 
     Args:
         content (str): The markdown content containing mdx-code-block image syntax
+        rendered_mdx (Path): The path to the rendered mdx file
+        website_build_directory (Path): The path to the website build directory
 
     Returns:
         str: The converted markdown content with standard image syntax
@@ -512,12 +514,13 @@ def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
 
     Args:
         content (str): Content of the file
+        img_rel_path (Path): Relative path to the image directory
 
     Returns:
         str: Content of the file with <img> tag extracted from <figure> tag
     """
 
-    def replace_local_path(match: re.Match) -> str:
+    def replace_local_path(match: re.Match[str]) -> str:
         img_tag = match.group(1)
         # Find src attribute value
         src_match = re.search(r'src="([^"]+)"', img_tag)
@@ -703,6 +706,7 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> dict[
     Args:
         input_dir (Path): Directory to process
         group_header (str): Group header
+        prefix (str): Prefix to prepend to file paths
     """
     sorted_dir_files = get_sorted_files(input_dir, prefix)
 
@@ -718,7 +722,7 @@ def extract_example_group(metadata_path: Path) -> list[str]:
         end = content.rfind("]")
         if start == -1 or end == -1:
             print("Could not find notebooksMetadata in the file")
-            return {}
+            return []
         metadata_str = content[start + 32 : end + 1]
         notebooks_metadata = json.loads(metadata_str)
 
@@ -750,10 +754,10 @@ def update_group_pages(
         for item in items:
             if isinstance(item, dict):
                 if item.get("group") == target_group:
-                    item["pages"] = new_value.copy()
+                    item["pages"] = new_value.copy()  # type: ignore [attr-defined]
                     return
                 if isinstance(item.get("pages"), list):
-                    update_recursively(item["pages"])
+                    update_recursively(item["pages"])  # type: ignore [arg-type]
             elif isinstance(item, list):
                 update_recursively(item)
 
@@ -932,7 +936,7 @@ def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
         print(f"Error reading authors file: {e}")
         sys.exit(1)
 
-    return all_authors_info
+    return all_authors_info  # type: ignore [no-any-return]
 
 
 @require_optional_import("yaml", "docs")
@@ -1047,7 +1051,7 @@ def get_files_path_from_navigation(navigation: list[NavigationGroup]) -> list[Pa
     """
     file_paths = []
 
-    def extract_paths(items: Union[list[Union[str, NavigationGroup]], list[str]]) -> None:
+    def extract_paths(items: Union[Sequence[Union[str, NavigationGroup]]]) -> None:
         for item in items:
             if isinstance(item, str):
                 file_paths.append(Path(item))
@@ -1075,7 +1079,7 @@ def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> N
     for mdx_file_path in mdx_files_with_prefix:
         rel_path = str(mdx_file_path.relative_to(website_build_directory.parent)).replace("build/", "website/")
         content = mdx_file_path.read_text(encoding="utf-8")
-        content_with_edit_url = ensure_edit_url(content, rel_path)
+        content_with_edit_url = ensure_edit_url(content, Path(rel_path))
         mdx_file_path.write_text(content_with_edit_url, encoding="utf-8")
 
 

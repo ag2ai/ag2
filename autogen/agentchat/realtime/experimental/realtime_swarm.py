@@ -55,13 +55,12 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
     Parse a message into an OpenAI-compatible message format.
 
     Args:
-        message (Union[dict[str, Any], str]): The message to parse.
-        role (str): The role associated with the message.
-        conversation_id (Agent): The conversation context for the message.
-        is_sending (bool): Indicates if the message is being sent or received.
+        message: The message to parse.
+        role: The role associated with the message.
+        adressee: The agent that will receive the message.
 
     Returns:
-        dict[str, Any]: Parsed message in OpenAI-compatible format.
+        The parsed message in OpenAI-compatible format.
 
     Raises:
         ValueError: If the message lacks required fields like 'content', 'function_call', or 'tool_calls'.
@@ -453,7 +452,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 @export_module("autogen.agentchat.realtime.experimental")
 def register_swarm(
     *,
-    realtime_agent: "RealtimeAgent",  # type: ignore
+    realtime_agent: "RealtimeAgent",
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
     system_message: Optional[str] = None,
