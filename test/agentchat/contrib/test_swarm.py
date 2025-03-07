@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+import inspect
 import json
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, Tuple, Union
@@ -18,6 +19,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     OnCondition,
     OnContextCondition,
     SwarmResult,
+    _change_tool_context_variables_to_depends,
     _cleanup_temp_user_messages,
     _create_nested_chats,
     _determine_next_agent,
@@ -1752,6 +1754,236 @@ def test_on_context_condition_available() -> None:
     agent1._context_variables = {"transfer_condition": True, "dynamic_availability": False}
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_change_tool_context_variables_to_depends() -> None:
+    """
+    Test that _change_tool_context_variables_to_depends correctly modifies a tool
+    that has a context_variables parameter to use dependency injection.
+    """
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
+            }
+        ]
+    }
+
+    agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
+
+    # Create a test function that has a context_variables parameter
+    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+        """Test function with context variables."""
+        return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
+
+    # Create a test function that doesn't have a context_variables parameter
+    def test_func_without_context_vars(param1: str, param2: int) -> str:
+        """Test function without context variables."""
+        return f"param1: {param1}, param2: {param2}"
+
+    # Create tools from these functions
+    tool_with_context = Tool(
+        name="tool_with_context",
+        description="A tool with context_variables parameter",
+        func_or_tool=test_func_with_context_vars,
+    )
+
+    tool_without_context = Tool(
+        name="tool_without_context",
+        description="A tool without context_variables parameter",
+        func_or_tool=test_func_without_context_vars,
+    )
+
+    # Register the tools with the agent
+    agent.register_for_llm()(tool_with_context)
+    agent.register_for_llm()(tool_without_context)
+
+    # Verify that the tools are registered before the change
+    assert "tool_with_context" in [tool._name for tool in agent.tools]
+    assert "tool_without_context" in [tool._name for tool in agent.tools]
+
+    # Verify that the tool has context_variables parameter before the change
+    assert "context_variables" in tool_with_context.tool_schema["function"]["parameters"]["properties"]
+
+    # Test context variables
+    context_variables = {"test_key": "test_value"}
+
+    # Keep track of the number of tools before the change
+    tools_count_before = len(agent.tools)
+
+    # Case 1: Tool with context_variables parameter
+    _change_tool_context_variables_to_depends(agent, tool_with_context, context_variables)
+
+    # Verify that the number of tools remains the same (one removed, one added)
+    assert len(agent.tools) == tools_count_before
+
+    # Find the tool with the same name after the change
+    modified_tool = None
+    for tool in agent.tools:
+        if tool._name == "tool_with_context":
+            modified_tool = tool
+            break
+
+    assert modified_tool is not None, "Modified tool should still be registered"
+
+    # Case 2: Tool without context_variables parameter
+    _change_tool_context_variables_to_depends(agent, tool_without_context, context_variables)
+
+    # Verify that the tool without context_variables is still registered
+    assert "tool_without_context" in [tool._name for tool in agent.tools]
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_change_tool_context_variables_dependency_injection() -> None:
+    """
+    Test that the modified tool correctly uses dependency injection for the context_variables parameter.
+    This test verifies that after modification, the tool can access the context variables without
+    explicitly passing them.
+    """
+
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
+            }
+        ]
+    }
+
+    agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
+
+    # Context variables to be injected
+    context_variables = {"test_key": "injected_value"}
+    agent._context_variables = context_variables
+
+    # Create a test function that has a context_variables parameter
+    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+        """Test function with context variables."""
+        return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
+
+    # Create a tool from this function
+    original_tool = Tool(
+        name="tool_with_context",
+        description="A tool with context_variables parameter",
+        func_or_tool=test_func_with_context_vars,
+    )
+
+    # Register the tool with the agent
+    agent.register_for_llm()(original_tool)
+
+    # Call the function to modify the tool
+    _change_tool_context_variables_to_depends(agent, original_tool, context_variables)
+
+    # Find the modified tool
+    modified_tool = None
+    for tool in agent.tools:
+        if tool._name == "tool_with_context":
+            modified_tool = tool
+            break
+
+    assert modified_tool is not None, "Modified tool should be registered"
+
+    # Call the original tool with explicitly passed context_variables
+    original_result = original_tool(param1="test_param", context_variables=context_variables)
+
+    # Call the modified tool without explicitly passing context_variables
+    # The context_variables should be automatically injected
+    modified_result = modified_tool(param1="test_param")
+
+    # Both results should be the same
+    assert original_result == modified_result
+    assert "param1: test_param" in modified_result
+    assert "context_var: injected_value" in modified_result
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_change_tool_context_variables_function_signature() -> None:
+    """
+    Test that specifically checks if the function signature is properly updated
+    after modifying the tool to use dependency injection.
+    """
+    testing_llm_config = {
+        "config_list": [
+            {
+                "model": "gpt-4o",
+                "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
+            }
+        ]
+    }
+
+    agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
+
+    # Create a test function that has a context_variables parameter
+    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+        """Test function with context variables."""
+        return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
+
+    # Create a tool from this function
+    original_tool = Tool(
+        name="tool_with_context",
+        description="A tool with context_variables parameter",
+        func_or_tool=test_func_with_context_vars,
+    )
+
+    # Register the tool with the agent
+    agent.register_for_llm()(original_tool)
+
+    # Get the original function's signature
+    original_sig = inspect.signature(original_tool.func)
+
+    # Verify the original signature has context_variables
+    assert "context_variables" in original_sig.parameters
+    orig_param = original_sig.parameters["context_variables"]
+
+    # Store the original annotation for later comparison
+    orig_annotation = orig_param.annotation
+    orig_default = orig_param.default
+
+    # Context variables
+    context_variables = {"test_key": "test_value"}
+
+    # Call the function to modify the tool
+    _change_tool_context_variables_to_depends(agent, original_tool, context_variables)
+
+    # Find the modified tool
+    modified_tool = None
+    for tool in agent.tools:
+        if tool._name == "tool_with_context":
+            modified_tool = tool
+            break
+
+    assert modified_tool is not None, "Modified tool should be registered"
+
+    # Get the modified function's signature
+    modified_sig = inspect.signature(modified_tool.func)
+
+    # Test the specific changes to the signature
+    if "context_variables" in modified_sig.parameters:
+        # If context_variables is still in the parameters, its annotation or default should have changed
+        mod_param = modified_sig.parameters["context_variables"]
+
+        # Check that something about the parameter has changed
+        sig_changed = (
+            mod_param.annotation != orig_annotation
+            or mod_param.default != orig_default
+            or hasattr(mod_param.annotation, "__metadata__")
+        )
+
+        assert sig_changed, "The signature of context_variables parameter should be modified"
+
+        # If the function uses Depends, the annotation will typically have __metadata__
+        if hasattr(mod_param.annotation, "__metadata__"):
+            # __metadata__ should contain at least one item
+            assert len(mod_param.annotation.__metadata__) > 0
+    else:
+        # If context_variables is completely removed, that's also an acceptable change
+        assert "context_variables" not in modified_sig.parameters
 
 
 if __name__ == "__main__":

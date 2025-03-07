@@ -18,6 +18,7 @@ from autogen.tools.dependency_injection import (
     inject_params,
     on,
 )
+from autogen.tools.tool import Tool
 
 from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
@@ -373,6 +374,30 @@ def _modify_context_variables_param(f: Callable[..., Any], context_variables: di
     return f
 
 
+def _change_tool_context_variables_to_depends(
+    agent: ConversableAgent, current_tool: Tool, context_variables: dict[str, Any]
+) -> None:
+    """Checks for the context_variables parameter in the tool and updates it to use dependency injection."""
+
+    # If the tool has a context_variables parameter, remove the tool and reregister it without the parameter
+    if __CONTEXT_VARIABLES_PARAM_NAME__ in current_tool.tool_schema["function"]["parameters"]["properties"]:
+        # We'll replace the tool, so start with getting the underlying function
+        tool_func = current_tool._func
+
+        # Remove the Tool from the agent
+        name = current_tool._name
+        description = current_tool._description
+        agent.remove_tool_for_llm(current_tool)
+
+        # Recreate the tool without the context_variables parameter
+        tool_func = _modify_context_variables_param(current_tool._func, context_variables)
+        tool_func = inject_params(tool_func)
+        new_tool = ConversableAgent._create_tool_if_needed(func_or_tool=tool_func, name=name, description=description)
+
+        # Re-register with the agent
+        agent.register_for_llm()(new_tool)
+
+
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
@@ -429,27 +454,9 @@ def _prepare_swarm_agents(
         for func_name, (func, _) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
             tool_execution._function_map[func_name] = func
 
-        # Register tools from the tools property
+        # Update any agent tools that have context_variables parameters to use Dependency Injection
         for tool in agent.tools:
-            # If the tool has a context_variables parameter, remove the tool and reregister it without the parameter
-            if __CONTEXT_VARIABLES_PARAM_NAME__ in tool.tool_schema["function"]["parameters"]["properties"]:
-                # We'll replace the tool, so start with getting the underlying function
-                tool_func = tool._func
-
-                # Remove the Tool from the agent
-                name = tool._name
-                description = tool._description
-                agent.remove_tool_for_llm(tool)
-
-                # Recreate the tool without the context_variables parameter
-                tool_func = _modify_context_variables_param(tool._func, context_variables)
-                tool_func = inject_params(tool_func)
-                new_tool = ConversableAgent._create_tool_if_needed(
-                    func_or_tool=tool_func, name=name, description=description
-                )
-
-                # Re-register with the agent
-                agent.register_for_llm()(new_tool)
+            _change_tool_context_variables_to_depends(agent, tool, context_variables)
 
         # Add all tools to the Tool Executor agent
         for tool in agent.tools:
