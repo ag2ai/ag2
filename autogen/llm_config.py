@@ -82,6 +82,12 @@ class LLMConfigEntry(BaseModel, ABC):
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
 
+    def model_dump(self) -> dict[str, Any]:
+        return BaseModel.model_dump(self, exclude_none=True)
+
+    def model_dump_json(self) -> str:
+        return BaseModel.model_dump_json(self, exclude_none=True)
+
 
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: LLMProvider = "openai"

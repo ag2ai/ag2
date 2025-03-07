@@ -57,5 +57,10 @@ class TestLLMConfig:
 
     def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
         actual = openai_llm_config_entry.model_dump()
-        expected = {"api_type": "openai", "model": "gpt-4o-mini", "api_key": "mock_api_key"}
+        expected = {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            "tags": [],
+        }
         assert actual == expected
