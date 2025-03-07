@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 LLMProvider = Literal[
     "openai",
+    "azure",
     "bedrock",
     "anthropic",
     "cerebras",
@@ -97,11 +98,14 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 
 
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "openai"
+    api_type: LLMProvider = "azure"
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "openai"
+    api_type: LLMProvider = "gemini"
+
+    def create_client(self) -> "ModelClient":
+        raise NotImplementedError
