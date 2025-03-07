@@ -31,7 +31,6 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
 
     Args:
         module_name (str): The name of the module to list submodules for.
-        include_path (Optional[Path], optional): The path to the module. Defaults to None.
         include_root (bool, optional): Whether to include the root module in the list. Defaults to True.
 
     Returns:
