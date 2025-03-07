@@ -420,7 +420,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
 
         Args:
             agent (ConversableAgent): The agent to create the nested chat agent for.
-            nested_chat (dict[str, Any]): The nested chat configuration.
+            nested_chats (dict[str, Any]): The nested chat configuration.
 
         Returns:
             ConversableAgent: The created nested chat agent.

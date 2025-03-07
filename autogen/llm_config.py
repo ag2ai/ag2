@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import functools
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, Union
@@ -12,95 +13,102 @@ if TYPE_CHECKING:
     from .oai.client import ModelClient
 
 
-# class LLMProvider(str, Enum):
-#     openai = "openai"
-#     azure = "azure"
-#     bedrock = "bedrock"
-#     anthropic = "anthropic"
-#     cerebras = "cerebras"
-#     cohere = "cohere"
-#     deepseek = "deepseek"
-#     google = "google"
-#     groq = "groq"
-#     mistral = "mistral"
-#     ollama = "ollama"
-#     together = "together"
-
-
-# LLMProvider = Literal[
-#     "openai",
-#     "azure",
-#     "bedrock",
-#     "anthropic",
-#     "cerebras",
-#     "cohere",
-#     "deepseek",
-#     "google",
-#     "groq",
-#     "mistral",
-#     "ollama",
-#     "together",
-# ]
-
-
 _current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
 
 
-def get_LLMConfig():
-    class _LLMConfig(BaseModel):
-        # class variable not touched by BaseModel
+class LLMConfig:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._model = self._get_base_model_class()(*args, **kwargs)
 
-        # used by BaseModel to create instance variables
-        config_list: Annotated[list[LLMConfigItem()], Field(default_factory=list)]
-        temperature: Optional[float] = None
-        check_every_ms: Optional[int] = None
-        max_new_tokens: Optional[int] = None
-        seed: Optional[int] = None
-        allow_format_str_template: Optional[bool] = None
-        response_format: Optional[str] = None
-        timeout: Optional[int] = None
-        cache_seed: Optional[int] = None
+    # used by BaseModel to create instance variables
+    def __enter__(self) -> "LLMConfig":
+        # Store previous context and set self as current
+        self._token = _current_llm_config.set(self.model_dump_json(exclude_none=True))
+        return self
 
-        def __enter__(self):
-            # Store previous context and set self as current
-            self._token = _current_llm_config.set(self.model_dump_json(exclude_none=True))
-            return self
+    def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
+        _current_llm_config.reset(self._token)
 
-        def __exit__(self, exc_type, exc_value, traceback):
-            _current_llm_config.reset(self._token)
+    @functools.wraps(BaseModel.model_dump)
+    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
+        return self._model.model_dump(exclude_none=exclude_none, *args, **kwargs)
 
-        def model_dump(self, *args, exclude_none: bool = True, **kwargs) -> dict[str, Any]:
-            return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
+    @functools.wraps(BaseModel.model_dump_json)
+    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
+        return self._model.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
-        def model_dump_json(self, *args, exclude_none: bool = True, **kwargs) -> str:
-            return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
+    @functools.wraps(BaseModel.model_validate)
+    def model_validate(self, *args: Any, **kwargs: Any) -> Any:
+        return self._model.model_validate(*args, **kwargs)
 
-    return _LLMConfig
+    @functools.wraps(BaseModel.model_validate_json)
+    def model_validate_json(self, *args: Any, **kwargs: Any) -> Any:
+        return self._model.model_validate_json(*args, **kwargs)
+
+    @functools.wraps(BaseModel.model_validate_strings)
+    def model_validate_strings(self, *args: Any, **kwargs: Any) -> Any:
+        return self._model.model_validate_strings(*args, **kwargs)
+
+    def __eq__(self, value):
+        print(f"{value=}, {hasattr(value, '_model')=}, {self._model=}, {value._model=}")
+        print(f"  ===> {self._model=}")
+        print(f"  ===> {value._model=}")
+        return hasattr(value, "_model") and self._model == value._model
+
+    _base_model_classes: dict[tuple[Type["LLMConfigEntry"]], Type[BaseModel]] = {}
+
+    @classmethod
+    def _get_base_model_class(cls) -> Type["LLMConfig"]:
+        def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry]]) -> Type[BaseModel]:
+            if llm_config_classes in LLMConfig._base_model_classes:
+                return LLMConfig._base_model_classes[llm_config_classes]
+
+            class _LLMConfig(BaseModel):
+                temperature: Optional[float] = None
+                check_every_ms: Optional[int] = None
+                max_new_tokens: Optional[int] = None
+                seed: Optional[int] = None
+                allow_format_str_template: Optional[bool] = None
+                response_format: Optional[str] = None
+                timeout: Optional[int] = None
+                cache_seed: Optional[int] = None
+
+                config_list: Annotated[  # type: ignore[valid-type]
+                    list[Annotated[Union[*llm_config_classes], Field(discriminator="api_type")]],
+                    Field(default_factory=list),
+                ]
+
+            LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
+
+            print(f"  -> LLMConfig for classes: {llm_config_classes}: {_LLMConfig}")
+            return _LLMConfig
+
+        return _get_cls(tuple(_llm_config_classes))
 
 
 class LLMConfigEntry(BaseModel, ABC):
-    # api_type: LLMProvider
+    api_type: str
     model: str
     api_key: Optional[str] = None
     base_url: Optional[HttpUrl] = None
-    tags: Annotated[list[str], Field(default_factory=list)]
+    # tags: Annotated[list[str], Field(default_factory=list)]
+    tags: list[str] = Field(default_factory=list)
 
-    @property
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
 
-    def model_dump(self, *args, exclude_none: bool = True, **kwargs) -> dict[str, Any]:
+    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
         return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
 
-    def model_dump_json(self, *args, exclude_none: bool = True, **kwargs) -> str:
+    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []
 
 
-def LLMConfigItem():
-    return Annotated[Union[*_llm_config_classes], Field(discriminator="api_type")]
+# def _get_LLMConfigItem():
+#     return Annotated[Union[*_llm_config_classes], Field(discriminator="api_type")]
 
 
 # ToDo: Add a decorator to auto gene

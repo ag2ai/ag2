@@ -4,9 +4,7 @@
 
 import pytest
 
-from autogen.llm_config import OpenAILLMConfigEntry, get_LLMConfig
-
-LLMConfig = get_LLMConfig()
+from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry
 
 # def test_llm_provider():
 #     assert LLMProvider.openai == "openai"
@@ -57,7 +55,7 @@ def openai_llm_config_entry() -> OpenAILLMConfigEntry:
 
 
 class TestLLMConfigEntry:
-    def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
+    def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         actual = openai_llm_config_entry.model_dump()
         expected = {
             "api_type": "openai",
@@ -67,7 +65,7 @@ class TestLLMConfigEntry:
         }
         assert actual == expected
 
-    def test_deserialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
+    def test_deserialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         actual = OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump())
         assert actual == openai_llm_config_entry
 
@@ -77,7 +75,7 @@ class TestLLMConfig:
     def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
         return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
 
-    def test_serialization(self, openai_llm_config: LLMConfig):
+    def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
         expected = {
             "config_list": [
@@ -94,8 +92,12 @@ class TestLLMConfig:
         }
         assert actual == expected
 
-    def test_deserialization(self, openai_llm_config: LLMConfig):
+    def test_deserialization(self, openai_llm_config: LLMConfig) -> None:
         actual = LLMConfig(**openai_llm_config.model_dump())
-        assert actual == openai_llm_config
+        print(actual)
+        print(actual.model_dump())
         assert actual.model_dump() == openai_llm_config.model_dump()
-        assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
+        assert type(actual._model) == type(openai_llm_config._model)
+        assert actual._model == openai_llm_config._model
+        assert actual == openai_llm_config
+        # assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
