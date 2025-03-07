@@ -4,6 +4,7 @@
 
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
+from enum import Enum
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -11,46 +12,46 @@ from pydantic import BaseModel, Field, HttpUrl
 if TYPE_CHECKING:
     from .oai.client import ModelClient
 
-# class LLMProvider(str, Enum):
-#     openai = "openai"
-#     bedrock = "bedrock"
-#     anthropic = "anthropic"
-#     cerebras = "cerebras"
-#     cohere = "cohere"
-#     deepseek = "deepseek"
-#     google = "google"
-#     groq = "groq"
-#     mistral = "mistral"
-#     ollama = "ollama"
-#     together = "together"
 
-LLMProvider = Literal[
-    "openai",
-    "azure",
-    "bedrock",
-    "anthropic",
-    "cerebras",
-    "cohere",
-    "deepseek",
-    "google",
-    "groq",
-    "mistral",
-    "ollama",
-    "together",
-]
+class LLMProvider(str, Enum):
+    openai = "openai"
+    azure = "azure"
+    bedrock = "bedrock"
+    anthropic = "anthropic"
+    cerebras = "cerebras"
+    cohere = "cohere"
+    deepseek = "deepseek"
+    google = "google"
+    groq = "groq"
+    mistral = "mistral"
+    ollama = "ollama"
+    together = "together"
+
+
+# LLMProvider = Literal[
+#     "openai",
+#     "azure",
+#     "bedrock",
+#     "anthropic",
+#     "cerebras",
+#     "cohere",
+#     "deepseek",
+#     "google",
+#     "groq",
+#     "mistral",
+#     "ollama",
+#     "together",
+# ]
 
 
 _current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
 
 
-LLMConfigItem = Annotated[Union["OpenAILLMConfigEntry", "AzureOpenAILLMConfigEntry", "GeminiLLMConfigEntry"], Field(discriminator="api_type")]
-
 class LLMConfig(BaseModel):
     # class variable not touched by BaseModel
 
     # used by BaseModel to create instance variables
-    # config_list: Annotated[list["LLMConfigEntry"], Field(default_factory=list)]
-    config_listt: Annotated[list[LLMConfigItem], Field(default_factory=list)]
+    config_list: Annotated[list["LLMConfigItem"], Field(default_factory=list)]
     temperature: Optional[float] = None
     check_every_ms: Optional[int] = None
     max_new_tokens: Optional[int] = None
@@ -76,7 +77,7 @@ class LLMConfig(BaseModel):
 
 
 class LLMConfigEntry(BaseModel, ABC):
-    api_type: LLMProvider
+    # api_type: LLMProvider
     model: str
     api_key: Optional[str] = None
     base_url: Optional[HttpUrl] = None
@@ -93,22 +94,27 @@ class LLMConfigEntry(BaseModel, ABC):
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
 
+LLMConfigItem = Annotated[
+    Union["OpenAILLMConfigEntry", "AzureOpenAILLMConfigEntry", "GeminiLLMConfigEntry"], Field(discriminator="api_type")
+]
+
+
 class OpenAILLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "openai"
+    api_type: Literal[LLMProvider.openai] = "openai"
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
 
 
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "azure"
+    api_type: Literal[LLMProvider.azure] = "azure"
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
 
 
 class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: LLMProvider = "google"
+    api_type: Literal[LLMProvider.google] = "google"
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError

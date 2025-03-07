@@ -91,3 +91,8 @@ class TestLLMConfig:
             "cache_seed": 42,
         }
         assert actual == expected
+
+    def test_deserialization(self, openai_llm_config: LLMConfig):
+        actual = LLMConfig(**openai_llm_config.model_dump())
+        assert actual == openai_llm_config
+        assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
