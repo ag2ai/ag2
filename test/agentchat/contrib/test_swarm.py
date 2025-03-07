@@ -951,9 +951,9 @@ def test_on_condition_unique_function_names() -> None:
     assert last_speaker
 
     # Check that agent1 has 3 functions and they have unique names
-    assert "transfer_agent1_to_agent2" in agent1._function_map
-    assert "transfer_agent1_to_agent2_2" in agent1._function_map
-    assert "transfer_agent1_to_agent2_3" in agent1._function_map
+    assert "transfer_agent1_to_agent2" in [t._name for t in agent1.tools]
+    assert "transfer_agent1_to_agent2_2" in [t._name for t in agent1.tools]
+    assert "transfer_agent1_to_agent2_3" in [t._name for t in agent1.tools]
 
 
 @run_for_optional_imports(["openai"], "openai")
@@ -988,7 +988,7 @@ def test_prepare_swarm_agents() -> None:
     register_hand_off(agent=agent1, hand_to=AfterWork(agent=agent2))
 
     # Test valid preparation
-    tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2])
+    tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2], {})
 
     assert nested_chat_agents == []
 
@@ -999,16 +999,16 @@ def test_prepare_swarm_agents() -> None:
 
     # Test invalid initial agent type
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(invalid_agent("invalid"), [agent1, agent2])  # type: ignore[arg-type]
+        _prepare_swarm_agents(invalid_agent("invalid"), [agent1, agent2], {})  # type: ignore[arg-type]
 
     # Test invalid agents list
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(agent1, [agent1, invalid_agent("invalid")])  # type: ignore[list-item]
+        _prepare_swarm_agents(agent1, [agent1, invalid_agent("invalid")], {})  # type: ignore[list-item]
 
     # Test missing handoff agent
     register_hand_off(agent=agent3, hand_to=AfterWork(agent=ConversableAgent("missing")))
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(agent1, [agent1, agent2, agent3])
+        _prepare_swarm_agents(agent1, [agent1, agent2, agent3], {})
 
 
 @run_for_optional_imports(["openai"], "openai")
@@ -1190,7 +1190,7 @@ def test_swarmresult_afterworkoption() -> None:
         next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         last_speaker_agent = ConversableAgent("dummy_1")
-        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent])
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent], {})
         user = UserProxyAgent("User")
         groupchat = GroupChat(
             agents=[last_speaker_agent],
@@ -1268,7 +1268,7 @@ def test_update_on_condition_str() -> None:
         # Get the function description (condition) from the agent's function map
         func_name = "transfer_agent1_to_agent2"
         # Store the condition for verification by accessing the function's description
-        func = args[0]._function_map[func_name]
+        func = args[0].tools[0]._func
         condition_container.captured_condition = func._description
         return True, {
             "role": "assistant",
@@ -1302,7 +1302,7 @@ def test_update_on_condition_str() -> None:
         # Get the function description (condition) from the agent's function map
         func_name = "transfer_agent2_to_agent3"
         # Store the condition for verification by accessing the function's description
-        func = args[0]._function_map[func_name]
+        func = args[0].tools[0]._func
         condition_container.captured_condition = func._description
         return True, {
             "role": "assistant",
@@ -1346,7 +1346,7 @@ def test_agent_tool_registration_for_execution(mock_credentials: Credentials) ->
 
     # Prepare swarm agents, this is where the tool will be registered for execution
     # with the internal tool executor agent
-    tool_execution, _ = _prepare_swarm_agents(agent, [agent])
+    tool_execution, _ = _prepare_swarm_agents(agent, [agent], {})
 
     # Check that the tool is register for execution with the tool_execution agent
     assert "test_tool" in tool_execution._function_map
@@ -1411,7 +1411,7 @@ def test_swarmresult_afterworkoption_tool_swarmresult() -> None:
         swarm_afterworkoption: AfterWorkOption,
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         another_agent = ConversableAgent(name="another_agent")
-        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent])
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent], {})
         tool_executor._swarm_next_agent = tool_execution_swarm_result  # type: ignore[attr-defined]
         user = UserProxyAgent("User")
         groupchat = GroupChat(
