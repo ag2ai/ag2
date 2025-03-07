@@ -4,7 +4,7 @@
 
 import pytest
 
-from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry
+from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry, current_llm_config
 
 # def test_current_llm_config():
 #     llm_config = LLMConfig(
@@ -124,3 +124,22 @@ class TestLLMConfig:
         assert openai_llm_config["timeout"] == 60
         openai_llm_config["timeout"] = None
         assert openai_llm_config["timeout"] is None
+
+    def test_with_context(self, openai_llm_config: LLMConfig) -> None:
+        # Test with dummy agent
+        class DummyAgent:
+            def __init__(self) -> None:
+                self.llm_config = current_llm_config.get()
+
+        with openai_llm_config:
+            agent = DummyAgent()
+        assert agent.llm_config == openai_llm_config
+        assert agent.llm_config.temperature == 0.5
+        assert agent.llm_config.config_list[0].model == "gpt-4o-mini"
+
+        # Test accessing current_llm_config outside the context
+        with openai_llm_config:
+            actual = current_llm_config.get()
+            assert actual == openai_llm_config
+        with pytest.raises(LookupError):
+            current_llm_config.get()

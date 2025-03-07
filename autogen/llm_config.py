@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .oai.client import ModelClient
 
 
-_current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
+current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
 
 class LLMConfig:
@@ -23,11 +23,11 @@ class LLMConfig:
     # used by BaseModel to create instance variables
     def __enter__(self) -> "LLMConfig":
         # Store previous context and set self as current
-        self._token = _current_llm_config.set(self)
+        self._token = current_llm_config.set(self)
         return self
 
     def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
-        _current_llm_config.reset(self._token)
+        current_llm_config.reset(self._token)
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
