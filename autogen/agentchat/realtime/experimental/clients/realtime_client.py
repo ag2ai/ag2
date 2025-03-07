@@ -93,8 +93,9 @@ class RealtimeClientProtocol(Protocol):
         """Create a Realtime API client.
 
         Args:
-            llm_config (dict[str, Any]): The config for the client.
-            kwargs (Any): Additional arguments.
+            llm_config: The config for the client.
+            logger: The logger to use for logging events.
+            **kwargs: Additional arguments.
 
         Returns:
             RealtimeClientProtocol: The Realtime API client is returned if the model matches the pattern
@@ -148,9 +149,6 @@ T = TypeVar("T", bound=RealtimeClientProtocol)
 def register_realtime_client() -> Callable[[type[T]], type[T]]:
     """Register a Realtime API client.
 
-    Args:
-        name (str): The name of the Realtime API client.
-
     Returns:
         Callable[[type[T]], type[T]]: The decorator to register the Realtime API client
     """
@@ -159,7 +157,7 @@ def register_realtime_client() -> Callable[[type[T]], type[T]]:
         """Register a Realtime API client.
 
         Args:
-            client (RealtimeClientProtocol): The client to register.
+            client_cls: The client to register.
         """
         global _realtime_client_classes
         fqn = f"{client_cls.__module__}.{client_cls.__name__}"
@@ -175,8 +173,9 @@ def get_client(llm_config: dict[str, Any], logger: Logger, **kwargs: Any) -> "Re
     """Get a registered Realtime API client.
 
     Args:
-        llm_config (dict[str, Any]): The config for the client.
-        kwargs (Any): Additional arguments.
+        llm_config: The config for the client.
+        logger: The logger to use for logging events.
+        **kwargs: Additional arguments.
 
     Returns:
         RealtimeClientProtocol: The Realtime API client.

@@ -79,8 +79,8 @@ def __find_async_chat_order(chat_ids: set[int], prerequisites: list[Prerequisite
     """Find chat order for async execution based on the prerequisite chats
 
     Args:
-        num_chats: number of chats
-        prerequisites: List of Prerequisite (prerequisite_chat_id, chat_id)
+        chat_ids: A set of all chat IDs that need to be scheduled
+        prerequisites: A list of tuples (chat_id, prerequisite_chat_id) where each tuple indicates that chat_id depends on prerequisite_chat_id
 
     Returns:
         list: a list of chat_id in order.
@@ -143,32 +143,32 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
     Args:
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
 
-        Each dictionary should contain the input arguments for
-        [`ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat).
-        For example:
-            - `"sender"` - the sender agent.
-            - `"recipient"` - the recipient agent.
-            - `"clear_history"` (bool) - whether to clear the chat history with the agent.
-               Default is True.
-            - `"silent"` (bool or None) - (Experimental) whether to print the messages in this
-               conversation. Default is False.
-            - `"cache"` (Cache or None) - the cache client to use for this conversation.
-               Default is None.
-            - `"max_turns"` (int or None) - maximum number of turns for the chat. If None, the chat
-               will continue until a termination condition is met. Default is None.
-            - `"summary_method"` (str or callable) - a string or callable specifying the method to get
-               a summary from the chat. Default is DEFAULT_summary_method, i.e., "last_msg".
-            - `"summary_args"` (dict) - a dictionary of arguments to be passed to the summary_method.
-               Default is {}.
-            - `"message"` (str, callable or None) - if None, input() will be called to get the
-               initial message.
-            - `**context` - additional context information to be passed to the chat.
-            - `"carryover"` - It can be used to specify the carryover information to be passed
-               to this chat. If provided, we will combine this carryover with the "message" content when
-               generating the initial chat message in `generate_init_message`.
-            - `"finished_chat_indexes_to_exclude_from_carryover"` - It can be used by specifying a list of indexes of the finished_chats list,
-               from which to exclude the summaries for carryover. If 'finished_chat_indexes_to_exclude_from_carryover' is not provided or an empty list,
-               then summary from all the finished chats will be taken.
+            Each dictionary should contain the input arguments for
+            [`ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat).
+            For example:
+                - `"sender"` - the sender agent.
+                - `"recipient"` - the recipient agent.
+                - `"clear_history"` (bool) - whether to clear the chat history with the agent.
+                Default is True.
+                - `"silent"` (bool or None) - (Experimental) whether to print the messages in this
+                conversation. Default is False.
+                - `"cache"` (Cache or None) - the cache client to use for this conversation.
+                Default is None.
+                - `"max_turns"` (int or None) - maximum number of turns for the chat. If None, the chat
+                will continue until a termination condition is met. Default is None.
+                - `"summary_method"` (str or callable) - a string or callable specifying the method to get
+                a summary from the chat. Default is DEFAULT_summary_method, i.e., "last_msg".
+                - `"summary_args"` (dict) - a dictionary of arguments to be passed to the summary_method.
+                Default is {}.
+                - `"message"` (str, callable or None) - if None, input() will be called to get the
+                initial message.
+                - `**context` - additional context information to be passed to the chat.
+                - `"carryover"` - It can be used to specify the carryover information to be passed
+                to this chat. If provided, we will combine this carryover with the "message" content when
+                generating the initial chat message in `generate_init_message`.
+                - `"finished_chat_indexes_to_exclude_from_carryover"` - It can be used by specifying a list of indexes of the finished_chats list,
+                from which to exclude the summaries for carryover. If 'finished_chat_indexes_to_exclude_from_carryover' is not provided or an empty list,
+                then summary from all the finished chats will be taken.
 
     Returns:
         (list): a list of ChatResult objects corresponding to the finished chats in the chat_queue.
@@ -252,7 +252,34 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
     """(async) Initiate a list of chats.
 
     Args:
-        - Please refer to `initiate_chats`.
+        chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
+
+        Each dictionary should contain the input arguments for
+        [`ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat).
+        For example:
+            - `"sender"` - the sender agent.
+            - `"recipient"` - the recipient agent.
+            - `"clear_history"` (bool) - whether to clear the chat history with the agent.
+               Default is True.
+            - `"silent"` (bool or None) - (Experimental) whether to print the messages in this
+               conversation. Default is False.
+            - `"cache"` (Cache or None) - the cache client to use for this conversation.
+               Default is None.
+            - `"max_turns"` (int or None) - maximum number of turns for the chat. If None, the chat
+               will continue until a termination condition is met. Default is None.
+            - `"summary_method"` (str or callable) - a string or callable specifying the method to get
+               a summary from the chat. Default is DEFAULT_summary_method, i.e., "last_msg".
+            - `"summary_args"` (dict) - a dictionary of arguments to be passed to the summary_method.
+               Default is {}.
+            - `"message"` (str, callable or None) - if None, input() will be called to get the
+               initial message.
+            - `**context` - additional context information to be passed to the chat.
+            - `"carryover"` - It can be used to specify the carryover information to be passed
+               to this chat. If provided, we will combine this carryover with the "message" content when
+               generating the initial chat message in `generate_init_message`.
+            - `"finished_chat_indexes_to_exclude_from_carryover"` - It can be used by specifying a list of indexes of the finished_chats list,
+               from which to exclude the summaries for carryover. If 'finished_chat_indexes_to_exclude_from_carryover' is not provided or an empty list,
+               then summary from all the finished chats will be taken.
 
 
     Returns:

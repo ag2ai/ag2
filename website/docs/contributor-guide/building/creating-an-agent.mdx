@@ -42,7 +42,7 @@ Cons:
 
 ## How a tool-based agent is created
 
-Let's take a look at a tool-based agent, the [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent). You can read more about how it's used [here](/docs/user-guide/reference-agents/communication-agents).
+Let's take a look at a tool-based agent, the [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent). You can read more about how it's used [here](/docs/user-guide/reference-agents/communication-platforms/discordagent).
 
 All agents should be based on [ConversableAgent](/docs/api-reference/autogen/ConversableAgent), this makes them usable in all orchestrations.
 
@@ -112,7 +112,7 @@ class DiscordAgent(ConversableAgent): # Built on the ConversableAgent class
 
 ### Agent's Tool
 
-Let's look at one of the tools that the agent is using, [DiscordSendTool](/docs/api-reference/autogen/tools/experimental/DiscordSendTool), to see how a [Tool](/docs/api-reference/autogen/tools/Tool) is created (annotations added):
+Let's look at one of the tools that the agent is using, [DiscordSendTool](/docs/user-guide/reference-tools/communication-platforms/discord), to see how a [Tool](/docs/api-reference/autogen/tools/Tool) is created (annotations added):
 
 (See the [Creating a Tool](/docs/contributor-guide/building/creating-a-tool) page for a more detailed guide on creating tools)
 

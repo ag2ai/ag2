@@ -6,30 +6,6 @@
 # SPDX-License-Identifier: MIT
 from typing import Optional
 
-from . import DEFAULT_MODEL, oai
-
-_MATH_PROMPT = "{problem} Solve the problem carefully. Simplify your answer as much as possible. Put the final answer in \\boxed{{}}."
-_MATH_CONFIG = {
-    "model": DEFAULT_MODEL,
-    "prompt": _MATH_PROMPT,
-}
-
-
-def solve_problem(problem: str, **config) -> str:
-    """`(openai<1)` Solve the math problem.
-
-    Args:
-        problem (str): The problem statement.
-        config (Optional, dict): The configuration for the API call.
-
-    Returns:
-        str: The solution to the problem.
-    """
-    params = {**_MATH_CONFIG, **config}
-    response = oai.Completion.create({"problem": problem}, **params)
-    results = eval_math_responses(oai.Completion.extract_text(response))
-    return results.get("voted_answer"), response["cost"]
-
 
 def remove_boxed(string: str) -> Optional[str]:
     """Source: https://github.com/hendrycks/math
@@ -323,12 +299,12 @@ def voting_counts(responses):
     return answers
 
 
-def eval_math_responses(responses, solution=None, **args):
+def eval_math_responses(responses, solution=None):
     """Select a response for a math problem using voting, and check if the response is correct if the solution is provided.
 
     Args:
-        responses (list): The list of responses.
-        solution (str): The canonical solution.
+        responses: The list of responses.
+        solution: The canonical solution.
 
     Returns:
         dict: The success metrics.

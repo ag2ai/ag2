@@ -34,11 +34,12 @@ class SlackAgent(ConversableAgent):
         """Initialize the SlackAgent.
 
         Args:
-            name (str): name of the agent.
-            system_message (str or list): system message for the ChatCompletion inference.
-            bot_token (str): Bot User OAuth Token starting with "xoxb-".
-            channel_id (str): Channel ID where messages will be sent.
-            has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
+            name: name of the agent.
+            system_message: system message for the ChatCompletion inference.
+            bot_token: Bot User OAuth Token starting with "xoxb-".
+            channel_id: Channel ID where messages will be sent.
+            has_writing_instructions: Whether to add writing instructions to the system message. Defaults to True.
+            **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
         slack_system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE
 

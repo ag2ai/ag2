@@ -13,6 +13,7 @@ def image_qa(image, question, ckpt="Salesforce/blip-vqa-base"):
     Args:
         image (Union[str, Image.Image]): The image to perform question answering on. It can be either file path to the image or a PIL Image object.
         question: The question to ask about the image.
+        ckpt: The checkpoint name to use. Default is "Salesforce/blip-vqa-base".
 
     Returns:
         dict: The generated answer text.

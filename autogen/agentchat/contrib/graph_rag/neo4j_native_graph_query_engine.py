@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
@@ -59,8 +59,7 @@ class Neo4jNativeGraphQueryEngine:
             query_llm (LLMInterface): Language model for querying the knowledge graph.
             entities (List[str], optional): Custom entities for guiding graph construction.
             relations (List[str], optional): Custom relations for guiding graph construction.
-            potential_schema (List[tuple[str, str, str]], optional):
-            Schema (triplets, i.e., [entity] -> [relationship] -> [entity]) to guide graph construction.
+            potential_schema (List[tuple[str, str, str]], optional): Schema (triplets, i.e., [entity] -> [relationship] -> [entity]) to guide graph construction.
         """
         self.uri = f"{host}:{port}"
         self.driver = GraphDatabase.driver(self.uri, auth=(username, password))
@@ -123,7 +122,7 @@ class Neo4jNativeGraphQueryEngine:
 
         return True
 
-    def query(self, question: str, n_results: int = 1, **kwargs: Any) -> GraphStoreQueryResult:
+    def query(self, question: str) -> GraphStoreQueryResult:
         """Query the Neo4j database using a natural language question.
 
         Args:

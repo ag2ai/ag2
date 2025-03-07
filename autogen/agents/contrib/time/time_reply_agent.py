@@ -29,7 +29,9 @@ class TimeReplyAgent(ConversableAgent):
         """Initialize the TimeReplyAgent.
 
         Args:
-            date_time_format (str): The format in which the date and time should be returned.
+            date_time_format: The format in which the date and time should be returned.
+            output_prefix: The prefix to add to the output message.
+            **kwargs: Additional parameters to pass to the base
         """
         # Here we handle a ConversableAgent parameter through the kwargs
         # We will pass this through when we run init() the base class
