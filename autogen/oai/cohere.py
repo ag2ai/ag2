@@ -72,7 +72,7 @@ class CohereClient:
         """Requires api_key or environment variable to be set
 
         Args:
-            api_key (str): The API key for using Cohere (or environment variable COHERE_API_KEY needs to be set)
+            **kwargs: The keyword arguments to pass to the Cohere API.
         """
         # Ensure we have the api_key upon instantiation
         self.api_key = kwargs.get("api_key")

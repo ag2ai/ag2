@@ -268,6 +268,7 @@ class GPTAssistantAgent(ConversableAgent):
         """Waits for and processes the response of a run from the OpenAI assistant.
 
         Args:
+            thread: The thread object initiated with the OpenAI assistant.
             run: The run object initiated with the OpenAI assistant.
 
         Returns:

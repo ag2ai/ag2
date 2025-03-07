@@ -429,10 +429,10 @@ def suppress(
     """Suppresses the specified exception and retries the function a specified number of times.
 
     Args:
-        exception (type[BaseException]): The exception to suppress.
-        retries (Optional[int]): The number of times to retry the function. If None, the function will tried once and just return in case of exception raised. Defaults to None.
-        timeout (int): The time to wait between retries in seconds. Defaults to 60.
-
+        exception: The exception to suppress.
+        retries: The number of times to retry the function. If None, the function will tried once and just return in case of exception raised. Defaults to None.
+        timeout: The time to wait between retries in seconds. Defaults to 60.
+        error_filter: A function that takes an exception as input and returns a boolean indicating whether the exception should be suppressed. Defaults to None.
     """
 
     def decorator(

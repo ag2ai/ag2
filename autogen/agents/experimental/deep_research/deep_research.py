@@ -28,10 +28,11 @@ class DeepResearchAgent(ConversableAgent):
         """Initialize the DeepResearchAgent.
 
         Args:
-            name (str): The name of the agent.
-            llm_config (dict[str, Any]): The LLM configuration.
-            system_message (Optional[Union[str, list[str]], optional): The system message. Defaults to DEFAULT_PROMPT.
-            max_web_steps (int, optional): The maximum number of web steps. Defaults to 30.
+            name: The name of the agent.
+            llm_config: The LLM configuration.
+            system_message: The system message. Defaults to DEFAULT_PROMPT.
+            max_web_steps: The maximum number of web steps. Defaults to 30.
+            **kwargs: Additional keyword arguments to pass to the ConversableAgent.
         """
         super().__init__(
             name=name,

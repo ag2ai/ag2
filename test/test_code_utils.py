@@ -23,15 +23,10 @@ from autogen.code_utils import (
     execute_code,
     extract_code,
     get_powershell_command,
-    improve_code,
-    improve_function,
     in_docker_container,
     infer_lang,
     is_docker_running,
 )
-from autogen.import_utils import run_for_optional_imports
-
-from .conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -384,34 +379,6 @@ def test_create_virtual_env_with_extra_args():
         venv_context = create_virtual_env(temp_dir, with_pip=False)
         assert isinstance(venv_context, SimpleNamespace)
         assert venv_context.env_name == os.path.split(temp_dir)[1]
-
-
-@run_for_optional_imports(["openai"], "openai")
-def _test_improve(credentials_all: Credentials):
-    config_list = credentials_all.config_list
-    improved, _ = improve_function(
-        "autogen/math_utils.py",
-        "solve_problem",
-        "Solve math problems accurately, by avoiding calculation errors and reduce reasoning errors.",
-        config_list=config_list,
-    )
-    with open(f"{here}/math_utils.py.improved", "w") as f:
-        f.write(improved)
-    suggestion, _ = improve_code(
-        ["autogen/code_utils.py", "autogen/math_utils.py"],
-        "leverage generative AI smartly and cost-effectively",
-        config_list=config_list,
-    )
-    print(suggestion)
-    improvement, cost = improve_code(
-        ["autogen/code_utils.py", "autogen/math_utils.py"],
-        "leverage generative AI smartly and cost-effectively",
-        suggest_only=False,
-        config_list=config_list,
-    )
-    print(cost)
-    with open(f"{here}/suggested_improvement.txt", "w") as f:
-        f.write(improvement)
 
 
 class TestContentStr:

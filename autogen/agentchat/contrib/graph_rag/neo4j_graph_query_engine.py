@@ -176,11 +176,12 @@ class Neo4jGraphQueryEngine:
         from the property graph to generate a response.
 
         Args:
-        question: a human input question.
-        n_results: number of results to return.
+            question: a human input question.
+            n_results: number of results to return.
+            **kwargs: additional keyword arguments.
 
         Returns:
-        A GrapStoreQueryResult object containing the answer and related triplets.
+            A GrapStoreQueryResult object containing the answer and related triplets.
         """
         if not hasattr(self, "index"):
             raise ValueError("Property graph index is not created.")

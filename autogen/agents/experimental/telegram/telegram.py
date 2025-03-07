@@ -35,11 +35,13 @@ class TelegramAgent(ConversableAgent):
         """Initialize the TelegramAgent.
 
         Args:
-            llm_config (dict[str, Any]): The LLM configuration.
+            name: The name of the agent.
+            system_message: The system message for the agent.
             api_id: Telegram API ID from https://my.telegram.org/apps.
             api_hash: Telegram API hash from https://my.telegram.org/apps.
             chat_id: The ID of the destination (Channel, Group, or User ID).
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
+            **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
 
         telegram_system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE

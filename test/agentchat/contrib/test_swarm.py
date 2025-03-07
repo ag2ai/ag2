@@ -305,6 +305,7 @@ def test_on_condition_handoff() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -368,6 +369,7 @@ def test_context_variables_updating_multi_tools() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -431,6 +433,7 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -501,6 +504,7 @@ def test_function_transfer() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -719,6 +723,7 @@ def test_string_agent_params_for_transfer() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -821,6 +826,7 @@ def test_after_work_callable() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -900,6 +906,7 @@ def test_on_condition_unique_function_names() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -957,6 +964,7 @@ def test_prepare_swarm_agents() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -1011,6 +1019,7 @@ def test_create_nested_chats() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -1233,6 +1242,7 @@ def test_update_on_condition_str() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
@@ -1465,6 +1475,7 @@ def test_swarmresult_afterworkoption_tool_swarmresult() -> None:
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
 
 
+@run_for_optional_imports(["openai"], "openai")
 def test_on_condition_available() -> None:
     """Test OnCondition's available parameter"""
 
@@ -1473,6 +1484,7 @@ def test_on_condition_available() -> None:
             {
                 "model": "gpt-4o",
                 "api_key": "SAMPLE_API_KEY",
+                "api_type": "openai",
             }
         ]
     }
