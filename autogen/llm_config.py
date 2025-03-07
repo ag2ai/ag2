@@ -47,10 +47,11 @@ LLMProvider = Literal[
 #     base_url: Optional[HttpUrl] = None
 #     tags: Optional[list[str]] = None
 
+_current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
+
 
 class LLMConfig(BaseModel):
     # class variable not touched by BaseModel
-    _current_llm_config: ContextVar[dict[str, list[dict[str, Any]]]] = ContextVar("current_llm_config")
 
     # used by BaseModel to create instance variables
     config_list: Annotated[list["LLMConfigEntry"], Field(default_factory=list)]
@@ -65,11 +66,17 @@ class LLMConfig(BaseModel):
 
     def __enter__(self):
         # Store previous context and set self as current
-        self._token = LLMConfig._current_llm_config.set(self.model_dump_json(exclude_none=True))
+        self._token = _current_llm_config.set(self.model_dump_json(exclude_none=True))
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        LLMConfig._current_llm_config.reset(self._token)
+        _current_llm_config.reset(self._token)
+
+    def model_dump(self, *args, exclude_none: bool = True, **kwargs) -> dict[str, Any]:
+        return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
+
+    def model_dump_json(self, *args, exclude_none: bool = True, **kwargs) -> str:
+        return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
 
 class LLMConfigEntry(BaseModel, ABC):
@@ -83,11 +90,11 @@ class LLMConfigEntry(BaseModel, ABC):
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
 
-    def model_dump(self) -> dict[str, Any]:
-        return BaseModel.model_dump(self, exclude_none=True)
+    def model_dump(self, *args, exclude_none: bool = True, **kwargs) -> dict[str, Any]:
+        return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
 
-    def model_dump_json(self) -> str:
-        return BaseModel.model_dump_json(self, exclude_none=True)
+    def model_dump_json(self, *args, exclude_none: bool = True, **kwargs) -> str:
+        return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
 
 class OpenAILLMConfigEntry(LLMConfigEntry):

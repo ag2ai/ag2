@@ -4,8 +4,7 @@
 
 import pytest
 
-from autogen.llm_config import OpenAILLMConfigEntry
-from test.conftest import Credentials
+from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry
 
 # def test_llm_provider():
 #     assert LLMProvider.openai == "openai"
@@ -50,11 +49,12 @@ from test.conftest import Credentials
 #         current_llm_config.get()
 
 
-class TestLLMConfig:
-    @pytest.fixture
-    def openai_llm_config_entry(self, mock_credentials: Credentials) -> OpenAILLMConfigEntry:
-        return OpenAILLMConfigEntry(model="gpt-4o-mini", api_key=mock_credentials.api_key)
+@pytest.fixture
+def openai_llm_config_entry() -> OpenAILLMConfigEntry:
+    return OpenAILLMConfigEntry(model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly")
 
+
+class TestLLMConfigEntry:
     def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
         actual = openai_llm_config_entry.model_dump()
         expected = {
@@ -68,3 +68,26 @@ class TestLLMConfig:
     def test_deserialization(self, openai_llm_config_entry: OpenAILLMConfigEntry):
         actual = OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump())
         assert actual == openai_llm_config_entry
+
+
+class TestLLMConfig:
+    @pytest.fixture
+    def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
+        return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
+
+    def test_serialization(self, openai_llm_config: LLMConfig):
+        actual = openai_llm_config.model_dump()
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+        assert actual == expected
