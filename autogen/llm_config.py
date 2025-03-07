@@ -50,9 +50,6 @@ class LLMConfig:
         return self._model.model_validate_strings(*args, **kwargs)
 
     def __eq__(self, value: Any) -> bool:
-        print(f"{value=}, {hasattr(value, '_model')=}, {self._model=}, {value._model=}")
-        print(f"  ===> {self._model=}")
-        print(f"  ===> {value._model=}")
         return hasattr(value, "_model") and self._model == value._model
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:

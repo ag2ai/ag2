@@ -86,8 +86,6 @@ class TestLLMConfig:
 
     def test_deserialization(self, openai_llm_config: LLMConfig) -> None:
         actual = LLMConfig(**openai_llm_config.model_dump())
-        print(actual)
-        print(actual.model_dump())
         assert actual.model_dump() == openai_llm_config.model_dump()
         assert type(actual._model) == type(openai_llm_config._model)
         assert actual._model == openai_llm_config._model
@@ -100,8 +98,6 @@ class TestLLMConfig:
         assert openai_llm_config.get("cache_seed") == 42
         assert openai_llm_config.get("doesnt_exists") is None
         assert openai_llm_config.get("doesnt_exists", "default") == "default"
-        print("hello")
-        print(openai_llm_config.get("config_list"))
 
     def test_getattr(self, openai_llm_config: LLMConfig) -> None:
         assert openai_llm_config.temperature == 0.5
