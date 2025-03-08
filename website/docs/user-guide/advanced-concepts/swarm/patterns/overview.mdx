@@ -1,0 +1,81 @@
+---
+title: Patterns using Swarm
+sidebarTitle: Overview
+---
+
+Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
+
+Each pattern includes:
+- Descriptions of the structure and information flow
+- Visualizations of agent interactions
+- Code examples showing how to implement the patterns with AG2's swarm orchestration
+- Sample workflow output
+
+## Available Patterns
+
+### [Star / Hub-and-Spoke](./star)
+
+A pattern that centralizes coordination through a single agent while leveraging specialized expertise through satellite agents.
+
+**Business Use Cases:**
+- Customer support systems with specialized agents for different query types
+- Research projects requiring diverse domain expertise
+- City or travel guides that need to coordinate information from multiple domains
+- Planning tasks requiring input from various specialized knowledge areas
+- Product recommendation systems with multiple product specialists
+
+### [Hierarchical / Tree](./hierarchical)
+
+A tree-structured organization where "manager" agents at higher levels delegate tasks to "specialist" agents at lower levels, then aggregate and refine their outputs.
+
+**Business Use Cases:**
+- Complex research reports requiring both oversight and specialized deep dives
+- Product development workflows coordinating multiple specialized teams
+- Multi-faceted analysis that benefits from both generalists and specialists
+- Organizational decision-making with multiple levels of approval
+- Enterprise customer service with tiered support levels
+
+### [Escalation](./escalation)
+
+A resource-efficient approach where simpler, less resource-intensive agents handle tasks first, with more capable (but potentially more expensive) agents only engaged when necessary.
+
+**Business Use Cases:**
+- Tiered customer support (chatbot → human agent → specialist)
+- Computational tasks with varying complexity requirements
+- Content moderation (automated → human review)
+- Technical problem-solving with varying difficulty levels
+- Healthcare triage and diagnosis systems
+
+### [Pipeline / Sequential Processing](./pipeline)
+
+A pattern that organizes agents into a linear sequence where each agent performs a specific transformation on data before passing it to the next agent in the chain.
+
+**Business Use Cases:**
+- E-commerce order processing workflows (validation → inventory → payment → fulfillment)
+- Content creation pipelines (research → draft → edit → polish)
+- Data processing workflows (collect → clean → analyze → visualize)
+- Multi-stage reasoning tasks (define problem → identify approaches → execute → validate)
+- Document processing (extraction → classification → analysis → archiving)
+
+### [Feedback Loop](./feedback_loop)
+
+A workflow where content progresses through repeated cycles of evaluation and improvement, enabling continuous refinement through deliberate iterations.
+
+**Business Use Cases:**
+- Document writing and editing processes
+- Iterative design and creative tasks
+- Learning systems that improve over time
+- Continuous improvement workflows
+- Complex problem-solving requiring multiple refinement cycles
+- Quality assurance processes with iterative improvement
+
+## Getting Started
+
+To implement these patterns in your own applications:
+
+1. Review the pattern documentation to identify which pattern(s) best suit your use case
+2. Examine the example code for implementation details
+3. Use AG2's Swarm framework to implement the chosen pattern
+4. Customize the agents and their capabilities for your specific needs
+
+For more information on using the Swarm framework itself, refer to the [Swarm documentation](/docs/user-guide/basic-concepts/orchestration/swarm).
