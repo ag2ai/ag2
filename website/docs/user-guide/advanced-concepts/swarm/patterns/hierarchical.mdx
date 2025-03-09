@@ -8,11 +8,11 @@ The Hierarchical, or Tree, Orchestration Pattern is a powerful approach to organ
 
 The Hierarchical Pattern establishes distinct agent roles across three primary levels:
 
-1. **Executive Level** (Top): An executive agent maintains strategic oversight of the entire task. This agent breaks complex problems into logical components, delegates to appropriate domain managers, provides overall direction, and ultimately synthesizes the final output.
+* **Executive Level** (Top): An executive agent maintains strategic oversight of the entire task. This agent breaks complex problems into logical components, delegates to appropriate domain managers, provides overall direction, and ultimately synthesizes the final output.
 
-2. **Manager Level** (Middle): Manager agents have responsibility for specific domains. Each manager breaks down their assigned component into specialized subtasks, delegates to appropriate specialists, monitors progress, provides guidance, and aggregates results before reporting back to the executive.
+* **Manager Level** (Middle): Manager agents have responsibility for specific domains. Each manager breaks down their assigned component into specialized subtasks, delegates to appropriate specialists, monitors progress, provides guidance, and aggregates results before reporting back to the executive.
 
-3. **Specialist Level** (Bottom): Specialist agents possess deep expertise in narrow areas. They focus exclusively on well-defined, discrete tasks without needing to understand the entire problem context. These agents do the detailed work and report their findings back to their respective managers.
+* **Specialist Level** (Bottom): Specialist agents possess deep expertise in narrow areas. They focus exclusively on well-defined, discrete tasks without needing to understand the entire problem context. These agents do the detailed work and report their findings back to their respective managers.
 
 ![Hierarchical Pattern](./assets/hierarchical.jpeg)
 
@@ -20,8 +20,9 @@ The Hierarchical Pattern establishes distinct agent roles across three primary l
 
 The strength of this pattern comes from its structured information flow:
 
-- **Downstream Flow**: Tasks, requirements, and context flow from the executive to managers to specialists, becoming more specialized and focused at each level.
-- **Upstream Flow**: Results, findings, and completed work flow from specialists to managers to the executive, being aggregated and refined at each level.
+* **Downstream Flow**: Tasks, requirements, and context flow from the executive to managers to specialists, becoming more specialized and focused at each level.
+
+* **Upstream Flow**: Results, findings, and completed work flow from specialists to managers to the executive, being aggregated and refined at each level.
 
 ![Hierarchical Flow](./assets/hierarchical_flow.jpeg)
 
@@ -29,19 +30,19 @@ The strength of this pattern comes from its structured information flow:
 
 In our implementation using AG2's Swarm, we've created:
 
-1. A clear hierarchy with one executive agent, three manager agents (Renewable, Storage, Alternative), and five specialist agents organized under their respective managers.
+* A clear hierarchy with one executive agent, three manager agents (Renewable, Storage, Alternative), and five specialist agents organized under their respective managers.
 
-2. Explicit handoffs designed around the hierarchy:
+* Explicit handoffs designed around the hierarchy:
    - Context-based transitions using `OnContextCondition` for deterministic, non-LLM routing
    - LLM-based fallbacks using `OnCondition` for more complex decisions
    - Explicit `AfterWork` designations to ensure agents always report back to their supervisors
 
-3. Shared context variables to track progress at different levels, allowing for:
+* Shared context variables to track progress at different levels, allowing for:
    - Deterministic routing based on task completion status
    - Storage of research content provided by specialists
    - Aggregation of report sections compiled by managers
 
-4. A complete workflow that follows organizational principles:
+* A complete workflow that follows organizational principles:
    - The executive delegates tasks to managers
    - Managers delegate to their respective specialists
    - Specialists conduct research and report back to managers

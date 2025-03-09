@@ -8,9 +8,9 @@ The Star Pattern (also known as Hub-and-Spoke) is an efficient orchestration app
 
 The Star Pattern establishes a clear two-level structure:
 
-1. **Coordinator Agent** (Hub): A central agent that maintains overall context, delegates specific tasks to specialists, and synthesizes their outputs into a coherent final result. The coordinator understands the big picture and how each specialist's work contributes to the whole.
+* **Coordinator Agent** (Hub): A central agent that maintains overall context, delegates specific tasks to specialists, and synthesizes their outputs into a coherent final result. The coordinator understands the big picture and how each specialist's work contributes to the whole.
 
-2. **Specialist Agents** (Spokes): Domain-specific agents that perform focused tasks within their area of expertise. Each specialist receives targeted instructions from the coordinator, performs its specialized work, and reports results back to the coordinator without needing to communicate with other specialists.
+* **Specialist Agents** (Spokes): Domain-specific agents that perform focused tasks within their area of expertise. Each specialist receives targeted instructions from the coordinator, performs its specialized work, and reports results back to the coordinator without needing to communicate with other specialists.
 
 Unlike more complex hierarchical patterns, the Star Pattern creates a flat structure where all specialists directly connect to a single coordinator, eliminating intermediate layers and simplifying communication flows.
 
@@ -18,9 +18,11 @@ Unlike more complex hierarchical patterns, the Star Pattern creates a flat struc
 
 The Star Pattern creates a highly efficient, centralized workflow:
 
-- **Outward Flow**: The coordinator distributes specific tasks to appropriate specialists based on their expertise.
-- **Inward Flow**: Specialists complete their tasks and report results directly back to the coordinator.
-- **Synthesis**: The coordinator integrates all specialist inputs into a cohesive final output.
+* **Outward Flow**: The coordinator distributes specific tasks to appropriate specialists based on their expertise.
+
+* **Inward Flow**: Specialists complete their tasks and report results directly back to the coordinator.
+
+* **Synthesis**: The coordinator integrates all specialist inputs into a cohesive final output.
 
 This pattern creates a streamlined, predictable information flow where all communication passes through the central coordinator. This ensures consistency in the final output while allowing each specialist to focus exclusively on their domain.
 
@@ -30,19 +32,19 @@ The coordinator agent is responsible for task decomposition, specialist selectio
 
 In our implementation using AG2's Swarm, we've created:
 
-1. A clear star topology with one coordinator agent and multiple specialist agents, each focused on a specific domain of expertise.
+* A clear star topology with one coordinator agent and multiple specialist agents, each focused on a specific domain of expertise.
 
-2. Direct handoffs designed for efficient task delegation:
+* Direct handoffs designed for efficient task delegation:
    - The coordinator uses `OnCondition` to route tasks to the appropriate specialist based on the query type
    - Each specialist is configured with `AfterWork` to always report back directly to the coordinator
    - The coordinator maintains context and synthesizes the final response
 
-3. Shared context variables to track:
+* Shared context variables to track:
    - Which specialist(s) are needed for a given query
    - The status of each specialist's work
    - The accumulated specialist responses
 
-4. A complete workflow that follows the star model:
+* A complete workflow that follows the star model:
    - The coordinator analyzes the initial request
    - The coordinator delegates specific tasks to appropriate specialists
    - Specialists perform their focused work and report back

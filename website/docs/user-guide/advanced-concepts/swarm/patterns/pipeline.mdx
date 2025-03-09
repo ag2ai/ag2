@@ -9,13 +9,13 @@ The Pipeline Pattern is a powerful orchestration approach that organizes agents 
 
 The Pipeline Pattern creates a streamlined, sequential processing flow where data moves through a series of specialized transformations. Each agent in the pipeline receives input from its predecessor, performs its specific processing, and passes the result to its successor. This approach simplifies complex workflows by breaking them into discrete, manageable stages.
 
-1. **Specialized Stages**: Each agent in the pipeline specializes in a specific type of data transformation or processing task, focusing exclusively on its area of expertise.
+* **Specialized Stages**: Each agent in the pipeline specializes in a specific type of data transformation or processing task, focusing exclusively on its area of expertise.
 
-2. **Unidirectional Flow**: Information typically flows in one direction from the beginning to the end of the pipeline, with clear handoffs between stages.
+* **Unidirectional Flow**: Information typically flows in one direction from the beginning to the end of the pipeline, with clear handoffs between stages.
 
-3. **Progressive Refinement**: Data is progressively refined, enhanced, and transformed as it moves through each stage, with each agent building upon the work of previous agents.
+* **Progressive Refinement**: Data is progressively refined, enhanced, and transformed as it moves through each stage, with each agent building upon the work of previous agents.
 
-4. **Well-Defined Interfaces**: Each agent has clear expectations about the format and content of both its inputs and outputs, ensuring smooth transitions between stages.
+* **Well-Defined Interfaces**: Each agent has clear expectations about the format and content of both its inputs and outputs, ensuring smooth transitions between stages.
 
 ### Information Flow
 
@@ -23,11 +23,11 @@ In the Pipeline Pattern, information flows along a predetermined path, creating 
 
 The workflow begins with raw input data entering the first stage of the pipeline. Each agent applies its specific transformation before passing the enriched data to the next agent. This continues until the data reaches the final stage, which produces the fully processed output. If an error occurs at any point, the pipeline can terminate early, with error information flowing back to the user rather than proceeding to subsequent stages.
 
-1. **Sequential Progression**: Data moves through a predetermined sequence of processing stages, with each agent receiving, transforming, and passing data forward.
+* **Sequential Progression**: Data moves through a predetermined sequence of processing stages, with each agent receiving, transforming, and passing data forward.
 
-2. **Transformation Focus**: Each stage applies its specialized expertise to the data, progressively refining it toward the final output.
+* **Transformation Focus**: Each stage applies its specialized expertise to the data, progressively refining it toward the final output.
 
-3. **Accumulative Value**: Each transformation builds upon previous ones, with the data becoming more refined and complete as it progresses through the pipeline.
+* **Accumulative Value**: Each transformation builds upon previous ones, with the data becoming more refined and complete as it progresses through the pipeline.
 
 ### Implementation
 
@@ -35,11 +35,11 @@ Our implementation using AG2's Swarm demonstrates the Pipeline Pattern in an e-c
 
 The pipeline begins with an Entry Agent that receives the order data and initiates processing. The order then flows sequentially through specialized stages: Validation checks the order's correctness, Inventory verifies item availability, Payment processes the transaction, Fulfillment prepares shipping instructions, and finally, Notification sends confirmation to the customer. Each agent focuses exclusively on its stage of the process, applying its specialized transformation before passing the enhanced data to the next agent.
 
-1. **Structured Data Models**: Pydantic models define the input/output for each stage, creating clear contracts between pipeline stages and ensuring type safety.
+* **Structured Data Models**: Pydantic models define the input/output for each stage, creating clear contracts between pipeline stages and ensuring type safety.
 
-2. **Stage-Specific Functions**: Each processing stage has dedicated functions that transform the input, update the shared context, and determine whether to proceed or terminate with an error.
+* **Stage-Specific Functions**: Each processing stage has dedicated functions that transform the input, update the shared context, and determine whether to proceed or terminate with an error.
 
-3. **Strategic Handoffs**: AfterWork handlers and context variables manage transitions between agents, with SwarmResult directing the flow based on each stage's outcome.
+* **Strategic Handoffs**: AfterWork handlers and context variables manage transitions between agents, with SwarmResult directing the flow based on each stage's outcome.
 
 The Pipeline Pattern excels at tasks requiring sequential processing with progressive refinement, particularly when the output of one stage naturally serves as the input to the next. This makes it ideal for workflows like document processing, approval sequences, and e-commerce transactions where data needs to undergo a series of distinct transformations in a specific order.
 

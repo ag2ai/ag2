@@ -8,45 +8,45 @@ The Escalation Pattern is a resource-efficient approach to task handling where s
 
 The Escalation Pattern optimizes resource usage by intelligently routing tasks to appropriate agents based on complexity and agent capabilities. At its core, this pattern recognizes that not all queries require the same level of expertise or computational resources to address effectively. By establishing a hierarchy of agents with increasing capabilities and costs, the system can balance efficiency and quality.
 
-1. **Progressive Capability**: Tasks start with basic agents and escalate through progressively more capable agents only when needed.
+* **Progressive Capability**: Tasks start with basic agents and escalate through progressively more capable agents only when needed.
 
-2. **Resource Efficiency**: Simpler, less expensive agents handle straightforward tasks, while more powerful agents are reserved for complex problems.
+* **Resource Efficiency**: Simpler, less expensive agents handle straightforward tasks, while more powerful agents are reserved for complex problems.
 
-3. **Clear Escalation Criteria**: Well-defined confidence thresholds and structured responses determine when to escalate to the next level.
+* **Clear Escalation Criteria**: Well-defined confidence thresholds and structured responses determine when to escalate to the next level.
 
-4. **Context Preservation**: All context and query information is maintained throughout the escalation process.
+* **Context Preservation**: All context and query information is maintained throughout the escalation process.
 
-5. **Graceful Degradation**: System handles varying complexity levels efficiently, providing the best available answer.
+* **Graceful Degradation**: System handles varying complexity levels efficiently, providing the best available answer.
 
 ### Information Flow
 
 The flow of information in the Escalation Pattern follows a deliberate path designed to maximize efficiency while ensuring that queries receive appropriate attention. Each query undergoes evaluation at multiple levels if necessary, with decisions made based on structured confidence assessments rather than subjective impressions. This systematic approach ensures consistent handling of queries and optimal resource allocation.
 
-1. **Query Reception**: The triage agent receives the user query and routes it to the basic agent.
+* **Query Reception**: The triage agent receives the user query and routes it to the basic agent.
 
-2. **Confidence Assessment**: Each agent evaluates the query and provides a structured response with a confidence score.
+* **Confidence Assessment**: Each agent evaluates the query and provides a structured response with a confidence score.
 
-3. **Escalation Decision**:
+* **Escalation Decision**:
    - If confidence is below threshold (typically < 8/10), escalate to the next agent level
    - If confidence is above threshold, return the response to the user
 
-4. **Context Tracking**: Context variables track each agent's confidence score, escalation count, and reasons.
+* **Context Tracking**: Context variables track each agent's confidence score, escalation count, and reasons.
 
-5. **Result Delivery**: The final answer is returned through the triage agent to the user.
+* **Result Delivery**: The final answer is returned through the triage agent to the user.
 
 ### Implementation
 
 Implementing the Escalation Pattern requires careful design of both the agent architecture and the communication protocol between agents. The implementation leverages structured data formats and explicit confidence reporting to make escalation decisions transparent and consistent. By using the Swarm orchestration engine, the pattern can be implemented with minimal custom code while maintaining robust escalation logic and context preservation.
 
-1. **Structured Response Format**: A Pydantic model (`ConsideredResponse`) captures answer, confidence, reasoning, and escalation information.
+* **Structured Response Format**: A Pydantic model (`ConsideredResponse`) captures answer, confidence, reasoning, and escalation information.
 
-2. **Confidence Thresholds**: Agents escalate queries when their confidence falls below a defined threshold (8/10).
+* **Confidence Thresholds**: Agents escalate queries when their confidence falls below a defined threshold (8/10).
 
-3. **Agent-Specific Context Variables**: Each agent's confidence and escalation decisions are tracked independently.
+* **Agent-Specific Context Variables**: Each agent's confidence and escalation decisions are tracked independently.
 
-4. **OnContextCondition**: Transitions between agents are triggered by evaluating context variables.
+* **OnContextCondition**: Transitions between agents are triggered by evaluating context variables.
 
-5. **Tool Functions**: Specialized tool functions process structured responses and manage escalation logic.
+* **Tool Functions**: Specialized tool functions process structured responses and manage escalation logic.
 
 ## Agent Flow
 

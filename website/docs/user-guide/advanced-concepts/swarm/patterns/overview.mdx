@@ -13,27 +13,16 @@ Each pattern includes:
 
 ## Available Patterns
 
-### [Star / Hub-and-Spoke](./star)
+### [Context-Aware Routing](./context_aware_routing)
 
-A pattern that centralizes coordination through a single agent while leveraging specialized expertise through satellite agents.
-
-**Business Use Cases:**
-- Customer support systems with specialized agents for different query types
-- Research projects requiring diverse domain expertise
-- City or travel guides that need to coordinate information from multiple domains
-- Planning tasks requiring input from various specialized knowledge areas
-- Product recommendation systems with multiple product specialists
-
-### [Hierarchical / Tree](./hierarchical)
-
-A tree-structured organization where "manager" agents at higher levels delegate tasks to "specialist" agents at lower levels, then aggregate and refine their outputs.
+A dynamic workflow where tasks are intelligently distributed to specialized agents based on content analysis rather than predetermined paths.
 
 **Business Use Cases:**
-- Complex research reports requiring both oversight and specialized deep dives
-- Product development workflows coordinating multiple specialized teams
-- Multi-faceted analysis that benefits from both generalists and specialists
-- Organizational decision-making with multiple levels of approval
-- Enterprise customer service with tiered support levels
+- Customer support systems that route queries to appropriate department specialists
+- Multi-domain virtual assistants that connect users with specialized services
+- Knowledge management systems that direct questions to domain experts
+- Research platforms that route complex questions to knowledgeable AI agents
+- Dynamic content moderation based on content type
 
 ### [Escalation](./escalation)
 
@@ -46,17 +35,6 @@ A resource-efficient approach where simpler, less resource-intensive agents hand
 - Technical problem-solving with varying difficulty levels
 - Healthcare triage and diagnosis systems
 
-### [Pipeline / Sequential Processing](./pipeline)
-
-A pattern that organizes agents into a linear sequence where each agent performs a specific transformation on data before passing it to the next agent in the chain.
-
-**Business Use Cases:**
-- E-commerce order processing workflows (validation → inventory → payment → fulfillment)
-- Content creation pipelines (research → draft → edit → polish)
-- Data processing workflows (collect → clean → analyze → visualize)
-- Multi-stage reasoning tasks (define problem → identify approaches → execute → validate)
-- Document processing (extraction → classification → analysis → archiving)
-
 ### [Feedback Loop](./feedback_loop)
 
 A workflow where content progresses through repeated cycles of evaluation and improvement, enabling continuous refinement through deliberate iterations.
@@ -68,6 +46,50 @@ A workflow where content progresses through repeated cycles of evaluation and im
 - Continuous improvement workflows
 - Complex problem-solving requiring multiple refinement cycles
 - Quality assurance processes with iterative improvement
+
+### [Hierarchical / Tree](./hierarchical)
+
+A tree-structured organization where "manager" agents at higher levels delegate tasks to "specialist" agents at lower levels, then aggregate and refine their outputs.
+
+**Business Use Cases:**
+- Complex research reports requiring both oversight and specialized deep dives
+- Product development workflows coordinating multiple specialized teams
+- Multi-faceted analysis that benefits from both generalists and specialists
+- Organizational decision-making with multiple levels of approval
+- Enterprise customer service with tiered support levels
+
+### [Pipeline / Sequential Processing](./pipeline)
+
+A pattern that organizes agents into a linear sequence where each agent performs a specific transformation on data before passing it to the next agent in the chain.
+
+**Business Use Cases:**
+- E-commerce order processing workflows (validation → inventory → payment → fulfillment)
+- Content creation pipelines (research → draft → edit → polish)
+- Data processing workflows (collect → clean → analyze → visualize)
+- Multi-stage reasoning tasks (define problem → identify approaches → execute → validate)
+- Document processing (extraction → classification → analysis → archiving)
+
+### [Redundant](./redundant)
+
+A pattern that employs multiple agents to attempt the same task using different approaches, with results compared to select the best outcome or combine strengths.
+
+**Business Use Cases:**
+- Critical systems where errors must be minimized
+- Creative tasks benefiting from multiple distinct perspectives
+- Complex problem solving with unclear optimal approaches
+- Medical diagnosis requiring multiple expert opinions
+- Security systems needing cross-validation of potential threats
+
+### [Star / Hub-and-Spoke](./star)
+
+A pattern that centralizes coordination through a single agent while leveraging specialized expertise through satellite agents.
+
+**Business Use Cases:**
+- Customer support systems with specialized agents for different query types
+- Research projects requiring diverse domain expertise
+- City or travel guides that need to coordinate information from multiple domains
+- Planning tasks requiring input from various specialized knowledge areas
+- Product recommendation systems with multiple product specialists
 
 ## Getting Started
 
