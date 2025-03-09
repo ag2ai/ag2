@@ -25,7 +25,7 @@ def cache_key(content: MessageContentType, *args: Hashable) -> str:
 
 
 def cache_content_get(cache: Optional[AbstractCache], key: str) -> Optional[tuple[MessageContentType, ...]]:
-    """Retrieves cachedd content from the cache.
+    """Retrieves cached content from the cache.
 
     Args:
         cache (None or AbstractCache): The cache to retrieve the content from. If None, the cache is ignored.
