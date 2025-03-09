@@ -27,6 +27,7 @@ __all__ = [
     "get_context_params",
     "inject_params",
     "on",
+    "remove_params",
 ]
 
 
@@ -135,7 +136,7 @@ def _is_depends_param(param: inspect.Parameter) -> bool:
     )
 
 
-def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
+def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
     new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
     func.__signature__ = new_signature  # type: ignore[attr-defined]
 
@@ -147,7 +148,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
 
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
-    _remove_params(func, sig, params_to_remove)
+    remove_params(func, sig, params_to_remove)
     return func
 
 
