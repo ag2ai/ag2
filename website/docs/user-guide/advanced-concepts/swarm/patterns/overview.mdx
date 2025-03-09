@@ -6,10 +6,10 @@ sidebarTitle: Overview
 Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
 
 Each pattern includes:
-- Descriptions of the structure and information flow
-- Visualizations of agent interactions
-- Code examples showing how to implement the patterns with AG2's swarm orchestration
-- Sample workflow output
+- Description of the structure and information flow
+- Visualization example of agent interactions
+- Code example showing how to implement the pattern with AG2's swarm orchestration
+- Code example output
 
 ## Available Patterns
 
@@ -58,9 +58,19 @@ A tree-structured organization where "manager" agents at higher levels delegate 
 - Organizational decision-making with multiple levels of approval
 - Enterprise customer service with tiered support levels
 
+### [Organic](./organic)
+
+A flexible pattern that relies on agent descriptions and conversation context to naturally determine the most appropriate specialist for each stage of a conversation, without requiring explicit routing rules.
+
+**Business Use Cases:**
+- Collaborative creative projects where expertise needs shift organically throughout the process
+- Educational assistants that adapt to changing student questions across different subjects
+- Consultative services where problem diagnosis may require different specialists at unpredictable points
+- Versatile virtual assistants that handle diverse user needs without rigid conversation flows
+
 ### [Pipeline / Sequential Processing](./pipeline)
 
-A pattern that organizes agents into a linear sequence where each agent performs a specific transformation on data before passing it to the next agent in the chain.
+A pattern that organizes agents into a linear sequence where each agent performs their specific action before passing onto the next agent in the chain.
 
 **Business Use Cases:**
 - E-commerce order processing workflows (validation → inventory → payment → fulfillment)
@@ -90,6 +100,54 @@ A pattern that centralizes coordination through a single agent while leveraging 
 - City or travel guides that need to coordinate information from multiple domains
 - Planning tasks requiring input from various specialized knowledge areas
 - Product recommendation systems with multiple product specialists
+
+## Error Handling
+
+It is possible, and even expected, that some agents may fail to complete their response successfully and that may disrupt the workflow. This could be due an exception being raised in a tool call or function.
+
+If you are able to catch those exceptions, you can transfer to an `error agent` in your swarm using either [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) to transfer to the error agent.
+
+```python
+# Transfer to the error_agent if the context variable "errored" is set to True
+register_hand_off(
+    agent=my_agent,
+    hand_to=[
+        OnContextCondition(
+            target=error_agent,
+            condition=ContextExpression("${errored}"),
+        )
+    ]
+)
+
+# Transfer to the error_agent when a tool fails
+def my_tool_function(my_parameter: str, context_variables: dict[str, Any]) -> SwarmResult:
+    try:
+        ...
+    except Exception as e:
+        # Option 1: set context variable that will be handled in a hand-off associated
+        # with this agent (see above)
+        context_variables["errored"] = True
+        return SwarmResult(
+            context_variables=context_variables,
+            values=f"An exception was raised: {e}"
+        )
+
+        # Option 2: include the target error_agent in the returned SwarmResult
+        # to transfer directly without the need for a hand-off
+        return SwarmResult(
+            agent=error_agent,
+            context_variables=context_variables,
+            values=f"An exception was raised: {e}"
+        )
+
+# Error agent can return to the user (or some other agent) automatically when it is transition to
+register_hand_off(
+    agent=error_agent,
+    hand_to=[
+        AfterWork(AfterWorkOption.REVERT_TO_USER)
+    ]
+)
+```
 
 ## Getting Started
 
