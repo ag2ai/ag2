@@ -57,25 +57,40 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. However, as of this writing, `DeepSeek` is encountering some issues.
 </Tip>
 
-```python
-from autogen.agents.experimental import WebSurferAgent
 
-# Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+<Tabs>
+  <Tab title="browser_use">
+    ```python
+    from autogen.agents.experimental import WebSurferAgent
 
-# Create our agent
-websurfer = WebSurferAgent(
-    name="WebSurfer",
-    llm_config=llm_config,
-    web_tool="browser_use",
-)
-# or
-websurfer = WebSurferAgent(
-    name="WebSurfer",
-    llm_config=llm_config,
-    web_tool="crawl4ai",
-)
-```
+    # Put your key in the OPENAI_API_KEY environment variable
+    llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+    # Create our agent
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        llm_config=llm_config,
+        web_tool="browser_use",
+    )
+    ```
+  </Tab>
+  <Tab title="crawl4ai">
+    ```python
+    from autogen.agents.experimental import WebSurferAgent
+
+    # Put your key in the OPENAI_API_KEY environment variable
+    llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+
+    # Create our agent
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        llm_config=llm_config,
+        web_tool="crawl4ai",
+    )
+    ```
+  </Tab>
+</Tabs>
+
 
 <Tip>
 Crawl4AI doesn't always require an LLM configuration, see [this notebook](/docs/use-cases/notebooks/notebooks/tools_crawl4ai) for examples with and without one.
