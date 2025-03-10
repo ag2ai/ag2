@@ -13,12 +13,9 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
-from autogen.tools.dependency_injection import (
-    Depends,
-    inject_params,
-    on,
-)
-from autogen.tools.tool import Tool
+from ...tools.dependency_injection import inject_params, on
+from ...tools import Depends, Tool
+
 
 from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
