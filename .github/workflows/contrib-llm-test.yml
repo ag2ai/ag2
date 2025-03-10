@@ -118,7 +118,7 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test,openai,autobuild]"
+          uv pip install --system -e ".[test,openai,autobuild,captainagent]"
       - name: Run tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -126,7 +126,7 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py
+          bash scripts/test.sh test/agentchat/contrib/test_agent_builder.py test/agentchat/contrib/test_captainagent.py
       - name: Show coverage report
         run: bash scripts/show-coverage-report.sh
       - name: Upload coverage to Codecov
@@ -134,7 +134,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
-          flags: autobuild, ${{ matrix.python-version }}, ${{ matrix.os }}
+          flags: autobuild, captainagent, ${{ matrix.python-version }}, ${{ matrix.os }}
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
