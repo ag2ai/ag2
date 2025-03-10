@@ -297,6 +297,70 @@ def copy_assets(website_dir: Path) -> None:
     copy_files(src_dir, dest_dir, git_tracket_img_files)
 
 
+def process_blog_metadata(contents: str, file: Path) -> str:
+    # Split the content into parts
+    parts = contents.split("---", 2)
+    if len(parts) < 3:
+        return contents
+
+    frontmatter = parts[1]
+    content = parts[2]
+
+    # Extract tags
+    tags_match = re.search(r"tags:\s*\[(.*?)\]", frontmatter)
+    if not tags_match:
+        return contents
+
+    tags_str = tags_match.group(1)
+    tags = [tag.strip() for tag in tags_str.split(",")]
+
+    # Extract date from second-to-last part of file path
+    date_match = re.match(r"(\d{4}-\d{2}-\d{2})", file.parts[-2])
+    date = date_match.group(1) if date_match else None
+
+    # Remove original tags
+    frontmatter = re.sub(r"tags:\s*\[.*?\]", "", frontmatter).strip()
+
+    # Format tags and categories as YAML lists
+    tags_yaml = "tags: \n    - " + "\n    - ".join(tags)
+    categories_yaml = "categories: \n    - " + "\n    - ".join(tags)
+
+    # Add date to metadata
+    date_yaml = f"\ndate: {date}" if date else ""
+
+    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}\n---{content}"
+
+
+def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path) -> None:
+    src_blog_dir = mkdocs_output_dir / "_blogs"
+    target_blog_dir = mkdocs_output_dir / "blog"
+    target_posts_dir = target_blog_dir / "posts"
+
+    # Create the target posts directory
+    target_posts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create the index file in the target blog directory
+    index_file = target_blog_dir / "index.md"
+    index_file.write_text("# Blog\n\n")
+
+    # Get all files to copy
+    files_to_copy = list(src_blog_dir.rglob("*"))
+
+    # process blog metadata
+    for file in files_to_copy:
+        if file.suffix == ".md":
+            contents = file.read_text()
+            processed_metadata = process_blog_metadata(contents, file)
+            file.write_text(processed_metadata)
+
+    # Copy files from source to target
+    copy_files(src_blog_dir, target_posts_dir, files_to_copy)
+
+    # Copy authors_yml_path to the target_blog_dir and rename it as .authors.yml
+    target_authors_yml_path = target_blog_dir / ".authors.yml"
+    shutil.copy2(authors_yml_path, target_authors_yml_path)
+
+
 def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
@@ -310,7 +374,6 @@ def main() -> None:
         shutil.rmtree(mkdocs_output_dir)
 
     exclusion_list = [
-        "docs/_blogs",
         "docs/.gitignore",
         "docs/use-cases",
         "docs/installation",
@@ -325,4 +388,7 @@ def main() -> None:
 
     copy_assets(website_dir)
     process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
+
+    authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
+    process_blog_files(mkdocs_output_dir, authors_yml_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)

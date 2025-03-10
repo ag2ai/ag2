@@ -16,6 +16,8 @@ from autogen._website.generate_mkdocs import (
     format_navigation,
     generate_mkdocs_navigation,
     process_and_copy_files,
+    process_blog_files,
+    process_blog_metadata,
     transform_card_grp_component,
     transform_tab_component,
 )
@@ -248,6 +250,83 @@ def test_fix_asset_path() -> None:
     </a>
 </div>""")
     actual = fix_asset_path(content)
+    assert actual == expected
+
+
+def test_process_blog_files() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source directory structure
+        src_dir = Path(tmpdir) / "_blogs"
+        src_dir.mkdir()
+
+        files = [
+            src_dir / "2023-04-21-LLM-tuning-math" / "index.mdx",
+            src_dir / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            src_dir / "2023-04-21-LLM-tuning-math" / "cover.png",
+        ]
+
+        # Create the files
+        for file in files:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.touch()
+
+        target_blog_dir = Path(tmpdir) / "blog"
+
+        authors_yml_path = Path(tmpdir) / ".authors.yml"
+        authors_yml_path.touch()
+
+        # Assert the target_blog_dir should have posts directory and index.md file and .authors.yml file
+        process_blog_files(Path(tmpdir), Path(authors_yml_path))
+
+        actual = list(filter(lambda x: x.is_file(), target_blog_dir.rglob("*")))
+        expected = [
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "index.md",
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "cover.png",
+            target_blog_dir / "index.md",
+            target_blog_dir / ".authors.yml",
+        ]
+        assert len(actual) == len(expected)
+        assert sorted(actual) == sorted(actual)
+
+
+def test_process_blog_metadata() -> None:
+    contents = dedent("""
+    ---
+    title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
+    authors: [sonichi]
+    tags: [LLM, GPT, research]
+    ---
+
+    ![level 2 algebra](img/level2algebra.png)
+
+    **TL;DR:**
+    """)
+
+    expected = "---" + dedent("""
+    title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
+    authors: [sonichi]
+    tags:
+        - LLM
+        - GPT
+        - research
+    categories:
+        - LLM
+        - GPT
+        - research
+    date: 2025-01-10
+    ---
+
+    ![level 2 algebra](img/level2algebra.png)
+
+    **TL;DR:**
+    """)
+    file = Path("tmp/ag2/ag2/website/mkdocs/docs/docs/_blogs/2025-01-10-WebSockets/index.md")
+    actual = process_blog_metadata(contents, file)
+    print("*" * 80)
+    print(f"{actual=}")
+    print(f"{expected=}")
+    print("*" * 80)
     assert actual == expected
 
 
