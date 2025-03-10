@@ -30,7 +30,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -58,7 +58,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
 
     @field_validator("top_p", mode="before")
     @classmethod
-    def check_top_p(cls, v: Any, info: dict[str, Any]) -> Any:
+    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
         if v is not None and info.data.get("temperature") is not None:
             raise ValueError("temperature and top_p cannot be set at the same time.")
         return v

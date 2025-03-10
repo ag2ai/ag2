@@ -444,6 +444,7 @@ files = [
     "autogen/llm_config.py",
     "autogen/logger",
     "autogen/messages",
+    "autogen/oai/deepseek.py",
     "autogen/oai/oai_models",
     "autogen/oai/openai_utils.py",
     "autogen/tools",
@@ -464,6 +465,7 @@ files = [
     "test/tools",
     "test/website",
     "test/oai/test_oai_models.py",
+    "test/oai/test_deepseek.py"
 ]
 
 exclude = [
