@@ -532,7 +532,7 @@ class GeminiClient:
                     else rst.append(Content(parts=parts, role=role))
                 )
             elif part_type == "tool" or part_type == "tool_call":
-                role = "function" if version.parse(genai.__version__) <= version.parse("1.3.0") else "user"
+                role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "user"
                 rst.append(
                     VertexAIContent(parts=parts, role=role)
                     if self.use_vertexai
