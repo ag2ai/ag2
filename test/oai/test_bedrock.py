@@ -59,6 +59,7 @@ def test_bedrock_llm_config_entry():
         "topP": 0.6,
         "stream": False,
         "tags": [],
+        "supports_system_prompts": True,
     }
     actual = bedrock_llm_config.model_dump()
     assert actual == expected, actual

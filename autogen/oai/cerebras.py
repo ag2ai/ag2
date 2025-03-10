@@ -30,7 +30,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -52,8 +52,8 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cerebras"] = "cerebras"
     max_tokens: Optional[int] = None
     seed: Optional[int] = None
-    stream: Optional[bool] = None
-    temperature: Optional[float] = None
+    stream: bool = False
+    temperature: float = Field(default=1.0, ge=0.0, le=1.5)
     top_p: Optional[float] = None
 
     @field_validator("top_p", mode="before")

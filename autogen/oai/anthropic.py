@@ -78,7 +78,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -111,12 +111,12 @@ ANTHROPIC_PRICING_1k = {
 @register_llm_config
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
-    temp: Optional[float] = None
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
+    temperature: float = Field(default=1.0, ge=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=None, ge=1)
+    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     stop_sequences: Optional[list[str]] = None
-    stream: Optional[bool] = None
-    max_tokens: Optional[int] = None
+    stream: bool = False
+    max_tokens: int = Field(default=4096, ge=1)
 
     def create_client(self):
         raise NotImplementedError("AnthropicLLMConfigEntry.create_client is not implemented.")
