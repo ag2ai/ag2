@@ -1,0 +1,242 @@
+---
+title: Group Chat with Tools
+---
+
+This user guide explains how to set up a group chat where each agent has unique capabilities and is equipped with specialized tools to perform specific tasks.
+
+## Installation
+```bash
+pip install -U ag2[openai]
+```
+
+> **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+> ```bash
+> pip install -U autogen[openai]
+> ```
+> or
+> ```bash
+> pip install -U pyautogen[openai]
+> ```
+> as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+## Imports
+
+```python
+import os
+import random
+
+from autogen import (
+    ConversableAgent,
+    GroupChat,
+    GroupChatManager,
+    UserProxyAgent,
+    register_function,
+)
+```
+
+## Agent Configuration
+
+The [`GroupChat`](/docs/api-reference/autogen/GroupChat) will contain three agents:
+- `sales_agent` - Responsible for selling tickets.
+- `cancellation_agent` - Handles ticket cancellations.
+- `user_proxy` - Acts as an intermediary between the user and other agents.
+
+```python
+llm_config = {
+    "api_type": "openai",
+    "model": "gpt-4o-mini",
+    "api_key": os.environ["OPENAI_API_KEY"]
+}
+
+sales_agent = ConversableAgent(
+    name="SalesAgent",
+    llm_config=llm_config,
+)
+
+cancellation_agent = ConversableAgent(
+    name="CanelationAgent",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="ALWAYS",
+    code_execution_config={
+        "use_docker": False,
+    },  # Please set use_docker=True if Docker is available to run the generated code. Using Docker is safer and recommended over running the generated code directly on the host machine.
+)
+```
+
+## Tools Registration
+
+In AG2, tool usage follows two steps:
+- An agent suggests a tool to use (via its LLM).
+- Another agent executes the tool.
+
+We will define two tools:
+- `buy_airplane_ticket`: Suggested by `sales_agent` and executed by `user_proxy` after user verification.
+- `cancel_airplane_ticket`: Suggested by `cancellation_agent` and executed by `user_proxy` after user verification.
+
+```python
+def buy_airplane_ticket(from_location: str, to_location: str, date: str) -> str:
+    ticket_number = random.randint(1000, 9999)
+    return f"""Your ticket from {from_location} to {to_location} on {date} has been booked.
+Your ticket number is {ticket_number}.
+Please keep this number for future reference.
+"""
+
+
+register_function(
+    buy_airplane_ticket,
+    caller=sales_agent,
+    executor=user_proxy,
+    description="Buy an airplane ticket",
+)
+
+
+def cancel_airplane_ticket(ticket_number: str) -> str:
+    return f"Your ticket with ticket number {ticket_number} has been canceled"
+
+
+register_function(
+    cancel_airplane_ticket,
+    caller=cancellation_agent,
+    executor=user_proxy,
+    description="Cancel an airplane ticket",
+)
+```
+
+## Creating and Initiating the Group Chat
+
+Now, let's create and start the [`GroupChat`](/docs/api-reference/autogen/GroupChat) with the three agents.
+
+```python
+groupchat = GroupChat(
+    agents=[user_proxy, cancellation_agent, sales_agent],
+    speaker_selection_method="auto",
+    messages=[],
+)
+
+manager = GroupChatManager(
+    name="group_manager",
+    groupchat=groupchat,
+    llm_config=llm_config,
+)
+
+
+user_proxy.initiate_chat(
+    recipient=manager,
+    message="I need to buy a plane ticket from New York to Los Angeles on 12th of April 2025",
+)
+```
+
+## Example Console Output
+
+```console
+user_proxy (to group_manager):
+
+I need to buy a plane ticket from New York to Los Angeles on 12th of April 2025
+
+--------------------------------------------------------------------------------
+
+Next speaker: SalesAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+SalesAgent (to group_manager):
+
+***** Suggested tool call (call_H7AqjaWAohk3zuezgPmvoxjB): buy_airplane_ticket *****
+Arguments:
+{"from_location":"New York","to_location":"Los Angeles","date":"2025-04-12"}
+************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+
+>>>>>>>> NO HUMAN INPUT RECEIVED.
+
+>>>>>>>> USING AUTO REPLY...
+
+>>>>>>>> EXECUTING FUNCTION buy_airplane_ticket...
+Call ID: call_H7AqjaWAohk3zuezgPmvoxjB
+Input arguments: {'from_location': 'New York', 'to_location': 'Los Angeles', 'date': '2025-04-12'}
+user_proxy (to group_manager):
+
+***** Response from calling tool (call_H7AqjaWAohk3zuezgPmvoxjB) *****
+Your ticket from New York to Los Angeles on 2025-04-12 has been booked.
+Your ticket number is 6841.
+Please keep this number for future reference.
+
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: CanelationAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+CanelationAgent (to group_manager):
+
+Your ticket from New York to Los Angeles on April 12, 2025, has been successfully booked. Your ticket number is **6841**. Please keep this number for future reference.
+
+--------------------------------------------------------------------------------
+
+Next speaker: CanelationAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+CanelationAgent (to group_manager):
+
+Your ticket from New York to Los Angeles on April 12, 2025, has been successfully booked. Your ticket number is **6841**. Please keep this number for future reference.
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+user_proxy (to group_manager):
+
+Cancel it
+
+--------------------------------------------------------------------------------
+
+Next speaker: CanelationAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+CanelationAgent (to group_manager):
+
+***** Suggested tool call (call_pSxE8W5g0HaAZ9UFOrbgD9sx): cancel_flight_ticket *****
+Arguments:
+{"ticket_number":"6841"}
+*************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+
+>>>>>>>> NO HUMAN INPUT RECEIVED.
+
+>>>>>>>> USING AUTO REPLY...
+
+>>>>>>>> EXECUTING FUNCTION cancel_flight_ticket...
+Call ID: call_pSxE8W5g0HaAZ9UFOrbgD9sx
+Input arguments: {'ticket_number': '6841'}
+user_proxy (to group_manager):
+
+***** Response from calling tool (call_pSxE8W5g0HaAZ9UFOrbgD9sx) *****
+Your ticket with ticket number 6841 has been canceled
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+user_proxy (to group_manager):
+
+thanks
+
+--------------------------------------------------------------------------------
+```

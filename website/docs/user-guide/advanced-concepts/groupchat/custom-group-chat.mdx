@@ -4,7 +4,7 @@ sidebarTitle: Custom GroupChat
 ---
 
 <Tip>
-If you haven't had a chance to read about or use AG2's GroupChat orchestration, see the [Basic Concepts](/docs/user-guide/basic-concepts/groupchat) section on GroupChat.
+If you haven't had a chance to read about or use AG2's GroupChat orchestration, check out the [GroupChat Overview](/docs/user-guide/advanced-concepts/groupchat/groupchat) for more information.
 </Tip>
 
 `GroupChat`'s four built-in conversation patterns, `automatic`, `round robin`, `random`, and `manual` provide a good degree of flexibility to orchestrate agents in a group chat setting.
@@ -391,9 +391,9 @@ transition_graph = {
 
 At each turn, the LLM will be presented with the valid agents based on the graph, limiting the transitions to those you've specified.
 
-::note
+<Note>
 There are a number of interesting transition paths you can create with a graph, see the [Finite State Machine documentation](/docs/use-cases/notebooks/notebooks/agentchat_groupchat_finite_state_machine) to explore them.
-::
+</Note>
 
 In this walk-through we're going to create a game with three teams, each team has three players (with the first as a team leader). Each player has a number of chocolates that no other player knows about, even the team leader.
 
