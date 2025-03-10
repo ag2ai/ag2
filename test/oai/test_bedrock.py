@@ -38,7 +38,7 @@ def bedrock_client():
 
 
 def test_bedrock_llm_config_entry():
-    bedrock_llm_config_entry = BedrockLLMConfigEntry(
+    bedrock_llm_config = BedrockLLMConfigEntry(
         model="anthropic.claude-3-sonnet-20240229-v1:0",
         aws_region="us-east-1",
         aws_access_key="test_access_key_id",
@@ -60,11 +60,11 @@ def test_bedrock_llm_config_entry():
         "stream": False,
         "tags": [],
     }
-    actual = bedrock_llm_config_entry.model_dump()
-    assert actual == expected
+    actual = bedrock_llm_config.model_dump()
+    assert actual == expected, actual
 
     with pytest.raises(ValidationError) as e:
-        bedrock_llm_config_entry = BedrockLLMConfigEntry(
+        bedrock_llm_config = BedrockLLMConfigEntry(
             model="anthropic.claude-3-sonnet-20240229-v1:0", aws_region="us-east-1", price=["0.1"]
         )
     assert " List should have at least 2 items after validation, not 1" in str(e.value)

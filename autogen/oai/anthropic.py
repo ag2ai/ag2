@@ -76,11 +76,12 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -105,6 +106,20 @@ ANTHROPIC_PRICING_1k = {
     "claude-2.0": (0.008, 0.024),
     "claude-instant-1.2": (0.008, 0.024),
 }
+
+
+@register_llm_config
+class AnthropicLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["anthropic"] = "anthropic"
+    temp: Optional[float] = None
+    top_k: Optional[int] = None
+    top_p: Optional[float] = None
+    stop_sequences: Optional[list[str]] = None
+    stream: Optional[bool] = None
+    max_tokens: Optional[int] = None
+
+    def create_client(self):
+        raise NotImplementedError("AnthropicLLMConfigEntry.create_client is not implemented.")
 
 
 @require_optional_import("anthropic", "anthropic")
