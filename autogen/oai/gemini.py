@@ -73,6 +73,7 @@ with optional_import_block():
         FunctionResponse,
         GenerateContentConfig,
         GenerateContentResponse,
+        GoogleSearch,
         Part,
         Schema,
         Tool,
@@ -654,7 +655,9 @@ class GeminiClient:
         if self.use_vertexai:
             return [vaiTool(function_declarations=functions)]
         else:
-            return [Tool(function_declarations=functions)]
+            # TODDO: just experimenting with GoogleSearch
+            # return [Tool(function_declarations=functions)]
+            return [Tool(google_search=GoogleSearch())]
 
     @staticmethod
     def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
