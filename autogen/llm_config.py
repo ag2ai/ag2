@@ -155,11 +155,3 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
-
-
-@register_llm_config
-class GeminiLLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["google"] = "google"
-
-    def create_client(self) -> "ModelClient":
-        raise NotImplementedError
