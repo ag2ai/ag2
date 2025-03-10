@@ -69,6 +69,10 @@ Here's a simple example using the [`DiscordAgent`](/docs/api-reference/autogen/a
 from autogen import ConversableAgent
 from autogen.agents.experimental import DiscordAgent
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 # LLM configuration for our agent to select the tools and craft the message
 # Put your key in the OPENAI_API_KEY environment variable
 llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}

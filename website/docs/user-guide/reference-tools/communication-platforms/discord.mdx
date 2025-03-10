@@ -54,6 +54,10 @@ Here are some references to help you establish those details:
 from autogen import ConversableAgent
 from autogen.tools.experimental import DiscordRetrieveTool, DiscordSendTool
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 # Our tool executor agent, which will run the tools once recommended by the discord_agent, no LLM required
