@@ -86,6 +86,12 @@ sequenceDiagram
 
 ## Code
 
+<Tip>
+In this code example we use OpenAI's GPT-4o mini with structured outputs.
+
+We also set the LLM parameter `parallel_tool_calls` to False so that our agents don't recommend more than one tool call at a time. This parameter may not be available with all model providers.
+</Tip>
+
 ```python
 import json
 from typing import Optional

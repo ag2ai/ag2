@@ -1,9 +1,11 @@
 ---
-title: Patterns using Swarm
+title: Pattern Cookbook
 sidebarTitle: Overview
 ---
 
 Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
+
+The pattern implementations use AG2's swarm orchestration, read more about it [here](/docs/user-guide/basic-concepts/orchestration/swarm).
 
 Each pattern includes:
 - Description of the structure and information flow
@@ -11,7 +13,7 @@ Each pattern includes:
 - Code example showing how to implement the pattern with AG2's swarm orchestration
 - Code example output
 
-## Available Patterns
+## Patterns
 
 ### [Context-Aware Routing](./context_aware_routing)
 
@@ -101,6 +103,22 @@ A pattern that centralizes coordination through a single agent while leveraging 
 - Planning tasks requiring input from various specialized knowledge areas
 - Product recommendation systems with multiple product specialists
 
+### [Triage with Tasks](./triage_with_tasks)
+
+A pattern that breaks down complex requests into categorized, sequential tasks processed by specialized agents in a dependency-respecting workflow.
+
+**Business Use Cases:**
+
+- Content creation pipelines requiring research before writing
+- Product development processes with sequential phase requirements
+- Complex customer service requests needing multi-stage resolution
+- Academic or scientific workflows involving data gathering and analysis before conclusions
+- Report generation requiring fact-finding before compilation and presentation
+- Multi-phase project planning with dependent deliverables
+- Technical support cases requiring diagnosis before solution implementation
+
+This pattern is used within our [`DocAgent`](/docs/user-guide/reference-agents/docagent) ([code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py)).
+
 ## Error Handling
 
 It is possible, and even expected, that some agents may fail to complete their response successfully and that may disrupt the workflow. This could be due an exception being raised in a tool call or function.
@@ -148,6 +166,8 @@ register_hand_off(
     ]
 )
 ```
+
+For a concrete example of error handling, see the [implementation of DocAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py).
 
 ## Getting Started
 
