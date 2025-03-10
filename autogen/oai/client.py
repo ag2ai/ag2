@@ -242,7 +242,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
 
     def create_client(self) -> "ModelClient":
-        raise NotImplementedError
+        raise NotImplementedError("create_client method must be implemented in the derived class.")
 
 
 @export_module("autogen")
