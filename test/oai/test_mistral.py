@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
+from autogen.oai.mistral import MistralAIClient, MistralLLMConfigEntry, calculate_mistral_cost
 
 
 # Fixtures for mock data
@@ -29,6 +29,24 @@ def mock_response():
 @pytest.fixture
 def mistral_client():
     return MistralAIClient(api_key="fake_api_key")
+
+
+def test_mistral_llm_config_entry():
+    mistral_llm_config_entry = MistralLLMConfigEntry(
+        model="mistral-small-latest",
+        api_key="fake_api_key",
+    )
+    expected = {
+        "api_type": "mistral",
+        "model": "mistral-small-latest",
+        "api_key": "fake_api_key",
+        "safe_prompt": False,
+        "stream": False,
+        "temperature": 0.7,
+        "tags": [],
+    }
+    actual = mistral_llm_config_entry.model_dump()
+    assert actual == expected, actual
 
 
 # Test initialization and configuration

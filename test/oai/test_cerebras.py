@@ -7,9 +7,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.cerebras import CerebrasClient, calculate_cerebras_cost
+from autogen.oai.cerebras import CerebrasClient, CerebrasLLMConfigEntry, calculate_cerebras_cost
 
 
 # Fixtures for mock data
@@ -29,6 +30,39 @@ def mock_response():
 @pytest.fixture
 def cerebras_client():
     return CerebrasClient(api_key="fake_api_key")
+
+
+def test_cerebras_llm_config_entry():
+    # Test initialization
+    cerebras_llm_config = CerebrasLLMConfigEntry(
+        api_key="fake_api_key",
+        model="llama3.1-8b",
+        max_tokens=1000,
+        seed=42,
+        stream=False,
+        temperature=1,
+    )
+
+    expected = {
+        "api_type": "cerebras",
+        "api_key": "fake_api_key",
+        "model": "llama3.1-8b",
+        "max_tokens": 1000,
+        "seed": 42,
+        "stream": False,
+        "temperature": 1.0,
+        "tags": [],
+    }
+    actual = cerebras_llm_config.model_dump()
+    assert actual == expected, actual
+
+    with pytest.raises(ValidationError) as e:
+        cerebras_llm_config = CerebrasLLMConfigEntry(
+            model="llama3.1-8b",
+            temperature=1,
+            top_p=0.8,
+        )
+    assert "Value error, temperature and top_p cannot be set at the same time" in str(e.value)
 
 
 # Test initialization and configuration

@@ -25,6 +25,7 @@ from autogen.oai.client import (
     LEGACY_DEFAULT_CACHE_SEED,
     OPENAI_FALLBACK_KWARGS,
     OpenAIClient,
+    OpenAILLMConfigEntry,
 )
 from autogen.oai.oai_models import ChatCompletion
 
@@ -374,6 +375,24 @@ def test_convert_system_role_to_user() -> None:
         {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
     ]
     assert messages == expected
+
+
+def test_openai_llm_config_entry():
+    openai_llm_config = OpenAILLMConfigEntry(
+        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    )
+    assert openai_llm_config.api_type == "openai"
+    assert openai_llm_config.model == "gpt-4o-mini"
+    assert openai_llm_config.api_key == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    assert openai_llm_config.base_url is None
+    expected = {
+        "api_type": "openai",
+        "model": "gpt-4o-mini",
+        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        "tags": [],
+    }
+    actual = openai_llm_config.model_dump()
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
 
 
 class TestOpenAIClientBadRequestsError:

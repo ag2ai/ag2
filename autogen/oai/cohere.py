@@ -34,13 +34,14 @@ import os
 import sys
 import time
 import warnings
-from typing import Any, Optional, Type
+from typing import Any, Literal, Optional, Type
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -63,6 +64,23 @@ COHERE_PRICING_1K = {
     "command-light": (0.008, 0.024),
     "command-light-nightly": (0.008, 0.024),
 }
+
+
+@register_llm_config
+class CohereLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["cohere"] = "cohere"
+    temperature: float = Field(default=0.3, ge=0)
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    k: int = Field(default=0, ge=0, le=500)
+    p: float = Field(default=0.75, ge=0.01, le=0.99)
+    seed: Optional[int] = None
+    frequency_penalty: float = Field(default=0, ge=0, le=1)
+    presence_penalty: float = Field(default=0, ge=0, le=1)
+    client_name: Optional[str] = None
+    strict_tools: bool = False
+
+    def create_client(self):
+        raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
 
 
 class CohereClient:

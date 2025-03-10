@@ -29,9 +29,12 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Union
+from typing import Any, Literal, Optional, Union
+
+from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -48,6 +51,20 @@ with optional_import_block():
         ToolMessage,
         UserMessage,
     )
+
+
+@register_llm_config
+class MistralLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["mistral"] = "mistral"
+    temperature: float = Field(default=0.7)
+    top_p: Optional[float] = None
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    safe_prompt: bool = False
+    random_seed: Optional[int] = None
+    stream: bool = False
+
+    def create_client(self):
+        raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
 
 
 @require_optional_import("mistralai", "mistral")
