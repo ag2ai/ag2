@@ -2,7 +2,7 @@
 title: CaptainAgent
 ---
 
-CaptainAgent is an agent enhanced with the capability to call AutoBuild to break down and solve complex tasks.
+[`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) is an agent enhanced with the capability to call AutoBuild to break down and solve complex tasks.
 
 AutoBuild can initiate a group chat between a group of experts and converse to solve the task. The experts in nested chat can be retrieved from agent library. The agents can be equipped with tools for advanced coding.
 
@@ -23,22 +23,19 @@ pip install -U pyautogen[openai,captainagent]
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
 
+## Using CaptainAgent without libraries
+
+We begin with demonstrating how to use [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](https://docs.ag2.ai/docs/topics/captainagent/configurations).
+
 ```python
 import autogen
+from autogen import UserProxyAgent
+from autogen.agentchat.contrib.captainagent import CaptainAgent
 
 config_path = "OAI_CONFIG_LIST"
 config_list = autogen.config_list_from_json(
     config_path, filter_dict={"model": ["gpt-4o"]}
 )  # You can modify the filter_dict to select your model
-```
-
-## Using CaptainAgent without libraries
-
-We begin with demonstrating how to use CaptainAgent without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](https://docs.ag2.ai/docs/topics/captainagent/configurations).
-
-```python
-from autogen import UserProxyAgent
-from autogen.agentchat.contrib.captainagent import CaptainAgent
 
 llm_config = {"temperature": 0, "config_list": config_list}
 
@@ -453,7 +450,7 @@ The initial task was to find a recent paper about large language models on arXiv
 ```
 
 ## Building Agents from library & Retrieve tools from tool library
-One significant feature of CaptainAgent is that the agents and tools can be retrieved from a dedicated library. When CaptainAgent starts building experts for group chat, it will retrieve and select from agent library, then assign tools retrieved from tool library to the experts.
+One significant feature of [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) is that the agents and tools can be retrieved from a dedicated library. When [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) starts building experts for group chat, it will retrieve and select from agent library, then assign tools retrieved from tool library to the experts.
 
 For agent library, refer to [`captainagent_expert_library.json`](https://github.com/ag2ai/ag2/blob/main/notebook/captainagent_expert_library.json) for samples. You can refer to [docs](https://docs.ag2.ai/docs/topics/captainagent/agent_library) on how to customize your own expert library.
 
