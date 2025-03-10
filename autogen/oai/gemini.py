@@ -54,6 +54,7 @@ from io import BytesIO
 from typing import Any, Optional, Type
 
 import requests
+from packaging import version
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -531,10 +532,11 @@ class GeminiClient:
                     else rst.append(Content(parts=parts, role=role))
                 )
             elif part_type == "tool" or part_type == "tool_call":
+                role = "function" if version.parse(genai.__version__) <= version.parse("1.3.0") else "user"
                 rst.append(
-                    VertexAIContent(parts=parts, role="user")
+                    VertexAIContent(parts=parts, role=role)
                     if self.use_vertexai
-                    else rst.append(Content(parts=parts, role="user"))
+                    else rst.append(Content(parts=parts, role=role))
                 )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
