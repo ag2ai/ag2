@@ -12,6 +12,12 @@ from pydantic import BaseModel, Field, HttpUrl
 if TYPE_CHECKING:
     from .oai.client import ModelClient
 
+__all__ = [
+    "LLMConfig",
+    "LLMConfigEntry",
+    "register_llm_config",
+]
+
 
 class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
@@ -108,7 +114,6 @@ class LLMConfigEntry(BaseModel, ABC):
     model: str
     api_key: Optional[str] = None
     base_url: Optional[HttpUrl] = None
-    # tags: Annotated[list[str], Field(default_factory=list)]
     tags: list[str] = Field(default_factory=list)
 
     @abstractmethod
@@ -142,14 +147,6 @@ def register_llm_config(cls: Type[LLMConfigEntry]) -> Type[LLMConfigEntry]:
     else:
         raise TypeError(f"Expected a subclass of LLMConfigEntry, got {cls}")
     return cls
-
-
-@register_llm_config
-class OpenAILLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["openai"] = "openai"
-
-    def create_client(self) -> "ModelClient":
-        raise NotImplementedError
 
 
 @register_llm_config

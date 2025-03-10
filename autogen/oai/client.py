@@ -14,7 +14,7 @@ import sys
 import uuid
 import warnings
 from functools import lru_cache
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Callable, Literal, Optional, Protocol, Union
 
 from pydantic import BaseModel
 from pydantic.type_adapter import TypeAdapter
@@ -24,6 +24,7 @@ from ..doc_utils import export_module
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
+from ..llm_config import LLMConfigEntry, register_llm_config
 from ..logger.logger_utils import get_current_ts
 from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
@@ -234,6 +235,14 @@ AOPENAI_FALLBACK_KWARGS = {
 @lru_cache(maxsize=128)
 def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient") -> None:
     logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
+
+
+@register_llm_config
+class OpenAILLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["openai"] = "openai"
+
+    def create_client(self) -> "ModelClient":
+        raise NotImplementedError
 
 
 @export_module("autogen")

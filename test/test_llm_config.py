@@ -4,7 +4,8 @@
 
 import pytest
 
-from autogen.llm_config import LLMConfig, OpenAILLMConfigEntry
+from autogen.llm_config import LLMConfig
+from autogen.oai.client import OpenAILLMConfigEntry
 
 # def test_current_llm_config():
 #     llm_config = LLMConfig(
