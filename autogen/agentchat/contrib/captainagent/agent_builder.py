@@ -532,18 +532,6 @@ Match roles in the role set to each expert in expert set.
             agent_list: a list of agents.
             cached_configs: cached configs.
         """
-        import sqlite3
-
-        # Some system will have an unexpected sqlite3 version.
-        # Check if the user has installed pysqlite3.
-        if int(sqlite3.version.split(".")[0]) < 3:
-            try:
-                __import__("pysqlite3")
-                import sys
-
-                sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-            except Exception as e:
-                raise e
         import chromadb
         from chromadb.utils import embedding_functions
 
