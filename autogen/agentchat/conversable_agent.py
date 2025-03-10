@@ -3031,6 +3031,7 @@ class ConversableAgent(LLMAgent):
         Args:
             func: the function to be wrapped.
             inject_params: the chat context parameters which will be passed to the function.
+            serialize: whether to serialize the return value
 
         Returns:
             The wrapped function.
@@ -3176,6 +3177,7 @@ class ConversableAgent(LLMAgent):
         Args:
             name: name of the function. If None, the function name will be used (default: None).
             description: description of the function (default: None).
+            serialize: whether to serialize the return value
 
         Returns:
             The decorator for registering a function to be used by an agent.

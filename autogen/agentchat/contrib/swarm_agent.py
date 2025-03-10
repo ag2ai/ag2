@@ -13,12 +13,10 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
-from ...tools.dependency_injection import inject_params, on
-from ...tools import Depends, Tool
-
-
 from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
+from ...tools import Depends, Tool
+from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
