@@ -6,6 +6,8 @@ The Hierarchical, or Tree, Orchestration Pattern is a powerful approach to organ
 
 ### Key Characteristics
 
+![Hierarchical Pattern](./assets/hierarchical.jpeg)
+
 The Hierarchical Pattern establishes distinct agent roles across three primary levels:
 
 * **Executive Level** (Top): An executive agent maintains strategic oversight of the entire task. This agent breaks complex problems into logical components, delegates to appropriate domain managers, provides overall direction, and ultimately synthesizes the final output.
@@ -14,17 +16,15 @@ The Hierarchical Pattern establishes distinct agent roles across three primary l
 
 * **Specialist Level** (Bottom): Specialist agents possess deep expertise in narrow areas. They focus exclusively on well-defined, discrete tasks without needing to understand the entire problem context. These agents do the detailed work and report their findings back to their respective managers.
 
-![Hierarchical Pattern](./assets/hierarchical.jpeg)
-
 ### Information Flow
+
+![Hierarchical Flow](./assets/hierarchical_flow.jpeg)
 
 The strength of this pattern comes from its structured information flow:
 
 * **Downstream Flow**: Tasks, requirements, and context flow from the executive to managers to specialists, becoming more specialized and focused at each level.
 
 * **Upstream Flow**: Results, findings, and completed work flow from specialists to managers to the executive, being aggregated and refined at each level.
-
-![Hierarchical Flow](./assets/hierarchical_flow.jpeg)
 
 ### Implementation
 
