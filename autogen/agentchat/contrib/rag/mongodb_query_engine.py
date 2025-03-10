@@ -88,8 +88,8 @@ class MongoDBQueryEngine:
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None
-        self.vector_search_engine: Optional["MongoDBAtlasVectorSearch"] = None
-        self.storage_context: Optional["StorageContext"] = None
+        self.vector_search_engine: Optional["MongoDBAtlasVectorSearch"] = None  # type: ignore[no-any-unimported]
+        self.storage_context: Optional["StorageContext"] = None  # type: ignore[no-any-unimported]
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
     def _set_up(self, overwrite: bool) -> None:
@@ -127,7 +127,7 @@ class MongoDBQueryEngine:
         Returns:
             bool: True if the collection exists; False otherwise.
         """
-        client: "MongoClient[Any]" = MongoClient(self.connection_string)
+        client: "MongoClient[Any]" = MongoClient(self.connection_string)  # type: ignore[no-any-unimported]
         db = client[self.database_name]  # type: ignore[index]
         return self.collection_name in db.list_collection_names()
 
