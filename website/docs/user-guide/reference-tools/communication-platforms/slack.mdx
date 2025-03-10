@@ -76,6 +76,10 @@ Here's a simple example using the Slack tools with a [`ConversableAgent`](/docs/
 from autogen import ConversableAgent, register_function
 from autogen.tools.experimental import SlackRetrieveTool, SlackSendTool
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 # LLM configuration for our agent to select the tools and craft the message
 # Put your key in the OPENAI_API_KEY environment variable
 llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}

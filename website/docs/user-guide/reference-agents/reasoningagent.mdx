@@ -2,13 +2,13 @@
 title: ReasoningAgent
 ---
 
-`ReasoningAgent` is designed to enhance language models' reasoning capabilities through systematic exploration of thought processes. By implementing the Tree of Thoughts (ToT) framework, it enables LLMs like GPT-4 and Llama to break down complex problems into manageable steps and explore multiple solution paths simultaneously.
+[`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent) is designed to enhance language models' reasoning capabilities through systematic exploration of thought processes. By implementing the Tree of Thoughts (ToT) framework, it enables LLMs like GPT-4 and Llama to break down complex problems into manageable steps and explore multiple solution paths simultaneously.
 
-Here, we demonstrate the key features and capabilities of the `ReasoningAgent`, showing how it can effectively reason about problems even when using smaller models like `gpt-4o-mini`.
+Here, we demonstrate the key features and capabilities of the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent), showing how it can effectively reason about problems even when using smaller models like `gpt-4o-mini`.
 
 ## Search Strategies
 
-The `ReasoningAgent` supports multiple search strategies for exploring the reasoning space:
+The [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent) supports multiple search strategies for exploring the reasoning space:
 
 ### 1. Beam Search (Default)
 - Maintains the top `k` most promising paths at each step
@@ -42,12 +42,13 @@ The agent is highly configurable through a single `reason_config` dictionary:
 ```python
 import random
 
-from autogen import AssistantAgent, ReasoningAgent, ThinkNode, UserProxyAgent
+from autogen.agents.experimental import ReasoningAgent, ThinkNode
+from autogen import AssistantAgent, UserProxyAgent
 
 # Put your key in the OPENAI_API_KEY environment variable
-config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
 
-verbose = False
+verbose = True
 
 question = "What is the expected maximum dice value if you can roll a 6-sided dice three times?"
 random.seed(1)  # setup seed for reproducibility
@@ -313,7 +314,7 @@ This structured approach provides a foundation for creating a mixed integer line
 ```
 
 ## MCTS
-This section demonstrates how to use Monte Carlo Tree Search (MCTS) with ReasoningAgent for complex reasoning tasks. MCTS provides several advantages over beam search when:
+This section demonstrates how to use Monte Carlo Tree Search (MCTS) with [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent) for complex reasoning tasks. MCTS provides several advantages over beam search when:
 
 1. Ground truth evaluation is available
 2. LLM-based evaluation is expensive
@@ -928,7 +929,7 @@ mcts_agent.visualize_tree()
 
 ## Utilizing ReasoningAgent for Nested Chat Interactions
 
-In this example, we will explore how the ReasoningAgent can be employed to facilitate nested chat interactions, specifically for writing a blog post about NVIDIA. The agent will engage in a structured dialogue to enhance the quality of the content through iterative feedback and reasoning.
+In this example, we will explore how the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent) can be employed to facilitate nested chat interactions, specifically for writing a blog post about NVIDIA. The agent will engage in a structured dialogue to enhance the quality of the content through iterative feedback and reasoning.
 
 ### Task: Writing a Blog Post on NVIDIA
 
@@ -993,11 +994,11 @@ In conclusion, Nvidia stands as not just a tech company, but a pivotal force in 
 
 ## Use a different Model for Grading
 
-To use a different model for grading instead of gpt-4o, pass the `grader_llm_config` argument when initializing the `ReasoningAgent`. This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
+To use a different model for grading instead of gpt-4o, pass the `grader_llm_config` argument when initializing the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent). This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+grader_config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
 grader_llm_config = {"config_list": grader_config_list}
 
 writer = AssistantAgent(

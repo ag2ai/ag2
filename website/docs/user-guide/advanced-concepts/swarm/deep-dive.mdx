@@ -35,7 +35,7 @@ Here are the main components that are needed to create a swarm chat:
 You can directly create [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) to be used in a swarm chat. Instead of registering functions one by one, you can pass in a list of functions when creating your agent, `AssistantAgent(functions=[func1, ...])`. These functions will be converted to schemas to be passed to the LLMs, and you don't need to worry about registering the functions for execution as the swarm handles that automatically.
 
 **Notes for creating the function calls**
-(*Caution*: The notes below only apply to functions that will used in swarm chats with [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat)//docs/api-reference/autogen/a_initiate_swarm_chat)
+(*Caution*: The notes below only apply to functions that will swarm chats with [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat) or [`a_initiate_swarm_chat`](/docs/api-reference/autogen/a_initiate_swarm_chat)
 - You can pass back a [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) object whereby you can return a value, the next agent to call, and update context variables at the same time.
 - For input arguments, you must define the type of the argument, otherwise, the registration will fail (e.g. `arg_name: str`).
 - If your function requires access or modification of the context variables, you must pass in `context_variables: dict` as one argument. This argument will not be visible to the LLM (removed when registering the function schema). But when called, the global context variables will be passed in by the swarm chat. If you are making changes to the context variables you must return it in the [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) so it can be updated.
@@ -79,7 +79,7 @@ agent_1 = AssistantAgent("agent_1", llm_config=llm_config, functions=[transfer_t
 ### Registering Context Variable-based Handoffs to agents
 In the previous section you saw how agent handoffs were created using [`OnCondition`](/docs/api-reference/autogen/OnCondition). These handoffs utilize the agent's LLM and tool calling to determine the next agent. However, if you are able to use the swarm's context variables in an expression, you can create a context variable-based handoff, using [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) and [`ContextExpression`](/docs/api-reference/autogen/ContextExpression), that does not require an LLM.
 
-The syntax for creating an using [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) is very similar to [`OnCondition`](/docs/api-reference/autogen/OnCondition), with the exception being the condition is a [`ContextExpression`](/docs/api-reference/autogen/ContextExpression).
+The syntax for creating a [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) is very similar to [`OnCondition`](/docs/api-reference/autogen/OnCondition), with the exception being the condition is a [`ContextExpression`](/docs/api-reference/autogen/ContextExpression).
 
 [`ContextExpression`](/docs/api-reference/autogen/ContextExpression) is a powerful expression evaluator that allows you to create complex expressions using context variable keys:
 - Variable references use `${var_name}` syntax: `${logged_in}`, `${attempts}`
