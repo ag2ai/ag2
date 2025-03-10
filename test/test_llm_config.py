@@ -129,7 +129,7 @@ class TestLLMConfig:
         # Test with dummy agent
         class DummyAgent:
             def __init__(self) -> None:
-                self.llm_config = LLMConfig._current_llm_config.get()
+                self.llm_config = LLMConfig.get_current_llm_config()
 
         with openai_llm_config:
             agent = DummyAgent()
@@ -139,7 +139,7 @@ class TestLLMConfig:
 
         # Test accessing current_llm_config outside the context
         with openai_llm_config:
-            actual = LLMConfig._current_llm_config.get()
+            actual = LLMConfig.get_current_llm_config()
             assert actual == openai_llm_config
         with pytest.raises(LookupError):
-            LLMConfig._current_llm_config.get()
+            LLMConfig.get_current_llm_config()
