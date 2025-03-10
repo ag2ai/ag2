@@ -79,6 +79,7 @@ class MongoDBQueryEngine:
             raise ValueError("Connection string is required to connect to MongoDB.")
 
         self.connection_string = connection_string
+        # ToDo: Is it okay if database_name is None?
         self.database_name = database_name
         self.collection_name = collection_name or DEFAULT_COLLECTION_NAME
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
@@ -126,8 +127,8 @@ class MongoDBQueryEngine:
         Returns:
             bool: True if the collection exists; False otherwise.
         """
-        client = MongoClient(self.connection_string)
-        db = client[self.database_name]
+        client: "MongoClient[Any]" = MongoClient(self.connection_string)
+        db = client[self.database_name]  # type: ignore[index]
         return self.collection_name in db.list_collection_names()
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
