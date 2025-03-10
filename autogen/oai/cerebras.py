@@ -64,7 +64,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
         return v
 
     def create_client(self):
-        raise NotImplementedError("AnthropicLLMConfigEntry.create_client is not implemented.")
+        raise NotImplementedError("CerebrasLLMConfigEntry.create_client is not implemented.")
 
 
 class CerebrasClient:
