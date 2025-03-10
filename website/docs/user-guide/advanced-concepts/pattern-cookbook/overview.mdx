@@ -1,0 +1,181 @@
+---
+title: Pattern Cookbook
+sidebarTitle: Overview
+---
+
+Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
+
+The pattern implementations use AG2's swarm orchestration, read more about it [here](/docs/user-guide/basic-concepts/orchestration/swarm).
+
+Each pattern includes:
+- Description of the structure and information flow
+- Visualization example of agent interactions
+- Code example showing how to implement the pattern with AG2's swarm orchestration
+- Code example output
+
+## Patterns
+
+### [Context-Aware Routing](./context_aware_routing)
+
+A dynamic workflow where tasks are intelligently distributed to specialized agents based on content analysis rather than predetermined paths.
+
+**Business Use Cases:**
+- Customer support systems that route queries to appropriate department specialists
+- Multi-domain virtual assistants that connect users with specialized services
+- Knowledge management systems that direct questions to domain experts
+- Research platforms that route complex questions to knowledgeable AI agents
+- Dynamic content moderation based on content type
+
+### [Escalation](./escalation)
+
+A resource-efficient approach where simpler, less resource-intensive agents handle tasks first, with more capable (but potentially more expensive) agents only engaged when necessary.
+
+**Business Use Cases:**
+- Tiered customer support (chatbot → human agent → specialist)
+- Computational tasks with varying complexity requirements
+- Content moderation (automated → human review)
+- Technical problem-solving with varying difficulty levels
+- Healthcare triage and diagnosis systems
+
+### [Feedback Loop](./feedback_loop)
+
+A workflow where content progresses through repeated cycles of evaluation and improvement, enabling continuous refinement through deliberate iterations.
+
+**Business Use Cases:**
+- Document writing and editing processes
+- Iterative design and creative tasks
+- Learning systems that improve over time
+- Continuous improvement workflows
+- Complex problem-solving requiring multiple refinement cycles
+- Quality assurance processes with iterative improvement
+
+### [Hierarchical / Tree](./hierarchical)
+
+A tree-structured organization where "manager" agents at higher levels delegate tasks to "specialist" agents at lower levels, then aggregate and refine their outputs.
+
+**Business Use Cases:**
+- Complex research reports requiring both oversight and specialized deep dives
+- Product development workflows coordinating multiple specialized teams
+- Multi-faceted analysis that benefits from both generalists and specialists
+- Organizational decision-making with multiple levels of approval
+- Enterprise customer service with tiered support levels
+
+### [Organic](./organic)
+
+A flexible pattern that relies on agent descriptions and conversation context to naturally determine the most appropriate specialist for each stage of a conversation, without requiring explicit routing rules.
+
+**Business Use Cases:**
+- Collaborative creative projects where expertise needs shift organically throughout the process
+- Educational assistants that adapt to changing student questions across different subjects
+- Consultative services where problem diagnosis may require different specialists at unpredictable points
+- Versatile virtual assistants that handle diverse user needs without rigid conversation flows
+
+### [Pipeline / Sequential Processing](./pipeline)
+
+A pattern that organizes agents into a linear sequence where each agent performs their specific action before passing onto the next agent in the chain.
+
+**Business Use Cases:**
+- E-commerce order processing workflows (validation → inventory → payment → fulfillment)
+- Content creation pipelines (research → draft → edit → polish)
+- Data processing workflows (collect → clean → analyze → visualize)
+- Multi-stage reasoning tasks (define problem → identify approaches → execute → validate)
+- Document processing (extraction → classification → analysis → archiving)
+
+### [Redundant](./redundant)
+
+A pattern that employs multiple agents to attempt the same task using different approaches, with results compared to select the best outcome or combine strengths.
+
+**Business Use Cases:**
+- Critical systems where errors must be minimized
+- Creative tasks benefiting from multiple distinct perspectives
+- Complex problem solving with unclear optimal approaches
+- Medical diagnosis requiring multiple expert opinions
+- Security systems needing cross-validation of potential threats
+
+### [Star / Hub-and-Spoke](./star)
+
+A pattern that centralizes coordination through a single agent while leveraging specialized expertise through satellite agents.
+
+**Business Use Cases:**
+- Customer support systems with specialized agents for different query types
+- Research projects requiring diverse domain expertise
+- City or travel guides that need to coordinate information from multiple domains
+- Planning tasks requiring input from various specialized knowledge areas
+- Product recommendation systems with multiple product specialists
+
+### [Triage with Tasks](./triage_with_tasks)
+
+A pattern that breaks down complex requests into categorized, sequential tasks processed by specialized agents in a dependency-respecting workflow.
+
+**Business Use Cases:**
+
+- Content creation pipelines requiring research before writing
+- Product development processes with sequential phase requirements
+- Complex customer service requests needing multi-stage resolution
+- Academic or scientific workflows involving data gathering and analysis before conclusions
+- Report generation requiring fact-finding before compilation and presentation
+- Multi-phase project planning with dependent deliverables
+- Technical support cases requiring diagnosis before solution implementation
+
+This pattern is used within our [`DocAgent`](/docs/user-guide/reference-agents/docagent) ([code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py)).
+
+## Error Handling
+
+It is possible, and even expected, that some agents may fail to complete their response successfully and that may disrupt the workflow. This could be due an exception being raised in a tool call or function.
+
+If you are able to catch those exceptions, you can transfer to an `error agent` in your swarm using either [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) to transfer to the error agent.
+
+```python
+# Transfer to the error_agent if the context variable "errored" is set to True
+register_hand_off(
+    agent=my_agent,
+    hand_to=[
+        OnContextCondition(
+            target=error_agent,
+            condition=ContextExpression("${errored}"),
+        )
+    ]
+)
+
+# Transfer to the error_agent when a tool fails
+def my_tool_function(my_parameter: str, context_variables: dict[str, Any]) -> SwarmResult:
+    try:
+        ...
+    except Exception as e:
+        # Option 1: set context variable that will be handled in a hand-off associated
+        # with this agent (see above)
+        context_variables["errored"] = True
+        return SwarmResult(
+            context_variables=context_variables,
+            values=f"An exception was raised: {e}"
+        )
+
+        # Option 2: include the target error_agent in the returned SwarmResult
+        # to transfer directly without the need for a hand-off
+        return SwarmResult(
+            agent=error_agent,
+            context_variables=context_variables,
+            values=f"An exception was raised: {e}"
+        )
+
+# Error agent can return to the user (or some other agent) automatically when it is transition to
+register_hand_off(
+    agent=error_agent,
+    hand_to=[
+        AfterWork(AfterWorkOption.REVERT_TO_USER)
+    ]
+)
+```
+
+For a concrete example of error handling, see the [implementation of DocAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py).
+
+## Getting Started
+
+To implement these patterns in your own applications:
+
+1. Review the pattern documentation to identify which pattern(s) best suit your use case
+2. Examine the example code for implementation details
+3. Use AG2's Swarm framework to implement the chosen pattern
+4. Customize the agents and their capabilities for your specific needs
+
+For more information on using the Swarm framework itself, refer to the [Swarm documentation](/docs/user-guide/basic-concepts/orchestration/swarm).

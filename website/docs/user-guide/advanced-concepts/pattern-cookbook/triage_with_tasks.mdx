@@ -1,0 +1,973 @@
+---
+title: Triage with Tasks
+---
+
+The Triage with Tasks Pattern is a workflow orchestration approach that breaks down complex user requests into structured task sequences with specialized agents handling specific task types in a sequential order.
+
+This pattern excels at managing interdependent work where certain tasks must precede others, such as research before writing, while maintaining organized tracking of task status, priorities, and dependencies throughout the process.
+
+By creating a clear task taxonomy and enforcing execution order, this pattern ensures each component of a complex request is handled by the most appropriate specialist agent while preserving the logical workflow dependencies.
+
+This pattern is used within our [`DocAgent`](/docs/user-guide/reference-agents/docagent) ([code](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py)).
+
+### Key Characteristics
+
+![Triage with Tasks Pattern](./assets/triage_tasks.jpeg)
+
+The Triage with Tasks Pattern establishes a structured workflow where complex requests are decomposed into discrete, prioritized tasks that flow through specialized agents in a predetermined sequence.
+
+* **Task Decomposition**: Initial triage breaks requests into categorized tasks (e.g., research, writing).
+
+* **Sequential Task Processing**: Tasks are processed in a logical order with enforced prerequisites (e.g., research tasks must complete before dependent writing tasks begin).
+
+* **Specialized Task Agents**: Dedicated agents handle specific task types, focusing exclusively on their domain expertise.
+
+* **Dynamic Task Management**: A central task manager tracks progress, maintains context, and routes tasks to appropriate agents based on current state and dependencies.
+
+### Information Flow
+
+![Triage with Tasks Flow Pattern](./assets/triage_tasks_flow.jpeg)
+
+The Triage with Tasks Pattern creates a structured information pipeline where tasks flow from initial triage agent through specialized processors in a determined sequence.
+
+* **Triage Stage**: User requests are analyzed and decomposed into categorized, pre-defined, tasks.
+
+* **Task Distribution**: Tasks flow through a central task manager that enforces the sequence, ensuring prerequisite tasks are completed before dependent ones begin.
+
+* **Specialized Processing**: Each task is processed by a domain-specific agent that adds its expertise to the task output.
+
+* **Consolidated Results**: Upon completion of all tasks, results are gathered and presented as a cohesive summary that reflects the relationships between the different task outputs.
+
+### Implementation
+
+Our implementation using AG2's Swarm demonstrates the Triage with Tasks Pattern with a structured system that breaks user requests into research and writing tasks, ensuring research is completed before dependent writing begins, while maintaining comprehensive task tracking.
+
+* **Structured Data Models**: Pydantic models (ResearchTask, WritingTask) define the explicit schema for different task types, ensuring consistent tracking and processing.
+
+* **Context-Aware Task Management**: The TaskManager maintains rich context including task lists, completion status, and current task indices to ensure proper sequencing.
+
+* **Dynamic System Messages**: Agent prompts update based on context, ensuring each agent always has current information about its assigned task.
+
+* **Conditional Hand-offs**: [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) transitions efficiently route tasks based on current state, ensuring research is completed before writing begins, and providing a comprehensive summary when all tasks are finished.
+
+## Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Triage as TriageAgent
+    participant TaskMgr as TaskManagerAgent
+    participant Research as ResearchAgent
+    participant Writing as WritingAgent
+    participant Summary as SummaryAgent
+    participant Tool as SwarmToolExecutor
+
+    User->>Triage: Request climate change research and writing
+
+    Note over Triage: Analyzes request and creates structured task lists
+    Triage->>TaskMgr: Tasks identified (research & writing tasks)
+
+    TaskMgr->>Tool: initiate_tasks()
+    Tool->>TaskMgr: Tasks initialized
+
+    Note over TaskMgr: Handles research tasks first
+    TaskMgr->>Research: Forward first research task (Solar Panels)
+
+    Research->>Tool: complete_research_task() for Solar Panels
+    Tool->>Research: Research task completed
+
+    Research->>Tool: complete_research_task() for Wind Farms
+    Tool->>Research: Research task completed
+
+    Research->>TaskMgr: All research tasks complete
+
+    Note over TaskMgr: Handles writing tasks after research
+    TaskMgr->>Writing: Forward first writing task (Solar Panel blog)
+
+    Writing->>Tool: complete_writing_task() for Solar Panel blog
+    Tool->>Writing: Writing task completed
+
+    Writing->>Tool: complete_writing_task() for Wind Farm article
+    Tool->>Writing: Writing task completed
+
+    Writing->>TaskMgr: All writing tasks complete
+
+    Note over TaskMgr: All tasks are now complete
+    TaskMgr->>Summary: Request final summary
+
+    Summary->>User: Deliver summary of all completed tasks
+
+    Note over User, Tool: The pattern ensures research tasks are completed before writing tasks begin
+```
+
+## Code
+
+<Tip>
+In this code example we use OpenAI's GPT-4o mini with structured outputs.
+
+We also set the LLM parameter `parallel_tool_calls` to False so that our agents don't recommend more than one tool call at a time. This parameter may not be available with all model providers.
+</Tip>
+
+```python
+from copy import deepcopy
+from enum import Enum
+from typing import Annotated, Any, List, Tuple
+from pydantic import BaseModel, Field
+from autogen import (
+    ConversableAgent,
+    register_hand_off,
+    OnContextCondition,
+    AfterWork,
+    AfterWorkOption,
+    initiate_swarm_chat,
+    ContextExpression,
+    SwarmResult,
+    UpdateSystemMessage,
+    ChatResult
+)
+
+# === STRUCTURED DATA MODELS ===
+
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class ResearchTask(BaseModel):
+    topic: str = Field(description="Topic to research")
+    details: str = Field(description="Specific details or questions to research")
+    priority: TaskPriority = Field(description="Priority level of the task")
+
+class WritingTask(BaseModel):
+    topic: str = Field(description="Topic to write about")
+    type: str = Field(description="Type of writing (article, email, report, etc.)")
+    details: str = Field(description="Details or requirements for the writing task")
+    priority: TaskPriority = Field(description="Priority level of the task")
+
+class TaskAssignment(BaseModel):
+    """Structured output for task triage decisions."""
+    research_tasks: List[ResearchTask] = Field(description="List of research tasks to complete first")
+    writing_tasks: List[WritingTask] = Field(description="List of writing tasks to complete after research")
+
+# === AGENTS ===
+
+# Task Manager
+TASK_MANAGER_NAME = "TaskManagerAgent"
+TASK_MANAGER_SYSTEM_MESSAGE = """
+You are a task manager. Your responsibilities include:
+
+1. Initialize tasks from the TriageAgent using the initiate_tasks tool
+2. Route research tasks to the ResearchAgent (complete ALL research tasks first)
+3. Route writing tasks to the WritingAgent (only after ALL research tasks are done)
+4. Hand off to the SummaryAgent when all tasks are complete
+
+Use tools to transfer to the appropriate agent based on the context variables.
+Only call tools once in your response.
+"""
+
+# Research Agent
+RESEARCH_AGENT_SYSTEM_MESSAGE = """
+You are a research specialist who gathers information on various topics.
+
+When assigned a research task:
+1. Analyze the topic and required details
+2. Provide comprehensive and accurate information
+3. Focus on facts and reliable information
+4. Use the complete_research_task tool to submit your findings
+
+Be thorough but concise, and ensure your research is relevant to the specific request.
+"""
+
+# Writing Agent
+WRITING_AGENT_SYSTEM_MESSAGE = """
+You are a writing specialist who creates various types of content.
+
+When assigned a writing task:
+1. Review the topic, type, and requirements
+2. Create well-structured, engaging content
+3. Adapt your style to the specified type (article, email, report, etc.)
+4. Use the complete_writing_task tool to submit your work
+
+Focus on quality, clarity, and meeting the specific requirements of each task.
+"""
+
+# Summary Agent
+SUMMARY_AGENT_SYSTEM_MESSAGE = """
+You provide clear summaries of completed tasks.
+
+Format your summary as follows:
+1. Total research tasks completed
+2. Total writing tasks completed
+3. Brief overview of each completed task
+
+Be concise and focus on the most important details and outcomes.
+"""
+
+# Error Agent
+ERROR_AGENT_NAME = "ErrorAgent"
+ERROR_AGENT_SYSTEM_MESSAGE = """
+You communicate errors to the user. Include the original error messages in full.
+Use the format:
+The following error(s) occurred while processing your request:
+- Error 1
+- Error 2
+"""
+
+# === TOOL FUNCTIONS ===
+
+def initiate_tasks(
+    research_tasks: list[ResearchTask],
+    writing_tasks: list[WritingTask],
+    context_variables: dict[str, Any],
+) -> SwarmResult:
+    """Initialize the task processing based on triage assessment."""
+    if "TaskInitiated" in context_variables:
+        return SwarmResult(
+            values="Task already initiated",
+            context_variables=context_variables
+        )
+
+    # Process tasks
+    formatted_research_tasks = []
+    for i, task in enumerate(research_tasks):
+        formatted_research_tasks.append({
+            "index": i,
+            "topic": task.topic,
+            "details": task.details,
+            "priority": task.priority,
+            "status": "pending",
+            "output": None
+        })
+
+    formatted_writing_tasks = []
+    for i, task in enumerate(writing_tasks):
+        formatted_writing_tasks.append({
+            "index": i,
+            "topic": task.topic,
+            "type": task.type,
+            "details": task.details,
+            "priority": task.priority,
+            "status": "pending",
+            "output": None
+        })
+
+    # Sort tasks by priority
+    for task_list in [formatted_research_tasks, formatted_writing_tasks]:
+        task_list.sort(key=lambda x: {"high": 0, "medium": 1, "low": 2}[x["priority"]])
+
+    # Update context variables
+    context_variables["ResearchTasks"] = formatted_research_tasks
+    context_variables["WritingTasks"] = formatted_writing_tasks
+    context_variables["CurrentResearchTaskIndex"] = -1 if not formatted_research_tasks else 0
+    context_variables["CurrentWritingTaskIndex"] = -1 if not formatted_writing_tasks else 0
+    context_variables["ResearchTasksCompleted"] = []
+    context_variables["WritingTasksCompleted"] = []
+    context_variables["TaskInitiated"] = True
+
+    return SwarmResult(
+        values="Initialized tasks for processing",
+        context_variables=context_variables,
+        agent=TASK_MANAGER_NAME,
+    )
+
+def complete_research_task(
+    index: Annotated[int, "Research task index"],
+    topic: Annotated[str, "Research topic"],
+    findings: Annotated[str, "Research findings"],
+    context_variables: dict[str, Any],
+) -> SwarmResult:
+    """Complete a research task with findings."""
+    try:
+        current_index = context_variables["CurrentResearchTaskIndex"]
+
+        if index != current_index:
+            return SwarmResult(
+                values=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
+                context_variables=context_variables,
+                agent=TASK_MANAGER_NAME,
+            )
+
+        if current_index == -1:
+            return SwarmResult(
+                values="No current research task to complete.",
+                context_variables=context_variables,
+                agent=TASK_MANAGER_NAME,
+            )
+
+        current_task = context_variables["ResearchTasks"][current_index]
+
+        # Update task status
+        current_task["status"] = "completed"
+        current_task["topic"] = topic
+        current_task["output"] = findings
+
+        # Move task to completed list
+        context_variables["ResearchTasksCompleted"].append(current_task)
+
+        # Move to the next research task, if there is one.
+        if current_index + 1 >= len(context_variables["ResearchTasks"]):
+            # No more tasks
+            context_variables["ResearchTasksDone"] = True
+            context_variables["CurrentResearchTaskIndex"] = -1
+        else:
+            # Move to the next task
+            context_variables["CurrentResearchTaskIndex"] = current_index + 1
+
+        return SwarmResult(
+            values=f"Research task completed: {topic}",
+            context_variables=context_variables,
+        )
+    except Exception as e:
+        return SwarmResult(
+            values=f"Error occurred with research task #{index}: {str(e)}",
+            context_variables=context_variables,
+            agent=ERROR_AGENT_NAME,
+        )
+
+def complete_writing_task(
+    index: Annotated[int, "Writing task index"],
+    topic: Annotated[str, "Writing topic"],
+    findings: Annotated[str, "Writing findings"],
+    context_variables: dict[str, Any],
+) -> SwarmResult:
+    """Complete a writing task with content."""
+    try:
+        current_index = context_variables["CurrentWritingTaskIndex"]
+
+        if index != current_index:
+            return SwarmResult(
+                values=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
+                context_variables=context_variables,
+                agent=TASK_MANAGER_NAME,
+            )
+
+        if current_index == -1:
+            return SwarmResult(
+                values="No current writing task to complete.",
+                context_variables=context_variables,
+                agent=TASK_MANAGER_NAME,
+            )
+
+        current_task = context_variables["WritingTasks"][current_index]
+
+        # Update task status
+        current_task["status"] = "completed"
+        current_task["topic"] = topic
+        current_task["output"] = findings
+
+        # Move task to completed list
+        context_variables["WritingTasksCompleted"].append(current_task)
+
+        # Move to the next research task, if there is one.
+        if current_index + 1 >= len(context_variables["WritingTasks"]):
+            # No more tasks
+            context_variables["WritingTasksDone"] = True
+            context_variables["CurrentWritingTaskIndex"] = -1
+        else:
+            # Move to the next task
+            context_variables["CurrentWritingTaskIndex"] = current_index + 1
+
+        return SwarmResult(
+            values=f"Writing task completed: {topic}",
+            context_variables=context_variables,
+        )
+    except Exception as e:
+        return SwarmResult(
+            values=f"Error occurred with writing task #{index}: {str(e)}",
+            context_variables=context_variables,
+            agent=ERROR_AGENT_NAME,
+        )
+
+# Create the agents for the swarm
+def create_research_writing_swarm(llm_config_base: dict[str, Any]):
+    """Create and configure all agents for the research-writing swarm."""
+
+    # Triage agent
+    structured_config = deepcopy(llm_config_base)
+    structured_config["config_list"][0]["response_format"] = TaskAssignment
+
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        llm_config=structured_config,
+        system_message=(
+            "You are a task triage agent. You analyze requests and break them down into tasks.\n"
+            "For each request, identify two types of tasks:\n"
+            "1. Research tasks: Topics that need information gathering before writing\n"
+            "2. Writing tasks: Content creation tasks that may depend on the research\n\n"
+            "Structure all tasks with appropriate details and priority levels.\n"
+            "Research tasks will be completed first, followed by writing tasks."
+        ),
+    )
+
+    llm_config_with_tools = deepcopy(llm_config_base)
+    llm_config_with_tools["config_list"][0]["parallel_tool_calls"] = False
+
+    # Task Manager agent
+    task_manager_agent = ConversableAgent(
+        name=TASK_MANAGER_NAME,
+        system_message=TASK_MANAGER_SYSTEM_MESSAGE,
+        llm_config=llm_config_with_tools,
+        functions=[initiate_tasks],
+    )
+
+    # Define the system message generation for the research agent, getting the next research task
+    def create_research_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+        """Create the research agent prompt with the current research task."""
+        current_research_index = agent.get_context("CurrentResearchTaskIndex", -1)
+        research_tasks = agent.get_context("ResearchTasks")
+
+        if current_research_index >= 0:
+
+            current_task = research_tasks[current_research_index]
+            return (f"{RESEARCH_AGENT_SYSTEM_MESSAGE}"
+                "\n\n"
+                f"Research Task:\n"
+                f"Index: {current_research_index}:\n"
+                f"Topic: {current_task['topic']}\n"
+                f"Details: {current_task['details']}\n"
+            )
+        else:
+            return "No more research tasks to process."
+
+    # Research agent
+    research_agent = ConversableAgent(
+        name="ResearchAgent",
+        system_message=RESEARCH_AGENT_SYSTEM_MESSAGE,
+        llm_config=llm_config_with_tools,
+        functions=[complete_research_task],
+        update_agent_state_before_reply=[UpdateSystemMessage(create_research_agent_prompt)],
+    )
+
+    # Define the system message generation for the writing agent, getting the next writing task
+    def create_writing_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+        """Create the writing agent prompt with the current writing task."""
+        current_writing_index = agent.get_context("CurrentWritingTaskIndex", -1)
+        writing_tasks = agent.get_context("WritingTasks")
+
+        if current_writing_index >= 0:
+
+            current_task = writing_tasks[current_writing_index]
+            return (f"{WRITING_AGENT_SYSTEM_MESSAGE}"
+                "\n\n"
+                f"Writing Task:\n"
+                f"Index: {current_writing_index}:\n"
+                f"Topic: {current_task['topic']}\n"
+                f"Type: {current_task['type']}\n"
+                f"Details: {current_task['details']}\n"
+            )
+        else:
+            return "No more writing tasks to process."
+
+    # Writing agent
+    writing_agent = ConversableAgent(
+        name="WritingAgent",
+        system_message=WRITING_AGENT_SYSTEM_MESSAGE,
+        llm_config=llm_config_with_tools,
+        functions=[complete_writing_task],
+        update_agent_state_before_reply=[UpdateSystemMessage(create_writing_agent_prompt)],
+    )
+
+    # Summary agent
+    def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+        """Create the summary agent prompt with task completion results."""
+        research_tasks = agent.get_context("ResearchTasksCompleted")
+        writing_tasks = agent.get_context("WritingTasksCompleted")
+
+        system_message = (
+            "You are a task summary specialist. Provide a summary of all completed tasks.\n\n"
+            f"Research Tasks Completed: {len(research_tasks)}\n"
+            f"Writing Tasks Completed: {len(writing_tasks)}\n\n"
+            "Task Details:\n\n"
+        )
+
+        if research_tasks:
+            system_message += "RESEARCH TASKS:\n"
+            for i, task in enumerate(research_tasks, 1):
+                system_message += (
+                    f"{i}. Topic: {task['topic']}\n"
+                    f"   Priority: {task['priority']}\n"
+                    f"   Details: {task['details']}\n"
+                    f"   Findings: {task['output'][:200]}...\n\n"
+                )
+
+        if writing_tasks:
+            system_message += "WRITING TASKS:\n"
+            for i, task in enumerate(writing_tasks, 1):
+                system_message += (
+                    f"{i}. Topic: {task['topic']}\n"
+                    f"   Type: {task['type']}\n"
+                    f"   Priority: {task['priority']}\n"
+                    f"   Content: {task['output'][:200]}...\n\n"
+                )
+
+        return system_message
+
+    # Create the summary agent
+    summary_agent = ConversableAgent(
+        name="SummaryAgent",
+        llm_config=llm_config_base,
+        system_message=SUMMARY_AGENT_SYSTEM_MESSAGE,
+        update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
+    )
+
+    # Create the error agent
+    error_agent = ConversableAgent(
+        name=ERROR_AGENT_NAME,
+        system_message=ERROR_AGENT_SYSTEM_MESSAGE,
+        llm_config=llm_config_base,
+    )
+
+    # Set up handoffs between agents
+
+    # Triage agent always hands off to the Task Manager
+    register_hand_off(
+        agent=triage_agent,
+        hand_to=[
+            AfterWork(task_manager_agent),
+        ],
+    )
+
+    # Task Manager routes to Research and Writing agents if they have tasks
+    # then to the Summary agent if the tasks are done
+    register_hand_off(
+        agent=task_manager_agent,
+        hand_to=[
+            OnContextCondition(
+                research_agent,
+                condition=ContextExpression("${CurrentResearchTaskIndex} >= 0"),
+            ),
+            OnContextCondition(
+                writing_agent,
+                condition=ContextExpression("${CurrentWritingTaskIndex} >= 0"),
+            ),
+            OnContextCondition(
+                summary_agent,
+                condition=ContextExpression("${ResearchTasksDone} and ${WritingTasksDone}"),
+            ),
+            AfterWork(AfterWorkOption.STAY),
+        ],
+    )
+
+    # Research agent hands back to the Task Manager if they have no more tasks
+    register_hand_off(
+        agent=research_agent,
+        hand_to=[
+            OnContextCondition(
+                task_manager_agent,
+                condition=ContextExpression("${CurrentResearchTaskIndex} == -1"),
+            ),
+            AfterWork(task_manager_agent),
+        ],
+    )
+
+    # Writing agent hands back to the Task Manager if they have no more tasks
+    register_hand_off(
+        agent=writing_agent,
+        hand_to=[
+            OnContextCondition(
+                task_manager_agent,
+                condition=ContextExpression("${CurrentWritingTaskIndex} == -1"),
+            ),
+            AfterWork(task_manager_agent),
+        ],
+    )
+
+    # The Summary Agent will summarize and then terminate
+    register_hand_off(
+        agent=summary_agent,
+        hand_to=[
+            AfterWork(AfterWorkOption.TERMINATE),
+        ],
+    )
+
+    # If an error occurs, hand off to the Error Agent
+    register_hand_off(
+        agent=error_agent,
+        hand_to=[
+            AfterWork(AfterWorkOption.TERMINATE),
+        ],
+    )
+
+    # Return all the agents
+    return {
+        "triage_agent": triage_agent,
+        "task_manager_agent": task_manager_agent,
+        "research_agent": research_agent,
+        "writing_agent": writing_agent,
+        "summary_agent": summary_agent,
+        "error_agent": error_agent
+    }
+
+# Function to run the swarm
+def run_research_writing_swarm(user_request: str) -> Tuple[ChatResult, dict[str, Any]]:
+    """Run the research and writing swarm for a given user request."""
+
+    llm_config_base = {
+        "config_list": [{"model": "gpt-4o-mini", "api_type": "openai"}],
+    }
+
+    # Create the swarm agents
+    agents = create_research_writing_swarm(llm_config_base)
+
+    # Set up initial context variables
+    context_variables = {
+        "CurrentResearchTaskIndex": -1,
+        "CurrentWritingTaskIndex": -1,
+        "ResearchTasksDone": False,
+        "WritingTasksDone": False,
+    }
+
+    # Get all agents as a list for the swarm
+    swarm_agents = list(agents.values())
+
+    # Run the swarm
+    chat_result, final_context, _ = initiate_swarm_chat(
+        initial_agent=agents["triage_agent"],
+        agents=swarm_agents,
+        messages=user_request,
+        context_variables=context_variables,
+        after_work=AfterWorkOption.TERMINATE,
+    )
+
+    # Return the results
+    return chat_result, final_context
+
+# Example usage
+if __name__ == "__main__":
+    # Sample request
+    request = "I need to write about climate change solutions. Can you help me research solar panels and wind farms and then write two articles a blog and a longer form article summarizing the state of these two technologies."
+
+    # Run the swarm
+    result, final_context = run_research_writing_swarm(request)
+
+    # Display the Research
+    print("\n===== RESEARCH =====\n")
+    for i, research_task in enumerate(final_context["ResearchTasksCompleted"]):
+        print(f"{research_task['index']}. Topic: {research_task['topic']}")
+        print(f"Details: {research_task['details']}")
+        print(f"Research: {research_task['output']}\n\n")
+
+    # Display the Writing
+    print("\n===== WRITING =====\n")
+    for i, writing_task in enumerate(final_context["WritingTasksCompleted"]):
+        print(f"{writing_task['index']}. Topic: {writing_task['topic']}")
+        print(f"Type: {writing_task['type']}")
+        print(f"Details: {writing_task['details']}")
+        print(f"Content: {writing_task['output']}\n\n")
+
+    # Print the result
+    print("===== SUMMARY =====")
+    print(result.summary)
+
+    # Display the conversation flow
+    print("\n===== SPEAKER ORDER =====\n")
+    for message in result.chat_history:
+        if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+            print(f"{message['name']}")
+
+```
+
+## Output
+
+```console
+_User (to chat_manager):
+
+I need to write about climate change solutions. Can you help me research solar panels and wind farms and then write two articles a blog and a longer form article summarizing the state of these two technologies.
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+{
+  "research_tasks": [
+    {
+      "topic": "Solar Panels",
+      "details": "Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.",
+      "priority": "high"
+    },
+    {
+      "topic": "Wind Farms",
+      "details": "Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.",
+      "priority": "high"
+    }
+  ],
+  "writing_tasks": [
+    {
+      "topic": "Climate Change Solutions: Solar Panels",
+      "type": "blog",
+      "details": "Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.",
+      "priority": "medium"
+    },
+    {
+      "topic": "Climate Change Solutions: Wind Farms",
+      "type": "article",
+      "details": "Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.",
+      "priority": "medium"
+    }
+  ]
+}
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+TaskManagerAgent (to chat_manager):
+
+***** Suggested tool call (call_YRrjwMzLzZc3VRzP5TOHY05q): initiate_tasks *****
+Arguments:
+{"research_tasks":[{"topic":"Solar Panels","details":"Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.","priority":"high"},{"topic":"Wind Farms","details":"Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.","priority":"high"}],"writing_tasks":[{"topic":"Climate Change Solutions: Solar Panels","type":"blog","details":"Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.","priority":"medium"},{"topic":"Climate Change Solutions: Wind Farms","type":"article","details":"Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.","priority":"medium"}]}
+*******************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION initiate_tasks...
+Call ID: call_YRrjwMzLzZc3VRzP5TOHY05q
+Input arguments: {'research_tasks': [{'topic': 'Solar Panels', 'details': 'Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.', 'priority': 'high'}, {'topic': 'Wind Farms', 'details': 'Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.', 'priority': 'high'}], 'writing_tasks': [{'topic': 'Climate Change Solutions: Solar Panels', 'type': 'blog', 'details': 'Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.', 'priority': 'medium'}, {'topic': 'Climate Change Solutions: Wind Farms', 'type': 'article', 'details': 'Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.', 'priority': 'medium'}]}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_YRrjwMzLzZc3VRzP5TOHY05q) *****
+Initialized tasks for processing
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+TaskManagerAgent (to chat_manager):
+
+[Handing off to ResearchAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: ResearchAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+ResearchAgent (to chat_manager):
+
+***** Suggested tool call (call_6xlRRLj1UOL284e2a0SxRTMD): complete_research_task *****
+Arguments:
+{"index":0,"topic":"Solar Panels","findings":"Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict."}
+***************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_research_task...
+Call ID: call_6xlRRLj1UOL284e2a0SxRTMD
+Input arguments: {'index': 0, 'topic': 'Solar Panels', 'findings': 'Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_6xlRRLj1UOL284e2a0SxRTMD) *****
+Research task completed: Solar Panels
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: ResearchAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+ResearchAgent (to chat_manager):
+
+***** Suggested tool call (call_Gfk1oFddR5epfyhw7K5puCU6): complete_research_task *****
+Arguments:
+{"index":1,"topic":"Wind Farms","findings":"Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets."}
+***************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_research_task...
+Call ID: call_Gfk1oFddR5epfyhw7K5puCU6
+Input arguments: {'index': 1, 'topic': 'Wind Farms', 'findings': 'Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_Gfk1oFddR5epfyhw7K5puCU6) *****
+Research task completed: Wind Farms
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: ResearchAgent
+
+ResearchAgent (to chat_manager):
+
+[Handing off to TaskManagerAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+TaskManagerAgent (to chat_manager):
+
+[Handing off to WritingAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: WritingAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+WritingAgent (to chat_manager):
+
+***** Suggested tool call (call_mm1LhoiY9hmPrW9xErXVa50o): complete_writing_task *****
+Arguments:
+{"index":0,"topic":"Climate Change Solutions: Solar Panels","findings":"Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future."}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_writing_task...
+Call ID: call_mm1LhoiY9hmPrW9xErXVa50o
+Input arguments: {'index': 0, 'topic': 'Climate Change Solutions: Solar Panels', 'findings': 'Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_mm1LhoiY9hmPrW9xErXVa50o) *****
+Writing task completed: Climate Change Solutions: Solar Panels
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: WritingAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+WritingAgent (to chat_manager):
+
+***** Suggested tool call (call_j7Vyv4mzl2Pa0XHKWvidhvCc): complete_writing_task *****
+Arguments:
+{"index":1,"topic":"Climate Change Solutions: Wind Farms","findings":"Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change."}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_writing_task...
+Call ID: call_j7Vyv4mzl2Pa0XHKWvidhvCc
+Input arguments: {'index': 1, 'topic': 'Climate Change Solutions: Wind Farms', 'findings': 'Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_j7Vyv4mzl2Pa0XHKWvidhvCc) *****
+Writing task completed: Climate Change Solutions: Wind Farms
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: WritingAgent
+
+WritingAgent (to chat_manager):
+
+[Handing off to TaskManagerAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+TaskManagerAgent (to chat_manager):
+
+[Handing off to SummaryAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: SummaryAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+SummaryAgent (to chat_manager):
+
+**Completed Tasks Summary:**
+
+**Research Tasks:**
+1. **Solar Panels**
+   - Findings: Recent advancements in solar technology include increased efficiency rates with perovskite materials and bifacial panels. Global solar capacity exceeded 1,000 GW as of 2023, with countries like China, the US, and India as leaders in installation. Benefits include reduced greenhouse gas emissions and energy independence, while challenges consist of high initial costs, land use conflicts, and recycling issues.
+
+2. **Wind Farms**
+   - Findings: Significant advancements in wind farm technology include larger, more efficient turbines like the GE Haliade-X producing up to 14 MW. Onshore/offshore top capacity locations are identified in the Texas Gulf Coast and Europe (UK, Germany). Wind farms significantly reduce carbon emissions, but they present environmental challenges like habitat disruption and noise pollution, necessitating careful management.
+
+**Writing Tasks:**
+1. **Blog on Solar Panels**
+   - Content: Solar panels offer substantial benefits in reducing greenhouse gas emissions and fostering energy independence, featuring advancements in technology and installation rates while addressing existing challenges. Case studies highlight global efforts in overcoming these challenges.
+
+2. **Article on Wind Farms**
+   - Content: Wind farms are pivotal for sustainable energy, with advancements in turbine efficiency contributing significantly to carbon reduction. The article discusses geographical advantages and environmental considerations, emphasizing the importance of wind farms in achieving renewable energy goals.
+
+--------------------------------------------------------------------------------
+
+===== RESEARCH =====
+
+0. Topic: Solar Panels
+Details: Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.
+Research: Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict.
+
+
+1. Topic: Wind Farms
+Details: Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.
+Research: Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets.
+
+
+
+===== WRITING =====
+
+0. Topic: Climate Change Solutions: Solar Panels
+Type: blog
+Details: Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.
+Content: Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future.
+
+
+1. Topic: Climate Change Solutions: Wind Farms
+Type: article
+Details: Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.
+Content: Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change.
+
+
+===== SUMMARY =====
+**Completed Tasks Summary:**
+
+**Research Tasks:**
+1. **Solar Panels**
+   - Findings: Recent advancements in solar technology include increased efficiency rates with perovskite materials and bifacial panels. Global solar capacity exceeded 1,000 GW as of 2023, with countries like China, the US, and India as leaders in installation. Benefits include reduced greenhouse gas emissions and energy independence, while challenges consist of high initial costs, land use conflicts, and recycling issues.
+
+2. **Wind Farms**
+   - Findings: Significant advancements in wind farm technology include larger, more efficient turbines like the GE Haliade-X producing up to 14 MW. Onshore/offshore top capacity locations are identified in the Texas Gulf Coast and Europe (UK, Germany). Wind farms significantly reduce carbon emissions, but they present environmental challenges like habitat disruption and noise pollution, necessitating careful management.
+
+**Writing Tasks:**
+1. **Blog on Solar Panels**
+   - Content: Solar panels offer substantial benefits in reducing greenhouse gas emissions and fostering energy independence, featuring advancements in technology and installation rates while addressing existing challenges. Case studies highlight global efforts in overcoming these challenges.
+
+2. **Article on Wind Farms**
+   - Content: Wind farms are pivotal for sustainable energy, with advancements in turbine efficiency contributing significantly to carbon reduction. The article discusses geographical advantages and environmental considerations, emphasizing the importance of wind farms in achieving renewable energy goals.
+
+===== SPEAKER ORDER =====
+
+triage_agent
+TaskManagerAgent
+TaskManagerAgent
+ResearchAgent
+ResearchAgent
+ResearchAgent
+TaskManagerAgent
+WritingAgent
+WritingAgent
+WritingAgent
+TaskManagerAgent
+SummaryAgent
+```
