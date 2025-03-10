@@ -88,8 +88,8 @@ class MongoDBQueryEngine:
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None
-        self.vector_search_engine = None
-        self.storage_context = None
+        self.vector_search_engine: Optional["MongoDBAtlasVectorSearch"] = None
+        self.storage_context: Optional["StorageContext"] = None
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
     def _set_up(self, overwrite: bool) -> None:
@@ -152,7 +152,7 @@ class MongoDBQueryEngine:
             self._set_up(overwrite=False)
 
             self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_search_engine,
+                vector_store=self.vector_search_engine,  # type: ignore[arg-type]
                 storage_context=self.storage_context,
                 embed_model=self.embedding_model,
             )
@@ -200,7 +200,7 @@ class MongoDBQueryEngine:
             logger.info("Setting up the database with existing collection.")
             documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
             self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_search_engine,
+                vector_store=self.vector_search_engine,  # type: ignore[arg-type]
                 storage_context=self.storage_context,
                 embed_model=self.embedding_model,
             )
