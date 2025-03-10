@@ -116,7 +116,7 @@ a.internal-link::after {
 
 /* Home page hero section starts */
 .homepage-hero-section {
-    background-image: url('/ag2/assets/img/homepage-hero-background.png');
+    background-image: url('/assets/img/homepage-hero-background.png');
     background-repeat: no-repeat;
     background-size: contain;
     background-position: center;

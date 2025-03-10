@@ -36,7 +36,13 @@ T = TypeVar("T")
 
 
 def require_jupyter_kernel_gateway_installed() -> Callable[[T], T]:
-    """Decorator to handle optional module dependencies"""
+    """Decorator that checks if jupyter-kernel-gateway is installed before function execution.
+
+    Returns:
+        Callable[[T], T]: A decorator function that either:
+            - Returns the original function unchanged if jupyter-kernel-gateway is installed
+            - Returns a patched version of the function that will raise a helpful error indicating the missing dependency when called
+    """
     if is_jupyter_kernel_gateway_installed():
 
         def decorator(o: T) -> T:

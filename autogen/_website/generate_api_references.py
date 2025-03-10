@@ -9,6 +9,7 @@ import importlib
 import json
 import os
 import pkgutil
+import re
 import shutil
 import sys
 from collections.abc import Iterable
@@ -30,7 +31,6 @@ def import_submodules(module_name: str, *, include_root: bool = True) -> list[st
 
     Args:
         module_name (str): The name of the module to list submodules for.
-        include_path (Optional[Path], optional): The path to the module. Defaults to None.
         include_root (bool, optional): Whether to include the root module in the list. Defaults to True.
 
     Returns:
@@ -125,6 +125,25 @@ def generate(target_dir: Path, template_dir: Path) -> None:
     generate_markdown(target_dir)
 
 
+def fix_api_reference_links(content: str) -> str:
+    """Fix the API reference links in the content."""
+
+    # Define a pattern that matches API reference links
+    pattern = r"(/docs/api-reference/[^#\)]+#)autogen\.([^\)]+)"
+
+    # Replace with the URL part and everything after the last dot
+    def replacement_func(match: re.Match[str]) -> str:
+        url_part = match.group(1)
+        full_name = match.group(2)
+
+        # Get the function name (everything after the last dot if there is one, or the whole thing)
+        func_name = full_name.split(".")[-1] if "." in full_name else full_name
+        return f"{url_part}{func_name}"
+
+    # Use re.sub with a replacement function
+    return re.sub(pattern, replacement_func, content)
+
+
 def convert_md_to_mdx(input_dir: Path) -> None:
     """Convert all .md files in directory to .mdx while preserving structure.
 
@@ -140,6 +159,9 @@ def convert_md_to_mdx(input_dir: Path) -> None:
 
         # Read content from .md file
         content = md_file.read_text(encoding="utf-8")
+
+        # Fix internal API references
+        content = fix_api_reference_links(content)
 
         # Write content to .mdx file
         mdx_file.write_text(content, encoding="utf-8")

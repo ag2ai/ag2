@@ -715,7 +715,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -986,8 +986,8 @@ class OpenAIWrapper:
             **config: The config for the completion.
 
         Raises:
-            - RuntimeError: If all declared custom model clients are not registered
-            - APIError: If any model client create call raises an APIError
+            RuntimeError: If all declared custom model clients are not registered
+            APIError: If any model client create call raises an APIError
         """
         # if ERROR:
         #     raise ERROR

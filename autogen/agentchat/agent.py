@@ -41,9 +41,9 @@ class Agent(Protocol):
         """Send a message to another agent.
 
         Args:
-            message: the message to send. If a dict, it should be
+            message (dict or str): the message to send. If a dict, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            recipient: the recipient of the message.
+            recipient (Agent): the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
         ...
@@ -57,10 +57,10 @@ class Agent(Protocol):
         """(Async) Send a message to another agent.
 
         Args:
-            message: the message to send. If a dict, it should be
+            message (dict or str): the message to send. If a dict, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            recipient: the recipient of the message.
-            request_reply: whether to request a reply from the recipient.
+            recipient (Agent): the recipient of the message.
+            request_reply (bool): whether to request a reply from the recipient.
         """
         ...
 
@@ -73,10 +73,10 @@ class Agent(Protocol):
         """Receive a message from another agent.
 
         Args:
-            message: the message received. If a dict, it should be
+            message (dict or str): the message received. If a dict, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            sender: the sender of the message.
-            request_reply: whether the sender requests a reply.
+            sender (Agent): the sender of the message.
+            request_reply (bool): whether the sender requests a reply.
         """
 
     async def a_receive(
@@ -88,10 +88,10 @@ class Agent(Protocol):
         """(Async) Receive a message from another agent.
 
         Args:
-            message: the message received. If a dict, it should be
+            message (dict or str): the message received. If a dict, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
-            sender: the sender of the message.
-            request_reply: whether the sender requests a reply.
+            sender (Agent): the sender of the message.
+            request_reply (bool): whether the sender requests a reply.
         """
         ...
 

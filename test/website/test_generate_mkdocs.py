@@ -244,8 +244,8 @@ def test_fix_asset_path() -> None:
 </div>""")
     expected = dedent("""This is a sample quick start page.
 <div class="key-feature">
-    <img noZoom src="/ag2/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
-    <a class="hero-btn" href="/ag2/docs/home/quick-start">
+    <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
 </div>""")
@@ -323,10 +323,6 @@ def test_process_blog_metadata() -> None:
     """)
     file = Path("tmp/ag2/ag2/website/mkdocs/docs/docs/_blogs/2025-01-10-WebSockets/index.md")
     actual = process_blog_metadata(contents, file)
-    print("*" * 80)
-    print(f"{actual=}")
-    print(f"{expected=}")
-    print("*" * 80)
     assert actual == expected
 
 
