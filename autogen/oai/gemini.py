@@ -532,9 +532,9 @@ class GeminiClient:
                 )
             elif part_type == "tool" or part_type == "tool_call":
                 rst.append(
-                    VertexAIContent(parts=parts, role="function")
+                    VertexAIContent(parts=parts, role="user")
                     if self.use_vertexai
-                    else rst.append(Content(parts=parts, role="function"))
+                    else rst.append(Content(parts=parts, role="user"))
                 )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
@@ -568,10 +568,21 @@ class GeminiClient:
                 rst.pop()
 
         # The Gemini is restrict on order of roles, such that
-        # 1. The messages should be interleaved between user and model.
+        # 1. The first message must be from the user role.
         # 2. The last message must be from the user role.
+        # 3. The messages should be interleaved between user and model.
+        # We add a dummy message "start chat" if the first role is not the user.
         # We add a dummy message "continue" if the last role is not the user.
-        if rst[-1].role not in ["user", "function"]:
+        if rst[0].role != "user":
+            text_part, _ = self._oai_content_to_gemini_content({"content": "start chat"})
+            rst.insert(
+                0,
+                VertexAIContent(parts=text_part, role="user")
+                if self.use_vertexai
+                else Content(parts=text_part, role="user"),
+            )
+
+        if rst[-1].role != "user":
             text_part, _ = self._oai_content_to_gemini_content({"content": "continue"})
             rst.append(
                 VertexAIContent(parts=text_part, role="user")
