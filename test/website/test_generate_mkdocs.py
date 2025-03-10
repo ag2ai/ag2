@@ -242,8 +242,8 @@ def test_fix_asset_path() -> None:
 </div>""")
     expected = dedent("""This is a sample quick start page.
 <div class="key-feature">
-    <img noZoom src="/ag2/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
-    <a class="hero-btn" href="/ag2/docs/home/quick-start">
+    <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
+    <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
 </div>""")

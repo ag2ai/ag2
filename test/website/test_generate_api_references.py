@@ -14,6 +14,7 @@ from autogen._website.generate_api_references import (
     add_prefix,
     convert_md_to_mdx,
     create_nav_structure,
+    fix_api_reference_links,
     generate_mint_json_from_template,
     get_mdx_files,
     update_mint_json_with_api_nav,
@@ -200,6 +201,23 @@ def test_add_prefix() -> None:
 
     # Test with multiple parent groups
     assert add_prefix("example", ["group1", "group2"]) == "docs/api-reference/group1/group2/example"
+
+
+def test_fix_api_reference_links() -> None:
+    fixtures = [
+        (
+            "which will be passed to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).",
+            "which will be passed to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#create).",
+        ),
+        (
+            "which will be passed to [ConversableAgent.a_receive](/docs/api-reference/autogen/ConversableAgent#autogen.ConversableAgent)",
+            "which will be passed to [ConversableAgent.a_receive](/docs/api-reference/autogen/ConversableAgent#ConversableAgent)",
+        ),
+    ]
+    for fixture in fixtures:
+        content, expected = fixture
+        actual = fix_api_reference_links(content)
+        assert actual == expected
 
 
 class TestCreateNavStructure:
