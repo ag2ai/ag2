@@ -3,13 +3,13 @@ title: RAG
 ---
 
 <Tip>
-Want an agent that can do this for you? We'll soon have a DocAgent available to take the hassle out of RAG.
+Looking for an agent to handle this for you? Check out [DocAgent](/docs/user-guide/reference-agents/docagent), which simplifies the RAG process by streamlining data retrieval and generation-making it faster and easier for you.
 </Tip>
 
 Retrieval-Augmented Generation is a technique to improve LLM-generated responses by providing additional knowledge. This typically involves gathering the information and injecting it into an agent's system message for use by their LLM.
 
 There are a number of ways to incorporate RAG into your AG2 workflow and agents:
-- Use an AG2 reference agent, DocAgent
+- Use an AG2 reference agent, [DocAgent](/docs/user-guide/reference-agents/docagent)
 - Add RAG capabilities to an agent
 - Incorporate context into an agent's system message (manually and automatically)
 
@@ -47,12 +47,14 @@ ConversableAgent has a number of hooks that get run before an agent replies. You
 
 Within the function use the [ConversableAgent.update_system_message](/docs/api-reference/autogen/ConversableAgent#update-system-message) method to update the system message.
 
-Let's walk-through a simple example that puts a listing of the files in the current directory into an agent's system message and asks an LLM to explain them.
+Let’s walk through a simple example where we take a list of files from the current directory, include it in an agent’s system message, and ask an LLM to analyze or explain the files.
 
 We start with our imports, LLM configuration, and the system message template, which we'll inject the file listing in to.
 ```python
 import os
-from autogen import ConversableAgent, UserProxyAgent
+from typing import Any
+
+from autogen import ConversableAgent
 
 config_list = {"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
 
