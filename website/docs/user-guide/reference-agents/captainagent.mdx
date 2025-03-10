@@ -23,22 +23,19 @@ pip install -U pyautogen[openai,captainagent]
 as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 </Tip>
 
-```python
-import autogen
-
-config_path = "OAI_CONFIG_LIST"
-config_list = autogen.config_list_from_json(
-    config_path, filter_dict={"model": ["gpt-4o"]}
-)  # You can modify the filter_dict to select your model
-```
-
 ## Using CaptainAgent without libraries
 
 We begin with demonstrating how to use CaptainAgent without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](https://docs.ag2.ai/docs/topics/captainagent/configurations).
 
 ```python
+import autogen
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent import CaptainAgent
+
+config_path = "OAI_CONFIG_LIST"
+config_list = autogen.config_list_from_json(
+    config_path, filter_dict={"model": ["gpt-4o"]}
+)  # You can modify the filter_dict to select your model
 
 llm_config = {"temperature": 0, "config_list": config_list}
 

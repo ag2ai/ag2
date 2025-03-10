@@ -42,12 +42,13 @@ The agent is highly configurable through a single `reason_config` dictionary:
 ```python
 import random
 
-from autogen import AssistantAgent, ReasoningAgent, ThinkNode, UserProxyAgent
+from autogen.agents.experimental import ReasoningAgent, ThinkNode
+from autogen import AssistantAgent, UserProxyAgent
 
 # Put your key in the OPENAI_API_KEY environment variable
-config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
 
-verbose = False
+verbose = True
 
 question = "What is the expected maximum dice value if you can roll a 6-sided dice three times?"
 random.seed(1)  # setup seed for reproducibility
@@ -997,7 +998,7 @@ To use a different model for grading instead of gpt-4o, pass the `grader_llm_con
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+grader_config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
 grader_llm_config = {"config_list": grader_config_list}
 
 writer = AssistantAgent(
