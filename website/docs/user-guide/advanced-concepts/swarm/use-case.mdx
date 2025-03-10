@@ -4,7 +4,7 @@ sidebarTitle: Use Case example
 ---
 
 <Tip>
-If you haven't had a chance to read about or use AG2's Swarm orchestration, see the [Basic Concepts](/docs/user-guide/basic-concepts/swarm) section on Swarm.
+If you haven't had a chance to read about or use AG2's Swarm orchestration, see the [Basic Concepts](/docs/user-guide/basic-concepts/orchestration/swarm) section on Swarm.
 </Tip>
 
 You can build complex, yet flexible, workflows using AG2's Swarm orchestration.
@@ -485,7 +485,7 @@ Arguments:
 --------------------------------------------------------------------------------
 ```
 
-Our authentication function has been used to authenticate the user my username, ensuring an incorrect username, "barry", didn't trigger a login. This blocked any chance of handing off to the order management agent, again.
+The authentication function verified the user by their username, preventing a login attempt with the incorrect username 'barry' and stopping the system from handing off control to the order management agent.
 
 ```console
 
