@@ -90,6 +90,10 @@ Here's a simple example using the [`SlackAgent`](/docs/api-reference/autogen/age
 from autogen import ConversableAgent, register_function
 from autogen.agents.experimental import SlackAgent
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 # Our Slack credentials
@@ -110,7 +114,7 @@ slack_agent = SlackAgent(
 )
 
 # We get the registered tools and register them for execution with the tool executor
-for tool in slack_agent.tools
+for tool in slack_agent.tools:
     tool.register_for_execution(executor_agent)
 
 # Weather function
