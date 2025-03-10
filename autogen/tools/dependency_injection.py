@@ -121,7 +121,10 @@ def _is_context_param(
 ) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
-    return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
+    try:
+        return isinstance(param_annotation, type) and issubclass(param_annotation, subclass)
+    except TypeError:
+        return False
 
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
