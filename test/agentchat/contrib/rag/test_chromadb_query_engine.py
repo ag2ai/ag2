@@ -27,7 +27,7 @@ docs_to_add = [input_dir + "Toast_financial_report.md"]
 
 @pytest.fixture(scope="module")
 @pytest.mark.openai
-@skip_on_missing_imports(["chromadb", "llama_index"], "chroma_db_query_engine")
+@skip_on_missing_imports(["chromadb", "llama_index"], "rag")
 def chroma_query_engine() -> ChromaDBQueryEngine:
     # For testing purposes, use a host and port that point to your running ChromaDB.
     # Adjust these if necessary.
@@ -63,7 +63,7 @@ def test_chroma_db_query_engine_query(chroma_query_engine: ChromaDBQueryEngine) 
 
 @pytest.mark.openai
 @pytest.mark.skipif(sys.platform in ["darwin", "win32"], reason=reason)
-def test_chroma_db_query_engine_connect_db(chroma_query_engine: ChromaDBQueryEngine) -> None:
+def test_chroma_db_query_engine_connect_db() -> None:
     """Test connecting to an existing collection using connect_db."""
     logger.info("Testing connect_db of ChromaDBQueryEngine")
     # Initialize first to create a collection
@@ -82,8 +82,8 @@ def test_chroma_db_query_engine_connect_db(chroma_query_engine: ChromaDBQueryEng
 
 @pytest.mark.openai
 @pytest.mark.skipif(sys.platform in ["darwin", "win32"], reason=reason)
-def test_chroma_db_query_engine_add_records(chroma_query_engine: ChromaDBQueryEngine) -> None:
-    """Test adding records with add_records to the existing collection."""
+def test_chroma_db_query_engine_add_docs(chroma_query_engine: ChromaDBQueryEngine) -> None:
+    """Test adding records with add_docs to the existing collection."""
     logger.info("Testing add_records of ChromaDBQueryEngine")
     chroma_query_engine.add_docs(new_doc_paths_or_urls=docs_to_add)
 
