@@ -51,7 +51,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Optional, Type
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 import requests
 from packaging import version
@@ -60,6 +60,9 @@ from pydantic import BaseModel
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
+
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 with optional_import_block():
     import google.genai as genai
@@ -96,6 +99,15 @@ with optional_import_block():
     )
 
 logger = logging.getLogger(__name__)
+
+GOOGLE_SEARCH_F_NAME = "gemini_google_search"
+
+
+def register_google_search(agent: "ConversableAgent") -> None:
+    def google_search():
+        pass
+
+    agent.register_for_llm(name=GOOGLE_SEARCH_F_NAME, description="Google Search")(google_search)
 
 
 @require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
@@ -634,6 +646,22 @@ class GeminiClient:
         return schema
 
     @staticmethod
+    def check_if_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
+        """Check if the Google Search tool is present in the tools list."""
+        exists = False
+        for tool in tools:
+            if tool["function"]["name"] == GOOGLE_SEARCH_F_NAME:
+                exists = True
+                break
+
+        if exists and len(tools) > 1:
+            raise ValueError(
+                "Google Search tool can be used only by itself. Please remove other tools from the tools list."
+            )
+
+        return exists
+
+    @staticmethod
     def _unwrap_references(function_parameters: dict[str, Any]) -> dict[str, Any]:
         if "properties" not in function_parameters:
             return function_parameters
@@ -649,6 +677,11 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
+        if self.check_if_google_search_tool_exists(tools):
+            if self.use_vertexai:
+                raise ValueError("Google Search tool is currently not supported with VertexAI.")
+            return [Tool(google_search=GoogleSearch())]
+
         functions = []
         for tool in tools:
             if self.use_vertexai:
@@ -668,9 +701,7 @@ class GeminiClient:
         if self.use_vertexai:
             return [vaiTool(function_declarations=functions)]
         else:
-            # TODDO: just experimenting with GoogleSearch
-            # return [Tool(function_declarations=functions)]
-            return [Tool(google_search=GoogleSearch())]
+            return [Tool(function_declarations=functions)]
 
     @staticmethod
     def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
