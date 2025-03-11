@@ -187,8 +187,6 @@ def get_llm_credentials(
 ) -> Credentials:
     credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
     config_list = credentials.config_list if credentials else []
-    for config in config_list:
-        config["api_type"] = api_type
 
     # Filter out non-OpenAI configs
     if api_type == "openai":
