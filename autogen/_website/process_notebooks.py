@@ -981,6 +981,9 @@ def _add_authors_and_social_preview(
             )
             content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
 
+            # replace the mkdocs excerpt marker
+            content_with_edit_url = content_with_edit_url.replace(r"\<!-- more -->", "")
+
             file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
 
         except Exception as e:

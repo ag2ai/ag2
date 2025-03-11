@@ -14,6 +14,7 @@ from autogen._website.generate_mkdocs import (
     add_excerpt_marker,
     filter_excluded_files,
     fix_asset_path,
+    fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
     process_and_copy_files,
@@ -386,6 +387,84 @@ def test_add_excerpt_marker() -> None:
     """)
     actual = add_excerpt_marker(content)
     assert actual == expected
+
+    content = dedent(r"""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    \<!-- more -->
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    <!-- more -->
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    actual = add_excerpt_marker(content)
+    assert actual == expected
+
+
+def test_fix_snippet_imports() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_snippets_dir = Path(tmpdir) / "snippets"
+        expected_path = "{!" + str(tmp_snippets_dir) + "/reference-agents/deep-research.mdx" + " !}"
+
+        content = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/snippets/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+        expected = dedent(f"""
+        ## Introduction
+
+        {expected_path}
+
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+
+        actual = fix_snippet_imports(content, tmp_snippets_dir)
+        assert actual == expected
+
+        content = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/some-other-dir/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+        expected = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/some-other-dir/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+
+        actual = fix_snippet_imports(content, tmp_snippets_dir)
+        assert actual == expected
 
 
 @pytest.fixture

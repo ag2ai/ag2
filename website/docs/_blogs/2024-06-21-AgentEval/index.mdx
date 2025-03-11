@@ -20,6 +20,8 @@ TL;DR:
 
 Previously introduced [`AgentEval`](https://docs.ag2.ai/blog/2023-11-20-AgentEval/index) is a comprehensive framework designed to bridge the gap in assessing the utility of LLM-powered applications. It leverages recent advancements in LLMs to offer a scalable and cost-effective alternative to traditional human evaluations. The framework comprises three main agents: `CriticAgent`, `QuantifierAgent`, and `VerifierAgent`, each playing a crucial role in assessing the task utility of an application.
 
+\<!-- more -->
+
 **CriticAgent: Defining the Criteria**
 
 The CriticAgent's primary function is to suggest a set of criteria for evaluating an application based on the task description and examples of successful and failed executions. For instance, in the context of a math tutoring application, the CriticAgent might propose criteria such as efficiency, clarity, and correctness. These criteria are essential for understanding the various dimensions of the application's performance. It’s highly recommended that application developers validate the suggested criteria leveraging their domain expertise.

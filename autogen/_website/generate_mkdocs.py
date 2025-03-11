@@ -307,6 +307,10 @@ def add_excerpt_marker(content: str) -> str:
     Returns:
         str: Modified body content with <!-- more --> added
     """
+
+    if "<!-- more -->" in content:
+        return content.replace(r"\<!-- more -->", "<!-- more -->")
+
     # Find all headings
     heading_pattern = re.compile(r"^(#{1,6}\s+.+?)$", re.MULTILINE)
     headings = list(heading_pattern.finditer(content))
@@ -361,10 +365,40 @@ def process_blog_contents(contents: str, file: Path) -> str:
     return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}\n---{content_with_excerpt_marker}"
 
 
+def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
+    """Replace import statements for MDX files from snippets directory with the target format.
+
+    Args:
+        content (str): Content containing import statements
+        snippets_dir (Path): Path to the snippets directory
+
+    Returns:
+        str: Content with import statements replaced
+    """
+    # Regular expression to find import statements for MDX files from /snippets/
+    import_pattern = re.compile(r'import\s+(\w+)\s+from\s+"(/snippets/[^"]+\.mdx)"\s*;')
+
+    # Function to replace the matched import statement
+    def replace_import(match: re.Match[str]) -> str:
+        relative_path = match.group(2).lstrip("/")
+
+        # Remove "snippets/" prefix from the relative path if it exists
+        if relative_path.startswith("snippets/"):
+            relative_path = relative_path[len("snippets/") :]
+
+        # Create the new format: {!<full_path_to_snippets>/<relative_path> !}
+        new_path = "{!" + str(snippets_dir / relative_path) + " !}"
+        return new_path + "\n"
+
+    # Replace all matching import statements
+    return import_pattern.sub(replace_import, content)
+
+
 def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets_src_path: Path) -> None:
     src_blog_dir = mkdocs_output_dir / "_blogs"
     target_blog_dir = mkdocs_output_dir / "blog"
     target_posts_dir = target_blog_dir / "posts"
+    snippets_dir = mkdocs_output_dir.parent / "snippets"
 
     # Create the target posts directory
     target_posts_dir.mkdir(parents=True, exist_ok=True)
@@ -380,16 +414,16 @@ def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets
     for file in files_to_copy:
         if file.suffix == ".md":
             contents = file.read_text()
-            processed_metadata = process_blog_contents(contents, file)
-            file.write_text(processed_metadata)
+            processed_contents = process_blog_contents(contents, file)
+            processed_contents = fix_snippet_imports(processed_contents, snippets_dir)
+            file.write_text(processed_contents)
 
     # Copy files from source to target
     copy_files(src_blog_dir, target_posts_dir, files_to_copy)
 
     # Copy snippets directory
-    snippets_target_path = mkdocs_output_dir.parent / "snippets"
     snippets_files_to_copy = list(snippets_src_path.rglob("*"))
-    copy_files(snippets_src_path, snippets_target_path, snippets_files_to_copy)
+    copy_files(snippets_src_path, snippets_dir, snippets_files_to_copy)
 
     # Copy authors_yml_path to the target_blog_dir and rename it as .authors.yml
     target_authors_yml_path = target_blog_dir / ".authors.yml"
