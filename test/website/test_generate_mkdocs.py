@@ -11,13 +11,14 @@ import pytest
 
 from autogen._website.generate_mkdocs import (
     add_api_ref_to_mkdocs_template,
+    add_excerpt_marker,
     filter_excluded_files,
     fix_asset_path,
     format_navigation,
     generate_mkdocs_navigation,
     process_and_copy_files,
+    process_blog_contents,
     process_blog_files,
-    process_blog_metadata,
     transform_card_grp_component,
     transform_tab_component,
 )
@@ -256,13 +257,24 @@ def test_fix_asset_path() -> None:
 def test_process_blog_files() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create source directory structure
-        src_dir = Path(tmpdir) / "_blogs"
+
+        mkdocs_dir = Path(tmpdir) / "mkdocs"
+        mkdocs_dir.mkdir()
+
+        src_dir = mkdocs_dir / "_blogs"
         src_dir.mkdir()
 
+        # Create snippets directory
+        snippets_dir = mkdocs_dir / "snippets"
+        snippets_dir.mkdir()
+
         files = [
-            src_dir / "2023-04-21-LLM-tuning-math" / "index.mdx",
+            src_dir / "2023-04-21-LLM-tuning-math" / "index.md",
             src_dir / "2023-04-21-LLM-tuning-math" / "cover.jpg",
             src_dir / "2023-04-21-LLM-tuning-math" / "cover.png",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "index.md",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "cover.png",
         ]
 
         # Create the files
@@ -270,13 +282,13 @@ def test_process_blog_files() -> None:
             file.parent.mkdir(parents=True, exist_ok=True)
             file.touch()
 
-        target_blog_dir = Path(tmpdir) / "blog"
+        target_blog_dir = mkdocs_dir / "blog"
 
-        authors_yml_path = Path(tmpdir) / ".authors.yml"
+        authors_yml_path = mkdocs_dir / ".authors.yml"
         authors_yml_path.touch()
 
         # Assert the target_blog_dir should have posts directory and index.md file and .authors.yml file
-        process_blog_files(Path(tmpdir), Path(authors_yml_path))
+        process_blog_files(mkdocs_dir, Path(authors_yml_path), snippets_dir)
 
         actual = list(filter(lambda x: x.is_file(), target_blog_dir.rglob("*")))
         expected = [
@@ -287,10 +299,14 @@ def test_process_blog_files() -> None:
             target_blog_dir / ".authors.yml",
         ]
         assert len(actual) == len(expected)
-        assert sorted(actual) == sorted(actual)
+        assert sorted(actual) == sorted(expected)
+
+        target_snippet_dir = Path(tmpdir) / "snippets"
+        assert target_snippet_dir.exists()
+        assert len(list(filter(lambda x: x.is_file(), target_snippet_dir.rglob("*")))) == 3
 
 
-def test_process_blog_metadata() -> None:
+def test_process_blog_contents() -> None:
     contents = dedent("""
     ---
     title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
@@ -320,9 +336,55 @@ def test_process_blog_metadata() -> None:
     ![level 2 algebra](img/level2algebra.png)
 
     **TL;DR:**
+
+    <!-- more -->
     """)
     file = Path("tmp/ag2/ag2/website/mkdocs/docs/docs/_blogs/2025-01-10-WebSockets/index.md")
-    actual = process_blog_metadata(contents, file)
+    actual = process_blog_contents(contents, file)
+    assert actual == expected
+
+
+def test_add_excerpt_marker() -> None:
+    content = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+
+    <!-- more -->
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    actual = add_excerpt_marker(content)
+    assert actual == expected
+
+    content = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    <!-- more -->
+    """)
+    actual = add_excerpt_marker(content)
     assert actual == expected
 
 

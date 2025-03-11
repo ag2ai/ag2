@@ -298,7 +298,33 @@ def copy_assets(website_dir: Path) -> None:
     copy_files(src_dir, dest_dir, git_tracket_img_files)
 
 
-def process_blog_metadata(contents: str, file: Path) -> str:
+def add_excerpt_marker(content: str) -> str:
+    """Add <!-- more --> marker before the second heading in markdown body content.
+
+    Args:
+        content (str): Body content of the markdown file (without frontmatter)
+
+    Returns:
+        str: Modified body content with <!-- more --> added
+    """
+    # Find all headings
+    heading_pattern = re.compile(r"^(#{1,6}\s+.+?)$", re.MULTILINE)
+    headings = list(heading_pattern.finditer(content))
+
+    # If there are fewer than 2 headings, add the marker at the end
+    if len(headings) < 2:
+        # If there's content, add the marker at the end
+        return content.rstrip() + "\n\n<!-- more -->\n"
+
+    # Get position of the second heading
+    second_heading = headings[1]
+    position = second_heading.start()
+
+    # Insert the more marker before the second heading
+    return content[:position] + "\n<!-- more -->\n\n" + content[position:]
+
+
+def process_blog_contents(contents: str, file: Path) -> str:
     # Split the content into parts
     parts = contents.split("---", 2)
     if len(parts) < 3:
@@ -329,10 +355,13 @@ def process_blog_metadata(contents: str, file: Path) -> str:
     # Add date to metadata
     date_yaml = f"\ndate: {date}" if date else ""
 
-    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}\n---{content}"
+    # add the excerpt marker in the content
+    content_with_excerpt_marker = add_excerpt_marker(content)
+
+    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}\n---{content_with_excerpt_marker}"
 
 
-def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path) -> None:
+def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets_src_path: Path) -> None:
     src_blog_dir = mkdocs_output_dir / "_blogs"
     target_blog_dir = mkdocs_output_dir / "blog"
     target_posts_dir = target_blog_dir / "posts"
@@ -351,11 +380,16 @@ def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path) -> None:
     for file in files_to_copy:
         if file.suffix == ".md":
             contents = file.read_text()
-            processed_metadata = process_blog_metadata(contents, file)
+            processed_metadata = process_blog_contents(contents, file)
             file.write_text(processed_metadata)
 
     # Copy files from source to target
     copy_files(src_blog_dir, target_posts_dir, files_to_copy)
+
+    # Copy snippets directory
+    snippets_target_path = mkdocs_output_dir.parent / "snippets"
+    snippets_files_to_copy = list(snippets_src_path.rglob("*"))
+    copy_files(snippets_src_path, snippets_target_path, snippets_files_to_copy)
 
     # Copy authors_yml_path to the target_blog_dir and rename it as .authors.yml
     target_authors_yml_path = target_blog_dir / ".authors.yml"
@@ -390,6 +424,8 @@ def main() -> None:
     copy_assets(website_dir)
     process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
 
+    snippets_dir_path = website_dir / "snippets"
     authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
-    process_blog_files(mkdocs_output_dir, authors_yml_path)
+
+    process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
