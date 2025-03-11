@@ -87,6 +87,10 @@ Here's some code snippets showing how Telegram can send and retrieve messages.
 from autogen import ConversableAgent
 from autogen.agents.experimental import TelegramAgent
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 # Authentication and target Chat ID (in this case a Group chat)
