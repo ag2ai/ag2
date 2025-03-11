@@ -62,7 +62,7 @@ from .client_utils import FormatterProtocol
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 if TYPE_CHECKING:
-    from ..agentchat.conversable_agent import ConversableAgent
+    pass
 
 with optional_import_block():
     import google.genai as genai
@@ -99,15 +99,6 @@ with optional_import_block():
     )
 
 logger = logging.getLogger(__name__)
-
-GOOGLE_SEARCH_F_NAME = "gemini_google_search"
-
-
-def register_google_search(agent: "ConversableAgent") -> None:
-    def google_search():
-        pass
-
-    agent.register_for_llm(name=GOOGLE_SEARCH_F_NAME, description="Google Search")(google_search)
 
 
 @require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
@@ -650,7 +641,7 @@ class GeminiClient:
         """Check if the Google Search tool is present in the tools list."""
         exists = False
         for tool in tools:
-            if tool["function"]["name"] == GOOGLE_SEARCH_F_NAME:
+            if tool["function"]["name"] == "google_search":
                 exists = True
                 break
 
