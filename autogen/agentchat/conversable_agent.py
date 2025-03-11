@@ -151,7 +151,7 @@ class ConversableAgent(LLMAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
         default_auto_reply: Union[str, dict[str, Any]] = "",
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
@@ -253,7 +253,8 @@ class ConversableAgent(LLMAgent):
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/topics/llm_configuration#adding-http-client-in-llm-config-for-proxy"
                 ) from e
 
-        self._validate_llm_config(llm_config)
+        self.llm_config = self._validate_llm_config(llm_config)
+        self.client = self._create_client(self.llm_config)
         self._validate_name(name)
         self._name = name
 
@@ -471,21 +472,31 @@ class ConversableAgent(LLMAgent):
             else:
                 self.register_hook(hookable_method="update_agent_state", hook=func)
 
-    def _validate_llm_config(self, llm_config):
-        assert llm_config in (None, False) or isinstance(llm_config, dict), (
-            "llm_config must be a dict or False or None."
-        )
-        llm_config = LLMConfig.get_current_llm_config() if llm_config is None else llm_config
+    @classmethod
+    def _validate_llm_config(
+        cls, llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]]
+    ) -> Union[LLMConfig, Literal[False]]:
+        # if not(llm_config in (None, False) or isinstance(llm_config, [dict, LLMConfig])):
+        #     raise ValueError(
+        #         "llm_config must be a dict or False or None."
+        #     )
 
         if llm_config is None:
-            llm_config = self.DEFAULT_CONFIG
-        self.llm_config = self.DEFAULT_CONFIG if llm_config is None else llm_config
-        # TODO: more complete validity check
-        if self.llm_config in [{}, {"config_list": []}, {"config_list": [{"model": ""}]}]:
-            raise ValueError(
-                "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
-            )
-        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config)
+            llm_config = LLMConfig.get_current_llm_config()
+            if llm_config is None:
+                llm_config = cls.DEFAULT_CONFIG
+        elif isinstance(llm_config, dict):
+            llm_config = LLMConfig(**llm_config)
+        elif llm_config is False or isinstance(llm_config, LLMConfig):
+            pass
+        else:
+            raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
+
+        return llm_config
+
+    @classmethod
+    def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[ModelClient]:
+        return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
     def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:

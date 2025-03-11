@@ -25,10 +25,20 @@ __all__ = [
 ]
 
 
+def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
+    if "api_type" not in d:
+        d["api_type"] = "openai"
+    return d
+
+
 class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if "config_list" in kwargs:
+            kwargs["config_list"] = [
+                _add_default_api_type(v) if isinstance(v, dict) else v for v in kwargs["config_list"]
+            ]
         self._model = self._get_base_model_class()(*args, **kwargs)
 
     # used by BaseModel to create instance variables

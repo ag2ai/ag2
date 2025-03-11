@@ -430,6 +430,7 @@ convention = "google"
 [tool.mypy]
 files = [
     "autogen/agentchat/agent.py",
+#    "autogen/agentchat/cenversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",

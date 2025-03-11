@@ -12,7 +12,7 @@ import inspect
 import os
 import time
 import unittest
-from typing import Annotated, Any, Callable, Literal, Optional
+from typing import Annotated, Any, Callable, Literal, Optional, Union
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +24,7 @@ from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
+from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -1857,6 +1858,28 @@ def test_create_or_get_executor(mock_credentials: Credentials):
             assert isinstance(executor_agent, ConversableAgent)
             assert agent.llm_config["tools"] == expected_tools
             assert len(executor_agent.function_map.keys()) == 1
+
+
+@pytest.mark.parametrize(
+    "llm_config, expected",
+    [
+        (None, False),
+        (False, False),
+        (
+            {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        ),
+        (
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        ),
+    ],
+)
+def test_validate_llm_config(
+    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]], expected: Union[LLMConfig, Literal[False]]
+):
+    actual = ConversableAgent._validate_llm_config(llm_config)
+    assert actual == expected
 
 
 if __name__ == "__main__":

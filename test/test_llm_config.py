@@ -71,6 +71,32 @@ class TestLLMConfig:
     def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
         return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
 
+    @pytest.mark.parametrize(
+        "llm_config, expected",
+        [
+            (
+                # todo add more test cases
+                {
+                    "config_list": [
+                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            api_type="openai",
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+        ],
+    )
+    def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
+        actual = LLMConfig(**llm_config)
+        assert actual == expected
+
     def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
         expected = {
