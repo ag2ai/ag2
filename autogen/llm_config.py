@@ -155,6 +155,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_type: str
     model: str
     api_key: Optional[str] = None
+    api_version: Optional[str] = None
     base_url: Optional[HttpUrl] = None
     tags: list[str] = Field(default_factory=list)
 
