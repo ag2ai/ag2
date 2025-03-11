@@ -58,7 +58,7 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
-from ..tools import ChatContext, Tool, get_function_schema, load_basemodels_if_needed, serialize_to_str
+from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
 from .utils import consolidate_chat_info, gather_usage_summary
@@ -400,7 +400,7 @@ class ConversableAgent(LLMAgent):
             self._add_single_function(func)
 
     def _add_single_function(self, func: Callable, name: Optional[str] = None, description: Optional[str] = ""):
-        """Add a single function to the agent, removing context variables for LLM use.
+        """Add a single function to the agent
 
         Args:
             func (Callable): The function to register.
@@ -418,23 +418,8 @@ class ConversableAgent(LLMAgent):
             # Use function's docstring, strip whitespace, fall back to empty string
             func._description = (func.__doc__ or "").strip()
 
-        f = get_function_schema(func, name=func._name, description=func._description)
-
-        # Remove context_variables parameter from function schema
-        f_no_context = f.copy()
-        if __CONTEXT_VARIABLES_PARAM_NAME__ in f_no_context["function"]["parameters"]["properties"]:
-            del f_no_context["function"]["parameters"]["properties"][__CONTEXT_VARIABLES_PARAM_NAME__]
-        if "required" in f_no_context["function"]["parameters"]:
-            required = f_no_context["function"]["parameters"]["required"]
-            f_no_context["function"]["parameters"]["required"] = [
-                param for param in required if param != __CONTEXT_VARIABLES_PARAM_NAME__
-            ]
-            # If required list is empty, remove it
-            if not f_no_context["function"]["parameters"]["required"]:
-                del f_no_context["function"]["parameters"]["required"]
-
-        self.update_tool_signature(f_no_context, is_remove=False)
-        self.register_function({func._name: func})
+        # Register the function
+        self.register_for_llm(name=name, description=description)(func)
 
     def _register_update_agent_state_before_reply(
         self, functions: Optional[Union[list[Callable[..., Any]], Callable[..., Any]]]
@@ -3038,7 +3023,7 @@ class ConversableAgent(LLMAgent):
         """Return the function map."""
         return self._function_map
 
-    def _wrap_function(self, func: F, inject_params: dict[str, Any] = {}) -> F:
+    def _wrap_function(self, func: F, inject_params: dict[str, Any] = {}, *, serialize: bool = True) -> F:
         """Wrap the function inject chat context parameters and to dump the return value to json.
 
         Handles both sync and async functions.
@@ -3046,6 +3031,7 @@ class ConversableAgent(LLMAgent):
         Args:
             func: the function to be wrapped.
             inject_params: the chat context parameters which will be passed to the function.
+            serialize: whether to serialize the return value
 
         Returns:
             The wrapped function.
@@ -3057,7 +3043,7 @@ class ConversableAgent(LLMAgent):
             retval = func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return serialize_to_str(retval)
+            return serialize_to_str(retval) if serialize else retval
 
         @load_basemodels_if_needed
         @functools.wraps(func)
@@ -3065,7 +3051,7 @@ class ConversableAgent(LLMAgent):
             retval = await func(*args, **kwargs, **inject_params)
             if logging_enabled():
                 log_function_use(self, func, kwargs, retval)
-            return serialize_to_str(retval)
+            return serialize_to_str(retval) if serialize else retval
 
         wrapped_func = _a_wrapped_func if inspect.iscoroutinefunction(func) else _wrapped_func
 
@@ -3181,6 +3167,8 @@ class ConversableAgent(LLMAgent):
         self,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        *,
+        serialize: bool = True,
     ) -> Callable[[Union[Tool, F]], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
@@ -3189,6 +3177,7 @@ class ConversableAgent(LLMAgent):
         Args:
             name: name of the function. If None, the function name will be used (default: None).
             description: description of the function (default: None).
+            serialize: whether to serialize the return value
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3223,7 +3212,9 @@ class ConversableAgent(LLMAgent):
             chat_context = ChatContext(self)
             chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
 
-            self.register_function({tool.name: self._wrap_function(tool.func, chat_context_params)})
+            self.register_function({
+                tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)
+            })
 
             return tool
 

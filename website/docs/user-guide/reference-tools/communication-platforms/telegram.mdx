@@ -74,6 +74,10 @@ Let’s add the Telegram Send and Retrieve tools to an agent and have them execu
 from autogen import ConversableAgent
 from autogen.tools.experimental import TelegramRetrieveTool, TelegramSendTool
 
+# For running the code in Jupyter, use nest_asyncio to allow nested event loops
+#import nest_asyncio
+#nest_asyncio.apply()
+
 llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
 
 # Our tool executor agent, which will run the tools once recommended by the telegram_agent, no LLM required
