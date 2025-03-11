@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import json
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, TypeVar, Union
@@ -40,16 +41,22 @@ class LLMConfig:
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
-    def get_current_llm_config(cls) -> "LLMConfig":
-        return LLMConfig._current_llm_config.get()
+    def get_current_llm_config(cls) -> "Optional[LLMConfig]":
+        try:
+            return LLMConfig._current_llm_config.get()
+        except LookupError:
+            return None
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return self._model.model_dump(*args, exclude_none=exclude_none, **kwargs)
+        d = self._model.model_dump(*args, exclude_none=exclude_none, **kwargs)
+        return {k: v for k, v in d.items() if not (isinstance(v, list) and len(v) == 0)}
 
     # @functools.wraps(BaseModel.model_dump_json)
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        return self._model.model_dump_json(*args, exclude_none=exclude_none, **kwargs)
+        # return self._model.model_dump_json(*args, exclude_none=exclude_none, **kwargs)
+        d = self.model_dump(*args, exclude_none=exclude_none, **kwargs)
+        return json.dumps(d)
 
     # @functools.wraps(BaseModel.model_validate)
     def model_validate(self, *args: Any, **kwargs: Any) -> Any:
@@ -85,13 +92,19 @@ class LLMConfig:
             raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
 
     def __setitem__(self, key: str, value: Any) -> None:
-        setattr(self._model, key, value)
+        try:
+            setattr(self._model, key, value)
+        except ValueError:
+            raise ValueError(f"'{self.__class__.__name__}' object has no field '{key}'")
 
     def __getattr__(self, name: Any) -> Any:
         try:
             return self._getattr(self._model, name)
         except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self._model, key)
 
     def items(self) -> "dict_items[_KT, _VT]":
         d = self.model_dump()
@@ -122,6 +135,9 @@ class LLMConfig:
                 response_format: Optional[str] = None
                 timeout: Optional[int] = None
                 cache_seed: Optional[int] = None
+
+                tools: list[Any] = Field(default_factory=list)
+                functions: list[Any] = Field(default_factory=list)
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],

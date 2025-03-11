@@ -191,6 +191,15 @@ class TestLLMConfig:
 
         test_unpacking(**openai_llm_config)
 
+    def test_contains(self, openai_llm_config: LLMConfig) -> None:
+        assert "temperature" in openai_llm_config
+        assert "check_every_ms" in openai_llm_config
+        assert "cache_seed" in openai_llm_config
+        assert "config_list" in openai_llm_config
+        assert "doesnt_exists" not in openai_llm_config
+        assert "config_list" in openai_llm_config
+        assert not "config_list" not in openai_llm_config
+
     def test_with_context(self, openai_llm_config: LLMConfig) -> None:
         # Test with dummy agent
         class DummyAgent:
@@ -204,8 +213,9 @@ class TestLLMConfig:
         assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
 
         # Test accessing current_llm_config outside the context
+        assert LLMConfig.get_current_llm_config() is None
         with openai_llm_config:
             actual = LLMConfig.get_current_llm_config()
             assert actual == openai_llm_config
-        with pytest.raises(LookupError):
-            LLMConfig.get_current_llm_config()
+
+        assert LLMConfig.get_current_llm_config() is None

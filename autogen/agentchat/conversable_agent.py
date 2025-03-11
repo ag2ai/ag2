@@ -43,6 +43,7 @@ from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
+from ..llm_config import LLMConfig
 from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
@@ -474,6 +475,8 @@ class ConversableAgent(LLMAgent):
         assert llm_config in (None, False) or isinstance(llm_config, dict), (
             "llm_config must be a dict or False or None."
         )
+        llm_config = LLMConfig.get_current_llm_config() if llm_config is None else llm_config
+
         if llm_config is None:
             llm_config = self.DEFAULT_CONFIG
         self.llm_config = self.DEFAULT_CONFIG if llm_config is None else llm_config
@@ -2922,7 +2925,7 @@ class ConversableAgent(LLMAgent):
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
         """
-        if not isinstance(self.llm_config, dict):
+        if not isinstance(self.llm_config, dict) or not isinstance(self.llm_config, LLMConfig):
             error_msg = "To update a function signature, agent must have an llm_config"
             logger.error(error_msg)
             raise AssertionError(error_msg)
@@ -2997,7 +3000,7 @@ class ConversableAgent(LLMAgent):
                     f"The tool signature must be of the type dict. Received tool signature type {type(tool_sig)}"
                 )
             self._assert_valid_name(tool_sig["function"]["name"])
-            if "tools" in self.llm_config:
+            if "tools" in self.llm_config and len(self.llm_config["tools"]) > 0:
                 if any(tool["function"]["name"] == tool_sig["function"]["name"] for tool in self.llm_config["tools"]):
                     warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
                 self.llm_config["tools"] = [

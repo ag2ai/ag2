@@ -23,6 +23,7 @@ from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAg
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
+from autogen.llm_config import LLMConfig
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -937,21 +938,24 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    coder = autogen.AssistantAgent(
-        name="chatbot",
-        system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
-    )
+    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
 
-    # create a UserProxyAgent instance named "user_proxy"
-    user_proxy = autogen.UserProxyAgent(
-        name="user_proxy",
-        system_message="A proxy for the user for executing code.",
-        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=10,
-        code_execution_config={"work_dir": "coding"},
-    )
+    with llm_config:
+        coder = autogen.AssistantAgent(
+            name="chatbot",
+            system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+            # llm_config=credentials_gpt_4o_mini.llm_config,
+        )
+
+        # create a UserProxyAgent instance named "user_proxy"
+        user_proxy = autogen.UserProxyAgent(
+            name="user_proxy",
+            system_message="A proxy for the user for executing code.",
+            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=10,
+            code_execution_config={"work_dir": "coding"},
+        )
 
     # define functions according to the function description
     timer_mock = unittest.mock.MagicMock()
