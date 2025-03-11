@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from _collections_abc import dict_items, dict_keys, dict_values
+from typing import Any
+
 import pytest
 
 from autogen.llm_config import LLMConfig
@@ -91,7 +94,7 @@ class TestLLMConfig:
         assert type(actual._model) == type(openai_llm_config._model)
         assert actual._model == openai_llm_config._model
         assert actual == openai_llm_config
-        # assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
+        assert isinstance(actual.config_list[0], dict)
 
     def test_get(self, openai_llm_config: LLMConfig) -> None:
         assert openai_llm_config.get("temperature") == 0.5
@@ -126,6 +129,68 @@ class TestLLMConfig:
         openai_llm_config["timeout"] = None
         assert openai_llm_config["timeout"] is None
 
+    def test_items(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.items()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_items)
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+        assert dict(actual) == expected, dict(actual)
+
+    def test_keys(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.keys()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_keys)
+        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]
+        assert list(actual) == expected, list(actual)
+
+    def test_values(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.values()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_values)
+        expected = [
+            0.5,
+            1000,
+            42,
+            [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+        ]
+        assert list(actual) == expected, list(actual)
+
+    def test_unpack(self, openai_llm_config: LLMConfig) -> None:
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+
+        def test_unpacking(**kwargs: Any) -> None:
+            assert kwargs == expected, kwargs
+
+        test_unpacking(**openai_llm_config)
+
     def test_with_context(self, openai_llm_config: LLMConfig) -> None:
         # Test with dummy agent
         class DummyAgent:
@@ -136,7 +201,7 @@ class TestLLMConfig:
             agent = DummyAgent()
         assert agent.llm_config == openai_llm_config
         assert agent.llm_config.temperature == 0.5
-        assert agent.llm_config.config_list[0].model == "gpt-4o-mini"
+        assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
 
         # Test accessing current_llm_config outside the context
         with openai_llm_config:

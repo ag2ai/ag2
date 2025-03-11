@@ -5,12 +5,17 @@
 import functools
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel, Field, HttpUrl
 
 if TYPE_CHECKING:
+    from _collections_abc import dict_items, dict_keys, dict_values
+
     from .oai.client import ModelClient
+
+    _KT = TypeVar("_KT")
+    _VT = TypeVar("_VT")
 
 __all__ = [
     "LLMConfig",
@@ -61,12 +66,21 @@ class LLMConfig:
     def __eq__(self, value: Any) -> bool:
         return hasattr(value, "_model") and self._model == value._model
 
+    def _getattr(self, o: object, name: str) -> Any:
+        val = getattr(o, name)
+        if isinstance(val, list) and name == "config_list":
+            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
+        return val
+
     def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return getattr(self._model, key, default)
+        val = getattr(self._model, key, default)
+        if isinstance(val, list) and key == "config_list":
+            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
+        return val
 
     def __getitem__(self, key: str) -> Any:
         try:
-            return getattr(self._model, key)
+            return self._getattr(self._model, key)
         except AttributeError:
             raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
 
@@ -75,9 +89,21 @@ class LLMConfig:
 
     def __getattr__(self, name: Any) -> Any:
         try:
-            return getattr(self._model, name)
+            return self._getattr(self._model, name)
         except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def items(self) -> "dict_items[_KT, _VT]":
+        d = self.model_dump()
+        return d.items()  # type: ignore[return-value]
+
+    def keys(self) -> "dict_keys[_KT, _VT]":
+        d = self.model_dump()
+        return d.keys()  # type: ignore[return-value]
+
+    def values(self) -> "dict_values[_KT, _VT]":
+        d = self.model_dump()
+        return d.values()  # type: ignore[return-value]
 
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
 
