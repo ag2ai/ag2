@@ -1867,7 +1867,7 @@ def test_create_or_get_executor(mock_credentials: Credentials):
         (False, False),
         (
             {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")]),
         ),
         (
             LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
