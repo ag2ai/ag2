@@ -260,7 +260,7 @@ def test_get_assistant_files(credentials_gpt_4o_mini: Credentials) -> None:
             vectorstore_ids = oas_assistant.tool_resources.file_search.vector_store_ids
             retrieved_file_ids = []
             for vectorstore_id in vectorstore_ids:
-                files = assistant.openai_client.beta.vector_stores.files.list(vector_store_id=vectorstore_id)
+                files = assistant.openai_client.vector_stores.files.list(vector_store_id=vectorstore_id)
                 retrieved_file_ids.extend([fild.id for fild in files])
         expected_file_id = file.id
     finally:
