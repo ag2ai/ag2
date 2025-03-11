@@ -328,6 +328,12 @@ def add_excerpt_marker(content: str) -> str:
     return content[:position] + "\n<!-- more -->\n\n" + content[position:]
 
 
+def generate_url_slug(file: Path) -> str:
+    parent_dir = file.parts[-2]
+    slug = "-".join(parent_dir.split("-")[3:])
+    return f"\nslug: {slug}"
+
+
 def process_blog_contents(contents: str, file: Path) -> str:
     # Split the content into parts
     parts = contents.split("---", 2)
@@ -359,10 +365,13 @@ def process_blog_contents(contents: str, file: Path) -> str:
     # Add date to metadata
     date_yaml = f"\ndate: {date}" if date else ""
 
+    # Add URL slug metadata
+    url_slug = generate_url_slug(file)
+
     # add the excerpt marker in the content
     content_with_excerpt_marker = add_excerpt_marker(content)
 
-    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}\n---{content_with_excerpt_marker}"
+    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}{url_slug}\n---{content_with_excerpt_marker}"
 
 
 def fix_snippet_imports(content: str, snippets_dir: Path) -> str:

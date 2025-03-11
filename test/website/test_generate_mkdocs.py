@@ -17,6 +17,7 @@ from autogen._website.generate_mkdocs import (
     fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
+    generate_url_slug,
     process_and_copy_files,
     process_blog_contents,
     process_blog_files,
@@ -332,6 +333,7 @@ def test_process_blog_contents() -> None:
         - GPT
         - research
     date: 2025-01-10
+    slug: WebSockets
     ---
 
     ![level 2 algebra](img/level2algebra.png)
@@ -464,6 +466,20 @@ def test_fix_snippet_imports() -> None:
         """)
 
         actual = fix_snippet_imports(content, tmp_snippets_dir)
+        assert actual == expected
+
+
+def test_generate_url_slug() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        blog_dir = Path(tmpdir) / "2025-02-13-DeepResearchAgent"
+        blog_dir.mkdir(parents=True, exist_ok=True)
+
+        tmpfile = blog_dir / "somefile.txt"
+        tmpfile.touch()
+
+        actual = generate_url_slug(tmpfile)
+        expected = "\nslug: DeepResearchAgent"
+
         assert actual == expected
 
 

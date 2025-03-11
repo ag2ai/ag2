@@ -623,9 +623,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         # Verify content of first blog post
         post1_path = generated_blog_dir / "2023-04-21-LLM-tuning-math" / "index.mdx"
         actual = post1_path.read_text()
-        print("*" * 80)
-        print(actual)
-        print("*" * 80)
+
         assert '<img noZoom className="social-share-img"' in actual
         assert '<p class="name">Chi Wang</p>' in actual
         assert '<p class="name">Davor Runje</p>' not in actual
