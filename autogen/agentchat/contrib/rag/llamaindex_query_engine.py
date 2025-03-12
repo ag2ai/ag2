@@ -47,8 +47,7 @@ class LlamaIndexQueryEngine:
         Initializes the LlamaIndexQueryEngine with the given vector store.
         Args:
             vector_store: The vector store to use for indexing and querying documents.
-            llm: LLM model used by LlamaIndex for query processing.
-            You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/)
+            llm: LLM model used by LlamaIndex for query processing. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/).
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.vector_store = vector_store
