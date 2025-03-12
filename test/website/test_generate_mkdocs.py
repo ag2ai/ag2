@@ -421,7 +421,7 @@ def test_add_excerpt_marker() -> None:
 def test_fix_snippet_imports() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_snippets_dir = Path(tmpdir) / "snippets"
-        expected_path = "{!" + str(tmp_snippets_dir) + "/reference-agents/deep-research.mdx" + " !}"
+        expected_path = "{!" + tmp_snippets_dir.as_posix() + "/reference-agents/deep-research.mdx" + " !}"
 
         content = dedent("""
         ## Introduction
