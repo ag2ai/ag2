@@ -22,6 +22,7 @@ pip install -U ag2[openai]
 ## Imports
 
 ```python
+import os
 import random
 
 from autogen import (
@@ -29,7 +30,6 @@ from autogen import (
     GroupChat,
     GroupChatManager,
     UserProxyAgent,
-    config_list_from_json,
     register_function,
 )
 ```
@@ -42,15 +42,10 @@ The [`GroupChat`](/docs/api-reference/autogen/GroupChat) will contain three agen
 - `user_proxy` - Acts as an intermediary between the user and other agents.
 
 ```python
-config_list = config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gpt-4o-mini"],
-    },
-)
-
 llm_config = {
-    "config_list": config_list,
+    "api_type": "openai",
+    "model": "gpt-4o-mini",
+    "api_key": os.environ["OPENAI_API_KEY"]
 }
 
 sales_agent = ConversableAgent(
@@ -66,6 +61,9 @@ cancellation_agent = ConversableAgent(
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="ALWAYS",
+    code_execution_config={
+        "use_docker": False,
+    },  # Please set use_docker=True if Docker is available to run the generated code. Using Docker is safer and recommended over running the generated code directly on the host machine.
 )
 ```
 

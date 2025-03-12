@@ -3,19 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-import json
+import inspect
 import warnings
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
+from ...tools import Depends, Tool
+from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
@@ -298,8 +299,7 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
     Does not link the Tool Executor agent.
     """
     for agent in agents:
-        if agent.name not in [__TOOL_EXECUTOR_NAME__]:
-            agent._swarm_manager = group_chat_manager  # type: ignore[attr-defined]
+        agent._swarm_manager = group_chat_manager  # type: ignore[attr-defined]
 
 
 def _run_oncontextconditions(
@@ -339,9 +339,64 @@ def _run_oncontextconditions(
     return False, None
 
 
+def _modify_context_variables_param(f: Callable[..., Any], context_variables: dict[str, Any]) -> Callable[..., Any]:
+    """Modifies the context_variables parameter to use dependency injection and link it to the swarm context variables.
+
+    This essentially changes:
+    def some_function(some_variable: int, context_variables: dict[str, Any]) -> str:
+
+    to:
+
+    def some_function(some_variable: int, context_variables: Annotated[dict[str, Any], Depends(on(self._context_variables))]) -> str:
+    """
+    sig = inspect.signature(f)
+
+    # Check if context_variables parameter exists and update it if so
+    if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
+        new_params = []
+        for name, param in sig.parameters.items():
+            if name == __CONTEXT_VARIABLES_PARAM_NAME__:
+                # Replace with new annotation using Depends
+                new_param = param.replace(annotation=Annotated[dict[str, Any], Depends(on(context_variables))])
+                new_params.append(new_param)
+            else:
+                new_params.append(param)
+
+        # Update signature
+        new_sig = sig.replace(parameters=new_params)
+        f.__signature__ = new_sig  # type: ignore[attr-defined]
+
+    return f
+
+
+def _change_tool_context_variables_to_depends(
+    agent: ConversableAgent, current_tool: Tool, context_variables: dict[str, Any]
+) -> None:
+    """Checks for the context_variables parameter in the tool and updates it to use dependency injection."""
+
+    # If the tool has a context_variables parameter, remove the tool and reregister it without the parameter
+    if __CONTEXT_VARIABLES_PARAM_NAME__ in current_tool.tool_schema["function"]["parameters"]["properties"]:
+        # We'll replace the tool, so start with getting the underlying function
+        tool_func = current_tool._func
+
+        # Remove the Tool from the agent
+        name = current_tool._name
+        description = current_tool._description
+        agent.remove_tool_for_llm(current_tool)
+
+        # Recreate the tool without the context_variables parameter
+        tool_func = _modify_context_variables_param(current_tool._func, context_variables)
+        tool_func = inject_params(tool_func)
+        new_tool = ConversableAgent._create_tool_if_needed(func_or_tool=tool_func, name=name, description=description)
+
+        # Re-register with the agent
+        agent.register_for_llm()(new_tool)
+
+
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
+    context_variables: dict[str, Any],
     exclude_transit_message: bool = True,
 ) -> tuple[ConversableAgent, list[ConversableAgent]]:
     """Validates agents, create the tool executor, configure nested chats.
@@ -349,6 +404,7 @@ def _prepare_swarm_agents(
     Args:
         initial_agent (ConversableAgent): The first agent in the conversation.
         agents (list[ConversableAgent]): List of all agents in the conversation.
+        context_variables (dict[str, Any]): Context variables to assign to all agents.
         exclude_transit_message (bool): Whether to exclude transit messages from the agents.
 
     Returns:
@@ -382,16 +438,24 @@ def _prepare_swarm_agents(
     for agent in agents:
         _create_nested_chats(agent, nested_chat_agents)
 
+    # Update any agent's tools that have context_variables as a parameter
+    # To use Dependency Injection
+
     # Update tool execution agent with all the functions from all the agents
     for agent in agents + nested_chat_agents:
         tool_execution._function_map.update(agent._function_map)
+
         # Add conditional functions to the tool_execution agent
         for func_name, (func, _) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
             tool_execution._function_map[func_name] = func
 
-        # Register tools from the tools property
+        # Update any agent tools that have context_variables parameters to use Dependency Injection
         for tool in agent.tools:
-            tool_execution.register_for_execution()(tool)
+            _change_tool_context_variables_to_depends(agent, tool, context_variables)
+
+        # Add all tools to the Tool Executor agent
+        for tool in agent.tools:
+            tool_execution.register_for_execution(serialize=False)(tool)
 
     if exclude_transit_message:
         # get all transit functions names
@@ -876,8 +940,11 @@ def initiate_swarm_chat(
         dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
+    context_variables = context_variables or {}
 
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(
+        initial_agent, agents, context_variables, exclude_transit_message
+    )
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
@@ -902,7 +969,7 @@ def initiate_swarm_chat(
     manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
-    _setup_context_variables(tool_execution, agents, manager, context_variables or {})
+    _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     # Link all agents with the GroupChatManager to allow access to the group chat
     # and other agents, particularly the tool executor for setting _swarm_next_agent
@@ -926,7 +993,7 @@ def initiate_swarm_chat(
 
     _cleanup_temp_user_messages(chat_result)
 
-    return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
+    return chat_result, context_variables if context_variables != {} else None, manager.last_speaker  # type: ignore[return-value]
 
 
 @export_module("autogen")
@@ -976,7 +1043,10 @@ async def a_initiate_swarm_chat(
         dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
+    context_variables = context_variables or {}
+    tool_execution, nested_chat_agents = _prepare_swarm_agents(
+        initial_agent, agents, context_variables, exclude_transit_message
+    )
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, nested_chat_agents
@@ -1001,7 +1071,7 @@ async def a_initiate_swarm_chat(
     manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
-    _setup_context_variables(tool_execution, agents, manager, context_variables or {})
+    _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     if len(processed_messages) > 1:
         last_agent, last_message = await manager.a_resume(messages=processed_messages)
@@ -1021,7 +1091,7 @@ async def a_initiate_swarm_chat(
 
     _cleanup_temp_user_messages(chat_result)
 
-    return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
+    return chat_result, context_variables if context_variables != {} else None, manager.last_speaker  # type: ignore[return-value]
 
 
 class SwarmResult(BaseModel):
@@ -1155,6 +1225,8 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
                 condition = condition.format(context_variables=agent._context_variables)
             elif callable(condition):
                 condition = condition(agent, messages)
+
+            # TODO: Don't add it if it's already there
             agent._add_single_function(func, func_name, condition)
 
 
@@ -1185,25 +1257,10 @@ def _generate_swarm_tool_reply(
         tool_responses_inner = []
         contents = []
         for index in range(tool_call_count):
-            # Deep copy to ensure no changes to messages when we insert the context variables
             message_copy = copy.deepcopy(message)
 
             # 1. add context_variables to the tool call arguments
             tool_call = message_copy["tool_calls"][index]
-
-            if tool_call["type"] == "function":
-                function_name = tool_call["function"]["name"]
-
-                # Check if this function exists in our function map
-                if function_name in agent._function_map:
-                    func = agent._function_map[function_name]  # Get the original function
-
-                    # Inject the context variables into the tool call if it has the parameter
-                    sig = signature(func)
-                    if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
-                        current_args = json.loads(tool_call["function"]["arguments"])
-                        current_args[__CONTEXT_VARIABLES_PARAM_NAME__] = agent._context_variables
-                        tool_call["function"]["arguments"] = json.dumps(current_args, default=BaseModel.model_dump_json)
 
             # Ensure we are only executing the one tool at a time
             message_copy["tool_calls"] = [tool_call]
@@ -1217,6 +1274,7 @@ def _generate_swarm_tool_reply(
             # 3. update context_variables and next_agent, convert content to string
             for tool_response in tool_message["tool_responses"]:
                 content = tool_response.get("content")
+
                 if isinstance(content, SwarmResult):
                     if content.context_variables != {}:
                         agent._context_variables.update(content.context_variables)
@@ -1224,6 +1282,10 @@ def _generate_swarm_tool_reply(
                         next_agent = content.agent  # type: ignore[assignment]
                 elif isinstance(content, Agent):
                     next_agent = content
+
+                # Serialize the content to a string
+                if content is not None:
+                    tool_response["content"] = str(content)
 
                 tool_responses_inner.append(tool_response)
                 contents.append(str(tool_response["content"]))
