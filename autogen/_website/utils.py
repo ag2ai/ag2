@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -45,3 +46,39 @@ def copy_only_git_tracked_and_untracked_files(src_dir: Path, dst_dir: Path, igno
         })
 
     copy_files(src_dir, dst_dir, tracked_and_new_files)
+
+
+def remove_marker_blocks(content: str, marker_prefix: str) -> str:
+    """Remove marker blocks from the content.
+
+    Args:
+        content: The source content to process
+        marker_prefix: The marker prefix to identify blocks to remove (without the START/END suffix)
+
+    Returns:
+        Processed content with appropriate blocks handled
+    """
+    # First, remove blocks with the specified marker completely
+    if f"{{/* {marker_prefix}-START */}}" in content:
+        pattern = rf"\{{/\* {re.escape(marker_prefix)}-START \*/\}}.*?\{{/\* {re.escape(marker_prefix)}-END \*/\}}"
+        content = re.sub(pattern, "", content, flags=re.DOTALL)
+
+    # Now, remove markers but keep content for the other marker type
+    other_prefix = (
+        "DELETE-ME-WHILE-BUILDING-MKDOCS"
+        if marker_prefix == "DELETE-ME-WHILE-BUILDING-MINTLIFY"
+        else "DELETE-ME-WHILE-BUILDING-MINTLIFY"
+    )
+
+    # Remove start markers
+    start_pattern = rf"\{{/\* {re.escape(other_prefix)}-START \*/\}}\s*"
+    content = re.sub(start_pattern, "", content)
+
+    # Remove end markers
+    end_pattern = rf"\s*\{{/\* {re.escape(other_prefix)}-END \*/\}}"
+    content = re.sub(end_pattern, "", content)
+
+    # Fix any double newlines that might have been created
+    content = re.sub(r"\n\s*\n\s*\n", "\n\n", content)
+
+    return content

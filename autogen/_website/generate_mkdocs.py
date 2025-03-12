@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..import_utils import optional_import_block, require_optional_import
-from .utils import NavigationGroup, copy_files, get_git_tracked_and_untracked_files_in_directory
+from .utils import NavigationGroup, copy_files, get_git_tracked_and_untracked_files_in_directory, remove_marker_blocks
 
 with optional_import_block():
     from jinja2 import Template
@@ -188,6 +188,9 @@ def transform_content_for_mkdocs(content: str) -> str:
 
     # Fix assets path
     content = fix_asset_path(content)
+
+    # Remove the mintlify specific markers
+    content = remove_marker_blocks(content, "DELETE-ME-WHILE-BUILDING-MKDOCS")
 
     return content
 
@@ -453,13 +456,12 @@ def main() -> None:
 
     exclusion_list = [
         "docs/.gitignore",
-        "docs/use-cases",
         "docs/installation",
         "docs/user-guide/getting-started",
         "docs/user-guide/models/litellm-with-watsonx.md",
         "docs/contributor-guide/Migration-Guide.md",
     ]
-    nav_exclusions = ["Use Cases"]
+    nav_exclusions = [""]
 
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)

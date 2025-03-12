@@ -30,7 +30,7 @@ from textwrap import dedent, indent
 from typing import Any, Callable, Optional, Sequence, TypeVar, Union
 
 from ..import_utils import optional_import_block, require_optional_import
-from .utils import NavigationGroup
+from .utils import NavigationGroup, remove_marker_blocks
 
 with optional_import_block():
     import nbformat
@@ -1066,8 +1066,8 @@ def get_files_path_from_navigation(navigation: list[NavigationGroup]) -> list[Pa
 
 
 @require_optional_import("jinja2", "docs")
-def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> None:
-    """Add edit links to the non generated mdx files in the website directory.
+def add_edit_urls_and_remove_mkdocs_markers(website_build_directory: Path) -> None:
+    """Add edit links to the non generated mdx files and remove mkdocs specific markers from the file.
 
     For the generated mdx files i.e. mdx files of _blogs and notebooks, it is added in their respective post processing functions.
     """
@@ -1083,7 +1083,10 @@ def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> N
         rel_path = str(mdx_file_path.relative_to(website_build_directory.parent)).replace("build/", "website/")
         content = mdx_file_path.read_text(encoding="utf-8")
         content_with_edit_url = ensure_edit_url(content, Path(rel_path))
-        mdx_file_path.write_text(content_with_edit_url, encoding="utf-8")
+
+        # Remove mkdocs markers before building the docs
+        content_without_mkdocs_marker = remove_marker_blocks(content_with_edit_url, "DELETE-ME-WHILE-BUILDING-MINTLIFY")
+        mdx_file_path.write_text(content_without_mkdocs_marker, encoding="utf-8")
 
 
 def copy_images_from_notebooks_dir_to_target_dir(notebook_directory: Path, target_notebooks_dir: Path) -> None:
@@ -1205,7 +1208,7 @@ def main() -> None:
             add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
             fix_internal_references_in_mdx_files(args.website_build_directory)
             add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
-            add_edit_urls_to_non_generated_mdx_files(args.website_build_directory)
+            add_edit_urls_and_remove_mkdocs_markers(args.website_build_directory)
 
     else:
         print("Unknown subcommand")
