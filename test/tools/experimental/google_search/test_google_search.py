@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from autogen import AssistantAgent
+from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import GoogleSearchTool
 from autogen.tools.experimental.google_search.google_search import _google_search
 
@@ -86,8 +87,7 @@ class TestGoogleSearchTool:
             )
             assert mock_execute_query.called == execute_query_called
 
-    @pytest.mark.openai
-    @pytest.mark.aux_neg_flag
+    @run_for_optional_imports("openai", "openai")
     def test_end_to_end_openai(
         self, credentials_gpt_4o_mini: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
@@ -99,8 +99,7 @@ class TestGoogleSearchTool:
             execute_query_called=True,
         )
 
-    @pytest.mark.gemini
-    @pytest.mark.aux_neg_flag
+    @run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
     def test_end_to_end_gemini(
         self, credentials_gemini_flash_exp: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
