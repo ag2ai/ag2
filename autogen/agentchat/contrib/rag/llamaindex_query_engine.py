@@ -36,7 +36,7 @@ class LlamaIndexQueryEngine:
     """
     This engine leverages LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. It use any LlamaIndex [vector store](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/).
-    
+
     By default the engine will use OpenAI's GPT-4o model (use the `llm` parameter to change that).
     """
 
