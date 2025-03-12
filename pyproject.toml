@@ -181,8 +181,7 @@ interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
-# pysqlite3-binary used so it doesn't need to compile pysqlite3
-autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "wolframalpha"]
