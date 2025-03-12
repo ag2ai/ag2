@@ -98,7 +98,9 @@ class TestGoogleSearchTool:
             execute_query_called=True,
         )
 
+    # TODO: Figure out why aux_neg_flag is needed for this test (it is not needed for the openai test)
     @pytest.mark.gemini
+    @pytest.mark.aux_neg_flag
     def test_end_to_end_gemini(
         self, credentials_gemini_flash_exp: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
