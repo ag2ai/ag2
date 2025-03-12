@@ -21,7 +21,6 @@ def test_deepseek_llm_config_entry() -> None:
         "base_url": "https://api.deepseek.com/v1",
         "max_tokens": 10000,
         "temperature": 0.5,
-        "top_p": 0.2,
         "tags": [],
     }
     actual = deepseek_llm_config.model_dump()

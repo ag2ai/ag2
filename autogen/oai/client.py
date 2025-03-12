@@ -245,6 +245,14 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("create_client method must be implemented in the derived class.")
 
 
+@register_llm_config
+class AzureOpenAILLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["azure"] = "azure"
+
+    def create_client(self) -> "ModelClient":
+        raise NotImplementedError
+
+
 @export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:

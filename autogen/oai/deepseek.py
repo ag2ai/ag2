@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import AnyUrl, Field, ValidationInfo, field_validator
 
@@ -12,10 +12,10 @@ from ..llm_config import LLMConfigEntry, register_llm_config
 @register_llm_config
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
-    base_url: AnyUrl = "https://api.deepseek.com/v1"  # type: ignore [assignment]
+    base_url: AnyUrl = AnyUrl("https://api.deepseek.com/v1")
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(10000, ge=1)
-    top_p: float = Field(0.2, ge=0.0, le=1.0)
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
 
     @field_validator("top_p", mode="before")
     @classmethod

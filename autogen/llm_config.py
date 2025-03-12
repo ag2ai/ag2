@@ -6,7 +6,7 @@ import functools
 import json
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
 
 from pydantic import AnyUrl, BaseModel, Field, field_serializer
 
@@ -116,6 +116,9 @@ class LLMConfig:
     def __contains__(self, key: str) -> bool:
         return hasattr(self._model, key)
 
+    def __repr__(self) -> str:
+        return repr(self._model).replace("_LLMConfig", self.__class__.__name__)
+
     def items(self) -> "dict_items[_KT, _VT]":
         d = self.model_dump()
         return d.items()  # type: ignore[return-value]
@@ -204,11 +207,3 @@ def register_llm_config(cls: Type[LLMConfigEntry]) -> Type[LLMConfigEntry]:
     else:
         raise TypeError(f"Expected a subclass of LLMConfigEntry, got {cls}")
     return cls
-
-
-@register_llm_config
-class AzureOpenAILLMConfigEntry(LLMConfigEntry):
-    api_type: Literal["azure"] = "azure"
-
-    def create_client(self) -> "ModelClient":
-        raise NotImplementedError

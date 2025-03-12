@@ -8,17 +8,17 @@ from typing import Any
 import pytest
 
 from autogen.llm_config import LLMConfig
-from autogen.oai.client import OpenAILLMConfigEntry
-
-# def test_current_llm_config():
-#     llm_config = LLMConfig(
-#         config_list=[LLMConfigEntry(api_type=LLMProvider.openai, model="model", api_key="api_key")]
-#     )
-#     with llm_config:
-#         print(current_llm_config.get())
-#         assert current_llm_config.get() == llm_config.model_dump_json()
-#     with pytest.raises(LookupError):
-#         current_llm_config.get()
+from autogen.oai.anthropic import AnthropicLLMConfigEntry
+from autogen.oai.bedrock import BedrockLLMConfigEntry
+from autogen.oai.cerebras import CerebrasLLMConfigEntry
+from autogen.oai.client import AzureOpenAILLMConfigEntry, OpenAILLMConfigEntry
+from autogen.oai.cohere import CohereLLMConfigEntry
+from autogen.oai.deepseek import DeepSeekLLMConfigEntry
+from autogen.oai.gemini import GeminiLLMConfigEntry
+from autogen.oai.groq import GroqLLMConfigEntry
+from autogen.oai.mistral import MistralLLMConfigEntry
+from autogen.oai.ollama import OllamaLLMConfigEntry
+from autogen.oai.together import TogetherLLMConfigEntry
 
 
 @pytest.fixture
@@ -84,9 +84,300 @@ class TestLLMConfig:
                 LLMConfig(
                     config_list=[
                         OpenAILLMConfigEntry(
-                            api_type="openai",
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "gpt-4o-mini",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "openai",
+                        }
+                    ],
+                    "temperature": 0.5,
+                    "check_every_ms": 1000,
+                    "cache_seed": 42,
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ],
+                    temperature=0.5,
+                    check_every_ms=1000,
+                    cache_seed=42,
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "gpt-4o-mini",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "azure",
+                            "base_url": "https://api.openai.com",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        AzureOpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            base_url="https://api.openai.com",
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "anthropic",
+                            "model": "claude-3-5-sonnet-latest",
+                            "api_key": "dummy_api_key",
+                            "stream": False,
+                            "temperature": 1.0,
+                            "top_p": 0.8,
+                            "max_tokens": 100,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        AnthropicLLMConfigEntry(
+                            model="claude-3-5-sonnet-latest",
+                            api_key="dummy_api_key",
+                            stream=False,
+                            temperature=1.0,
+                            top_p=0.8,
+                            max_tokens=100,
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "bedrock",
+                            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+                            "aws_region": "us-east-1",
+                            "aws_access_key": "test_access_key_id",
+                            "aws_secret_key": "test_secret_access_key",
+                            "aws_session_token": "test_session_token",
+                            "temperature": 0.8,
+                            "topP": 0.6,
+                            "stream": False,
+                            "tags": [],
+                            "supports_system_prompts": True,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        BedrockLLMConfigEntry(
+                            model="anthropic.claude-3-sonnet-20240229-v1:0",
+                            aws_region="us-east-1",
+                            aws_access_key="test_access_key_id",
+                            aws_secret_key="test_secret_access_key",
+                            aws_session_token="test_session_token",
+                            temperature=0.8,
+                            topP=0.6,
+                            stream=False,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "cerebras",
+                            "api_key": "fake_api_key",
+                            "model": "llama3.1-8b",
+                            "max_tokens": 1000,
+                            "seed": 42,
+                            "stream": False,
+                            "temperature": 1.0,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        CerebrasLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="llama3.1-8b",
+                            max_tokens=1000,
+                            seed=42,
+                            stream=False,
+                            temperature=1,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "cohere",
+                            "model": "command-r-plus",
+                            "api_key": "dummy_api_key",
+                            "frequency_penalty": 0,
+                            "k": 0,
+                            "p": 0.75,
+                            "presence_penalty": 0,
+                            "strict_tools": False,
+                            "tags": [],
+                            "temperature": 0.3,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        CohereLLMConfigEntry(
+                            model="command-r-plus",
+                            api_key="dummy_api_key",
+                            stream=False,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "deepseek",
+                            "api_key": "fake_api_key",
+                            "model": "deepseek-chat",
+                            "base_url": "https://api.deepseek.com/v1",
+                            "max_tokens": 10000,
+                            "temperature": 0.5,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        DeepSeekLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="deepseek-chat",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "google",
+                            "model": "gemini-2.0-flash-lite",
+                            "api_key": "dummy_api_key",
+                            "project_id": "fake-project-id",
+                            "location": "us-west1",
+                            "stream": False,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        GeminiLLMConfigEntry(
+                            model="gemini-2.0-flash-lite",
+                            api_key="dummy_api_key",
+                            project_id="fake-project-id",
+                            location="us-west1",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "groq",
+                            "model": "llama3-8b-8192",
+                            "api_key": "fake_api_key",
+                            "temperature": 1,
+                            "stream": False,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(config_list=[GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")]),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "mistral",
+                            "model": "mistral-small-latest",
+                            "api_key": "fake_api_key",
+                            "safe_prompt": False,
+                            "stream": False,
+                            "temperature": 0.7,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        MistralLLMConfigEntry(
+                            model="mistral-small-latest",
+                            api_key="fake_api_key",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "ollama",
+                            "model": "llama3.1:8b",
+                            "num_ctx": 2048,
+                            "num_predict": 128,
+                            "repeat_penalty": 1.1,
+                            "seed": 42,
+                            "stream": False,
+                            "tags": [],
+                            "temperature": 0.8,
+                            "top_k": 40,
+                            "top_p": 0.9,
+                        }
+                    ]
+                },
+                LLMConfig(config_list=[OllamaLLMConfigEntry(model="llama3.1:8b")]),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "together",
+                            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                            "api_key": "fake_api_key",
+                            "safety_model": "Meta-Llama/Llama-Guard-7b",
+                            "tags": [],
+                            "max_tokens": 512,
+                            "stream": False,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        TogetherLLMConfigEntry(
+                            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+                            api_key="fake_api_key",
+                            safety_model="Meta-Llama/Llama-Guard-7b",
                         )
                     ]
                 ),
@@ -95,7 +386,7 @@ class TestLLMConfig:
     )
     def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
         actual = LLMConfig(**llm_config)
-        assert actual == expected
+        assert actual == expected, actual
 
     def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
