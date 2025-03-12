@@ -145,7 +145,7 @@ class LLMConfig:
                 max_new_tokens: Optional[int] = None
                 seed: Optional[int] = None
                 allow_format_str_template: Optional[bool] = None
-                response_format: Optional[str] = None
+                response_format: Optional[Union[str, dict[str, Any], BaseModel]] = None
                 timeout: Optional[int] = None
                 cache_seed: Optional[int] = None
 
@@ -154,7 +154,7 @@ class LLMConfig:
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
-                    Field(default_factory=list),
+                    Field(default_factory=list, min_length=1),
                 ]
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
@@ -166,10 +166,11 @@ class LLMConfig:
 
 class LLMConfigEntry(BaseModel, ABC):
     api_type: str
-    model: str
+    model: str = Field(..., min_length=1)
     api_key: Optional[str] = None
     api_version: Optional[str] = None
     base_url: Optional[AnyUrl] = None
+    model_client_cls: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
 
     @abstractmethod

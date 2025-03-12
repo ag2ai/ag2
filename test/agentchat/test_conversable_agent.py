@@ -854,7 +854,7 @@ def test_register_for_llm_without_LLM():  # noqa: N802
 def test_register_for_llm_without_configuration():
     with pytest.raises(
         ValueError,
-        match="When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'.",
+        match="List should have at least 1 item after validation, not 0",
     ):
         ConversableAgent(name="agent", llm_config={"config_list": []})
 
@@ -862,7 +862,7 @@ def test_register_for_llm_without_configuration():
 def test_register_for_llm_without_model_name():
     with pytest.raises(
         ValueError,
-        match="When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'.",
+        match="String should have at least 1 character",
     ):
         ConversableAgent(name="agent", llm_config={"config_list": [{"model": ""}]})
 
@@ -1398,7 +1398,7 @@ def test_http_client():
 
 
 def test_adding_duplicate_function_warning():
-    config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL"}]
+    config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL", "model": "gpt-4"}]
 
     agent = autogen.ConversableAgent(
         "jtoy",
