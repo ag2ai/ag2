@@ -34,9 +34,10 @@ logger = logging.getLogger(__name__)
 @export_module("autogen.agentchat.contrib.rag")
 class LlamaIndexQueryEngine:
     """
-    This engine leverages  LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response.
-    to natural language queries. It can connect with vector databases using any LlamaIndex's [vector store](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/)
-    that's already set up by the user.
+    This engine leverages LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
+    to natural language queries. It use any LlamaIndex [vector store](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/).
+    
+    By default the engine will use OpenAI's GPT-4o model (use the `llm` parameter to change that).
     """
 
     def __init__(  # type: ignore[no-any-unimported]
