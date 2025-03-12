@@ -6,7 +6,59 @@ from typing import Any, Optional, Type, Union
 
 import pytest
 
-from autogen.import_utils import optional_import_block, require_optional_import
+from autogen.import_utils import PackageInfo, optional_import_block, require_optional_import, split_package_info
+
+
+class TestPackageInfo:
+    @pytest.mark.parametrize(
+        "package_info, expected",
+        [
+            (
+                "jupyter-client>=8.6.0,<9.0.0",
+                PackageInfo(
+                    name="jupyter-client",
+                    min_version="8.6.0",
+                    max_version="9.0.0",
+                    min_inclusive=True,
+                    max_inclusive=False,
+                ),
+            ),
+            (
+                "jupyter-client>=8.6.0",
+                PackageInfo(
+                    name="jupyter-client",
+                    min_version="8.6.0",
+                    max_version=None,
+                    min_inclusive=True,
+                    max_inclusive=False,
+                ),
+            ),
+            (
+                "jupyter-client<9.0.0",
+                PackageInfo(
+                    name="jupyter-client",
+                    min_version=None,
+                    max_version="9.0.0",
+                    min_inclusive=False,
+                    max_inclusive=False,
+                ),
+            ),
+            (
+                "jupyter-client",
+                PackageInfo(
+                    name="jupyter-client", min_version=None, max_version=None, min_inclusive=False, max_inclusive=False
+                ),
+            ),
+        ],
+    )
+    def test_split_package_info(self, package_info: str, expected: PackageInfo) -> None:
+        result = split_package_info(package_info)
+        assert result == expected
+
+    def test_split_package_info_with_invalid_format(self) -> None:
+        package_info = "jupyter-client>="
+        with pytest.raises(ValueError, match="Invalid package information: jupyter-client>="):
+            split_package_info(package_info)
 
 
 class TestOptionalImportBlock:

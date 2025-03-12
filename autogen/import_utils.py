@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import re
 import sys
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
@@ -19,6 +21,58 @@ __all__ = [
 ]
 
 logger = getLogger(__name__)
+
+
+@dataclass
+class PackageInfo:
+    name: str
+    min_version: Optional[str] = None
+    max_version: Optional[str] = None
+    min_inclusive: bool = False
+    max_inclusive: bool = False
+
+
+def split_package_info(package_info: str) -> PackageInfo:
+    pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
+    match = pattern.match(package_info.strip())
+
+    if not match:
+        raise ValueError(f"Invalid package information: {package_info}")
+
+    name = match.group("name")
+    constraints = match.group("constraint").strip()
+    min_version = max_version = None
+    min_inclusive = max_inclusive = False
+
+    if constraints:
+        constraint_pattern = re.findall(r"(>=|<=|>|<)([0-9\.]+)?", constraints)
+
+        if not all(version for _, version in constraint_pattern):
+            raise ValueError(f"Invalid package information: {package_info}")
+
+        for operator, version in constraint_pattern:
+            if operator == ">=":
+                min_version = version
+                min_inclusive = True
+            elif operator == "<=":
+                max_version = version
+                max_inclusive = True
+            elif operator == ">":
+                min_version = version
+                min_inclusive = False
+            elif operator == "<":
+                max_version = version
+                max_inclusive = False
+            else:
+                raise ValueError(f"Invalid package information: {package_info}")
+
+    return PackageInfo(
+        name=name,
+        min_version=min_version,
+        max_version=max_version,
+        min_inclusive=min_inclusive,
+        max_inclusive=max_inclusive,
+    )
 
 
 class Result:
