@@ -140,7 +140,8 @@ def get_missing_imports(modules: Union[str, Iterable[str]]) -> list[str]:
     if isinstance(modules, str):
         modules = [modules]
 
-    return [m for m in modules if m not in sys.modules]
+    module_infos = [ModuleInfo.from_str(module) for module in modules]
+    return [m.name for m in module_infos if not m.is_in_sys_modules()]
 
 
 T = TypeVar("T")

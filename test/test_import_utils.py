@@ -4,11 +4,11 @@
 
 import sys
 from types import ModuleType
-from typing import Any, Iterator, Optional, Type, Union
+from typing import Any, Iterable, Iterator, Optional, Type, Union
 
 import pytest
 
-from autogen.import_utils import ModuleInfo, optional_import_block, require_optional_import
+from autogen.import_utils import ModuleInfo, get_missing_imports, optional_import_block, require_optional_import
 
 
 class TestmoduleInfo:
@@ -301,3 +301,49 @@ class TestRequiresOptionalImportClasses:
             match=r"Module 'some_optional_module' needed for __init__ is missing, please install it using 'pip install ag2\[optional_dep\]'",
         ):
             dummy_cls()
+
+
+class TestGetMissingImports:
+    class MockModule:
+        def __init__(self, name: str, version: str):
+            self.__name__ = name
+            self.__version__ = version
+
+    @pytest.fixture
+    def mock_modules(self) -> Iterator[None]:
+        modules = {
+            "module_a": TestGetMissingImports.MockModule("module_a", "1.0.0"),
+            "module_b": TestGetMissingImports.MockModule("module_b", "2.0.0"),
+            "module_c": TestGetMissingImports.MockModule("module_c", "3.0.0"),
+        }
+        original_sys_modules = sys.modules.copy()
+        sys.modules.update(modules)  # type: ignore[arg-type]
+        assert all(module in sys.modules for module in modules)
+        try:
+            yield
+        finally:
+            sys.modules.clear()
+            sys.modules.update(original_sys_modules)
+
+    @pytest.mark.parametrize(
+        "modules, expected_missing",
+        [
+            (["module_a", "module_b", "module_c"], []),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.0.0"], []),
+            (["module_a>=1.0.1", "module_b>=2.0.0", "module_c>=3.0.0"], ["module_a"]),
+            (["module_a>=1.0.0", "module_b>=2.1.0", "module_c>=3.0.0"], ["module_b"]),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.1.0"], ["module_c"]),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_d"], ["module_d"]),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.0.0"], ["module_c"]),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<=3.0.0"], []),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>3.0.0"], ["module_c"]),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.1.0"], []),
+        ],
+    )
+    def test_get_missing_imports(
+        self, mock_modules: None, modules: Union[str, Iterable[str]], expected_missing: list[str]
+    ) -> None:
+        assert mock_modules is None
+        # print(f"{list((sys.modules.keys()))=})")
+        missing = get_missing_imports(modules)
+        assert missing == expected_missing
