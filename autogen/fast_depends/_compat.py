@@ -53,14 +53,14 @@ else:
     from pydantic.typing import evaluate_forwardref as evaluate_forwardref  # type: ignore[no-redef]
     from pydantic.config import get_config, ConfigDict, BaseConfig
 
-    def get_config_base(config_data: Optional[ConfigDict] = None) -> Type[BaseConfig]:  # type: ignore[misc]
-        return get_config(config_data or ConfigDict(**default_pydantic_config))  # type: ignore[typeddict-item]
+    def get_config_base(config_data: Optional[ConfigDict] = None) -> Type[BaseConfig]:  # type: ignore[misc,no-any-unimported]
+        return get_config(config_data or ConfigDict(**default_pydantic_config))  # type: ignore[typeddict-item,no-any-unimported,no-any-return]
 
     def model_schema(model: Type[BaseModel]) -> Dict[str, Any]:
         return model.schema()
 
     def get_aliases(model: Type[BaseModel]) -> Tuple[str, ...]:
-        return tuple(f.alias or name for name, f in model.__fields__.items())
+        return tuple(f.alias or name for name, f in model.__fields__.items())  # type: ignore[attr-defined]
 
     class CreateBaseModel(BaseModel):  # type: ignore[no-redef]
         """Just to support FastStream < 0.3.7."""
@@ -72,7 +72,7 @@ else:
 ANYIO_V3 = get_version("anyio").startswith("3.")
 
 if ANYIO_V3:
-    from anyio import ExceptionGroup as ExceptionGroup
+    from anyio import ExceptionGroup as ExceptionGroup  # type: ignore[attr-defined]
 else:
     if sys.version_info < (3, 11):
         from exceptiongroup import ExceptionGroup as ExceptionGroup

@@ -191,7 +191,7 @@ def build_call_model(
 
     response_model: Optional[Type[ResponseModel[T]]] = None
     if cast and return_annotation and return_annotation is not inspect.Parameter.empty:
-        response_model = create_model(  # type: ignore[call-overload]
+        response_model = create_model(  # type: ignore[call-overload,assignment]
             "ResponseModel",
             __config__=get_config_base(pydantic_config),
             response=(return_annotation, Ellipsis),

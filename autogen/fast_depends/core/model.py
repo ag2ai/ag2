@@ -317,7 +317,7 @@ class CallModel(Generic[P, T]):
     def solve(
         self,
         /,
-        *args: Tuple[Any, ...],
+        *args: Any,
         stack: ExitStack,
         cache_dependencies: Dict[
             Union[
@@ -339,7 +339,7 @@ class CallModel(Generic[P, T]):
             ]
         ] = None,
         nested: bool = False,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> T:
         cast_gen = self._solve(
             *args,
@@ -348,7 +348,7 @@ class CallModel(Generic[P, T]):
             **kwargs,
         )
         try:
-            args, kwargs, _ = next(cast_gen)
+            args, kwargs, _ = next(cast_gen)  # type: ignore[assignment]
         except StopIteration as e:
             cached_value: T = e.value
             return cached_value
@@ -419,7 +419,7 @@ class CallModel(Generic[P, T]):
     async def asolve(
         self,
         /,
-        *args: Tuple[Any, ...],
+        *args: Any,
         stack: AsyncExitStack,
         cache_dependencies: Dict[
             Union[
@@ -441,7 +441,7 @@ class CallModel(Generic[P, T]):
             ]
         ] = None,
         nested: bool = False,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> T:
         cast_gen = self._solve(
             *args,
@@ -450,7 +450,7 @@ class CallModel(Generic[P, T]):
             **kwargs,
         )
         try:
-            args, kwargs, _ = next(cast_gen)
+            args, kwargs, _ = next(cast_gen)  # type: ignore[assignment]
         except StopIteration as e:
             cached_value: T = e.value
             return cached_value
