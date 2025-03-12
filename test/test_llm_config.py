@@ -197,13 +197,18 @@ class TestLLMConfig:
         ]
         assert list(actual) == expected, list(actual)
 
-    def test_unpack(self, openai_llm_config: LLMConfig) -> None:
+    def test_unpack(self, openai_llm_config: LLMConfig, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        openai_llm_config_entry.base_url = "localhost:8080"  # type: ignore[assignment]
+        openai_llm_config.config_list = [  # type: ignore[attr-defined]
+            openai_llm_config_entry,
+        ]
         expected = {
             "config_list": [
                 {
                     "api_type": "openai",
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "base_url": "localhost:8080",
                     "tags": [],
                 }
             ],

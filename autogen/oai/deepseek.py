@@ -4,7 +4,7 @@
 
 from typing import Any, Literal
 
-from pydantic import AnyHttpUrl, Field, ValidationInfo, field_validator
+from pydantic import AnyUrl, Field, ValidationInfo, field_validator
 
 from ..llm_config import LLMConfigEntry, register_llm_config
 
@@ -12,7 +12,7 @@ from ..llm_config import LLMConfigEntry, register_llm_config
 @register_llm_config
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
-    base_url: AnyHttpUrl = "https://api.deepseek.com/v1"  # type: ignore [assignment]
+    base_url: AnyUrl = "https://api.deepseek.com/v1"  # type: ignore [assignment]
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(10000, ge=1)
     top_p: float = Field(0.2, ge=0.0, le=1.0)

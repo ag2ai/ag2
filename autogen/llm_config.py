@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, TypeVar, Union
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field, field_serializer
 
 if TYPE_CHECKING:
     from _collections_abc import dict_items, dict_keys, dict_values
@@ -166,11 +166,15 @@ class LLMConfigEntry(BaseModel, ABC):
     model: str
     api_key: Optional[str] = None
     api_version: Optional[str] = None
-    base_url: Optional[AnyHttpUrl] = None
+    base_url: Optional[AnyUrl] = None
     tags: list[str] = Field(default_factory=list)
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
+
+    @field_serializer("base_url")
+    def serialize_base_url(self, v: Any) -> Any:
+        return str(v)
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
         return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
