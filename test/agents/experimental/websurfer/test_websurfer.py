@@ -10,6 +10,7 @@ from autogen.agentchat import UserProxyAgent
 from autogen.agentchat.chat import ChatResult
 from autogen.agents.experimental import WebSurferAgent
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 
 from ....conftest import Credentials
 
@@ -28,7 +29,7 @@ class WebSurferTestHelper:
     ) -> None:
         websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         assert websurfer.llm_config is not False, "llm_config should not be False"
-        assert isinstance(websurfer.llm_config, dict), "llm_config should be a dictionary"
+        assert isinstance(websurfer.llm_config, (dict, LLMConfig)), "llm_config should be a dictionary or LLMConfig"
         assert websurfer.llm_config["tools"] == expected
 
     def test_end2end(self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
