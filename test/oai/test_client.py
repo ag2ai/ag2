@@ -387,7 +387,7 @@ def test_openai_llm_config_entry():
     )
     assert openai_llm_config.api_type == "openai"
     assert openai_llm_config.model == "gpt-4o-mini"
-    assert openai_llm_config.api_key == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    assert openai_llm_config.api_key.get_secret_value() == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
     assert openai_llm_config.base_url is None
     expected = {
         "api_type": "openai",
@@ -434,7 +434,7 @@ def test_deepseek_llm_config_entry() -> None:
         "api_key": "fake_api_key",
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com/v1",
-        "max_tokens": 10000,
+        "max_tokens": 8192,
         "temperature": 0.5,
         "tags": [],
     }
