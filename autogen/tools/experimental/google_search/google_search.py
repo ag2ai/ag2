@@ -36,11 +36,10 @@ def _google_search(
         query=query, search_api_key=search_api_key, search_engine_id=search_engine_id, num_results=num_results
     )
 
-    results = []
-    if "items" in res:
-        for item in res["items"]:
-            results.append({"title": item["title"], "link": item["link"], "snippet": item.get("snippet", "")})
-    return results
+    return [
+        {"title": item.get("title", ""), "link": item.get("link", ""), "snippet": item.get("snippet", "")}
+        for item in res.get("items", [])
+    ]
 
 
 @export_module("autogen.tools.experimental")
