@@ -601,10 +601,6 @@ MyClass(
     @run_for_optional_imports(["jinja2", "pdoc"], "docs")
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:
         """Test that files are split correctly."""
-        all_files_relative_to_api_dir = [str(p.relative_to(api_dir)) for p in api_dir.rglob("*.md")]
-        print("*" * 80)
-        print(f"{all_files_relative_to_api_dir=}")
-
         symbol_files_generator = SplitReferenceFilesBySymbols(api_dir)
         symbol_files_generator.generate()
 

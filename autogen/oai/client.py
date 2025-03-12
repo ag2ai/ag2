@@ -908,7 +908,7 @@ class OpenAIWrapper:
 
         Args:
             model_client_cls: A custom client class that follows the ModelClient interface
-            **kwargs: The kwargs for the custom client class to be initialized with
+            kwargs: The kwargs for the custom client class to be initialized with
         """
         existing_client_class = False
         for i, client in enumerate(self._clients):
