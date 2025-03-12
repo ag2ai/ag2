@@ -145,7 +145,7 @@ class LLMConfig:
                 max_new_tokens: Optional[int] = None
                 seed: Optional[int] = None
                 allow_format_str_template: Optional[bool] = None
-                response_format: Optional[Union[str, dict[str, Any], BaseModel]] = None
+                response_format: Optional[Union[str, dict[str, Any], BaseModel, object]] = None
                 timeout: Optional[int] = None
                 cache_seed: Optional[int] = None
 
@@ -171,6 +171,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_version: Optional[str] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
+    response_format: Optional[Union[str, dict[str, Any], BaseModel, object]] = None
     tags: list[str] = Field(default_factory=list)
 
     @abstractmethod
