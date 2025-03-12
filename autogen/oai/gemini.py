@@ -637,7 +637,7 @@ class GeminiClient:
         return schema
 
     @staticmethod
-    def check_if_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
+    def _check_if_gemini_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
         """Check if the Google Search tool is present in the tools list."""
         exists = False
         for tool in tools:
@@ -668,7 +668,7 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-        if self.check_if_google_search_tool_exists(tools) and not self.use_vertexai:
+        if self._check_if_gemini_google_search_tool_exists(tools) and not self.use_vertexai:
             return [Tool(google_search=GoogleSearch())]
 
         functions = []
