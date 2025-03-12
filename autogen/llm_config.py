@@ -192,11 +192,17 @@ class LLMConfigEntry(BaseModel, ABC):
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return getattr(self, key, default)
+        val = getattr(self, key, default)
+        if isinstance(val, SecretStr):
+            return val.get_secret_value()
+        return val
 
     def __getitem__(self, key: str) -> Any:
         try:
-            return getattr(self, key)
+            val = getattr(self, key)
+            if isinstance(val, SecretStr):
+                return val.get_secret_value()
+            return val
         except AttributeError:
             raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
 

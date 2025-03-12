@@ -259,7 +259,7 @@ class TestLLMConfig:
                             "api_key": "fake_api_key",
                             "model": "deepseek-chat",
                             "base_url": "https://api.deepseek.com/v1",
-                            "max_tokens": 10000,
+                            "max_tokens": 8192,
                             "temperature": 0.5,
                             "tags": [],
                         }
