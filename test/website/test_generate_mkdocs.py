@@ -11,11 +11,16 @@ import pytest
 
 from autogen._website.generate_mkdocs import (
     add_api_ref_to_mkdocs_template,
+    add_excerpt_marker,
     filter_excluded_files,
     fix_asset_path,
+    fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
+    generate_url_slug,
     process_and_copy_files,
+    process_blog_contents,
+    process_blog_files,
     transform_card_grp_component,
     transform_tab_component,
 )
@@ -251,6 +256,233 @@ def test_fix_asset_path() -> None:
     assert actual == expected
 
 
+def test_process_blog_files() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source directory structure
+
+        mkdocs_dir = Path(tmpdir) / "mkdocs"
+        mkdocs_dir.mkdir()
+
+        src_dir = mkdocs_dir / "_blogs"
+        src_dir.mkdir()
+
+        # Create snippets directory
+        snippets_dir = mkdocs_dir / "snippets"
+        snippets_dir.mkdir()
+
+        files = [
+            src_dir / "2023-04-21-LLM-tuning-math" / "index.md",
+            src_dir / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            src_dir / "2023-04-21-LLM-tuning-math" / "cover.png",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "index.md",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            snippets_dir / "2023-04-21-LLM-tuning-math" / "cover.png",
+        ]
+
+        # Create the files
+        for file in files:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.touch()
+
+        target_blog_dir = mkdocs_dir / "blog"
+
+        authors_yml_path = mkdocs_dir / ".authors.yml"
+        authors_yml_path.touch()
+
+        # Assert the target_blog_dir should have posts directory and index.md file and .authors.yml file
+        process_blog_files(mkdocs_dir, Path(authors_yml_path), snippets_dir)
+
+        actual = list(filter(lambda x: x.is_file(), target_blog_dir.rglob("*")))
+        expected = [
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "index.md",
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "cover.jpg",
+            target_blog_dir / "posts" / "2023-04-21-LLM-tuning-math" / "cover.png",
+            target_blog_dir / "index.md",
+            target_blog_dir / ".authors.yml",
+        ]
+        assert len(actual) == len(expected)
+        assert sorted(actual) == sorted(expected)
+
+        target_snippet_dir = Path(tmpdir) / "snippets"
+        assert target_snippet_dir.exists()
+        assert len(list(filter(lambda x: x.is_file(), target_snippet_dir.rglob("*")))) == 3
+
+
+def test_process_blog_contents() -> None:
+    contents = dedent("""
+    ---
+    title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
+    authors: [sonichi]
+    tags: [LLM, GPT, research]
+    ---
+
+    ![level 2 algebra](img/level2algebra.png)
+
+    **TL;DR:**
+    """)
+
+    expected = "---" + dedent("""
+    title: Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH
+    authors: [sonichi]
+    tags:
+        - LLM
+        - GPT
+        - research
+    categories:
+        - LLM
+        - GPT
+        - research
+    date: 2025-01-10
+    slug: WebSockets
+    ---
+
+    ![level 2 algebra](img/level2algebra.png)
+
+    **TL;DR:**
+
+    <!-- more -->
+    """)
+    file = Path("tmp/ag2/ag2/website/mkdocs/docs/docs/_blogs/2025-01-10-WebSockets/index.md")
+    actual = process_blog_contents(contents, file)
+    assert actual == expected
+
+
+def test_add_excerpt_marker() -> None:
+    content = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+
+    <!-- more -->
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    actual = add_excerpt_marker(content)
+    assert actual == expected
+
+    content = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    We want to help you focus on building workflows and enhancing agents
+
+    <!-- more -->
+    """)
+    actual = add_excerpt_marker(content)
+    assert actual == expected
+
+    content = dedent(r"""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    \<!-- more -->
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    expected = dedent("""
+    ## Welcome DiscordAgent, SlackAgent, and TelegramAgent
+
+    <!-- more -->
+
+    We want to help you focus on building workflows and enhancing agents
+
+    ### New agents need new tools
+
+    some content
+
+    """)
+    actual = add_excerpt_marker(content)
+    assert actual == expected
+
+
+def test_fix_snippet_imports() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_snippets_dir = Path(tmpdir) / "snippets"
+        expected_path = "{!" + str(tmp_snippets_dir) + "/reference-agents/deep-research.mdx" + " !}"
+
+        content = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/snippets/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+        expected = dedent(f"""
+        ## Introduction
+
+        {expected_path}
+
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+
+        actual = fix_snippet_imports(content, tmp_snippets_dir)
+        assert actual == expected
+
+        content = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/some-other-dir/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+        expected = dedent("""
+        ## Introduction
+
+        import DeepResearch from "/some-other-dir/reference-agents/deep-research.mdx";
+
+        <DeepResearch/>
+
+        ## Conclusion
+        """)
+
+        actual = fix_snippet_imports(content, tmp_snippets_dir)
+        assert actual == expected
+
+
+def test_generate_url_slug() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        blog_dir = Path(tmpdir) / "2025-02-13-DeepResearchAgent"
+        blog_dir.mkdir(parents=True, exist_ok=True)
+
+        tmpfile = blog_dir / "somefile.txt"
+        tmpfile.touch()
+
+        actual = generate_url_slug(tmpfile)
+        expected = "\nslug: DeepResearchAgent"
+
+        assert actual == expected
+
+
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
@@ -395,7 +627,9 @@ search:
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )
+            + "\n- Blog\n    - [Blog](docs/blog)"
             + "\n"
         )
+
         assert actual == expected
         assert summary_md_path.read_text() == expected

@@ -283,7 +283,9 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mkdocs_nav = format_navigation(filtered_nav)
     mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n"
+    blog_nav = "- Blog\n    - [Blog](docs/blog)"
+
+    mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
     summary_md_path.write_text(mkdocs_nav_content)
 
@@ -294,6 +296,147 @@ def copy_assets(website_dir: Path) -> None:
 
     git_tracket_img_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "static" / "img")
     copy_files(src_dir, dest_dir, git_tracket_img_files)
+
+
+def add_excerpt_marker(content: str) -> str:
+    """Add <!-- more --> marker before the second heading in markdown body content.
+
+    Args:
+        content (str): Body content of the markdown file (without frontmatter)
+
+    Returns:
+        str: Modified body content with <!-- more --> added
+    """
+
+    if "<!-- more -->" in content:
+        return content.replace(r"\<!-- more -->", "<!-- more -->")
+
+    # Find all headings
+    heading_pattern = re.compile(r"^(#{1,6}\s+.+?)$", re.MULTILINE)
+    headings = list(heading_pattern.finditer(content))
+
+    # If there are fewer than 2 headings, add the marker at the end
+    if len(headings) < 2:
+        # If there's content, add the marker at the end
+        return content.rstrip() + "\n\n<!-- more -->\n"
+
+    # Get position of the second heading
+    second_heading = headings[1]
+    position = second_heading.start()
+
+    # Insert the more marker before the second heading
+    return content[:position] + "\n<!-- more -->\n\n" + content[position:]
+
+
+def generate_url_slug(file: Path) -> str:
+    parent_dir = file.parts[-2]
+    slug = "-".join(parent_dir.split("-")[3:])
+    return f"\nslug: {slug}"
+
+
+def process_blog_contents(contents: str, file: Path) -> str:
+    # Split the content into parts
+    parts = contents.split("---", 2)
+    if len(parts) < 3:
+        return contents
+
+    frontmatter = parts[1]
+    content = parts[2]
+
+    # Extract tags
+    tags_match = re.search(r"tags:\s*\[(.*?)\]", frontmatter)
+    if not tags_match:
+        return contents
+
+    tags_str = tags_match.group(1)
+    tags = [tag.strip() for tag in tags_str.split(",")]
+
+    # Extract date from second-to-last part of file path
+    date_match = re.match(r"(\d{4}-\d{2}-\d{2})", file.parts[-2])
+    date = date_match.group(1) if date_match else None
+
+    # Remove original tags
+    frontmatter = re.sub(r"tags:\s*\[.*?\]", "", frontmatter).strip()
+
+    # Format tags and categories as YAML lists
+    tags_yaml = "tags:\n    - " + "\n    - ".join(tags)
+    categories_yaml = "categories:\n    - " + "\n    - ".join(tags)
+
+    # Add date to metadata
+    date_yaml = f"\ndate: {date}" if date else ""
+
+    # Add URL slug metadata
+    url_slug = generate_url_slug(file)
+
+    # add the excerpt marker in the content
+    content_with_excerpt_marker = add_excerpt_marker(content)
+
+    return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}{url_slug}\n---{content_with_excerpt_marker}"
+
+
+def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
+    """Replace import statements for MDX files from snippets directory with the target format.
+
+    Args:
+        content (str): Content containing import statements
+        snippets_dir (Path): Path to the snippets directory
+
+    Returns:
+        str: Content with import statements replaced
+    """
+    # Regular expression to find import statements for MDX files from /snippets/
+    import_pattern = re.compile(r'import\s+(\w+)\s+from\s+"(/snippets/[^"]+\.mdx)"\s*;')
+
+    # Function to replace the matched import statement
+    def replace_import(match: re.Match[str]) -> str:
+        relative_path = match.group(2).lstrip("/")
+
+        # Remove "snippets/" prefix from the relative path if it exists
+        if relative_path.startswith("snippets/"):
+            relative_path = relative_path[len("snippets/") :]
+
+        # Create the new format: {!<full_path_to_snippets>/<relative_path> !}
+        new_path = "{!" + str(snippets_dir / relative_path) + " !}"
+        return new_path + "\n"
+
+    # Replace all matching import statements
+    return import_pattern.sub(replace_import, content)
+
+
+def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets_src_path: Path) -> None:
+    src_blog_dir = mkdocs_output_dir / "_blogs"
+    target_blog_dir = mkdocs_output_dir / "blog"
+    target_posts_dir = target_blog_dir / "posts"
+    snippets_dir = mkdocs_output_dir.parent / "snippets"
+
+    # Create the target posts directory
+    target_posts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create the index file in the target blog directory
+    index_file = target_blog_dir / "index.md"
+    index_file.write_text("# Blog\n\n")
+
+    # Get all files to copy
+    files_to_copy = list(src_blog_dir.rglob("*"))
+
+    # process blog metadata
+    for file in files_to_copy:
+        if file.suffix == ".md":
+            contents = file.read_text()
+            processed_contents = process_blog_contents(contents, file)
+            processed_contents = fix_snippet_imports(processed_contents, snippets_dir)
+            file.write_text(processed_contents)
+
+    # Copy files from source to target
+    copy_files(src_blog_dir, target_posts_dir, files_to_copy)
+
+    # Copy snippets directory
+    snippets_files_to_copy = list(snippets_src_path.rglob("*"))
+    copy_files(snippets_src_path, snippets_dir, snippets_files_to_copy)
+
+    # Copy authors_yml_path to the target_blog_dir and rename it as .authors.yml
+    target_authors_yml_path = target_blog_dir / ".authors.yml"
+    shutil.copy2(authors_yml_path, target_authors_yml_path)
 
 
 def main() -> None:
@@ -309,7 +452,6 @@ def main() -> None:
         shutil.rmtree(mkdocs_output_dir)
 
     exclusion_list = [
-        "docs/_blogs",
         "docs/.gitignore",
         "docs/use-cases",
         "docs/installation",
@@ -324,4 +466,9 @@ def main() -> None:
 
     copy_assets(website_dir)
     process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
+
+    snippets_dir_path = website_dir / "snippets"
+    authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
+
+    process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)

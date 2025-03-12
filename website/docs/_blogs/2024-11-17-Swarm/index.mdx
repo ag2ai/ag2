@@ -1,14 +1,14 @@
 ---
 title: Building Swarm-based agents with AG2
-authors:
-  - yiranwu
-  - marklysze
+authors: [yiranwu, marklysze]
 tags: [groupchat, swarm]
 ---
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/YQdTsD4dPeg?si=6Y-cceWyQsyYNAJY" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework, with some additional features!
+
+\<!-- more -->
 
 *Background*: the swarm orchestration is a multi-agent collaboration where agents execute tasks and are responsible for handing them off to other agents.
 
@@ -24,9 +24,9 @@ Besides these core features, AG2 provides:
 This feature builds on GroupChat, offering a simpler interface to use swarm orchestration. For comparison, see two implementations of the same example: one [using swarm orchestration](/docs/use-cases/notebooks/notebooks/agentchat_swarm) and another [naive implementation with GroupChat (Legacy)](/docs/use-cases/notebooks/notebooks/agentchat_swarm_w_groupchat_legacy).
 
 ````mdx-code-block
-:::note
+<Note>
 This blog has been updated as swarms can now accommodate any ConversableAgent.
-:::
+</Note>
 ````
 
 ## Handoffs
