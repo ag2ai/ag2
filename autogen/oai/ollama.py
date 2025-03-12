@@ -30,7 +30,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -46,7 +46,7 @@ with optional_import_block():
 @register_llm_config
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
-    client_host: Optional[HttpUrl] = None
+    client_host: Optional[AnyHttpUrl] = None
     stream: bool = False
     num_predict: int = Field(
         default=128,

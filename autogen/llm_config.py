@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Type, TypeVar, Union
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 if TYPE_CHECKING:
     from _collections_abc import dict_items, dict_keys, dict_values
@@ -166,7 +166,7 @@ class LLMConfigEntry(BaseModel, ABC):
     model: str
     api_key: Optional[str] = None
     api_version: Optional[str] = None
-    base_url: Optional[HttpUrl] = None
+    base_url: Optional[AnyHttpUrl] = None
     tags: list[str] = Field(default_factory=list)
 
     @abstractmethod
