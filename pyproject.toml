@@ -76,7 +76,7 @@ flaml = [
 # public distributions
 
 openai = [
-    "openai>=1.58",
+    "openai>=1.66.2",
 ]
 
 openai-realtime = [
