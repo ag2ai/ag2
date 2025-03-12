@@ -11,9 +11,8 @@ from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
-from autogen.oai.client import AzureOpenAILLMConfigEntry, OpenAILLMConfigEntry
+from autogen.oai.client import AzureOpenAILLMConfigEntry, DeepSeekLLMConfigEntry, OpenAILLMConfigEntry
 from autogen.oai.cohere import CohereLLMConfigEntry
-from autogen.oai.deepseek import DeepSeekLLMConfigEntry
 from autogen.oai.gemini import GeminiLLMConfigEntry
 from autogen.oai.groq import GroqLLMConfigEntry
 from autogen.oai.mistral import MistralLLMConfigEntry

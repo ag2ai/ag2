@@ -16,7 +16,7 @@ import warnings
 from functools import lru_cache
 from typing import Any, Callable, Literal, Optional, Protocol, Union
 
-from pydantic import BaseModel
+from pydantic import AnyUrl, BaseModel, Field, ValidationInfo, field_validator
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
@@ -251,6 +251,25 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
+
+
+@register_llm_config
+class DeepSeekLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["deepseek"] = "deepseek"
+    base_url: AnyUrl = AnyUrl("https://api.deepseek.com/v1")
+    temperature: float = Field(0.5, ge=0.0, le=1.0)
+    max_tokens: int = Field(8192, ge=1, le=8192)
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+    @field_validator("top_p", mode="before")
+    @classmethod
+    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
+        if v is not None and info.data.get("temperature") is not None:
+            raise ValueError("temperature and top_p cannot be set at the same time.")
+        return v
+
+    def create_client(self) -> None:  # type: ignore [override]
+        raise NotImplementedError("DeepSeekLLMConfigEntry.create_client is not implemented.")
 
 
 @export_module("autogen")
