@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 
 
@@ -63,6 +64,13 @@ def test_bedrock_llm_config_entry():
     }
     actual = bedrock_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[bedrock_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
     with pytest.raises(ValidationError) as e:
         bedrock_llm_config = BedrockLLMConfigEntry(

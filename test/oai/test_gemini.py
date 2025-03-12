@@ -13,6 +13,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:
@@ -41,6 +42,13 @@ def test_gemini_llm_config_entry():
     }
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[gemini_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 @run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")

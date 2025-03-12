@@ -5,6 +5,7 @@
 import pytest
 from pydantic import ValidationError
 
+from autogen.llm_config import LLMConfig
 from autogen.oai.deepseek import DeepSeekLLMConfigEntry
 
 
@@ -25,6 +26,13 @@ def test_deepseek_llm_config_entry() -> None:
     }
     actual = deepseek_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[deepseek_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
     with pytest.raises(ValidationError) as e:
         deepseek_llm_config = DeepSeekLLMConfigEntry(

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.groq import GroqClient, GroqLLMConfigEntry, calculate_groq_cost
 
 
@@ -43,6 +44,13 @@ def test_groq_llm_config_entry():
     }
     actual = groq_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[groq_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration

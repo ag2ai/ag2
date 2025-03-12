@@ -11,6 +11,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.ollama import OllamaClient, OllamaLLMConfigEntry, response_to_tool_call
 
 
@@ -56,6 +57,13 @@ def test_ollama_llm_config_entry():
     }
     actual = ollama_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[ollama_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration

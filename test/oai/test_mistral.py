@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.mistral import MistralAIClient, MistralLLMConfigEntry, calculate_mistral_cost
 
 
@@ -32,7 +33,7 @@ def mistral_client():
 
 
 def test_mistral_llm_config_entry():
-    mistral_llm_config_entry = MistralLLMConfigEntry(
+    mistral_llm_config = MistralLLMConfigEntry(
         model="mistral-small-latest",
         api_key="fake_api_key",
     )
@@ -45,8 +46,15 @@ def test_mistral_llm_config_entry():
         "temperature": 0.7,
         "tags": [],
     }
-    actual = mistral_llm_config_entry.model_dump()
+    actual = mistral_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[mistral_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration

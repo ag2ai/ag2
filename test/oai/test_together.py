@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.together import TogetherClient, TogetherLLMConfigEntry, calculate_together_cost
 
 
@@ -48,6 +49,13 @@ def test_together_llm_config_entry():
     }
     actual = together_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[together_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 @run_for_optional_imports("together", "together")

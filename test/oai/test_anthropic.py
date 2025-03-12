@@ -9,6 +9,7 @@
 import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicClient, AnthropicLLMConfigEntry, _calculate_cost
 
 with optional_import_block() as result:
@@ -71,6 +72,13 @@ def test_anthropic_llm_config_entry():
     }
     actual = anthropic_llm_config.model_dump()
     assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[anthropic_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
