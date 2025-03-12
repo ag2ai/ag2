@@ -60,8 +60,9 @@ dependencies = [
     "docker",
     "packaging",
     "asyncer==0.0.8",
-    "fast-depends>=2.4.12,<3",
+#    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
+    "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends
 ]
 
 [project.optional-dependencies]
@@ -236,6 +237,7 @@ test = [
     "mock==5.1.0",
     "pandas==2.2.3",
     "fastapi==0.115.11",
+    "dirty-equals==0.9.0",
 ]
 
 docs = [
@@ -437,6 +439,7 @@ files = [
     "autogen/agents",
     "autogen/coding",
     "autogen/exception_utils.py",
+    "autogen/fast_depends",
     "autogen/import_utils.py",
     "autogen/interop",
     "autogen/io",
@@ -453,6 +456,7 @@ files = [
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",
+#    "test/fast_depends",
     "test/interop",
     "test/io",
     "test/messages",
