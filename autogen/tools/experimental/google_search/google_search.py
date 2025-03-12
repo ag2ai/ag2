@@ -21,14 +21,20 @@ with optional_import_block():
     ],
     "google-search",
 )
+def _execute_query(query: str, search_api_key: str, search_engine_id: str, num_results: int) -> Any:
+    service = build("customsearch", "v1", developerKey=search_api_key)
+    return service.cse().list(q=query, cx=search_engine_id, num=num_results).execute()
+
+
 def _google_search(
     query: str,
     search_api_key: str,
     search_engine_id: str,
     num_results: int,
 ) -> list[dict[str, Any]]:
-    service = build("customsearch", "v1", developerKey=search_api_key)
-    res = service.cse().list(q=query, cx=search_engine_id, num=num_results).execute()
+    res = _execute_query(
+        query=query, search_api_key=search_api_key, search_engine_id=search_engine_id, num_results=num_results
+    )
 
     results = []
     if "items" in res:
@@ -84,6 +90,6 @@ class GoogleSearchTool(Tool):
         super().__init__(
             # GeminiClient will look for a tool with the name "gemini_google_search"
             name="gemini_google_search" if use_genai_search_tool else "google_search",
-            description="Google Search",
+            description="Use the Google Search API to perform a search.",
             func_or_tool=google_search,
         )
