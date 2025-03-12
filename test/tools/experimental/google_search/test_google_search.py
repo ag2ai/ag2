@@ -87,6 +87,7 @@ class TestGoogleSearchTool:
             assert mock_execute_query.called == execute_query_called
 
     @pytest.mark.openai
+    @pytest.mark.aux_neg_flag
     def test_end_to_end_openai(
         self, credentials_gpt_4o_mini: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
@@ -98,7 +99,6 @@ class TestGoogleSearchTool:
             execute_query_called=True,
         )
 
-    # TODO: Figure out why aux_neg_flag is needed for this test (it is not needed for the openai test)
     @pytest.mark.gemini
     @pytest.mark.aux_neg_flag
     def test_end_to_end_gemini(
