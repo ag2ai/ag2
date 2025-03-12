@@ -79,6 +79,7 @@ class MongoDBQueryEngine:
             raise ValueError("Connection string is required to connect to MongoDB.")
 
         self.connection_string = connection_string
+        # ToDo: Is it okay if database_name is None?
         self.database_name = database_name
         self.collection_name = collection_name or DEFAULT_COLLECTION_NAME
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
@@ -87,8 +88,8 @@ class MongoDBQueryEngine:
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None
-        self.vector_search_engine = None
-        self.storage_context = None
+        self.vector_search_engine: Optional["MongoDBAtlasVectorSearch"] = None  # type: ignore[no-any-unimported]
+        self.storage_context: Optional["StorageContext"] = None  # type: ignore[no-any-unimported]
         self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
 
     def _set_up(self, overwrite: bool) -> None:
@@ -126,8 +127,8 @@ class MongoDBQueryEngine:
         Returns:
             bool: True if the collection exists; False otherwise.
         """
-        client = MongoClient(self.connection_string)
-        db = client[self.database_name]
+        client: "MongoClient[Any]" = MongoClient(self.connection_string)  # type: ignore[no-any-unimported]
+        db = client[self.database_name]  # type: ignore[index]
         return self.collection_name in db.list_collection_names()
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
@@ -151,7 +152,7 @@ class MongoDBQueryEngine:
             self._set_up(overwrite=False)
 
             self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_search_engine,
+                vector_store=self.vector_search_engine,  # type: ignore[arg-type]
                 storage_context=self.storage_context,
                 embed_model=self.embedding_model,
             )
@@ -199,7 +200,7 @@ class MongoDBQueryEngine:
             logger.info("Setting up the database with existing collection.")
             documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
             self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_search_engine,
+                vector_store=self.vector_search_engine,  # type: ignore[arg-type]
                 storage_context=self.storage_context,
                 embed_model=self.embedding_model,
             )

@@ -9,12 +9,11 @@ from abc import ABC
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, Union, get_type_hints
 
-from fast_depends import Depends as FastDepends
-from fast_depends import inject
-from fast_depends.dependencies import model
-
 from ..agentchat import Agent
 from ..doc_utils import export_module
+from ..fast_depends import Depends as FastDepends
+from ..fast_depends import inject
+from ..fast_depends.dependencies import model
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -27,6 +26,7 @@ __all__ = [
     "get_context_params",
     "inject_params",
     "on",
+    "remove_params",
 ]
 
 
@@ -135,7 +135,7 @@ def _is_depends_param(param: inspect.Parameter) -> bool:
     )
 
 
-def _remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
+def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iterable[str]) -> None:
     new_signature = sig.replace(parameters=[p for p in sig.parameters.values() if p.name not in params])
     func.__signature__ = new_signature  # type: ignore[attr-defined]
 
@@ -147,7 +147,7 @@ def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable
 
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
-    _remove_params(func, sig, params_to_remove)
+    remove_params(func, sig, params_to_remove)
     return func
 
 

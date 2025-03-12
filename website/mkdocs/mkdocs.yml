@@ -120,6 +120,9 @@ plugins:
       alias_type: copy
       redirect_template: templates/redirect.html
       canonical_version: latest
+  - blog:
+      blog_dir: docs/blog
+      blog_toc: true
   - ezlinks
 
 hooks:
