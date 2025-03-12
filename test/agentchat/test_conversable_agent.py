@@ -1881,7 +1881,7 @@ def test_validate_llm_config(
     llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]], expected: Union[LLMConfig, Literal[False]]
 ):
     actual = ConversableAgent._validate_llm_config(llm_config)
-    assert actual == expected
+    assert actual == expected, f"{actual} != {expected}"
 
 
 if __name__ == "__main__":

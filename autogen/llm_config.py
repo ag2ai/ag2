@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
 
-from pydantic import AnyUrl, BaseModel, Field, field_serializer
+from pydantic import AnyUrl, BaseModel, Field, SecretStr, field_serializer
 
 if TYPE_CHECKING:
     from _collections_abc import dict_items, dict_keys, dict_values
@@ -167,7 +167,7 @@ class LLMConfig:
 class LLMConfigEntry(BaseModel, ABC):
     api_type: str
     model: str = Field(..., min_length=1)
-    api_key: Optional[str] = None
+    api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
@@ -180,6 +180,10 @@ class LLMConfigEntry(BaseModel, ABC):
     @field_serializer("base_url")
     def serialize_base_url(self, v: Any) -> Any:
         return str(v)
+
+    @field_serializer("api_key", when_used="unless-none")
+    def serialize_api_key(self, v: SecretStr) -> Any:
+        return v.get_secret_value()
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
         return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
