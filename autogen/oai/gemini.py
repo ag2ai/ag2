@@ -51,7 +51,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import Any, Optional, Type
 
 import requests
 from packaging import version
@@ -60,9 +60,6 @@ from pydantic import BaseModel
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
-
-if TYPE_CHECKING:
-    pass
 
 with optional_import_block():
     import google.genai as genai
