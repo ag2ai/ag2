@@ -63,7 +63,9 @@ def test_conversable_agent_name_with_white_space(
     ):
         ConversableAgent(name=name, llm_config=llm_config)
 
-    llm_config["config_list"][0]["api_type"] = "something-else"
+    llm_config["config_list"][0]["api_type"] = "azure"
+    llm_config["config_list"][0]["api_version"] = "2023-01-01"
+    llm_config["config_list"][0]["base_url"] = "https://api.azure.com/v1"
     agent = ConversableAgent(name=name, llm_config=llm_config)
     assert agent.name == name
 

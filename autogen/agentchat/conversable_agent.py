@@ -2942,7 +2942,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "functions" not in self.llm_config:
+            if "functions" not in self.llm_config or len(self.llm_config["functions"]) == 0:
                 error_msg = f"The agent config doesn't have function {func_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2968,7 +2968,8 @@ class ConversableAgent(LLMAgent):
             else:
                 self.llm_config["functions"] = [func_sig]
 
-        if len(self.llm_config["functions"]) == 0:
+        # Do this only if llm_config is a dict. If llm_config is LLMConfig, LLMConfig will handle this.
+        if len(self.llm_config["functions"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["functions"]
 
         self.client = OpenAIWrapper(**self.llm_config)
@@ -2986,7 +2987,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "tools" not in self.llm_config:
+            if "tools" not in self.llm_config or len(self.llm_config["tools"]) == 0:
                 error_msg = f"The agent config doesn't have tool {tool_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -3022,7 +3023,8 @@ class ConversableAgent(LLMAgent):
             else:
                 self.llm_config["tools"] = [tool_sig]
 
-        if len(self.llm_config["tools"]) == 0:
+        # Do this only if llm_config is a dict. If llm_config is LLMConfig, LLMConfig will handle this.
+        if len(self.llm_config["tools"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["tools"]
 
         self.client = OpenAIWrapper(**self.llm_config)
