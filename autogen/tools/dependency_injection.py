@@ -9,12 +9,11 @@ from abc import ABC
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, Union, get_type_hints
 
-from fast_depends import Depends as FastDepends
-from fast_depends import inject
-from fast_depends.dependencies import model
-
 from ..agentchat import Agent
 from ..doc_utils import export_module
+from ..fast_depends import Depends as FastDepends
+from ..fast_depends import inject
+from ..fast_depends.dependencies import model
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent

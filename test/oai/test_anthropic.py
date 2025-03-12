@@ -16,8 +16,6 @@ with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
-from typing import List
-
 from pydantic import BaseModel
 from typing_extensions import Literal
 
@@ -191,7 +189,7 @@ def test_extract_json_response(anthropic_client):
         output: str
 
     class MathReasoning(BaseModel):
-        steps: List[Step]
+        steps: list[Step]
         final_answer: str
 
     # Set up the response format
