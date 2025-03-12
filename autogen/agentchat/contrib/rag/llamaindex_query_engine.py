@@ -61,7 +61,7 @@ class LlamaIndexQueryEngine:
     ) -> bool:
         """Initialize the database with the input documents or records.
 
-        It takes the following steps,
+        It takes the following steps:
         1. Set up LlamaIndex storage context.
         2. insert documents and build an index upon them.
 
