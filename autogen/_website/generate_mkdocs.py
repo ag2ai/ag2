@@ -396,7 +396,7 @@ def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
             relative_path = relative_path[len("snippets/") :]
 
         # Create the new format: {!<full_path_to_snippets>/<relative_path> !}
-        new_path = "{!" + str(snippets_dir / relative_path) + " !}"
+        new_path = "{!" + (snippets_dir / relative_path).as_posix() + " !}"
         return new_path + "\n"
 
     # Replace all matching import statements
