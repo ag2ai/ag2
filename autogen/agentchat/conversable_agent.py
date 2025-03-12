@@ -495,7 +495,7 @@ class ConversableAgent(LLMAgent):
         return llm_config
 
     @classmethod
-    def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[ModelClient]:
+    def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[OpenAIWrapper]:
         return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
