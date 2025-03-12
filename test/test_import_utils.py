@@ -2,20 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Type, Union
+import sys
+from types import ModuleType
+from typing import Any, Iterator, Optional, Type, Union
 
 import pytest
 
-from autogen.import_utils import PackageInfo, optional_import_block, require_optional_import, split_package_info
+from autogen.import_utils import ModuleInfo, optional_import_block, require_optional_import
 
 
-class TestPackageInfo:
+class TestmoduleInfo:
     @pytest.mark.parametrize(
-        "package_info, expected",
+        "module_info, expected",
         [
             (
                 "jupyter-client>=8.6.0,<9.0.0",
-                PackageInfo(
+                ModuleInfo(
                     name="jupyter-client",
                     min_version="8.6.0",
                     max_version="9.0.0",
@@ -25,7 +27,7 @@ class TestPackageInfo:
             ),
             (
                 "jupyter-client>=8.6.0",
-                PackageInfo(
+                ModuleInfo(
                     name="jupyter-client",
                     min_version="8.6.0",
                     max_version=None,
@@ -35,7 +37,7 @@ class TestPackageInfo:
             ),
             (
                 "jupyter-client<9.0.0",
-                PackageInfo(
+                ModuleInfo(
                     name="jupyter-client",
                     min_version=None,
                     max_version="9.0.0",
@@ -45,20 +47,69 @@ class TestPackageInfo:
             ),
             (
                 "jupyter-client",
-                PackageInfo(
+                ModuleInfo(
                     name="jupyter-client", min_version=None, max_version=None, min_inclusive=False, max_inclusive=False
                 ),
             ),
         ],
     )
-    def test_split_package_info(self, package_info: str, expected: PackageInfo) -> None:
-        result = split_package_info(package_info)
+    def test_from_str_success(self, module_info: str, expected: ModuleInfo) -> None:
+        result = ModuleInfo.from_str(module_info)
         assert result == expected
 
-    def test_split_package_info_with_invalid_format(self) -> None:
-        package_info = "jupyter-client>="
-        with pytest.raises(ValueError, match="Invalid package information: jupyter-client>="):
-            split_package_info(package_info)
+    def test_from_str_with_invalid_format(self) -> None:
+        module_info = "jupyter-client>="
+        with pytest.raises(ValueError, match="Invalid module information: jupyter-client>="):
+            ModuleInfo.from_str(module_info)
+
+    @pytest.fixture
+    def mock_module(self) -> Iterator[ModuleType]:
+        module_name = "mock_module"
+        module = ModuleType(module_name)
+        module.__version__ = "1.0.0"  # type: ignore[attr-defined]
+        sys.modules[module_name] = module
+        yield module
+        del sys.modules[module_name]
+
+    @pytest.mark.parametrize(
+        "module_info, expected",
+        [
+            (ModuleInfo(name="mock_module"), True),
+            (ModuleInfo(name="non_existent_module"), False),
+            (ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=True), True),
+            (ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=False), False),
+            (ModuleInfo(name="mock_module", min_version="0.9.0", min_inclusive=True), True),
+            (ModuleInfo(name="mock_module", min_version="1.1.0", min_inclusive=True), False),
+            (ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=True), True),
+            (ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=False), False),
+            (ModuleInfo(name="mock_module", max_version="1.1.0", max_inclusive=True), True),
+            (ModuleInfo(name="mock_module", max_version="0.9.0", max_inclusive=True), False),
+            (
+                ModuleInfo(
+                    name="mock_module", min_version="0.9.0", max_version="1.1.0", min_inclusive=True, max_inclusive=True
+                ),
+                True,
+            ),
+            (
+                ModuleInfo(
+                    name="mock_module", min_version="1.0.0", max_version="1.0.0", min_inclusive=True, max_inclusive=True
+                ),
+                True,
+            ),
+            (
+                ModuleInfo(
+                    name="mock_module",
+                    min_version="1.0.0",
+                    max_version="1.0.0",
+                    min_inclusive=False,
+                    max_inclusive=False,
+                ),
+                False,
+            ),
+        ],
+    )
+    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: bool) -> None:
+        assert module_info.is_in_sys_modules() == expected
 
 
 class TestOptionalImportBlock:

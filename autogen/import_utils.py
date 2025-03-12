@@ -24,55 +24,73 @@ logger = getLogger(__name__)
 
 
 @dataclass
-class PackageInfo:
+class ModuleInfo:
     name: str
     min_version: Optional[str] = None
     max_version: Optional[str] = None
     min_inclusive: bool = False
     max_inclusive: bool = False
 
+    def is_in_sys_modules(self) -> bool:
+        if self.name not in sys.modules:
+            return False
 
-def split_package_info(package_info: str) -> PackageInfo:
-    pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
-    match = pattern.match(package_info.strip())
+        if self.min_version:
+            if not self.min_inclusive and sys.modules[self.name].__version__ == self.min_version:
+                return False
+            if self.min_inclusive and sys.modules[self.name].__version__ < self.min_version:
+                return False
 
-    if not match:
-        raise ValueError(f"Invalid package information: {package_info}")
+        if self.max_version:
+            if not self.max_inclusive and sys.modules[self.name].__version__ == self.max_version:
+                return False
+            if self.max_inclusive and sys.modules[self.name].__version__ > self.max_version:
+                return False
 
-    name = match.group("name")
-    constraints = match.group("constraint").strip()
-    min_version = max_version = None
-    min_inclusive = max_inclusive = False
+        return True
 
-    if constraints:
-        constraint_pattern = re.findall(r"(>=|<=|>|<)([0-9\.]+)?", constraints)
+    @classmethod
+    def from_str(cls, module_info: str) -> "ModuleInfo":
+        pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
+        match = pattern.match(module_info.strip())
 
-        if not all(version for _, version in constraint_pattern):
-            raise ValueError(f"Invalid package information: {package_info}")
+        if not match:
+            raise ValueError(f"Invalid package information: {module_info}")
 
-        for operator, version in constraint_pattern:
-            if operator == ">=":
-                min_version = version
-                min_inclusive = True
-            elif operator == "<=":
-                max_version = version
-                max_inclusive = True
-            elif operator == ">":
-                min_version = version
-                min_inclusive = False
-            elif operator == "<":
-                max_version = version
-                max_inclusive = False
-            else:
-                raise ValueError(f"Invalid package information: {package_info}")
+        name = match.group("name")
+        constraints = match.group("constraint").strip()
+        min_version = max_version = None
+        min_inclusive = max_inclusive = False
 
-    return PackageInfo(
-        name=name,
-        min_version=min_version,
-        max_version=max_version,
-        min_inclusive=min_inclusive,
-        max_inclusive=max_inclusive,
-    )
+        if constraints:
+            constraint_pattern = re.findall(r"(>=|<=|>|<)([0-9\.]+)?", constraints)
+
+            if not all(version for _, version in constraint_pattern):
+                raise ValueError(f"Invalid module information: {module_info}")
+
+            for operator, version in constraint_pattern:
+                if operator == ">=":
+                    min_version = version
+                    min_inclusive = True
+                elif operator == "<=":
+                    max_version = version
+                    max_inclusive = True
+                elif operator == ">":
+                    min_version = version
+                    min_inclusive = False
+                elif operator == "<":
+                    max_version = version
+                    max_inclusive = False
+                else:
+                    raise ValueError(f"Invalid package information: {module_info}")
+
+        return ModuleInfo(
+            name=name,
+            min_version=min_version,
+            max_version=max_version,
+            min_inclusive=min_inclusive,
+            max_inclusive=max_inclusive,
+        )
 
 
 class Result:
