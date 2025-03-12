@@ -641,7 +641,7 @@ class GeminiClient:
         """Check if the Google Search tool is present in the tools list."""
         exists = False
         for tool in tools:
-            if tool["function"]["name"] == "google_search":
+            if tool["function"]["name"] == "gemini_google_search":
                 exists = True
                 break
 
@@ -668,9 +668,7 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-        if self.check_if_google_search_tool_exists(tools):
-            if self.use_vertexai:
-                raise ValueError("Google Search tool is currently not supported with VertexAI.")
+        if self.check_if_google_search_tool_exists(tools) and not self.use_vertexai:
             return [Tool(google_search=GoogleSearch())]
 
         functions = []
