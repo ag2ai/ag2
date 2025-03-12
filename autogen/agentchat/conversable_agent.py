@@ -2577,7 +2577,7 @@ class ConversableAgent(LLMAgent):
         reply = await loop.run_in_executor(None, functools.partial(self.get_human_input, prompt))
         return reply
 
-    def run_code(self, code, **kwargs: Any) -> tuple[int, str, Optional[str]]:
+    def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
         """Run the code and return the result.
 
         Override this function to modify the way to run the code.
