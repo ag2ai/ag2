@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
+from pydantic import BaseModel
+
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 
@@ -17,11 +19,13 @@ with optional_import_block():
     from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.core.llms import LLM
+    from llama_index.core.query_engine import CitationQueryEngine
     from llama_index.core.schema import Document as LlamaDocument
+    from llama_index.core.schema import NodeWithScore
     from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-__all__ = ["VectorChromaQueryEngine"]
+__all__ = ["VectorChromaCitationQueryEngine", "VectorChromaQueryEngine"]
 
 DEFAULT_COLLECTION_NAME = "docling-parsed-docs"
 EMPTY_RESPONSE_TEXT = "Empty Response"  # Indicates that the query did not return any results
@@ -248,6 +252,57 @@ class VectorChromaQueryEngine:
     ) -> bool:
         """Not required nor implemented for VectorChromaQueryEngine"""
         raise NotImplementedError("Method, init_db, not required nor implemented for VectorChromaQueryEngine")
+
+
+class AnswerWithCitations(BaseModel):  # type: ignore[no-any-unimported]
+    answer: str
+    citations: list["NodeWithScore"]  # type: ignore[no-any-unimported]
+
+
+@require_optional_import(["chromadb", "llama_index"], "rag")
+@export_module("autogen.agents.experimental")
+class VectorChromaCitationQueryEngine(VectorChromaQueryEngine):
+    """
+    This engine leverages VectorChromaQueryEngine and CitationQueryEngine to answer queries with citations.
+    """
+
+    def __init__(  # type: ignore[no-any-unimported]
+        self,
+        db_path: Optional[str] = None,
+        embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
+        metadata: Optional[dict[str, Any]] = None,
+        llm: Optional["LLM"] = None,
+        collection_name: Optional[str] = None,
+        enable_query_citations: bool = False,
+        citation_chunk_size: int = 512,
+    ) -> None:
+        """
+        see parent class VectorChromaQueryEngine.
+        """
+        super().__init__(db_path, embedding_function, metadata, llm, collection_name)
+        self.enable_query_citations = enable_query_citations
+        self.citation_chunk_size = citation_chunk_size
+
+    def query_with_citations(self, query: str) -> AnswerWithCitations:
+        """
+        Query the index with the given query and return the answer along with citations.
+
+        Args:
+            query (str): The query to be answered.
+            citation_chunk_size (int): The size of chunks to use for each citation. Default is 512.
+
+        Returns:
+            AnswerWithCitations: An object containing the answer and citations.
+        """
+
+        query_engine = CitationQueryEngine.from_args(
+            index=self.index,
+            citation_chunk_size=self.citation_chunk_size,
+        )
+
+        response = query_engine.query(query)
+
+        return AnswerWithCitations(answer=response.response, citations=response.source_nodes)
 
 
 # mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol
