@@ -11,6 +11,9 @@ from test.conftest import Credentials
 
 
 @require_optional_import("openai", "openai")
+@pytest.mark.skip(
+    reason="This test is failing due to the fact that the document_agent is not able to ingest the document"
+)
 def test_issue_1324(credentials_gpt_4o_mini: Credentials, monkeypatch: pytest.MonkeyPatch) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config
 

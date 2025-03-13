@@ -12,7 +12,7 @@ import inspect
 import os
 import time
 import unittest
-from typing import Annotated, Any, Callable, Literal, Optional
+from typing import Annotated, Any, Callable, List, Literal, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -597,79 +597,95 @@ def test_update_function_signature_and_register_functions(mock_credentials: Cred
     assert agent.function_map["sh"] == exec_sh
 
 
-def test__wrap_function_sync():
-    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
+class TestWrapFunction:
+    def test__wrap_function_sync(self):
+        CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
-    class Currency(BaseModel):
-        currency: CurrencySymbol = Field(description="Currency code")
-        amount: float = Field(default=100.0, description="Amount of money in the currency")
+        class Currency(BaseModel):
+            currency: CurrencySymbol = Field(description="Currency code")
+            amount: float = Field(default=100.0, description="Amount of money in the currency")
 
-    Currency(currency="USD", amount=100.0)
+        Currency(currency="USD", amount=100.0)
 
-    def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
-        if base_currency == quote_currency:
-            return 1.0
-        elif base_currency == "USD" and quote_currency == "EUR":
-            return 1 / 1.1
-        elif base_currency == "EUR" and quote_currency == "USD":
-            return 1.1
-        else:
-            raise ValueError(f"Unknown currencies {base_currency}, {quote_currency}")
+        def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
+            if base_currency == quote_currency:
+                return 1.0
+            elif base_currency == "USD" and quote_currency == "EUR":
+                return 1 / 1.1
+            elif base_currency == "EUR" and quote_currency == "USD":
+                return 1.1
+            else:
+                raise ValueError(f"Unknown currencies {base_currency}, {quote_currency}")
 
-    agent = ConversableAgent(name="agent", llm_config=False)
+        agent = ConversableAgent(name="agent", llm_config=False)
 
-    @agent._wrap_function
-    def currency_calculator(
-        base: Annotated[Currency, "Base currency"],
-        quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
-    ) -> Currency:
-        quote_amount = exchange_rate(base.currency, quote_currency) * base.amount
-        return Currency(amount=quote_amount, currency=quote_currency)
+        @agent._wrap_function
+        def currency_calculator(
+            base: Annotated[Currency, "Base currency"],
+            quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
+        ) -> Currency:
+            quote_amount = exchange_rate(base.currency, quote_currency) * base.amount
+            return Currency(amount=quote_amount, currency=quote_currency)
 
-    assert (
-        currency_calculator(base={"currency": "USD", "amount": 110.11}, quote_currency="EUR")
-        == '{"currency":"EUR","amount":100.1}'
-    )
+        assert (
+            currency_calculator(base={"currency": "USD", "amount": 110.11}, quote_currency="EUR")
+            == '{"currency":"EUR","amount":100.1}'
+        )
 
-    assert not inspect.iscoroutinefunction(currency_calculator)
+        assert not inspect.iscoroutinefunction(currency_calculator)
 
+    @pytest.mark.skip(reason="Not implemented yet")
+    def test__wrap_function_list(self) -> None:
+        class Point(BaseModel):
+            x: float
+            y: float
 
-@pytest.mark.asyncio
-async def test__wrap_function_async():
-    CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
+        agent = ConversableAgent(name="agent", llm_config=False)
 
-    class Currency(BaseModel):
-        currency: CurrencySymbol = Field(description="Currency code")
-        amount: float = Field(default=100.0, description="Amount of money in the currency")
+        @agent._wrap_function
+        def f(xs: list[tuple[float, float]], ys: List[Point]) -> List[Point]:
+            return [Point(x=x, y=y) for (x, y) in xs] + ys
 
-    Currency(currency="USD", amount=100.0)
+        assert f([(1.0, 2.0), (3.0, 4.0)], [Point(x=5.0, y=6.0)]) == [
+            Point(x=x, y=y) for (x, y) in [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
+        ]
 
-    def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
-        if base_currency == quote_currency:
-            return 1.0
-        elif base_currency == "USD" and quote_currency == "EUR":
-            return 1 / 1.1
-        elif base_currency == "EUR" and quote_currency == "USD":
-            return 1.1
-        else:
-            raise ValueError(f"Unknown currencies {base_currency}, {quote_currency}")
+    @pytest.mark.asyncio
+    async def test__wrap_function_async(self):
+        CurrencySymbol = Literal["USD", "EUR"]  # noqa: N806
 
-    agent = ConversableAgent(name="agent", llm_config=False)
+        class Currency(BaseModel):
+            currency: CurrencySymbol = Field(description="Currency code")
+            amount: float = Field(default=100.0, description="Amount of money in the currency")
 
-    @agent._wrap_function
-    async def currency_calculator(
-        base: Annotated[Currency, "Base currency"],
-        quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
-    ) -> Currency:
-        quote_amount = exchange_rate(base.currency, quote_currency) * base.amount
-        return Currency(amount=quote_amount, currency=quote_currency)
+        Currency(currency="USD", amount=100.0)
 
-    assert (
-        await currency_calculator(base={"currency": "USD", "amount": 110.11}, quote_currency="EUR")
-        == '{"currency":"EUR","amount":100.1}'
-    )
+        def exchange_rate(base_currency: CurrencySymbol, quote_currency: CurrencySymbol) -> float:
+            if base_currency == quote_currency:
+                return 1.0
+            elif base_currency == "USD" and quote_currency == "EUR":
+                return 1 / 1.1
+            elif base_currency == "EUR" and quote_currency == "USD":
+                return 1.1
+            else:
+                raise ValueError(f"Unknown currencies {base_currency}, {quote_currency}")
 
-    assert inspect.iscoroutinefunction(currency_calculator)
+        agent = ConversableAgent(name="agent", llm_config=False)
+
+        @agent._wrap_function
+        async def currency_calculator(
+            base: Annotated[Currency, "Base currency"],
+            quote_currency: Annotated[CurrencySymbol, "Quote currency"] = "EUR",
+        ) -> Currency:
+            quote_amount = exchange_rate(base.currency, quote_currency) * base.amount
+            return Currency(amount=quote_amount, currency=quote_currency)
+
+        assert (
+            await currency_calculator(base={"currency": "USD", "amount": 110.11}, quote_currency="EUR")
+            == '{"currency":"EUR","amount":100.1}'
+        )
+
+        assert inspect.iscoroutinefunction(currency_calculator)
 
 
 def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:

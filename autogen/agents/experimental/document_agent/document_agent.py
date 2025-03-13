@@ -239,12 +239,19 @@ class DocAgent(ConversableAgent):
                 if doc not in self.documents_ingested:
                     self.documents_ingested.append(doc)
 
+        class TaskInitInfo(BaseModel):
+            ingestions: list[Ingest]
+            queries: list[Query]
+            context_variables: dict[str, Any]
+
         def initiate_tasks(
-            ingestions: list[Ingest],
-            queries: list[Query],
-            context_variables: dict[str, Any],
+            task_init_info: TaskInitInfo,
         ) -> SwarmResult:
             """Add documents to ingest and queries to answer when received."""
+            context_variables = task_init_info.context_variables
+            ingestions = task_init_info.ingestions
+            queries = task_init_info.queries
+
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
