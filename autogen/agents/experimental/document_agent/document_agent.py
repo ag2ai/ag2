@@ -241,11 +241,11 @@ class DocAgent(ConversableAgent):
                     self.documents_ingested.append(doc)
 
         class TaskInitInfo(BaseModel):
-            ingestions: Annotated[list[Ingest], Field(description="The list of documents to ingest.")]
-            queries: Annotated[list[Query], Field(description="The list of queries to perform.")]
+            ingestions: Annotated[list[Ingest], Field(description="List of documents, files, and URLs to ingest")]
+            queries: Annotated[list[Query], Field(description="List of queries to run")]
 
         def initiate_tasks(
-            task_init_info: Annotated[TaskInitInfo, "Task info to initiate tasks"],
+            task_init_info: Annotated[TaskInitInfo, "Documents, Files, URLs to ingest and the queries to run"],
             context_variables: Annotated[dict[str, Any], "Context variables"],
         ) -> SwarmResult:
             """Add documents to ingest and queries to answer when received."""
