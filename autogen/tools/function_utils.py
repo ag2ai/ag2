@@ -315,11 +315,7 @@ def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, An
     def load_base_model(v: dict[str, Any], t: type[BaseModel]) -> BaseModel:
         return t(**v)
 
-    try:
-        return load_base_model if isinstance(t, type) and issubclass(t, BaseModel) else None
-    except Exception as e:
-        print(f"Error loading {t}: {e}")
-        raise
+    return load_base_model if isinstance(t, type) and issubclass(t, BaseModel) else None
 
 
 @export_module("autogen.tools")
