@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 import sys
 from types import ModuleType
 from typing import Any, Iterable, Iterator, Optional, Type, Union
@@ -9,6 +10,39 @@ from typing import Any, Iterable, Iterator, Optional, Type, Union
 import pytest
 
 from autogen.import_utils import ModuleInfo, get_missing_imports, optional_import_block, require_optional_import
+
+
+@pytest.fixture
+def mock_module() -> Iterator[ModuleType]:
+    module_name = "mock_module"
+    module = ModuleType(module_name)
+    module.__version__ = "1.0.0"  # type: ignore[attr-defined]
+    sys.modules[module_name] = module
+    yield module
+    del sys.modules[module_name]
+
+
+class MockModule:
+    def __init__(self, name: str, version: str):
+        self.__name__ = name
+        self.__version__ = version
+
+
+@pytest.fixture
+def mock_modules() -> Iterator[dict[str, ModuleType]]:
+    modules = {
+        "module_a": MockModule("module_a", "1.0.0"),
+        "module_b": MockModule("module_b", "2.0.0"),
+        "module_c": MockModule("module_c", "3.0.0"),
+    }
+    original_sys_modules = sys.modules.copy()
+    sys.modules.update(modules)  # type: ignore[arg-type]
+    assert all(module in sys.modules for module in modules)
+    try:
+        yield modules  # type: ignore[misc]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_sys_modules)
 
 
 class TestmoduleInfo:
@@ -62,39 +96,42 @@ class TestmoduleInfo:
         with pytest.raises(ValueError, match="Invalid module information: jupyter-client>="):
             ModuleInfo.from_str(module_info)
 
-    @pytest.fixture
-    def mock_module(self) -> Iterator[ModuleType]:
-        module_name = "mock_module"
-        module = ModuleType(module_name)
-        module.__version__ = "1.0.0"  # type: ignore[attr-defined]
-        sys.modules[module_name] = module
-        yield module
-        del sys.modules[module_name]
-
     @pytest.mark.parametrize(
         "module_info, expected",
         [
-            (ModuleInfo(name="mock_module"), True),
-            (ModuleInfo(name="non_existent_module"), False),
-            (ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=True), True),
-            (ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=False), False),
-            (ModuleInfo(name="mock_module", min_version="0.9.0", min_inclusive=True), True),
-            (ModuleInfo(name="mock_module", min_version="1.1.0", min_inclusive=True), False),
-            (ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=True), True),
-            (ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=False), False),
-            (ModuleInfo(name="mock_module", max_version="1.1.0", max_inclusive=True), True),
-            (ModuleInfo(name="mock_module", max_version="0.9.0", max_inclusive=True), False),
+            (ModuleInfo(name="mock_module"), None),
+            (ModuleInfo(name="non_existent_module"), "'non_existent_module' is not installed."),
+            (ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=True), None),
+            (
+                ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=False),
+                "'mock_module' is installed, but the installed version 1.0.0 is too low (required 'mock_module>1.0.0').",
+            ),
+            (ModuleInfo(name="mock_module", min_version="0.9.0", min_inclusive=True), None),
+            (
+                ModuleInfo(name="mock_module", min_version="1.1.0", min_inclusive=True),
+                "'mock_module' is installed, but the installed version 1.0.0 is too low (required 'mock_module>=1.1.0').",
+            ),
+            (ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=True), None),
+            (
+                ModuleInfo(name="mock_module", max_version="1.0.0", max_inclusive=False),
+                "'mock_module' is installed, but the installed version 1.0.0 is too high (required 'mock_module<1.0.0').",
+            ),
+            (ModuleInfo(name="mock_module", max_version="1.1.0", max_inclusive=True), None),
+            (
+                ModuleInfo(name="mock_module", max_version="0.9.0", max_inclusive=True),
+                "'mock_module' is installed, but the installed version 1.0.0 is too high (required 'mock_module<=0.9.0').",
+            ),
             (
                 ModuleInfo(
                     name="mock_module", min_version="0.9.0", max_version="1.1.0", min_inclusive=True, max_inclusive=True
                 ),
-                True,
+                None,
             ),
             (
                 ModuleInfo(
                     name="mock_module", min_version="1.0.0", max_version="1.0.0", min_inclusive=True, max_inclusive=True
                 ),
-                True,
+                None,
             ),
             (
                 ModuleInfo(
@@ -104,11 +141,11 @@ class TestmoduleInfo:
                     min_inclusive=False,
                     max_inclusive=False,
                 ),
-                False,
+                "'mock_module' is installed, but the installed version 1.0.0 is too low (required 'mock_module>1.0.0<1.0.0').",
             ),
         ],
     )
-    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: bool) -> None:
+    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: Optional[str]) -> None:
         assert module_info.is_in_sys_modules() == expected
 
 
@@ -135,6 +172,24 @@ class TestOptionalImportBlock:
 
 
 class TestRequiresOptionalImportCallables:
+    def test_version_too_high(self, mock_module: ModuleInfo) -> None:
+        assert mock_module.__name__ in sys.modules  # type: ignore[attr-defined]
+        mock_info = f"{mock_module.__name__}>{mock_module.__version__}"  # type: ignore[attr-defined]
+
+        @require_optional_import(mock_info, "mock-module")
+        def dummy_function() -> None:
+            """Dummy function to test requires_optional_import"""
+            pass
+
+        with pytest.raises(
+            ImportError,
+            match=re.escape("""A module needed for test.test_import_utils.dummy_function is missing:
+ - 'mock_module' is installed, but the installed version 1.0.0 is too low (required 'mock_module>1.0.0').
+Please install it using:
+'pip install ag2[mock-module]'"""),
+        ):
+            dummy_function()
+
     @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
     def test_function_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
         def dummy_function() -> None:
@@ -153,7 +208,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for some_random_module.dummy_stuff.dummy_function is missing, please install it using 'pip install ag2\[optional_dep\]'",
+                match=re.escape("""A module needed for some_random_module.dummy_stuff.dummy_function is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]"""),
             ):
                 actual()
         else:
@@ -169,7 +227,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for test.test_import_utils.dummy_function is missing, please install it using 'pip install ag2\[optional_dep\]'",
+                match=re.escape("""A module needed for test.test_import_utils.dummy_function is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]'"""),
             ):
                 dummy_function()
         else:
@@ -202,7 +263,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for some_random_module.dummy_stuff.dummy_method is missing, please install it using 'pip install ag2\[optional_dep\]",
+                match=re.escape("""A module needed for some_random_module.dummy_stuff.dummy_method is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]'"""),
             ):
                 dummy.dummy_method()
         else:
@@ -221,7 +285,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for test.test_import_utils.dummy_method is missing, please install it using 'pip install ag2\[optional_dep\]'",
+                match=re.escape("""A module needed for test.test_import_utils.dummy_method is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]'"""),
             ):
                 dummy.dummy_method()
         else:
@@ -241,7 +308,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for test.test_import_utils.dummy_static_function is missing, please install it using 'pip install ag2\[optional_dep\]'",
+                match=re.escape("""A module needed for test.test_import_utils.dummy_static_function is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]'"""),
             ):
                 dummy.dummy_static_function()
         else:
@@ -261,7 +331,10 @@ class TestRequiresOptionalImportCallables:
         if not except_for:
             with pytest.raises(
                 ImportError,
-                match=r"Module 'some_optional_module' needed for test.test_import_utils.dummy_property is missing, please install it using 'pip install ag2\[optional_dep\]'",
+                match=re.escape("""A module needed for test.test_import_utils.dummy_property is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:
+'pip install ag2[optional_dep]'"""),
             ):
                 dummy.dummy_property
 
@@ -298,52 +371,57 @@ class TestRequiresOptionalImportClasses:
     def test_class_init_call(self, dummy_cls: Type[Any]) -> None:
         with pytest.raises(
             ImportError,
-            match=r"Module 'some_optional_module' needed for __init__ is missing, please install it using 'pip install ag2\[optional_dep\]'",
+            match=re.escape("""A module needed for __init__ is missing:
+ - 'some_optional_module' is not installed.
+Please install it using:\n'pip install ag2[optional_dep]'"""),
         ):
             dummy_cls()
 
 
 class TestGetMissingImports:
-    class MockModule:
-        def __init__(self, name: str, version: str):
-            self.__name__ = name
-            self.__version__ = version
-
-    @pytest.fixture
-    def mock_modules(self) -> Iterator[None]:
-        modules = {
-            "module_a": TestGetMissingImports.MockModule("module_a", "1.0.0"),
-            "module_b": TestGetMissingImports.MockModule("module_b", "2.0.0"),
-            "module_c": TestGetMissingImports.MockModule("module_c", "3.0.0"),
-        }
-        original_sys_modules = sys.modules.copy()
-        sys.modules.update(modules)  # type: ignore[arg-type]
-        assert all(module in sys.modules for module in modules)
-        try:
-            yield
-        finally:
-            sys.modules.clear()
-            sys.modules.update(original_sys_modules)
-
     @pytest.mark.parametrize(
         "modules, expected_missing",
         [
-            (["module_a", "module_b", "module_c"], []),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.0.0"], []),
-            (["module_a>=1.0.1", "module_b>=2.0.0", "module_c>=3.0.0"], ["module_a"]),
-            (["module_a>=1.0.0", "module_b>=2.1.0", "module_c>=3.0.0"], ["module_b"]),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.1.0"], ["module_c"]),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_d"], ["module_d"]),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.0.0"], ["module_c"]),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<=3.0.0"], []),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>3.0.0"], ["module_c"]),
-            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.1.0"], []),
+            (["module_a", "module_b", "module_c"], {}),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.0.0"], {}),
+            (
+                ["module_a>=1.0.1", "module_b>=2.0.0", "module_c>=3.0.0"],
+                {
+                    "module_a": "'module_a' is installed, but the installed version 1.0.0 is too low (required 'module_a>=1.0.1')."
+                },
+            ),
+            (
+                ["module_a>=1.0.0", "module_b>=2.1.0", "module_c>=3.0.0"],
+                {
+                    "module_b": "'module_b' is installed, but the installed version 2.0.0 is too low (required 'module_b>=2.1.0')."
+                },
+            ),
+            (
+                ["module_a>=1.0.0", "module_b>=2.0.0", "module_c>=3.1.0"],
+                {
+                    "module_c": "'module_c' is installed, but the installed version 3.0.0 is too low (required 'module_c>=3.1.0')."
+                },
+            ),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_d"], {"module_d": "'module_d' is not installed."}),
+            (
+                ["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.0.0"],
+                {
+                    "module_c": "'module_c' is installed, but the installed version 3.0.0 is too high (required 'module_c<3.0.0')."
+                },
+            ),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<=3.0.0"], {}),
+            (
+                ["module_a>=1.0.0", "module_b>=2.0.0", "module_c>3.0.0"],
+                {
+                    "module_c": "'module_c' is installed, but the installed version 3.0.0 is too low (required 'module_c>3.0.0')."
+                },
+            ),
+            (["module_a>=1.0.0", "module_b>=2.0.0", "module_c<3.1.0"], {}),
         ],
     )
     def test_get_missing_imports(
-        self, mock_modules: None, modules: Union[str, Iterable[str]], expected_missing: list[str]
+        self, mock_modules: dict[str, MockModule], modules: Union[str, Iterable[str]], expected_missing: dict[str, str]
     ) -> None:
-        assert mock_modules is None
-        # print(f"{list((sys.modules.keys()))=})")
+        assert mock_modules
         missing = get_missing_imports(modules)
         assert missing == expected_missing
