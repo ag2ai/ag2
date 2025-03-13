@@ -6,7 +6,7 @@ import logging
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Annotated, Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -240,15 +240,14 @@ class DocAgent(ConversableAgent):
                     self.documents_ingested.append(doc)
 
         class TaskInitInfo(BaseModel):
-            ingestions: list[Ingest]
-            queries: list[Query]
-            context_variables: dict[str, Any]
+            ingestions: Annotated[list[Ingest], Field(description="The list of documents to ingest.")]
+            queries: Annotated[list[Query], Field(description="The list of queries to perform.")]
 
         def initiate_tasks(
-            task_init_info: TaskInitInfo,
+            task_init_info: Annotated[TaskInitInfo, "Task info to initiate tasks"],
+            context_variables: Annotated[dict[str, Any], "Context variables"],
         ) -> SwarmResult:
             """Add documents to ingest and queries to answer when received."""
-            context_variables = task_init_info.context_variables
             ingestions = task_init_info.ingestions
             queries = task_init_info.queries
 
