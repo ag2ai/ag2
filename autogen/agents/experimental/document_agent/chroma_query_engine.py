@@ -256,7 +256,7 @@ class VectorChromaQueryEngine:
 
 class AnswerWithCitations(BaseModel):  # type: ignore[no-any-unimported]
     answer: str
-    citations: list[NodeWithScore]  # type: ignore[no-any-unimported]
+    citations: list["NodeWithScore"]  # type: ignore[no-any-unimported]
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
