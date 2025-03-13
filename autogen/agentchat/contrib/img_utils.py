@@ -277,7 +277,7 @@ def _to_pil(data: str) -> "Image.Image":
 
 
 @require_optional_import("PIL", "unknown")
-def message_formatter_pil_to_b64(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def message_formatter_pil_to_b64(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Converts the PIL image URLs in the messages to base64 encoded data URIs.
 
     This function iterates over a list of message dictionaries. For each message,

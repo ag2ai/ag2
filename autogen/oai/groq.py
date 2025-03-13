@@ -252,7 +252,7 @@ class GroqClient:
         return response_oai
 
 
-def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_groq_messages(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """

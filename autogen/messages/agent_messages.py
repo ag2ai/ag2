@@ -508,7 +508,7 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
 @wrap_message
 class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
-    messages: list[dict[str, Any]]
+    messages: list["LLMMessageType"]
     verbose: Optional[bool] = False
 
     def __init__(
@@ -516,7 +516,7 @@ class GroupChatResumeMessage(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         last_speaker_name: str,
-        messages: list[dict[str, Any]],
+        messages: list["LLMMessageType"],
         silent: Optional[bool] = False,
     ):
         super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)

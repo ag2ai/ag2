@@ -110,7 +110,7 @@ def validate_parameter(
     return param_value
 
 
-def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]], hide_tools_param: str) -> bool:
+def should_hide_tools(messages: list["LLMMessageType"], tools: list[dict[str, Any]], hide_tools_param: str) -> bool:
     """Determines if tools should be hidden. This function is used to hide tools when they have been run, minimising the chance of the LLM choosing them when they shouldn't.
     Parameters:
         messages (List[Dict[str, Any]]): List of messages

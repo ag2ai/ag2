@@ -520,7 +520,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

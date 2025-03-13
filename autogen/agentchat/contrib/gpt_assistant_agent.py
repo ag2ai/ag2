@@ -181,7 +181,7 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

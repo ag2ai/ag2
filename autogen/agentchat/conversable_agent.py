@@ -154,7 +154,7 @@ class ConversableAgent:
         llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
         default_auto_reply: Union[str, dict[str, Any]] = "",
         description: Optional[str] = None,
-        chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
+        chat_messages: Optional[dict[Agent, list["LLMMessageType"]]] = None,
         silent: Optional[bool] = None,
         context_variables: Optional[dict[str, Any]] = None,
         functions: Union[list[Callable[..., Any]], Callable[..., Any]] = None,
@@ -472,7 +472,7 @@ class ConversableAgent:
                 # Outer function to create a closure with the update function
                 def create_wrapper(update_func: UpdateSystemMessage):
                     def update_system_message_wrapper(
-                        agent: ConversableAgent, messages: list[dict[str, Any]]
+                        agent: ConversableAgent, messages: list["LLMMessageType"]
                     ) -> list[dict[str, Any]]:
                         if isinstance(update_func.content_updater, str):
                             # Templates like "My context variable passport is {passport}" will
@@ -622,7 +622,7 @@ class ConversableAgent:
     def _get_chats_to_run(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         sender: Agent,
         config: Any,
     ) -> list[dict[str, Any]]:
@@ -658,7 +658,7 @@ class ConversableAgent:
     def _process_nested_chat_carryover(
         chat: dict[str, Any],
         recipient: Agent,
-        messages: list[dict[str, Any]],
+        messages: list["LLMMessageType"],
         sender: Agent,
         config: Any,
         trim_n_messages: int = 0,
@@ -801,7 +801,7 @@ class ConversableAgent:
     def _summary_from_nested_chats(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         sender: Agent,
         config: Any,
     ) -> tuple[bool, Union[str, None]]:
@@ -840,7 +840,7 @@ class ConversableAgent:
     async def _a_summary_from_nested_chats(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         sender: Agent,
         config: Any,
     ) -> tuple[bool, Union[str, None]]:
@@ -1056,7 +1056,7 @@ class ConversableAgent:
         return None if self._code_execution_config is False else self._code_execution_config.get("use_docker")
 
     @staticmethod
-    def _message_to_dict(message: Union[LLMMessageType, str]) -> dict:
+    def _message_to_dict(message: Union["LLMMessageType", str]) -> dict:
         """Convert a message to a dictionary.
 
         The message can be a string or a dictionary. The string will be put in the "content" field of the new dictionary.
@@ -1089,7 +1089,7 @@ class ConversableAgent:
         return name
 
     def _append_oai_message(
-        self, message: Union[LLMMessageType, str], role, conversation_id: Agent, is_sending: bool
+        self, message: Union["LLMMessageType", str], role, conversation_id: Agent, is_sending: bool
     ) -> bool:
         """Append a message to the ChatCompletion conversation.
 
@@ -1147,7 +1147,7 @@ class ConversableAgent:
         return True
 
     def _process_message_before_send(
-        self, message: Union[LLMMessageType, str], recipient: Agent, silent: bool
+        self, message: Union["LLMMessageType", str], recipient: Agent, silent: bool
     ) -> Union[dict[str, Any], str]:
         """Process the message before sending it to the recipient."""
         hook_list = self.hook_lists["process_message_before_send"]
@@ -1159,7 +1159,7 @@ class ConversableAgent:
 
     def send(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         recipient: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -1207,7 +1207,7 @@ class ConversableAgent:
 
     async def a_send(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         recipient: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -1253,14 +1253,14 @@ class ConversableAgent:
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
 
-    def _print_received_message(self, message: Union[LLMMessageType, str], sender: Agent, skip_head: bool = False):
+    def _print_received_message(self, message: Union["LLMMessageType", str], sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
         message_model = create_received_message_model(message=message, sender=sender, recipient=self)
         iostream = IOStream.get_default()
         # message_model.print(iostream.print)
         iostream.send(message_model)
 
-    def _process_received_message(self, message: Union[LLMMessageType, str], sender: Agent, silent: bool):
+    def _process_received_message(self, message: Union["LLMMessageType", str], sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
         valid = self._append_oai_message(message, "user", sender, is_sending=False)
         if logging_enabled():
@@ -1276,7 +1276,7 @@ class ConversableAgent:
 
     def receive(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         sender: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -1313,7 +1313,7 @@ class ConversableAgent:
 
     async def a_receive(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         sender: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -1391,7 +1391,7 @@ class ConversableAgent:
         max_turns: Optional[int] = None,
         summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
         summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        message: Optional[Union["LLMMessageType", str, Callable[..., Any]]] = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Initiate a chat with the recipient agent.
@@ -1542,7 +1542,7 @@ class ConversableAgent:
         max_turns: Optional[int] = None,
         summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
         summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        message: Optional[Union["LLMMessageType", str, Callable[..., Any]]] = None,
         **kwargs: Any,
     ) -> ChatResult:
         """(async) Initiate a chat with the recipient agent.
@@ -1827,7 +1827,7 @@ class ConversableAgent:
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -1887,7 +1887,7 @@ class ConversableAgent:
 
     async def a_generate_oai_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -1909,7 +1909,7 @@ class ConversableAgent:
 
     def _generate_code_execution_reply_using_executor(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Union[dict[str, Any], Literal[False]]] = None,
     ):
@@ -1960,7 +1960,7 @@ class ConversableAgent:
 
     def generate_code_execution_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Union[dict[str, Any], Literal[False]]] = None,
     ):
@@ -2010,7 +2010,7 @@ class ConversableAgent:
 
     def generate_function_call_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -2048,7 +2048,7 @@ class ConversableAgent:
 
     async def a_generate_function_call_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -2080,7 +2080,7 @@ class ConversableAgent:
 
     def generate_tool_calls_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -2148,7 +2148,7 @@ class ConversableAgent:
 
     async def a_generate_tool_calls_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -2173,7 +2173,7 @@ class ConversableAgent:
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, None]]:
@@ -2317,7 +2317,7 @@ class ConversableAgent:
 
     async def a_check_termination_and_human_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, None]]:
@@ -2457,7 +2457,7 @@ class ConversableAgent:
 
     def generate_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Optional[Union[str, dict[str, Any]]]:
@@ -2531,7 +2531,7 @@ class ConversableAgent:
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -2882,7 +2882,7 @@ class ConversableAgent:
         }
 
     def generate_init_message(
-        self, message: Optional[Union[LLMMessageType, str]], **kwargs: Any
+        self, message: Optional[Union["LLMMessageType", str]], **kwargs: Any
     ) -> Union[str, dict[str, Any]]:
         """Generate the initial message for the agent.
         If message is None, input() will be called to get the initial message.
@@ -2948,7 +2948,7 @@ class ConversableAgent:
         return [{"type": "text", "text": self._process_carryover("", kwargs)}] + content
 
     async def a_generate_init_message(
-        self, message: Optional[Union[LLMMessageType, str]], **kwargs: Any
+        self, message: Optional[Union["LLMMessageType", str]], **kwargs: Any
     ) -> Union[str, dict[str, Any]]:
         """Generate the initial message for the agent.
         If message is None, input() will be called to get the initial message.
@@ -3359,7 +3359,7 @@ class ConversableAgent:
         assert hook not in hook_list, f"{hook} is already registered as a hook."
         hook_list.append(hook)
 
-    def update_agent_state_before_reply(self, messages: list[dict[str, Any]]) -> None:
+    def update_agent_state_before_reply(self, messages: list["LLMMessageType"]) -> None:
         """Calls any registered capability hooks to update the agent's state.
         Primarily used to update context variables.
         Will, potentially, modify the messages.
@@ -3370,7 +3370,7 @@ class ConversableAgent:
         for hook in hook_list:
             hook(self, messages)
 
-    def process_all_messages_before_reply(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def process_all_messages_before_reply(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Calls any registered capability hooks to process all messages, potentially modifying the messages."""
         hook_list = self.hook_lists["process_all_messages_before_reply"]
         # If no hooks are registered, or if there are no messages to process, return the original message list.
@@ -3383,7 +3383,7 @@ class ConversableAgent:
             processed_messages = hook(processed_messages)
         return processed_messages
 
-    def process_last_received_message(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def process_last_received_message(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Calls any registered capability hooks to use and potentially modify the text of the last message,
         as long as the last message is not a function call or exit command.
         """

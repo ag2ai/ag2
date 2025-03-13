@@ -637,7 +637,7 @@ def test_update_system_message() -> None:
     message_container = MessageContainer()
 
     # 1. Test with a callable function
-    def custom_update_function(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+    def custom_update_function(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
         return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
@@ -688,7 +688,7 @@ def test_update_system_message() -> None:
     assert message_container.captured_sys_message == "Template message with test_value"
 
     # Test multiple update functions
-    def another_update_function(context_variables: dict[str, Any], messages: list[dict[str, Any]]) -> str:
+    def another_update_function(context_variables: dict[str, Any], messages: list["LLMMessageType"]) -> str:
         return "Another update"
 
     agent6 = ConversableAgent(
@@ -834,17 +834,17 @@ def test_after_work_callable() -> None:
     agent3 = ConversableAgent("agent3", llm_config=testing_llm_config)
 
     def return_agent(
-        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+        last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat
     ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return agent2
 
     def return_agent_str(
-        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+        last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat
     ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return "agent3"
 
     def return_after_work_option(
-        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+        last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat
     ) -> Union[AfterWorkOption, ConversableAgent, str]:
         return AfterWorkOption.TERMINATE
 
@@ -1356,7 +1356,7 @@ def test_compress_message_func() -> None:
         "transfer_Agent_1_to_Agent_2"  # remove the function call
     ])
 
-    messages: list[dict[str, Any]] = [
+    messages: list["LLMMessageType"] = [
         {"content": "start", "name": "_User", "role": "user"},
         {
             "content": "None",
@@ -1558,7 +1558,7 @@ def test_on_condition_available() -> None:
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
     agent1._oai_messages[agent2].append({"role": "user", "content": "Test"})
 
-    def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+    def is_available(agent: ConversableAgent, messages: list["LLMMessageType"]) -> bool:
         return True
 
     register_hand_off(
@@ -1739,7 +1739,7 @@ def test_on_context_condition_available() -> None:
     assert result is False
 
     # 6. Test with callable available parameter
-    def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+    def is_available(agent: ConversableAgent, messages: list["LLMMessageType"]) -> bool:
         return agent._context_variables.get("dynamic_availability", False)  # type: ignore[no-any-return]
 
     agent1._swarm_oncontextconditions = [  # type: ignore[attr-defined]

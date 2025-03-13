@@ -100,7 +100,7 @@ class MultimodalConversableAgent(ConversableAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

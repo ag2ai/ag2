@@ -129,7 +129,7 @@ class GroupChat:
     """
 
     agents: Sequence[Agent]
-    messages: list[dict[str, Any]] = field(default_factory=list)
+    messages: list["LLMMessageType"] = field(default_factory=list)
     max_round: int = 10
     admin_name: str = "Admin"
     func_call_filter: bool = True
@@ -690,7 +690,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -775,7 +775,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """(Asynchronous) Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -1144,7 +1144,7 @@ class GroupChatManager(ConversableAgent):
 
     def run_chat(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
@@ -1238,7 +1238,7 @@ class GroupChatManager(ConversableAgent):
 
     async def a_run_chat(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ):
@@ -1525,7 +1525,7 @@ class GroupChatManager(ConversableAgent):
 
         return previous_last_agent, last_message
 
-    def _valid_resume_messages(self, messages: list[dict[str, Any]]):
+    def _valid_resume_messages(self, messages: list["LLMMessageType"]):
         """Validates the messages used for resuming
 
         Args:
@@ -1550,7 +1550,7 @@ class GroupChatManager(ConversableAgent):
                 raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
 
     def _process_resume_termination(
-        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict[str, Any]]
+        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list["LLMMessageType"]
     ):
         """Removes termination string, if required, and checks if termination may occur.
 
@@ -1597,7 +1597,7 @@ class GroupChatManager(ConversableAgent):
 
         return state
 
-    def messages_to_string(self, messages: list[dict[str, Any]]) -> str:
+    def messages_to_string(self, messages: list["LLMMessageType"]) -> str:
         """Converts the provided messages into a Json string that can be used for resuming the chat.
         The state is made up of a list of messages
 

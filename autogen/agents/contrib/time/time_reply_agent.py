@@ -51,7 +51,7 @@ class TimeReplyAgent(ConversableAgent):
         # may even contain another AG2 workflow inside it
         def get_date_time_reply(
             agent: ConversableAgent,
-            messages: Optional[list[LLMMessageType]] = None,
+            messages: Optional[list["LLMMessageType"]] = None,
             sender: Optional[Agent] = None,
             config: Optional[OpenAIWrapper] = None,
         ) -> tuple[bool, dict[str, Any]]:

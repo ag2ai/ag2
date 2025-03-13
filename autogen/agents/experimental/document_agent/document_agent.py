@@ -218,7 +218,7 @@ class DocAgent(ConversableAgent):
 
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
 
-        def create_error_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+        def create_error_agent_prompt(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
             """Create the error agent prompt, primarily used to update ingested documents for ending"""
             update_ingested_documents()
 
@@ -310,7 +310,7 @@ class DocAgent(ConversableAgent):
         )
 
         # Summary agent prompt will include the results of the ingestions and swarms
-        def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+        def create_summary_agent_prompt(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
             """Create the summary agent prompt and updates ingested documents"""
             update_ingested_documents()
 
@@ -334,17 +334,17 @@ class DocAgent(ConversableAgent):
             update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
         )
 
-        def has_ingest_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        def has_ingest_tasks(agent: ConversableAgent, messages: list["LLMMessageType"]) -> bool:
             logger.debug("has_ingest_tasks context_variables:", agent._context_variables)
             return len(agent.get_context("DocumentsToIngest")) > 0
 
-        def has_only_query_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        def has_only_query_tasks(agent: ConversableAgent, messages: list["LLMMessageType"]) -> bool:
             logger.debug("has_only_query_tasks context_variables:", agent._context_variables)
             if len(agent.get_context("DocumentsToIngest")) > 0:
                 return False
             return len(agent.get_context("QueriesToRun")) > 0
 
-        def summary_task(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        def summary_task(agent: ConversableAgent, messages: list["LLMMessageType"]) -> bool:
             return (
                 len(agent.get_context("DocumentsToIngest")) == 0
                 and len(agent.get_context("QueriesToRun")) == 0

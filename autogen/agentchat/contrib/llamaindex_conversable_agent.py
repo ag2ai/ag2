@@ -65,7 +65,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     def _generate_oai_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -80,7 +80,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     async def _a_generate_oai_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -96,7 +96,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         return (True, extracted_response)
 
     def _extract_message_and_history(
-        self, messages: Optional[list[LLMMessageType]] = None, sender: Optional[Agent] = None
+        self, messages: Optional[list["LLMMessageType"]] = None, sender: Optional[Agent] = None
     ) -> tuple[str, list["ChatMessage"]]:
         """Extract the message and history from the messages."""
         if not messages:

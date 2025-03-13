@@ -30,7 +30,7 @@ def your_function_name(
     sender: ConversableAgent,
     message: LLMMessageType,
     recipient: Agent,
-    silent: bool) -> Union[LLMMessageType, str]:
+    silent: bool) -> Union["LLMMessageType", str]:
 ```
 
 Let's look at how we could prepend a message with who is sending the message (sender) and to whom it's going (recipient).
@@ -50,9 +50,9 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 # Our function associated with the hook
 def update_message_before_send(
     sender: ConversableAgent,
-    message: Union[LLMMessageType, str],
+    message: Union["LLMMessageType", str],
     recipient: Agent,
-    silent: bool) -> Union[LLMMessageType, str]:
+    silent: bool) -> Union["LLMMessageType", str]:
 
     if isinstance(message, dict):
         msg_text = message.get("content", message)
@@ -169,7 +169,7 @@ Signature:
 ```python
 def my_update_function(
     agent: ConversableAgent,
-    messages: list[dict[str, Any]]
+    messages: list["LLMMessageType"]
     ) -> None:
 ```
 
@@ -194,7 +194,7 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 # Our function to update the agent's system message, this will be attached to the hook
 def update_my_agent_state(
     agent: ConversableAgent,
-    messages: list[dict[str, Any]]
+    messages: list["LLMMessageType"]
     ) -> None:
 
     from datetime import datetime
@@ -340,7 +340,7 @@ An example of the use of this hook is the [TransformMessages](/docs/api-referenc
 Signature:
 ```python
 def your_function_name(
-    messages: list[dict[str, Any]]
+    messages: list["LLMMessageType"]
     ) -> list[dict[str, Any]]:
 ```
 
@@ -359,7 +359,7 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config, system_message="
 
 # Our function for the hook, to prepend the agent's name on each message
 def prepend_name(
-    messages: list[dict[str, Any]]
+    messages: list["LLMMessageType"]
     ) -> list[dict[str, Any]]:
 
     for message in messages:

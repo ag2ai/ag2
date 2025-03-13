@@ -51,7 +51,7 @@ class Agent(Protocol):
 
     def send(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -67,7 +67,7 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -83,7 +83,7 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -98,7 +98,7 @@ class Agent(Protocol):
 
     async def a_receive(
         self,
-        message: Union[LLMMessageType, str],
+        message: Union["LLMMessageType", str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -114,7 +114,7 @@ class Agent(Protocol):
 
     def generate_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -133,7 +133,7 @@ class Agent(Protocol):
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -160,7 +160,7 @@ class Agent(Protocol):
         max_turns: Optional[int] = None,
         summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
         summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        message: Optional[Union["LLMMessageType", str, Callable[..., Any]]] = None,
         **kwargs: Any,
     ) -> "ChatResult": ...
 
@@ -173,7 +173,7 @@ class Agent(Protocol):
         max_turns: Optional[int] = None,
         summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
         summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        message: Optional[Union["LLMMessageType", str, Callable[..., Any]]] = None,
         **kwargs: Any,
     ) -> "ChatResult": ...
 

@@ -269,7 +269,7 @@ class BedrockClient:
         }
 
 
-def extract_system_messages(messages: list[dict[str, Any]]) -> list:
+def extract_system_messages(messages: list["LLMMessageType"]) -> list:
     """Extract the system messages from the list of messages.
 
     Args:
@@ -293,7 +293,7 @@ def extract_system_messages(messages: list[dict[str, Any]]) -> list:
 
 
 def oai_messages_to_bedrock_messages(
-    messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
+    messages: list["LLMMessageType"], has_tools: bool, supports_system_prompts: bool
 ) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.

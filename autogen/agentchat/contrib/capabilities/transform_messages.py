@@ -11,6 +11,9 @@ from ....formatting_utils import colored
 from ...conversable_agent import ConversableAgent
 from .transforms import MessageTransform
 
+if TYPE_CHECKING:
+    from ... import LLMMessageType
+
 
 class TransformMessages:
     """Agent capability for transforming messages before reply generation.
@@ -65,7 +68,7 @@ class TransformMessages:
         """
         agent.register_hook(hookable_method="process_all_messages_before_reply", hook=self._transform_messages)
 
-    def _transform_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _transform_messages(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         post_transform_messages = copy.deepcopy(messages)
         system_message = None
 

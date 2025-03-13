@@ -425,7 +425,7 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[list[LLMMessageType]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:
@@ -554,7 +554,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return reward
 
     def _process_prompt(
-        self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
+        self, messages: Optional[list["LLMMessageType"]], sender: Optional[Agent]
     ) -> Tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
