@@ -157,6 +157,10 @@ browser-use = [
     "browser-use==0.1.37",
 ]
 
+google-search = [
+    "google-api-python-client>=2.163.0,<3.0",
+]
+
 neo4j = [
     "docx2txt==0.8",
     "llama-index==0.12.22",
@@ -342,6 +346,7 @@ markers = [
     "interop",
     "browser_use",
     "crawl4ai",
+    "google_search",
     "websockets",
     "commsagent_discord",
     "commsagent_slack",

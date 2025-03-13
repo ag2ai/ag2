@@ -51,7 +51,7 @@ def require_jupyter_kernel_gateway_installed() -> Callable[[T], T]:
     else:
 
         def decorator(o: T) -> T:
-            return patch_object(o, missing_modules=[], dep_target="jupyter-executor")
+            return patch_object(o, missing_modules={}, dep_target="jupyter-executor")
 
     return decorator
 

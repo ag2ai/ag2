@@ -68,7 +68,7 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
 
     Use the initiate_tasks tool to incorporate all ingestions and queries. Don't call it again until new ingestions or queries are raised.
 
-    New ingestations and queries may be raised from time to time, so use the initiate_tasks again if you see new ingestions/queries.
+    New ingestions and queries may be raised from time to time, so use the initiate_tasks again if you see new ingestions/queries.
 
     Transfer to the summary agent if all ingestion and query tasks are done.
     """
@@ -180,6 +180,7 @@ class DocAgent(ConversableAgent):
             parsed_docs_path (Union[str, Path]): The path where parsed documents will be stored.
             collection_name (Optional[str]): The unique name for the data store collection. If omitted, a random name will be used. Populate this to reuse previous ingested data.
             query_engine (Optional[RAGQueryEngine]): The query engine to use for querying documents, defaults to VectorChromaQueryEngine if none provided.
+                                                     Use enable_query_citations and implement query_with_citations method to enable citation support. e.g. VectorChromaCitationQueryEngine
 
         The DocAgent is responsible for generating a group of agents to solve a task.
 
@@ -288,12 +289,30 @@ class DocAgent(ConversableAgent):
                     context_variables=context_variables,
                 )
 
-            query = context_variables["QueriesToRun"][0]["query"]
+            query = context_variables["QueriesToRun"][0].query
             try:
-                answer = query_engine.query(query)
+                if (
+                    hasattr(query_engine, "enable_query_citations")
+                    and query_engine.enable_query_citations
+                    and hasattr(query_engine, "query_with_citations")
+                    and callable(query_engine.query_with_citations)
+                ):
+                    answer_with_citations = query_engine.query_with_citations(query)  # type: ignore[union-attr]
+                    answer = answer_with_citations.answer
+                    txt_citations = [
+                        {
+                            "text_chunk": source.node.get_text(),
+                            "file_path": source.metadata["file_path"],
+                        }
+                        for source in answer_with_citations.citations
+                    ]
+                    logger.info(f"Citations:\n {txt_citations}")
+                else:
+                    answer = query_engine.query(query)
+                    txt_citations = []
                 context_variables["QueriesToRun"].pop(0)
                 context_variables["CompletedTaskCount"] += 1
-                context_variables["QueryResults"].append({"query": query, "answer": answer})
+                context_variables["QueryResults"].append({"query": query, "answer": answer, "citations": txt_citations})
                 return SwarmResult(values=answer, context_variables=context_variables)
             except Exception as e:
                 return SwarmResult(
@@ -304,7 +323,11 @@ class DocAgent(ConversableAgent):
 
         self._query_agent = ConversableAgent(
             name="QueryAgent",
-            system_message="You are a query agent. You answer the user's questions only using the query function provided to you. You can only call use the execute_rag_query tool once per turn.",
+            system_message="""
+            You are a query agent.
+            You answer the user's questions only using the query function provided to you.
+            You can only call use the execute_rag_query tool once per turn.
+            """,
             llm_config=llm_config,
             functions=[execute_rag_query],
         )
@@ -319,11 +342,16 @@ class DocAgent(ConversableAgent):
                 "Output two sections: 'Ingestions:' and 'Queries:' with the results of the tasks. Number the ingestions and queries. "
                 "If there are no ingestions output 'No ingestions', if there are no queries output 'No queries' under their respective sections. "
                 "Don't add markdown formatting. "
-                "Format the Query and Answers as 'Query:\nAnswer:'. Add a number to each query if more than one. Use the context below:\n"
+                "For each query, there is one answer and, optionally, a list of citations."
+                "For each citation, it contains two fields: 'text_chunk' and 'file_path'."
+                "Format the Query and Answers and Citations as 'Query:\nAnswer:\n\nCitations:'. Add a number to each query if more than one. Use the context below:\n"
+                "For each query, output the full citation contents and list them one by one,"
+                "format each citation as '\nSource [X] (chunk file_path here):\n\nChunk X:\n(text_chunk here)' and mark a separator between each citation using '\n#########################\n\n'."
+                "If there are no citations at all, DON'T INCLUDE ANY mention of citations.\n"
                 f"Documents ingested: {agent.get_context('DocumentsIngested')}\n"
                 f"Documents left to ingest: {len(agent.get_context('DocumentsToIngest'))}\n"
                 f"Queries left to run: {len(agent.get_context('QueriesToRun'))}\n"
-                f"Query and Answers: {agent.get_context('QueryResults')}\n"
+                f"Query and Answers and Citations: {agent.get_context('QueryResults')}\n"
             )
 
             return system_message
@@ -333,16 +361,6 @@ class DocAgent(ConversableAgent):
             llm_config=llm_config,
             update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
         )
-
-        def has_ingest_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
-            logger.debug("has_ingest_tasks context_variables:", agent._context_variables)
-            return len(agent.get_context("DocumentsToIngest")) > 0
-
-        def has_only_query_tasks(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
-            logger.debug("has_only_query_tasks context_variables:", agent._context_variables)
-            if len(agent.get_context("DocumentsToIngest")) > 0:
-                return False
-            return len(agent.get_context("QueriesToRun")) > 0
 
         def summary_task(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
             return (
