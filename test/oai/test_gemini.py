@@ -19,7 +19,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.genai.types import GenerateContentResponse
+    from google.genai.types import GenerateContentResponse, GoogleSearch, Tool
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -563,3 +563,62 @@ class TestGeminiClient:
         }
 
         assert result == expected_result, result
+
+    @pytest.mark.parametrize("name", ["prebuilt_google_search", "google_search"])
+    def test_check_if_prebuilt_google_search_tool_exists(self, name: str) -> None:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "description": "Google Search",
+                    "name": name,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query."},
+                            "num_results": {
+                                "type": "integer",
+                                "default": 10,
+                                "description": "The number of results to return.",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        ]
+        expected = name == "prebuilt_google_search"
+        assert GeminiClient._check_if_prebuilt_google_search_tool_exists(tools) == expected
+
+    @pytest.mark.parametrize("name", ["prebuilt_google_search", "google_search"])
+    def test_tools_to_gemini_tools(self, gemini_client: GeminiClient, name: str) -> None:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "description": "Google Search",
+                    "name": name,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query."},
+                            "num_results": {
+                                "type": "integer",
+                                "default": 10,
+                                "description": "The number of results to return.",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        ]
+        result = gemini_client._tools_to_gemini_tools(tools)
+        assert isinstance(result, list)
+        assert isinstance(result[0], Tool)
+
+        tools_list = [Tool(google_search=GoogleSearch())]
+        if name == "prebuilt_google_search":
+            assert result == tools_list
+        else:
+            assert result != tools_list
