@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from _collections_abc import dict_items, dict_keys, dict_values
 from typing import Any
 
 import pytest
 
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import LLMConfig, LLMConfigFilter
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
@@ -18,6 +19,69 @@ from autogen.oai.groq import GroqLLMConfigEntry
 from autogen.oai.mistral import MistralLLMConfigEntry
 from autogen.oai.ollama import OllamaLLMConfigEntry
 from autogen.oai.together import TogetherLLMConfigEntry
+
+
+class TestLLMConfigFilter:
+    @pytest.fixture
+    def llm_config_filter(self) -> LLMConfigFilter:
+        return LLMConfigFilter(api_type="openai", model=["gpt-4o-mini", "gpt-4o-small"])
+
+    def test_init(self) -> None:
+        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+        actual = LLMConfigFilter(**{"api_type": "openai", "model": "gpt-4o-mini"})
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+        actual = LLMConfigFilter(filter_dict={"api_type": "openai", "model": "gpt-4o-mini"})
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+    def test_serialization(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.model_dump()
+        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
+        assert actual == expected
+
+        actual_model_dump_json = llm_config_filter.model_dump_json()
+        assert actual_model_dump_json == json.dumps(expected)
+
+    def test_deserialization(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = LLMConfigFilter(**llm_config_filter.model_dump())
+        assert actual == llm_config_filter
+
+    def test_get(self, llm_config_filter: LLMConfigFilter) -> None:
+        assert llm_config_filter.get("api_type") == "openai"
+        assert llm_config_filter.get("model") == ["gpt-4o-mini", "gpt-4o-small"]
+        assert llm_config_filter.get("doesnt_exists") is None
+        assert llm_config_filter.get("doesnt_exists", "default") == "default"
+
+    def test_getattr(self, llm_config_filter: LLMConfigFilter) -> None:
+        assert llm_config_filter.api_type == "openai"
+        assert llm_config_filter.model == ["gpt-4o-mini", "gpt-4o-small"]
+        with pytest.raises(AttributeError) as e:
+            llm_config_filter.wrong_key
+        assert str(e.value) == "'LLMConfigFilter' object has no attribute 'wrong_key'"
+
+    def test_get_item_and_set_item(self, llm_config_filter: LLMConfigFilter) -> None:
+        # Test __getitem__
+        assert llm_config_filter["api_type"] == "openai"
+        assert llm_config_filter["model"] == ["gpt-4o-mini", "gpt-4o-small"]
+        with pytest.raises(KeyError) as e:
+            llm_config_filter["wrong_key"]
+        assert str(e.value) == "\"Key 'wrong_key' not found in LLMConfigFilter\""
+
+        # Test __setitem__
+        assert llm_config_filter["api_type"] == "openai"
+        llm_config_filter["api_type"] = "azure"
+        assert llm_config_filter["api_type"] == "azure"
+        llm_config_filter["api_type"] = "openai"
+        assert llm_config_filter["api_type"] == "openai"
+
+    def test_repr(self) -> None:
+        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
+        assert repr(actual) == "LLMConfigFilter(api_type='openai', model='gpt-4o-mini')"
 
 
 @pytest.fixture

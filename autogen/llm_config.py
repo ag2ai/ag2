@@ -31,6 +31,54 @@ def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
+class LLMConfigFilter(BaseModel):
+    filter_dict: dict[str, Any] = Field(default_factory=dict)
+
+    def __init__(self, **kwargs: Any) -> None:
+        if "filter_dict" in kwargs:
+            f = kwargs.pop("filter_dict")
+            kwargs = {**f, **kwargs}
+        filter_dict = kwargs
+        super().__init__(filter_dict=filter_dict)
+
+    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
+        return self.filter_dict
+
+    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
+        d = self.model_dump(*args, exclude_none=exclude_none, **kwargs)
+        return json.dumps(d)
+
+    def _getattr(self, key: str) -> Any:
+        return self.filter_dict[key]
+
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
+        return self.filter_dict.get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return self._getattr(key=key)
+        except KeyError:
+            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        try:
+            self.filter_dict[key] = value
+        except ValueError:
+            raise ValueError(f"'{self.__class__.__name__}' object has no field '{key}'")
+
+    def __getattr__(self, name: Any) -> Any:
+        try:
+            return self._getattr(key=name)
+        except KeyError:
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __repr__(self) -> str:
+        # Iterate filter_dict and create a string representation
+        r = [f"{k}={repr(v)}" for k, v in self.filter_dict.items()]
+
+        return f"LLMConfigFilter({', '.join(r)})"
+
+
 class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
