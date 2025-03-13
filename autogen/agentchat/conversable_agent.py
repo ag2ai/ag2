@@ -420,7 +420,7 @@ class ConversableAgent(LLMAgent):
             func._description = (func.__doc__ or "").strip()
 
         # Register the function
-        self.register_for_llm(name=name, description=description)(func)
+        self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
     def _register_update_agent_state_before_reply(
         self, functions: Optional[Union[list[Callable[..., Any]], Callable[..., Any]]]
@@ -2960,27 +2960,31 @@ class ConversableAgent(LLMAgent):
         except ValueError:
             raise ValueError(f"Tool {tool} not found in collection")
 
-    def register_function(self, function_map: dict[str, Union[Callable[..., Any]]]):
+    def register_function(self, function_map: dict[str, Union[Callable[..., Any]]], silent_override: bool = False):
         """Register functions to the agent.
 
         Args:
             function_map: a dictionary mapping function names to functions. if function_map[name] is None, the function will be removed from the function_map.
+            silent_override: whether to print warnings when overriding functions.
         """
         for name, func in function_map.items():
             self._assert_valid_name(name)
             if func is None and name not in self._function_map:
                 warnings.warn(f"The function {name} to remove doesn't exist", name)
-            if name in self._function_map:
+            if not silent_override and name in self._function_map:
                 warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
         self._function_map.update(function_map)
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
-    def update_function_signature(self, func_sig: Union[str, dict[str, Any]], is_remove: None):
+    def update_function_signature(
+        self, func_sig: Union[str, dict[str, Any]], is_remove: None, silent_override: bool = False
+    ):
         """Update a function_signature in the LLM configuration for function_call.
 
         Args:
             func_sig (str or dict): description/name of the function to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-functions
             is_remove: whether removing the function from llm_config with name 'func_sig'
+            silent_override: whether to print warnings when overriding functions.
 
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
@@ -3008,7 +3012,9 @@ class ConversableAgent(LLMAgent):
                 raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
             self._assert_valid_name(func_sig["name"]), func_sig
             if "functions" in self.llm_config:
-                if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
+                if not silent_override and any(
+                    func["name"] == func_sig["name"] for func in self.llm_config["functions"]
+                ):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
 
                 self.llm_config["functions"] = [
@@ -3022,12 +3028,15 @@ class ConversableAgent(LLMAgent):
 
         self.client = OpenAIWrapper(**self.llm_config)
 
-    def update_tool_signature(self, tool_sig: Union[str, dict[str, Any]], is_remove: bool):
+    def update_tool_signature(
+        self, tool_sig: Union[str, dict[str, Any]], is_remove: bool, silent_override: bool = False
+    ):
         """Update a tool_signature in the LLM configuration for tool_call.
 
         Args:
             tool_sig (str or dict): description/name of the tool to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tools
             is_remove: whether removing the tool from llm_config with name 'tool_sig'
+            silent_override: whether to print warnings when overriding functions.
         """
         if not self.llm_config:
             error_msg = "To update a tool signature, agent must have an llm_config"
@@ -3061,7 +3070,9 @@ class ConversableAgent(LLMAgent):
                 )
             self._assert_valid_name(tool_sig["function"]["name"])
             if "tools" in self.llm_config:
-                if any(tool["function"]["name"] == tool_sig["function"]["name"] for tool in self.llm_config["tools"]):
+                if not silent_override and any(
+                    tool["function"]["name"] == tool_sig["function"]["name"] for tool in self.llm_config["tools"]
+                ):
                     warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
                 self.llm_config["tools"] = [
                     tool
@@ -3147,6 +3158,7 @@ class ConversableAgent(LLMAgent):
         name: Optional[str] = None,
         description: Optional[str] = None,
         api_style: Literal["function", "tool"] = "tool",
+        silent_override: bool = False,
     ) -> Callable[[Union[F, Tool]], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
@@ -3164,6 +3176,7 @@ class ConversableAgent(LLMAgent):
                 `"function"` style will be deprecated. For earlier version use
                 `"function"` if `"tool"` doesn't work.
                 See [Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/function-calling?tabs=python) for details.
+            silent_override (bool): whether to suppress any override warning messages.
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3207,22 +3220,36 @@ class ConversableAgent(LLMAgent):
             """
             tool = self._create_tool_if_needed(func_or_tool, name, description)
 
-            self._register_for_llm(tool, api_style)
+            self._register_for_llm(tool, api_style, silent_override=silent_override)
             self._tools.append(tool)
 
             return tool
 
         return _decorator
 
-    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False) -> None:
+    def _register_for_llm(
+        self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False, silent_override: bool = False
+    ) -> None:
+        """
+        Register a tool for LLM.
+
+        Args:
+            tool: the tool to be registered.
+            api_style: the API style for function call ("tool" or "function").
+            is_remove: whether to remove the function or tool.
+            silent_override: whether to suppress any override warning messages.
+
+        Returns:
+            None
+        """
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            self.update_function_signature(tool.function_schema, is_remove=is_remove)
+            self.update_function_signature(tool.function_schema, is_remove=is_remove, silent_override=silent_override)
         elif api_style == "tool":
-            self.update_tool_signature(tool.tool_schema, is_remove=is_remove)
+            self.update_tool_signature(tool.tool_schema, is_remove=is_remove, silent_override=silent_override)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
@@ -3232,6 +3259,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         *,
         serialize: bool = True,
+        silent_override: bool = False,
     ) -> Callable[[Union[Tool, F]], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
@@ -3241,6 +3269,7 @@ class ConversableAgent(LLMAgent):
             name: name of the function. If None, the function name will be used (default: None).
             description: description of the function (default: None).
             serialize: whether to serialize the return value
+            silent_override: whether to suppress any override warning messages
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3275,9 +3304,10 @@ class ConversableAgent(LLMAgent):
             chat_context = ChatContext(self)
             chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
 
-            self.register_function({
-                tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)
-            })
+            self.register_function(
+                {tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)},
+                silent_override=silent_override,
+            )
 
             return tool
 

@@ -455,7 +455,7 @@ def _prepare_swarm_agents(
 
         # Add all tools to the Tool Executor agent
         for tool in agent.tools:
-            tool_execution.register_for_execution(serialize=False)(tool)
+            tool_execution.register_for_execution(serialize=False, silent_override=True)(tool)
 
     if exclude_transit_message:
         # get all transit functions names
