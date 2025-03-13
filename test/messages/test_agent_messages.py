@@ -34,7 +34,7 @@ from autogen.messages.agent_messages import (
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
     SpeakerAttemptSuccessfulMessage,
-    TerminationAndHumanReplyMessage,
+    TerminationAndHumanReplyNoInputMessage,
     TextMessage,
     ToolCallMessage,
     ToolResponseMessage,
@@ -801,13 +801,13 @@ class TestTerminationAndHumanReplyMessage:
     def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
         no_human_input_msg = "NO HUMAN INPUT RECEIVED."
 
-        actual = TerminationAndHumanReplyMessage(
+        actual = TerminationAndHumanReplyNoInputMessage(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
             sender=sender,
             recipient=recipient,
         )
-        assert isinstance(actual, TerminationAndHumanReplyMessage)
+        assert isinstance(actual, TerminationAndHumanReplyNoInputMessage)
 
         expected_model_dump = {
             "type": "termination_and_human_reply",
