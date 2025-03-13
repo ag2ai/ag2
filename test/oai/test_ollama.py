@@ -19,6 +19,7 @@ class Step(BaseModel):
     explanation: str
     output: str
 
+
 class MathReasoning(BaseModel):
     steps: list[Step]
     final_answer: str
@@ -48,9 +49,9 @@ def ollama_client():
 
     return client
 
+
 @pytest.fixture
 def ollama_client_maths_format():
-
     # Set Ollama client with some default values
     client = OllamaClient(response_format=MathReasoning)
 
@@ -58,6 +59,7 @@ def ollama_client_maths_format():
     client._tools_in_conversation = False
 
     return client
+
 
 # Test initialization and configuration
 @run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
@@ -325,7 +327,6 @@ def test_oai_messages_to_ollama_messages(ollama_client):
 # Test message conversion from OpenAI to Ollama format
 @run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
 def test_extract_json_response(ollama_client):
-
     # Set up the response format
     ollama_client._response_format = MathReasoning
 
@@ -366,10 +367,10 @@ def test_extract_json_response(ollama_client):
     ):
         ollama_client._convert_json_response(no_json_response)
 
+
 # Test message conversion from OpenAI to Ollama format
 @run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
 def test_extract_json_response_client(ollama_client_maths_format):
-
     # Test case 1: JSON within tags - CORRECT
     tagged_response = """{
                 "steps": [
@@ -407,10 +408,10 @@ def test_extract_json_response_client(ollama_client_maths_format):
     ):
         ollama_client_maths_format._convert_json_response(no_json_response)
 
+
 # Test message conversion from OpenAI to Ollama format
 @run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
 def test_extract_json_response_params(ollama_client):
-
     # All parameters (with default values)
     params = {
         "model": "llama3.1:8b",

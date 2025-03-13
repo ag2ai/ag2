@@ -77,7 +77,7 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]], **kwargs):
+    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]] = None, **kwargs):
         """Note that no api_key or environment variable is required for Ollama."""
 
         # Store the response format, if provided (for structured outputs)
@@ -176,7 +176,6 @@ class OllamaClient:
         if len(options_dict) != 0:
             ollama_params["options"] = options_dict
 
-
         # Structured outputs (see https://ollama.com/blog/structured-outputs)
         if not self._response_format and params.get("response_format"):
             self._response_format = params["response_format"]
@@ -238,7 +237,6 @@ class OllamaClient:
         ollama_params = self.parse_params(params)
 
         ollama_params["messages"] = ollama_messages
-
 
         # Token counts will be returned
         prompt_tokens = 0
