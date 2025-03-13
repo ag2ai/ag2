@@ -22,6 +22,15 @@ def mock_module() -> Iterator[ModuleType]:
     del sys.modules[module_name]
 
 
+@pytest.fixture
+def mock_module_without_version() -> Iterator[ModuleType]:
+    module_name = "mock_module"
+    module = ModuleType(module_name)
+    sys.modules[module_name] = module
+    yield module
+    del sys.modules[module_name]
+
+
 class MockModule:
     def __init__(self, name: str, version: str):
         self.__name__ = name
@@ -146,6 +155,21 @@ class TestmoduleInfo:
         ],
     )
     def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: Optional[str]) -> None:
+        assert module_info.is_in_sys_modules() == expected
+
+    @pytest.mark.parametrize(
+        "module_info, expected",
+        [
+            (ModuleInfo(name="mock_module"), None),
+            (
+                ModuleInfo(name="mock_module", min_version="1.0.0", min_inclusive=True),
+                "'mock_module' is installed, but the version is not available.",
+            ),
+        ],
+    )
+    def test_is_in_sys_modules_without_version(
+        self, mock_module_without_version: ModuleType, module_info: ModuleInfo, expected: Optional[str]
+    ) -> None:
         assert module_info.is_in_sys_modules() == expected
 
 

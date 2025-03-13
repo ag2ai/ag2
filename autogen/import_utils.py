@@ -41,19 +41,24 @@ class ModuleInfo:
         if self.name not in sys.modules:
             return f"'{self.name}' is not installed."
 
-        installed_version = sys.modules[self.name].__version__
+        installed_version = (
+            sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
+        )
+        if installed_version is None and (self.min_version or self.max_version):
+            return f"'{self.name}' is installed, but the version is not available."
+
         if self.min_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
             if not self.min_inclusive and installed_version == self.min_version:
                 return msg
-            if self.min_inclusive and installed_version < self.min_version:
+            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
                 return msg
 
         if self.max_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and sys.modules[self.name].__version__ == self.max_version:
+            if not self.max_inclusive and installed_version == self.max_version:
                 return msg
-            if self.max_inclusive and sys.modules[self.name].__version__ > self.max_version:
+            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
                 return msg
 
         return None
