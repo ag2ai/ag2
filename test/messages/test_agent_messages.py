@@ -34,7 +34,8 @@ from autogen.messages.agent_messages import (
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
     SpeakerAttemptSuccessfulMessage,
-    TerminationAndHumanReplyMessage,
+    TerminationAndHumanReplyNoInputMessage,
+    TerminationMessage,
     TextMessage,
     ToolCallMessage,
     ToolResponseMessage,
@@ -801,16 +802,16 @@ class TestTerminationAndHumanReplyMessage:
     def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
         no_human_input_msg = "NO HUMAN INPUT RECEIVED."
 
-        actual = TerminationAndHumanReplyMessage(
+        actual = TerminationAndHumanReplyNoInputMessage(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
             sender=sender,
             recipient=recipient,
         )
-        assert isinstance(actual, TerminationAndHumanReplyMessage)
+        assert isinstance(actual, TerminationAndHumanReplyNoInputMessage)
 
         expected_model_dump = {
-            "type": "termination_and_human_reply",
+            "type": "termination_and_human_reply_no_input",
             "content": {
                 "uuid": uuid,
                 "no_human_input_msg": no_human_input_msg,
@@ -824,6 +825,34 @@ class TestTerminationAndHumanReplyMessage:
         actual.print(f=mock)
         # print(mock.call_args_list)
         expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
+        assert mock.call_args_list == expected_call_args_list
+
+
+class TestTerminationMessage:
+    def test_print(self, uuid: UUID) -> None:
+        termination_reason = "User requested to end the conversation."
+
+        actual = TerminationMessage(
+            uuid=uuid,
+            termination_reason=termination_reason,
+        )
+        assert isinstance(actual, TerminationMessage)
+
+        expected_model_dump = {
+            "type": "termination",
+            "content": {
+                "uuid": uuid,
+                "termination_reason": termination_reason,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        mock = MagicMock()
+        actual.print(f=mock)
+        # print(mock.call_args_list)
+        expected_call_args_list = [
+            call("\x1b[31m\n>>>>>>>> TERMINATING: " + termination_reason + "\x1b[0m", flush=True)
+        ]
         assert mock.call_args_list == expected_call_args_list
 
 

@@ -1878,7 +1878,7 @@ def test_manager_messages_to_string():
     groupchat = GroupChat(messages=messages, agents=[])
     manager = GroupChatManager(groupchat)
 
-    # Convert the messages List[Dict] to a JSON string
+    # Convert the messages list[dict] to a JSON string
     converted_string = manager.messages_to_string(messages)
 
     # The conversion should match the original messages
@@ -1886,13 +1886,13 @@ def test_manager_messages_to_string():
 
 
 def test_manager_messages_from_string():
-    """In this test we test the conversion of a JSON string of messages to a messages List[Dict]"""
+    """In this test we test the conversion of a JSON string of messages to a messages list[dict]"""
     messages_str = r"""[{"content": "You are an expert at finding the next speaker.", "role": "system"}, {"content": "Let's get this meeting started. First the Product_Manager will create 3 new product ideas.", "name": "Chairperson", "role": "assistant"}]"""
 
     groupchat = GroupChat(messages=[], agents=[])
     manager = GroupChatManager(groupchat)
 
-    # Convert the messages List[Dict] to a JSON string
+    # Convert the messages list[dict] to a JSON string
     messages = manager.messages_from_string(messages_str)
 
     # The conversion should match the original messages
@@ -2084,7 +2084,7 @@ def test_manager_resume_messages():
     manager = GroupChatManager(groupchat)
     messages = 1
 
-    # Only acceptable messages types are JSON str and List[Dict]
+    # Only acceptable messages types are JSON str and list[dict]
 
     # Try a number
     with pytest.raises(Exception):
