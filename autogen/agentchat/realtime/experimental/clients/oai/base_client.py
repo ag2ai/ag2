@@ -27,7 +27,7 @@ global_logger = getLogger(__name__)
 
 
 @register_realtime_client()
-@require_optional_import("openai", "openai-realtime", except_for=["get_factory", "__init__"])
+@require_optional_import("openai>=1.66.2", "openai-realtime", except_for=["get_factory", "__init__"])
 @export_module("autogen.agentchat.realtime.experimental.clients")
 class OpenAIRealtimeClient(RealtimeClientBase):
     """(Experimental) Client for OpenAI Realtime API."""
