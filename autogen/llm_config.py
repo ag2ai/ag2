@@ -5,14 +5,13 @@
 import functools
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
 
 from pydantic import AnyUrl, BaseModel, Field, SecretStr, field_serializer
 
 if TYPE_CHECKING:
-    from _collections_abc import dict_items, dict_keys, dict_values
-
     from .oai.client import ModelClient
 
     _KT = TypeVar("_KT")
@@ -72,6 +71,15 @@ class LLMConfigFilter(BaseModel):
         except KeyError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
+    def items(self) -> Iterable[tuple[str, Any]]:
+        return self.filter_dict.items()
+
+    def keys(self) -> Iterable[str]:
+        return self.filter_dict.keys()
+
+    def values(self) -> Iterable[Any]:
+        return self.filter_dict.values()
+
     def __repr__(self) -> str:
         # Iterate filter_dict and create a string representation
         r = [f"{k}={repr(v)}" for k, v in self.filter_dict.items()]
@@ -104,6 +112,27 @@ class LLMConfig:
             return LLMConfig._current_llm_config.get()
         except LookupError:
             return None
+
+    def _satisfies_criteria(self, value: Any, criteria_values: Any) -> bool:
+        if value is None:
+            return False
+
+        if isinstance(value, list):
+            return bool(set(value) & set(criteria_values))  # Non-empty intersection
+        else:
+            return value in criteria_values
+
+    def apply_filter(self, filter: LLMConfigFilter, exclude: bool = False) -> "LLMConfig":
+        d = self.model_dump()
+        config_list = d["config_list"]
+        filtered_config_list = [
+            item
+            for item in config_list
+            if all(self._satisfies_criteria(item.get(key), values) != exclude for key, values in filter.items())
+        ]
+
+        d["config_list"] = filtered_config_list
+        return LLMConfig(**d)
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
@@ -167,17 +196,17 @@ class LLMConfig:
     def __repr__(self) -> str:
         return repr(self._model).replace("_LLMConfig", self.__class__.__name__)
 
-    def items(self) -> "dict_items[_KT, _VT]":
+    def items(self) -> Iterable[tuple[str, Any]]:
         d = self.model_dump()
-        return d.items()  # type: ignore[return-value]
+        return d.items()
 
-    def keys(self) -> "dict_keys[_KT, _VT]":
+    def keys(self) -> Iterable[str]:
         d = self.model_dump()
-        return d.keys()  # type: ignore[return-value]
+        return d.keys()
 
-    def values(self) -> "dict_values[_KT, _VT]":
+    def values(self) -> Iterable[Any]:
         d = self.model_dump()
-        return d.values()  # type: ignore[return-value]
+        return d.values()
 
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
 

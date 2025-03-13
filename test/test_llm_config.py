@@ -20,6 +20,37 @@ from autogen.oai.mistral import MistralLLMConfigEntry
 from autogen.oai.ollama import OllamaLLMConfigEntry
 from autogen.oai.together import TogetherLLMConfigEntry
 
+JSON_SAMPLE = """
+[
+    {
+        "model": "gpt-3.5-turbo",
+        "api_type": "openai",
+        "tags": ["gpt35"]
+    },
+    {
+        "model": "gpt-4",
+        "api_type": "openai",
+        "tags": ["gpt4"]
+    },
+    {
+        "model": "gpt-35-turbo-v0301",
+        "tags": ["gpt-3.5-turbo", "gpt35_turbo"],
+        "api_key": "Your Azure OAI API Key",
+        "base_url": "https://deployment_name.openai.azure.com/",
+        "api_type": "azure",
+        "api_version": "2024-02-01"
+    },
+    {
+        "model": "gpt",
+        "api_key": "not-needed",
+        "base_url": "http://localhost:1234/v1",
+        "tags": []
+    }
+]
+"""
+
+JSON_SAMPLE_DICT = json.loads(JSON_SAMPLE)
+
 
 class TestLLMConfigFilter:
     @pytest.fixture
@@ -78,6 +109,24 @@ class TestLLMConfigFilter:
         assert llm_config_filter["api_type"] == "azure"
         llm_config_filter["api_type"] = "openai"
         assert llm_config_filter["api_type"] == "openai"
+
+    def test_items(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.items()
+        assert isinstance(actual, dict_items)
+        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
+        assert dict(actual) == expected
+
+    def test_keys(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.keys()
+        assert isinstance(actual, dict_keys)
+        expected = ["api_type", "model"]
+        assert list(actual) == expected
+
+    def test_values(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.values()
+        assert isinstance(actual, dict_values)
+        expected = ["openai", ["gpt-4o-mini", "gpt-4o-small"]]
+        assert list(actual) == expected
 
     def test_repr(self) -> None:
         actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
@@ -604,3 +653,36 @@ class TestLLMConfig:
             assert actual == openai_llm_config
 
         assert LLMConfig.get_current_llm_config() is None
+
+    @pytest.mark.parametrize(
+        "filter_dict, exclude, expected",
+        [
+            (
+                {"tags": ["gpt35", "gpt4"]},
+                False,
+                JSON_SAMPLE_DICT[0:2],
+            ),
+            (
+                {"tags": ["gpt35", "gpt4"]},
+                True,
+                JSON_SAMPLE_DICT[2:4],
+            ),
+            (
+                {"api_type": "azure", "api_version": "2024-02-01"},
+                False,
+                [JSON_SAMPLE_DICT[2]],
+            ),
+            (
+                {"api_type": ["azure"]},
+                False,
+                [JSON_SAMPLE_DICT[2]],
+            ),
+        ],
+    )
+    def test_apply_filter(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        llm_config_filter = LLMConfigFilter(**filter_dict)
+
+        actual = openai_llm_config.apply_filter(llm_config_filter, exclude=exclude)
+        assert isinstance(actual, LLMConfig)
+        assert actual.config_list == expected
