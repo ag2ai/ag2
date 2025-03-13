@@ -7,14 +7,16 @@
 import ast
 import re
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from ..doc_utils import export_module
-from .agent import Agent
+
+if TYPE_CHECKING:
+    from .agent import Agent
 
 
 def consolidate_chat_info(
-    chat_info: Union[dict[str, Any], list[dict[str, Any]]], uniform_sender: Optional[Agent] = None
+    chat_info: Union[dict[str, Any], list[dict[str, Any]]], uniform_sender: Optional["Agent"] = None
 ) -> None:
     if isinstance(chat_info, dict):
         chat_info = [chat_info]
@@ -36,7 +38,7 @@ def consolidate_chat_info(
 
 
 @export_module("autogen")
-def gather_usage_summary(agents: list[Agent]) -> dict[str, dict[str, Any]]:
+def gather_usage_summary(agents: list["Agent"]) -> dict[str, dict[str, Any]]:
     r"""Gather usage summary from all agents.
 
     Args:

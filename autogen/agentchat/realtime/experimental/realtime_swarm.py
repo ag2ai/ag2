@@ -13,7 +13,7 @@ from asyncer import asyncify, create_task_group, syncify
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
-from ... import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, initiate_swarm_chat
+from ... import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, LLMMessageType, initiate_swarm_chat
 from ...utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def message_to_dict(message: Union[dict[str, Any], str]) -> dict[str, Any]:
+def message_to_dict(message: Union[LLMMessageType, str]) -> dict[str, Any]:
     if isinstance(message, str):
         return {"content": message}
     elif isinstance(message, dict):
@@ -50,7 +50,7 @@ def message_to_dict(message: Union[dict[str, Any], str]) -> dict[str, Any]:
         return dict(message)
 
 
-def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: Agent) -> dict[str, Any]:
+def parse_oai_message(message: Union[LLMMessageType, str], role: str, adressee: Agent) -> dict[str, Any]:
     """
     Parse a message into an OpenAI-compatible message format.
 
@@ -155,7 +155,7 @@ class SwarmableAgent:
 
     def send(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         recipient: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -165,7 +165,7 @@ class SwarmableAgent:
 
     def receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         sender: Agent,
         request_reply: Optional[bool] = None,
         silent: Optional[bool] = False,
@@ -179,7 +179,7 @@ class SwarmableAgent:
 
     def generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -194,7 +194,7 @@ class SwarmableAgent:
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Union[str, None]]:
@@ -203,7 +203,7 @@ class SwarmableAgent:
     def initiate_chat(
         self,
         recipient: ConversableAgent,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         clear_history: bool = True,
         silent: Optional[bool] = False,
         cache: Optional[AbstractCache] = None,
@@ -234,7 +234,7 @@ class SwarmableAgent:
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -242,7 +242,7 @@ class SwarmableAgent:
 
     async def a_receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -250,7 +250,7 @@ class SwarmableAgent:
 
     async def a_send(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -390,7 +390,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[str]]:

@@ -59,7 +59,7 @@ Signature of reply function:
 ```python
 def my_reply_function(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[LLMMessageType]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, dict[str, Any]]:
@@ -88,7 +88,7 @@ agent_bob = ConversableAgent(
 # Our reply function
 def get_date_time_reply(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[LLMMessageType]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, dict[str, Any]]:

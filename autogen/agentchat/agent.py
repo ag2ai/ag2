@@ -4,11 +4,23 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Protocol, Union, runtime_checkable
 
+from ..cache.abstract_cache_base import AbstractCache
 from ..doc_utils import export_module
+from .chat import ChatResult
 
-__all__ = ["Agent", "LLMAgent"]
+if TYPE_CHECKING:
+    # mypy will fail if Conversible agent does not implement Agent protocol
+    from .chat import ChatResult
+    from .conversable_agent import ConversableAgent
+
+
+__all__ = ["DEFAULT_SUMMARY_METHOD", "Agent", "LLMAgent", "LLMMessageType"]
+
+DEFAULT_SUMMARY_METHOD = "last_msg"
+
+LLMMessageType = dict[str, Any]
 
 
 @runtime_checkable
@@ -32,9 +44,14 @@ class Agent(Protocol):
         """
         ...
 
+    @property
+    def llm_config(self) -> Union[dict[str, Any], Literal[False]]:
+        """The LLM configuration of the agent."""
+        ...
+
     def send(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -50,7 +67,7 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -66,7 +83,7 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -81,7 +98,7 @@ class Agent(Protocol):
 
     async def a_receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: Union[LLMMessageType, str],
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
@@ -97,7 +114,7 @@ class Agent(Protocol):
 
     def generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -116,7 +133,7 @@ class Agent(Protocol):
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
@@ -133,6 +150,32 @@ class Agent(Protocol):
             str or dict or None: the generated reply. If None, no reply is generated.
         """
         ...
+
+    def initiate_chat(
+        self,
+        recipient: "ConversableAgent",
+        clear_history: bool = True,
+        silent: Optional[bool] = False,
+        cache: Optional[AbstractCache] = None,
+        max_turns: Optional[int] = None,
+        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_args: Optional[dict[str, Any]] = {},
+        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        **kwargs: Any,
+    ) -> "ChatResult": ...
+
+    async def a_initiate_chat(
+        self,
+        recipient: "ConversableAgent",
+        clear_history: bool = True,
+        silent: Optional[bool] = False,
+        cache: Optional[AbstractCache] = None,
+        max_turns: Optional[int] = None,
+        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_args: Optional[dict[str, Any]] = {},
+        message: Optional[Union[LLMMessageType, str, Callable[..., Any]]] = None,
+        **kwargs: Any,
+    ) -> "ChatResult": ...
 
 
 @runtime_checkable
@@ -154,7 +197,5 @@ class LLMAgent(Agent, Protocol):
 
 if TYPE_CHECKING:
     # mypy will fail if Conversible agent does not implement Agent protocol
-    from .conversable_agent import ConversableAgent
-
-    def _check_protocol_implementation(agent: ConversableAgent) -> Agent:
+    def _check_protocol_implementation(agent: ConversableAgent) -> LLMAgent:
         return agent

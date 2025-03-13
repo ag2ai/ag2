@@ -9,7 +9,7 @@ from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
 from ...code_utils import content_str
-from .. import Agent, ConversableAgent
+from .. import Agent, ConversableAgent, LLMMessageType
 from ..contrib.img_utils import (
     gpt4v_formatter,
     message_formatter_pil_to_b64,
@@ -100,7 +100,7 @@ class MultimodalConversableAgent(ConversableAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

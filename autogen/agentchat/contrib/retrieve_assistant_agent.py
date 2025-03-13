@@ -7,7 +7,7 @@
 import warnings
 from typing import Any, Optional, Union
 
-from ..agent import Agent
+from ..agent import Agent, LLMMessageType
 from ..assistant_agent import AssistantAgent
 
 
@@ -33,7 +33,7 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def _generate_retrieve_assistant_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

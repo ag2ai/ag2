@@ -8,7 +8,7 @@ import re
 import warnings
 from typing import Any, Literal, Optional, Tuple
 
-from .... import Agent, AssistantAgent, UserProxyAgent
+from .... import Agent, AssistantAgent, LLMMessageType, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
 
@@ -425,7 +425,7 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:

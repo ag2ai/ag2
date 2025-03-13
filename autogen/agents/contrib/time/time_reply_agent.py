@@ -4,7 +4,7 @@
 
 from typing import Any, Optional
 
-from .... import Agent, ConversableAgent, OpenAIWrapper
+from .... import Agent, ConversableAgent, LLMMessageType, OpenAIWrapper
 from ....doc_utils import export_module
 
 __all__ = ["TimeReplyAgent"]
@@ -51,7 +51,7 @@ class TimeReplyAgent(ConversableAgent):
         # may even contain another AG2 workflow inside it
         def get_date_time_reply(
             agent: ConversableAgent,
-            messages: Optional[list[dict[str, Any]]] = None,
+            messages: Optional[list[LLMMessageType]] = None,
             sender: Optional[Agent] = None,
             config: Optional[OpenAIWrapper] = None,
         ) -> tuple[bool, dict[str, Any]]:

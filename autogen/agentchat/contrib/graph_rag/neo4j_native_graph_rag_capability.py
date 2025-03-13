@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, Union
 
-from .... import Agent, ConversableAgent
+from ... import Agent, ConversableAgent, LLMMessageType
 from .graph_query_engine import GraphStoreQueryResult
 from .graph_rag_capability import GraphRagCapability
 from .neo4j_native_graph_query_engine import Neo4jNativeGraphQueryEngine
@@ -41,7 +41,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
     def _reply_using_native_neo4j_query(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -66,7 +66,7 @@ class Neo4jNativeGraphCapability(GraphRagCapability):
 
         return True, result.answer if result.answer else "I'm sorry, I don't have an answer for that."
 
-    def _messages_summary(self, messages: Union[dict[str, Any], str], system_message: str) -> str:
+    def _messages_summary(self, messages: Union[LLMMessageType, str], system_message: str) -> str:
         """Summarize the messages in the conversation history. Excluding any message with 'tool_calls' and 'tool_responses'
         Includes the 'name' (if it exists) and the 'content', with a new line between each one, like:
         customer:

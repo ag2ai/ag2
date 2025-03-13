@@ -28,9 +28,9 @@ Signature:
 ```python
 def your_function_name(
     sender: ConversableAgent,
-    message: Union[dict[str, Any], str],
+    message: LLMMessageType,
     recipient: Agent,
-    silent: bool) -> Union[dict[str, Any], str]:
+    silent: bool) -> Union[LLMMessageType, str]:
 ```
 
 Let's look at how we could prepend a message with who is sending the message (sender) and to whom it's going (recipient).
@@ -50,9 +50,9 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 # Our function associated with the hook
 def update_message_before_send(
     sender: ConversableAgent,
-    message: Union[dict[str, Any], str],
+    message: Union[LLMMessageType, str],
     recipient: Agent,
-    silent: bool) -> Union[dict[str, Any], str]:
+    silent: bool) -> Union[LLMMessageType, str]:
 
     if isinstance(message, dict):
         msg_text = message.get("content", message)

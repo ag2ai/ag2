@@ -14,7 +14,7 @@ from typing import Any, Optional, Union
 from ... import OpenAIWrapper
 from ...oai.openai_utils import create_gpt_assistant, retrieve_assistants_by_name, update_gpt_assistant
 from ...runtime_logging import log_new_agent, logging_enabled
-from ..agent import Agent
+from ..agent import Agent, LLMMessageType
 from ..assistant_agent import AssistantAgent, ConversableAgent
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

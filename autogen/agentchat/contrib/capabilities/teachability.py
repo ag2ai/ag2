@@ -10,6 +10,7 @@ from typing import Any, Optional, Union
 
 from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
+from ...agent import LLMMessageType
 from ...assistant_agent import ConversableAgent
 from ..text_analyzer_agent import TextAnalyzerAgent
 from .agent_capability import AgentCapability
@@ -91,7 +92,7 @@ class Teachability(AgentCapability):
         """Adds a few arbitrary memos to the DB."""
         self.memo_store.prepopulate()
 
-    def process_last_received_message(self, text: Union[dict[str, Any], str]):
+    def process_last_received_message(self, text: Union[LLMMessageType, str]):
         """Appends any relevant memos to the message text, and stores any apparent teachings in new memos.
         Uses TextAnalyzerAgent to make decisions about memo storage and retrieval.
         """
@@ -106,7 +107,7 @@ class Teachability(AgentCapability):
         # Return the (possibly) expanded message text.
         return expanded_text
 
-    def _consider_memo_storage(self, comment: Union[dict[str, Any], str]):
+    def _consider_memo_storage(self, comment: Union[LLMMessageType, str]):
         """Decides whether to store something from one user comment in the DB."""
         memo_added = False
 
@@ -164,7 +165,7 @@ class Teachability(AgentCapability):
             # Yes. Save them to disk.
             self.memo_store._save_memos()
 
-    def _consider_memo_retrieval(self, comment: Union[dict[str, Any], str]):
+    def _consider_memo_retrieval(self, comment: Union[LLMMessageType, str]):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
         # First, use the comment directly as the lookup key.
         if self.verbosity >= 1:
@@ -227,7 +228,7 @@ class Teachability(AgentCapability):
             memo_texts = memo_texts + "\n" + info
         return memo_texts
 
-    def _analyze(self, text_to_analyze: Union[dict[str, Any], str], analysis_instructions: Union[dict[str, Any], str]):
+    def _analyze(self, text_to_analyze: Union[LLMMessageType, str], analysis_instructions: Union[LLMMessageType, str]):
         """Asks TextAnalyzerAgent to analyze the given text according to specific instructions."""
         self.analyzer.reset()  # Clear the analyzer's list of messages.
         self.teachable_agent.send(

@@ -22,7 +22,7 @@ from ...retrieve_utils import (
 )
 from ...token_count_utils import count_token
 from .. import UserProxyAgent
-from ..agent import Agent
+from ..agent import Agent, LLMMessageType
 from ..contrib.vectordb.base import Document, QueryResults, VectorDB, VectorDBFactory
 from ..contrib.vectordb.utils import (
     chroma_results_to_query_results,
@@ -520,7 +520,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
 
     def _generate_retrieve_user_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

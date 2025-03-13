@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Annotated, Any, Callable, ClassVar, Literal, Optional
+from typing import Any, Callable, ClassVar, Literal, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -35,15 +35,15 @@ Message = dict[str, Any]
 
 
 class Event(BaseModel):
-    uuid: Annotated[UUID, Field(default_factory=uuid4)]
+    uuid: UUID = Field(default_factory=uuid4)
 
     type: ClassVar[EventType]
 
     @classmethod
-    def accept(cls, message: dict[str, Any]) -> None:
-        return message["type"] == cls.type
+    def accept(cls, message: dict[str, Any]) -> bool:
+        return message["type"] == cls.type  # type: ignore[no-any-return]
 
-    def model_dump(self, **kwargs) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Serialize the Event instance, including the `type` field."""
         data = super().model_dump(**kwargs)
         data["type"] = self.type  # Include the ClassVar type explicitly

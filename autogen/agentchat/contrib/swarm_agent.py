@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from types import MethodType
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Optional, Sequence, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -17,7 +17,7 @@ from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
-from ..agent import Agent
+from ..agent import Agent, LLMMessageType
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
@@ -290,7 +290,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     agent._swarm_is_established = True  # type: ignore[attr-defined]
 
 
-def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
+def _link_agents_to_swarm_manager(agents: Sequence[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
 
     This is primarily used so that agents can set the tool executor's _swarm_next_agent attribute to control
@@ -304,7 +304,7 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
 
 def _run_oncontextconditions(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[LLMMessageType]] = None,
     sender: Optional[Agent] = None,
     config: Optional[Any] = None,
 ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -1200,7 +1200,7 @@ def register_hand_off(
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")
 
 
-def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
+def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[LLMMessageType]] = None) -> None:
     """Updates the agent's functions based on the OnCondition's available condition."""
     for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
         is_available = True
@@ -1232,7 +1232,7 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
 
 def _generate_swarm_tool_reply(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[LLMMessageType]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -1250,7 +1250,7 @@ def _generate_swarm_tool_reply(
 
     message = messages[-1]
     if "tool_calls" in message:
-        tool_call_count = len(message["tool_calls"])
+        tool_call_count = len(message["tool_calls"])  # type: ignore[index]
 
         # Loop through tool calls individually (so context can be updated after each function call)
         next_agent: Optional[Agent] = None
@@ -1260,10 +1260,10 @@ def _generate_swarm_tool_reply(
             message_copy = copy.deepcopy(message)
 
             # 1. add context_variables to the tool call arguments
-            tool_call = message_copy["tool_calls"][index]
+            tool_call = message_copy["tool_calls"][index]  # type: ignore[index]
 
             # Ensure we are only executing the one tool at a time
-            message_copy["tool_calls"] = [tool_call]
+            message_copy["tool_calls"] = [tool_call]  # type: ignore[index]
 
             # 2. generate tool calls reply
             _, tool_message = agent.generate_tool_calls_reply([message_copy])

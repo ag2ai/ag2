@@ -11,7 +11,7 @@ import random
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 from ..code_utils import content_str
 from ..doc_utils import export_module
@@ -31,7 +31,7 @@ from ..messages.agent_messages import (
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
-from .agent import Agent
+from .agent import Agent, LLMMessageType
 from .contrib.capabilities import transform_messages
 from .conversable_agent import ConversableAgent
 
@@ -127,7 +127,7 @@ class GroupChat:
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
     """
 
-    agents: list[Agent]
+    agents: Sequence[Agent]
     messages: list[dict[str, Any]] = field(default_factory=list)
     max_round: int = 10
     admin_name: str = "Admin"
@@ -1143,7 +1143,7 @@ class GroupChatManager(ConversableAgent):
 
     def run_chat(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
@@ -1223,7 +1223,7 @@ class GroupChatManager(ConversableAgent):
 
     async def a_run_chat(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ):

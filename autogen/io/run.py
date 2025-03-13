@@ -42,7 +42,7 @@ class MultiprocessingIOStream:
 class RunResponse:
     def __init__(self, iostream: MultiprocessingIOStream):
         self.iostream = iostream
-        self._summary = None
+        self._summary: Optional[str] = None
         self._uuid = uuid4()
 
     def _queue_generator(self, q: multiprocessing.Queue) -> Iterable[Event]:  # type: ignore[type-arg]
@@ -111,14 +111,17 @@ def run_group_chat(*agents: Agent, iostream: MultiprocessingIOStream, message: s
 
 
 def run(
-    *agents: Agent, message: Optional[str] = None, previous_run: Optional[RunResponseProtocol] = None, **kwargs: Any
+    *agents: Agent,
+    initial_message: Optional[str] = None,
+    previous_run: Optional[RunResponseProtocol] = None,
+    **kwargs: Any,
 ) -> RunResponseProtocol:
     """Run the agents with the given initial message.
 
     Args:
-        agents: The agents to run.
-        message: The initial message to send to the first agent.
-        previous_run: The previous run to continue.
+        agents (Agent): The agents to run.
+        initial_message (str): The initial message to send to the first agent.
+        previous_run (RunResponseProtocol): The previous run to continue.
         kwargs: Additional arguments to pass to the agents.
 
     """
@@ -126,12 +129,14 @@ def run(
     response = RunResponse(iostream)
 
     if len(agents) == 1:
-        process = multiprocessing.Process(target=run_single_agent, args=(agents[0], iostream, message), kwargs=kwargs)
+        process = multiprocessing.Process(
+            target=run_single_agent, args=(agents[0], iostream, initial_message), kwargs=kwargs
+        )
         process.start()
 
     else:
         process = multiprocessing.Process(
-            target=run_group_chat, args=(agents), kwargs={**kwargs, "iostream": iostream, "message": message}
+            target=run_group_chat, args=(agents), kwargs={**kwargs, "iostream": iostream, "message": initial_message}
         )
         process.start()
 
@@ -139,15 +144,18 @@ def run(
 
 
 async def a_run(  # type: ignore[empty-body]
-    *agents: Agent, message: Optional[str] = None, previous_run: Optional[RunResponseProtocol] = None, **kwargs: Any
+    *agents: Agent,
+    initial_message: Optional[str] = None,
+    previous_run: Optional[RunResponseProtocol] = None,
+    **kwargs: Any,
 ) -> AsyncRunResponseProtocol:
     """Run the agents with the given initial message.
 
     Args:
-        agents: The agents to run.
-        message: The initial message to send to the first agent.
-        previous_run: The previous run to continue.
-        kwargs: Additional arguments to pass to the agents.
+        agents (Agent): The agents to run.
+        initial_message (str): The initial message to send to the first agent.
+        previous_run (RunResponseProtocol): The previous run to continue.
+        kwargs: Additional arguments to pass to the agents
 
     """
     ...

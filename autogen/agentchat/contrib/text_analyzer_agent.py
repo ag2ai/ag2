@@ -6,8 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Literal, Optional, Union
 
-from ..agent import Agent
-from ..assistant_agent import ConversableAgent
+from .. import Agent, ConversableAgent, LLMMessageType
 
 system_message = """You are an expert in text analysis.
 The user will give you TEXT to analyze.
@@ -47,7 +46,7 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list[LLMMessageType]] = None,
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
