@@ -20,10 +20,15 @@ def test_issue_1324(credentials_gpt_4o_mini: Credentials, monkeypatch: pytest.Mo
 
     user_proxy = ConversableAgent(
         name="user_proxy",
-        human_input_mode="ALWAYS",
+        human_input_mode="NEVER",
     )
 
-    user_proxy.initiate_chat(
+    summary = user_proxy.initiate_chat(
         recipient=document_agent,
         message="could you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf? What is the fiscal year 2024 financial summary?",
+        max_turns=10,
+        summary_method="reflection_with_llm",
     )
+
+    assert "error" not in summary.summary.lower()
+    assert "fail" not in summary.summary.lower()
