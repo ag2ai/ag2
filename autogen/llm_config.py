@@ -122,7 +122,10 @@ class LLMConfig:
         else:
             return value in criteria_values
 
-    def apply_filter(self, filter: LLMConfigFilter, exclude: bool = False) -> "LLMConfig":
+    def apply_filter(self, filter: Optional[LLMConfigFilter], exclude: bool = False) -> "LLMConfig":
+        if filter is None:
+            return self
+
         d = self.model_dump()
         config_list = d["config_list"]
         filtered_config_list = [
@@ -231,7 +234,7 @@ class LLMConfig:
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
-                    Field(default_factory=list, min_length=1),
+                    Field(default_factory=list, min_length=0),
                 ]
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig

@@ -43,7 +43,7 @@ from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
-from ..llm_config import LLMConfig
+from ..llm_config import LLMConfig, LLMConfigFilter
 from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
@@ -153,6 +153,7 @@ class ConversableAgent(LLMAgent):
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
         llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+        llm_config_filter: Optional[Union[LLMConfigFilter, dict[str, Any]]] = None,
         default_auto_reply: Union[str, dict[str, Any]] = "",
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
@@ -198,12 +199,14 @@ class ConversableAgent(LLMAgent):
                 - timeout (Optional, int): The maximum execution time in seconds.
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
-            llm_config (dict or False or None): llm inference configuration.
+            llm_config (LLMConfig or dict or False or None): llm inference configuration.
                 Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
                 for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
                 When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
+            llm_config_filter (LLMConfigFilter or dict): llm config filter to filter the llm config.
+                It can be a dict or an instance of LLMConfigFilter.
             default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.
             description (str): a short description of the agent. This description is used by other agents
                 (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
@@ -254,7 +257,13 @@ class ConversableAgent(LLMAgent):
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/topics/llm_configuration#adding-http-client-in-llm-config-for-proxy"
                 ) from e
 
-        self.llm_config = self._validate_llm_config(llm_config)
+        self._llm_config_filter = (
+            LLMConfigFilter(**llm_config_filter) if isinstance(llm_config_filter, dict) else llm_config_filter
+        )
+        self.llm_config = self._apply_llm_config_filter(
+            llm_config=self._validate_llm_config(llm_config),
+            llm_config_filter=self._llm_config_filter,
+        )
         self.client = self._create_client(self.llm_config)
         self._validate_name(name)
         self._name = name
@@ -494,6 +503,18 @@ class ConversableAgent(LLMAgent):
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
 
         return llm_config
+
+    @classmethod
+    def _apply_llm_config_filter(
+        cls,
+        llm_config: Union[LLMConfig, Literal[False]],
+        llm_config_filter: Optional[LLMConfigFilter],
+        exclude: bool = False,
+    ) -> Union[LLMConfig, Literal[False]]:
+        if llm_config is False:
+            return llm_config
+
+        return llm_config.apply_filter(llm_config_filter, exclude=exclude)
 
     @classmethod
     def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[OpenAIWrapper]:

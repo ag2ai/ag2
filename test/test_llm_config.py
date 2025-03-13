@@ -677,6 +677,11 @@ class TestLLMConfig:
                 False,
                 [JSON_SAMPLE_DICT[2]],
             ),
+            (
+                {},
+                False,
+                JSON_SAMPLE_DICT,
+            ),
         ],
     )
     def test_apply_filter(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
