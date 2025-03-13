@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel
 
@@ -77,11 +77,11 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self):
+    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]] = None, **kwargs):
         """Note that no api_key or environment variable is required for Ollama."""
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[type[BaseModel]] = None
+        self._response_format: Optional[Union[BaseModel, dict[str, Any]]] = response_format
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -176,6 +176,17 @@ class OllamaClient:
         if len(options_dict) != 0:
             ollama_params["options"] = options_dict
 
+        # Structured outputs (see https://ollama.com/blog/structured-outputs)
+        if not self._response_format and params.get("response_format"):
+            self._response_format = params["response_format"]
+
+        if self._response_format:
+            if isinstance(self._response_format, dict):
+                ollama_params["format"] = self._response_format
+            else:
+                # Keep self._response_format as a Pydantic model for when process the response
+                ollama_params["format"] = self._response_format.model_json_schema()
+
         return ollama_params
 
     @require_optional_import(["ollama", "fix_busted_json"], "ollama")
@@ -226,17 +237,6 @@ class OllamaClient:
         ollama_params = self.parse_params(params)
 
         ollama_params["messages"] = ollama_messages
-
-        # If response_format exists, we want structured outputs
-        # Based on:
-        # https://ollama.com/blog/structured-outputs
-        if params.get("response_format"):
-            self._response_format = params["response_format"]
-            ollama_params["format"] = (
-                params.get("response_format").model_json_schema()
-                if isinstance(self._response_format, BaseModel)
-                else params.get("response_format")
-            )
 
         # Token counts will be returned
         prompt_tokens = 0
