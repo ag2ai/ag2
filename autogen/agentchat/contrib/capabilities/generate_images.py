@@ -65,7 +65,7 @@ class ImageGenerator(Protocol):
 
 
 @require_optional_import("PIL", "unknown")
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=1.66.2", "openai")
 class DalleImageGenerator:
     """Generates images using OpenAI's DALL-E models.
 

@@ -42,7 +42,8 @@ __all__ = [
     "SpeakerAttemptFailedMultipleAgentsMessage",
     "SpeakerAttemptFailedNoAgentsMessage",
     "SpeakerAttemptSuccessfulMessage",
-    "TerminationAndHumanReplyMessage",
+    "TerminationAndHumanReplyNoInputMessage",
+    "TerminationMessage",
     "TextMessage",
     "ToolCallMessage",
     "ToolResponseMessage",
@@ -545,7 +546,9 @@ class GroupChatRunChatMessage(BaseMessage):
 
 
 @wrap_message
-class TerminationAndHumanReplyMessage(BaseMessage):
+class TerminationAndHumanReplyNoInputMessage(BaseMessage):
+    """When the human-in-the-loop is prompted but provides no input."""
+
     no_human_input_msg: str
     sender_name: str
     recipient_name: str
@@ -596,6 +599,29 @@ class UsingAutoReplyMessage(BaseMessage):
         f = f or print
 
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
+
+
+@wrap_message
+class TerminationMessage(BaseMessage):
+    """When a workflow termination condition is met"""
+
+    termination_reason: str
+
+    def __init__(
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        termination_reason: str,
+    ):
+        super().__init__(
+            uuid=uuid,
+            termination_reason=termination_reason,
+        )
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+
+        f(colored(f"\n>>>>>>>> TERMINATING: {self.termination_reason}", "red"), flush=True)
 
 
 @wrap_message

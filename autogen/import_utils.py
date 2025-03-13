@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+import re
 import sys
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
@@ -19,6 +21,110 @@ __all__ = [
 ]
 
 logger = getLogger(__name__)
+
+
+@dataclass
+class ModuleInfo:
+    name: str
+    min_version: Optional[str] = None
+    max_version: Optional[str] = None
+    min_inclusive: bool = False
+    max_inclusive: bool = False
+
+    def is_in_sys_modules(self) -> Optional[str]:
+        """Check if the module is installed and satisfies the version constraints
+
+        Returns:
+            None if the module is installed and satisfies the version constraints, otherwise a message indicating the issue.
+
+        """
+        if self.name not in sys.modules:
+            return f"'{self.name}' is not installed."
+
+        installed_version = (
+            sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
+        )
+        if installed_version is None and (self.min_version or self.max_version):
+            return f"'{self.name}' is installed, but the version is not available."
+
+        if self.min_version:
+            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
+            if not self.min_inclusive and installed_version == self.min_version:
+                return msg
+            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
+                return msg
+
+        if self.max_version:
+            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
+            if not self.max_inclusive and installed_version == self.max_version:
+                return msg
+            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
+                return msg
+
+        return None
+
+    def __repr__(self) -> str:
+        s = self.name
+        if self.min_version:
+            s += f">={self.min_version}" if self.min_inclusive else f">{self.min_version}"
+        if self.max_version:
+            s += f"<={self.max_version}" if self.max_inclusive else f"<{self.max_version}"
+        return s
+
+    @classmethod
+    def from_str(cls, module_info: str) -> "ModuleInfo":
+        """Parse a string to create a ModuleInfo object
+
+        Args:
+            module_info (str): A string containing the module name and optional version constraints
+
+        Returns:
+            ModuleInfo: A ModuleInfo object with the parsed information
+
+        Raises:
+            ValueError: If the module information is invalid
+        """
+
+        pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
+        match = pattern.match(module_info.strip())
+
+        if not match:
+            raise ValueError(f"Invalid package information: {module_info}")
+
+        name = match.group("name")
+        constraints = match.group("constraint").strip()
+        min_version = max_version = None
+        min_inclusive = max_inclusive = False
+
+        if constraints:
+            constraint_pattern = re.findall(r"(>=|<=|>|<)([0-9\.]+)?", constraints)
+
+            if not all(version for _, version in constraint_pattern):
+                raise ValueError(f"Invalid module information: {module_info}")
+
+            for operator, version in constraint_pattern:
+                if operator == ">=":
+                    min_version = version
+                    min_inclusive = True
+                elif operator == "<=":
+                    max_version = version
+                    max_inclusive = True
+                elif operator == ">":
+                    min_version = version
+                    min_inclusive = False
+                elif operator == "<":
+                    max_version = version
+                    max_inclusive = False
+                else:
+                    raise ValueError(f"Invalid package information: {module_info}")
+
+        return ModuleInfo(
+            name=name,
+            min_version=min_version,
+            max_version=max_version,
+            min_inclusive=min_inclusive,
+            max_inclusive=max_inclusive,
+        )
 
 
 class Result:
@@ -56,11 +162,11 @@ def optional_import_block() -> Generator[Result, None, None]:
         result._failed = True
 
 
-def get_missing_imports(modules: Union[str, Iterable[str]]) -> list[str]:
+def get_missing_imports(modules: Union[str, Iterable[str]]) -> dict[str, str]:
     """Get missing modules from a list of module names
 
     Args:
-        modules: Module name or list of module names
+        modules (Union[str, Iterable[str]]): Module name or list of module names
 
     Returns:
         List of missing module names
@@ -68,7 +174,9 @@ def get_missing_imports(modules: Union[str, Iterable[str]]) -> list[str]:
     if isinstance(modules, str):
         modules = [modules]
 
-    return [m for m in modules if m not in sys.modules]
+    module_infos = [ModuleInfo.from_str(module) for module in modules]
+    x = {m.name: m.is_in_sys_modules() for m in module_infos}
+    return {k: v for k, v in x.items() if v}
 
 
 T = TypeVar("T")
@@ -77,12 +185,12 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 class PatchObject(ABC, Generic[T]):
-    def __init__(self, o: T, missing_modules: Iterable[str], dep_target: str):
+    def __init__(self, o: T, missing_modules: dict[str, str], dep_target: str):
         if not self.accept(o):
             raise ValueError(f"Cannot patch object of type {type(o)}")
 
         self.o = o
-        self.missing_modules = list(missing_modules)
+        self.missing_modules = missing_modules
         self.dep_target = dep_target
 
     @classmethod
@@ -100,8 +208,12 @@ class PatchObject(ABC, Generic[T]):
         o = self.get_object_with_metadata()
         plural = len(self.missing_modules) > 1
         fqn = f"{o.__module__}.{o.__name__}" if hasattr(o, "__module__") else o.__name__
-        modules_str = ", ".join([f"'{m}'" for m in self.missing_modules])
-        return f"Module{'s' if plural else ''} {modules_str} needed for {fqn} {'are' if plural else 'is'} missing, please install it using 'pip install ag2[{self.dep_target}]'"
+        # modules_str = ", ".join([f"'{m}'" for m in self.missing_modules])
+        msg = f"{'Modules' if plural else 'A module'} needed for {fqn} {'are' if plural else 'is'} missing:\n"
+        for _, status in self.missing_modules.items():
+            msg += f" - {status}\n"
+        msg += f"Please install {'them' if plural else 'it'} using:\n'pip install ag2[{self.dep_target}]'"
+        return msg
 
     def copy_metadata(self, retval: T) -> None:
         """Copy metadata from original object to patched object
@@ -133,7 +245,7 @@ class PatchObject(ABC, Generic[T]):
         cls,
         o: T,
         *,
-        missing_modules: Iterable[str],
+        missing_modules: dict[str, str],
         dep_target: str,
     ) -> Optional["PatchObject[T]"]:
         for subclass in cls._registry:
@@ -275,7 +387,7 @@ class PatchClass(PatchObject[type[Any]]):
 def patch_object(
     o: T,
     *,
-    missing_modules: Iterable[str],
+    missing_modules: dict[str, str],
     dep_target: str,
     fail_if_not_patchable: bool = True,
     except_for: Optional[Union[str, Iterable[str]]] = None,

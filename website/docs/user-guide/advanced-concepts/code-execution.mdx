@@ -68,7 +68,7 @@ Now we have the agent generate a reply given a message with a Python code block.
 ```python
 message_with_code_block = """This is a message with code block.
 The code block is below:
-'''python
+``""" + """`python
 import numpy as np
 import matplotlib.pyplot as plt
 x = np.random.randint(0, 100, 100)
@@ -76,7 +76,7 @@ y = np.random.randint(0, 100, 100)
 plt.scatter(x, y)
 plt.savefig('scatter.png')
 print('Scatter plot saved to scatter.png')
-'''
+``""" + """`
 This is the end of the message.
 """
 
