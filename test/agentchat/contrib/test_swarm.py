@@ -4,7 +4,7 @@
 import inspect
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -460,11 +460,11 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     agent2 = ConversableAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> Tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
         return True, "This is a mock response from the agent."
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> Tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
         return True, {
             "role": "assistant",
             "name": "agent1",

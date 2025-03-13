@@ -568,35 +568,36 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
 
             # Create blogs_and_user_stories_authors.yml
             authors_content = textwrap.dedent("""
-                sonichi:
-                    name: Chi Wang
-                    title: Founder of AutoGen (now AG2) & FLAML
-                    url: https://www.linkedin.com/in/chi-wang-autogen/
-                    image_url: https://github.com/sonichi.png
+                authors:
+                    sonichi:
+                        name: Chi Wang
+                        description: Founder of AutoGen (now AG2) & FLAML
+                        url: https://www.linkedin.com/in/chi-wang-autogen/
+                        avatar: https://github.com/sonichi.png
 
-                marklysze:
-                    name: Mark Sze
-                    title: Software Engineer at AG2.ai
-                    url: https://github.com/marklysze
-                    image_url: https://github.com/marklysze.png
+                    marklysze:
+                        name: Mark Sze
+                        description: Software Engineer at AG2.ai
+                        url: https://github.com/marklysze
+                        avatar: https://github.com/marklysze.png
 
-                sternakt:
-                    name: Tvrtko Sternak
-                    title: Machine Learning Engineer at Airt
-                    url: https://github.com/sternakt
-                    image_url: https://github.com/sternakt.png
+                    sternakt:
+                        name: Tvrtko Sternak
+                        description: Machine Learning Engineer at Airt
+                        url: https://github.com/sternakt
+                        avatar: https://github.com/sternakt.png
 
-                davorrunje:
-                    name: Davor Runje
-                    title: CTO at Airt
-                    url: https://github.com/davorrunje
-                    image_url: https://github.com/davorrunje.png
+                    davorrunje:
+                        name: Davor Runje
+                        description: CTO at Airt
+                        url: https://github.com/davorrunje
+                        avatar: https://github.com/davorrunje.png
 
-                davorinrusevljan:
-                    name: Davorin
-                    title: Developer
-                    url: https://github.com/davorinrusevljan
-                    image_url: https://github.com/davorinrusevljan.png
+                    davorinrusevljan:
+                        name: Davorin
+                        description: Developer
+                        url: https://github.com/davorinrusevljan
+                        avatar: https://github.com/davorinrusevljan.png
                 """).lstrip()
             (website_dir / "blogs_and_user_stories_authors.yml").write_text(authors_content)
 
@@ -622,6 +623,7 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         # Verify content of first blog post
         post1_path = generated_blog_dir / "2023-04-21-LLM-tuning-math" / "index.mdx"
         actual = post1_path.read_text()
+
         assert '<img noZoom className="social-share-img"' in actual
         assert '<p class="name">Chi Wang</p>' in actual
         assert '<p class="name">Davor Runje</p>' not in actual

@@ -28,6 +28,7 @@ from ..messages.agent_messages import (
     SpeakerAttemptFailedMultipleAgentsMessage,
     SpeakerAttemptFailedNoAgentsMessage,
     SpeakerAttemptSuccessfulMessage,
+    TerminationMessage,
 )
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
@@ -1148,6 +1149,8 @@ class GroupChatManager(ConversableAgent):
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
         """Run a group chat."""
+        iostream = IOStream.get_default()
+
         if messages is None:
             messages = self._oai_messages[sender]
         message = messages[-1]
@@ -1155,6 +1158,7 @@ class GroupChatManager(ConversableAgent):
         groupchat = config
         send_introductions = getattr(groupchat, "send_introductions", False)
         silent = getattr(self, "_silent", False)
+        termination_reason = None
 
         if send_introductions:
             # Broadcast the intro
@@ -1175,8 +1179,13 @@ class GroupChatManager(ConversableAgent):
             for agent in groupchat.agents:
                 if agent != speaker:
                     self.send(message, agent, request_reply=False, silent=True)
-            if self._is_termination_msg(message) or i == groupchat.max_round - 1:
-                # The conversation is over or it's the last round
+            if self._is_termination_msg(message):
+                # The conversation is over
+                termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
+                break
+            elif i == groupchat.max_round - 1:
+                # It's the last round
+                termination_reason = f"Maximum rounds ({groupchat.max_round}) reached"
                 break
             try:
                 # select the next speaker
@@ -1197,10 +1206,12 @@ class GroupChatManager(ConversableAgent):
                     raise
             except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
+                termination_reason = "No eligible speaker found"
                 break
 
             if reply is None:
                 # no reply is generated, exit the chat
+                termination_reason = "No reply generated"
                 break
 
             # check for "clear history" phrase in reply and activate clear history function if found
@@ -1219,6 +1230,10 @@ class GroupChatManager(ConversableAgent):
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache
                 a.previous_cache = None
+
+        if termination_reason:
+            iostream.send(TerminationMessage(termination_reason=termination_reason))
+
         return True, None
 
     async def a_run_chat(
@@ -1228,6 +1243,8 @@ class GroupChatManager(ConversableAgent):
         config: Optional[GroupChat] = None,
     ):
         """Run a group chat asynchronously."""
+        iostream = IOStream.get_default()
+
         if messages is None:
             messages = self._oai_messages[sender]
         message = messages[-1]
@@ -1235,6 +1252,7 @@ class GroupChatManager(ConversableAgent):
         groupchat = config
         send_introductions = getattr(groupchat, "send_introductions", False)
         silent = getattr(self, "_silent", False)
+        termination_reason = None
 
         if send_introductions:
             # Broadcast the intro
@@ -1253,6 +1271,7 @@ class GroupChatManager(ConversableAgent):
 
             if self._is_termination_msg(message):
                 # The conversation is over
+                termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
                 break
 
             # broadcast the message to all agents except the speaker
@@ -1261,6 +1280,7 @@ class GroupChatManager(ConversableAgent):
                     await self.a_send(message, agent, request_reply=False, silent=True)
             if i == groupchat.max_round - 1:
                 # the last round
+                termination_reason = f"Maximum rounds ({groupchat.max_round}) reached"
                 break
             try:
                 # select the next speaker
@@ -1278,10 +1298,14 @@ class GroupChatManager(ConversableAgent):
                     raise
             except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
+                termination_reason = "No eligible speaker found"
                 break
 
             if reply is None:
+                # no reply is generated, exit the chat
+                termination_reason = "No reply generated"
                 break
+
             # The speaker sends the message without requesting a reply
             await speaker.a_send(reply, self, request_reply=False, silent=silent)
             message = self.last_message(speaker)
@@ -1289,6 +1313,10 @@ class GroupChatManager(ConversableAgent):
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache
                 a.previous_cache = None
+
+        if termination_reason:
+            iostream.send(TerminationMessage(termination_reason=termination_reason))
+
         return True, None
 
     def resume(

@@ -4,7 +4,7 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import List
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -311,7 +311,7 @@ def test_extract_json_response(ollama_client):
         output: str
 
     class MathReasoning(BaseModel):
-        steps: List[Step]
+        steps: list[Step]
         final_answer: str
 
     # Set up the response format
