@@ -181,7 +181,6 @@ class DocAgent(ConversableAgent):
             collection_name (Optional[str]): The unique name for the data store collection. If omitted, a random name will be used. Populate this to reuse previous ingested data.
             query_engine (Optional[RAGQueryEngine]): The query engine to use for querying documents, defaults to VectorChromaQueryEngine if none provided.
                                                      Use enable_query_citations and implement query_with_citations method to enable citation support. e.g. VectorChromaCitationQueryEngine
-        Returns:
 
         The DocAgent is responsible for generating a group of agents to solve a task.
 

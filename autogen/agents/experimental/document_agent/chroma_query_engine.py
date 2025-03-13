@@ -5,7 +5,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from pydantic import BaseModel
 
@@ -256,7 +256,7 @@ class VectorChromaQueryEngine:
 
 class AnswerWithCitations(BaseModel):  # type: ignore[no-any-unimported]
     answer: str
-    citations: List[NodeWithScore]  # type: ignore[no-any-unimported]
+    citations: list[NodeWithScore]  # type: ignore[no-any-unimported]
 
 
 @require_optional_import(["chromadb", "llama_index"], "rag")
