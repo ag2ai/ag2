@@ -405,7 +405,7 @@ config_list_from_dotenv(
 <b>Returns:</b>
 | Type | Description |
 |--|--|
-| `list[dict[str, str \\| set[str]]]` | List[Dict[str, Union[str, Set[str]]]]: A list of configuration dictionaries for each model. |
+| `list[dict[str, str \\| set[str]]]` | list[dict[str, Union[str, Set[str]]]]: A list of configuration dictionaries for each model. |
 
 <br />
 
@@ -488,7 +488,7 @@ a_check_termination_and_human_reply(
 <b>Returns:</b>
 | Type | Description |
 |--|--|
-| `tuple[bool, str \\| None]` | Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation should be terminated, and a human reply which can be a string, a dictionary, or None. |
+| `tuple[bool, str \\| None]` | tuple[bool, Union[str, dict, None]]: A tuple containing a boolean indicating if the conversation should be terminated, and a human reply which can be a string, a dictionary, or None. |
 
 <br />
 

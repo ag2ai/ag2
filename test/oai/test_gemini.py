@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
-from typing import Any, List
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -384,7 +384,7 @@ class TestGeminiClient:
             output: str
 
         class MathReasoning(BaseModel):
-            steps: List[Step]
+            steps: list[Step]
             final_answer: str
 
         # Set up the response format
