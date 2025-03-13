@@ -6,7 +6,7 @@ import logging
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Annotated, Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -240,12 +240,18 @@ class DocAgent(ConversableAgent):
                 if doc not in self.documents_ingested:
                     self.documents_ingested.append(doc)
 
+        class TaskInitInfo(BaseModel):
+            ingestions: Annotated[list[Ingest], Field(description="List of documents, files, and URLs to ingest")]
+            queries: Annotated[list[Query], Field(description="List of queries to run")]
+
         def initiate_tasks(
-            ingestions: list[Ingest],
-            queries: list[Query],
-            context_variables: dict[str, Any],
+            task_init_info: Annotated[TaskInitInfo, "Documents, Files, URLs to ingest and the queries to run"],
+            context_variables: Annotated[dict[str, Any], "Context variables"],
         ) -> SwarmResult:
             """Add documents to ingest and queries to answer when received."""
+            ingestions = task_init_info.ingestions
+            queries = task_init_info.queries
+
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return SwarmResult(values="Task already initiated", context_variables=context_variables)
