@@ -86,6 +86,9 @@ class LLMConfigFilter(BaseModel):
 
         return f"LLMConfigFilter({', '.join(r)})"
 
+    def __str__(self) -> str:
+        return str(self.filter_dict)
+
 
 class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
@@ -133,6 +136,9 @@ class LLMConfig:
             for item in config_list
             if all(self._satisfies_criteria(item.get(key), values) != exclude for key, values in filter.items())
         ]
+
+        if len(filtered_config_list) == 0:
+            raise ValueError(f"No config found that satisfies the filter criteria: {filter}")
 
         d["config_list"] = filtered_config_list
         return LLMConfig(**d)
@@ -199,6 +205,9 @@ class LLMConfig:
     def __repr__(self) -> str:
         return repr(self._model).replace("_LLMConfig", self.__class__.__name__)
 
+    def __str__(self) -> str:
+        return str(self._model)
+
     def items(self) -> Iterable[tuple[str, Any]]:
         d = self.model_dump()
         return d.items()
@@ -234,7 +243,7 @@ class LLMConfig:
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
-                    Field(default_factory=list, min_length=0),
+                    Field(default_factory=list, min_length=1),
                 ]
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig

@@ -1903,11 +1903,6 @@ def test_validate_llm_config(
             LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
         ),
         (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
-            LLMConfigFilter(model="gpt-4"),
-            LLMConfig(config_list=[]),
-        ),
-        (
             LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3"), OpenAILLMConfigEntry(model="gpt-4")]),
             LLMConfigFilter(
                 model="gpt-4",
@@ -1923,6 +1918,13 @@ def test_apply_llm_config_filter(
 ):
     actual = ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
     assert actual == expected, f"{actual} != {expected}"
+
+
+def test_apply_llm_config_filter_with_invalid_filter():
+    llm_config = LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")])
+    llm_config_filter = LLMConfigFilter(model="gpt-4")
+    with pytest.raises(ValueError):
+        ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
 
 
 if __name__ == "__main__":

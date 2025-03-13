@@ -691,3 +691,11 @@ class TestLLMConfig:
         actual = openai_llm_config.apply_filter(llm_config_filter, exclude=exclude)
         assert isinstance(actual, LLMConfig)
         assert actual.config_list == expected
+
+    def test_apply_filter_invalid_filter(self) -> None:
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        llm_config_filter = LLMConfigFilter(api_type="invalid")
+
+        with pytest.raises(ValueError) as e:
+            openai_llm_config.apply_filter(llm_config_filter)
+        assert str(e.value) == f"No config found that satisfies the filter criteria: {llm_config_filter}"
