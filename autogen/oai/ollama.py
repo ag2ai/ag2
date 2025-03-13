@@ -32,6 +32,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from .. import LLMMessageType
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage

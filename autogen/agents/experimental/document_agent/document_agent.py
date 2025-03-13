@@ -10,7 +10,7 @@ from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from .... import Agent, ConversableAgent, UpdateSystemMessage
+from .... import Agent, ConversableAgent, LLMMessageType, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.contrib.swarm_agent import (
     AfterWork,

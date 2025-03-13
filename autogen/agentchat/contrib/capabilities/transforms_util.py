@@ -7,7 +7,7 @@
 from collections.abc import Hashable
 from typing import Any, Optional
 
-from .... import token_count_utils
+from .... import LLMMessageType, token_count_utils
 from ....cache.abstract_cache_base import AbstractCache
 from ....oai.openai_utils import filter_config
 from ....types import MessageContentType

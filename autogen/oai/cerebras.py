@@ -28,7 +28,7 @@ import math
 import os
 import time
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..import_utils import optional_import_block, require_optional_import
 from .client_utils import should_hide_tools, validate_parameter
@@ -42,6 +42,9 @@ CEREBRAS_PRICING_1K = {
     "llama3.1-8b": (0.10 / 1000, 0.10 / 1000),
     "llama-3.3-70b": (0.85 / 1000, 1.20 / 1000),
 }
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 class CerebrasClient:

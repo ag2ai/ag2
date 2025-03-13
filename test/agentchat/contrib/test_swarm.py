@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-from autogen.agentchat.agent import Agent
+from autogen.agentchat.agent import Agent, LLMMessageType
 from autogen.agentchat.contrib.swarm_agent import (
     __TOOL_EXECUTOR_NAME__,
     AfterWork,

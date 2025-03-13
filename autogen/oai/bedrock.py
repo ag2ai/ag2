@@ -36,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import requests
 
@@ -47,6 +47,9 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     import boto3
     from botocore.config import Config
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 @require_optional_import("boto3", "bedrock")

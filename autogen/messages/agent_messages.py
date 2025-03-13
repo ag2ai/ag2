@@ -21,6 +21,7 @@ with optional_import_block() as result:
 IS_PIL_AVAILABLE = result.is_successful
 
 if TYPE_CHECKING:
+    from .. import LLMMessageType
     from ..agentchat.agent import Agent
     from ..coding.base import CodeBlock
 

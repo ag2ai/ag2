@@ -15,7 +15,7 @@ from typing import Any, Union
 import requests
 
 from ...import_utils import optional_import_block, require_optional_import
-from .. import utils
+from .. import LLMMessageType, utils
 
 with optional_import_block():
     from PIL import Image
