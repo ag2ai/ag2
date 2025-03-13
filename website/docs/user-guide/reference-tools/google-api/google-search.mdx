@@ -59,13 +59,13 @@ assistant = AssistantAgent(
 
 ### GoogleSearchTool Initialization
 
-For Gemini GenAI, you can use the GenAI prebuilt Google Search tool by setting `use_genai_search_tool` to `True`.
+For Gemini GenAI, you can use the GenAI prebuilt Google Search tool by setting `use_internal_llm_tool_if_available` to `True`.
 
 > **Note:** You cannot combine other tools with the prebuilt Google Search tool. If you need multiple tools, refer to the AG2 implementation section.
 
 ```python
 gs_tool = GoogleSearchTool(
-    use_genai_search_tool=True,
+    use_internal_llm_tool_if_available=True,
 )
 # Once initialized, register the tool with the assistant
 gs_tool.register_for_llm(assistant)
