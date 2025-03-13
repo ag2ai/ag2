@@ -1484,11 +1484,7 @@ class ConversableAgent(LLMAgent):
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
 
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(
-                    TerminationMessage(
-                        termination_reason=f"Maximum turns ({max_turns}) reached.", sender=self, recipient=recipient
-                    )
-                )
+                iostream.send(TerminationMessage(termination_reason=f"Maximum turns ({max_turns}) reached."))
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -2259,7 +2255,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationMessage(termination_reason=termination_reason, sender=sender, recipient=self))
+                iostream.send(TerminationMessage(termination_reason=termination_reason))
 
             return True, None
 
@@ -2396,7 +2392,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationMessage(termination_reason=termination_reason, sender=sender, recipient=self))
+                iostream.send(TerminationMessage(termination_reason=termination_reason))
 
             return True, None
 

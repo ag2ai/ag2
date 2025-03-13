@@ -1232,7 +1232,7 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationMessage(termination_reason=termination_reason, sender=sender, recipient=self))
+            iostream.send(TerminationMessage(termination_reason=termination_reason))
 
         return True, None
 
@@ -1315,7 +1315,7 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationMessage(termination_reason=termination_reason, sender=sender, recipient=self))
+            iostream.send(TerminationMessage(termination_reason=termination_reason))
 
         return True, None
 

@@ -612,8 +612,6 @@ class TerminationMessage(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         termination_reason: str,
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
     ):
         super().__init__(
             uuid=uuid,
