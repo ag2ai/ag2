@@ -16,17 +16,14 @@ from ....conftest import Credentials
 
 
 class TestGoogleSearchTool:
-    @pytest.mark.parametrize("use_genai_search_tool", [True, False])
-    def test_init(self, use_genai_search_tool: bool) -> None:
-        if use_genai_search_tool:
-            google_search_tool = GoogleSearchTool(use_genai_search_tool=True)
-            tool_name = "gemini_google_search"
-            assert google_search_tool.name == tool_name
+    @pytest.mark.parametrize("use_internal_llm_tool_if_available", [True, False])
+    def test_init(self, use_internal_llm_tool_if_available: bool) -> None:
+        if use_internal_llm_tool_if_available:
+            google_search_tool = GoogleSearchTool()
         else:
             google_search_tool = GoogleSearchTool(search_api_key="api_key", search_engine_id="engine_id")
-            tool_name = "google_search"
-            assert google_search_tool.name == tool_name
 
+        assert google_search_tool.name == "prebuilt_google_search"
         assert google_search_tool.description == "Use the Google Search API to perform a search."
 
     @pytest.fixture
@@ -103,7 +100,7 @@ class TestGoogleSearchTool:
     def test_end_to_end_gemini(
         self, credentials_gemini_flash_exp: Credentials, expected_search_result: dict[str, Any]
     ) -> None:
-        google_search_tool = GoogleSearchTool(use_genai_search_tool=True)
+        google_search_tool = GoogleSearchTool(use_internal_llm_tool_if_available=True)
         self._test_end_to_end(
             google_search_tool=google_search_tool,
             credentials=credentials_gemini_flash_exp,

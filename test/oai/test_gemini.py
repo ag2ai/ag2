@@ -564,8 +564,8 @@ class TestGeminiClient:
 
         assert result == expected_result, result
 
-    @pytest.mark.parametrize("name", ["gemini_google_search", "google_search"])
-    def test_check_if_gemini_google_search_tool_exists(self, name: str) -> None:
+    @pytest.mark.parametrize("name", ["prebuilt_google_search", "google_search"])
+    def test_check_if_prebuilt_google_search_tool_exists(self, name: str) -> None:
         tools = [
             {
                 "type": "function",
@@ -587,10 +587,10 @@ class TestGeminiClient:
                 },
             }
         ]
-        expected = name == "gemini_google_search"
-        assert GeminiClient._check_if_gemini_google_search_tool_exists(tools) == expected
+        expected = name == "prebuilt_google_search"
+        assert GeminiClient._check_if_prebuilt_google_search_tool_exists(tools) == expected
 
-    @pytest.mark.parametrize("name", ["gemini_google_search", "google_search"])
+    @pytest.mark.parametrize("name", ["prebuilt_google_search", "google_search"])
     def test_tools_to_gemini_tools(self, gemini_client: GeminiClient, name: str) -> None:
         tools = [
             {
@@ -618,7 +618,7 @@ class TestGeminiClient:
         assert isinstance(result[0], Tool)
 
         tools_list = [Tool(google_search=GoogleSearch())]
-        if name == "gemini_google_search":
+        if name == "prebuilt_google_search":
             assert result == tools_list
         else:
             assert result != tools_list

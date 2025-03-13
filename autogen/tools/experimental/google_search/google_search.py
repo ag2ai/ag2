@@ -51,44 +51,43 @@ class GoogleSearchTool(Tool):
         *,
         search_api_key: Optional[str] = None,
         search_engine_id: Optional[str] = None,
-        use_genai_search_tool: bool = False,
+        use_internal_llm_tool_if_available: bool = True,
     ):
         """GoogleSearchTool is a tool that uses the Google Search API to perform a search.
 
         Args:
             search_api_key: The API key for the Google Search API.
             search_engine_id: The search engine ID for the Google Search API.
-            use_genai_search_tool: Whether to use the predefined Gemini search tool. This can only be used for agents with the Gemini (GenAI) configuration.
+            use_internal_llm_tool_if_available: Whether to use the predefined (e.g. Gemini GenaAI) search tool. Currently, this can only be used for agents with the Gemini (GenAI) configuration.
         """
         self.search_api_key = search_api_key
         self.search_engine_id = search_engine_id
-        self.use_predefined_gemini_tool = use_genai_search_tool
+        self.use_internal_llm_tool_if_available = use_internal_llm_tool_if_available
 
-        if not use_genai_search_tool and (search_api_key is None or search_engine_id is None):
+        if not use_internal_llm_tool_if_available and (search_api_key is None or search_engine_id is None):
             raise ValueError(
-                "search_api_key and search_engine_id must be provided if use_predefined_gemini_tool is False"
+                "search_api_key and search_engine_id must be provided if use_internal_llm_tool_if_available is False"
             )
 
-        if use_genai_search_tool and (search_api_key is not None or search_engine_id is not None):
-            logging.warning("search_api_key and search_engine_id will be ignored as use_predefined_gemini_tool is True")
+        if use_internal_llm_tool_if_available and (search_api_key is not None or search_engine_id is not None):
+            logging.warning("search_api_key and search_engine_id will be ignored if internal LLM tool is available")
 
         def google_search(
             query: Annotated[str, "The search query."],
             search_api_key: Annotated[Optional[str], Depends(on(search_api_key))],
             search_engine_id: Annotated[Optional[str], Depends(on(search_engine_id))],
-            use_genai_search_tool: Annotated[bool, Depends(on(use_genai_search_tool))],
             num_results: Annotated[int, "The number of results to return."] = 10,
         ) -> list[dict[str, Any]]:
-            if use_genai_search_tool or search_api_key is None or search_engine_id is None:
+            if search_api_key is None or search_engine_id is None:
                 raise ValueError(
-                    "Your agent is not configured to use the Gemini (GenAI) LLM.\n"
-                    "If you want to use different LLM providers, GoogleSearchTool must be configured with: use_genai_search_tool=False and provided search_api_key and search_engine_id.\n"
+                    "Your LLM is not configured to use prebuilt google-search tool.\n"
+                    "Please provide search_api_key and search_engine_id.\n"
                 )
             return _google_search(query, search_api_key, search_engine_id, num_results)
 
         super().__init__(
-            # GeminiClient will look for a tool with the name "gemini_google_search"
-            name="gemini_google_search" if use_genai_search_tool else "google_search",
+            # GeminiClient will look for a tool with the name "prebuilt_google_search"
+            name="prebuilt_google_search" if use_internal_llm_tool_if_available else "google_search",
             description="Use the Google Search API to perform a search.",
             func_or_tool=google_search,
         )

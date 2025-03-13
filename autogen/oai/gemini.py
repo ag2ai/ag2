@@ -634,11 +634,11 @@ class GeminiClient:
         return schema
 
     @staticmethod
-    def _check_if_gemini_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
+    def _check_if_prebuilt_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
         """Check if the Google Search tool is present in the tools list."""
         exists = False
         for tool in tools:
-            if tool["function"]["name"] == "gemini_google_search":
+            if tool["function"]["name"] == "prebuilt_google_search":
                 exists = True
                 break
 
@@ -665,7 +665,7 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
-        if self._check_if_gemini_google_search_tool_exists(tools) and not self.use_vertexai:
+        if self._check_if_prebuilt_google_search_tool_exists(tools) and not self.use_vertexai:
             return [Tool(google_search=GoogleSearch())]
 
         functions = []
