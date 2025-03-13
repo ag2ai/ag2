@@ -1484,7 +1484,7 @@ class ConversableAgent(LLMAgent):
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
 
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationMessage(termination_reason=f"Maximum turns ({max_turns}) reached."))
+                iostream.send(TerminationMessage(termination_reason=f"Maximum turns ({max_turns}) reached"))
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -2177,7 +2177,7 @@ class ConversableAgent(LLMAgent):
         if messages is None:
             messages = self._oai_messages[sender] if sender else []
 
-        termination_reason = ""
+        termination_reason = None
 
         # if there are no messages, continue the conversation
         if not messages:
@@ -2194,15 +2194,15 @@ class ConversableAgent(LLMAgent):
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
             if not reply and self._is_termination_msg(message):
-                termination_reason = f"Termination message condition on agent '{self.name}' met."
+                termination_reason = f"Termination message condition on agent '{self.name}' met"
             elif reply == "exit":
-                termination_reason = "User requested to end the conversation."
+                termination_reason = "User requested to end the conversation"
 
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
         else:
             if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
-                    termination_reason = "Maximum number of consecutive auto-replies reached."
+                    termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2216,15 +2216,15 @@ class ConversableAgent(LLMAgent):
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
                     if reply != "exit" and terminate:
                         termination_reason = (
-                            f"Termination message condition on agent '{self.name}' met and no human input provided."
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
                         )
                     elif reply == "exit":
-                        termination_reason = "User requested to end the conversation."
+                        termination_reason = "User requested to end the conversation"
 
                     reply = reply if reply or not terminate else "exit"
             elif self._is_termination_msg(message):
                 if self.human_input_mode == "NEVER":
-                    termination_reason = f"Termination message condition on agent '{self.name}' met."
+                    termination_reason = f"Termination message condition on agent '{self.name}' met"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2236,7 +2236,7 @@ class ConversableAgent(LLMAgent):
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
                     if not reply or reply == "exit":
                         termination_reason = (
-                            f"Termination message condition on agent '{self.name}' met and no human input provided."
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
                         )
 
                     reply = reply or "exit"
@@ -2320,6 +2320,9 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender] if sender else []
+
+        termination_reason = None
+
         message = messages[-1] if messages else {}
         reply = ""
         no_human_input_msg = ""
@@ -2331,15 +2334,15 @@ class ConversableAgent(LLMAgent):
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
             if not reply and self._is_termination_msg(message):
-                termination_reason = f"Termination message condition on agent '{self.name}' met."
+                termination_reason = f"Termination message condition on agent '{self.name}' met"
             elif reply == "exit":
-                termination_reason = "User requested to end the conversation."
+                termination_reason = "User requested to end the conversation"
 
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
         else:
             if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
-                    termination_reason = "Maximum number of consecutive auto-replies reached."
+                    termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2353,15 +2356,15 @@ class ConversableAgent(LLMAgent):
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
                     if reply != "exit" and terminate:
                         termination_reason = (
-                            f"Termination message condition on agent '{self.name}' met and no human input provided."
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
                         )
                     elif reply == "exit":
-                        termination_reason = "User requested to end the conversation."
+                        termination_reason = "User requested to end the conversation"
 
                     reply = reply if reply or not terminate else "exit"
             elif self._is_termination_msg(message):
                 if self.human_input_mode == "NEVER":
-                    termination_reason = f"Termination message condition on agent '{self.name}' met."
+                    termination_reason = f"Termination message condition on agent '{self.name}' met"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2373,7 +2376,7 @@ class ConversableAgent(LLMAgent):
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
                     if not reply or reply == "exit":
                         termination_reason = (
-                            f"Termination message condition on agent '{self.name}' met and no human input provided."
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
                         )
 
                     reply = reply or "exit"
