@@ -74,6 +74,7 @@ with optional_import_block():
         FunctionResponse,
         GenerateContentConfig,
         GenerateContentResponse,
+        GoogleSearch,
         Part,
         Schema,
         Tool,
@@ -633,6 +634,22 @@ class GeminiClient:
         return schema
 
     @staticmethod
+    def _check_if_prebuilt_google_search_tool_exists(tools: list[dict[str, Any]]) -> bool:
+        """Check if the Google Search tool is present in the tools list."""
+        exists = False
+        for tool in tools:
+            if tool["function"]["name"] == "prebuilt_google_search":
+                exists = True
+                break
+
+        if exists and len(tools) > 1:
+            raise ValueError(
+                "Google Search tool can be used only by itself. Please remove other tools from the tools list."
+            )
+
+        return exists
+
+    @staticmethod
     def _unwrap_references(function_parameters: dict[str, Any]) -> dict[str, Any]:
         if "properties" not in function_parameters:
             return function_parameters
@@ -648,6 +665,9 @@ class GeminiClient:
 
     def _tools_to_gemini_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
         """Create Gemini tools (as typically requires Callables)"""
+        if self._check_if_prebuilt_google_search_tool_exists(tools) and not self.use_vertexai:
+            return [Tool(google_search=GoogleSearch())]
+
         functions = []
         for tool in tools:
             if self.use_vertexai:
