@@ -5,12 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from .... import LLMMessageType, token_count_utils
+from .... import token_count_utils
 from ....cache.abstract_cache_base import AbstractCache
 from ....oai.openai_utils import filter_config
 from ....types import MessageContentType
+
+if TYPE_CHECKING:
+    from .... import LLMMessageType
 
 
 def cache_key(content: MessageContentType, *args: Hashable) -> str:

@@ -10,12 +10,14 @@ import os
 import re
 from io import BytesIO
 from math import ceil
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import requests
 
 from ...import_utils import optional_import_block, require_optional_import
-from .. import LLMMessageType, utils
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType, utils
 
 with optional_import_block():
     from PIL import Image
