@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 from termcolor import colored
 
+from ..agentchat.agent import LLMMessageType
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
@@ -21,7 +22,6 @@ with optional_import_block() as result:
 IS_PIL_AVAILABLE = result.is_successful
 
 if TYPE_CHECKING:
-    from .. import LLMMessageType
     from ..agentchat.agent import Agent
     from ..coding.base import CodeBlock
 
@@ -509,7 +509,7 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
 @wrap_message
 class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
-    messages: list["LLMMessageType"]
+    messages: list[LLMMessageType]
     verbose: Optional[bool] = False
 
     def __init__(

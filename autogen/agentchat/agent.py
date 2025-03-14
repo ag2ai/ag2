@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Protocol, Un
 
 from ..cache.abstract_cache_base import AbstractCache
 from ..doc_utils import export_module
-from .chat import ChatResult
 
 if TYPE_CHECKING:
     # mypy will fail if Conversible agent does not implement Agent protocol
