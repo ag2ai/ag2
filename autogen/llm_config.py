@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
 
-from httpx import Client as httpx_client
+from httpx import Client as httpxClient
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
 
 if TYPE_CHECKING:
@@ -276,7 +276,7 @@ class LLMConfigEntry(BaseModel, ABC):
     max_tokens: Optional[int] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
-    http_client: Optional[httpx_client] = None
+    http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
     tags: list[str] = Field(default_factory=list)
 
