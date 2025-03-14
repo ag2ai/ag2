@@ -5,7 +5,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Type, Union
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -13,6 +13,7 @@ from ....import_utils import optional_import_block, require_optional_import
 with optional_import_block():
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.core.llms import LLM
+    from llama_index.core.readers.base import BaseReader
     from llama_index.core.schema import Document as LlamaDocument
     from llama_index.core.vector_stores.types import BasePydanticVectorStore
     from llama_index.llms.openai import OpenAI
@@ -41,16 +42,21 @@ class LlamaIndexQueryEngine:
     """
 
     def __init__(  # type: ignore[no-any-unimported]
-        self, vector_store: "BasePydanticVectorStore", llm: Optional["LLM"] = None
+        self,
+        vector_store: "BasePydanticVectorStore",
+        llm: Optional["LLM"] = None,
+        file_reader_class: Type[BaseReader] = SimpleDirectoryReader,
     ) -> None:
         """
         Initializes the LlamaIndexQueryEngine with the given vector store.
         Args:
             vector_store: The vector store to use for indexing and querying documents.
             llm: LLM model used by LlamaIndex for query processing. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/).
+            file_reader_class: The file reader class to use for loading documents. Defaults to SimpleDirectoryReader.
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.vector_store = vector_store
+        self.file_reader_class = file_reader_class
 
     def init_db(
         self,
@@ -149,7 +155,7 @@ class LlamaIndexQueryEngine:
         """
         Load documents from a directory and/or a sequence of file paths.
 
-        It uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
+        Default to uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
 
         Args:
             input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.
@@ -170,14 +176,14 @@ class LlamaIndexQueryEngine:
             logger.info(f"Loading docs from directory: {input_dir}")
             if not os.path.exists(input_dir):
                 raise ValueError(f"Input directory not found: {input_dir}")
-            loaded_documents.extend(SimpleDirectoryReader(input_dir=input_dir).load_data())
+            loaded_documents.extend(self.file_reader_class(input_dir=input_dir).load_data())
 
         if input_docs:
             for doc in input_docs:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(SimpleDirectoryReader(input_files=input_docs).load_data())  # type: ignore[arg-type]
+            loaded_documents.extend(self.file_reader_class(input_files=input_docs).load_data())  # type: ignore[arg-type]
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
