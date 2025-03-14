@@ -5,7 +5,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -45,7 +45,7 @@ class LlamaIndexQueryEngine:
         self,
         vector_store: "BasePydanticVectorStore",
         llm: Optional["LLM"] = None,
-        file_reader_class: Type[BaseReader] = SimpleDirectoryReader,
+        file_reader_class: Optional["BaseReader"] = None,
     ) -> None:
         """
         Initializes the LlamaIndexQueryEngine with the given vector store.
@@ -56,7 +56,7 @@ class LlamaIndexQueryEngine:
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.vector_store = vector_store
-        self.file_reader_class = file_reader_class
+        self.file_reader_class = file_reader_class if file_reader_class else SimpleDirectoryReader
 
     def init_db(
         self,
