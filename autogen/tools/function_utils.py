@@ -8,7 +8,7 @@ import functools
 import inspect
 import json
 from logging import getLogger
-from typing import Annotated, Any, Callable, ForwardRef, Mapping, Optional, TypeVar, Union
+from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
 
 from packaging.version import parse
 from pydantic import BaseModel, Field, TypeAdapter
@@ -22,14 +22,7 @@ from .dependency_injection import Field as AG2Field
 if parse(pydantic_version) < parse("2.10.2"):
     from pydantic._internal._typing_extra import eval_type_lenient
 else:
-    from pydantic._internal._typing_extra import eval_type
-
-    def eval_type_lenient(
-        value: Any,
-        globalns: Optional[dict[str, Any]] = None,
-        localns: Optional[Mapping[str, Any]] = None,
-    ) -> Any:
-        return eval_type(value, globalns, localns, lenient=True)  # type: ignore[call-arg]
+    from pydantic._internal._typing_extra import try_eval_type as eval_type_lenient
 
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
