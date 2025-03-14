@@ -58,13 +58,13 @@ from packaging import version
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..json_utils import resolve_json_references
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import google.genai as genai
-    import jsonref
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
@@ -112,7 +112,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
 
 
-@require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")
+@require_optional_import(["google", "vertexai", "PIL", "jsonschema"], "gemini")
 class GeminiClient:
     """Client for Google's Gemini API."""
 
@@ -274,9 +274,9 @@ class GeminiClient:
             response_format_schema_raw = params.get("response_format")
 
             if isinstance(response_format_schema_raw, dict):
-                response_schema = dict(jsonref.replace_refs(response_format_schema_raw))
+                response_schema = resolve_json_references(response_format_schema_raw)
             else:
-                response_schema = dict(jsonref.replace_refs(params.get("response_format").model_json_schema()))
+                response_schema = resolve_json_references(params.get("response_format").model_json_schema())
             if "$defs" in response_schema:
                 response_schema.pop("$defs")
             generation_config["response_schema"] = response_schema
@@ -672,7 +672,7 @@ class GeminiClient:
 
         for property_name, property_value in function_parameters["properties"].items():
             if "$defs" in property_value:
-                function_parameters_copy["properties"][property_name] = dict(jsonref.replace_refs(property_value))
+                function_parameters_copy["properties"][property_name] = resolve_json_references(property_value)
                 function_parameters_copy["properties"][property_name].pop("$defs")
 
         return function_parameters_copy

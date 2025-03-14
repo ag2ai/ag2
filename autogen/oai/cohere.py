@@ -78,6 +78,7 @@ class CohereLLMConfigEntry(LLMConfigEntry):
     presence_penalty: float = Field(default=0, ge=0, le=1)
     client_name: Optional[str] = None
     strict_tools: bool = False
+    stream: bool = False
 
     def create_client(self):
         raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
