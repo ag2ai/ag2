@@ -436,6 +436,7 @@ convention = "google"
 [tool.mypy]
 files = [
     "autogen/agentchat/agent.py",
+#    "autogen/agentchat/cenversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -448,6 +449,7 @@ files = [
     "autogen/import_utils.py",
     "autogen/interop",
     "autogen/io",
+    "autogen/llm_config.py",
     "autogen/logger",
     "autogen/messages",
     "autogen/oai/oai_models",
@@ -464,6 +466,7 @@ files = [
 #    "test/fast_depends",
     "test/interop",
     "test/io",
+    "test/test_llm_config.py",
     "test/messages",
     "test/test_import_utils.py",
     "test/test_import.py",

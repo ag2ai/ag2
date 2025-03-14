@@ -51,13 +51,14 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Optional, Type
+from typing import Any, Literal, Optional, Type, Union
 
 import requests
 from packaging import version
 from pydantic import BaseModel
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -96,6 +97,19 @@ with optional_import_block():
     )
 
 logger = logging.getLogger(__name__)
+
+
+@register_llm_config
+class GeminiLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["google"] = "google"
+    project_id: Optional[str] = None
+    location: Optional[str] = None
+    google_application_credentials: Optional[str] = None
+    stream: bool = False
+    safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
+
+    def create_client(self):
+        raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
 
 
 @require_optional_import(["google", "vertexai", "PIL", "jsonschema", "jsonref"], "gemini")

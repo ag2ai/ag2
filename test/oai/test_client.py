@@ -15,16 +15,21 @@ from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.oai.client import (
     AOPENAI_FALLBACK_KWARGS,
     LEGACY_CACHE_DIR,
     LEGACY_DEFAULT_CACHE_SEED,
     OPENAI_FALLBACK_KWARGS,
+    AzureOpenAILLMConfigEntry,
+    DeepSeekLLMConfigEntry,
     OpenAIClient,
+    OpenAILLMConfigEntry,
 )
 from autogen.oai.oai_models import ChatCompletion
 
@@ -374,6 +379,82 @@ def test_convert_system_role_to_user() -> None:
         {"content": "Jack, tell me a joke.", "role": "user", "name": "user"},
     ]
     assert messages == expected
+
+
+def test_openai_llm_config_entry():
+    openai_llm_config = OpenAILLMConfigEntry(
+        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    )
+    assert openai_llm_config.api_type == "openai"
+    assert openai_llm_config.model == "gpt-4o-mini"
+    assert openai_llm_config.api_key.get_secret_value() == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    assert openai_llm_config.base_url is None
+    expected = {
+        "api_type": "openai",
+        "model": "gpt-4o-mini",
+        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        "tags": [],
+    }
+    actual = openai_llm_config.model_dump()
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+
+
+def test_azure_llm_config_entry() -> None:
+    azure_llm_config = AzureOpenAILLMConfigEntry(
+        model="gpt-4o-mini",
+        api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        base_url="https://api.openai.com/v1",
+    )
+    expected = {
+        "api_type": "azure",
+        "model": "gpt-4o-mini",
+        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        "base_url": "https://api.openai.com/v1",
+        "tags": [],
+    }
+    actual = azure_llm_config.model_dump()
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+
+    llm_config = LLMConfig(
+        config_list=[azure_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
+
+
+def test_deepseek_llm_config_entry() -> None:
+    deepseek_llm_config = DeepSeekLLMConfigEntry(
+        api_key="fake_api_key",
+        model="deepseek-chat",
+    )
+
+    expected = {
+        "api_type": "deepseek",
+        "api_key": "fake_api_key",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com/v1",
+        "max_tokens": 8192,
+        "temperature": 0.5,
+        "tags": [],
+    }
+    actual = deepseek_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[deepseek_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
+
+    with pytest.raises(ValidationError) as e:
+        deepseek_llm_config = DeepSeekLLMConfigEntry(
+            model="deepseek-chat",
+            temperature=1,
+            top_p=0.8,
+        )
+    assert "Value error, temperature and top_p cannot be set at the same time" in str(e.value)
 
 
 class TestOpenAIClientBadRequestsError:

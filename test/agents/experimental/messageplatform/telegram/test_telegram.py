@@ -4,6 +4,7 @@
 
 from autogen.agents.experimental import TelegramAgent
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 
 from .....conftest import Credentials
 
@@ -59,7 +60,9 @@ class TestTelegramAgent:
         ]
 
         assert set(tool.name for tool in telegram_agent.tools) == {"telegram_send", "telegram_retrieve"}
-        assert isinstance(telegram_agent.llm_config, dict), "llm_config should be a dictionary"
+        assert isinstance(telegram_agent.llm_config, (dict, LLMConfig)), (
+            "llm_config should be a dictionary or LLMConfig"
+        )
         assert telegram_agent.llm_config["tools"] == expected_tools
         assert telegram_agent.system_message == (
             "You are a helpful AI assistant that communicates through Telegram. "

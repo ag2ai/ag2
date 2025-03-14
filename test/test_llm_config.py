@@ -1,0 +1,701 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+import json
+from _collections_abc import dict_items, dict_keys, dict_values
+from typing import Any
+
+import pytest
+
+from autogen.llm_config import LLMConfig, LLMConfigFilter
+from autogen.oai.anthropic import AnthropicLLMConfigEntry
+from autogen.oai.bedrock import BedrockLLMConfigEntry
+from autogen.oai.cerebras import CerebrasLLMConfigEntry
+from autogen.oai.client import AzureOpenAILLMConfigEntry, DeepSeekLLMConfigEntry, OpenAILLMConfigEntry
+from autogen.oai.cohere import CohereLLMConfigEntry
+from autogen.oai.gemini import GeminiLLMConfigEntry
+from autogen.oai.groq import GroqLLMConfigEntry
+from autogen.oai.mistral import MistralLLMConfigEntry
+from autogen.oai.ollama import OllamaLLMConfigEntry
+from autogen.oai.together import TogetherLLMConfigEntry
+
+JSON_SAMPLE = """
+[
+    {
+        "model": "gpt-3.5-turbo",
+        "api_type": "openai",
+        "tags": ["gpt35"]
+    },
+    {
+        "model": "gpt-4",
+        "api_type": "openai",
+        "tags": ["gpt4"]
+    },
+    {
+        "model": "gpt-35-turbo-v0301",
+        "tags": ["gpt-3.5-turbo", "gpt35_turbo"],
+        "api_key": "Your Azure OAI API Key",
+        "base_url": "https://deployment_name.openai.azure.com/",
+        "api_type": "azure",
+        "api_version": "2024-02-01"
+    },
+    {
+        "model": "gpt",
+        "api_key": "not-needed",
+        "base_url": "http://localhost:1234/v1",
+        "tags": []
+    }
+]
+"""
+
+JSON_SAMPLE_DICT = json.loads(JSON_SAMPLE)
+
+
+class TestLLMConfigFilter:
+    @pytest.fixture
+    def llm_config_filter(self) -> LLMConfigFilter:
+        return LLMConfigFilter(api_type="openai", model=["gpt-4o-mini", "gpt-4o-small"])
+
+    def test_init(self) -> None:
+        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+        actual = LLMConfigFilter(**{"api_type": "openai", "model": "gpt-4o-mini"})
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+        actual = LLMConfigFilter(filter_dict={"api_type": "openai", "model": "gpt-4o-mini"})
+        assert isinstance(actual, LLMConfigFilter)
+        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
+
+    def test_serialization(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.model_dump()
+        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
+        assert actual == expected
+
+        actual_model_dump_json = llm_config_filter.model_dump_json()
+        assert actual_model_dump_json == json.dumps(expected)
+
+    def test_deserialization(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = LLMConfigFilter(**llm_config_filter.model_dump())
+        assert actual == llm_config_filter
+
+    def test_get(self, llm_config_filter: LLMConfigFilter) -> None:
+        assert llm_config_filter.get("api_type") == "openai"
+        assert llm_config_filter.get("model") == ["gpt-4o-mini", "gpt-4o-small"]
+        assert llm_config_filter.get("doesnt_exists") is None
+        assert llm_config_filter.get("doesnt_exists", "default") == "default"
+
+    def test_getattr(self, llm_config_filter: LLMConfigFilter) -> None:
+        assert llm_config_filter.api_type == "openai"
+        assert llm_config_filter.model == ["gpt-4o-mini", "gpt-4o-small"]
+        with pytest.raises(AttributeError) as e:
+            llm_config_filter.wrong_key
+        assert str(e.value) == "'LLMConfigFilter' object has no attribute 'wrong_key'"
+
+    def test_get_item_and_set_item(self, llm_config_filter: LLMConfigFilter) -> None:
+        # Test __getitem__
+        assert llm_config_filter["api_type"] == "openai"
+        assert llm_config_filter["model"] == ["gpt-4o-mini", "gpt-4o-small"]
+        with pytest.raises(KeyError) as e:
+            llm_config_filter["wrong_key"]
+        assert str(e.value) == "\"Key 'wrong_key' not found in LLMConfigFilter\""
+
+        # Test __setitem__
+        assert llm_config_filter["api_type"] == "openai"
+        llm_config_filter["api_type"] = "azure"
+        assert llm_config_filter["api_type"] == "azure"
+        llm_config_filter["api_type"] = "openai"
+        assert llm_config_filter["api_type"] == "openai"
+
+    def test_items(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.items()
+        assert isinstance(actual, dict_items)
+        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
+        assert dict(actual) == expected
+
+    def test_keys(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.keys()
+        assert isinstance(actual, dict_keys)
+        expected = ["api_type", "model"]
+        assert list(actual) == expected
+
+    def test_values(self, llm_config_filter: LLMConfigFilter) -> None:
+        actual = llm_config_filter.values()
+        assert isinstance(actual, dict_values)
+        expected = ["openai", ["gpt-4o-mini", "gpt-4o-small"]]
+        assert list(actual) == expected
+
+    def test_repr(self) -> None:
+        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
+        assert repr(actual) == "LLMConfigFilter(api_type='openai', model='gpt-4o-mini')"
+
+
+@pytest.fixture
+def openai_llm_config_entry() -> OpenAILLMConfigEntry:
+    return OpenAILLMConfigEntry(model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly")
+
+
+class TestLLMConfigEntry:
+    def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        actual = openai_llm_config_entry.model_dump()
+        expected = {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            "tags": [],
+        }
+        assert actual == expected
+
+    def test_deserialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        actual = OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump())
+        assert actual == openai_llm_config_entry
+
+    def test_get(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        assert openai_llm_config_entry.get("api_type") == "openai"
+        assert openai_llm_config_entry.get("model") == "gpt-4o-mini"
+        assert openai_llm_config_entry.get("api_key") == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+        assert openai_llm_config_entry.get("doesnt_exists") is None
+        assert openai_llm_config_entry.get("doesnt_exists", "default") == "default"
+
+    def test_get_item_and_set_item(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        # Test __getitem__
+        assert openai_llm_config_entry["api_type"] == "openai"
+        assert openai_llm_config_entry["model"] == "gpt-4o-mini"
+        assert openai_llm_config_entry["api_key"] == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+        assert openai_llm_config_entry["tags"] == []
+        with pytest.raises(KeyError) as e:
+            openai_llm_config_entry["wrong_key"]
+        assert str(e.value) == "\"Key 'wrong_key' not found in OpenAILLMConfigEntry\""
+
+        # Test __setitem__
+        assert openai_llm_config_entry["base_url"] is None
+        openai_llm_config_entry["base_url"] = "https://api.openai.com"
+        assert openai_llm_config_entry["base_url"] == "https://api.openai.com"
+        openai_llm_config_entry["base_url"] = None
+        assert openai_llm_config_entry["base_url"] is None
+
+
+class TestLLMConfig:
+    @pytest.fixture
+    def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
+        return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
+
+    @pytest.mark.parametrize(
+        "llm_config, expected",
+        [
+            (
+                # todo add more test cases
+                {
+                    "config_list": [
+                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "gpt-4o-mini",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "openai",
+                        }
+                    ],
+                    "temperature": 0.5,
+                    "check_every_ms": 1000,
+                    "cache_seed": 42,
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ],
+                    temperature=0.5,
+                    check_every_ms=1000,
+                    cache_seed=42,
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "gpt-4o-mini",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "azure",
+                            "base_url": "https://api.openai.com",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        AzureOpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            base_url="https://api.openai.com",
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "anthropic",
+                            "model": "claude-3-5-sonnet-latest",
+                            "api_key": "dummy_api_key",
+                            "stream": False,
+                            "temperature": 1.0,
+                            "top_p": 0.8,
+                            "max_tokens": 100,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        AnthropicLLMConfigEntry(
+                            model="claude-3-5-sonnet-latest",
+                            api_key="dummy_api_key",
+                            stream=False,
+                            temperature=1.0,
+                            top_p=0.8,
+                            max_tokens=100,
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "bedrock",
+                            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+                            "aws_region": "us-east-1",
+                            "aws_access_key": "test_access_key_id",
+                            "aws_secret_key": "test_secret_access_key",
+                            "aws_session_token": "test_session_token",
+                            "temperature": 0.8,
+                            "topP": 0.6,
+                            "stream": False,
+                            "tags": [],
+                            "supports_system_prompts": True,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        BedrockLLMConfigEntry(
+                            model="anthropic.claude-3-sonnet-20240229-v1:0",
+                            aws_region="us-east-1",
+                            aws_access_key="test_access_key_id",
+                            aws_secret_key="test_secret_access_key",
+                            aws_session_token="test_session_token",
+                            temperature=0.8,
+                            topP=0.6,
+                            stream=False,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "cerebras",
+                            "api_key": "fake_api_key",
+                            "model": "llama3.1-8b",
+                            "max_tokens": 1000,
+                            "seed": 42,
+                            "stream": False,
+                            "temperature": 1.0,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        CerebrasLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="llama3.1-8b",
+                            max_tokens=1000,
+                            seed=42,
+                            stream=False,
+                            temperature=1,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "cohere",
+                            "model": "command-r-plus",
+                            "api_key": "dummy_api_key",
+                            "frequency_penalty": 0,
+                            "k": 0,
+                            "p": 0.75,
+                            "presence_penalty": 0,
+                            "strict_tools": False,
+                            "tags": [],
+                            "temperature": 0.3,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        CohereLLMConfigEntry(
+                            model="command-r-plus",
+                            api_key="dummy_api_key",
+                            stream=False,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "deepseek",
+                            "api_key": "fake_api_key",
+                            "model": "deepseek-chat",
+                            "base_url": "https://api.deepseek.com/v1",
+                            "max_tokens": 8192,
+                            "temperature": 0.5,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        DeepSeekLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="deepseek-chat",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "google",
+                            "model": "gemini-2.0-flash-lite",
+                            "api_key": "dummy_api_key",
+                            "project_id": "fake-project-id",
+                            "location": "us-west1",
+                            "stream": False,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        GeminiLLMConfigEntry(
+                            model="gemini-2.0-flash-lite",
+                            api_key="dummy_api_key",
+                            project_id="fake-project-id",
+                            location="us-west1",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "groq",
+                            "model": "llama3-8b-8192",
+                            "api_key": "fake_api_key",
+                            "temperature": 1,
+                            "stream": False,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(config_list=[GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")]),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "mistral",
+                            "model": "mistral-small-latest",
+                            "api_key": "fake_api_key",
+                            "safe_prompt": False,
+                            "stream": False,
+                            "temperature": 0.7,
+                            "tags": [],
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        MistralLLMConfigEntry(
+                            model="mistral-small-latest",
+                            api_key="fake_api_key",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "ollama",
+                            "model": "llama3.1:8b",
+                            "num_ctx": 2048,
+                            "num_predict": 128,
+                            "repeat_penalty": 1.1,
+                            "seed": 42,
+                            "stream": False,
+                            "tags": [],
+                            "temperature": 0.8,
+                            "top_k": 40,
+                            "top_p": 0.9,
+                        }
+                    ]
+                },
+                LLMConfig(config_list=[OllamaLLMConfigEntry(model="llama3.1:8b")]),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "api_type": "together",
+                            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                            "api_key": "fake_api_key",
+                            "safety_model": "Meta-Llama/Llama-Guard-7b",
+                            "tags": [],
+                            "max_tokens": 512,
+                            "stream": False,
+                        }
+                    ]
+                },
+                LLMConfig(
+                    config_list=[
+                        TogetherLLMConfigEntry(
+                            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+                            api_key="fake_api_key",
+                            safety_model="Meta-Llama/Llama-Guard-7b",
+                        )
+                    ]
+                ),
+            ),
+        ],
+    )
+    def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
+        actual = LLMConfig(**llm_config)
+        assert actual == expected, actual
+
+    def test_serialization(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.model_dump()
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+        assert actual == expected
+
+    def test_deserialization(self, openai_llm_config: LLMConfig) -> None:
+        actual = LLMConfig(**openai_llm_config.model_dump())
+        assert actual.model_dump() == openai_llm_config.model_dump()
+        assert type(actual._model) == type(openai_llm_config._model)
+        assert actual._model == openai_llm_config._model
+        assert actual == openai_llm_config
+        assert isinstance(actual.config_list[0], dict)
+
+    def test_get(self, openai_llm_config: LLMConfig) -> None:
+        assert openai_llm_config.get("temperature") == 0.5
+        assert openai_llm_config.get("check_every_ms") == 1000
+        assert openai_llm_config.get("cache_seed") == 42
+        assert openai_llm_config.get("doesnt_exists") is None
+        assert openai_llm_config.get("doesnt_exists", "default") == "default"
+
+    def test_getattr(self, openai_llm_config: LLMConfig) -> None:
+        assert openai_llm_config.temperature == 0.5
+        assert openai_llm_config.check_every_ms == 1000
+        assert openai_llm_config.cache_seed == 42
+        assert openai_llm_config.config_list == [openai_llm_config.config_list[0]]
+        with pytest.raises(AttributeError) as e:
+            openai_llm_config.wrong_key
+        assert str(e.value) == "'LLMConfig' object has no attribute 'wrong_key'"
+
+    def test_get_item_and_set_item(self, openai_llm_config: LLMConfig) -> None:
+        # Test __getitem__
+        assert openai_llm_config["temperature"] == 0.5
+        assert openai_llm_config["check_every_ms"] == 1000
+        assert openai_llm_config["cache_seed"] == 42
+        assert openai_llm_config["config_list"] == [openai_llm_config.config_list[0]]
+        with pytest.raises(KeyError) as e:
+            openai_llm_config["wrong_key"]
+        assert str(e.value) == "\"Key 'wrong_key' not found in LLMConfig\""
+
+        # Test __setitem__
+        assert openai_llm_config["timeout"] is None
+        openai_llm_config["timeout"] = 60
+        assert openai_llm_config["timeout"] == 60
+        openai_llm_config["timeout"] = None
+        assert openai_llm_config["timeout"] is None
+
+    def test_items(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.items()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_items)
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+        assert dict(actual) == expected, dict(actual)
+
+    def test_keys(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.keys()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_keys)
+        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]
+        assert list(actual) == expected, list(actual)
+
+    def test_values(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.values()  # type: ignore[var-annotated]
+        assert isinstance(actual, dict_values)
+        expected = [
+            0.5,
+            1000,
+            42,
+            [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "tags": [],
+                }
+            ],
+        ]
+        assert list(actual) == expected, list(actual)
+
+    def test_unpack(self, openai_llm_config: LLMConfig, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        openai_llm_config_entry.base_url = "localhost:8080"  # type: ignore[assignment]
+        openai_llm_config.config_list = [  # type: ignore[attr-defined]
+            openai_llm_config_entry,
+        ]
+        expected = {
+            "config_list": [
+                {
+                    "api_type": "openai",
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "base_url": "localhost:8080",
+                    "tags": [],
+                }
+            ],
+            "temperature": 0.5,
+            "check_every_ms": 1000,
+            "cache_seed": 42,
+        }
+
+        def test_unpacking(**kwargs: Any) -> None:
+            assert kwargs == expected, kwargs
+
+        test_unpacking(**openai_llm_config)
+
+    def test_contains(self, openai_llm_config: LLMConfig) -> None:
+        assert "temperature" in openai_llm_config
+        assert "check_every_ms" in openai_llm_config
+        assert "cache_seed" in openai_llm_config
+        assert "config_list" in openai_llm_config
+        assert "doesnt_exists" not in openai_llm_config
+        assert "config_list" in openai_llm_config
+        assert not "config_list" not in openai_llm_config
+
+    def test_with_context(self, openai_llm_config: LLMConfig) -> None:
+        # Test with dummy agent
+        class DummyAgent:
+            def __init__(self) -> None:
+                self.llm_config = LLMConfig.get_current_llm_config()
+
+        with openai_llm_config:
+            agent = DummyAgent()
+        assert agent.llm_config == openai_llm_config
+        assert agent.llm_config.temperature == 0.5
+        assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
+
+        # Test accessing current_llm_config outside the context
+        assert LLMConfig.get_current_llm_config() is None
+        with openai_llm_config:
+            actual = LLMConfig.get_current_llm_config()
+            assert actual == openai_llm_config
+
+        assert LLMConfig.get_current_llm_config() is None
+
+    @pytest.mark.parametrize(
+        "filter_dict, exclude, expected",
+        [
+            (
+                {"tags": ["gpt35", "gpt4"]},
+                False,
+                JSON_SAMPLE_DICT[0:2],
+            ),
+            (
+                {"tags": ["gpt35", "gpt4"]},
+                True,
+                JSON_SAMPLE_DICT[2:4],
+            ),
+            (
+                {"api_type": "azure", "api_version": "2024-02-01"},
+                False,
+                [JSON_SAMPLE_DICT[2]],
+            ),
+            (
+                {"api_type": ["azure"]},
+                False,
+                [JSON_SAMPLE_DICT[2]],
+            ),
+            (
+                {},
+                False,
+                JSON_SAMPLE_DICT,
+            ),
+        ],
+    )
+    def test_apply_filter(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        llm_config_filter = LLMConfigFilter(**filter_dict)
+
+        actual = openai_llm_config.apply_filter(llm_config_filter, exclude=exclude)
+        assert isinstance(actual, LLMConfig)
+        assert actual.config_list == expected
+
+    def test_apply_filter_invalid_filter(self) -> None:
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        llm_config_filter = LLMConfigFilter(api_type="invalid")
+
+        with pytest.raises(ValueError) as e:
+            openai_llm_config.apply_filter(llm_config_filter)
+        assert str(e.value) == f"No config found that satisfies the filter criteria: {llm_config_filter}"

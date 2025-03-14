@@ -10,12 +10,42 @@
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.cohere import CohereClient, calculate_cohere_cost
+from autogen.llm_config import LLMConfig
+from autogen.oai.cohere import CohereClient, CohereLLMConfigEntry, calculate_cohere_cost
 
 
 @pytest.fixture
 def cohere_client():
     return CohereClient(api_key="dummy_api_key")
+
+
+def test_cohere_llm_config_entry():
+    cohere_llm_config = CohereLLMConfigEntry(
+        model="command-r-plus",
+        api_key="dummy_api_key",
+        stream=False,
+    )
+    expected = {
+        "api_type": "cohere",
+        "model": "command-r-plus",
+        "api_key": "dummy_api_key",
+        "frequency_penalty": 0,
+        "k": 0,
+        "p": 0.75,
+        "presence_penalty": 0,
+        "strict_tools": False,
+        "tags": [],
+        "temperature": 0.3,
+    }
+    actual = cohere_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[cohere_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 @run_for_optional_imports(["cohere"], "cohere")

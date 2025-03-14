@@ -33,14 +33,35 @@ import copy
 import os
 import time
 import warnings
-from typing import Any
+from typing import Any, Literal, Optional
+
+from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     from together import Together
+
+
+@register_llm_config
+class TogetherLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["together"] = "together"
+    max_tokens: int = Field(default=512, ge=0)
+    stream: bool = False
+    temperature: Optional[float] = Field(default=None)
+    top_p: Optional[float] = Field(default=None)
+    top_k: Optional[int] = Field(default=None)
+    repetition_penalty: Optional[float] = Field(default=None)
+    presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
+    frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
+    min_p: Optional[float] = Field(default=None, ge=0, le=1)
+    safety_model: Optional[str] = None
+
+    def create_client(self):
+        raise NotImplementedError("TogetherLLMConfigEntry.create_client is not implemented.")
 
 
 class TogetherClient:
