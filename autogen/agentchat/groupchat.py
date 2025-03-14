@@ -1206,7 +1206,7 @@ class GroupChatManager(ConversableAgent):
                     raise
             except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
-                termination_reason = "No eligible speaker found"
+                termination_reason = "No next speaker selected"
                 break
 
             if reply is None:
@@ -1298,7 +1298,7 @@ class GroupChatManager(ConversableAgent):
                     raise
             except NoEligibleSpeakerError:
                 # No eligible speaker, terminate the conversation
-                termination_reason = "No eligible speaker found"
+                termination_reason = "No next speaker selected"
                 break
 
             if reply is None:
