@@ -7,7 +7,7 @@
 import re
 from typing import Any, Literal, Optional, Protocol, Union
 
-from .... import Agent, ConversableAgent, code_utils
+from .... import Agent, ConversableAgent, LLMMessageType, code_utils
 from ....cache import AbstractCache
 from ....import_utils import optional_import_block, require_optional_import
 from .. import img_utils
@@ -215,7 +215,7 @@ class ImageGeneration(AgentCapability):
     def _image_gen_reply(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

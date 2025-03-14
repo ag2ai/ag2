@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from types import MethodType
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Optional, Sequence, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -17,7 +17,7 @@ from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
-from ..agent import Agent
+from ..agent import Agent, LLMMessageType
 from ..chat import ChatResult
 from ..conversable_agent import __CONTEXT_VARIABLES_PARAM_NAME__, ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
@@ -95,11 +95,11 @@ class AfterWork:  # noqa: N801
     Args:
         agent (Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]): The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def my_after_work_func(last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
         next_agent_selection_msg (Optional[Union[str, Callable[..., Any]]]): Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
@@ -290,7 +290,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     agent._swarm_is_established = True  # type: ignore[attr-defined]
 
 
-def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
+def _link_agents_to_swarm_manager(agents: Sequence[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
 
     This is primarily used so that agents can set the tool executor's _swarm_next_agent attribute to control
@@ -304,7 +304,7 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
 
 def _run_oncontextconditions(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list["LLMMessageType"]] = None,
     sender: Optional[Agent] = None,
     config: Optional[Any] = None,
 ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
@@ -627,7 +627,7 @@ def _prepare_groupchat_auto_speaker(
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -849,7 +849,7 @@ def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[
     The returned function can be registered as a hook to "process_all_messages_before_reply"" to remove messages with tool calls.
     """
 
-    def remove_messages(messages: list[dict[str, Any]], tool_msgs_to_remove: list[str]) -> list[dict[str, Any]]:
+    def remove_messages(messages: list["LLMMessageType"], tool_msgs_to_remove: list[str]) -> list[dict[str, Any]]:
         copied = copy.deepcopy(messages)
         new_messages = []
         removed_tool_ids = []
@@ -931,7 +931,7 @@ def initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
@@ -1034,7 +1034,7 @@ async def a_initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list["LLMMessageType"], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
@@ -1200,7 +1200,7 @@ def register_hand_off(
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")
 
 
-def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
+def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list["LLMMessageType"]] = None) -> None:
     """Updates the agent's functions based on the OnCondition's available condition."""
     for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
         is_available = True
@@ -1232,7 +1232,7 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
 
 def _generate_swarm_tool_reply(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list["LLMMessageType"]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, Optional[dict[str, Any]]]:
@@ -1250,7 +1250,7 @@ def _generate_swarm_tool_reply(
 
     message = messages[-1]
     if "tool_calls" in message:
-        tool_call_count = len(message["tool_calls"])
+        tool_call_count = len(message["tool_calls"])  # type: ignore[index]
 
         # Loop through tool calls individually (so context can be updated after each function call)
         next_agent: Optional[Agent] = None
@@ -1260,10 +1260,10 @@ def _generate_swarm_tool_reply(
             message_copy = copy.deepcopy(message)
 
             # 1. add context_variables to the tool call arguments
-            tool_call = message_copy["tool_calls"][index]
+            tool_call = message_copy["tool_calls"][index]  # type: ignore[index]
 
             # Ensure we are only executing the one tool at a time
-            message_copy["tool_calls"] = [tool_call]
+            message_copy["tool_calls"] = [tool_call]  # type: ignore[index]
 
             # 2. generate tool calls reply
             _, tool_message = agent.generate_tool_calls_reply([message_copy])

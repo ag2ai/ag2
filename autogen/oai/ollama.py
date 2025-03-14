@@ -32,6 +32,7 @@ from typing import Any, Literal, Optional, Union
 
 from pydantic import AnyUrl, BaseModel, Field
 
+from .. import LLMMessageType
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
@@ -395,7 +396,7 @@ class OllamaClient:
 
         return response_oai
 
-    def oai_messages_to_ollama_messages(self, messages: list[dict[str, Any]], tools: list) -> list[dict[str, Any]]:
+    def oai_messages_to_ollama_messages(self, messages: list["LLMMessageType"], tools: list) -> list[dict[str, Any]]:
         """Convert messages from OAI format to Ollama's format.
         We correct for any specific role orders and types, and convert tools to messages (as Ollama can't use tool messages)
         """

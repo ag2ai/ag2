@@ -31,6 +31,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from .. import LLMMessageType
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import should_hide_tools, validate_parameter
@@ -270,7 +271,7 @@ class GroqClient:
         return response_oai
 
 
-def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_groq_messages(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """

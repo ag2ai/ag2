@@ -14,7 +14,7 @@ import sys
 import uuid
 import warnings
 from functools import lru_cache
-from typing import Any, Callable, Literal, Optional, Protocol, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Protocol, Union
 
 from pydantic import AnyUrl, BaseModel, Field, ValidationInfo, field_validator
 from pydantic.type_adapter import TypeAdapter
@@ -31,6 +31,9 @@ from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapp
 from ..token_count_utils import count_token
 from .client_utils import FormatterProtocol, logging_formatter
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 TOOL_ENABLED = False
 with optional_import_block() as openai_result:
@@ -388,7 +391,7 @@ class OpenAIClient:
         return bool(pattern.match(message))
 
     @staticmethod
-    def _move_system_message_to_beginning(messages: list[dict[str, Any]]) -> None:
+    def _move_system_message_to_beginning(messages: list["LLMMessageType"]) -> None:
         for msg in messages:
             if msg["role"] == "system":
                 messages.insert(0, messages.pop(messages.index(msg)))
@@ -461,7 +464,7 @@ class OpenAIClient:
         return wrapper
 
     @staticmethod
-    def _convert_system_role_to_user(messages: list[dict[str, Any]]) -> None:
+    def _convert_system_role_to_user(messages: list["LLMMessageType"]) -> None:
         for msg in messages:
             if msg.get("role", "") == "system":
                 msg["role"] = "user"
@@ -983,7 +986,7 @@ class OpenAIWrapper:
         """Prime the create_config with additional_kwargs."""
         # Validate the config
         prompt: Optional[str] = create_config.get("prompt")
-        messages: Optional[list[dict[str, Any]]] = create_config.get("messages")
+        messages: Optional[list["LLMMessageType"]] = create_config.get("messages")
         if (prompt is None) == (messages is None):
             raise ValueError("Either prompt or messages should be in create config but not both.")
         context = extra_kwargs.get("context")

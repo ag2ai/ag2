@@ -36,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import requests
 from pydantic import Field
@@ -49,6 +49,9 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     import boto3
     from botocore.config import Config
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 @register_llm_config
@@ -294,7 +297,7 @@ class BedrockClient:
         }
 
 
-def extract_system_messages(messages: list[dict[str, Any]]) -> list:
+def extract_system_messages(messages: list["LLMMessageType"]) -> list:
     """Extract the system messages from the list of messages.
 
     Args:
@@ -318,7 +321,7 @@ def extract_system_messages(messages: list[dict[str, Any]]) -> list:
 
 
 def oai_messages_to_bedrock_messages(
-    messages: list[dict[str, Any]], has_tools: bool, supports_system_prompts: bool
+    messages: list["LLMMessageType"], has_tools: bool, supports_system_prompts: bool
 ) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Bedrock format.
     We correct for any specific role orders and types, etc.
