@@ -248,6 +248,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
+    azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError

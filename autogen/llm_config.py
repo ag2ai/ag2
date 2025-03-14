@@ -98,7 +98,21 @@ class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(self, **kwargs: Any) -> None:
-        modified_kwargs = kwargs if "config_list" in kwargs else {"config_list": [kwargs]}
+        outside_properties = list((self._get_base_model_class()).model_json_schema()["properties"].keys())
+        outside_properties.remove("config_list")
+
+        modified_kwargs = (
+            kwargs
+            if "config_list" in kwargs
+            else {
+                **{
+                    "config_list": [
+                        {k: v for k, v in kwargs.items() if k not in outside_properties},
+                    ]
+                },
+                **{k: v for k, v in kwargs.items() if k in outside_properties},
+            }
+        )
 
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
@@ -281,7 +295,7 @@ class LLMConfigEntry(BaseModel, ABC):
     tags: list[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...

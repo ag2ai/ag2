@@ -225,6 +225,22 @@ class TestLLMConfig:
             ),
             (
                 {
+                    "model": "gpt-4o-mini",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "cache_seed": 42,
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ],
+                    cache_seed=42,
+                ),
+            ),
+            (
+                {
                     "config_list": [
                         {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
                     ],
