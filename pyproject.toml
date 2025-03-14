@@ -201,7 +201,6 @@ gemini = [
     "google-auth",
     "pillow",
     "jsonschema",
-    "jsonref>=1,<2",
 ]
 
 gemini-realtime = [
@@ -449,6 +448,7 @@ files = [
     "autogen/import_utils.py",
     "autogen/interop",
     "autogen/io",
+    "autogen/json_utils.py",
     "autogen/llm_config.py",
     "autogen/logger",
     "autogen/messages",
@@ -466,6 +466,7 @@ files = [
 #    "test/fast_depends",
     "test/interop",
     "test/io",
+    "test/test_json_utils.py",
     "test/test_llm_config.py",
     "test/messages",
     "test/test_import_utils.py",
