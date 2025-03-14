@@ -43,7 +43,7 @@ The agent is highly configurable through a single `reason_config` dictionary:
 import random
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
 config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
@@ -999,7 +999,7 @@ To use a different model for grading instead of gpt-4o, pass the `grader_llm_con
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
 grader_config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
-grader_llm_config = {"config_list": grader_config_list}
+grader_llm_config = LLMConfig(config_list=grader_config_list)
 
 writer = AssistantAgent(
     name="Writer",

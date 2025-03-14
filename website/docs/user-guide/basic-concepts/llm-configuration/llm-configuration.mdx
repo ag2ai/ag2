@@ -19,16 +19,17 @@ First, we define our configuration with the API type, model, and, if necessary, 
 
 ```python
 import os
+from autogen import LLMConfig
 
-llm_config = {
-  "config_list": [
+llm_config = LLMConfig(
+  config_list = [
     {
       "api_type": "openai",
       "model": "gpt-4o-mini",
       "api_key": os.environ["OPENAI_API_KEY"]
     }
   ],
-}
+)
 ```
 
 <Warning>
