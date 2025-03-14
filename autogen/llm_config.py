@@ -33,6 +33,7 @@ def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
 class LLMConfigFilter(BaseModel):
     filter_dict: dict[str, Any] = Field(default_factory=dict)
 
+    # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid")
 
     def __init__(self, **kwargs: Any) -> None:
@@ -250,6 +251,7 @@ class LLMConfig:
                     Field(default_factory=list, min_length=1),
                 ]
 
+                # Following field is configuration for pydantic to disallow extra fields
                 model_config = ConfigDict(extra="forbid")
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
@@ -269,6 +271,7 @@ class LLMConfigEntry(BaseModel, ABC):
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
     tags: list[str] = Field(default_factory=list)
 
+    # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid")
 
     @abstractmethod
