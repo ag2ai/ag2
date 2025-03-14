@@ -29,6 +29,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     input_file_path: Annotated[Union[Path, str], "Path to the input file or directory"],
     output_dir_path: Annotated[Optional[Union[Path, str]], "Path to the output directory"] = None,
     output_formats: Annotated[Optional[list[str]], "List of output formats (markdown, json)"] = None,
+    table_output_format: str = "html",
 ) -> list[Path]:
     """Convert documents into a Deep Search document format using EasyOCR
     with CPU only, and export the document and its tables to the specified
@@ -47,6 +48,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         input_file_path (Union[Path, str]): The path to the input file.
         output_dir_path (Union[Path, str]): The path to the output directory.
         output_formats (list[str], optional): The output formats. Defaults to ["markdown"].
+        table_output_format (str, optional): The output format for tables. Defaults to "html".
 
     Returns:
         list[ConversionResult]: The result of the conversion.
@@ -109,13 +111,11 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
                 conv_files.append(output_file)
 
         # Export tables (used for evaluating conversion)
-        """
-        for table_ix, table in enumerate(res.document.tables):
-            # Save the table as html
-            element_html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
-            logger.debug(f"Saving HTML table to {element_html_filename}")
-            with element_html_filename.open("w") as fp:
-                fp.write(table.export_to_html())
-        """
-
+        if table_output_format == "html":
+            for table_ix, table in enumerate(res.document.tables):
+                # Save the table as html
+                element_html_filename = output_dir / f"{doc_filename}-table-{table_ix + 1}.html"
+                logger.debug(f"Saving HTML table to {element_html_filename}")
+                with element_html_filename.open("w") as fp:
+                    fp.write(table.export_to_html())
     return conv_files

@@ -290,7 +290,7 @@ class PlaceHolderClient:
         self.config = config
 
 
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=1.66.2", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -675,7 +675,6 @@ class OpenAIClient:
         }
 
 
-# @require_optional_import("openai", "openai")
 @export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
@@ -832,7 +831,7 @@ class OpenAIWrapper:
         else:
             if api_type is not None and api_type.startswith("azure"):
 
-                @require_optional_import("openai", "openai")
+                @require_optional_import("openai>=1.66.2", "openai")
                 def create_azure_openai_client() -> "AzureOpenAI":
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
@@ -892,7 +891,7 @@ class OpenAIWrapper:
                 self._clients.append(client)
             else:
 
-                @require_optional_import("openai", "openai")
+                @require_optional_import("openai>=1.66.2", "openai")
                 def create_openai_client() -> "OpenAI":
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format))
