@@ -34,6 +34,7 @@ def test_cohere_llm_config_entry():
         "p": 0.75,
         "presence_penalty": 0,
         "strict_tools": False,
+        "stream": False,
         "tags": [],
         "temperature": 0.3,
     }

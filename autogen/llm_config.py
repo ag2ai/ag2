@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
 
-from pydantic import AnyUrl, BaseModel, Field, SecretStr, field_serializer
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
 
 if TYPE_CHECKING:
     from .oai.client import ModelClient
@@ -32,6 +32,9 @@ def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
 
 class LLMConfigFilter(BaseModel):
     filter_dict: dict[str, Any] = Field(default_factory=dict)
+
+    # Following field is configuration for pydantic to disallow extra fields
+    model_config = ConfigDict(extra="forbid")
 
     def __init__(self, **kwargs: Any) -> None:
         if "filter_dict" in kwargs:
@@ -93,12 +96,19 @@ class LLMConfigFilter(BaseModel):
 class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        if "config_list" in kwargs:
-            kwargs["config_list"] = [
-                _add_default_api_type(v) if isinstance(v, dict) else v for v in kwargs["config_list"]
+    def __init__(self, **kwargs: Any) -> None:
+        modified_kwargs = kwargs if "config_list" in kwargs else {"config_list": [kwargs]}
+
+        modified_kwargs["config_list"] = [
+            _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
+        ]
+        if "max_tokens" in modified_kwargs:
+            modified_kwargs["config_list"] = [
+                {**v, "max_tokens": modified_kwargs["max_tokens"]} for v in modified_kwargs["config_list"]
             ]
-        self._model = self._get_base_model_class()(*args, **kwargs)
+            modified_kwargs.pop("max_tokens")
+
+        self._model = self._get_base_model_class()(**modified_kwargs)
 
     # used by BaseModel to create instance variables
     def __enter__(self) -> "LLMConfig":
@@ -240,11 +250,15 @@ class LLMConfig:
 
                 tools: list[Any] = Field(default_factory=list)
                 functions: list[Any] = Field(default_factory=list)
+                parallel_tool_calls: Optional[bool] = None
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
                     Field(default_factory=list, min_length=1),
                 ]
+
+                # Following field is configuration for pydantic to disallow extra fields
+                model_config = ConfigDict(extra="forbid")
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
 
@@ -258,10 +272,14 @@ class LLMConfigEntry(BaseModel, ABC):
     model: str = Field(..., min_length=1)
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
+    max_tokens: Optional[int] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
     tags: list[str] = Field(default_factory=list)
+
+    # Following field is configuration for pydantic to disallow extra fields
+    model_config = ConfigDict(extra="forbid")
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...

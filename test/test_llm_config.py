@@ -139,6 +139,16 @@ def openai_llm_config_entry() -> OpenAILLMConfigEntry:
 
 
 class TestLLMConfigEntry:
+    def test_extra_fields(self) -> None:
+        with pytest.raises(ValueError) as e:
+            # Intentionally passing extra field to raise an error
+            OpenAILLMConfigEntry(  # type: ignore [call-arg]
+                model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly", extra="extra"
+            )
+        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
+            e.value
+        )
+
     def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         actual = openai_llm_config_entry.model_dump()
         expected = {
@@ -198,6 +208,34 @@ class TestLLMConfig:
                         OpenAILLMConfigEntry(
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
+                    ],
+                    "max_tokens": 1024,
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            max_tokens=1024,
                         )
                     ]
                 ),
@@ -499,6 +537,20 @@ class TestLLMConfig:
     def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
         actual = LLMConfig(**llm_config)
         assert actual == expected, actual
+
+    def test_extra_fields(self) -> None:
+        with pytest.raises(ValueError) as e:
+            LLMConfig(
+                config_list=[
+                    OpenAILLMConfigEntry(
+                        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+                    )
+                ],
+                extra="extra",
+            )
+        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
+            e.value
+        )
 
     def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
