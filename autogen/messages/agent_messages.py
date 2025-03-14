@@ -621,7 +621,7 @@ class TerminationMessage(BaseMessage):
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(colored(f"\n>>>>>>>> TERMINATING: {self.termination_reason}", "red"), flush=True)
+        f(colored(f"\n>>>>>>>> TERMINATING RUN ({str(self.uuid)}): {self.termination_reason}", "red"), flush=True)
 
 
 @wrap_message
