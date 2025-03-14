@@ -116,14 +116,15 @@ from autogen import (
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
-    register_hand_off
+    register_hand_off,
+    LLMConfig,
 )
 
 # Example task: Research and create a comprehensive report on renewable energy technologies
 
 # Setup LLM configuration
 # Note that we turn parallel tool calling off for OpenAI so we only get one tool call at a time.
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False)
 
 # Shared context for all agents in the swarm
 shared_context = {
