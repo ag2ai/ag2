@@ -3024,7 +3024,7 @@ class ConversableAgent(LLMAgent):
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
         """
-        if not isinstance(self.llm_config, [dict, LLMConfig]):
+        if not isinstance(self.llm_config, (dict, LLMConfig)):
             error_msg = "To update a function signature, agent must have an llm_config"
             logger.error(error_msg)
             raise AssertionError(error_msg)
