@@ -70,6 +70,7 @@ setuptools.setup(
         "cohere": ["pyautogen[cohere]==" + __version__],
         "ollama": ["pyautogen[ollama]==" + __version__],
         "bedrock": ["pyautogen[bedrock]==" + __version__],
+        "agent-occam": ["pyautogen[agent-occam]==" + __version__],
         "deepseek": ["pyautogen[deepseek]==" + __version__],
         "commsagent-discord": ["pyautogen[commsagent-discord]==" + __version__],
         "commsagent-slack": ["pyautogen[commsagent-slack]==" + __version__],
