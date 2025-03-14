@@ -302,7 +302,10 @@ class VectorChromaCitationQueryEngine(VectorChromaQueryEngine):
 
         response = query_engine.query(query)
 
-        return AnswerWithCitations(answer=response.response, citations=response.source_nodes)
+        if hasattr(response, "response"):
+            return AnswerWithCitations(answer=response.response, citations=response.source_nodes)
+        else:
+            raise ValueError(f"Query response of type '{type(response)}' does not contain a response attribute.")
 
 
 # mypy will fail if ChromaDBQueryEngine does not implement RAGQueryEngine protocol

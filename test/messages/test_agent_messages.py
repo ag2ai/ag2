@@ -851,7 +851,9 @@ class TestTerminationMessage:
         actual.print(f=mock)
         # print(mock.call_args_list)
         expected_call_args_list = [
-            call("\x1b[31m\n>>>>>>>> TERMINATING: " + termination_reason + "\x1b[0m", flush=True)
+            call(
+                "\x1b[31m\n>>>>>>>> TERMINATING RUN (" + str(uuid) + "): " + termination_reason + "\x1b[0m", flush=True
+            )
         ]
         assert mock.call_args_list == expected_call_args_list
 

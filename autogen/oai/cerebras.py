@@ -28,9 +28,12 @@ import math
 import os
 import time
 import warnings
-from typing import Any
+from typing import Any, Literal, Optional
+
+from pydantic import Field, ValidationInfo, field_validator
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -42,6 +45,26 @@ CEREBRAS_PRICING_1K = {
     "llama3.1-8b": (0.10 / 1000, 0.10 / 1000),
     "llama-3.3-70b": (0.85 / 1000, 1.20 / 1000),
 }
+
+
+@register_llm_config
+class CerebrasLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["cerebras"] = "cerebras"
+    max_tokens: Optional[int] = None
+    seed: Optional[int] = None
+    stream: bool = False
+    temperature: float = Field(default=1.0, ge=0.0, le=1.5)
+    top_p: Optional[float] = None
+
+    @field_validator("top_p", mode="before")
+    @classmethod
+    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
+        if v is not None and info.data.get("temperature") is not None:
+            raise ValueError("temperature and top_p cannot be set at the same time.")
+        return v
+
+    def create_client(self):
+        raise NotImplementedError("CerebrasLLMConfigEntry.create_client is not implemented.")
 
 
 class CerebrasClient:

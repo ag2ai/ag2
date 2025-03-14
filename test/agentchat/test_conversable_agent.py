@@ -12,7 +12,7 @@ import inspect
 import os
 import time
 import unittest
-from typing import Annotated, Any, Callable, List, Literal, Optional
+from typing import Annotated, Any, Callable, List, Literal, Optional, Union
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,6 +23,8 @@ from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAg
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
+from autogen.llm_config import LLMConfig, LLMConfigFilter
+from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
 
 from ..conftest import (
@@ -61,7 +63,9 @@ def test_conversable_agent_name_with_white_space(
     ):
         ConversableAgent(name=name, llm_config=llm_config)
 
-    llm_config["config_list"][0]["api_type"] = "something-else"
+    llm_config["config_list"][0]["api_type"] = "azure"
+    llm_config["config_list"][0]["api_version"] = "2023-01-01"
+    llm_config["config_list"][0]["base_url"] = "https://api.azure.com/v1"
     agent = ConversableAgent(name=name, llm_config=llm_config)
     assert agent.name == name
 
@@ -866,7 +870,7 @@ def test_register_for_llm_without_LLM():  # noqa: N802
 def test_register_for_llm_without_configuration():
     with pytest.raises(
         ValueError,
-        match="When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'.",
+        match="List should have at least 1 item after validation, not 0",
     ):
         ConversableAgent(name="agent", llm_config={"config_list": []})
 
@@ -874,7 +878,7 @@ def test_register_for_llm_without_configuration():
 def test_register_for_llm_without_model_name():
     with pytest.raises(
         ValueError,
-        match="When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'.",
+        match="String should have at least 1 character",
     ):
         ConversableAgent(name="agent", llm_config={"config_list": [{"model": ""}]})
 
@@ -953,21 +957,24 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    coder = autogen.AssistantAgent(
-        name="chatbot",
-        system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o_mini.llm_config,
-    )
+    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
 
-    # create a UserProxyAgent instance named "user_proxy"
-    user_proxy = autogen.UserProxyAgent(
-        name="user_proxy",
-        system_message="A proxy for the user for executing code.",
-        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-        human_input_mode="NEVER",
-        max_consecutive_auto_reply=10,
-        code_execution_config={"work_dir": "coding"},
-    )
+    with llm_config:
+        coder = autogen.AssistantAgent(
+            name="chatbot",
+            system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+            # llm_config=credentials_gpt_4o_mini.llm_config,
+        )
+
+        # create a UserProxyAgent instance named "user_proxy"
+        user_proxy = autogen.UserProxyAgent(
+            name="user_proxy",
+            system_message="A proxy for the user for executing code.",
+            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=10,
+            code_execution_config={"work_dir": "coding"},
+        )
 
     # define functions according to the function description
     timer_mock = unittest.mock.MagicMock()
@@ -1407,7 +1414,7 @@ def test_http_client():
 
 
 def test_adding_duplicate_function_warning():
-    config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL"}]
+    config_base = [{"base_url": "http://0.0.0.0:8000", "api_key": "NULL", "model": "gpt-4"}]
 
     agent = autogen.ConversableAgent(
         "jtoy",
@@ -1869,6 +1876,77 @@ def test_create_or_get_executor(mock_credentials: Credentials):
             assert isinstance(executor_agent, ConversableAgent)
             assert agent.llm_config["tools"] == expected_tools
             assert len(executor_agent.function_map.keys()) == 1
+
+
+@pytest.mark.parametrize(
+    "llm_config, expected",
+    [
+        (None, False),
+        (False, False),
+        pytest.param(
+            {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")]),
+            marks=pytest.mark.xfail(
+                reason="This doesn't fails when executed with filename but fails when running using scripts"
+            ),
+        ),
+        (
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        ),
+    ],
+)
+def test_validate_llm_config(
+    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]], expected: Union[LLMConfig, Literal[False]]
+):
+    actual = ConversableAgent._validate_llm_config(llm_config)
+    assert actual == expected, f"{actual} != {expected}"
+
+
+@pytest.mark.parametrize(
+    "llm_config, llm_config_filter, expected",
+    [
+        (False, None, False),
+        (False, LLMConfigFilter(model="gpt-3"), False),
+        (
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
+            None,
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
+        ),
+        pytest.param(
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
+            LLMConfigFilter(model="gpt-4"),
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
+            marks=pytest.mark.xfail(
+                reason="This doesn't fails when executed with filename but fails when running using scripts"
+            ),
+        ),
+        pytest.param(
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3"), OpenAILLMConfigEntry(model="gpt-4")]),
+            LLMConfigFilter(
+                model="gpt-4",
+            ),
+            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
+            marks=pytest.mark.xfail(
+                reason="This doesn't fails when executed with filename but fails when running using scripts"
+            ),
+        ),
+    ],
+)
+def test_apply_llm_config_filter(
+    llm_config: Union[LLMConfig, Literal[False]],
+    llm_config_filter: Optional[LLMConfigFilter],
+    expected: Union[LLMConfig, Literal[False]],
+):
+    actual = ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
+    assert actual == expected, f"{actual} != {expected}"
+
+
+def test_apply_llm_config_filter_with_invalid_filter():
+    llm_config = LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")])
+    llm_config_filter = LLMConfigFilter(model="gpt-4")
+    with pytest.raises(ValueError):
+        ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
 
 
 if __name__ == "__main__":

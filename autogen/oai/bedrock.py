@@ -36,17 +36,42 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import requests
+from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import boto3
     from botocore.config import Config
+
+
+@register_llm_config
+class BedrockLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["bedrock"] = "bedrock"
+    aws_region: str
+    aws_access_key: Optional[str] = None
+    aws_secret_key: Optional[str] = None
+    aws_session_token: Optional[str] = None
+    aws_profile_name: Optional[str] = None
+    temperature: Optional[float] = None
+    topP: Optional[float] = None  # noqa: N815
+    maxTokens: Optional[int] = None  # noqa: N815
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    k: Optional[int] = None
+    seed: Optional[int] = None
+    supports_system_prompts: bool = True
+    stream: bool = False
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+
+    def create_client(self):
+        raise NotImplementedError("BedrockLLMConfigEntry.create_client must be implemented.")
 
 
 @require_optional_import("boto3", "bedrock")

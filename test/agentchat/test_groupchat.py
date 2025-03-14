@@ -2158,7 +2158,10 @@ def test_custom_model_client():
     assert isinstance(speaker_selection_agent.client._clients[0], CustomModelClient)
 
     # Check that the LLM Config is assigned
-    assert speaker_selection_agent.client._config_list == llm_config["config_list"]
+    expected_config_list = [
+        {"model": "test_model_name", "model_client_cls": "CustomModelClient", "api_type": "openai", "tags": []}
+    ]
+    assert speaker_selection_agent.client._config_list == expected_config_list
 
 
 def test_select_speaker_transform_messages():

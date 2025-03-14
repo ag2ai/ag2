@@ -6,6 +6,7 @@ import pytest
 
 from autogen.agents.experimental import SlackAgent
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 
 from .....conftest import Credentials
 
@@ -60,7 +61,7 @@ class TestSlackAgent:
         ]
 
         assert set(tool.name for tool in slack_agent.tools) == {"slack_send", "slack_retrieve"}
-        assert isinstance(slack_agent.llm_config, dict), "llm_config should be a dictionary"
+        assert isinstance(slack_agent.llm_config, (dict, LLMConfig)), "llm_config should be a dictionary or LLMConfig"
         assert slack_agent.llm_config["tools"] == expected_tools
         assert slack_agent.system_message == (
             "You are a helpful AI assistant that communicates through Slack. "

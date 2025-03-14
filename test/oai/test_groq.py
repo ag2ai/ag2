@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.groq import GroqClient, calculate_groq_cost
+from autogen.llm_config import LLMConfig
+from autogen.oai.groq import GroqClient, GroqLLMConfigEntry, calculate_groq_cost
 
 
 # Fixtures for mock data
@@ -29,6 +30,27 @@ def mock_response():
 @pytest.fixture
 def groq_client():
     return GroqClient(api_key="fake_api_key")
+
+
+def test_groq_llm_config_entry():
+    groq_llm_config = GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")
+    expected = {
+        "api_type": "groq",
+        "model": "llama3-8b-8192",
+        "api_key": "fake_api_key",
+        "temperature": 1,
+        "stream": False,
+        "tags": [],
+    }
+    actual = groq_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[groq_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration

@@ -13,7 +13,8 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.oai.gemini import GeminiClient
+from autogen.llm_config import LLMConfig
+from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
@@ -24,6 +25,30 @@ with optional_import_block() as result:
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
     from vertexai.generative_models import SafetySetting as VertexAISafetySetting
+
+
+def test_gemini_llm_config_entry():
+    gemini_llm_config = GeminiLLMConfigEntry(
+        model="gemini-2.0-flash-lite", api_key="dummy_api_key", project_id="fake-project-id", location="us-west1"
+    )
+    expected = {
+        "api_type": "google",
+        "model": "gemini-2.0-flash-lite",
+        "api_key": "dummy_api_key",
+        "project_id": "fake-project-id",
+        "location": "us-west1",
+        "stream": False,
+        "tags": [],
+    }
+    actual = gemini_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[gemini_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 @run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")

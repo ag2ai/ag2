@@ -11,7 +11,8 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.ollama import OllamaClient, response_to_tool_call
+from autogen.llm_config import LLMConfig
+from autogen.oai.ollama import OllamaClient, OllamaLLMConfigEntry, response_to_tool_call
 
 
 # Define test Pydantic model
@@ -59,6 +60,32 @@ def ollama_client_maths_format():
     client._tools_in_conversation = False
 
     return client
+
+
+def test_ollama_llm_config_entry():
+    ollama_llm_config = OllamaLLMConfigEntry(model="llama3.1:8b")
+    expected = {
+        "api_type": "ollama",
+        "model": "llama3.1:8b",
+        "num_ctx": 2048,
+        "num_predict": 128,
+        "repeat_penalty": 1.1,
+        "seed": 42,
+        "stream": False,
+        "tags": [],
+        "temperature": 0.8,
+        "top_k": 40,
+        "top_p": 0.9,
+    }
+    actual = ollama_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[ollama_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration
