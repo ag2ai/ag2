@@ -226,6 +226,23 @@ class TestLLMConfig:
             (
                 {
                     "config_list": [
+                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
+                    ],
+                    "max_tokens": 1024,
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            max_tokens=1024,
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
                         {
                             "model": "gpt-4o-mini",
                             "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",

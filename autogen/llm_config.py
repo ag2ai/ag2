@@ -102,6 +102,12 @@ class LLMConfig:
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
         ]
+        if "max_tokens" in modified_kwargs:
+            modified_kwargs["config_list"] = [
+                {**v, "max_tokens": modified_kwargs["max_tokens"]} for v in modified_kwargs["config_list"]
+            ]
+            modified_kwargs.pop("max_tokens")
+
         self._model = self._get_base_model_class()(**modified_kwargs)
 
     # used by BaseModel to create instance variables
@@ -266,6 +272,7 @@ class LLMConfigEntry(BaseModel, ABC):
     model: str = Field(..., min_length=1)
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
+    max_tokens: Optional[int] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
