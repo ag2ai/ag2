@@ -240,6 +240,7 @@ class LLMConfig:
 
                 tools: list[Any] = Field(default_factory=list)
                 functions: list[Any] = Field(default_factory=list)
+                parallel_tool_calls: Optional[bool] = None
 
                 config_list: Annotated[  # type: ignore[valid-type]
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
