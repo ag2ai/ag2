@@ -203,6 +203,17 @@ class TestLLMConfig:
                 ),
             ),
             (
+                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+            ),
+            (
                 {
                     "config_list": [
                         {
