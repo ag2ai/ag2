@@ -17,17 +17,18 @@ import autogen
 import random
 
 from autogen import (
- AfterWork,
- OnCondition,
- AfterWorkOption,
- AssistantAgent,
- SwarmResult,
- initiate_swarm_chat,
- register_hand_off
+    AfterWork,
+    OnCondition,
+    AfterWorkOption,
+    AssistantAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+    register_hand_off,
+    LLMConfig,
 )
 
 config_list = autogen.config_list_from_json("<path_to_your_config_file>")
-llm_config = {"config_list": config_list}
+llm_config = LLMConfig(config_list=config_list)
 
 # 1. A function that returns a value of "success" and updates the context variable "1" to True
 def update_context_1(context_variables: dict) -> SwarmResult:
