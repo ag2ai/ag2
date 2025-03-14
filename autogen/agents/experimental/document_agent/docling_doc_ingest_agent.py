@@ -77,7 +77,7 @@ class DoclingDocIngestAgent(ConversableAgent):
                 tasks = context_variables.get("DocumentsToIngest", [])
                 while tasks:
                     task = tasks.pop()
-                    input_file_path = task["path_or_url"]
+                    input_file_path = task.path_or_url
                     output_files = docling_parse_docs(
                         input_file_path=input_file_path, output_dir_path=parsed_docs_path, output_formats=["markdown"]
                     )
