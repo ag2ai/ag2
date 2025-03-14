@@ -20,9 +20,9 @@ from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
 
 if parse(pydantic_version) < parse("2.10.2"):
-    from pydantic._internal._typing_extra import eval_type_lenient
+    from pydantic._internal._typing_extra import eval_type_lenient as try_eval_type
 else:
-    from pydantic._internal._typing_extra import try_eval_type as eval_type_lenient
+    from pydantic._internal._typing_extra import try_eval_type
 
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
@@ -46,7 +46,7 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
         annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
-        annotation, _ = eval_type_lenient(annotation, globalns, globalns)
+        annotation, _ = try_eval_type(annotation, globalns, globalns)
     return annotation
 
 
