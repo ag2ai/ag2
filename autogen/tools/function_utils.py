@@ -8,15 +8,29 @@ import functools
 import inspect
 import json
 from logging import getLogger
-from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
+from typing import Annotated, Any, Callable, ForwardRef, Mapping, Optional, TypeVar, Union
 
+from packaging.version import parse
 from pydantic import BaseModel, Field, TypeAdapter
-from pydantic._internal._typing_extra import try_eval_type  # type: ignore[attr-defined]
+from pydantic import __version__ as pydantic_version
 from pydantic.json_schema import JsonSchemaValue
 from typing_extensions import Literal, get_args, get_origin
 
 from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
+
+if parse(pydantic_version) < parse("2.10.2"):
+    from pydantic._internal._typing_extra import eval_type_lenient
+else:
+    from pydantic._internal._typing_extra import eval_type
+
+    def eval_type_lenient(
+        value: Any,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[Mapping[str, Any]] = None,
+    ) -> Any:
+        return eval_type(value, globalns, localns, lenient=True)  # type: ignore[call-arg]
+
 
 __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str"]
 
@@ -39,7 +53,7 @@ def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
         annotation = annotation.description
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
-        annotation, _ = try_eval_type(annotation, globalns, globalns)
+        annotation, _ = eval_type_lenient(annotation, globalns, globalns)
     return annotation
 
 
