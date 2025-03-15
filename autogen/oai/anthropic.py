@@ -76,7 +76,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -493,30 +493,26 @@ def _format_json_response(response: Any) -> str:
         return response.model_dump_json()
 
 
-def process_image_content(content_item: Dict[str, Any]) -> Dict[str, Any]:
+def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
     """Process an OpenAI image content item into Claude format."""
-    if content_item['type'] != 'image_url':
+    if content_item["type"] != "image_url":
         return content_item
 
-    url = content_item['image_url']['url']
+    url = content_item["image_url"]["url"]
     try:
         # Handle data URLs
-        if url.startswith('data:'):
-            data_url_pattern = r'data:image/([a-zA-Z]+);base64,(.+)'
+        if url.startswith("data:"):
+            data_url_pattern = r"data:image/([a-zA-Z]+);base64,(.+)"
             match = re.match(data_url_pattern, url)
             if match:
                 media_type, base64_data = match.groups()
                 return {
-                    'type': 'image',
-                    'source': {
-                        'type': 'base64',
-                        'media_type': f'image/{media_type}',
-                        'data': base64_data
-                    }
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": f"image/{media_type}", "data": base64_data},
                 }
 
         else:
-            print(f"Error processing image.")
+            print("Error processing image.")
             # Return original content if image processing fails
             return content_item
 
@@ -526,7 +522,7 @@ def process_image_content(content_item: Dict[str, Any]) -> Dict[str, Any]:
         return content_item
 
 
-def process_message_content(message: Dict[str, Any]) -> Union[str, List[Dict[str, Any]]]:
+def process_message_content(message: dict[str, Any]) -> Union[str, list[dict[str, Any]]]:
     """Process message content, handling both string and list formats with images."""
     content = message.get("content", "")
 
@@ -542,12 +538,9 @@ def process_message_content(message: Dict[str, Any]) -> Union[str, List[Dict[str
     if isinstance(content, list):
         processed_content = []
         for item in content:
-            if item['type'] == 'text':
-                processed_content.append({
-                    'type': 'text',
-                    'text': item['text']
-                })
-            elif item['type'] == 'image_url':
+            if item["type"] == "text":
+                processed_content.append({"type": "text", "text": item["text"]})
+            elif item["type"] == "image_url":
                 processed_content.append(process_image_content(item))
         return processed_content
 
@@ -581,17 +574,10 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
             content = process_message_content(message)
             if isinstance(content, list):
                 # For system messages with images, concatenate only the text portions
-                text_content = " ".join(
-                    item.get('text', '')
-                    for item in content
-                    if item.get('type') == 'text'
-                )
-                params["system"] = params.get(
-                    "system", "") + (" " if "system" in params else "") + text_content
+                text_content = " ".join(item.get("text", "") for item in content if item.get("type") == "text")
+                params["system"] = params.get("system", "") + (" " if "system" in params else "") + text_content
             else:
-                params["system"] = params.get(
-                    "system", "") + ("\n" if "system" in params else "") + content
-            # params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + message["content"]
+                params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + content
             # EDIT END
         else:
             # New messages will be added here, manage role alternations
