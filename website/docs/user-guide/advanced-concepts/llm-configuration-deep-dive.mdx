@@ -106,7 +106,7 @@ config_list = autogen.config_list_from_json(
 )
 
 # Then, create the assistant agent with the config list
-assistant = autogen.AssistantAgent(name="assistant", llm_config={"config_list": config_list})
+assistant = autogen.AssistantAgent(name="assistant", llm_config=LLMConfig(config_list=config_list))
 ```
 
 This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
