@@ -886,11 +886,11 @@ def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict
         <Card href="{url}">
             <div class="col card">
               <div class="img-placeholder">
-                <img noZoom src="{image_url}" />
+                <img noZoom src="{avatar}" />
               </div>
               <div>
                 <p class="name">{name}</p>
-                <p>{title}</p>
+                <p>{description}</p>
               </div>
             </div>
         </Card>"""
@@ -931,7 +931,7 @@ def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
 @require_optional_import("yaml", "docs")
 def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
     try:
-        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))
+        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))["authors"]
     except (yaml.YAMLError, OSError) as e:
         print(f"Error reading authors file: {e}")
         sys.exit(1)
@@ -980,6 +980,9 @@ def _add_authors_and_social_preview(
                 .replace("website/docs/blog/", "website/docs/_blogs/")
             )
             content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
+
+            # replace the mkdocs excerpt marker
+            content_with_edit_url = content_with_edit_url.replace(r"\<!-- more -->", "")
 
             file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
 

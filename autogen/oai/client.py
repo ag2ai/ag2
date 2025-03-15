@@ -14,9 +14,9 @@ import sys
 import uuid
 import warnings
 from functools import lru_cache
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Callable, Literal, Optional, Protocol, Union
 
-from pydantic import BaseModel
+from pydantic import AnyUrl, BaseModel, Field, ValidationInfo, field_validator
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
@@ -24,6 +24,7 @@ from ..doc_utils import export_module
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
+from ..llm_config import LLMConfigEntry, register_llm_config
 from ..logger.logger_utils import get_current_ts
 from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
@@ -236,6 +237,41 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
     logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
+@register_llm_config
+class OpenAILLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["openai"] = "openai"
+
+    def create_client(self) -> "ModelClient":
+        raise NotImplementedError("create_client method must be implemented in the derived class.")
+
+
+@register_llm_config
+class AzureOpenAILLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["azure"] = "azure"
+
+    def create_client(self) -> "ModelClient":
+        raise NotImplementedError
+
+
+@register_llm_config
+class DeepSeekLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["deepseek"] = "deepseek"
+    base_url: AnyUrl = AnyUrl("https://api.deepseek.com/v1")
+    temperature: float = Field(0.5, ge=0.0, le=1.0)
+    max_tokens: int = Field(8192, ge=1, le=8192)
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+    @field_validator("top_p", mode="before")
+    @classmethod
+    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
+        if v is not None and info.data.get("temperature") is not None:
+            raise ValueError("temperature and top_p cannot be set at the same time.")
+        return v
+
+    def create_client(self) -> None:  # type: ignore [override]
+        raise NotImplementedError("DeepSeekLLMConfigEntry.create_client is not implemented.")
+
+
 @export_module("autogen")
 class ModelClient(Protocol):
     """A client class must implement the following methods:
@@ -290,7 +326,7 @@ class PlaceHolderClient:
         self.config = config
 
 
-@require_optional_import("openai", "openai")
+@require_optional_import("openai>=1.66.2", "openai")
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
@@ -675,7 +711,6 @@ class OpenAIClient:
         }
 
 
-# @require_optional_import("openai", "openai")
 @export_module("autogen")
 class OpenAIWrapper:
     """A wrapper class for openai client."""
@@ -832,7 +867,7 @@ class OpenAIWrapper:
         else:
             if api_type is not None and api_type.startswith("azure"):
 
-                @require_optional_import("openai", "openai")
+                @require_optional_import("openai>=1.66.2", "openai")
                 def create_azure_openai_client() -> "AzureOpenAI":
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
@@ -892,7 +927,7 @@ class OpenAIWrapper:
                 self._clients.append(client)
             else:
 
-                @require_optional_import("openai", "openai")
+                @require_optional_import("openai>=1.66.2", "openai")
                 def create_openai_client() -> "OpenAI":
                     client = OpenAI(**openai_config)
                     self._clients.append(OpenAIClient(client, response_format))
@@ -908,7 +943,7 @@ class OpenAIWrapper:
 
         Args:
             model_client_cls: A custom client class that follows the ModelClient interface
-            **kwargs: The kwargs for the custom client class to be initialized with
+            kwargs: The kwargs for the custom client class to be initialized with
         """
         existing_client_class = False
         for i, client in enumerate(self._clients):

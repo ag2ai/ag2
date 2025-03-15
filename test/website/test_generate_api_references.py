@@ -405,7 +405,7 @@ config_list_from_dotenv(
 <b>Returns:</b>
 | Type | Description |
 |--|--|
-| `list[dict[str, str \\| set[str]]]` | List[Dict[str, Union[str, Set[str]]]]: A list of configuration dictionaries for each model. |
+| `list[dict[str, str \\| set[str]]]` | list[dict[str, Union[str, Set[str]]]]: A list of configuration dictionaries for each model. |
 
 <br />
 
@@ -488,7 +488,7 @@ a_check_termination_and_human_reply(
 <b>Returns:</b>
 | Type | Description |
 |--|--|
-| `tuple[bool, str \\| None]` | Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation should be terminated, and a human reply which can be a string, a dictionary, or None. |
+| `tuple[bool, str \\| None]` | tuple[bool, Union[str, dict, None]]: A tuple containing a boolean indicating if the conversation should be terminated, and a human reply which can be a string, a dictionary, or None. |
 
 <br />
 
@@ -601,10 +601,6 @@ MyClass(
     @run_for_optional_imports(["jinja2", "pdoc"], "docs")
     def test_split_reference_by_symbols(self, api_dir: Path, expected_files: list[str]) -> None:
         """Test that files are split correctly."""
-        all_files_relative_to_api_dir = [str(p.relative_to(api_dir)) for p in api_dir.rglob("*.md")]
-        print("*" * 80)
-        print(f"{all_files_relative_to_api_dir=}")
-
         symbol_files_generator = SplitReferenceFilesBySymbols(api_dir)
         symbol_files_generator.generate()
 

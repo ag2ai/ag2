@@ -43,6 +43,7 @@ from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
+from ..llm_config import LLMConfig, LLMConfigFilter
 from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
@@ -52,7 +53,8 @@ from ..messages.agent_messages import (
     ExecuteFunctionMessage,
     ExecutedFunctionMessage,
     GenerateCodeExecutionReplyMessage,
-    TerminationAndHumanReplyMessage,
+    TerminationAndHumanReplyNoInputMessage,
+    TerminationMessage,
     UsingAutoReplyMessage,
     create_received_message_model,
 )
@@ -150,7 +152,8 @@ class ConversableAgent(LLMAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+        llm_config_filter: Optional[Union[LLMConfigFilter, dict[str, Any]]] = None,
         default_auto_reply: Union[str, dict[str, Any]] = "",
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
@@ -196,12 +199,14 @@ class ConversableAgent(LLMAgent):
                 - timeout (Optional, int): The maximum execution time in seconds.
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
-            llm_config (dict or False or None): llm inference configuration.
+            llm_config (LLMConfig or dict or False or None): llm inference configuration.
                 Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
                 for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
                 When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
+            llm_config_filter (LLMConfigFilter or dict): llm config filter to filter the llm config.
+                It can be a dict or an instance of LLMConfigFilter.
             default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.
             description (str): a short description of the agent. This description is used by other agents
                 (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
@@ -252,7 +257,14 @@ class ConversableAgent(LLMAgent):
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/topics/llm_configuration#adding-http-client-in-llm-config-for-proxy"
                 ) from e
 
-        self._validate_llm_config(llm_config)
+        self._llm_config_filter = (
+            LLMConfigFilter(**llm_config_filter) if isinstance(llm_config_filter, dict) else llm_config_filter
+        )
+        self.llm_config = self._apply_llm_config_filter(
+            llm_config=self._validate_llm_config(llm_config),
+            llm_config_filter=self._llm_config_filter,
+        )
+        self.client = self._create_client(self.llm_config)
         self._validate_name(name)
         self._name = name
 
@@ -419,7 +431,7 @@ class ConversableAgent(LLMAgent):
             func._description = (func.__doc__ or "").strip()
 
         # Register the function
-        self.register_for_llm(name=name, description=description)(func)
+        self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
     def _register_update_agent_state_before_reply(
         self, functions: Optional[Union[list[Callable[..., Any]], Callable[..., Any]]]
@@ -470,19 +482,43 @@ class ConversableAgent(LLMAgent):
             else:
                 self.register_hook(hookable_method="update_agent_state", hook=func)
 
-    def _validate_llm_config(self, llm_config):
-        assert llm_config in (None, False) or isinstance(llm_config, dict), (
-            "llm_config must be a dict or False or None."
-        )
+    @classmethod
+    def _validate_llm_config(
+        cls, llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]]
+    ) -> Union[LLMConfig, Literal[False]]:
+        # if not(llm_config in (None, False) or isinstance(llm_config, [dict, LLMConfig])):
+        #     raise ValueError(
+        #         "llm_config must be a dict or False or None."
+        #     )
+
         if llm_config is None:
-            llm_config = self.DEFAULT_CONFIG
-        self.llm_config = self.DEFAULT_CONFIG if llm_config is None else llm_config
-        # TODO: more complete validity check
-        if self.llm_config in [{}, {"config_list": []}, {"config_list": [{"model": ""}]}]:
-            raise ValueError(
-                "When using OpenAI or Azure OpenAI endpoints, specify a non-empty 'model' either in 'llm_config' or in each config of 'config_list'."
-            )
-        self.client = None if self.llm_config is False else OpenAIWrapper(**self.llm_config)
+            llm_config = LLMConfig.get_current_llm_config()
+            if llm_config is None:
+                llm_config = cls.DEFAULT_CONFIG
+        elif isinstance(llm_config, dict):
+            llm_config = LLMConfig(**llm_config)
+        elif llm_config is False or isinstance(llm_config, LLMConfig):
+            pass
+        else:
+            raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
+
+        return llm_config
+
+    @classmethod
+    def _apply_llm_config_filter(
+        cls,
+        llm_config: Union[LLMConfig, Literal[False]],
+        llm_config_filter: Optional[LLMConfigFilter],
+        exclude: bool = False,
+    ) -> Union[LLMConfig, Literal[False]]:
+        if llm_config is False:
+            return llm_config
+
+        return llm_config.apply_filter(llm_config_filter, exclude=exclude)
+
+    @classmethod
+    def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[OpenAIWrapper]:
+        return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
     def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:
@@ -1459,6 +1495,8 @@ class ConversableAgent(LLMAgent):
         Returns:
             ChatResult: an ChatResult object.
         """
+        iostream = IOStream.get_default()
+
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1468,8 +1506,8 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
-            for _ in range(max_turns):
-                if _ == 0:
+            for i in range(max_turns):
+                if i == 0:
                     if isinstance(message, Callable):
                         msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
                     else:
@@ -1479,6 +1517,9 @@ class ConversableAgent(LLMAgent):
                 if msg2send is None:
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
+
+            else:  # No breaks in the for loop, so we have reached max turns
+                iostream.send(TerminationMessage(termination_reason=f"Maximum turns ({max_turns}) reached"))
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -2171,6 +2212,8 @@ class ConversableAgent(LLMAgent):
         if messages is None:
             messages = self._oai_messages[sender] if sender else []
 
+        termination_reason = None
+
         # if there are no messages, continue the conversation
         if not messages:
             return False, None
@@ -2185,10 +2228,16 @@ class ConversableAgent(LLMAgent):
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+            if not reply and self._is_termination_msg(message):
+                termination_reason = f"Termination message condition on agent '{self.name}' met"
+            elif reply == "exit":
+                termination_reason = "User requested to end the conversation"
+
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
         else:
             if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
+                    termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2200,9 +2249,17 @@ class ConversableAgent(LLMAgent):
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+                    if reply != "exit" and terminate:
+                        termination_reason = (
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
+                        )
+                    elif reply == "exit":
+                        termination_reason = "User requested to end the conversation"
+
                     reply = reply if reply or not terminate else "exit"
             elif self._is_termination_msg(message):
                 if self.human_input_mode == "NEVER":
+                    termination_reason = f"Termination message condition on agent '{self.name}' met"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2210,19 +2267,31 @@ class ConversableAgent(LLMAgent):
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
+
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+                    if not reply or reply == "exit":
+                        termination_reason = (
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
+                        )
+
                     reply = reply or "exit"
 
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+                TerminationAndHumanReplyNoInputMessage(
+                    no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
+                )
             )
 
         # stop the conversation
         if reply == "exit":
             # reset the consecutive_auto_reply_counter
             self._consecutive_auto_reply_counter[sender] = 0
+
+            if termination_reason:
+                iostream.send(TerminationMessage(termination_reason=termination_reason))
+
             return True, None
 
         # send the human reply
@@ -2286,6 +2355,9 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender] if sender else []
+
+        termination_reason = None
+
         message = messages[-1] if messages else {}
         reply = ""
         no_human_input_msg = ""
@@ -2296,10 +2368,16 @@ class ConversableAgent(LLMAgent):
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+            if not reply and self._is_termination_msg(message):
+                termination_reason = f"Termination message condition on agent '{self.name}' met"
+            elif reply == "exit":
+                termination_reason = "User requested to end the conversation"
+
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
         else:
             if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
+                    termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2311,9 +2389,17 @@ class ConversableAgent(LLMAgent):
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+                    if reply != "exit" and terminate:
+                        termination_reason = (
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
+                        )
+                    elif reply == "exit":
+                        termination_reason = "User requested to end the conversation"
+
                     reply = reply if reply or not terminate else "exit"
             elif self._is_termination_msg(message):
                 if self.human_input_mode == "NEVER":
+                    termination_reason = f"Termination message condition on agent '{self.name}' met"
                     reply = "exit"
                 else:
                     # self.human_input_mode == "TERMINATE":
@@ -2321,19 +2407,31 @@ class ConversableAgent(LLMAgent):
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
+
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
+                    if not reply or reply == "exit":
+                        termination_reason = (
+                            f"Termination message condition on agent '{self.name}' met and no human input provided"
+                        )
+
                     reply = reply or "exit"
 
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReplyMessage(no_human_input_msg=no_human_input_msg, sender=sender, recipient=self)
+                TerminationAndHumanReplyNoInputMessage(
+                    no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
+                )
             )
 
         # stop the conversation
         if reply == "exit":
             # reset the consecutive_auto_reply_counter
             self._consecutive_auto_reply_counter[sender] = 0
+
+            if termination_reason:
+                iostream.send(TerminationMessage(termination_reason=termination_reason))
+
             return True, None
 
         # send the human reply
@@ -2577,7 +2675,7 @@ class ConversableAgent(LLMAgent):
         reply = await loop.run_in_executor(None, functools.partial(self.get_human_input, prompt))
         return reply
 
-    def run_code(self, code, **kwargs: Any) -> tuple[int, str, Optional[str]]:
+    def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
         """Run the code and return the result.
 
         Override this function to modify the way to run the code.
@@ -2897,38 +2995,42 @@ class ConversableAgent(LLMAgent):
         except ValueError:
             raise ValueError(f"Tool {tool} not found in collection")
 
-    def register_function(self, function_map: dict[str, Union[Callable[..., Any]]]):
+    def register_function(self, function_map: dict[str, Union[Callable[..., Any]]], silent_override: bool = False):
         """Register functions to the agent.
 
         Args:
             function_map: a dictionary mapping function names to functions. if function_map[name] is None, the function will be removed from the function_map.
+            silent_override: whether to print warnings when overriding functions.
         """
         for name, func in function_map.items():
             self._assert_valid_name(name)
             if func is None and name not in self._function_map:
                 warnings.warn(f"The function {name} to remove doesn't exist", name)
-            if name in self._function_map:
+            if not silent_override and name in self._function_map:
                 warnings.warn(f"Function '{name}' is being overridden.", UserWarning)
         self._function_map.update(function_map)
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
-    def update_function_signature(self, func_sig: Union[str, dict[str, Any]], is_remove: None):
+    def update_function_signature(
+        self, func_sig: Union[str, dict[str, Any]], is_remove: None, silent_override: bool = False
+    ):
         """Update a function_signature in the LLM configuration for function_call.
 
         Args:
             func_sig (str or dict): description/name of the function to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-functions
             is_remove: whether removing the function from llm_config with name 'func_sig'
+            silent_override: whether to print warnings when overriding functions.
 
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
         """
-        if not isinstance(self.llm_config, dict):
+        if not isinstance(self.llm_config, (dict, LLMConfig)):
             error_msg = "To update a function signature, agent must have an llm_config"
             logger.error(error_msg)
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "functions" not in self.llm_config:
+            if "functions" not in self.llm_config or len(self.llm_config["functions"]) == 0:
                 error_msg = f"The agent config doesn't have function {func_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2945,7 +3047,9 @@ class ConversableAgent(LLMAgent):
                 raise ValueError(f"The function signature must have a 'name' key. Received: {func_sig}")
             self._assert_valid_name(func_sig["name"]), func_sig
             if "functions" in self.llm_config:
-                if any(func["name"] == func_sig["name"] for func in self.llm_config["functions"]):
+                if not silent_override and any(
+                    func["name"] == func_sig["name"] for func in self.llm_config["functions"]
+                ):
                     warnings.warn(f"Function '{func_sig['name']}' is being overridden.", UserWarning)
 
                 self.llm_config["functions"] = [
@@ -2954,17 +3058,21 @@ class ConversableAgent(LLMAgent):
             else:
                 self.llm_config["functions"] = [func_sig]
 
-        if len(self.llm_config["functions"]) == 0:
+        # Do this only if llm_config is a dict. If llm_config is LLMConfig, LLMConfig will handle this.
+        if len(self.llm_config["functions"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["functions"]
 
         self.client = OpenAIWrapper(**self.llm_config)
 
-    def update_tool_signature(self, tool_sig: Union[str, dict[str, Any]], is_remove: bool):
+    def update_tool_signature(
+        self, tool_sig: Union[str, dict[str, Any]], is_remove: bool, silent_override: bool = False
+    ):
         """Update a tool_signature in the LLM configuration for tool_call.
 
         Args:
             tool_sig (str or dict): description/name of the tool to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tools
             is_remove: whether removing the tool from llm_config with name 'tool_sig'
+            silent_override: whether to print warnings when overriding functions.
         """
         if not self.llm_config:
             error_msg = "To update a tool signature, agent must have an llm_config"
@@ -2972,7 +3080,7 @@ class ConversableAgent(LLMAgent):
             raise AssertionError(error_msg)
 
         if is_remove:
-            if "tools" not in self.llm_config:
+            if "tools" not in self.llm_config or len(self.llm_config["tools"]) == 0:
                 error_msg = f"The agent config doesn't have tool {tool_sig}."
                 logger.error(error_msg)
                 raise AssertionError(error_msg)
@@ -2997,8 +3105,10 @@ class ConversableAgent(LLMAgent):
                     f"The tool signature must be of the type dict. Received tool signature type {type(tool_sig)}"
                 )
             self._assert_valid_name(tool_sig["function"]["name"])
-            if "tools" in self.llm_config:
-                if any(tool["function"]["name"] == tool_sig["function"]["name"] for tool in self.llm_config["tools"]):
+            if "tools" in self.llm_config and len(self.llm_config["tools"]) > 0:
+                if not silent_override and any(
+                    tool["function"]["name"] == tool_sig["function"]["name"] for tool in self.llm_config["tools"]
+                ):
                     warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
                 self.llm_config["tools"] = [
                     tool
@@ -3008,7 +3118,8 @@ class ConversableAgent(LLMAgent):
             else:
                 self.llm_config["tools"] = [tool_sig]
 
-        if len(self.llm_config["tools"]) == 0:
+        # Do this only if llm_config is a dict. If llm_config is LLMConfig, LLMConfig will handle this.
+        if len(self.llm_config["tools"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["tools"]
 
         self.client = OpenAIWrapper(**self.llm_config)
@@ -3084,6 +3195,7 @@ class ConversableAgent(LLMAgent):
         name: Optional[str] = None,
         description: Optional[str] = None,
         api_style: Literal["function", "tool"] = "tool",
+        silent_override: bool = False,
     ) -> Callable[[Union[F, Tool]], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
@@ -3101,6 +3213,7 @@ class ConversableAgent(LLMAgent):
                 `"function"` style will be deprecated. For earlier version use
                 `"function"` if `"tool"` doesn't work.
                 See [Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/function-calling?tabs=python) for details.
+            silent_override (bool): whether to suppress any override warning messages.
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3144,22 +3257,36 @@ class ConversableAgent(LLMAgent):
             """
             tool = self._create_tool_if_needed(func_or_tool, name, description)
 
-            self._register_for_llm(tool, api_style)
+            self._register_for_llm(tool, api_style, silent_override=silent_override)
             self._tools.append(tool)
 
             return tool
 
         return _decorator
 
-    def _register_for_llm(self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False) -> None:
+    def _register_for_llm(
+        self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False, silent_override: bool = False
+    ) -> None:
+        """
+        Register a tool for LLM.
+
+        Args:
+            tool: the tool to be registered.
+            api_style: the API style for function call ("tool" or "function").
+            is_remove: whether to remove the function or tool.
+            silent_override: whether to suppress any override warning messages.
+
+        Returns:
+            None
+        """
         # register the function to the agent if there is LLM config, raise an exception otherwise
         if self.llm_config is None:
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            self.update_function_signature(tool.function_schema, is_remove=is_remove)
+            self.update_function_signature(tool.function_schema, is_remove=is_remove, silent_override=silent_override)
         elif api_style == "tool":
-            self.update_tool_signature(tool.tool_schema, is_remove=is_remove)
+            self.update_tool_signature(tool.tool_schema, is_remove=is_remove, silent_override=silent_override)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
@@ -3169,6 +3296,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         *,
         serialize: bool = True,
+        silent_override: bool = False,
     ) -> Callable[[Union[Tool, F]], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
@@ -3178,6 +3306,7 @@ class ConversableAgent(LLMAgent):
             name: name of the function. If None, the function name will be used (default: None).
             description: description of the function (default: None).
             serialize: whether to serialize the return value
+            silent_override: whether to suppress any override warning messages
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3212,9 +3341,10 @@ class ConversableAgent(LLMAgent):
             chat_context = ChatContext(self)
             chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
 
-            self.register_function({
-                tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)
-            })
+            self.register_function(
+                {tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)},
+                silent_override=silent_override,
+            )
 
             return tool
 

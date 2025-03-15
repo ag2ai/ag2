@@ -4,7 +4,7 @@
 import inspect
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +39,7 @@ from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.agentchat.utils import ContextExpression
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 from autogen.tools.tool import Tool
 
 from ...conftest import (
@@ -460,11 +461,11 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     agent2 = ConversableAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> Tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
         return True, "This is a mock response from the agent."
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> Tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
         return True, {
             "role": "assistant",
             "name": "agent1",
@@ -1504,7 +1505,7 @@ def test_on_condition_available() -> None:
     # Evaluate hand-offs
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
-    assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
+    assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
     assert len(agent1.llm_config["tools"]) == 1  # Is available
 
     # 2. Test with an available parameter that equates to True
@@ -1519,7 +1520,7 @@ def test_on_condition_available() -> None:
     # Evaluate hand-offs
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
-    assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
+    assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
     assert len(agent1.llm_config["tools"]) == 1  # Is available
 
     # 3. Test with an available parameter that equates to False
@@ -1534,7 +1535,7 @@ def test_on_condition_available() -> None:
     # Evaluate hand-offs
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
-    assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
+    assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
     assert "tools" not in agent1.llm_config  # Is not available
 
     # 4. Test with an available parameter that equates to True using NOT operator "!"
@@ -1551,7 +1552,7 @@ def test_on_condition_available() -> None:
     # Evaluate hand-offs
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
-    assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
+    assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
     assert len(agent1.llm_config["tools"]) == 1  # Is available (Not False)
 
     # 5. Test with an available parameter using a Callable
@@ -1569,7 +1570,7 @@ def test_on_condition_available() -> None:
     # Evaluate hand-offs
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
-    assert agent1.llm_config is not False and isinstance(agent1.llm_config, dict)
+    assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
     assert len(agent1.llm_config["tools"]) == 1  # Is available
 
 
