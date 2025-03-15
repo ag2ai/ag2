@@ -30,7 +30,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional, Union
 
-from pydantic import AnyUrl, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -46,15 +46,15 @@ with optional_import_block():
 @register_llm_config
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
-    client_host: Optional[AnyUrl] = None
+    client_host: Optional[str] = None
     stream: bool = False
     num_predict: int = Field(
-        default=128,
-        description="Maximum number of tokens to predict, note: -1 is infinite, -2 is fill context, 128 is default",
+        default=-1,
+        description="Maximum number of tokens to predict, note: -1 is infinite (default), -2 is fill context.",
     )
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
-    seed: int = Field(default=42)
+    seed: int = Field(default=0)
     temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
     top_p: float = Field(default=0.9)
