@@ -149,12 +149,12 @@ We'll start with creating an equivalent [`DiscordAgent`](/docs/api-reference/aut
 from autogen import ConversableAgent # We'll build our DiscordAgent from ConversableAgent
 from autogen.agents.experimental import SlackAgent, TelegramAgent
 from autogen.tools.experimental.messageplatform import DiscordSendTool, DiscordRetrieveTool
-from autogen import GroupChatManager, GroupChat
+from autogen import GroupChatManager, GroupChat, LLMConfig
 
 # LLM Configuration
 # OpenAI GPT-4o mini for all agents
 # Put your OpenAI API key in the OPENAI_API_KEY environment key
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 ```
 
 All your tokens and identifiers, next.

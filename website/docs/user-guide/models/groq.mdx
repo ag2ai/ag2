@@ -136,7 +136,7 @@ config_list = [
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
@@ -167,7 +167,7 @@ IMPORTANT: Wait for the user to execute your code and then you can reply with th
 assistant_agent = AssistantAgent(
     name="Groq Assistant",
     system_message=system_message,
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
@@ -260,7 +260,7 @@ chatbot = autogen.AssistantAgent(
     system_message="""For currency exchange and weather forecasting tasks,
         only use the functions you have been provided with.
         Output 'HAVE FUN!' when an answer has been provided.""",
-    llm_config={"config_list": config_list},
+    llm_config=autogen.LLMConfig(config_list=config_list),
 )
 
 # Note that we have changed the termination string to be "HAVE FUN!"

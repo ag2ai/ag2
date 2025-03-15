@@ -1,9 +1,10 @@
 ```python
 # 1. Import our WebSurferAgent
+from autogen import LLMConfig
 from autogen.agents.experimental import WebSurferAgent
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # 2. Add additional browser configurations for our browser-use tool
 browser_use_browser_config = {"browser_config": {"headless": False}, "agent_kwargs": {"generate_gif": True}}

@@ -51,9 +51,9 @@ pip install autogen[openai]
 
 ```python
 import os
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = LLMConfig(api_type="openai", model="gpt-4", api_key=os.environ["OPENAI_API_KEY"])
 assistant = AssistantAgent("assistant", llm_config=llm_config)
 user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
 
@@ -76,9 +76,9 @@ user_proxy.initiate_chat(
 ```python
 import os
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = LLMConfig(api_type="openai", model="gpt-4", api_key=os.environ["OPENAI_API_KEY"])
 assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent(
@@ -98,9 +98,9 @@ user_proxy.initiate_chat(
 ```python
 import os
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+llm_config = LLMConfig(api_type="openai", model="gpt-4", api_key=os.environ["OPENAI_API_KEY"])
 
 with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_executor:
     assistant = AssistantAgent("assistant", llm_config=llm_config)

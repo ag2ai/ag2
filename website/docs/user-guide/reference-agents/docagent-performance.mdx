@@ -589,11 +589,11 @@ Answer: For NVIDIA's latest quarter ended October 27, 2024, the GAAP operating i
 Here is a basic Python code in line with the tests above. You will need to have `OPENAI_API_KEY` set in your environment variables.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
 import json
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", cache_seed=None)
 
 llm_config_list = {"config_list": [llm_config]}
 

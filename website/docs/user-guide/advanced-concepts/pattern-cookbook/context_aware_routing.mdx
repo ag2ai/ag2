@@ -117,14 +117,15 @@ from autogen import (
     AfterWorkOption,
     initiate_swarm_chat,
     ContextExpression,
-    SwarmResult
+    SwarmResult,
+    LLMConfig,
 )
 
 # Context-Aware Routing pattern for dynamic task assignment
 # Routes queries to the most appropriate specialist based on query content analysis
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False, "cache_seed": None}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai", cache_seed=None, parallel_tool_calls=False)
 
 # Shared context for tracking the conversation and routing decisions
 shared_context = {

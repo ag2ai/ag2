@@ -115,13 +115,12 @@ And this tool can now be registered with any [ConversableAgent](/docs/api-refere
 Here's how to use the Crawl4AITool:
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 # Import the Tool
 from autogen.tools.experimental import Crawl4AITool
 
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-llm_config = {"config_list": config_list}
+llm_config = LLMConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
 # Agent for LLM tool recommendation
 assistant = AssistantAgent(name="assistant", llm_config=llm_config)

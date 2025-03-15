@@ -150,7 +150,7 @@ config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 # Define your agent; the user proxy and an assistant
 assistant = autogen.AssistantAgent(
     "assistant",
-    llm_config={"config_list": config_list},
+    llm_config=autogen.LLMConfig(config_list=config_list),
 )
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",

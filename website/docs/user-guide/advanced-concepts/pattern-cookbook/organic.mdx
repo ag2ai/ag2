@@ -86,10 +86,10 @@ In this code example we use OpenAI's GPT-4o mini.
 
 ```python
 from typing import Any, Dict, List, Optional
-from autogen import ConversableAgent, UserProxyAgent, initiate_swarm_chat, AfterWorkOption
+from autogen import ConversableAgent, UserProxyAgent, initiate_swarm_chat, AfterWorkOption, LLMConfig
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"} # , "temperature": 0.2}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini") # , temperature=0.2)
 
 # Create specialized agents with descriptions that help the SWARM_MANAGER route appropriately
 

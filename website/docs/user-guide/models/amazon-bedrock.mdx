@@ -137,9 +137,7 @@ config_list_bedrock = [
 
 assistant = autogen.AssistantAgent(
     "assistant",
-    llm_config={
-        "config_list": config_list_bedrock,
-    },
+    llm_config=autogen.LLMConfig(config_list=config_list_bedrock),
 )
 
 user_proxy = autogen.UserProxyAgent(
@@ -238,9 +236,7 @@ chatbot = autogen.AssistantAgent(
         only use the functions you have been provided with.
         Output only the word 'TERMINATE' when an answer has been provided.
         Use both tools together if you can.""",
-    llm_config={
-        "config_list": config_list_bedrock,
-    },
+    llm_config=autogen.LLMConfig(config_list=config_list_bedrock),
 )
 
 user_proxy = autogen.UserProxyAgent(
@@ -388,7 +384,7 @@ Here we have a conversation that has two models (Anthropic's Claude 3 Sonnet and
 from typing import Annotated, Literal
 
 import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
 config_list_sonnet = [
     {
@@ -432,36 +428,28 @@ config_list_llama31_70b = [
 alice = AssistantAgent(
     "sonnet_agent",
     system_message="You are from Anthropic, an AI company that created the Sonnet large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to mistral_agent when you have finished. Start your response with 'I am sonnet_agent'.",
-    llm_config={
-        "config_list": config_list_sonnet,
-    },
+    llm_config=LLMConfig(config_list=config_list_sonnet),
     is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
 )
 
 bob = autogen.AssistantAgent(
     "mistral_agent",
     system_message="You are from Mistral, an AI company that created the Large v2 large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to the judge if you have finished. Start your response with 'I am mistral_agent'.",
-    llm_config={
-        "config_list": config_list_mistral,
-    },
+    llm_config=LLMConfig(config_list=config_list_mistral),
     is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
 )
 
 charlie = AssistantAgent(
     "research_assistant",
     system_message="You are a helpful assistant to research the latest news and headlines. You have access to call functions to get the latest news articles for research through 'code_interpreter'.",
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
+    llm_config=LLMConfig(config_list=config_list_llama31_70b),
     is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
 )
 
 dan = AssistantAgent(
     "judge",
     system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing. End your decision with the word 'TERMINATE' to conclude the debate.",
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
+    llm_config=LLMConfig(config_list=config_list_llama31_70b),
     is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
 )
 
@@ -513,9 +501,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
+    llm_config=LLMConfig(config_list=config_list_llama31_70b),
 )
 
 task = "Analyze the potential of Anthropic and Mistral to revolutionize the field of AI based on today's headlines. Today is 06202024. Start by selecting 'research_assistant' to get relevant news articles and then ask sonnet_agent and mistral_agent to respond before the judge evaluates the conversation."

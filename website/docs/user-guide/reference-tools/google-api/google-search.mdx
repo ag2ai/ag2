@@ -33,7 +33,7 @@ You're all set! Now you can start using Google Search with AG2.
 import os
 
 import autogen
-from autogen import AssistantAgent
+from autogen import AssistantAgent, LLMConfig
 from autogen.tools.experimental import GoogleSearchTool
 ```
 
@@ -53,7 +53,7 @@ config_list = autogen.config_list_from_json(
 
 assistant = AssistantAgent(
     name="assistant",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 ```
 
@@ -148,7 +148,7 @@ config_list = autogen.config_list_from_json(
 
 assistant = AssistantAgent(
     name="assistant",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 ```
 

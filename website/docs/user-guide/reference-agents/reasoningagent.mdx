@@ -43,7 +43,7 @@ The agent is highly configurable through a single `reason_config` dictionary:
 import random
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
 config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
@@ -94,7 +94,7 @@ may show limited improvement with this approach.
 reason_agent = ReasoningAgent(
     name="reason_agent",
     system_message="answer math questions",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=verbose,
     reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
     # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
@@ -219,7 +219,7 @@ In this approach, the agent generates multiple reasoning steps in parallel, allo
 ```python
 reason_agent = ReasoningAgent(
     name="reason_agent",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=verbose,
     reason_config={"method": "beam_search", "beam_size": 3, "max_depth": 3},
 )
@@ -324,7 +324,7 @@ This section demonstrates how to use Monte Carlo Tree Search (MCTS) with [`Reaso
 mcts_agent = ReasoningAgent(
     name="mcts_agent",
     system_message="answer math questions",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=True,
     # setup small depth and simulations for conciseness.
     reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
@@ -408,7 +408,7 @@ It is important to note that our reasoning agent operates based on "process" and
 lats_agent = ReasoningAgent(
     name="mcts_agent",
     system_message="answer math questions",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=True,
     # setup small depth and simulations for conciseness.
     reason_config={"method": "lats", "nsim": 5, "max_depth": 4},
@@ -940,7 +940,7 @@ The goal is to generate a concise yet engaging blog post about NVIDIA. The proce
 ```python
 writer = AssistantAgent(
     name="Writer",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     system_message="""
     You are a professional writer, known for your insightful and engaging articles.
     You transform complex concepts into compelling narratives.
@@ -949,7 +949,7 @@ writer = AssistantAgent(
 )
 reason_agent_for_writer = ReasoningAgent(
     name="reason_agent",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=verbose,
     reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
 )
@@ -999,11 +999,11 @@ To use a different model for grading instead of gpt-4o, pass the `grader_llm_con
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
 grader_config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
-grader_llm_config = {"config_list": grader_config_list}
+grader_llm_config = LLMConfig(config_list=grader_config_list)
 
 writer = AssistantAgent(
     name="Writer",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     system_message="""
     You are a professional writer, known for your insightful and engaging articles.
     You transform complex concepts into compelling narratives.
@@ -1012,7 +1012,7 @@ writer = AssistantAgent(
 )
 reason_agent_for_writer = ReasoningAgent(
     name="reason_agent",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     grader_llm_config=grader_llm_config,
     verbose=verbose,
     reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
@@ -1063,7 +1063,7 @@ random.seed(1)  # setup seed for reproducibility
 mcts_agent2 = ReasoningAgent(
     name="mcts_agent",
     system_message="answer math questions",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=True,
     # setup small depth and simulations for conciseness.
     reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
@@ -1721,7 +1721,7 @@ The concept of a "Forest of Thoughts" allows us to leverage bootstrapping techni
 forest_agent = ReasoningAgent(
     name="mcts_agent",
     system_message="answer math questions",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
     verbose=True,
     # setup small depth and simulations for conciseness.
     reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},

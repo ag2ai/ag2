@@ -34,17 +34,25 @@ The example below is a two-agent chat between a student agent and a teacher agen
 ```python
 import os
 
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 student_agent = ConversableAgent(
     name="Student_Agent",
     system_message="You are a student willing to learn.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
 )
 teacher_agent = ConversableAgent(
     name="Teacher_Agent",
     system_message="You are a math teacher.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
 )
 
 chat_result = student_agent.initiate_chat(
@@ -101,7 +109,11 @@ To illustrate this pattern, let's consider a simple example of arithmetic operat
 number_agent = ConversableAgent(
     name="Number_Agent",
     system_message="You return me the numbers I give you, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 
@@ -109,7 +121,11 @@ number_agent = ConversableAgent(
 adder_agent = ConversableAgent(
     name="Adder_Agent",
     system_message="You add 1 to each number I give you and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 
@@ -117,7 +133,11 @@ adder_agent = ConversableAgent(
 multiplier_agent = ConversableAgent(
     name="Multiplier_Agent",
     system_message="You multiply each number I give you by 2 and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 
@@ -125,7 +145,11 @@ multiplier_agent = ConversableAgent(
 subtracter_agent = ConversableAgent(
     name="Subtracter_Agent",
     system_message="You subtract 1 from each number I give you and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 
@@ -133,7 +157,11 @@ subtracter_agent = ConversableAgent(
 divider_agent = ConversableAgent(
     name="Divider_Agent",
     system_message="You divide each number I give you by 2 and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 ```
@@ -263,7 +291,11 @@ from autogen import GroupChatManager
 
 group_chat_manager = GroupChatManager(
     groupchat=group_chat,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
 )
 ```
 
@@ -308,7 +340,11 @@ In this case, the Group Chat Manager is treated as a regular agent in the sequen
 # Let's use the group chat with introduction messages created above.
 group_chat_manager_with_intros = GroupChatManager(
     groupchat=group_chat_with_introductions,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
 )
 
 # Start a sequence of two-agent chats between the number agent and
@@ -373,7 +409,11 @@ constrained_graph_chat = GroupChat(
 
 constrained_group_chat_manager = GroupChatManager(
     groupchat=constrained_graph_chat,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
 )
 
 chat_result = number_agent.initiate_chat(
@@ -438,14 +478,22 @@ arithmetic_agent = ConversableAgent(
 code_writer_agent = ConversableAgent(
     name="Code_Writer_Agent",
     system_message="You are a code writer. You write Python script in Markdown code blocks.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 
 poetry_agent = ConversableAgent(
     name="Poetry_Agent",
     system_message="You are an AI poet.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     human_input_mode="NEVER",
 )
 ```

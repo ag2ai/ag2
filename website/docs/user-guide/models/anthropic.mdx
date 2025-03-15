@@ -134,9 +134,7 @@ config_list_vertexai = [
 
 assistant = autogen.AssistantAgent(
     "assistant",
-    llm_config={
-        "config_list": config_list_vertexai,
-    },
+    llm_config=autogen.LLMConfig(config_list=config_list_vertexai),
 )
 ```
 
@@ -165,9 +163,7 @@ Construct a simple conversation between a User proxy and an ConversableAgent bas
 ```python
 assistant = autogen.AssistantAgent(
     "assistant",
-    llm_config={
-        "config_list": config_list_claude,
-    },
+    llm_config=autogen.LLMConfig(config_list=config_list_claude),
 )
 
 user_proxy = autogen.UserProxyAgent(
@@ -333,7 +329,7 @@ TERMINATE
 ### A group chat with GPT-4 as the judge
 
 ```python
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
 config_list_gpt4 = [
     {
@@ -359,33 +355,25 @@ config_list_gpt35 = [
 alice = AssistantAgent(
     "Openai_agent",
     system_message="You are from OpenAI. You make arguments to support your company's position.",
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=LLMConfig(config_list=config_list_gpt4),
 )
 
 bob = autogen.AssistantAgent(
     "Anthropic_agent",
     system_message="You are from Anthropic. You make arguments to support your company's position.",
-    llm_config={
-        "config_list": config_list_claude,
-    },
+    llm_config=LLMConfig(config_list=config_list_claude),
 )
 
 charlie = AssistantAgent(
     "Research_Assistant",
     system_message="You are a helpful assistant to research the latest news and headlines.",
-    llm_config={
-        "config_list": config_list_gpt35,
-    },
+    llm_config=LLMConfig(config_list=config_list_gpt35),
 )
 
 dan = AssistantAgent(
     "Judge",
     system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=LLMConfig(config_list=config_list_gpt4),
 )
 
 code_interpreter = UserProxyAgent(
@@ -421,9 +409,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=LLMConfig(config_list=config_list_gpt4),
 )
 
 task = "Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024."
@@ -612,9 +598,7 @@ While we're proud of our record and the merits you've recognized in our argument
 dan = AssistantAgent(
     "Judge",
     system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config={
-        "config_list": config_list_claude,
-    },
+    llm_config=LLMConfig(config_list=config_list_claude),
 )
 
 groupchat = GroupChat(
@@ -627,9 +611,7 @@ groupchat = GroupChat(
 manager = GroupChatManager(
     groupchat=groupchat,
     # is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=LLMConfig(config_list=config_list_gpt4),
 )
 
 user_proxy.initiate_chat(manager, message=task)

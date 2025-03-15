@@ -38,10 +38,10 @@ Let's look at how we could prepend a message with who is sending the message (se
 In this example, our `Mike` agent will have this hook registered, so all their messages will have this text added.
 
 ```python
-from autogen import ConversableAgent, Agent
+from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Union
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 agent_mike = ConversableAgent(name="Mike", llm_config=llm_config)
 
@@ -176,10 +176,10 @@ def my_update_function(
 In the following example we will update an agent's system message to have the current date in it.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from typing import Any
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 calendar_prompt = ("You are a calendar agent who answers questions on the date and day.\n"
                    "The current date is: [CURRENT_DATE]\n"
@@ -266,10 +266,10 @@ def my_processing_function(
 Here's an example that changes any instances of the word "blue" to "red" in the last message.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from typing import Any, Union
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
 
@@ -347,11 +347,11 @@ def your_function_name(
 Here's an example that adds the agent's name to the start of each message.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from typing import Any
 import json
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 agent_mike = ConversableAgent(name="Mike", llm_config=llm_config, system_message="You are a comedian.")
 

@@ -42,11 +42,12 @@ from autogen import (
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
-    register_hand_off
+    register_hand_off,
+    LLMConfig,
 )
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 ```
 
 #### Context

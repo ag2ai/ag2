@@ -10,10 +10,11 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 
 ```python
 import os
+from autogen import LLMConfig
 
-llm_config = {
-    "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-}
+llm_config = LLMConfig(
+  config_list=[{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+)
 ```
 
 <Warning>
@@ -105,7 +106,7 @@ config_list = autogen.config_list_from_json(
 )
 
 # Then, create the assistant agent with the config list
-assistant = autogen.AssistantAgent(name="assistant", llm_config={"config_list": config_list})
+assistant = autogen.AssistantAgent(name="assistant", llm_config=LLMConfig(config_list=config_list))
 ```
 
 This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
@@ -178,6 +179,8 @@ The below example shows how to implement a `__deepcopy__` method for http client
 #!pip install httpx
 import httpx
 
+from autogen import LLMConfig
+
 
 class MyHttpClient(httpx.Client):
     def __deepcopy__(self, memo):
@@ -193,9 +196,7 @@ config_list = [
     }
 ]
 
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(config_list=config_list)
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
@@ -274,8 +275,10 @@ To use AAD authentication with Azure OpenAI in AG2, configure the `llm_config` w
 Here is an example configuration:
 
 ```
-llm_config = {
-    "config_list": [
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    config_list= [
         {
             "model": "gpt-4",
             "base_url": "YOUR_BASE_URL",
@@ -285,7 +288,7 @@ llm_config = {
             "azure_ad_token_provider": "DEFAULT"
         }
     ]
-}
+)
 ```
 
 For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
@@ -330,8 +333,11 @@ This is commonly used for things like `temperature`, or `timeout`.
 ## Example
 
 ```python
-llm_config = {
-    "config_list": [
+from autogen import LLMConfig
+
+
+llm_config = LLMConfig(
+    config_list = [
         {
             "model": "my-gpt-4o-deployment",
             "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -346,9 +352,9 @@ llm_config = {
             "api_type": "openai",
         },
     ],
-    "temperature": 0.9,
-    "timeout": 300,
-}
+    temperature = 0.9,
+    timeout = 300,
+)
 ```
 
 ## Other helpers for loading a config list

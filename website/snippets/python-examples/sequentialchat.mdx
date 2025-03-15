@@ -1,7 +1,7 @@
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # Three chats:
 # 1. Teacher and Curriculum designer > summary is a topic for next chat

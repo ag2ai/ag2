@@ -109,14 +109,15 @@ from autogen import (
     AfterWorkOption,
     initiate_swarm_chat,
     ContextExpression,
-    SwarmResult
+    SwarmResult,
+    LLMConfig,
 )
 
 # Feedback Loop pattern for iterative document refinement
 # Each agent refines the document, which is then sent back for further iterations based on feedback
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False} #, "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False) #, cache_seed=None)
 
 # Document types for the document editing feedback loop: essay, article, email, report, other
 # Feedback severity: minor, moderate, major, critical

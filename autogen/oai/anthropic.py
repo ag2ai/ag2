@@ -118,6 +118,10 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=1)
 
+    gcp_project_id: Optional[str] = None
+    gcp_region: Optional[str] = None
+    gcp_auth_token: Optional[str] = None
+
     def create_client(self):
         raise NotImplementedError("AnthropicLLMConfigEntry.create_client is not implemented.")
 
