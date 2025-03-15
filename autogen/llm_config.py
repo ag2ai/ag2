@@ -7,7 +7,7 @@ import json
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
@@ -292,6 +292,7 @@ class LLMConfigEntry(BaseModel, ABC):
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
+    default_headers: Optional[Mapping[str, Any]] = None
     tags: list[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
