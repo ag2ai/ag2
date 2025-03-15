@@ -101,6 +101,9 @@ class LLMConfig:
         outside_properties = list((self._get_base_model_class()).model_json_schema()["properties"].keys())
         outside_properties.remove("config_list")
 
+        if "config_list" in kwargs and isinstance(kwargs["config_list"], dict):
+            kwargs["config_list"] = [kwargs["config_list"]]
+
         modified_kwargs = (
             kwargs
             if "config_list" in kwargs
