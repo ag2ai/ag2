@@ -66,6 +66,7 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     top_k: Optional[int] = None
     k: Optional[int] = None
     seed: Optional[int] = None
+    cache_seed: Optional[int] = None
     supports_system_prompts: bool = True
     stream: bool = False
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
