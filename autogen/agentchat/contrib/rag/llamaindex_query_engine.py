@@ -13,7 +13,6 @@ from ....import_utils import optional_import_block, require_optional_import
 with optional_import_block():
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.core.llms import LLM
-    from llama_index.core.readers.base import BaseReader
     from llama_index.core.schema import Document as LlamaDocument
     from llama_index.core.vector_stores.types import BasePydanticVectorStore
     from llama_index.llms.openai import OpenAI
