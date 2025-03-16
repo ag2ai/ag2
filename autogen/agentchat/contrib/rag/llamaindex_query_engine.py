@@ -171,7 +171,7 @@ class LlamaIndexQueryEngine:
             ValueError: If any provided file path does not exist.
             ValueError: If neither input_dir nor input_docs is provided.
         """
-        loaded_documents = []
+        loaded_documents: list["LlamaDocument"] = []  # type: ignore[no-any-unimported]
         if input_dir:
             logger.info(f"Loading docs from directory: {input_dir}")
             if not os.path.exists(input_dir):
