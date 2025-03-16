@@ -45,14 +45,14 @@ class LlamaIndexQueryEngine:
         self,
         vector_store: "BasePydanticVectorStore",
         llm: Optional["LLM"] = None,
-        file_reader_class: Optional[type["BaseReader"]] = None,
+        file_reader_class: Optional["SimpleDirectoryReader"] = None,
     ) -> None:
         """
         Initializes the LlamaIndexQueryEngine with the given vector store.
         Args:
             vector_store: The vector store to use for indexing and querying documents.
             llm: LLM model used by LlamaIndex for query processing. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/).
-            file_reader_class: The file reader class to use for loading documents. Defaults to SimpleDirectoryReader.
+            file_reader_class: The file reader class to use for loading documents. Only SimpleDirectoryReader is currently supported.
         """
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.vector_store = vector_store
@@ -176,14 +176,14 @@ class LlamaIndexQueryEngine:
             logger.info(f"Loading docs from directory: {input_dir}")
             if not os.path.exists(input_dir):
                 raise ValueError(f"Input directory not found: {input_dir}")
-            loaded_documents.extend(self.file_reader_class(input_dir=input_dir).load_data())  # type: ignore[operator,call-arg]
+            loaded_documents.extend(self.file_reader_class(input_dir=input_dir).load_data())
 
         if input_docs:
             for doc in input_docs:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(self.file_reader_class(input_files=input_docs).load_data())  # type: ignore[operator,call-arg]
+            loaded_documents.extend(self.file_reader_class(input_files=input_docs).load_data())
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
