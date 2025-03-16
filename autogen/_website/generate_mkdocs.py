@@ -19,7 +19,7 @@ from .utils import (
     copy_files,
     get_git_tracked_and_untracked_files_in_directory,
     remove_marker_blocks,
-    render_gallery,
+    render_gallery_html,
 )
 
 with optional_import_block():
@@ -511,7 +511,7 @@ def add_front_matter_to_metadata_yml(
 
 
 @require_optional_import("yaml", "docs")
-def post_process_mdx(
+def post_process_func(
     rendered_mdx: Path,
     source_notebooks: Path,
     front_matter: dict[str, Union[str, list[str], None]],
@@ -537,26 +537,6 @@ def post_process_mdx(
     front_matter["source_notebook"] = f"/{repo_relative_notebook}"
     front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
 
-    # Is there a title on the content? Only search up until the first code cell
-    # first_code_cell = content.find("```")
-    # if first_code_cell != -1:
-    #     title_search_content = content[:first_code_cell]
-    # else:
-    #     title_search_content = content
-
-    # title_exists = title_search_content.find("\n# ") != -1
-    # if not title_exists:
-    #     content = f"# {front_matter['title']}\n{content}"
-    # inject in content directly after the markdown title the word done
-    # Find the end of the line with the title
-    # title_end = content.find("\n", content.find("#"))
-
-    # Extract page title
-    # title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
-    # If there is a { in the title we trim off the { and everything after it
-    # if "{" in title:
-    #     title = title[: title.find("{")].strip()
-
     github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
     content = (
         f'\n<a href="{github_link}" class="github-badge" target="_blank">'
@@ -581,6 +561,9 @@ def post_process_mdx(
     # Dump front_matter to yaml
     front_matter_str = yaml.dump(front_matter, default_flow_style=False)
 
+    # Add render_macros: false to the front matter
+    front_matter_str += "render_macros: false\n"
+
     # Convert callout blocks
     # content = convert_callout_blocks(content)
 
@@ -590,9 +573,8 @@ def post_process_mdx(
     # ensure editUrl is present
     # content = ensure_edit_url(content, repo_relative_notebook)
 
-    # convert figure tag to img tag
-    # img_rel_path = rendered_mdx.parent.relative_to(website_build_directory)
-    # content = extract_img_tag_from_figure_tag(content, img_rel_path)
+    # Remove ::: from content
+    content = content.replace(":::", "")
 
     # Rewrite the content as
     # ---
@@ -600,23 +582,30 @@ def post_process_mdx(
     # ---
     # content
     new_content = f"---\n{front_matter_str}---\n{content}"
-    with open(rendered_mdx, "w", encoding="utf-8") as f:
+
+    # Change the file extension to .md
+    rendered_md = rendered_mdx.with_suffix(".md")
+
+    with open(rendered_md, "w", encoding="utf-8") as f:
         f.write(new_content)
 
+    # Optionally, remove the original .mdx file
+    rendered_mdx.unlink()
 
-def notebooks_target_dir(website_build_directory: Path) -> Path:
+
+def target_dir_func(website_build_directory: Path) -> Path:
     """Return the target directory for notebooks."""
     return website_build_directory / "use-cases" / "notebooks" / "notebooks"
 
 
-def generate_notebooks_index_html(notebooks_md_path: Path, metadata_yml_path: Path) -> None:
+def generate_gallery_html(notebooks_md_path: Path, metadata_yml_path: Path) -> None:
     """Generate the index.html file for the notebooks section."""
     with open(notebooks_md_path, encoding="utf-8") as f:
         content = f.read()
 
-    gallery_html = render_gallery(metadata_yml_path)
+    gallery_html = render_gallery_html(metadata_yml_path)
 
-    updated_content = content + "\n\n" + gallery_html
+    updated_content = content.replace("{{ render_gallery(gallery_items) }}", gallery_html)
     with open(notebooks_md_path, "w", encoding="utf-8") as f:
         f.write(updated_content)
 
@@ -668,10 +657,15 @@ def main(force: bool) -> None:
     if args.notebook_directory is None:
         args.notebook_directory = mkdocs_root_dir / "../../notebook"
 
-    process_notebooks_core(args, post_process_mdx, notebooks_target_dir)
+    if force and mkdocs_output_dir.exists():
+        process_notebooks_core(args, post_process_func, target_dir_func)
 
-    # read the notebooks_metadata.yml file and the notebooks.md file
-    # replace the content with the HTML
+    # Render Notebooks Gallery HTML
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
     metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
-    generate_notebooks_index_html(notebooks_md_path, metadata_yml_path)
+    generate_gallery_html(notebooks_md_path, metadata_yml_path)
+
+    # Render Community Gallery HTML
+    community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"
+    metadata_yml_path = Path(args.website_build_directory) / "../../data/gallery_items.yml"
+    generate_gallery_html(community_md_path, metadata_yml_path)

@@ -79,7 +79,6 @@ plugins:
       include_dir: includes
       include_yaml:
         - people: data/people.yml
-        - gallery_items: data/gallery_items.yml
   - mkdocstrings:                # Generate References
       default_handler: python
       handlers:

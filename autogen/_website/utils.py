@@ -90,7 +90,7 @@ def remove_marker_blocks(content: str, marker_prefix: str) -> str:
 
 
 @require_optional_import("yaml", "docs")
-def render_gallery(gallery_file_path: Path) -> str:
+def render_gallery_html(gallery_file_path: Path) -> str:
     """Renders a gallery of items with tag filtering
 
     Args:
