@@ -7,12 +7,23 @@ import json
 import re
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from ..import_utils import optional_import_block, require_optional_import
-from .utils import NavigationGroup, copy_files, get_git_tracked_and_untracked_files_in_directory, remove_marker_blocks
+from .notebook_processor import (
+    create_base_argument_parser,
+    process_notebooks_core,
+)
+from .utils import (
+    NavigationGroup,
+    copy_files,
+    get_git_tracked_and_untracked_files_in_directory,
+    remove_marker_blocks,
+    render_gallery,
+)
 
 with optional_import_block():
+    import yaml
     from jinja2 import Template
 
 
@@ -222,8 +233,7 @@ def format_page_entry(page_path: str, indent: str, keywords: dict[str, str]) -> 
 
 
 def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Optional[dict[str, str]] = None) -> str:
-    """
-    Recursively format navigation structure into markdown-style nested list.
+    """Recursively format navigation structure into markdown-style nested list.
 
     Args:
         nav: List of navigation items with groups and pages
@@ -442,7 +452,176 @@ def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets
     shutil.copy2(authors_yml_path, target_authors_yml_path)
 
 
-def main() -> None:
+_is_first_notebook = True
+
+
+def add_front_matter_to_metadata_yml(
+    front_matter: dict[str, Union[str, list[str], None]], website_build_directory: Path, rendered_mdx: Path
+) -> None:
+    """Add notebook metadata to a YAML file containing metadata for all notebooks."""
+    global _is_first_notebook
+
+    source = front_matter.get("source_notebook")
+    if isinstance(source, str) and source.startswith("/website/docs/"):
+        return
+
+    # Get the metadata file path
+    metadata_yml_path = website_build_directory / "../../data/notebooks_metadata.yml"
+
+    # Create parent directories if they don't exist
+    metadata_yml_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # If this is the first notebook, delete the existing file
+    if _is_first_notebook and metadata_yml_path.exists():
+        metadata_yml_path.unlink()
+        _is_first_notebook = False
+
+    # Create new entry for current notebook
+    title = front_matter.get("title", "")
+    link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}"
+    description = front_matter.get("description", "")
+    tags = front_matter.get("tags", []) or []
+
+    # Escape quotes in strings
+    title = str(title).replace('"', '\\"')
+    description = str(description).replace('"', '\\"')
+    source_str = str(source or "").replace('"', '\\"')
+
+    # Open file in append mode
+    with open(metadata_yml_path, "a", encoding="utf-8") as f:
+        # Write the entry
+        f.write(f'- title: "{title}"\n')
+        f.write(f'  link: "{link}"\n')
+        f.write(f'  description: "{description}"\n')
+        f.write('  image: ""\n')
+
+        # Write tags
+        if tags:
+            f.write("  tags:\n")
+            for tag in tags:
+                if tag:  # Only write non-empty tags
+                    tag_str = str(tag).replace('"', '\\"')
+                    f.write(f'    - "{tag_str}"\n')
+        else:
+            f.write("  tags: []\n")
+
+        # Write source
+        f.write(f'  notebook_source: "{source_str}"\n')
+        f.write("\n")
+
+
+@require_optional_import("yaml", "docs")
+def post_process_mdx(
+    rendered_mdx: Path,
+    source_notebooks: Path,
+    front_matter: dict[str, Union[str, list[str], None]],
+    website_build_directory: Path,
+) -> None:
+    with open(rendered_mdx, encoding="utf-8") as f:
+        content = f.read()
+
+    # If there is front matter in the mdx file, we need to remove it
+    if content.startswith("---"):
+        front_matter_end = content.find("---", 3)
+        mdx_front_matter = yaml.safe_load(content[4:front_matter_end])
+        # Merge while preserving original values
+        front_matter = {**front_matter, **mdx_front_matter}
+        content = content[front_matter_end + 3 :]
+
+    # Clean heading IDs using regex - matches from # to the end of ID block
+    content = re.sub(r"(#{1,6}[^{]+){#[^}]+}", r"\1", content)
+
+    # Each intermediate path needs to be resolved for this to work reliably
+    repo_root = Path(__file__).resolve().parents[2]
+    repo_relative_notebook = source_notebooks.resolve().relative_to(repo_root)
+    front_matter["source_notebook"] = f"/{repo_relative_notebook}"
+    front_matter["custom_edit_url"] = f"https://github.com/ag2ai/ag2/edit/main/{repo_relative_notebook}"
+
+    # Is there a title on the content? Only search up until the first code cell
+    # first_code_cell = content.find("```")
+    # if first_code_cell != -1:
+    #     title_search_content = content[:first_code_cell]
+    # else:
+    #     title_search_content = content
+
+    # title_exists = title_search_content.find("\n# ") != -1
+    # if not title_exists:
+    #     content = f"# {front_matter['title']}\n{content}"
+    # inject in content directly after the markdown title the word done
+    # Find the end of the line with the title
+    # title_end = content.find("\n", content.find("#"))
+
+    # Extract page title
+    # title = content[content.find("#") + 1 : content.find("\n", content.find("#"))].strip()
+    # If there is a { in the title we trim off the { and everything after it
+    # if "{" in title:
+    #     title = title[: title.find("{")].strip()
+
+    github_link = f"https://github.com/ag2ai/ag2/blob/main/{repo_relative_notebook}"
+    content = (
+        f'\n<a href="{github_link}" class="github-badge" target="_blank">'
+        + """<img noZoom src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github" alt="Open on GitHub" />"""
+        + "</a>"
+        + content
+    )
+
+    # If no colab link is present, insert one
+    if "colab-badge.svg" not in content:
+        colab_link = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{repo_relative_notebook}"
+        content = (
+            f'\n<a href="{colab_link}" class="colab-badge" target="_blank">'
+            + """<img noZoom src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab" />"""
+            + "</a>"
+            + content
+        )
+
+    # Create the front matter metadata js file for examples by notebook section
+    add_front_matter_to_metadata_yml(front_matter, website_build_directory, rendered_mdx)
+
+    # Dump front_matter to yaml
+    front_matter_str = yaml.dump(front_matter, default_flow_style=False)
+
+    # Convert callout blocks
+    # content = convert_callout_blocks(content)
+
+    # Convert mdx image syntax to mintly image syntax
+    # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
+
+    # ensure editUrl is present
+    # content = ensure_edit_url(content, repo_relative_notebook)
+
+    # convert figure tag to img tag
+    # img_rel_path = rendered_mdx.parent.relative_to(website_build_directory)
+    # content = extract_img_tag_from_figure_tag(content, img_rel_path)
+
+    # Rewrite the content as
+    # ---
+    # front_matter_str
+    # ---
+    # content
+    new_content = f"---\n{front_matter_str}---\n{content}"
+    with open(rendered_mdx, "w", encoding="utf-8") as f:
+        f.write(new_content)
+
+
+def notebooks_target_dir(website_build_directory: Path) -> Path:
+    """Return the target directory for notebooks."""
+    return website_build_directory / "use-cases" / "notebooks" / "notebooks"
+
+
+def generate_notebooks_index_html(notebooks_md_path: Path, metadata_yml_path: Path) -> None:
+    """Generate the index.html file for the notebooks section."""
+    with open(notebooks_md_path, encoding="utf-8") as f:
+        content = f.read()
+
+    gallery_html = render_gallery(metadata_yml_path)
+
+    updated_content = content + "\n\n" + gallery_html
+    with open(notebooks_md_path, "w", encoding="utf-8") as f:
+        f.write(updated_content)
+
+
+def main(force: bool) -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
 
@@ -451,17 +630,25 @@ def main() -> None:
     mkdocs_root_dir = website_dir / "mkdocs"
     mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
 
-    if mkdocs_output_dir.exists():
+    parser = create_base_argument_parser()
+    args = parser.parse_args(["render"])
+    args.dry_run = False
+    args.quarto_bin = "quarto"
+    args.notebooks = None
+
+    # check if args.force is set
+    if force and mkdocs_output_dir.exists():
         shutil.rmtree(mkdocs_output_dir)
 
     exclusion_list = [
         "docs/.gitignore",
         "docs/installation",
+        "docs/user-stories",
         "docs/user-guide/getting-started",
         "docs/user-guide/models/litellm-with-watsonx.md",
         "docs/contributor-guide/Migration-Guide.md",
     ]
-    nav_exclusions = [""]
+    nav_exclusions = ["User Stories"]
 
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
@@ -474,3 +661,17 @@ def main() -> None:
 
     process_blog_files(mkdocs_output_dir, authors_yml_path, snippets_dir_path)
     generate_mkdocs_navigation(website_dir, mkdocs_root_dir, nav_exclusions)
+
+    if args.website_build_directory is None:
+        args.website_build_directory = mkdocs_output_dir
+
+    if args.notebook_directory is None:
+        args.notebook_directory = mkdocs_root_dir / "../../notebook"
+
+    process_notebooks_core(args, post_process_mdx, notebooks_target_dir)
+
+    # read the notebooks_metadata.yml file and the notebooks.md file
+    # replace the content with the HTML
+    notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
+    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
+    generate_notebooks_index_html(notebooks_md_path, metadata_yml_path)

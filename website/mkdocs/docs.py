@@ -98,8 +98,8 @@ def live(port: Annotated[Optional[str], typer.Argument()] = None):
 
 
 @app.command()
-def build():
-    _build()
+def build(force: bool = typer.Option(False, "--force", help="Force build")):
+    _build(force)
 
 
 @app.command()
@@ -213,8 +213,8 @@ def build_api_docs():
     create_api_docs(root_path=BASE_DIR, module="autogen")
 
 
-def _build():
-    generate_files_for_mkdocs()
+def _build(force: bool = False):
+    generate_files_for_mkdocs(force)
     build_api_docs()
     # update_readme()
     # update_contributing()

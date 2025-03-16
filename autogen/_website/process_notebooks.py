@@ -8,10 +8,7 @@
 
 from __future__ import annotations
 
-import argparse
-import concurrent.futures
 import json
-import os
 import re
 import shutil
 import sys
@@ -23,18 +20,8 @@ from typing import Sequence, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 from .notebook_processor import (
-    NotebookError,
-    NotebookSkip,
-    check_quarto_bin,
-    collect_notebooks,
-    fmt_error,
-    fmt_ok,
-    fmt_skip,
-    notebooks_target_dir,
-    process_notebook,
-    skip_reason_or_none_if_ok,
-    start_thread_to_terminate_when_parent_process_dies,
-    test_notebook,
+    create_base_argument_parser,
+    process_notebooks_core,
 )
 from .utils import NavigationGroup, remove_marker_blocks
 
@@ -48,6 +35,11 @@ EDIT_URL_HTML = """
     <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
 </div>
 """
+
+
+def notebooks_target_dir(website_build_directory: Path) -> Path:
+    """Return the target directory for notebooks."""
+    return website_build_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
 
 
 def add_front_matter_to_metadata_mdx(
@@ -350,11 +342,6 @@ def post_process_mdx(
     new_content = f"---\n{front_matter_str}---\n{content}"
     with open(rendered_mdx, "w", encoding="utf-8") as f:
         f.write(new_content)
-
-
-def path(path_str: str) -> Path:
-    """Return a Path object."""
-    return Path(path_str)
 
 
 def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
@@ -784,116 +771,34 @@ def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
     website_build_dir = website_dir / "build"
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="subcommand")
+    parser = create_base_argument_parser()
 
     if not website_build_dir.exists():
         website_build_dir.mkdir()
         shutil.copytree(website_dir, website_build_dir, dirs_exist_ok=True)
-
-    parser.add_argument(
-        "--notebook-directory",
-        type=path,
-        help="Directory containing notebooks to process",
-        default=website_build_dir / "../../notebook",
-    )
-    parser.add_argument(
-        "--website-build-directory", type=path, help="Root directory of mintlify website", default=website_build_dir
-    )
-
-    parser.add_argument("--force", help="Force re-rendering of all notebooks", default=False)
-
-    render_parser = subparsers.add_parser("render")
-    render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
-    render_parser.add_argument("--dry-run", help="Don't render", action="store_true")
-    render_parser.add_argument("notebooks", type=path, nargs="*", default=None)
-
-    test_parser = subparsers.add_parser("test")
-    test_parser.add_argument("--timeout", help="Timeout for each notebook", type=int, default=60)
-    test_parser.add_argument("--exit-on-first-fail", "-e", help="Exit after first test fail", action="store_true")
-    test_parser.add_argument("notebooks", type=path, nargs="*", default=None)
-    test_parser.add_argument("--workers", help="Number of workers to use", type=int, default=-1)
 
     args = parser.parse_args()
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)
 
+    if args.website_build_directory is None:
+        args.website_build_directory = website_build_dir
+
+    if args.notebook_directory is None:
+        args.notebook_directory = website_build_dir / "../../notebook"
+
     ensure_mint_json_exists(args.website_build_directory)
     cleanup_tmp_dirs(args.website_build_directory, args.force)
 
-    collected_notebooks = (
-        args.notebooks if args.notebooks else collect_notebooks(args.notebook_directory, args.website_build_directory)
-    )
+    # Process notebooks using core logic
+    process_notebooks_core(args, post_process_mdx, notebooks_target_dir)
 
-    filtered_notebooks = []
-    for notebook in collected_notebooks:
-        reason = skip_reason_or_none_if_ok(notebook)
-        if reason and isinstance(reason, str):
-            print(fmt_skip(notebook, reason))
-        else:
-            filtered_notebooks.append(notebook)
-
-    if args.subcommand == "test":
-        if args.workers == -1:
-            args.workers = None
-        failure = False
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=args.workers,
-            initializer=start_thread_to_terminate_when_parent_process_dies,
-            initargs=(os.getpid(),),
-        ) as executor:
-            futures = [executor.submit(test_notebook, f, args.timeout) for f in filtered_notebooks]
-            for future in concurrent.futures.as_completed(futures):
-                notebook, optional_error_or_skip = future.result()
-                if isinstance(optional_error_or_skip, NotebookError):
-                    if optional_error_or_skip.error_name == "timeout":
-                        print(fmt_error(notebook, optional_error_or_skip.error_name))
-
-                    else:
-                        print("-" * 80)
-
-                        print(fmt_error(notebook, optional_error_or_skip))
-                        print(optional_error_or_skip.traceback)
-                        print("-" * 80)
-                    if args.exit_on_first_fail:
-                        sys.exit(1)
-                    failure = True
-                elif isinstance(optional_error_or_skip, NotebookSkip):
-                    print(fmt_skip(notebook, optional_error_or_skip.reason))
-                else:
-                    print(fmt_ok(notebook))
-
-        if failure:
-            sys.exit(1)
-
-    elif args.subcommand == "render":
-        check_quarto_bin(args.quarto_bin)
-
-        if not notebooks_target_dir(args.website_build_directory).exists():
-            notebooks_target_dir(args.website_build_directory).mkdir(parents=True)
-
-        for notebook in filtered_notebooks:
-            print(
-                process_notebook(
-                    notebook,
-                    args.website_build_directory,
-                    args.notebook_directory,
-                    args.quarto_bin,
-                    args.dry_run,
-                    post_process_mdx,
-                )
-            )
-
-        # Post-processing steps after all notebooks are handled
-        if not args.dry_run:
-            target_notebooks_dir = notebooks_target_dir(args.website_build_directory)
-            copy_images_from_notebooks_dir_to_target_dir(args.notebook_directory, target_notebooks_dir)
-            add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
-            fix_internal_references_in_mdx_files(args.website_build_directory)
-            add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
-            add_edit_urls_and_remove_mkdocs_markers(args.website_build_directory)
-
-    else:
-        print("Unknown subcommand")
-        sys.exit(1)
+    # Post-processing steps after all notebooks are handled
+    if not args.dry_run:
+        target_notebooks_dir = notebooks_target_dir(args.website_build_directory)
+        copy_images_from_notebooks_dir_to_target_dir(args.notebook_directory, target_notebooks_dir)
+        add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
+        fix_internal_references_in_mdx_files(args.website_build_directory)
+        add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
+        add_edit_urls_and_remove_mkdocs_markers(args.website_build_directory)

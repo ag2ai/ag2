@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import argparse
+import concurrent.futures
 import functools
 import json
 import os
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -54,6 +57,11 @@ class Result:
         self.stderr = stderr
 
 
+def path(path_str: str) -> Path:
+    """Return a Path object."""
+    return Path(path_str)
+
+
 @lru_cache
 def check_quarto_bin(quarto_bin: str = "quarto") -> bool:
     """Check if quarto is installed."""
@@ -81,11 +89,6 @@ def require_quarto_bin(f: C) -> C:
             return ImportError("Quarto is not installed")
 
         return wrapper  # type: ignore[return-value]
-
-
-def notebooks_target_dir(website_build_directory: Path) -> Path:
-    """Return the target directory for notebooks."""
-    return website_build_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
 
 
 def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
@@ -284,6 +287,7 @@ def process_notebook(
     notebook_dir: Path,
     quarto_bin: str,
     dry_run: bool,
+    target_dir_func: Callable[[Path], Path],
     post_processor: Optional[Callable[[Path, Path, dict[str, Any], Path], None]] = None,
 ) -> str:
     """Process a single notebook.
@@ -294,6 +298,7 @@ def process_notebook(
         notebook_dir: Base notebooks directory
         quarto_bin: Path to quarto binary
         dry_run: If True, don't actually process
+        target_dir_func: Function to determine target directory for notebooks
         post_processor: Optional callback for post-processing
     """
 
@@ -313,7 +318,7 @@ def process_notebook(
 
     if in_notebook_dir:
         relative_notebook = src_notebook.resolve().relative_to(notebook_dir.resolve())
-        dest_dir = notebooks_target_dir(website_build_directory=website_build_directory)
+        dest_dir = target_dir_func(website_build_directory)
         target_file = dest_dir / relative_notebook.with_suffix(".mdx")
         intermediate_notebook = dest_dir / relative_notebook
 
@@ -364,3 +369,108 @@ def process_notebook(
         post_processor(target_file, src_notebook, front_matter, website_build_directory)
 
     return fmt_ok(src_notebook)
+
+
+def create_base_argument_parser() -> argparse.ArgumentParser:
+    """Create the base argument parser with common options."""
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="subcommand")
+
+    parser.add_argument(
+        "--notebook-directory",
+        type=path,
+        help="Directory containing notebooks to process",
+    )
+    parser.add_argument("--website-build-directory", type=path, help="Root directory of website build")
+    parser.add_argument("--force", help="Force re-rendering of all notebooks", action="store_true", default=False)
+
+    render_parser = subparsers.add_parser("render")
+    render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
+    render_parser.add_argument("--dry-run", help="Don't render", action="store_true")
+    render_parser.add_argument("notebooks", type=path, nargs="*", default=None)
+
+    test_parser = subparsers.add_parser("test")
+    test_parser.add_argument("--timeout", help="Timeout for each notebook", type=int, default=60)
+    test_parser.add_argument("--exit-on-first-fail", "-e", help="Exit after first test fail", action="store_true")
+    test_parser.add_argument("notebooks", type=path, nargs="*", default=None)
+    test_parser.add_argument("--workers", help="Number of workers to use", type=int, default=-1)
+
+    return parser
+
+
+def process_notebooks_core(
+    args: argparse.Namespace,
+    post_process_func: Optional[Callable[[Path, Path, dict[str, Any], Path], None]],
+    target_dir_func: Callable[[Path], Path],
+) -> list[Path]:
+    """Core logic for processing notebooks shared across build systems.
+
+    Args:
+        args: Command line arguments
+        post_process_func: Function for post-processing rendered notebooks
+        target_dir_func: Function to determine target directory for notebooks
+    """
+    collected_notebooks = (
+        args.notebooks if args.notebooks else collect_notebooks(args.notebook_directory, args.website_build_directory)
+    )
+
+    filtered_notebooks = []
+    for notebook in collected_notebooks:
+        reason = skip_reason_or_none_if_ok(notebook)
+        if reason and isinstance(reason, str):
+            print(fmt_skip(notebook, reason))
+        else:
+            filtered_notebooks.append(notebook)
+
+    if args.subcommand == "test":
+        if args.workers == -1:
+            args.workers = None
+        failure = False
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=args.workers,
+            initializer=start_thread_to_terminate_when_parent_process_dies,
+            initargs=(os.getpid(),),
+        ) as executor:
+            futures = [executor.submit(test_notebook, f, args.timeout) for f in filtered_notebooks]
+            for future in concurrent.futures.as_completed(futures):
+                notebook, optional_error_or_skip = future.result()
+                if isinstance(optional_error_or_skip, NotebookError):
+                    if optional_error_or_skip.error_name == "timeout":
+                        print(fmt_error(notebook, optional_error_or_skip.error_name))
+                    else:
+                        print("-" * 80)
+                        print(fmt_error(notebook, optional_error_or_skip))
+                        print(optional_error_or_skip.traceback)
+                        print("-" * 80)
+                    if args.exit_on_first_fail:
+                        sys.exit(1)
+                    failure = True
+                elif isinstance(optional_error_or_skip, NotebookSkip):
+                    print(fmt_skip(notebook, optional_error_or_skip.reason))
+                else:
+                    print(fmt_ok(notebook))
+
+        if failure:
+            sys.exit(1)
+
+    elif args.subcommand == "render":
+        check_quarto_bin(args.quarto_bin)
+
+        target_dir = target_dir_func(args.website_build_directory)
+        if not target_dir.exists():
+            target_dir.mkdir(parents=True)
+
+        for notebook in filtered_notebooks:
+            print(
+                process_notebook(
+                    notebook,
+                    args.website_build_directory,
+                    args.notebook_directory,
+                    args.quarto_bin,
+                    args.dry_run,
+                    target_dir_func,
+                    post_process_func,
+                )
+            )
+
+    return filtered_notebooks
