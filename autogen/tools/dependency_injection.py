@@ -80,8 +80,8 @@ T = TypeVar("T")
 
 
 def on(x: T) -> Callable[[], T]:
-    def inner(_x: T = x) -> T:
-        return _x
+    def inner(ag2_x: T = x) -> T:
+        return ag2_x
 
     return inner
 

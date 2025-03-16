@@ -27,9 +27,12 @@ import copy
 import os
 import time
 import warnings
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -43,6 +46,21 @@ GROQ_PRICING_1K = {
     "llama3-8b-8192": (0.00005, 0.00008),
     "gemma-7b-it": (0.00007, 0.00007),
 }
+
+
+@register_llm_config
+class GroqLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["groq"] = "groq"
+    frequency_penalty: float = Field(default=None, ge=-2, le=2)
+    max_tokens: int = Field(default=None, ge=0)
+    presence_penalty: float = Field(default=None, ge=-2, le=2)
+    seed: int = Field(default=None)
+    stream: bool = Field(default=False)
+    temperature: float = Field(default=1, ge=0, le=2)
+    top_p: float = Field(default=None)
+
+    def create_client(self):
+        raise NotImplementedError("GroqLLMConfigEntry.create_client is not implemented.")
 
 
 class GroqClient:

@@ -7,9 +7,11 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.bedrock import BedrockClient, oai_messages_to_bedrock_messages
+from autogen.llm_config import LLMConfig
+from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 
 
 # Fixtures for mock data
@@ -34,6 +36,47 @@ def bedrock_client():
     client._supports_system_prompts = True
 
     return client
+
+
+def test_bedrock_llm_config_entry():
+    bedrock_llm_config = BedrockLLMConfigEntry(
+        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        aws_region="us-east-1",
+        aws_access_key="test_access_key_id",
+        aws_secret_key="test_secret_access_key",
+        aws_session_token="test_session_token",
+        temperature=0.8,
+        topP=0.6,
+        stream=False,
+    )
+    expected = {
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "aws_region": "us-east-1",
+        "aws_access_key": "test_access_key_id",
+        "aws_secret_key": "test_secret_access_key",
+        "aws_session_token": "test_session_token",
+        "temperature": 0.8,
+        "topP": 0.6,
+        "stream": False,
+        "tags": [],
+        "supports_system_prompts": True,
+    }
+    actual = bedrock_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[bedrock_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
+
+    with pytest.raises(ValidationError) as e:
+        bedrock_llm_config = BedrockLLMConfigEntry(
+            model="anthropic.claude-3-sonnet-20240229-v1:0", aws_region="us-east-1", price=["0.1"]
+        )
+    assert " List should have at least 2 items after validation, not 1" in str(e.value)
 
 
 # Test initialization and configuration
