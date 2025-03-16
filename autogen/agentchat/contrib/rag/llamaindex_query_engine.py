@@ -176,14 +176,14 @@ class LlamaIndexQueryEngine:
             logger.info(f"Loading docs from directory: {input_dir}")
             if not os.path.exists(input_dir):
                 raise ValueError(f"Input directory not found: {input_dir}")
-            loaded_documents.extend(self.file_reader_class(input_dir=input_dir).load_data())  # type: ignore[call-arg]
+            loaded_documents.extend(self.file_reader_class(input_dir=input_dir).load_data())  # type: ignore[operator, call-arg]
 
         if input_docs:
             for doc in input_docs:
                 logger.info(f"Loading input doc: {doc}")
                 if not os.path.exists(doc):
                     raise ValueError(f"Document file not found: {doc}")
-            loaded_documents.extend(self.file_reader_class(input_files=input_docs).load_data())  # type: ignore[call-arg]
+            loaded_documents.extend(self.file_reader_class(input_files=input_docs).load_data())  # type: ignore[operator, call-arg]
 
         if not input_dir and not input_docs:
             raise ValueError("No input directory or docs provided!")
