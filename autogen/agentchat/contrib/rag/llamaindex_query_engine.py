@@ -45,7 +45,7 @@ class LlamaIndexQueryEngine:
         self,
         vector_store: "BasePydanticVectorStore",
         llm: Optional["LLM"] = None,
-        file_reader_class: Optional["BaseReader"] = None,
+        file_reader_class: Optional[type["BaseReader"]] = None,
     ) -> None:
         """
         Initializes the LlamaIndexQueryEngine with the given vector store.
