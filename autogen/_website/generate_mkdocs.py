@@ -595,12 +595,12 @@ def transform_admonition_blocks(content: str) -> str:
 
                     # Remove common indentation and add 4-space indent
                     processed_content = []
-                    for l in admonition_content:
-                        if l.strip():
-                            if len(l) >= min_indent:
-                                processed_content.append("    " + l[min_indent:])
+                    for line in admonition_content:
+                        if line.strip():
+                            if len(line) >= min_indent:
+                                processed_content.append("    " + line[min_indent:])
                             else:
-                                processed_content.append("    " + l.lstrip())
+                                processed_content.append("    " + line.lstrip())
                         else:
                             processed_content.append("")
                 else:
