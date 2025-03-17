@@ -6,18 +6,21 @@ import logging
 import sys
 
 import pytest
-from chromadb import HttpClient
-from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from autogen.agentchat.contrib.rag import LlamaIndexQueryEngine, RAGQueryEngine
-from autogen.import_utils import skip_on_missing_imports
+from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
 from ....conftest import reason
+
+with optional_import_block():
+    from chromadb import HttpClient
+    from llama_index.vector_stores.chroma import ChromaVectorStore
 
 """
 This test file contains tests for the LlamaIndexQueryEngine class in the rag module.
 Please set your OPENAI_API_KEY in your environment variables before running these tests.
 """
+
 
 logger = logging.getLogger(__name__)
 reason = "do not run on MacOS or windows OR dependency is not installed OR " + reason
