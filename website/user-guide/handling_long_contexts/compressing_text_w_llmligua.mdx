@@ -86,7 +86,7 @@ config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 # Define your agent; the user proxy and an assistant
 researcher = autogen.ConversableAgent(
     "assistant",
-    llm_config={"config_list": config_list},
+    llm_config=autogen.LLMConfig(config_list=config_list),
     max_consecutive_auto_reply=1,
     system_message=system_message,
     human_input_mode="NEVER",
@@ -146,7 +146,7 @@ config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
 
 researcher = autogen.ConversableAgent(
     "assistant",
-    llm_config={"config_list": config_list},
+    llm_config=autogen.LLMConfig(config_list=config_list),
     max_consecutive_auto_reply=1,
     system_message=system_message,
     human_input_mode="NEVER",

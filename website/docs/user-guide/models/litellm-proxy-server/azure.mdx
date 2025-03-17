@@ -58,7 +58,7 @@ To confirm that `config.yaml` is correctly mounted, check the logs:
 To communicate with LiteLLM, configure the model in `config_list` and initiate a chat session.
 
 ```python
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 config_list = [
     {
@@ -73,7 +73,7 @@ user_proxy = UserProxyAgent(
 )
 assistant = AssistantAgent(
     name="assistant",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 
 

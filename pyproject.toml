@@ -163,9 +163,8 @@ google-search = [
 
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.22",
+    "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.22",
     "llama-index-readers-web==0.3.7",
 ]
 
