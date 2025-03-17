@@ -153,29 +153,20 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.code_utils import content_str
 
-config_list_gemini = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gemini-1.5-pro"],
-    },
-)
+llm_config_gemini = LLMConfig(path="OAI_CONFIG_LIST").where(model=["gemini-1.5-pro"])
 
-config_list_gemini_vision = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gemini-pro-vision"],
-    },
-)
+llm_config_gemini_vision = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(model=["gemini-pro-vision"])
 
-for config_list in [config_list_gemini, config_list_gemini_vision]:
-    for config_list_item in config_list:
-        config_list_item["safety_settings"] = safety_settings
+for llm_config in [llm_config_gemini, llm_config_gemini_vision]:
+    for config_list_item in llm_config.config_list:
+        config_list_item.safety_settings = safety_settings
 
 seed = 25  # for caching
+llm_config_gemini.seed = seed
 
 assistant = AssistantAgent(
     "assistant",
-    llm_config=LLMConfig(config_list=config_list_gemini, seed=seed),
+    llm_config=llm_config_gemini,
     max_consecutive_auto_reply=3
 )
 
