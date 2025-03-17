@@ -5,6 +5,7 @@
 import functools
 import json
 import os
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
@@ -284,7 +285,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         d = self.model_dump()
         r = [f"{k}={repr(v)}" for k, v in d.items()]
 
-        return f"LLMConfig({', '.join(r)})"
+        s = f"LLMConfig({', '.join(r)})"
+        # Replace api_key values with stars for security
+        s = re.sub(r"(['\"])api_key\1:\s*(['\"])([^'\"]*)(?:\2)", r"\1api_key\1: \2**********\2", s)
+        return s
 
     def __str__(self) -> str:
         return repr(self)

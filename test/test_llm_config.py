@@ -782,12 +782,12 @@ class TestLLMConfig:
 
     def test_repr(self, openai_llm_config: LLMConfig) -> None:
         actual = repr(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': 'sk-mockopenaiAPIkeysinexpectedformatsfortestingonly', 'tags': []}])"
+        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
         assert actual == expected, actual
 
     def test_str(self, openai_llm_config: LLMConfig) -> None:
         actual = str(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': 'sk-mockopenaiAPIkeysinexpectedformatsfortestingonly', 'tags': []}])"
+        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
         assert actual == expected, actual
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
