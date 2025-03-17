@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import tempfile
 from _collections_abc import dict_items, dict_keys, dict_values
 from typing import Any
 
@@ -777,3 +778,29 @@ class TestLLMConfig:
         actual = str(openai_llm_config)
         expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': 'sk-mockopenaiAPIkeysinexpectedformatsfortestingonly', 'tags': []}])"
         assert actual == expected, actual
+
+    def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
+        expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        actual = LLMConfig.from_json(env="LLM_CONFIG")
+        assert isinstance(actual, LLMConfig)
+        assert actual == expected, actual
+
+        with pytest.raises(ValueError) as e:
+            LLMConfig.from_json(env="INVALID_ENV")
+        assert str(e.value) == "Environment variable 'INVALID_ENV' not found"
+
+    def test_from_json_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            file_path = f"{tmpdirname}/llm_config.json"
+            with open(file_path, "w") as f:
+                f.write(JSON_SAMPLE)
+
+            expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+            actual = LLMConfig.from_json(path=file_path)
+            assert isinstance(actual, LLMConfig)
+            assert actual == expected, actual
+
+        with pytest.raises(ValueError) as e:
+            LLMConfig.from_json(path="invalid_path")
+        assert str(e.value) == "File 'invalid_path' not found"

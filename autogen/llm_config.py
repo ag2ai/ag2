@@ -4,9 +4,11 @@
 
 import functools
 import json
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
@@ -170,6 +172,32 @@ class LLMConfig:
 
         d["config_list"] = filtered_config_list
         return LLMConfig(**d)
+
+    @classmethod
+    def from_json(cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None) -> "LLMConfig":
+        if env is None and path is None:
+            raise ValueError("Either 'env' or 'path' must be provided")
+        if env is not None and path is not None:
+            raise ValueError("Only one of 'env' or 'path' can be provided")
+
+        if env is not None:
+            config_list_str = os.environ.get(env)
+            if config_list_str is None:
+                raise ValueError(f"Environment variable '{env}' not found")
+            config_list = json.loads(config_list_str)
+        elif path is not None:
+            path = Path(path)
+            if not path.exists():
+                raise ValueError(f"File '{path}' not found")
+            with path.open("r") as f:
+                config_list = json.load(f)
+
+        if isinstance(config_list, dict):
+            return LLMConfig(**config_list)
+        elif isinstance(config_list, list):
+            return LLMConfig(config_list=config_list)
+        else:
+            raise ValueError(f"Expected a list or dict, got {type(config_list)}")
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
