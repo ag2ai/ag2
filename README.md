@@ -93,14 +93,15 @@ You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
 Create a script or a Jupyter Notebook and run your first agent.
 
 ```python
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, LLMConfig
 
-llm_config = {
-    "config_list": config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-}
+llm_config = LLMConfig(
+    config_list=config_list_from_json(env_or_file="OAI_CONFIG_LIST")
+)
 
-assistant = AssistantAgent("assistant", llm_config=llm_config)
-user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
+with llm_config:
+    assistant = AssistantAgent("assistant", llm_config=llm_config)
+    user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
 # This initiates an automated chat between the two agents to solve the task
 ```

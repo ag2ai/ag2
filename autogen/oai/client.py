@@ -240,6 +240,7 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
 @register_llm_config
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -248,6 +249,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
+    azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError

@@ -39,7 +39,7 @@ import os
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.interop import Interoperability
 ```
 
@@ -59,7 +59,7 @@ user_proxy = UserProxyAgent(
 
 chatbot = AssistantAgent(
     name="chatbot",
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 ```
 

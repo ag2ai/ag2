@@ -7,8 +7,9 @@ import json
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Annotated, Any, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
 
+from httpx import Client as httpxClient
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
 
 if TYPE_CHECKING:
@@ -97,7 +98,24 @@ class LLMConfig:
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(self, **kwargs: Any) -> None:
-        modified_kwargs = kwargs if "config_list" in kwargs else {"config_list": [kwargs]}
+        outside_properties = list((self._get_base_model_class()).model_json_schema()["properties"].keys())
+        outside_properties.remove("config_list")
+
+        if "config_list" in kwargs and isinstance(kwargs["config_list"], dict):
+            kwargs["config_list"] = [kwargs["config_list"]]
+
+        modified_kwargs = (
+            kwargs
+            if "config_list" in kwargs
+            else {
+                **{
+                    "config_list": [
+                        {k: v for k, v in kwargs.items() if k not in outside_properties},
+                    ]
+                },
+                **{k: v for k, v in kwargs.items() if k in outside_properties},
+            }
+        )
 
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
@@ -275,11 +293,13 @@ class LLMConfigEntry(BaseModel, ABC):
     max_tokens: Optional[int] = None
     base_url: Optional[AnyUrl] = None
     model_client_cls: Optional[str] = None
+    http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
+    default_headers: Optional[Mapping[str, Any]] = None
     tags: list[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...

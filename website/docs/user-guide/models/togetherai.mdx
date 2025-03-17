@@ -134,7 +134,7 @@ config_list = [
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
@@ -165,7 +165,7 @@ IMPORTANT: Wait for the user to execute your code and then you can reply with th
 assistant_agent = AssistantAgent(
     name="Together Assistant",
     system_message=system_message,
-    llm_config={"config_list": config_list},
+    llm_config=LLMConfig(config_list=config_list),
 )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
@@ -287,13 +287,13 @@ from autogen import ConversableAgent, register_function
 player_white = ConversableAgent(
     name="Player White",
     system_message="You are a chess player and you play as white. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
+    llm_config=LLMConfig(config_list=config_list, cache_seed=None),
 )
 
 player_black = ConversableAgent(
     name="Player Black",
     system_message="You are a chess player and you play as black. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
+    llm_config=LLMConfig(config_list=config_list, cache_seed=None),
 )
 
 board_proxy = ConversableAgent(

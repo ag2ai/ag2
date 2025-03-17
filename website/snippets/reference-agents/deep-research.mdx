@@ -63,9 +63,11 @@ Models like `gpt-4o-mini` often don’t perform well enough for complex tasks.
 </Tip>
 
 ```python
-llm_config = {
-    "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-}
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    config_list=[{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
+)
 
 agent = DeepResearchAgent(
     name="DeepResearchAgent",

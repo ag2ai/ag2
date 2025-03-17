@@ -1,10 +1,10 @@
 ```python
-from autogen import ConversableAgent, GroupChatManager, GroupChat
+from autogen import ConversableAgent, GroupChatManager, GroupChat, LLMConfig
 
-llm_config = {
-    "api_type": "openai",
-    "model": "gpt-4o-mini",
-}
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+)
 
 # Curriculum Standards Agent
 curriculum_agent = ConversableAgent(

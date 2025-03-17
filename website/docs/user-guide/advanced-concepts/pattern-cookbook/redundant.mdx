@@ -116,14 +116,15 @@ from autogen import (
     AfterWorkOption,
     initiate_swarm_chat,
     ContextExpression,
-    SwarmResult
+    SwarmResult,
+    LLMConfig,
 )
 
 # Redundant Pattern - multiple agents attempt the same task using different approaches,
 # then results are compared to select the best outcome or combine strengths
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False, "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False, cache_seed=None)
 
 # Shared context for tracking the conversation and redundant agent results
 shared_context = {
