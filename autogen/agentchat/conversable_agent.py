@@ -2366,8 +2366,15 @@ class ConversableAgent(LLMAgent):
                 termination_reason = "User requested to end the conversation"
 
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
+
         else:
-            if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
+            # Check max consecutive auto replies for both sender and recipient
+            if sender and sender._consecutive_auto_reply_counter.get(
+                self, 0
+            ) >= sender._max_consecutive_auto_reply_dict.get(self, float("inf")):
+                termination_reason = "Maximum number of consecutive auto-replies reached"
+                reply = "exit"
+            elif self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
                     termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"

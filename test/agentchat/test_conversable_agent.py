@@ -475,9 +475,8 @@ def test_generate_reply():
     messages = [{"function_call": {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}, "role": "assistant"}]
 
     # when sender is None, messages is provided
-    assert dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == 15, (
-        "generate_reply not working when sender is None"
-    )
+    actual = dummy_agent_2.generate_reply(messages=messages, sender=None)["content"]
+    assert actual == 15, "generate_reply not working when sender is None"
 
     # when sender is provided, messages is None
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
