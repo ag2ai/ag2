@@ -4,13 +4,17 @@
 
 import functools
 import json
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
+
+# from .oai.common_utils import _filter_config, _config_list_from_json
 
 if TYPE_CHECKING:
     from .oai.client import ModelClient
@@ -31,70 +35,24 @@ def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-class LLMConfigFilter(BaseModel):
-    filter_dict: dict[str, Any] = Field(default_factory=dict)
+# Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
+class MetaLLMConfig(type):
+    def __init__(cls, *args: Any, **kwargs: Any) -> None:
+        pass
 
-    # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid")
+    @property
+    def current(cls) -> "LLMConfig":
+        current_llm_config = LLMConfig.get_current_llm_config()
+        if current_llm_config is None:
+            raise ValueError("No current LLMConfig set. Are you inside a context block?")
+        return current_llm_config
 
-    def __init__(self, **kwargs: Any) -> None:
-        if "filter_dict" in kwargs:
-            f = kwargs.pop("filter_dict")
-            kwargs = {**f, **kwargs}
-        filter_dict = kwargs
-        super().__init__(filter_dict=filter_dict)
-
-    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return self.filter_dict
-
-    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        d = self.model_dump(*args, exclude_none=exclude_none, **kwargs)
-        return json.dumps(d)
-
-    def _getattr(self, key: str) -> Any:
-        return self.filter_dict[key]
-
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return self.filter_dict.get(key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return self._getattr(key=key)
-        except KeyError:
-            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        try:
-            self.filter_dict[key] = value
-        except ValueError:
-            raise ValueError(f"'{self.__class__.__name__}' object has no field '{key}'")
-
-    def __getattr__(self, name: Any) -> Any:
-        try:
-            return self._getattr(key=name)
-        except KeyError:
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-
-    def items(self) -> Iterable[tuple[str, Any]]:
-        return self.filter_dict.items()
-
-    def keys(self) -> Iterable[str]:
-        return self.filter_dict.keys()
-
-    def values(self) -> Iterable[Any]:
-        return self.filter_dict.values()
-
-    def __repr__(self) -> str:
-        # Iterate filter_dict and create a string representation
-        r = [f"{k}={repr(v)}" for k, v in self.filter_dict.items()]
-
-        return f"LLMConfigFilter({', '.join(r)})"
-
-    def __str__(self) -> str:
-        return str(self.filter_dict)
+    @property
+    def default(cls) -> "LLMConfig":
+        return cls.current
 
 
-class LLMConfig:
+class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(self, **kwargs: Any) -> None:
@@ -153,23 +111,28 @@ class LLMConfig:
         else:
             return value in criteria_values
 
-    def apply_filter(self, filter: Optional[LLMConfigFilter], exclude: bool = False) -> "LLMConfig":
-        if filter is None:
-            return self
+    @classmethod
+    def from_json(
+        cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None, **kwargs: Any
+    ) -> "LLMConfig":
+        from .oai.openai_utils import config_list_from_json
 
-        d = self.model_dump()
-        config_list = d["config_list"]
-        filtered_config_list = [
-            item
-            for item in config_list
-            if all(self._satisfies_criteria(item.get(key), values) != exclude for key, values in filter.items())
-        ]
+        if env is None and path is None:
+            raise ValueError("Either 'env' or 'path' must be provided")
+        if env is not None and path is not None:
+            raise ValueError("Only one of 'env' or 'path' can be provided")
 
+        config_list = config_list_from_json(env_or_file=env if env is not None else str(path))
+        return LLMConfig(config_list=config_list, **kwargs)
+
+    def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
+        from .oai.openai_utils import filter_config
+
+        filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
         if len(filtered_config_list) == 0:
-            raise ValueError(f"No config found that satisfies the filter criteria: {filter}")
+            raise ValueError(f"No config found that satisfies the filter criteria: {kwargs}")
 
-        d["config_list"] = filtered_config_list
-        return LLMConfig(**d)
+        return LLMConfig(config_list=filtered_config_list)
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
@@ -199,14 +162,10 @@ class LLMConfig:
 
     def _getattr(self, o: object, name: str) -> Any:
         val = getattr(o, name)
-        if isinstance(val, list) and name == "config_list":
-            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:
         val = getattr(self._model, key, default)
-        if isinstance(val, list) and key == "config_list":
-            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def __getitem__(self, key: str) -> Any:
@@ -227,14 +186,26 @@ class LLMConfig:
         except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_model":
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._model, name, value)
+
     def __contains__(self, key: str) -> bool:
         return hasattr(self._model, key)
 
     def __repr__(self) -> str:
-        return repr(self._model).replace("_LLMConfig", self.__class__.__name__)
+        d = self.model_dump()
+        r = [f"{k}={repr(v)}" for k, v in d.items()]
+
+        s = f"LLMConfig({', '.join(r)})"
+        # Replace api_key values with stars for security
+        s = re.sub(r"(['\"])api_key\1:\s*(['\"])([^'\"]*)(?:\2)", r"\1api_key\1: \2**********\2", s)
+        return s
 
     def __str__(self) -> str:
-        return str(self._model)
+        return repr(self)
 
     def items(self) -> Iterable[tuple[str, Any]]:
         d = self.model_dump()
@@ -291,7 +262,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
-    base_url: Optional[AnyUrl] = None
+    base_url: Optional[HttpUrl] = None
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
@@ -303,6 +274,13 @@ class LLMConfigEntry(BaseModel, ABC):
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
+        if not str(v).startswith("https://") and not str(v).startswith("http://"):
+            v = f"http://{str(v)}"
+        return v
 
     @field_serializer("base_url")
     def serialize_base_url(self, v: Any) -> Any:
@@ -335,6 +313,21 @@ class LLMConfigEntry(BaseModel, ABC):
 
     def __setitem__(self, key: str, value: Any) -> None:
         setattr(self, key, value)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
+    def items(self) -> Iterable[tuple[str, Any]]:
+        d = self.model_dump()
+        return d.items()
+
+    def keys(self) -> Iterable[str]:
+        d = self.model_dump()
+        return d.keys()
+
+    def values(self) -> Iterable[Any]:
+        d = self.model_dump()
+        return d.values()
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []
