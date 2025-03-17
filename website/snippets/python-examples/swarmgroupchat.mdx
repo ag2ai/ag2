@@ -1,7 +1,7 @@
 ```python
-from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat
+from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # 1. Create our agents
 planner_message = """You are a classroom lesson planner.

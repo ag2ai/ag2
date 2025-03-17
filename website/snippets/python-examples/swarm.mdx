@@ -7,9 +7,10 @@ from autogen import (
     SwarmResult,
     initiate_swarm_chat,
     register_hand_off,
+    LLMConfig,
 )
 
-llm_config = {"api_type": "openai", "model": "gpt-4o", "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o", cache_seed=None)
 
 # 1. Context
 shared_context = {

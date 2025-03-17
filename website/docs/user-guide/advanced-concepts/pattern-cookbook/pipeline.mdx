@@ -109,14 +109,15 @@ from autogen import (
     AfterWorkOption,
     initiate_swarm_chat,
     ContextExpression,
-    SwarmResult
+    SwarmResult,
+    LLMConfig,
 )
 
 # E-commerce order processing pipeline
 # Each agent handles a specific stage of order processing in sequence
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False, "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False, cache_seed=None)
 
 # Shared context for tracking order processing state
 shared_context = {

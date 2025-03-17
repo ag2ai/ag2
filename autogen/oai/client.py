@@ -16,7 +16,7 @@ import warnings
 from functools import lru_cache
 from typing import Any, Callable, Literal, Optional, Protocol, Union
 
-from pydantic import AnyUrl, BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, HttpUrl, ValidationInfo, field_validator
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
@@ -240,6 +240,7 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
 @register_llm_config
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -248,6 +249,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
+    azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
@@ -256,7 +258,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
-    base_url: AnyUrl = AnyUrl("https://api.deepseek.com/v1")
+    base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
