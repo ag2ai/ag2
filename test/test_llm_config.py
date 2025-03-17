@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import tempfile
 from _collections_abc import dict_items, dict_keys, dict_values
 from typing import Any
 
 import pytest
 
-from autogen.llm_config import LLMConfig, LLMConfigFilter
+from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
@@ -50,87 +51,6 @@ JSON_SAMPLE = """
 """
 
 JSON_SAMPLE_DICT = json.loads(JSON_SAMPLE)
-
-
-class TestLLMConfigFilter:
-    @pytest.fixture
-    def llm_config_filter(self) -> LLMConfigFilter:
-        return LLMConfigFilter(api_type="openai", model=["gpt-4o-mini", "gpt-4o-small"])
-
-    def test_init(self) -> None:
-        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
-        assert isinstance(actual, LLMConfigFilter)
-        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
-
-        actual = LLMConfigFilter(**{"api_type": "openai", "model": "gpt-4o-mini"})
-        assert isinstance(actual, LLMConfigFilter)
-        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
-
-        actual = LLMConfigFilter(filter_dict={"api_type": "openai", "model": "gpt-4o-mini"})
-        assert isinstance(actual, LLMConfigFilter)
-        assert actual.filter_dict == {"api_type": "openai", "model": "gpt-4o-mini"}
-
-    def test_serialization(self, llm_config_filter: LLMConfigFilter) -> None:
-        actual = llm_config_filter.model_dump()
-        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
-        assert actual == expected
-
-        actual_model_dump_json = llm_config_filter.model_dump_json()
-        assert actual_model_dump_json == json.dumps(expected)
-
-    def test_deserialization(self, llm_config_filter: LLMConfigFilter) -> None:
-        actual = LLMConfigFilter(**llm_config_filter.model_dump())
-        assert actual == llm_config_filter
-
-    def test_get(self, llm_config_filter: LLMConfigFilter) -> None:
-        assert llm_config_filter.get("api_type") == "openai"
-        assert llm_config_filter.get("model") == ["gpt-4o-mini", "gpt-4o-small"]
-        assert llm_config_filter.get("doesnt_exists") is None
-        assert llm_config_filter.get("doesnt_exists", "default") == "default"
-
-    def test_getattr(self, llm_config_filter: LLMConfigFilter) -> None:
-        assert llm_config_filter.api_type == "openai"
-        assert llm_config_filter.model == ["gpt-4o-mini", "gpt-4o-small"]
-        with pytest.raises(AttributeError) as e:
-            llm_config_filter.wrong_key
-        assert str(e.value) == "'LLMConfigFilter' object has no attribute 'wrong_key'"
-
-    def test_get_item_and_set_item(self, llm_config_filter: LLMConfigFilter) -> None:
-        # Test __getitem__
-        assert llm_config_filter["api_type"] == "openai"
-        assert llm_config_filter["model"] == ["gpt-4o-mini", "gpt-4o-small"]
-        with pytest.raises(KeyError) as e:
-            llm_config_filter["wrong_key"]
-        assert str(e.value) == "\"Key 'wrong_key' not found in LLMConfigFilter\""
-
-        # Test __setitem__
-        assert llm_config_filter["api_type"] == "openai"
-        llm_config_filter["api_type"] = "azure"
-        assert llm_config_filter["api_type"] == "azure"
-        llm_config_filter["api_type"] = "openai"
-        assert llm_config_filter["api_type"] == "openai"
-
-    def test_items(self, llm_config_filter: LLMConfigFilter) -> None:
-        actual = llm_config_filter.items()
-        assert isinstance(actual, dict_items)
-        expected = {"api_type": "openai", "model": ["gpt-4o-mini", "gpt-4o-small"]}
-        assert dict(actual) == expected
-
-    def test_keys(self, llm_config_filter: LLMConfigFilter) -> None:
-        actual = llm_config_filter.keys()
-        assert isinstance(actual, dict_keys)
-        expected = ["api_type", "model"]
-        assert list(actual) == expected
-
-    def test_values(self, llm_config_filter: LLMConfigFilter) -> None:
-        actual = llm_config_filter.values()
-        assert isinstance(actual, dict_values)
-        expected = ["openai", ["gpt-4o-mini", "gpt-4o-small"]]
-        assert list(actual) == expected
-
-    def test_repr(self) -> None:
-        actual = LLMConfigFilter(api_type="openai", model="gpt-4o-mini")
-        assert repr(actual) == "LLMConfigFilter(api_type='openai', model='gpt-4o-mini')"
 
 
 @pytest.fixture
@@ -591,7 +511,7 @@ class TestLLMConfig:
         assert type(actual._model) == type(openai_llm_config._model)
         assert actual._model == openai_llm_config._model
         assert actual == openai_llm_config
-        assert isinstance(actual.config_list[0], dict)
+        assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
 
     def test_get(self, openai_llm_config: LLMConfig) -> None:
         assert openai_llm_config.get("temperature") == 0.5
@@ -608,6 +528,11 @@ class TestLLMConfig:
         with pytest.raises(AttributeError) as e:
             openai_llm_config.wrong_key
         assert str(e.value) == "'LLMConfig' object has no attribute 'wrong_key'"
+
+    def test_setattr(self, openai_llm_config: LLMConfig) -> None:
+        assert openai_llm_config.temperature == 0.5
+        openai_llm_config.temperature = 0.8
+        assert openai_llm_config.temperature == 0.8
 
     def test_get_item_and_set_item(self, openai_llm_config: LLMConfig) -> None:
         # Test __getitem__
@@ -689,7 +614,13 @@ class TestLLMConfig:
         }
 
         def test_unpacking(**kwargs: Any) -> None:
-            assert kwargs == expected, kwargs
+            for k, v in expected.items():
+                assert k in kwargs
+                if k == "config_list":
+                    assert kwargs[k][0].model_dump() == v[0]  # type: ignore[index]
+                else:
+                    assert kwargs[k] == v
+            # assert kwargs == expected, kwargs
 
         test_unpacking(**openai_llm_config)
 
@@ -752,18 +683,88 @@ class TestLLMConfig:
             ),
         ],
     )
-    def test_apply_filter(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
+    def test_where(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
         openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
-        llm_config_filter = LLMConfigFilter(**filter_dict)
 
-        actual = openai_llm_config.apply_filter(llm_config_filter, exclude=exclude)
+        actual = openai_llm_config.where(**filter_dict, exclude=exclude)
         assert isinstance(actual, LLMConfig)
-        assert actual.config_list == expected
+        assert actual.config_list == LLMConfig(config_list=expected).config_list
 
-    def test_apply_filter_invalid_filter(self) -> None:
+    def test_where_invalid_filter(self) -> None:
         openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
-        llm_config_filter = LLMConfigFilter(api_type="invalid")
 
         with pytest.raises(ValueError) as e:
-            openai_llm_config.apply_filter(llm_config_filter)
-        assert str(e.value) == f"No config found that satisfies the filter criteria: {llm_config_filter}"
+            openai_llm_config.where(api_type="invalid")
+        assert str(e.value) == "No config found that satisfies the filter criteria: {'api_type': 'invalid'}"
+
+    def test_repr(self, openai_llm_config: LLMConfig) -> None:
+        actual = repr(openai_llm_config)
+        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
+        assert actual == expected, actual
+
+    def test_str(self, openai_llm_config: LLMConfig) -> None:
+        actual = str(openai_llm_config)
+        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
+        assert actual == expected, actual
+
+    def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
+        expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        actual = LLMConfig.from_json(env="LLM_CONFIG")
+        assert isinstance(actual, LLMConfig)
+        assert actual == expected, actual
+
+    @pytest.mark.xfail(reason="Currently raises FileNotFoundError")
+    def test_from_json_env_not_found(self) -> None:
+        with pytest.raises(ValueError) as e:
+            LLMConfig.from_json(env="INVALID_ENV")
+        assert str(e.value) == "Environment variable 'INVALID_ENV' not found"
+
+    def test_from_json_env_with_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
+        expected = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.5, check_every_ms=1000, cache_seed=42)
+        actual = LLMConfig.from_json(env="LLM_CONFIG", temperature=0.5, check_every_ms=1000, cache_seed=42)
+        assert isinstance(actual, LLMConfig)
+        assert actual == expected, actual
+
+    def test_from_json_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            file_path = f"{tmpdirname}/llm_config.json"
+            with open(file_path, "w") as f:
+                f.write(JSON_SAMPLE)
+
+            expected = LLMConfig(config_list=JSON_SAMPLE_DICT)
+            actual = LLMConfig.from_json(path=file_path)
+            assert isinstance(actual, LLMConfig)
+            assert actual == expected, actual
+
+        with pytest.raises(FileNotFoundError) as e:
+            LLMConfig.from_json(path="invalid_path")
+        assert "No such file or directory: 'invalid_path'" in str(e.value)
+
+    def test_current(self) -> None:
+        llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+
+        # Test without context. Should raise an error
+        expected_error = "No current LLMConfig set. Are you inside a context block?"
+        with pytest.raises(ValueError) as e:
+            LLMConfig.current
+        assert str(e.value) == expected_error
+        with pytest.raises(ValueError) as e:
+            LLMConfig.default
+        assert str(e.value) == expected_error
+
+        with llm_config:
+            assert LLMConfig.get_current_llm_config() == llm_config
+            assert LLMConfig.current == llm_config
+            assert LLMConfig.default == llm_config
+
+            with LLMConfig.current.where(api_type="openai"):
+                assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai")
+                assert LLMConfig.current == llm_config.where(api_type="openai")
+                assert LLMConfig.default == llm_config.where(api_type="openai")
+
+                with LLMConfig.default.where(model="gpt-4"):
+                    assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai", model="gpt-4")
+                    assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
+                    assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")

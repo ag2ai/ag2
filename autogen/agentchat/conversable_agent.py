@@ -43,7 +43,7 @@ from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
-from ..llm_config import LLMConfig, LLMConfigFilter
+from ..llm_config import LLMConfig
 from ..messages.agent_messages import (
     ClearConversableAgentHistoryMessage,
     ClearConversableAgentHistoryWarningMessage,
@@ -153,7 +153,6 @@ class ConversableAgent(LLMAgent):
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
         llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        llm_config_filter: Optional[Union[LLMConfigFilter, dict[str, Any]]] = None,
         default_auto_reply: Union[str, dict[str, Any]] = "",
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
@@ -205,8 +204,6 @@ class ConversableAgent(LLMAgent):
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
                 When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
-            llm_config_filter (LLMConfigFilter or dict): llm config filter to filter the llm config.
-                It can be a dict or an instance of LLMConfigFilter.
             default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.
             description (str): a short description of the agent. This description is used by other agents
                 (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
@@ -257,13 +254,7 @@ class ConversableAgent(LLMAgent):
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/topics/llm_configuration#adding-http-client-in-llm-config-for-proxy"
                 ) from e
 
-        self._llm_config_filter = (
-            LLMConfigFilter(**llm_config_filter) if isinstance(llm_config_filter, dict) else llm_config_filter
-        )
-        self.llm_config = self._apply_llm_config_filter(
-            llm_config=self._validate_llm_config(llm_config),
-            llm_config_filter=self._llm_config_filter,
-        )
+        self.llm_config = self._validate_llm_config(llm_config)
         self.client = self._create_client(self.llm_config)
         self._validate_name(name)
         self._name = name
@@ -377,17 +368,12 @@ class ConversableAgent(LLMAgent):
         self._register_update_agent_state_before_reply(update_agent_state_before_reply)
 
     def _validate_name(self, name: str) -> None:
-        if not self.llm_config or "config_list" not in self.llm_config or len(self.llm_config["config_list"]) == 0:
+        if not self.llm_config:
             return
 
-        config_list = self.llm_config.get("config_list")
-        # The validation is currently done only for openai endpoints
-        # (other ones do not have the issue with whitespace in the name)
-        if "api_type" in config_list[0] and config_list[0]["api_type"] != "openai":
-            return
-
-        # Validation for name using regex to detect any whitespace
-        if re.search(r"\s", name):
+        if any([
+            entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)
+        ]):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
 
     def _get_display_name(self):
@@ -503,18 +489,6 @@ class ConversableAgent(LLMAgent):
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
 
         return llm_config
-
-    @classmethod
-    def _apply_llm_config_filter(
-        cls,
-        llm_config: Union[LLMConfig, Literal[False]],
-        llm_config_filter: Optional[LLMConfigFilter],
-        exclude: bool = False,
-    ) -> Union[LLMConfig, Literal[False]]:
-        if llm_config is False:
-            return llm_config
-
-        return llm_config.apply_filter(llm_config_filter, exclude=exclude)
 
     @classmethod
     def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[OpenAIWrapper]:
