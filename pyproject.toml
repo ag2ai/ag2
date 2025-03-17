@@ -236,7 +236,7 @@ test = [
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
     "pytest==8.3.5",
-    "mock==5.1.0",
+    "mock==5.2.0",
     "pandas==2.2.3",
     "fastapi==0.115.11",
     "dirty-equals==0.9.0",
