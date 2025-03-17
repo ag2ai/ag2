@@ -377,17 +377,12 @@ class ConversableAgent(LLMAgent):
         self._register_update_agent_state_before_reply(update_agent_state_before_reply)
 
     def _validate_name(self, name: str) -> None:
-        if not self.llm_config or "config_list" not in self.llm_config or len(self.llm_config["config_list"]) == 0:
+        if not self.llm_config:
             return
 
-        config_list = self.llm_config.get("config_list")
-        # The validation is currently done only for openai endpoints
-        # (other ones do not have the issue with whitespace in the name)
-        if "api_type" in config_list[0] and config_list[0]["api_type"] != "openai":
-            return
-
-        # Validation for name using regex to detect any whitespace
-        if re.search(r"\s", name):
+        if any([
+            entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)
+        ]):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
 
     def _get_display_name(self):
