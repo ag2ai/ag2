@@ -363,7 +363,7 @@ class LLMConfigEntry(BaseModel, ABC):
 
     @field_validator("base_url", mode="before")
     @classmethod
-    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
+    def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
         if not str(v).startswith("https://") and not str(v).startswith("http://"):
             v = f"http://{str(v)}"
         return v
