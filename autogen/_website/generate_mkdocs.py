@@ -510,6 +510,157 @@ def add_front_matter_to_metadata_yml(
         f.write("\n")
 
 
+def transform_admonition_blocks(content: str) -> str:
+    """Transform admonition blocks from ::: syntax to Material for MkDocs syntax.
+
+    Converts blocks like:
+    :::info Requirements
+    content here
+    :::
+
+    To:
+    !!! info "Requirements"
+        content here
+
+    Args:
+        content: String containing ::: syntax admonition blocks
+
+    Returns:
+        String with Material for MkDocs admonition blocks
+    """
+
+    tag_mappings = {
+        "Tip": "tip",
+        "Warning": "warning",
+        "Note": "note",
+        "Danger": "danger",
+    }
+
+    # Simplified approach: first detect admonition blocks boundaries
+    lines = content.split("\n")
+    admonition_start = None
+    admonition_type = None
+    admonition_title = None
+    admonition_content: list[str] = []
+    result_lines = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        # Check for admonition start
+        if line.strip().startswith(":::") and admonition_start is None:
+            admonition_start = i
+            # Extract admonition type and optional title
+            match = re.match(r":::(\w+)(?:\s+(.+))?", line.strip())
+            if match:
+                admonition_type = match.group(1)
+                admonition_title = match.group(2) if match.group(2) else ""
+            else:
+                # No match for admonition type means we couldn't parse the format
+                admonition_type = None
+            i += 1
+            continue
+
+        # Check for admonition end
+        elif line.strip() == ":::" and admonition_start is not None:
+            # If admonition_type is None, preserve the original content
+            if admonition_type is None:
+                # Add back the original admonition block without transformation
+                original_lines = []
+                original_lines.append(lines[admonition_start])  # Opening :::
+                original_lines.extend(admonition_content)  # Content
+                original_lines.append(line)  # Closing :::
+                result_lines.extend(original_lines)
+            else:
+                # Process as before for valid admonition types
+                # Map the admonition type
+                if admonition_type in tag_mappings:
+                    mapped_type = tag_mappings[admonition_type]
+                else:
+                    # Try case-insensitive match
+                    for tag, mapped in tag_mappings.items():
+                        if tag.lower() == admonition_type.lower():
+                            mapped_type = mapped
+                            break
+                    else:
+                        # Default to lowercase of original if no mapping found
+                        mapped_type = admonition_type.lower()
+
+                # Process indentation
+                if admonition_content:
+                    # Find minimum common indentation
+                    non_empty_lines = [line for line in admonition_content if line.strip()]
+                    min_indent = min((len(line) - len(line.lstrip()) for line in non_empty_lines), default=0)
+
+                    # Remove common indentation and add 4-space indent
+                    processed_content = []
+                    for l in admonition_content:
+                        if l.strip():
+                            if len(l) >= min_indent:
+                                processed_content.append("    " + l[min_indent:])
+                            else:
+                                processed_content.append("    " + l.lstrip())
+                        else:
+                            processed_content.append("")
+                else:
+                    processed_content = []
+
+                # Create the MkDocs admonition
+                if admonition_title:
+                    mkdocs_admonition = [f'!!! {mapped_type} "{admonition_title}"'] + processed_content
+                else:
+                    mkdocs_admonition = [f"!!! {mapped_type}"] + processed_content
+
+                # Add the processed admonition
+                result_lines.extend(mkdocs_admonition)
+
+            # Reset admonition tracking
+            admonition_start = None
+            admonition_type = None
+            admonition_title = None
+            admonition_content = []
+            i += 1
+            continue
+
+        elif admonition_start is not None:
+            admonition_content.append(line)
+            i += 1
+            continue
+
+        else:
+            result_lines.append(line)
+            i += 1
+
+    if admonition_start is not None:
+        for j in range(admonition_start, len(lines)):
+            result_lines.append(lines[j])
+
+    return "\n".join(result_lines)
+
+
+def remove_mdx_code_blocks(content: str) -> str:
+    """Remove ````mdx-code-block and ```` markers from the content.
+
+    This function removes the mdx-code-block markers while preserving the content inside.
+
+    Args:
+        content: String containing mdx-code-block markers
+
+    Returns:
+        String with mdx-code-block markers removed
+    """
+
+    # Pattern to match mdx-code-block sections
+    # Captures everything between ````mdx-code-block and ````
+    pattern = re.compile(r"````mdx-code-block\n(.*?)\n````", re.DOTALL)
+
+    # Replace with just the content (group 1)
+    result = pattern.sub(r"\1", content)
+
+    return result
+
+
 @require_optional_import("yaml", "docs")
 def post_process_func(
     rendered_mdx: Path,
@@ -573,8 +724,11 @@ def post_process_func(
     # ensure editUrl is present
     # content = ensure_edit_url(content, repo_relative_notebook)
 
-    # Remove ::: from content
-    content = content.replace(":::", "")
+    # Remove admonition blocks
+    content = transform_admonition_blocks(content)
+
+    # Remove mdx-code-block markers
+    content = remove_mdx_code_blocks(content)
 
     # Rewrite the content as
     # ---

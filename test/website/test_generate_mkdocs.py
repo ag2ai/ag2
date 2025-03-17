@@ -21,6 +21,8 @@ from autogen._website.generate_mkdocs import (
     process_and_copy_files,
     process_blog_contents,
     process_blog_files,
+    remove_mdx_code_blocks,
+    transform_admonition_blocks,
     transform_card_grp_component,
     transform_tab_component,
 )
@@ -481,6 +483,278 @@ def test_generate_url_slug() -> None:
         expected = "\nslug: DeepResearchAgent"
 
         assert actual == expected
+
+
+class TestRemoveMdxCodeBlocks:
+    def test_simple_example(self) -> None:
+        """Test with the example provided in the requirements."""
+        input_content = """````mdx-code-block
+!!! info "Requirements"
+    Some extra dependencies are needed for this notebook, which can be installed via pip:
+
+    ```bash
+    pip install pyautogen[openai,lmm]
+    ```
+
+    For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
+````"""
+
+        expected_output = """!!! info "Requirements"
+    Some extra dependencies are needed for this notebook, which can be installed via pip:
+
+    ```bash
+    pip install pyautogen[openai,lmm]
+    ```
+
+    For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2)."""
+
+        assert remove_mdx_code_blocks(input_content) == expected_output
+
+    def test_multiple_blocks(self) -> None:
+        """Test with multiple mdx-code-blocks in the content."""
+        input_content = """Some text before
+
+````mdx-code-block
+!!! note
+    This is a note
+````
+
+Some text in between
+
+````mdx-code-block
+!!! warning
+    This is a warning
+````
+
+Some text after"""
+
+        expected_output = """Some text before
+
+!!! note
+    This is a note
+
+Some text in between
+
+!!! warning
+    This is a warning
+
+Some text after"""
+
+        assert remove_mdx_code_blocks(input_content) == expected_output
+
+    def test_no_mdx_blocks(self) -> None:
+        """Test with content that doesn't have any mdx-code-blocks."""
+        input_content = """# Regular Markdown
+
+This is some regular markdown content.
+
+```python
+def regular_code():
+    return "not inside mdx-code-block"
+```"""
+
+        assert remove_mdx_code_blocks(input_content) == input_content
+
+
+class TestTransformAdmonitionBlocks:
+    def test_basic_admonition(self) -> None:
+        """Test basic admonition block without a title."""
+        content = """
+Some text before
+
+:::note
+This is a simple note.
+:::
+
+Some text after
+"""
+        expected = """
+Some text before
+
+!!! note
+    This is a simple note.
+
+Some text after
+"""
+        actual = transform_admonition_blocks(content)
+        assert actual == expected
+
+    def test_admonition_with_title(self) -> None:
+        """Test admonition block with a title."""
+        content = """
+:::warning Important Alert
+This is a warning with a title.
+:::
+"""
+        expected = """
+!!! warning "Important Alert"
+    This is a warning with a title.
+"""
+        actual = transform_admonition_blocks(content)
+        assert actual == expected
+
+    def test_multiple_admonitions(self) -> None:
+        """Test multiple admonition blocks in the same content."""
+        content = """
+:::tip
+Tip content
+:::
+
+Some text in between
+
+:::danger Caution
+Danger content
+:::
+"""
+        expected = """
+!!! tip
+    Tip content
+
+Some text in between
+
+!!! danger "Caution"
+    Danger content
+"""
+        actual = transform_admonition_blocks(content)
+        assert actual == expected
+
+    def test_admonition_with_multiline_content(self) -> None:
+        """Test admonition with multiple lines of content."""
+        content = """
+:::note
+Line 1
+Line 2
+Line 3
+:::
+"""
+        expected = """
+!!! note
+    Line 1
+    Line 2
+    Line 3
+"""
+        assert transform_admonition_blocks(content) == expected
+
+    def test_admonition_with_indented_content(self) -> None:
+        """Test admonition with indented content."""
+        content = """
+:::note
+    This line is indented.
+        This line is more indented.
+    Back to first level.
+:::
+"""
+        expected = """
+!!! note
+    This line is indented.
+        This line is more indented.
+    Back to first level.
+"""
+        assert transform_admonition_blocks(content) == expected
+
+    def test_admonition_with_code_block(self) -> None:
+        """Test admonition containing a code block."""
+        content = """
+:::tip Code Example
+Here's some code:
+
+```python
+def hello():
+    print("Hello world")
+```
+:::
+"""
+        expected = """
+!!! tip "Code Example"
+    Here's some code:
+
+    ```python
+    def hello():
+        print("Hello world")
+    ```
+"""
+        actual = transform_admonition_blocks(content)
+        assert actual == expected
+
+    def test_admonition_with_lists(self) -> None:
+        """Test admonition containing lists."""
+        content = """
+:::note
+- Item 1
+- Item 2
+  - Nested item
+- Item 3
+:::
+"""
+        expected = """
+!!! note
+    - Item 1
+    - Item 2
+      - Nested item
+    - Item 3
+"""
+        assert transform_admonition_blocks(content) == expected
+
+    def test_admonition_with_blockquotes(self) -> None:
+        """Test admonition containing blockquotes."""
+        content = """
+:::info
+Here's a quote:
+
+> This is a blockquote
+> Multiple lines
+:::
+"""
+        expected = """
+!!! info
+    Here's a quote:
+
+    > This is a blockquote
+    > Multiple lines
+"""
+        actual = transform_admonition_blocks(content)
+        assert actual == expected
+
+    def test_admonition_type_mapping(self) -> None:
+        """Test mapping of admonition types."""
+        content = """
+:::Tip
+This should map to lowercase 'tip'
+:::
+
+:::warning
+This should stay as 'warning'
+:::
+
+:::custom
+This should stay as 'custom'
+:::
+"""
+        expected = """
+!!! tip
+    This should map to lowercase 'tip'
+
+!!! warning
+    This should stay as 'warning'
+
+!!! custom
+    This should stay as 'custom'
+"""
+        assert transform_admonition_blocks(content) == expected
+
+    def test_invalid_syntax_admonition(self) -> None:
+        """Test that original content is preserved for malformed admonition syntax."""
+        content = """
+    Some text before
+
+    :::
+    This is missing a type specifier
+    :::
+
+    Some text after
+    """
+        # The output should be identical to the input
+        assert transform_admonition_blocks(content) == content
 
 
 @pytest.fixture

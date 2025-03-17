@@ -504,6 +504,11 @@ p.hero-subtitle {
     font-size: 0.55rem;
 }
 
+.examples-gallery-container .badges{
+    display: inline-block;
+    text-align: left;
+}
+
 .examples-gallery-container .badges a{
     display: inline-block;
 }

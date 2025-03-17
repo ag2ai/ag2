@@ -164,11 +164,11 @@ def render_gallery_html(gallery_file_path: Path) -> str:
                 github_href = f"https://github.com/ag2ai/ag2/blob/main/{notebook_src}"
                 badges_html = f"""
                 <div class="badges">
-                    <a style="margin-right: 5px" href="{colab_href}" target="_parent">
+                    <a style="margin-right: 5px" href="{colab_href}" target="_blank">
                         <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
                     </a>
                     <p class="hidden">{item.get("title", "")}</p>
-                    <a href="{github_href}" target="_parent">
+                    <a href="{github_href}" target="_blank">
                         <img alt="GitHub" src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"/>
                     </a>
                 </div>
