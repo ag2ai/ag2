@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAg
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
-from autogen.llm_config import LLMConfig, LLMConfigFilter
+from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
 
@@ -1901,52 +1901,6 @@ def test_validate_llm_config(
 ):
     actual = ConversableAgent._validate_llm_config(llm_config)
     assert actual == expected, f"{actual} != {expected}"
-
-
-@pytest.mark.parametrize(
-    "llm_config, llm_config_filter, expected",
-    [
-        (False, None, False),
-        (False, LLMConfigFilter(model="gpt-3"), False),
-        (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            None,
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-        ),
-        pytest.param(
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            LLMConfigFilter(model="gpt-4"),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
-        ),
-        pytest.param(
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3"), OpenAILLMConfigEntry(model="gpt-4")]),
-            LLMConfigFilter(
-                model="gpt-4",
-            ),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
-        ),
-    ],
-)
-def test_apply_llm_config_filter(
-    llm_config: Union[LLMConfig, Literal[False]],
-    llm_config_filter: Optional[LLMConfigFilter],
-    expected: Union[LLMConfig, Literal[False]],
-):
-    actual = ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
-    assert actual == expected, f"{actual} != {expected}"
-
-
-def test_apply_llm_config_filter_with_invalid_filter():
-    llm_config = LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")])
-    llm_config_filter = LLMConfigFilter(model="gpt-4")
-    with pytest.raises(ValueError):
-        ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@
 
 import functools
 import json
-import os
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -14,6 +13,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeV
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
+
+# from .oai.common_utils import _filter_config, _config_list_from_json
 
 if TYPE_CHECKING:
     from .oai.client import ModelClient
@@ -32,69 +33,6 @@ def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
     if "api_type" not in d:
         d["api_type"] = "openai"
     return d
-
-
-class LLMConfigFilter(BaseModel):
-    filter_dict: dict[str, Any] = Field(default_factory=dict)
-
-    # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid")
-
-    def __init__(self, **kwargs: Any) -> None:
-        if "filter_dict" in kwargs:
-            f = kwargs.pop("filter_dict")
-            kwargs = {**f, **kwargs}
-        filter_dict = kwargs
-        super().__init__(filter_dict=filter_dict)
-
-    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return self.filter_dict
-
-    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        d = self.model_dump(*args, exclude_none=exclude_none, **kwargs)
-        return json.dumps(d)
-
-    def _getattr(self, key: str) -> Any:
-        return self.filter_dict[key]
-
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return self.filter_dict.get(key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return self._getattr(key=key)
-        except KeyError:
-            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        try:
-            self.filter_dict[key] = value
-        except ValueError:
-            raise ValueError(f"'{self.__class__.__name__}' object has no field '{key}'")
-
-    def __getattr__(self, name: Any) -> Any:
-        try:
-            return self._getattr(key=name)
-        except KeyError:
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-
-    def items(self) -> Iterable[tuple[str, Any]]:
-        return self.filter_dict.items()
-
-    def keys(self) -> Iterable[str]:
-        return self.filter_dict.keys()
-
-    def values(self) -> Iterable[Any]:
-        return self.filter_dict.values()
-
-    def __repr__(self) -> str:
-        # Iterate filter_dict and create a string representation
-        r = [f"{k}={repr(v)}" for k, v in self.filter_dict.items()]
-
-        return f"LLMConfigFilter({', '.join(r)})"
-
-    def __str__(self) -> str:
-        return str(self.filter_dict)
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -173,52 +111,26 @@ class LLMConfig(metaclass=MetaLLMConfig):
         else:
             return value in criteria_values
 
-    def apply_filter(self, filter: Optional[LLMConfigFilter], exclude: bool = False) -> "LLMConfig":
-        if filter is None:
-            return self
-
-        d = self.model_dump()
-        config_list = d["config_list"]
-        filtered_config_list = [
-            item
-            for item in config_list
-            if all(self._satisfies_criteria(item.get(key), values) != exclude for key, values in filter.items())
-        ]
-
-        if len(filtered_config_list) == 0:
-            raise ValueError(f"No config found that satisfies the filter criteria: {filter}")
-
-        d["config_list"] = filtered_config_list
-        return LLMConfig(**d)
-
     @classmethod
     def from_json(cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None) -> "LLMConfig":
+        from .oai.openai_utils import config_list_from_json
+
         if env is None and path is None:
             raise ValueError("Either 'env' or 'path' must be provided")
         if env is not None and path is not None:
             raise ValueError("Only one of 'env' or 'path' can be provided")
 
-        if env is not None:
-            config_list_str = os.environ.get(env)
-            if config_list_str is None:
-                raise ValueError(f"Environment variable '{env}' not found")
-            config_list = json.loads(config_list_str)
-        elif path is not None:
-            path = Path(path)
-            if not path.exists():
-                raise ValueError(f"File '{path}' not found")
-            with path.open("r") as f:
-                config_list = json.load(f)
+        config_list = config_list_from_json(env_or_file=env if env is not None else str(path))
+        return LLMConfig(config_list=config_list)
 
-        if isinstance(config_list, dict):
-            return LLMConfig(**config_list)
-        elif isinstance(config_list, list):
-            return LLMConfig(config_list=config_list)
-        else:
-            raise ValueError(f"Expected a list or dict, got {type(config_list)}")
+    def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
+        from .oai.openai_utils import filter_config
 
-    def where(self, **kwargs: Any) -> "LLMConfig":
-        return self.apply_filter(LLMConfigFilter(**kwargs))
+        filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
+        if len(filtered_config_list) == 0:
+            raise ValueError(f"No config found that satisfies the filter criteria: {kwargs}")
+
+        return LLMConfig(config_list=filtered_config_list)
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
