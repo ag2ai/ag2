@@ -196,7 +196,7 @@ def fmt_ok(notebook: Path) -> str:
 
 
 @require_optional_import("termcolor", "docs")
-def fmt_error(notebook: Path, error: NotebookError | str) -> str:
+def fmt_error(notebook: Path, error: Union[NotebookError, str]) -> str:
     if isinstance(error, str):
         return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error}"
     elif isinstance(error, NotebookError):
