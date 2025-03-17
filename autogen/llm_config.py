@@ -231,10 +231,13 @@ class LLMConfig:
         return hasattr(self._model, key)
 
     def __repr__(self) -> str:
-        return repr(self._model).replace("_LLMConfig", self.__class__.__name__)
+        d = self.model_dump()
+        r = [f"{k}={repr(v)}" for k, v in d.items()]
+
+        return f"LLMConfig({', '.join(r)})"
 
     def __str__(self) -> str:
-        return str(self._model)
+        return repr(self)
 
     def items(self) -> Iterable[tuple[str, Any]]:
         d = self.model_dump()
