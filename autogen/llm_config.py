@@ -96,6 +96,7 @@ class LLMConfigFilter(BaseModel):
         return str(self.filter_dict)
 
 
+# Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
 class MetaLLMConfig(type):
     def __init__(cls, *args: Any, **kwargs: Any) -> None:
         pass
