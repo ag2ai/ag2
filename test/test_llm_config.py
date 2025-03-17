@@ -720,6 +720,13 @@ class TestLLMConfig:
             LLMConfig.from_json(env="INVALID_ENV")
         assert str(e.value) == "Environment variable 'INVALID_ENV' not found"
 
+    def test_from_json_env_with_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
+        expected = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.5, check_every_ms=1000, cache_seed=42)
+        actual = LLMConfig.from_json(env="LLM_CONFIG", temperature=0.5, check_every_ms=1000, cache_seed=42)
+        assert isinstance(actual, LLMConfig)
+        assert actual == expected, actual
+
     def test_from_json_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdirname:
             file_path = f"{tmpdirname}/llm_config.json"

@@ -112,7 +112,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
             return value in criteria_values
 
     @classmethod
-    def from_json(cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None) -> "LLMConfig":
+    def from_json(
+        cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None, **kwargs: Any
+    ) -> "LLMConfig":
         from .oai.openai_utils import config_list_from_json
 
         if env is None and path is None:
@@ -121,7 +123,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
             raise ValueError("Only one of 'env' or 'path' can be provided")
 
         config_list = config_list_from_json(env_or_file=env if env is not None else str(path))
-        return LLMConfig(config_list=config_list)
+        return LLMConfig(config_list=config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
         from .oai.openai_utils import filter_config
