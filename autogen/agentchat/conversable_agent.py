@@ -279,7 +279,7 @@ class ConversableAgent(LLMAgent):
             max_consecutive_auto_reply if max_consecutive_auto_reply is not None else self.MAX_CONSECUTIVE_AUTO_REPLY
         )
         self._consecutive_auto_reply_counter = defaultdict(int)
-        self._max_consecutive_auto_reply_dict = defaultdict(self.max_consecutive_auto_reply)
+        self._max_consecutive_auto_reply_dict = defaultdict(int)
         self._function_map = (
             {}
             if function_map is None
@@ -1007,24 +1007,6 @@ class ConversableAgent(LLMAgent):
         """
         self._oai_system_message[0]["content"] = system_message
 
-    def update_max_consecutive_auto_reply(self, value: int, sender: Optional[Agent] = None):
-        """Update the maximum number of consecutive auto replies.
-
-        Args:
-            value (int): the maximum number of consecutive auto replies.
-            sender (Agent): when the sender is provided, only update the max_consecutive_auto_reply for that sender.
-        """
-        if sender is None:
-            self._max_consecutive_auto_reply = value
-            for k in self._max_consecutive_auto_reply_dict:
-                self._max_consecutive_auto_reply_dict[k] = value
-        else:
-            self._max_consecutive_auto_reply_dict[sender] = value
-
-    def max_consecutive_auto_reply(self, sender: Optional[Agent] = None) -> int:
-        """The maximum number of consecutive auto replies."""
-        return self._max_consecutive_auto_reply if sender is None else self._max_consecutive_auto_reply_dict[sender]
-
     @property
     def chat_messages(self) -> dict[Agent, list[dict[str, Any]]]:
         """A dictionary of conversations from agent to list of messages."""
@@ -1367,6 +1349,7 @@ class ConversableAgent(LLMAgent):
         reply_at_receive: bool = True,
     ) -> None:
         self.reset_consecutive_auto_reply_counter(recipient)
+        self.init_max_consecutive_auto_reply_dict(recipient)
         self.reply_at_receive[recipient] = reply_at_receive
         if clear_history:
             self.clear_history(recipient)
@@ -1795,6 +1778,9 @@ class ConversableAgent(LLMAgent):
             self.reply_at_receive.clear()
         else:
             self.reply_at_receive[sender] = False
+
+    def init_max_consecutive_auto_reply_dict(self, sender: Optional[Agent] = None):
+        self._max_consecutive_auto_reply_dict[sender] = sender._max_consecutive_auto_reply
 
     def reset_consecutive_auto_reply_counter(self, sender: Optional[Agent] = None):
         """Reset the consecutive_auto_reply_counter of the sender."""
@@ -2235,7 +2221,13 @@ class ConversableAgent(LLMAgent):
 
             reply = reply if reply or not self._is_termination_msg(message) else "exit"
         else:
-            if self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
+            # Check max consecutive auto replies for both sender and recipient
+            if sender and sender._consecutive_auto_reply_counter.get(
+                self, 0
+            ) >= sender._max_consecutive_auto_reply_dict.get(self, float("inf")):
+                termination_reason = "Maximum number of consecutive auto-replies reached"
+                reply = "exit"
+            elif self._consecutive_auto_reply_counter[sender] >= self._max_consecutive_auto_reply_dict[sender]:
                 if self.human_input_mode == "NEVER":
                     termination_reason = "Maximum number of consecutive auto-replies reached"
                     reply = "exit"

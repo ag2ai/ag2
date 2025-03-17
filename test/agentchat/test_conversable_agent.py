@@ -366,10 +366,7 @@ def test_generate_code_execution_reply():
 
 def test_max_consecutive_auto_reply():
     agent = ConversableAgent("a0", max_consecutive_auto_reply=2, llm_config=False, human_input_mode="NEVER")
-    agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
-    assert agent.max_consecutive_auto_reply() == agent.max_consecutive_auto_reply(agent1) == 2
-    agent.update_max_consecutive_auto_reply(1)
-    assert agent.max_consecutive_auto_reply() == agent.max_consecutive_auto_reply(agent1) == 1
+    agent1 = ConversableAgent("a1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
 
     agent1.initiate_chat(agent, message="hello")
     assert agent._consecutive_auto_reply_counter[agent1] == 1
