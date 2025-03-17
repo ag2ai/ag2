@@ -42,7 +42,7 @@ We specify `human_input_mode="ALWAYS"` to manually validate the safety of the co
 ```python
 import tempfile
 
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Create a temporary directory to store the code files.
@@ -187,7 +187,11 @@ Reply 'TERMINATE' in the end when everything is done.
 code_writer_agent = ConversableAgent(
     "code_writer_agent",
     system_message=code_writer_system_message,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=LLMConfig(
+        config_list=[
+            {"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}
+        ]
+    ),
     code_execution_config=False,  # Turn off code execution for this agent.
 )
 

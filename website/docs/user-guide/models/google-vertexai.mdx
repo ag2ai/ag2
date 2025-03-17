@@ -149,7 +149,7 @@ safety_settings = {
 }
 
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.code_utils import content_str
 
@@ -174,7 +174,9 @@ for config_list in [config_list_gemini, config_list_gemini_vision]:
 seed = 25  # for caching
 
 assistant = AssistantAgent(
-    "assistant", llm_config={"config_list": config_list_gemini, "seed": seed}, max_consecutive_auto_reply=3
+    "assistant",
+    llm_config=LLMConfig(config_list=config_list_gemini, seed=seed),
+    max_consecutive_auto_reply=3
 )
 
 user_proxy = UserProxyAgent(
@@ -283,7 +285,9 @@ gemini_vision_config = [
 ]
 
 image_agent = MultimodalConversableAgent(
-    "Gemini Vision", llm_config={"config_list": gemini_vision_config, "seed": seed}, max_consecutive_auto_reply=1
+    "Gemini Vision",
+    llm_config=LLMConfig(config_list=gemini_vision_config, seed=seed),
+    max_consecutive_auto_reply=1,
 )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
@@ -353,7 +357,7 @@ openai_gemini_config = [
     }
 ]
 
-assistant = AssistantAgent("assistant", llm_config={"config_list": openai_gemini_config}, max_consecutive_auto_reply=3)
+assistant = AssistantAgent("assistant", llm_config=LLMConfig(config_list=openai_gemini_config), max_consecutive_auto_reply=3)
 
 user_proxy = UserProxyAgent(
     "user_proxy",

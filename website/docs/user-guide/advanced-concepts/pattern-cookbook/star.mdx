@@ -127,14 +127,15 @@ from autogen import (
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
-    register_hand_off
+    register_hand_off,
+    LLMConfig,
 )
 
 # Example task: Create a virtual city guide that can answer questions about weather, events,
 # transportation, and dining in various cities
 
 # Setup LLM configuration
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "parallel_tool_calls": False, "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False, cache_seed=None)
 
 # Shared context for all agents in the swarm
 shared_context = {

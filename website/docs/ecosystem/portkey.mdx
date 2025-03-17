@@ -62,13 +62,13 @@ user_proxy = autogen.UserProxyAgent(
 coder = autogen.AssistantAgent(
     name="Coder",
     system_message = "You are a Python developer who is good at developing games. You work with Product Manager.",
-    llm_config={"config_list": config},
+    llm_config=autogen.LLMConfig(config_list=config)
 )
 
 # Create groupchat
 groupchat = autogen.GroupChat(
     agents=[user_proxy, coder], messages=[])
-manager = autogen.GroupChatManager(groupchat=groupchat, llm_config={"config_list": config})
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=autogen.LLMConfig(config_list=config))
 
 
 

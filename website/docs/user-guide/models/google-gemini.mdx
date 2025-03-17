@@ -78,7 +78,7 @@ For guidance on using environment variables, see our [LLMs documentation](/docs/
 
 ```python
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.code_utils import content_str
 
 config_list_gemini = autogen.config_list_from_json(
@@ -97,7 +97,8 @@ assistant = AssistantAgent(
       "After your code has been executed and you have a code execution result, say 'ALL DONE'. "
       "Do not say 'ALL DONE' in the same response as code."
     ),
-    llm_config={"config_list": config_list_gemini, "seed": seed}, max_consecutive_auto_reply=3
+    llm_config=LLMConfig(config_list=config_list_gemini, seed=seed),
+    max_consecutive_auto_reply=3
 )
 
 user_proxy = UserProxyAgent(
@@ -163,7 +164,7 @@ Here, we ask a question about
 
 ```python
 import autogen
-from autogen import UserProxyAgent
+from autogen import UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 
 config_list_gemini_vision = autogen.config_list_from_json(
@@ -176,7 +177,9 @@ config_list_gemini_vision = autogen.config_list_from_json(
 seed = None # for caching
 
 image_agent = MultimodalConversableAgent(
-    "Gemini Vision", llm_config={"config_list": config_list_gemini_vision, "seed": seed}, max_consecutive_auto_reply=1
+    "Gemini Vision",
+    llm_config=LLMConfig(config_list=config_list_gemini_vision, seed=seed),
+    max_consecutive_auto_reply=1
 )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
