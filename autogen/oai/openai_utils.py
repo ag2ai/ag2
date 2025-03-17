@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from dotenv import find_dotenv, load_dotenv
 from packaging.version import parse
+from pydantic_core import to_jsonable_python
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -117,12 +118,7 @@ def get_key(config: dict[str, Any]) -> str:
         if key in config:
             config, copied = config.copy() if not copied else config, True
             config.pop(key)
-    # if isinstance(config, dict):
-    #     return tuple(get_key(x) for x in sorted(config.items()))
-    # if isinstance(config, list):
-    #     return tuple(get_key(x) for x in config)
-    # return config
-    return json.dumps(config, sort_keys=True)
+    return to_jsonable_python(config)  # type: ignore [no-any-return]
 
 
 def is_valid_api_key(api_key: str) -> bool:
