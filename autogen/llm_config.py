@@ -96,7 +96,23 @@ class LLMConfigFilter(BaseModel):
         return str(self.filter_dict)
 
 
-class LLMConfig:
+class MetaLLMConfig(type):
+    def __init__(cls, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    @property
+    def current(cls) -> "LLMConfig":
+        current_llm_config = LLMConfig.get_current_llm_config()
+        if current_llm_config is None:
+            raise ValueError("No current LLMConfig set. Are you inside a context block?")
+        return current_llm_config
+
+    @property
+    def default(cls) -> "LLMConfig":
+        return cls.current
+
+
+class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(self, **kwargs: Any) -> None:
@@ -198,6 +214,9 @@ class LLMConfig:
             return LLMConfig(config_list=config_list)
         else:
             raise ValueError(f"Expected a list or dict, got {type(config_list)}")
+
+    def where(self, **kwargs: Any) -> "LLMConfig":
+        return self.apply_filter(LLMConfigFilter(**kwargs))
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:

@@ -804,3 +804,39 @@ class TestLLMConfig:
         with pytest.raises(ValueError) as e:
             LLMConfig.from_json(path="invalid_path")
         assert str(e.value) == "File 'invalid_path' not found"
+
+    def test_where(self) -> None:
+        llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        actual = llm_config.where(tags=["gpt35"])
+        expected = LLMConfig(config_list=[JSON_SAMPLE_DICT[0]])
+        assert actual == expected
+
+        with llm_config.where(tags=["gpt35"]):
+            assert LLMConfig.get_current_llm_config() == expected
+
+    def test_current(self) -> None:
+        llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+
+        # Test without context. Should raise an error
+        expected_error = "No current LLMConfig set. Are you inside a context block?"
+        with pytest.raises(ValueError) as e:
+            LLMConfig.current
+        assert str(e.value) == expected_error
+        with pytest.raises(ValueError) as e:
+            LLMConfig.default
+        assert str(e.value) == expected_error
+
+        with llm_config:
+            assert LLMConfig.get_current_llm_config() == llm_config
+            assert LLMConfig.current == llm_config
+            assert LLMConfig.default == llm_config
+
+            with LLMConfig.current.where(api_type="openai"):
+                assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai")
+                assert LLMConfig.current == llm_config.where(api_type="openai")
+                assert LLMConfig.default == llm_config.where(api_type="openai")
+
+                with LLMConfig.default.where(model="gpt-4"):
+                    assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai", model="gpt-4")
+                    assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
+                    assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
