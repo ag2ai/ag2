@@ -246,14 +246,14 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     def _getattr(self, o: object, name: str) -> Any:
         val = getattr(o, name)
-        if isinstance(val, list) and name == "config_list":
-            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
+        # if isinstance(val, list) and name == "config_list":
+        #     return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:
         val = getattr(self._model, key, default)
-        if isinstance(val, list) and key == "config_list":
-            return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
+        # if isinstance(val, list) and key == "config_list":
+        #     return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def __getitem__(self, key: str) -> Any:
@@ -391,6 +391,21 @@ class LLMConfigEntry(BaseModel, ABC):
 
     def __setitem__(self, key: str, value: Any) -> None:
         setattr(self, key, value)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
+    def items(self) -> Iterable[tuple[str, Any]]:
+        d = self.model_dump()
+        return d.items()
+
+    def keys(self) -> Iterable[str]:
+        d = self.model_dump()
+        return d.keys()
+
+    def values(self) -> Iterable[Any]:
+        d = self.model_dump()
+        return d.values()
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []

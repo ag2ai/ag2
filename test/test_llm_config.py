@@ -592,7 +592,7 @@ class TestLLMConfig:
         assert type(actual._model) == type(openai_llm_config._model)
         assert actual._model == openai_llm_config._model
         assert actual == openai_llm_config
-        assert isinstance(actual.config_list[0], dict)
+        assert isinstance(actual.config_list[0], OpenAILLMConfigEntry)
 
     def test_get(self, openai_llm_config: LLMConfig) -> None:
         assert openai_llm_config.get("temperature") == 0.5
@@ -695,7 +695,13 @@ class TestLLMConfig:
         }
 
         def test_unpacking(**kwargs: Any) -> None:
-            assert kwargs == expected, kwargs
+            for k, v in expected.items():
+                assert k in kwargs
+                if k == "config_list":
+                    assert kwargs[k][0].model_dump() == v[0]  # type: ignore[index]
+                else:
+                    assert kwargs[k] == v
+            # assert kwargs == expected, kwargs
 
         test_unpacking(**openai_llm_config)
 
@@ -764,7 +770,7 @@ class TestLLMConfig:
 
         actual = openai_llm_config.apply_filter(llm_config_filter, exclude=exclude)
         assert isinstance(actual, LLMConfig)
-        assert actual.config_list == expected
+        assert actual.config_list == LLMConfig(config_list=expected).config_list
 
     def test_apply_filter_invalid_filter(self) -> None:
         openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
