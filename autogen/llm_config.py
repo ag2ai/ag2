@@ -246,14 +246,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     def _getattr(self, o: object, name: str) -> Any:
         val = getattr(o, name)
-        # if isinstance(val, list) and name == "config_list":
-        #     return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:
         val = getattr(self._model, key, default)
-        # if isinstance(val, list) and key == "config_list":
-        #     return [v.model_dump() if isinstance(v, LLMConfigEntry) else v for v in val]
         return val
 
     def __getitem__(self, key: str) -> Any:
