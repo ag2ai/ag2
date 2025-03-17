@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, SecretStr, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
 
 if TYPE_CHECKING:
     from .oai.client import ModelClient
@@ -347,7 +347,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
-    base_url: Optional[AnyUrl] = None
+    base_url: Optional[HttpUrl] = None
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
@@ -359,6 +359,13 @@ class LLMConfigEntry(BaseModel, ABC):
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
+        if not str(v).startswith("https://") and not str(v).startswith("http://"):
+            v = f"http://{str(v)}"
+        return v
 
     @field_serializer("base_url")
     def serialize_base_url(self, v: Any) -> Any:
