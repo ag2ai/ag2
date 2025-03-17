@@ -730,12 +730,16 @@ def post_process_func(
     # Remove mdx-code-block markers
     content = remove_mdx_code_blocks(content)
 
+    # Generate the page title
+    page_header = front_matter.get("title")
+    page_title = f"# {page_header}\n\n" if page_header else ""
+
     # Rewrite the content as
     # ---
     # front_matter_str
     # ---
     # content
-    new_content = f"---\n{front_matter_str}---\n{content}"
+    new_content = f"---\n{front_matter_str}---\n\n{page_title}\n{content}"
 
     # Change the file extension to .md
     rendered_md = rendered_mdx.with_suffix(".md")
@@ -762,6 +766,42 @@ def inject_gallery_html(notebooks_md_path: Path, metadata_yml_path: Path) -> Non
     updated_content = content.replace("{{ render_gallery(gallery_items) }}", gallery_html)
     with open(notebooks_md_path, "w", encoding="utf-8") as f:
         f.write(updated_content)
+
+
+@require_optional_import("yaml", "docs")
+def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
+    """Add notebooks navigation to the summary markdown file.
+
+    Args:
+        mkdocs_nav_path: Path to the mkdocs navigation template file
+        metadata_yml_path: Path to the notebooks metadata YAML file
+    """
+    # Read the metadata file to get notebook items
+    with open(metadata_yml_path, "r") as file:
+        items = yaml.safe_load(file)
+
+    # Create navigation list entries for each notebook
+    nav_list = []
+    for item in items:
+        _link = item["link"][1:] if item["link"].startswith("/") else item["link"]
+        nav_list.append(f"        - [{item['title']}]({_link})\n")
+
+    # Read the summary file
+    with open(mkdocs_nav_path, "r") as file:
+        lines = file.readlines()
+
+    # Find where to insert the notebook entries
+    for i, line in enumerate(lines):
+        if line.strip() == "- [Notebooks](docs/use-cases/notebooks/Notebooks.md)":
+            # Insert all notebook items after the Notebooks line
+            # No need to insert extra blank lines, just the notebook entries
+            for j, nav_item in enumerate(nav_list):
+                lines.insert(i + 1 + j, nav_item)
+            break
+
+    # Write the updated content back to the summary file
+    with open(mkdocs_nav_path, "w") as file:
+        file.writelines(lines)
 
 
 def main(force: bool) -> None:
@@ -818,6 +858,10 @@ def main(force: bool) -> None:
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
     metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
     inject_gallery_html(notebooks_md_path, metadata_yml_path)
+
+    # Add Notebooks Navigation to Summary.md
+    mkdocs_nav_path = mkdocs_root_dir / "docs" / "navigation_template.txt"
+    add_notebooks_nav(mkdocs_nav_path, metadata_yml_path)
 
     # Render Community Gallery HTML
     community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"

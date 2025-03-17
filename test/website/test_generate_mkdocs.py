@@ -12,6 +12,7 @@ import pytest
 from autogen._website.generate_mkdocs import (
     add_api_ref_to_mkdocs_template,
     add_excerpt_marker,
+    add_notebooks_nav,
     filter_excluded_files,
     fix_asset_path,
     fix_snippet_imports,
@@ -482,6 +483,78 @@ def test_generate_url_slug() -> None:
         actual = generate_url_slug(tmpfile)
         expected = "\nslug: DeepResearchAgent"
 
+        assert actual == expected
+
+
+def test_add_notebooks_nav() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source directory structure
+        metadata_yml_path = Path(tmpdir) / "notebooks_metadata.yml"
+
+        # Add content
+        metadata_yml_path.write_text(
+            dedent("""
+- title: "Run a standalone AssistantAgent"
+  link: "/docs/use-cases/notebooks/notebooks/agentchat_assistant_agent_standalone"
+  description: "Run a standalone AssistantAgent, browsing the web using the BrowserUseTool"
+  image: ""
+  tags:
+    - "assistantagent"
+    - "run"
+    - "browser-use"
+    - "webscraping"
+    - "function calling"
+  source: "/notebook/agentchat_assistant_agent_standalone.ipynb"
+
+- title: "Mitigating Prompt hacking with JSON Mode in Autogen"
+  link: "/docs/use-cases/notebooks/notebooks/JSON_mode_example"
+  description: "Use JSON mode and Agent Descriptions to mitigate prompt manipulation and control speaker transition."
+  image: ""
+  tags:
+    - "JSON"
+    - "description"
+    - "prompt hacking"
+    - "group chat"
+    - "orchestration"
+  source: "/notebook/JSON_mode_example.ipynb"
+""")
+        )
+
+        mkdocs_nav_path = Path(tmpdir) / "navigation_template.txt"
+
+        mkdocs_nav_path.write_text(
+            dedent("""
+- Use Cases
+    - Use cases
+        - [Customer Service](docs/use-cases/use-cases/customer-service.md)
+        - [Game Design](docs/use-cases/use-cases/game-design.md)
+        - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
+    - Notebooks
+        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+    - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
+- API References
+{api}
+""")
+        )
+
+        add_notebooks_nav(mkdocs_nav_path, metadata_yml_path)
+
+        expected = dedent("""
+- Use Cases
+    - Use cases
+        - [Customer Service](docs/use-cases/use-cases/customer-service.md)
+        - [Game Design](docs/use-cases/use-cases/game-design.md)
+        - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
+    - Notebooks
+        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+        - [Run a standalone AssistantAgent](docs/use-cases/notebooks/notebooks/agentchat_assistant_agent_standalone)
+        - [Mitigating Prompt hacking with JSON Mode in Autogen](docs/use-cases/notebooks/notebooks/JSON_mode_example)
+    - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
+- API References
+{api}
+""")
+
+        actual = mkdocs_nav_path.read_text()
         assert actual == expected
 
 
