@@ -274,6 +274,12 @@ class LLMConfig(metaclass=MetaLLMConfig):
         except AttributeError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_model":
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._model, name, value)
+
     def __contains__(self, key: str) -> bool:
         return hasattr(self._model, key)
 

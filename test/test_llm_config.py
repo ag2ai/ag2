@@ -610,6 +610,11 @@ class TestLLMConfig:
             openai_llm_config.wrong_key
         assert str(e.value) == "'LLMConfig' object has no attribute 'wrong_key'"
 
+    def test_setattr(self, openai_llm_config: LLMConfig) -> None:
+        assert openai_llm_config.temperature == 0.5
+        openai_llm_config.temperature = 0.8
+        assert openai_llm_config.temperature == 0.8
+
     def test_get_item_and_set_item(self, openai_llm_config: LLMConfig) -> None:
         # Test __getitem__
         assert openai_llm_config["temperature"] == 0.5
