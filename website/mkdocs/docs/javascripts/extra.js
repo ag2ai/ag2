@@ -72,8 +72,9 @@
         // Don't trigger if user clicked on a link or tag inside the card
         if (!e.target.closest("a") && !e.target.closest(".tag")) {
           const link = this.getAttribute("data-link");
+          const link_target = this.getAttribute("data-link-target");
           if (link && link !== "#") {
-            window.open(link, "_blank");
+            window.open(link, link_target);
           }
         }
       });

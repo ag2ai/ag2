@@ -506,7 +506,7 @@ def add_front_matter_to_metadata_yml(
             f.write("  tags: []\n")
 
         # Write source
-        f.write(f'  notebook_source: "{source_str}"\n')
+        f.write(f'  source: "{source_str}"\n')
         f.write("\n")
 
 
@@ -598,7 +598,7 @@ def target_dir_func(website_build_directory: Path) -> Path:
     return website_build_directory / "use-cases" / "notebooks" / "notebooks"
 
 
-def generate_gallery_html(notebooks_md_path: Path, metadata_yml_path: Path) -> None:
+def inject_gallery_html(notebooks_md_path: Path, metadata_yml_path: Path) -> None:
     """Generate the index.html file for the notebooks section."""
     with open(notebooks_md_path, encoding="utf-8") as f:
         content = f.read()
@@ -663,9 +663,9 @@ def main(force: bool) -> None:
     # Render Notebooks Gallery HTML
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
     metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
-    generate_gallery_html(notebooks_md_path, metadata_yml_path)
+    inject_gallery_html(notebooks_md_path, metadata_yml_path)
 
     # Render Community Gallery HTML
     community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"
     metadata_yml_path = Path(args.website_build_directory) / "../../data/gallery_items.yml"
-    generate_gallery_html(community_md_path, metadata_yml_path)
+    inject_gallery_html(community_md_path, metadata_yml_path)

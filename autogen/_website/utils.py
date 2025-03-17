@@ -157,27 +157,36 @@ def render_gallery_html(gallery_file_path: Path) -> str:
 
             # Badges HTML
             badges_html = ""
-            if "source" in item and item["source"]:
-                colab_href = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{item['source']}"
-                github_href = f"https://github.com/ag2ai/ag2/blob/main/{item['source']}"
+            notebook_src = item.get("source", None)
+
+            if notebook_src:
+                colab_href = f"https://colab.research.google.com/github/ag2ai/ag2/blob/main/{notebook_src}"
+                github_href = f"https://github.com/ag2ai/ag2/blob/main/{notebook_src}"
                 badges_html = f"""
-                <span class="badges">
+                <div class="badges">
                     <a style="margin-right: 5px" href="{colab_href}" target="_parent">
                         <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
                     </a>
+                    <p class="hidden">{item.get("title", "")}</p>
                     <a href="{github_href}" target="_parent">
                         <img alt="GitHub" src="https://img.shields.io/badge/Open%20on%20GitHub-grey?logo=github"/>
                     </a>
-                </span>
+                </div>
                 """
 
             # Generate card HTML with safer access to attributes
             tags_str = ",".join(item.get("tags", [])) if isinstance(item.get("tags"), list) else ""
 
+            # Generate HTML for image tag
+            img_tag = (
+                f'<img src="{image_url}" alt="{item.get("title", "")}" class="card-image">' if not notebook_src else ""
+            )
+
+            data_link_target = "_self" if notebook_src else "_blank"
             html += f"""
-            <div class="card" data-link="{item.get("link", "#")}" data-tags="{tags_str}">
+            <div class="card" data-link="{item.get("link", "#")}" data-tags="{tags_str}" data-link-target="{data_link_target}">
                 <div class="card-container">
-                    <img src="{image_url}" alt="{item.get("title", "")}" class="card-image">
+                    {img_tag}
                     <p class="card-title">{item.get("title", "")}</p>
                     {badges_html}
                     <p class="card-description">{item.get("description", item.get("title", ""))}</p>

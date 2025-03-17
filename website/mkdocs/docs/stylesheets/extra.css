@@ -507,6 +507,9 @@ p.hero-subtitle {
 .examples-gallery-container .badges a{
     display: inline-block;
 }
+.examples-gallery-container .badges p.hidden {
+    display: none;
+}
 .examples-gallery-container .tag:hover {
     background-color: #e0e0e0;
 }
