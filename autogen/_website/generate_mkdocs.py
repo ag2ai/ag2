@@ -20,6 +20,7 @@ from .utils import (
     get_git_tracked_and_untracked_files_in_directory,
     remove_marker_blocks,
     render_gallery_html,
+    sort_files_by_date,
 )
 
 with optional_import_block():
@@ -804,6 +805,49 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
         file.writelines(lines)
 
 
+def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) -> None:
+    user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
+
+    # Read all user story files and sort them by date (newest first)
+    files = sorted(user_stories_dir.glob("**/index.md"), key=sort_files_by_date, reverse=True)
+
+    # Prepare user stories navigation entries
+    user_stories_entries = []
+    for file in files:
+        # Extract the title from the frontmatter using a simpler split approach
+        content = file.read_text()
+
+        # Split content at the "---" markers
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            # No valid frontmatter found, use directory name as title
+            title = file.parent.name
+        else:
+            # Parse the frontmatter
+            frontmatter_text = parts[1].strip()
+            frontmatter = yaml.safe_load(frontmatter_text)
+            title = frontmatter.get("title", file.parent.name)
+
+        # Generate relative path from the docs root directory
+        relative_path = file.parent.relative_to(mkdocs_output_dir)
+        path_for_link = str(relative_path).replace("\\", "/")
+
+        # Format navigation entry
+        user_stories_entries.append(f"    - [{title}]({path_for_link})")
+
+    # Read existing navigation template
+    nav_content = mkdocs_nav_path.read_text()
+    user_stories_section = "- User Stories\n" + "\n".join(user_stories_entries)
+
+    section_to_follow_marker = "- Contributor Guide"
+
+    replacement_content = f"{user_stories_section}\n{section_to_follow_marker}"
+    updated_nav_content = nav_content.replace(section_to_follow_marker, replacement_content)
+
+    # Write updated navigation to file
+    mkdocs_nav_path.write_text(updated_nav_content)
+
+
 def main(force: bool) -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
@@ -826,12 +870,11 @@ def main(force: bool) -> None:
     exclusion_list = [
         "docs/.gitignore",
         "docs/installation",
-        "docs/user-stories",
         "docs/user-guide/getting-started",
         "docs/user-guide/models/litellm-with-watsonx.md",
         "docs/contributor-guide/Migration-Guide.md",
     ]
-    nav_exclusions = ["User Stories"]
+    nav_exclusions = [""]
 
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
@@ -867,3 +910,7 @@ def main(force: bool) -> None:
     community_md_path = mkdocs_output_dir / "use-cases" / "community-gallery" / "community-gallery.md"
     metadata_yml_path = Path(args.website_build_directory) / "../../data/gallery_items.yml"
     inject_gallery_html(community_md_path, metadata_yml_path)
+
+    # Generate Navigation for User Stories
+    docs_dir = mkdocs_root_dir / "docs"
+    generate_user_stories_nav(docs_dir, mkdocs_nav_path)

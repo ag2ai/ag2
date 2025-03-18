@@ -13,7 +13,6 @@ import re
 import shutil
 import sys
 from copy import deepcopy
-from datetime import datetime
 from pathlib import Path
 from textwrap import dedent, indent
 from typing import Sequence, Union
@@ -23,7 +22,7 @@ from .notebook_processor import (
     create_base_argument_parser,
     process_notebooks_core,
 )
-from .utils import NavigationGroup, remove_marker_blocks
+from .utils import NavigationGroup, remove_marker_blocks, sort_files_by_date
 
 with optional_import_block():
     import yaml
@@ -349,18 +348,7 @@ def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     if not input_dir.exists():
         raise FileNotFoundError(f"Directory not found: {input_dir}")
 
-    # Sort files by parent directory date (if exists) and name
-    def sort_key(file_path: Path) -> tuple[datetime, str]:
-        dirname = file_path.parent.name
-        try:
-            # Extract date from directory name (first 3 parts)
-            date_str = "-".join(dirname.split("-")[:3])
-            date = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            date = datetime.min
-        return (date, dirname)
-
-    files = sorted(input_dir.glob("**/index.mdx"), key=sort_key)
+    files = sorted(input_dir.glob("**/index.mdx"), key=sort_files_by_date)
     reversed_files = files[::-1]
 
     return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]

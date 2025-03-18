@@ -19,6 +19,7 @@ from autogen._website.generate_mkdocs import (
     format_navigation,
     generate_mkdocs_navigation,
     generate_url_slug,
+    generate_user_stories_nav,
     process_and_copy_files,
     process_blog_contents,
     process_blog_files,
@@ -552,6 +553,81 @@ def test_add_notebooks_nav() -> None:
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
 - API References
 {api}
+""")
+
+        actual = mkdocs_nav_path.read_text()
+        assert actual == expected
+
+
+def test_generate_user_stories_nav() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create User Stories directory
+        user_stories_dir = Path(tmpdir) / "docs" / "user-stories"
+
+        file_1 = user_stories_dir / "2025-03-11-NOVA" / "index.md"
+        file_1.parent.mkdir(parents=True, exist_ok=True)
+        file_1.write_text("""
+---
+title: Unlocking the Power of Agentic Workflows at Nexla with AG2
+authors:
+  - ABC
+  - XYZ
+tags: [data automation, agents, AG2, Nexla]
+---
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
+
+        file_1 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
+        file_1.parent.mkdir(parents=True, exist_ok=True)
+        file_1.write_text("""
+---
+title: Some other text
+authors:
+  - ABC
+  - XYZ
+tags: [data automation, agents, AG2, Nexla]
+---
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
+
+        # Create source directory structure
+        mkdocs_nav_path = Path(tmpdir) / "navigation_template.txt"
+
+        mkdocs_nav_path.write_text(
+            dedent("""
+- Use Cases
+    - Use cases
+        - [Customer Service](docs/use-cases/use-cases/customer-service.md)
+        - [Game Design](docs/use-cases/use-cases/game-design.md)
+        - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
+    - Notebooks
+        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+    - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+    - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
+""")
+        )
+
+        generate_user_stories_nav(Path(tmpdir), mkdocs_nav_path)
+
+        expected = dedent("""
+- Use Cases
+    - Use cases
+        - [Customer Service](docs/use-cases/use-cases/customer-service.md)
+        - [Game Design](docs/use-cases/use-cases/game-design.md)
+        - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
+    - Notebooks
+        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+    - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
+- User Stories
+    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA)
+    - [Some other text](docs/user-stories/2025-02-11-NOVA)
+- Contributor Guide
+    - [Contributing](docs/contributor-guide/contributing.md)
+    - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
 """)
 
         actual = mkdocs_nav_path.read_text()

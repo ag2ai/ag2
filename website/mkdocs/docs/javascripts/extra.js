@@ -211,9 +211,29 @@
     }
   }
 
+  // User Story URL transformation
+  function handleUserStoryURLs() {
+    // Check if the URL contains '/docs/user-stories'
+    if (window.location.pathname.includes("/docs/user-stories")) {
+      let currentPath = window.location.pathname;
+      // Check if the URL ends with '/index'
+      if (currentPath.endsWith("/index")) {
+        // Remove the trailing '/index'
+        currentPath = currentPath.slice(0, -6);
+
+        // Create the new URL with the transformed path
+        const newUrl = window.location.origin + currentPath;
+
+        // Redirect to the new URL
+        window.location.href = newUrl;
+      }
+    }
+  }
+
   // Initialize everything when the document is ready
   document.addEventListener("DOMContentLoaded", function () {
     handleBlogURLs();
+    handleUserStoryURLs();
     loadDependencies();
   });
 

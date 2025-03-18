@@ -5,6 +5,7 @@
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, TypedDict, Union
 
@@ -87,6 +88,18 @@ def remove_marker_blocks(content: str, marker_prefix: str) -> str:
     content = re.sub(r"\n\s*\n\s*\n", "\n\n", content)
 
     return content
+
+
+# Sort files by parent directory date (if exists) and name
+def sort_files_by_date(file_path: Path) -> tuple[datetime, str]:
+    dirname = file_path.parent.name
+    try:
+        # Extract date from directory name (first 3 parts)
+        date_str = "-".join(dirname.split("-")[:3])
+        date = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        date = datetime.min
+    return (date, dirname)
 
 
 @require_optional_import("yaml", "docs")
