@@ -1,8 +1,8 @@
-name: Check docs for broken links
+name: Check mkdocs for broken links
 
 on:
   workflow_run:
-    workflows: ["mintlify docs"]
+    workflows: ["Deploy MkDocs to GitHub Pages"]
     types:
       - completed
     branches:
@@ -28,4 +28,4 @@ jobs:
         run: go install github.com/raviqqe/muffet/v2@latest
 
       - name: Check for broken links
-        run: ./scripts/broken-links-check.sh --url "https://docs.ag2.ai/docs/Home"
+        run: ./scripts/broken-links-check.sh --url "https://ag2ai.github.io/ag2"
