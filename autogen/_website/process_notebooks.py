@@ -8,326 +8,36 @@
 
 from __future__ import annotations
 
-import argparse
-import concurrent.futures
-import functools
 import json
-import os
 import re
 import shutil
-import signal
-import subprocess
 import sys
-import tempfile
-import threading
-import time
 from copy import deepcopy
-from dataclasses import dataclass
-from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
-from textwrap import dedent, indent
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from typing import Sequence, Union
 
 from ..import_utils import optional_import_block, require_optional_import
-from .utils import NavigationGroup
+from .notebook_processor import (
+    create_base_argument_parser,
+    process_notebooks_core,
+)
+from .utils import (
+    NavigationGroup,
+    add_authors_and_social_preview,
+    ensure_edit_url,
+    get_authors_info,
+    remove_marker_blocks,
+    sort_files_by_date,
+)
 
 with optional_import_block():
-    import nbformat
     import yaml
     from jinja2 import Template
-    from nbclient.client import NotebookClient
-    from nbclient.exceptions import (
-        CellExecutionError,
-        CellTimeoutError,
-    )
-    from nbformat import NotebookNode
-    from termcolor import colored
-
-
-EDIT_URL_HTML = """
-<div className="edit-url-container">
-    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
-</div>
-"""
-
-
-@lru_cache
-def check_quarto_bin(quarto_bin: str = "quarto") -> bool:
-    """Check if quarto is installed."""
-    try:
-        version_str = subprocess.check_output([quarto_bin, "--version"], text=True).strip()
-        version = tuple(map(int, version_str.split(".")))
-        return version >= (1, 5, 23)
-
-    except FileNotFoundError:
-        return False
-
-
-C = TypeVar("C", bound=Callable[..., Any])
-
-
-def require_quarto_bin(f: C) -> C:
-    """Decorator to skip a function if quarto is not installed."""
-
-    if check_quarto_bin():
-        return f
-    else:
-
-        @functools.wraps(f)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return ImportError("Quarto is not installed")
-
-        return wrapper  # type: ignore[return-value]
-
-
-class Result:
-    def __init__(self, returncode: int, stdout: str, stderr: str):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
 
 
 def notebooks_target_dir(website_build_directory: Path) -> Path:
     """Return the target directory for notebooks."""
     return website_build_directory / "docs" / "use-cases" / "notebooks" / "notebooks"
-
-
-def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
-    content = json.load(notebook.open(encoding="utf-8"))
-    metadata: dict[str, dict[str, Union[str, list[str], None]]] = content.get("metadata", {})
-    return metadata
-
-
-def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]]:
-    """Return a reason to skip the notebook, or None if it should not be skipped."""
-    if notebook.suffix != ".ipynb":
-        return "not a notebook"
-
-    if not notebook.exists():
-        return "file does not exist"
-
-    # Extra checks for notebooks in the notebook directory
-    if "notebook" not in notebook.parts:
-        return None
-
-    with open(notebook, encoding="utf-8") as f:
-        content = f.read()
-
-    # Load the json and get the first cell
-    json_content = json.loads(content)
-    first_cell = json_content["cells"][0]
-
-    # <!-- and --> must exists on lines on their own
-    if first_cell["cell_type"] == "markdown" and first_cell["source"][0].strip() == "<!--":
-        raise ValueError(
-            f"Error in {notebook.resolve()!s} - Front matter should be defined in the notebook metadata now."
-        )
-
-    metadata = load_metadata(notebook)
-
-    if "skip_render" in metadata:
-        return metadata["skip_render"]
-
-    if "front_matter" not in metadata:
-        return "front matter missing from notebook metadata ⚠️"
-
-    front_matter = metadata["front_matter"]
-
-    if "tags" not in front_matter:
-        return "tags is not in front matter"
-
-    if "description" not in front_matter:
-        return "description is not in front matter"
-
-    # Make sure tags is a list of strings
-    if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
-        return "tags must be a list of strings"
-
-    # Make sure description is a string
-    if not isinstance(front_matter["description"], str):
-        return "description must be a string"
-
-    return None
-
-
-def extract_title(notebook: Path) -> Optional[str]:
-    """Extract the title of the notebook."""
-    with open(notebook, encoding="utf-8") as f:
-        content = f.read()
-
-    # Load the json and get the first cell
-    json_content = json.loads(content)
-    first_cell = json_content["cells"][0]
-
-    # find the # title
-    for line in first_cell["source"]:
-        if line.startswith("# "):
-            title: str = line[2:].strip()
-            # Strip off the { if it exists
-            if "{" in title:
-                title = title[: title.find("{")].strip()
-            return title
-
-    return None
-
-
-@require_quarto_bin
-@require_optional_import(["nbclient", "termcolor"], "docs")
-def process_notebook(
-    src_notebook: Path, website_build_directory: Path, notebook_dir: Path, quarto_bin: str, dry_run: bool
-) -> str:
-    """Process a single notebook."""
-    in_notebook_dir = "notebook" in src_notebook.parts
-
-    metadata = load_metadata(src_notebook)
-
-    title = extract_title(src_notebook)
-    if title is None:
-        return fmt_error(src_notebook, "Title not found in notebook")
-
-    front_matter = {}
-    if "front_matter" in metadata:
-        front_matter = metadata["front_matter"]
-
-    front_matter["title"] = title
-
-    if in_notebook_dir:
-        relative_notebook = src_notebook.resolve().relative_to(notebook_dir.resolve())
-        dest_dir = notebooks_target_dir(website_build_directory=website_build_directory)
-        target_file = dest_dir / relative_notebook.with_suffix(".mdx")
-        intermediate_notebook = dest_dir / relative_notebook
-
-        # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
-
-        if dry_run:
-            return colored(f"Would process {src_notebook.name}", "green")
-
-        # Copy notebook to target dir
-        # The reason we copy the notebook is that quarto does not support rendering from a different directory
-        shutil.copy(src_notebook, intermediate_notebook)
-
-        # Check if another file has to be copied too
-        # Solely added for the purpose of agent_library_example.json
-        if "extra_files_to_copy" in metadata:
-            for file in metadata["extra_files_to_copy"]:
-                shutil.copy(src_notebook.parent / file, dest_dir / file)
-
-        # Capture output
-        result = subprocess.run([quarto_bin, "render", intermediate_notebook], capture_output=True, text=True)
-        if result.returncode != 0:
-            return fmt_error(
-                src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
-            )
-
-        # Unlink intermediate files
-        intermediate_notebook.unlink()
-    else:
-        target_file = src_notebook.with_suffix(".mdx")
-
-        # If the intermediate_notebook already exists, check if it is newer than the source file
-        if target_file.exists() and target_file.stat().st_mtime > src_notebook.stat().st_mtime:
-            return fmt_skip(src_notebook, f"target file ({target_file.name}) is newer ☑️")
-
-        if dry_run:
-            return colored(f"Would process {src_notebook.name}", "green")
-
-        result = subprocess.run([quarto_bin, "render", src_notebook], capture_output=True, text=True)
-        if result.returncode != 0:
-            return fmt_error(
-                src_notebook, f"Failed to render {src_notebook}\n\nstderr:\n{result.stderr}\nstdout:\n{result.stdout}"
-            )
-
-    post_process_mdx(target_file, src_notebook, front_matter, website_build_directory)
-
-    return fmt_ok(src_notebook)
-
-
-# Notebook execution based on nbmake: https://github.com/treebeardtech/nbmakes
-@dataclass
-class NotebookError:
-    error_name: str
-    error_value: Optional[str]
-    traceback: str
-    cell_source: str
-
-
-@dataclass
-class NotebookSkip:
-    reason: str
-
-
-NB_VERSION = 4
-
-
-@require_quarto_bin
-@require_optional_import("nbclient", "docs")
-def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
-    nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore[arg-type,no-untyped-call]
-
-    if "skip_test" in nb.metadata:
-        return notebook_path, NotebookSkip(reason=nb.metadata.skip_test)
-
-    try:
-        c = NotebookClient(
-            nb,
-            timeout=timeout,
-            allow_errors=False,
-            record_timing=True,
-        )
-        os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        with tempfile.TemporaryDirectory() as tempdir:
-            c.execute(cwd=tempdir)
-    except CellExecutionError:
-        error = get_error_info(nb)
-        assert error is not None
-        return notebook_path, error
-    except CellTimeoutError:
-        error = get_timeout_info(nb)
-        assert error is not None
-        return notebook_path, error
-
-    return notebook_path, None
-
-
-# Find the first code cell which did not complete.
-@require_optional_import("nbclient", "docs")
-def get_timeout_info(
-    nb: NotebookNode,
-) -> Optional[NotebookError]:
-    for i, cell in enumerate(nb.cells):
-        if cell.cell_type != "code":
-            continue
-        if "shell.execute_reply" not in cell.metadata.execution:
-            return NotebookError(
-                error_name="timeout",
-                error_value="",
-                traceback="",
-                cell_source="".join(cell["source"]),
-            )
-
-    return None
-
-
-@require_optional_import("nbclient", "docs")
-def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
-    for cell in nb["cells"]:  # get LAST error
-        if cell["cell_type"] != "code":
-            continue
-        errors = [output for output in cell["outputs"] if output["output_type"] == "error" or "ename" in output]
-
-        if errors:
-            traceback = "\n".join(errors[0].get("traceback", ""))
-            return NotebookError(
-                error_name=errors[0].get("ename", ""),
-                error_value=errors[0].get("evalue", ""),
-                traceback=traceback,
-                cell_source="".join(cell["source"]),
-            )
-    return None
 
 
 def add_front_matter_to_metadata_mdx(
@@ -492,19 +202,6 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_build_dir
     return re.sub(pattern, resolve_path, content)
 
 
-def ensure_edit_url(content: str, file_path: Path) -> str:
-    """Ensure editUrl is present in the content.
-    Args:
-        content (str): Content of the file
-        file_path (Path): Path to the file
-    """
-    html_placeholder = [line for line in EDIT_URL_HTML.splitlines() if line.strip() != ""][0]
-    if html_placeholder in content:
-        return content
-
-    return content + EDIT_URL_HTML.format(file_path=file_path)
-
-
 def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
     """Extracts the img tag from the figure tag and modifies local image path.
 
@@ -632,69 +329,12 @@ def post_process_mdx(
         f.write(new_content)
 
 
-def path(path_str: str) -> Path:
-    """Return a Path object."""
-    return Path(path_str)
-
-
-def collect_notebooks(notebook_directory: Path, website_build_directory: Path) -> list[Path]:
-    notebooks = list(notebook_directory.glob("*.ipynb"))
-    notebooks.extend(list(website_build_directory.glob("docs/**/*.ipynb")))
-    return notebooks
-
-
-@require_optional_import("termcolor", "docs")
-def fmt_skip(notebook: Path, reason: str) -> str:
-    return f"{colored('[Skip]', 'yellow')} {colored(notebook.name, 'blue')}: {reason}"
-
-
-@require_optional_import("termcolor", "docs")
-def fmt_ok(notebook: Path) -> str:
-    return f"{colored('[OK]', 'green')} {colored(notebook.name, 'blue')} ✅"
-
-
-@require_optional_import("termcolor", "docs")
-def fmt_error(notebook: Path, error: NotebookError | str) -> str:
-    if isinstance(error, str):
-        return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error}"
-    elif isinstance(error, NotebookError):
-        return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error.error_name} - {error.error_value}"
-    else:
-        raise ValueError("error must be a string or a NotebookError")
-
-
-def start_thread_to_terminate_when_parent_process_dies(ppid: int) -> None:
-    pid = os.getpid()
-
-    def f() -> None:
-        while True:
-            try:
-                os.kill(ppid, 0)
-            except OSError:
-                os.kill(pid, signal.SIGTERM)
-            time.sleep(1)
-
-    thread = threading.Thread(target=f, daemon=True)
-    thread.start()
-
-
 def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     """Get sorted list of files with prefix prepended."""
     if not input_dir.exists():
         raise FileNotFoundError(f"Directory not found: {input_dir}")
 
-    # Sort files by parent directory date (if exists) and name
-    def sort_key(file_path: Path) -> tuple[datetime, str]:
-        dirname = file_path.parent.name
-        try:
-            # Extract date from directory name (first 3 parts)
-            date_str = "-".join(dirname.split("-")[:3])
-            date = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            date = datetime.min
-        return (date, dirname)
-
-    files = sorted(input_dir.glob("**/index.mdx"), key=sort_key)
+    files = sorted(input_dir.glob("**/index.mdx"), key=sort_files_by_date)
     reversed_files = files[::-1]
 
     return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]
@@ -870,127 +510,6 @@ def fix_internal_references_in_mdx_files(website_build_directory: Path) -> None:
             sys.exit(1)
 
 
-def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict[str, str]]) -> str:
-    """Constructs HTML for displaying author cards in a blog.
-
-    Args:
-        authors_list: list of author identifiers
-        authors_dict: Dictionary containing author information keyed by author identifier
-    Returns:
-        str: Formatted HTML string containing author cards
-    """
-    if not authors_list:
-        return ""
-
-    card_template = """
-        <Card href="{url}">
-            <div class="col card">
-              <div class="img-placeholder">
-                <img noZoom src="{avatar}" />
-              </div>
-              <div>
-                <p class="name">{name}</p>
-                <p>{description}</p>
-              </div>
-            </div>
-        </Card>"""
-
-    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
-
-    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
-    authors_html_str = indent("".join(authors_html), "        ")
-    retval = dedent(
-        f"""
-            <div class="blog-authors">
-              <p class="authors">{author_label}</p>
-              <CardGroup cols={{2}}>{authors_html_str}
-              </CardGroup>
-            </div>
-        """
-    )
-    return retval
-
-
-def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
-    """Separate front matter and content from a markdown file.
-
-    Args:
-        file_path (Path): Path to the mdx file
-    """
-    content = file_path.read_text(encoding="utf-8")
-
-    if content.startswith("---"):
-        front_matter_end = content.find("---", 3)
-        front_matter = content[0 : front_matter_end + 3]
-        content = content[front_matter_end + 3 :].strip()
-        return front_matter, content
-
-    return "", content
-
-
-@require_optional_import("yaml", "docs")
-def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
-    try:
-        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))["authors"]
-    except (yaml.YAMLError, OSError) as e:
-        print(f"Error reading authors file: {e}")
-        sys.exit(1)
-
-    return all_authors_info  # type: ignore [no-any-return]
-
-
-@require_optional_import("yaml", "docs")
-def _add_authors_and_social_preview(
-    website_build_dir: Path, target_dir: Path, all_authors_info: dict[str, dict[str, str]]
-) -> None:
-    """Add authors info and social share image to mdx files in the target directory."""
-
-    # Social share image
-    social_img_html = """\n<div>
-<img noZoom className="social-share-img"
-  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
-  alt="social preview"
-  style={{ position: 'absolute', left: '-9999px' }}
-/>
-</div>"""
-
-    for file_path in target_dir.glob("**/*.mdx"):
-        try:
-            front_matter_string, content = separate_front_matter_and_content(file_path)
-
-            # Convert single author to list and handle authors
-            front_matter = yaml.safe_load(front_matter_string[4:-3])
-            authors = front_matter.get("authors", [])
-            authors_list = [authors] if isinstance(authors, str) else authors
-
-            # Generate authors HTML
-            authors_html = (
-                construct_authors_html(authors_list, all_authors_info)
-                if '<div class="blog-authors">' not in content
-                else ""
-            )
-
-            # Combine content
-            new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
-
-            # ensure editUrl is present
-            rel_file_path = (
-                str(file_path.relative_to(website_build_dir.parent))
-                .replace("build/docs/", "website/docs/")
-                .replace("website/docs/blog/", "website/docs/_blogs/")
-            )
-            content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
-
-            # replace the mkdocs excerpt marker
-            content_with_edit_url = content_with_edit_url.replace(r"\<!-- more -->", "")
-
-            file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            continue
-
-
 def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory: Path) -> None:
     """Add authors info to blog posts and user stories.
 
@@ -1001,7 +520,7 @@ def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory:
     generated_blog_dir = website_build_directory / "docs" / "blog"
 
     authors_yml = website_build_directory / "blogs_and_user_stories_authors.yml"
-    all_authors_info = _get_authors_info(authors_yml)
+    all_authors_info = get_authors_info(authors_yml)
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
@@ -1009,10 +528,10 @@ def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory:
 
     # Copy entire blog directory structure to generated_blog
     shutil.copytree(blog_dir, generated_blog_dir)
-    _add_authors_and_social_preview(website_build_directory, generated_blog_dir, all_authors_info)
+    add_authors_and_social_preview(website_build_directory, generated_blog_dir, all_authors_info)
 
     user_stories_dir = website_build_directory / "docs" / "user-stories"
-    _add_authors_and_social_preview(website_build_directory, user_stories_dir, all_authors_info)
+    add_authors_and_social_preview(website_build_directory, user_stories_dir, all_authors_info)
 
 
 def ensure_mint_json_exists(website_build_directory: Path) -> None:
@@ -1066,8 +585,8 @@ def get_files_path_from_navigation(navigation: list[NavigationGroup]) -> list[Pa
 
 
 @require_optional_import("jinja2", "docs")
-def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> None:
-    """Add edit links to the non generated mdx files in the website directory.
+def add_edit_urls_and_remove_mkdocs_markers(website_build_directory: Path) -> None:
+    """Add edit links to the non generated mdx files and remove mkdocs specific markers from the file.
 
     For the generated mdx files i.e. mdx files of _blogs and notebooks, it is added in their respective post processing functions.
     """
@@ -1083,7 +602,10 @@ def add_edit_urls_to_non_generated_mdx_files(website_build_directory: Path) -> N
         rel_path = str(mdx_file_path.relative_to(website_build_directory.parent)).replace("build/", "website/")
         content = mdx_file_path.read_text(encoding="utf-8")
         content_with_edit_url = ensure_edit_url(content, Path(rel_path))
-        mdx_file_path.write_text(content_with_edit_url, encoding="utf-8")
+
+        # Remove mkdocs markers before building the docs
+        content_without_mkdocs_marker = remove_marker_blocks(content_with_edit_url, "DELETE-ME-WHILE-BUILDING-MINTLIFY")
+        mdx_file_path.write_text(content_without_mkdocs_marker, encoding="utf-8")
 
 
 def copy_images_from_notebooks_dir_to_target_dir(notebook_directory: Path, target_notebooks_dir: Path) -> None:
@@ -1102,111 +624,34 @@ def main() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
     website_build_dir = website_dir / "build"
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="subcommand")
+    parser = create_base_argument_parser()
 
     if not website_build_dir.exists():
         website_build_dir.mkdir()
         shutil.copytree(website_dir, website_build_dir, dirs_exist_ok=True)
-
-    parser.add_argument(
-        "--notebook-directory",
-        type=path,
-        help="Directory containing notebooks to process",
-        default=website_build_dir / "../../notebook",
-    )
-    parser.add_argument(
-        "--website-build-directory", type=path, help="Root directory of mintlify website", default=website_build_dir
-    )
-
-    parser.add_argument("--force", help="Force re-rendering of all notebooks", default=False)
-
-    render_parser = subparsers.add_parser("render")
-    render_parser.add_argument("--quarto-bin", help="Path to quarto binary", default="quarto")
-    render_parser.add_argument("--dry-run", help="Don't render", action="store_true")
-    render_parser.add_argument("notebooks", type=path, nargs="*", default=None)
-
-    test_parser = subparsers.add_parser("test")
-    test_parser.add_argument("--timeout", help="Timeout for each notebook", type=int, default=60)
-    test_parser.add_argument("--exit-on-first-fail", "-e", help="Exit after first test fail", action="store_true")
-    test_parser.add_argument("notebooks", type=path, nargs="*", default=None)
-    test_parser.add_argument("--workers", help="Number of workers to use", type=int, default=-1)
 
     args = parser.parse_args()
     if args.subcommand is None:
         print("No subcommand specified")
         sys.exit(1)
 
+    if args.website_build_directory is None:
+        args.website_build_directory = website_build_dir
+
+    if args.notebook_directory is None:
+        args.notebook_directory = website_build_dir / "../../notebook"
+
     ensure_mint_json_exists(args.website_build_directory)
     cleanup_tmp_dirs(args.website_build_directory, args.force)
 
-    collected_notebooks = (
-        args.notebooks if args.notebooks else collect_notebooks(args.notebook_directory, args.website_build_directory)
-    )
+    # Process notebooks using core logic
+    process_notebooks_core(args, post_process_mdx, notebooks_target_dir)
 
-    filtered_notebooks = []
-    for notebook in collected_notebooks:
-        reason = skip_reason_or_none_if_ok(notebook)
-        if reason and isinstance(reason, str):
-            print(fmt_skip(notebook, reason))
-        else:
-            filtered_notebooks.append(notebook)
-
-    if args.subcommand == "test":
-        if args.workers == -1:
-            args.workers = None
-        failure = False
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=args.workers,
-            initializer=start_thread_to_terminate_when_parent_process_dies,
-            initargs=(os.getpid(),),
-        ) as executor:
-            futures = [executor.submit(test_notebook, f, args.timeout) for f in filtered_notebooks]
-            for future in concurrent.futures.as_completed(futures):
-                notebook, optional_error_or_skip = future.result()
-                if isinstance(optional_error_or_skip, NotebookError):
-                    if optional_error_or_skip.error_name == "timeout":
-                        print(fmt_error(notebook, optional_error_or_skip.error_name))
-
-                    else:
-                        print("-" * 80)
-
-                        print(fmt_error(notebook, optional_error_or_skip))
-                        print(optional_error_or_skip.traceback)
-                        print("-" * 80)
-                    if args.exit_on_first_fail:
-                        sys.exit(1)
-                    failure = True
-                elif isinstance(optional_error_or_skip, NotebookSkip):
-                    print(fmt_skip(notebook, optional_error_or_skip.reason))
-                else:
-                    print(fmt_ok(notebook))
-
-        if failure:
-            sys.exit(1)
-
-    elif args.subcommand == "render":
-        check_quarto_bin(args.quarto_bin)
-
-        if not notebooks_target_dir(args.website_build_directory).exists():
-            notebooks_target_dir(args.website_build_directory).mkdir(parents=True)
-
-        for notebook in filtered_notebooks:
-            print(
-                process_notebook(
-                    notebook, args.website_build_directory, args.notebook_directory, args.quarto_bin, args.dry_run
-                )
-            )
-
-        # Post-processing steps after all notebooks are handled
-        if not args.dry_run:
-            target_notebooks_dir = notebooks_target_dir(args.website_build_directory)
-            copy_images_from_notebooks_dir_to_target_dir(args.notebook_directory, target_notebooks_dir)
-            add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
-            fix_internal_references_in_mdx_files(args.website_build_directory)
-            add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
-            add_edit_urls_to_non_generated_mdx_files(args.website_build_directory)
-
-    else:
-        print("Unknown subcommand")
-        sys.exit(1)
+    # Post-processing steps after all notebooks are handled
+    if not args.dry_run:
+        target_notebooks_dir = notebooks_target_dir(args.website_build_directory)
+        copy_images_from_notebooks_dir_to_target_dir(args.notebook_directory, target_notebooks_dir)
+        add_notebooks_blogs_and_user_stories_to_nav(args.website_build_directory)
+        fix_internal_references_in_mdx_files(args.website_build_directory)
+        add_authors_and_social_img_to_blog_and_user_stories(args.website_build_directory)
+        add_edit_urls_and_remove_mkdocs_markers(args.website_build_directory)

@@ -1481,6 +1481,9 @@ class ConversableAgent(LLMAgent):
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
             for i in range(max_turns):
+                # check recipient max consecutive auto reply limit
+                if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
+                    break
                 if i == 0:
                     if isinstance(message, Callable):
                         msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
