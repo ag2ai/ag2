@@ -10,6 +10,7 @@ from typing import Any, Optional, Union
 
 from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
+from ....llm_config import LLMConfig
 from ...assistant_agent import ConversableAgent
 from ..text_analyzer_agent import TextAnalyzerAgent
 from .agent_capability import AgentCapability
@@ -42,7 +43,7 @@ class Teachability(AgentCapability):
         path_to_db_dir: Optional[str] = "./tmp/teachable_agent_db",
         recall_threshold: Optional[float] = 1.5,
         max_num_retrievals: Optional[int] = 10,
-        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
     ):
         """Args:
         verbosity (Optional, int): # 0 (default) for basic info, 1 to add memory operations, 2 for analyzer messages, 3 for memo lists.
@@ -50,7 +51,7 @@ class Teachability(AgentCapability):
         path_to_db_dir (Optional, str): path to the directory where this particular agent's DB is stored. Default "./tmp/teachable_agent_db"
         recall_threshold (Optional, float): The maximum distance for retrieved memos, where 0.0 is exact match. Default 1.5. Larger values allow more (but less relevant) memos to be recalled.
         max_num_retrievals (Optional, int): The maximum number of memos to retrieve from the DB. Default 10.
-        llm_config (dict or False): llm inference configuration passed to TextAnalyzerAgent.
+        llm_config (LLMConfig or dict or False): llm inference configuration passed to TextAnalyzerAgent.
             If None, TextAnalyzerAgent uses llm_config from the teachable agent.
         """
         self.verbosity = verbosity

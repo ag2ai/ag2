@@ -5,10 +5,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ......doc_utils import export_module
 from ......import_utils import optional_import_block, require_optional_import
+from ......llm_config import LLMConfig
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message
@@ -35,7 +36,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
     def __init__(
         self,
         *,
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         logger: Optional[Logger] = None,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
@@ -197,7 +198,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
+        cls, llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
