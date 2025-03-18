@@ -4,9 +4,10 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Union
 
 from ...doc_utils import export_module
+from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
 
 __all__ = ["LiteLLmConfigFactory"]
@@ -19,7 +20,7 @@ class LiteLLmConfigFactory(ABC):
     _factories: set["LiteLLmConfigFactory"] = set()
 
     @classmethod
-    def create_lite_llm_config(cls, llm_config: dict[str, Any]) -> dict[str, Any]:
+    def create_lite_llm_config(cls, llm_config: Union[LLMConfig, dict[str, Any]]) -> dict[str, Any]:
         first_llm_config = get_first_llm_config(llm_config)
         for factory in LiteLLmConfigFactory._factories:
             if factory.accepts(first_llm_config):
