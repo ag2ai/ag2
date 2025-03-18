@@ -574,7 +574,6 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     last_tool_result_index = -1
     for message in params["messages"]:
         if message["role"] == "system":
-            # EDIT START - fix issue with system message being a list, not string
             content = process_message_content(message)
             if isinstance(content, list):
                 # For system messages with images, concatenate only the text portions
@@ -582,7 +581,6 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                 params["system"] = params.get("system", "") + (" " if "system" in params else "") + text_content
             else:
                 params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + content
-            # EDIT END
         else:
             # New messages will be added here, manage role alternations
             expected_role = "user" if len(processed_messages) % 2 == 0 else "assistant"
@@ -654,14 +652,12 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                     processed_messages.append(
                         user_continue_message if expected_role == "user" else assistant_continue_message
                     )
-                # EDIT START - process messages for images
+                # Process messages for images
                 processed_content = process_message_content(message)
                 processed_message = message.copy()
                 processed_message["content"] = processed_content
                 processed_messages.append(processed_message)
 
-                # processed_messages.append(message)
-                # EDIT END
 
     # We'll replace the last tool_use if there's no tool_result (occurs if we finish the conversation before running the function)
     if has_tools and tool_use_messages != tool_result_messages:
