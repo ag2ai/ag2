@@ -3,17 +3,31 @@ title: Community Gallery
 mode: "wide"
 ---
 
+{/* DELETE-ME-WHILE-BUILDING-MKDOCS-START */}
+
 import { GalleryPage } from "/snippets/components/GalleryPage.mdx";
 import { galleryItems } from "/snippets/data/GalleryItems.mdx";
 import { ClientSideComponent } from "/snippets/components/ClientSideComponent.mdx";
+
+{/* DELETE-ME-WHILE-BUILDING-MKDOCS-END */}
+
 
 This page contains a list of demos that use AG2 in various applications from the community.
 
 **Contribution guide:**
 Built something interesting with AG2? Submit a PR to add it to the list! See the [Contribution Guide below](#contributing) for more details.
 
+{/* DELETE-ME-WHILE-BUILDING-MKDOCS-START */}
+
 <ClientSideComponent Component={GalleryPage} componentProps={{galleryItems: galleryItems}} />
 
+{/* DELETE-ME-WHILE-BUILDING-MKDOCS-END */}
+
+{/* DELETE-ME-WHILE-BUILDING-MINTLIFY-START */}
+
+{{ render_gallery(gallery_items) }}
+
+{/* DELETE-ME-WHILE-BUILDING-MINTLIFY-END */}
 
 ## Contributing
 Thank you for your interest in contributing! To add your demo to the gallery, please create a Pull Request (PR) with the following details.
