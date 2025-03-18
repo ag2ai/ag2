@@ -321,6 +321,7 @@ class ReasoningAgent(AssistantAgent):
         beam_size: int = 3,
         answer_approach: Literal["pool", "best"] = "pool",
         reason_config: Optional[dict[str, Any]] = None,
+        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -356,6 +357,21 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
+            code_execution_config (dict or False): config for the code execution.
+                To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:
+                - work_dir (Optional, str): The working directory for the code execution.
+                    If None, a default working directory will be used.
+                    The default working directory is the "extensions" directory under
+                    "path_to_autogen".
+                - use_docker (Optional, list, str or bool): The docker image to use for code execution.
+                    Default is True, which means the code will be executed in a docker container. A default list of images will be used.
+                    If a list or a str of image name(s) is provided, the code will be executed in a docker container
+                    with the first image successfully pulled.
+                    If False, the code will be executed in the current environment.
+                    We strongly recommend using docker for code execution.
+                - timeout (Optional, int): The maximum execution time in seconds.
+                - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
+                    If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
             **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
@@ -367,7 +383,7 @@ class ReasoningAgent(AssistantAgent):
             )
             kwargs["silent"] = not kwargs.pop("verbose")
 
-        super().__init__(name=name, llm_config=llm_config, **kwargs)
+        super().__init__(name=name, llm_config=llm_config, code_execution_config=code_execution_config, **kwargs)
         self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
         self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (
             grader_llm_config if grader_llm_config else llm_config
@@ -411,8 +427,7 @@ class ReasoningAgent(AssistantAgent):
         tot_msg = TREEOFTHOUGHT_MESSAGE
         self._user_proxy: Optional[UserProxyAgent] = None
 
-        if self._code_execution_config is not None:
-            self._code_execution_config = False
+        if self._code_execution_config is not False:
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
