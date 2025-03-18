@@ -18,44 +18,45 @@ __all__ = ["ReasoningAgent", "ThinkNode"]
 EPSILON = 1e-6
 
 TREEOFTHOUGHT_MESSAGE = """
-Role: Expert Planning AI Assistant
+Role: Deep Thinking AI Assistant
 
-Task: Given a question and a list of previous steps (the plan trajectory), generate at least four innovative options for the next step. The user would not answer you anything.
+End Goal: Generate a thinking trajectory of steps to follow in order to provide a high-quality response to the user.
+
+Current Task: Given the question and a list of previous thinking steps (the plan trajectory), generate at least four innovative options for the next step in the thinking process to add in the trajectory. The user will not answer you anything.
 
 Instructions:
-- Review the user's question and the previous steps taken.
-- Identify any mistakes or errors in the previous steps.
-- If you find any mistakes, include options to correct them in your proposed options.
-- Think creatively to propose at least four possible options that logically build upon or correct the previous steps.
+- Review the user's question and the previous steps taken. If only the question is provided and no previous steps, then make your suggestions to initiate the thinking process.
+- The options you will provide must be alternatives for the next step in the thinking trajectory. Not steps that consider another option as given. So, make them focused and not too many.
+- Identify any mistakes or errors in the previous thinking. If you find any mistakes, include options to correct them in your proposed options.
 - Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
-- Provide a brief description for each option.
-- Present your output in the specified format.
 - If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
-- If you need to validate, simulate, or illustrate a reasoning concept with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
+- If you need to validate, simulate, or illustrate a reasoning concept (like mathematical expressions, code execution, algorithms, etc.) with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
 
 (Note: Randomness, floating point precision, or hardware specifics may affect outputs, so your reasoning should not rely heavily on Python results.)
+
+Options Restrictions:
+- Never suggest options that access/consult/cross-check the internet, external sources, literature, datasets, books, or experts.
+- Never suggest options in the physical world like conducting experiments or surveys, your approach in practical problems should still be theoretical.
+- Never suggest options that require data you do not have, or suggest research to collect them.
+- Never use Python when there is no need to.
 
 ---
 
 **Format of Output:**
 
 REFLECTION:
-*Give a few sentence reflections on the previous steps, what are wrong and what are good.*
+*Give a few sentence reflections on the previous steps in the thinking trajectory, what is wrong and what is good.*
 
 **Possible Options:**
-Option 1: Correct the error X in the previous steps.
+Option 1: Thinking 1. Short Description.
 
-Option 2: Reiterate and understand the user's question.
+Option 2: Thinking 2. Short Description.
 
-Option 3: Analyze and validate the results based on the previous steps.
+Option 3: Thinking 3. Short Description.
 
-Option 4: Simulate the experiment and perform stats analysis with python.
-```python
+Option 4: Thinking 4. Short Description.
+
 ...
-print(result)
-```
-
-Option 5: Perform Y.
 """
 
 
@@ -118,6 +119,7 @@ class ThinkNode:
         """
         traj = self._trajectory_arr
         ans = traj[0]
+        ans += "# Trajectory:\n"
         for i, option in enumerate(traj[1:]):
             ans += f"\nStep {i + 1}: {option}"
         return ans
@@ -507,6 +509,11 @@ Additionally, a good answer should:
 
 If the answer fails to meet any of the core requirements above, it should be considered a poor response.
 
+Also, rate poory (with 1) trajectories that:
+- Require access to internet, experts opinions or external sources.
+- Require research, hypotheses or data that are not provided.
+- Include solutions in the physical world, like conducting experiments or surveys.
+
 Please provide your rating along with a brief explanation of your assessment.
 """
         else:
@@ -522,6 +529,11 @@ Additionally, a good trajectory should:
 - Be free of any odd or irrelevant content.
 
 If the trajectory does not meet one of the above requirements, it is considered a bad response.
+
+Also, rate poory (with 1) trajectories that:
+- Require access to internet, experts opinions or external sources.
+- Require research, hypotheses or data that are not provided.
+- Include solutions in the physical world, like conducting experiments or surveys.
 
 Please provide your rating along with a brief explanation of your assessment.
 """
@@ -768,9 +780,13 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         self._thinker.clear_history()
 
         if self._method == "lats":
-            prompt = self._lats_context + "\n\n---\n\n" + f"{node.trajectory}\n---\nWhat are the possible next steps?"
+            prompt = (
+                self._lats_context
+                + "\n\n---\n\n"
+                + f"{node.trajectory}\n---\nWhat are some options for the next step in the thinking process?"
+            )
         else:
-            prompt = f"{node.trajectory}\n---\nWhat are the possible next steps?"
+            prompt = f"{node.trajectory}\n---\nWhat are some options for the next steps in the thinking process?"
 
         self.send(
             message=prompt,
