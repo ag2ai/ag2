@@ -41,7 +41,7 @@ jobs:
           uv pip install -e ".[docs]"
           ls -la ./website/mkdocs
           ls -la ./website/mkdocs/data
-          ./scripts/docs_build_mkdocs.sh
+          ./scripts/docs_build_mkdocs.sh --force
           ls -la ./website/mkdocs/site
         working-directory: .
 
