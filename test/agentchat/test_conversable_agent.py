@@ -393,7 +393,7 @@ def test_max_consecutive_auto_reply():
     assert agent1.reply_at_receive[agent] is False and agent.reply_at_receive[agent1] is True
 
 
-def test_max_consecutive_auto_reply_with_max_turns(capsys):
+def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture[str]):
     agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
 
