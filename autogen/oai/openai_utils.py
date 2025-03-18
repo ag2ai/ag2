@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from openai.types.beta.assistant import Assistant
 
 from ..doc_utils import export_module
-from ..llm_config import LLMConfig, LLMConfigEntry
+from ..llm_config import LLMConfig
 
 NON_CACHE_KEY = [
     "api_key",
@@ -192,7 +192,7 @@ def get_config_list(
 @export_module("autogen")
 def get_first_llm_config(
     llm_config: Union[LLMConfig, dict[str, Any]],
-) -> Union[LLMConfigEntry, dict[str, Any]]:
+) -> dict[str, Any]:
     """Get the first LLM config from the given LLM config.
 
     Args:
@@ -212,7 +212,9 @@ def get_first_llm_config(
 
     if len(llm_config["config_list"]) == 0:
         raise ValueError("Config list must contain at least one config.")
-    return llm_config["config_list"][0]  # type: ignore [no-any-return]
+
+    to_return = llm_config["config_list"][0]
+    return to_return if isinstance(to_return, dict) else to_return.model_dump()  # type: ignore [no-any-return]
 
 
 @export_module("autogen")
