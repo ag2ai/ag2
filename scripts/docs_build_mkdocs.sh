@@ -3,4 +3,8 @@
 set -e
 set -x
 
-cd website/mkdocs; python docs.py build
+if [ "$1" == "--force" ]; then
+    cd website/mkdocs; python docs.py build --force
+else
+    cd website/mkdocs; python docs.py build
+fi
