@@ -6,13 +6,14 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import requests
 
 from ...code_utils import content_str
 from ...formatting_utils import colored
 from ...import_utils import optional_import_block, require_optional_import
+from ...llm_config import LLMConfig
 from ..agent import Agent
 from .img_utils import get_image_data, llava_formatter
 from .multimodal_conversable_agent import MultimodalConversableAgent
@@ -168,7 +169,7 @@ def llava_call_binary(
             continue
 
 
-def llava_call(prompt: str, llm_config: dict) -> str:
+def llava_call(prompt: str, llm_config: Union[LLMConfig, dict]) -> str:
     """Makes a call to the LLaVA service to generate text based on a given prompt"""
     prompt, images = llava_formatter(prompt, order_image_tokens=False)
 

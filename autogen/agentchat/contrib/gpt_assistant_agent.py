@@ -12,6 +12,7 @@ from collections import defaultdict
 from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
+from ...llm_config import LLMConfig
 from ...oai.openai_utils import create_gpt_assistant, retrieve_assistants_by_name, update_gpt_assistant
 from ...runtime_logging import log_new_agent, logging_enabled
 from ..agent import Agent
@@ -31,7 +32,7 @@ class GPTAssistantAgent(ConversableAgent):
         self,
         name="GPT Assistant",
         instructions: Optional[str] = None,
-        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
         assistant_config: Optional[dict[str, Any]] = None,
         overwrite_instructions: bool = False,
         overwrite_tools: bool = False,
@@ -46,7 +47,7 @@ class GPTAssistantAgent(ConversableAgent):
         and the assistant does not exist, the system message will be set to
         AssistantAgent.DEFAULT_SYSTEM_MESSAGE. If the assistant exists, the
         system message will be set to the existing assistant instructions.
-        llm_config (dict or False): llm inference configuration.
+        llm_config (LLMConfig or dict or False): llm inference configuration.
             - model: Model to use for the assistant (gpt-4-1106-preview, gpt-3.5-turbo-1106).
         assistant_config
             - assistant_id: ID of the assistant to use. If None, a new assistant will be created.
