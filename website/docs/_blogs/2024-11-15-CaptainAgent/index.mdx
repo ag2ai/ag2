@@ -49,12 +49,9 @@ Without them, CaptainAgent will automatically generate new agents.
 
 ```python
 from autogen.agentchat.contrib.captainagent import CaptainAgent
-from autogen import UserProxyAgent, config_list_from_json
+from autogen import UserProxyAgent, LLMConfig
 
-llm_config = {
-    "temperature": 0,
-    "config_list": config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o"]}),
-}
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model=["gpt-4o"])
 
 ## build agents
 captain_agent = CaptainAgent(
@@ -78,12 +75,9 @@ To use agents from an agent library, you just need to specify a `library_path` s
 
 ```python
 from autogen.agentchat.contrib.captainagent import CaptainAgent
-from autogen import UserProxyAgent, config_list_from_json
+from autogen import UserProxyAgent, LLMConfig
 
-llm_config = {
-    "temperature": 0,
-    "config_list": config_list_from_json("OAI_CONFIG_LIST", filter_dict={"model": ["gpt-4o"]}),
-}
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model=["gpt-4o"])
 
 ## build agents
 captain_agent = CaptainAgent(

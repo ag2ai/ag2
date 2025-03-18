@@ -57,6 +57,7 @@ import os
 
 import nest_asyncio
 
+from autogen import LLMConfig
 from autogen.agentchat import UserProxyAgent
 from autogen.agents.experimental import WebSurferAgent
 
@@ -72,11 +73,15 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"],
+        }
+    ]
+)
 ````
 
 [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
@@ -379,6 +384,7 @@ import os
 
 import nest_asyncio
 
+from autogen import LLMConfig
 from autogen.agentchat import UserProxyAgent
 from autogen.agents.experimental import WebSurferAgent
 
@@ -394,11 +400,15 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"],
+        }
+    ]
+)
 ```
 
 The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.

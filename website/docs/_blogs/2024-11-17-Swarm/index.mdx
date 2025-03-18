@@ -47,7 +47,7 @@ In the following code sample a `ConversableAgent` named `responder` has:
 - An after-work handoff (`AFTER_WORK`) nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
 ```python
-from autogen import register_hand_off, OnCondition, AfterWorkOption
+from autogen import register_hand_off, OnCondition, AfterWorkOption, LLMConfig
 register_hand_off(
     agent=responder,
     hand_to=[
@@ -87,7 +87,7 @@ from autogen import UserProxyAgent
 import os
 
 # All our swarm agents will use GPT-4o-mini from OpenAI
-llm_config = {...}
+llm_config = LLMConfig(config_list=[{...}])  # Replace ... with your LLM configuration
 
 # We configure our starting context dictionary
 context_variables = {
