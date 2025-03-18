@@ -39,6 +39,8 @@ jobs:
           uv venv
           . .venv/bin/activate
           uv pip install -e ".[docs]"
+          ls -la ./website/mkdocs
+          ls -la ./website/mkdocs/data
           ./scripts/docs_build_mkdocs.sh
           ls -la ./website/mkdocs/site
         working-directory: .
