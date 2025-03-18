@@ -393,7 +393,7 @@ def test_max_consecutive_auto_reply():
     assert agent1.reply_at_receive[agent] is False and agent.reply_at_receive[agent1] is True
 
 
-def test_max_consecutive_auto_reply_with_max_turns():
+def test_max_consecutive_auto_reply_with_max_turns(capsys):
     agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
 
@@ -401,11 +401,21 @@ def test_max_consecutive_auto_reply_with_max_turns():
     agent1.initiate_chat(agent2, message="hello", max_turns=50)
     assert len(agent2.chat_messages[agent1]) == 4
     assert len(agent1.chat_messages[agent2]) == 4
+    # checking captured output
+    captured = capsys.readouterr()
+    assert "TERMINATING RUN" in captured.out
+    assert "Maximum number of consecutive auto-replies reached" in captured.out
+
+    _ = capsys.readouterr()  # Explicitly clear buffer
 
     # max_consecutive_auto_reply parameter on the recipient agent
     agent2.initiate_chat(agent1, message="hello", max_turns=50)
     assert len(agent1.chat_messages[agent2]) == 3
     assert len(agent2.chat_messages[agent1]) == 3
+    # checking captured output
+    captured = capsys.readouterr()
+    assert "TERMINATING RUN" in captured.out
+    assert "Maximum number of consecutive auto-replies reached" in captured.out
 
 
 def test_conversable_agent():
