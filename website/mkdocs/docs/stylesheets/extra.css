@@ -547,3 +547,43 @@ p.hero-subtitle {
 }
 
 /* Examples page Gallery section ends */
+
+/* Blog page section starts */
+.blog-authors {
+    margin: 1rem 0;
+}
+.blog-authors .px-6.py-5{
+    padding:0.35rem 0;
+}
+
+.blog-authors .card-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.blog-authors .card {
+    display: flex;
+    padding: 0;
+    margin: 0;
+    justify-content: flex-start;
+    background: none;
+    border: none;
+}
+.blog-authors .card img {
+    max-width: 60px;
+    height: auto;
+    border-radius: 50%;
+}
+.blog-authors p {
+    font-weight: 300;
+    margin: 0;
+}
+.blog-authors p.name, .blog-authors p.authors {
+    font-weight: 700;
+}
+.blog-authors p.authors {
+    margin: 0.5rem 0;
+}
+.blog-authors .img-placeholder {
+    margin-right: 1rem;
+}
+  /* Blog page section ends */

@@ -14,7 +14,6 @@ import shutil
 import sys
 from copy import deepcopy
 from pathlib import Path
-from textwrap import dedent, indent
 from typing import Sequence, Union
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -22,18 +21,18 @@ from .notebook_processor import (
     create_base_argument_parser,
     process_notebooks_core,
 )
-from .utils import NavigationGroup, remove_marker_blocks, sort_files_by_date
+from .utils import (
+    NavigationGroup,
+    add_authors_and_social_preview,
+    ensure_edit_url,
+    get_authors_info,
+    remove_marker_blocks,
+    sort_files_by_date,
+)
 
 with optional_import_block():
     import yaml
     from jinja2 import Template
-
-
-EDIT_URL_HTML = """
-<div className="edit-url-container">
-    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
-</div>
-"""
 
 
 def notebooks_target_dir(website_build_directory: Path) -> Path:
@@ -201,19 +200,6 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_build_dir
 
     pattern = r"````mdx-code-block\n(!\[.*?\]\(.*?\))\n````"
     return re.sub(pattern, resolve_path, content)
-
-
-def ensure_edit_url(content: str, file_path: Path) -> str:
-    """Ensure editUrl is present in the content.
-    Args:
-        content (str): Content of the file
-        file_path (Path): Path to the file
-    """
-    html_placeholder = [line for line in EDIT_URL_HTML.splitlines() if line.strip() != ""][0]
-    if html_placeholder in content:
-        return content
-
-    return content + EDIT_URL_HTML.format(file_path=file_path)
 
 
 def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
@@ -524,127 +510,6 @@ def fix_internal_references_in_mdx_files(website_build_directory: Path) -> None:
             sys.exit(1)
 
 
-def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict[str, str]]) -> str:
-    """Constructs HTML for displaying author cards in a blog.
-
-    Args:
-        authors_list: list of author identifiers
-        authors_dict: Dictionary containing author information keyed by author identifier
-    Returns:
-        str: Formatted HTML string containing author cards
-    """
-    if not authors_list:
-        return ""
-
-    card_template = """
-        <Card href="{url}">
-            <div class="col card">
-              <div class="img-placeholder">
-                <img noZoom src="{avatar}" />
-              </div>
-              <div>
-                <p class="name">{name}</p>
-                <p>{description}</p>
-              </div>
-            </div>
-        </Card>"""
-
-    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
-
-    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
-    authors_html_str = indent("".join(authors_html), "        ")
-    retval = dedent(
-        f"""
-            <div class="blog-authors">
-              <p class="authors">{author_label}</p>
-              <CardGroup cols={{2}}>{authors_html_str}
-              </CardGroup>
-            </div>
-        """
-    )
-    return retval
-
-
-def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
-    """Separate front matter and content from a markdown file.
-
-    Args:
-        file_path (Path): Path to the mdx file
-    """
-    content = file_path.read_text(encoding="utf-8")
-
-    if content.startswith("---"):
-        front_matter_end = content.find("---", 3)
-        front_matter = content[0 : front_matter_end + 3]
-        content = content[front_matter_end + 3 :].strip()
-        return front_matter, content
-
-    return "", content
-
-
-@require_optional_import("yaml", "docs")
-def _get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
-    try:
-        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))["authors"]
-    except (yaml.YAMLError, OSError) as e:
-        print(f"Error reading authors file: {e}")
-        sys.exit(1)
-
-    return all_authors_info  # type: ignore [no-any-return]
-
-
-@require_optional_import("yaml", "docs")
-def _add_authors_and_social_preview(
-    website_build_dir: Path, target_dir: Path, all_authors_info: dict[str, dict[str, str]]
-) -> None:
-    """Add authors info and social share image to mdx files in the target directory."""
-
-    # Social share image
-    social_img_html = """\n<div>
-<img noZoom className="social-share-img"
-  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
-  alt="social preview"
-  style={{ position: 'absolute', left: '-9999px' }}
-/>
-</div>"""
-
-    for file_path in target_dir.glob("**/*.mdx"):
-        try:
-            front_matter_string, content = separate_front_matter_and_content(file_path)
-
-            # Convert single author to list and handle authors
-            front_matter = yaml.safe_load(front_matter_string[4:-3])
-            authors = front_matter.get("authors", [])
-            authors_list = [authors] if isinstance(authors, str) else authors
-
-            # Generate authors HTML
-            authors_html = (
-                construct_authors_html(authors_list, all_authors_info)
-                if '<div class="blog-authors">' not in content
-                else ""
-            )
-
-            # Combine content
-            new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
-
-            # ensure editUrl is present
-            rel_file_path = (
-                str(file_path.relative_to(website_build_dir.parent))
-                .replace("build/docs/", "website/docs/")
-                .replace("website/docs/blog/", "website/docs/_blogs/")
-            )
-            content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
-
-            # replace the mkdocs excerpt marker
-            content_with_edit_url = content_with_edit_url.replace(r"\<!-- more -->", "")
-
-            file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            continue
-
-
 def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory: Path) -> None:
     """Add authors info to blog posts and user stories.
 
@@ -655,7 +520,7 @@ def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory:
     generated_blog_dir = website_build_directory / "docs" / "blog"
 
     authors_yml = website_build_directory / "blogs_and_user_stories_authors.yml"
-    all_authors_info = _get_authors_info(authors_yml)
+    all_authors_info = get_authors_info(authors_yml)
 
     # Remove existing generated directory if it exists
     if generated_blog_dir.exists():
@@ -663,10 +528,10 @@ def add_authors_and_social_img_to_blog_and_user_stories(website_build_directory:
 
     # Copy entire blog directory structure to generated_blog
     shutil.copytree(blog_dir, generated_blog_dir)
-    _add_authors_and_social_preview(website_build_directory, generated_blog_dir, all_authors_info)
+    add_authors_and_social_preview(website_build_directory, generated_blog_dir, all_authors_info)
 
     user_stories_dir = website_build_directory / "docs" / "user-stories"
-    _add_authors_and_social_preview(website_build_directory, user_stories_dir, all_authors_info)
+    add_authors_and_social_preview(website_build_directory, user_stories_dir, all_authors_info)
 
 
 def ensure_mint_json_exists(website_build_directory: Path) -> None:

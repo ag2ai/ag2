@@ -11,6 +11,7 @@ import pytest
 
 from autogen._website.generate_mkdocs import (
     add_api_ref_to_mkdocs_template,
+    add_authors_info_to_user_stories,
     add_excerpt_marker,
     add_notebooks_nav,
     filter_excluded_files,
@@ -566,26 +567,24 @@ def test_generate_user_stories_nav() -> None:
 
         file_1 = user_stories_dir / "2025-03-11-NOVA" / "index.md"
         file_1.parent.mkdir(parents=True, exist_ok=True)
-        file_1.write_text("""
----
+        file_1.write_text("""---
 title: Unlocking the Power of Agentic Workflows at Nexla with AG2
 authors:
-  - ABC
-  - XYZ
+  - sonichi
+  - qingyunwu
 tags: [data automation, agents, AG2, Nexla]
 ---
 
 > AG2 has been instrumental in helping Nexla build NOVA,
 """)
 
-        file_1 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
-        file_1.parent.mkdir(parents=True, exist_ok=True)
-        file_1.write_text("""
----
+        file_2 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
+        file_2.parent.mkdir(parents=True, exist_ok=True)
+        file_2.write_text("""---
 title: Some other text
 authors:
-  - ABC
-  - XYZ
+  - sonichi
+  - qingyunwu
 tags: [data automation, agents, AG2, Nexla]
 ---
 
@@ -631,6 +630,102 @@ tags: [data automation, agents, AG2, Nexla]
 """)
 
         actual = mkdocs_nav_path.read_text()
+        assert actual == expected
+
+
+def test_add_authors_info_to_user_stories() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create User Stories directory
+        mkdocs_output_dir = Path(tmpdir) / "mkdocs" / "docs" / "docs"
+        user_stories_dir = mkdocs_output_dir / "user-stories"
+
+        file_1 = user_stories_dir / "2025-03-11-NOVA" / "index.md"
+        file_1.parent.mkdir(parents=True, exist_ok=True)
+        file_1.write_text("""---
+title: Unlocking the Power of Agentic Workflows at Nexla with AG2
+authors:
+  - sonichi
+  - qingyunwu
+tags: [data automation, agents, AG2, Nexla]
+---
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
+
+        file_2 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
+        file_2.parent.mkdir(parents=True, exist_ok=True)
+        file_2.write_text("""---
+title: Some other text
+authors:
+  - sonichi
+  - qingyunwu
+tags: [data automation, agents, AG2, Nexla]
+---
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
+
+        authors_yml = Path(tmpdir) / "blogs_and_user_stories_authors.yml"
+
+        authors_yml.write_text("""
+authors:
+  sonichi:
+    name: Chi Wang
+    description: Founder of AutoGen (now AG2) & FLAML
+    url: https://www.linkedin.com/in/chi-wang-autogen/
+    avatar: https://github.com/sonichi.png
+
+  qingyunwu:
+    name: Qingyun Wu
+    description: Co-Founder of AutoGen/AG2 & FLAML, Assistant Professor at Penn State University
+    url: https://qingyun-wu.github.io/
+    avatar: https://github.com/qingyun-wu.png
+""")
+
+        add_authors_info_to_user_stories(Path(tmpdir))
+
+        actual = file_1.read_text()
+        expected = dedent("""---
+title: Unlocking the Power of Agentic Workflows at Nexla with AG2
+authors:
+  - sonichi
+  - qingyunwu
+tags: [data automation, agents, AG2, Nexla]
+---
+
+<div class="blog-authors">
+<p class="authors">Authors:</p>
+<div class="card-group">
+
+<div class="card">
+    <div class="col card">
+      <div class="img-placeholder">
+        <img noZoom src="https://github.com/sonichi.png" />
+      </div>
+      <div>
+        <p class="name">Chi Wang</p>
+        <p>Founder of AutoGen (now AG2) & FLAML</p>
+      </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="col card">
+      <div class="img-placeholder">
+        <img noZoom src="https://github.com/qingyun-wu.png" />
+      </div>
+      <div>
+        <p class="name">Qingyun Wu</p>
+        <p>Co-Founder of AutoGen/AG2 & FLAML, Assistant Professor at Penn State University</p>
+      </div>
+    </div>
+</div>
+
+</div>
+</div>
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
         assert actual == expected
 
 

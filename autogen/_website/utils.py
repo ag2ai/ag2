@@ -5,14 +5,25 @@
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TypedDict, Union
+from textwrap import dedent, indent
+from typing import Literal, Optional, TypedDict, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 
 with optional_import_block():
     import yaml
+
+
+EDIT_URL_HTML = """
+<div className="edit-url-container">
+    <a className="edit-url" href="https://github.com/ag2ai/ag2/edit/main/{file_path}" target='_blank'><Icon icon="pen" iconType="solid" size="13px"/> Edit this page</a>
+</div>
+"""
+
+build_system = Literal["mkdocs", "mintlify"]
 
 
 class NavigationGroup(TypedDict):
@@ -100,6 +111,183 @@ def sort_files_by_date(file_path: Path) -> tuple[datetime, str]:
     except ValueError:
         date = datetime.min
     return (date, dirname)
+
+
+def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict[str, str]], build_system: str) -> str:
+    """Constructs HTML for displaying author cards in a blog.
+
+    Args:
+        authors_list: list of author identifiers
+        authors_dict: Dictionary containing author information keyed by author identifier
+        build_system: The build system being used (mkdocs or mintlify)
+    Returns:
+        str: Formatted HTML string containing author cards
+    """
+    if not authors_list:
+        return ""
+
+    card_template_mintlify = """
+        <Card href="{url}">
+            <div class="col card">
+              <div class="img-placeholder">
+                <img noZoom src="{avatar}" />
+              </div>
+              <div>
+                <p class="name">{name}</p>
+                <p>{description}</p>
+              </div>
+            </div>
+        </Card>"""
+
+    card_template_mkdocs = """
+        <div class="card">
+            <div class="col card">
+              <div class="img-placeholder">
+                <img noZoom src="{avatar}" />
+              </div>
+              <div>
+                <p class="name">{name}</p>
+                <p>{description}</p>
+              </div>
+            </div>
+        </div>
+    """
+
+    card_template = card_template_mintlify if build_system == "mintlify" else card_template_mkdocs
+
+    authors_html = [card_template.format(**authors_dict[author]) for author in authors_list]
+
+    author_label = "Author:" if len(authors_list) == 1 else "Authors:"
+    authors_html_str = indent("".join(authors_html), "        ")
+
+    retval = ""
+    if build_system == "mintlify":
+        retval = dedent(
+            f"""
+                <div class="blog-authors">
+                <p class="authors">{author_label}</p>
+                <CardGroup cols={{2}}>{authors_html_str}
+                </CardGroup>
+                </div>
+            """
+        )
+    else:
+        retval = dedent(
+            f"""
+                <div class="blog-authors">
+                <p class="authors">{author_label}</p>
+                <div class="card-group">
+                    {authors_html_str}
+                </div>
+                </div>
+            """
+        )
+    return retval
+
+
+def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
+    """Separate front matter and content from a markdown file.
+
+    Args:
+        file_path (Path): Path to the mdx file
+    """
+    content = file_path.read_text(encoding="utf-8")
+
+    if content.startswith("---"):
+        front_matter_end = content.find("---", 3)
+        front_matter = content[0 : front_matter_end + 3]
+        content = content[front_matter_end + 3 :].strip()
+        return front_matter, content
+
+    return "", content
+
+
+def ensure_edit_url(content: str, file_path: Path) -> str:
+    """Ensure editUrl is present in the content.
+    Args:
+        content (str): Content of the file
+        file_path (Path): Path to the file
+    """
+    html_placeholder = [line for line in EDIT_URL_HTML.splitlines() if line.strip() != ""][0]
+    if html_placeholder in content:
+        return content
+
+    return content + EDIT_URL_HTML.format(file_path=file_path)
+
+
+@require_optional_import("yaml", "docs")
+def add_authors_and_social_preview(
+    website_build_dir: Path,
+    target_dir: Path,
+    all_authors_info: dict[str, dict[str, str]],
+    build_system: build_system = "mintlify",
+) -> None:
+    """Add authors info and social share image to mdx files in the target directory."""
+
+    social_img_html = (
+        """\n<div>
+<img noZoom className="social-share-img"
+  src="https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/website/static/img/cover.png"
+  alt="social preview"
+  style={{ position: 'absolute', left: '-9999px' }}
+/>
+</div>"""
+        if build_system == "mintlify"
+        else ""
+    )
+
+    target_file_extension = "mdx" if build_system == "mintlify" else "md"
+    for file_path in target_dir.glob(f"**/*.{target_file_extension}"):
+        try:
+            front_matter_string, content = separate_front_matter_and_content(file_path)
+
+            # Convert single author to list and handle authors
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            authors = front_matter.get("authors", [])
+            authors_list = [authors] if isinstance(authors, str) else authors
+
+            # Generate authors HTML
+            authors_html = (
+                construct_authors_html(authors_list, all_authors_info, build_system)
+                if '<div class="blog-authors">' not in content
+                else ""
+            )
+
+            # Combine content
+            new_content = f"{front_matter_string}\n{social_img_html}\n{authors_html}\n{content}"
+
+            # ensure editUrl is present
+
+            if build_system == "mintlify":
+                rel_file_path = (
+                    str(file_path.relative_to(website_build_dir.parent))
+                    .replace("build/docs/", "website/docs/")
+                    .replace("website/docs/blog/", "website/docs/_blogs/")
+                )
+                content_with_edit_url = ensure_edit_url(new_content, Path(rel_file_path))
+
+                # replace the mkdocs excerpt marker
+                content_with_edit_url = content_with_edit_url.replace(r"\<!-- more -->", "")
+
+                file_path.write_text(f"{content_with_edit_url}\n", encoding="utf-8")
+
+            else:
+                file_path.write_text(f"{new_content}\n", encoding="utf-8")
+
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+
+
+@require_optional_import("yaml", "docs")
+def get_authors_info(authors_yml: Path) -> dict[str, dict[str, str]]:
+    try:
+        all_authors_info = yaml.safe_load(authors_yml.read_text(encoding="utf-8"))["authors"]
+    except (yaml.YAMLError, OSError) as e:
+        print(f"Error reading authors file: {e}")
+        sys.exit(1)
+
+    return all_authors_info  # type: ignore [no-any-return]
 
 
 @require_optional_import("yaml", "docs")

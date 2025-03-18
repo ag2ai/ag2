@@ -16,7 +16,9 @@ from .notebook_processor import (
 )
 from .utils import (
     NavigationGroup,
+    add_authors_and_social_preview,
     copy_files,
+    get_authors_info,
     get_git_tracked_and_untracked_files_in_directory,
     remove_marker_blocks,
     render_gallery_html,
@@ -848,6 +850,21 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
     mkdocs_nav_path.write_text(updated_nav_content)
 
 
+def add_authors_info_to_user_stories(website_dir: Path) -> None:
+    mkdocs_output_dir = website_dir / "mkdocs" / "docs" / "docs"
+    user_stories_dir = mkdocs_output_dir / "user-stories"
+    authors_yml = website_dir / "blogs_and_user_stories_authors.yml"
+
+    all_authors_info = get_authors_info(authors_yml)
+
+    add_authors_and_social_preview(website_dir, user_stories_dir, all_authors_info, "mkdocs")
+
+    for file_path in user_stories_dir.glob("**/*.md"):
+        content = file_path.read_text(encoding="utf-8")
+        updated_content = transform_content_for_mkdocs(content)
+        file_path.write_text(updated_content, encoding="utf-8")
+
+
 def main(force: bool) -> None:
     root_dir = Path(__file__).resolve().parents[2]
     website_dir = root_dir / "website"
@@ -914,3 +931,6 @@ def main(force: bool) -> None:
     # Generate Navigation for User Stories
     docs_dir = mkdocs_root_dir / "docs"
     generate_user_stories_nav(docs_dir, mkdocs_nav_path)
+
+    # Add Authors info to User Stories
+    add_authors_info_to_user_stories(website_dir)
