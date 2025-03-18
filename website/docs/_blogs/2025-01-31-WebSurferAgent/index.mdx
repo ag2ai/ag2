@@ -73,15 +73,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-llm_config = LLMConfig(
-    config_list=[
-        {
-            "api_type": "openai",
-            "model": "gpt-4o-mini",
-            "api_key": os.environ["OPENAI_API_KEY"],
-        }
-    ]
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 ````
 
 [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
@@ -95,7 +87,8 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 - ✅ **Easier setup** – No need to manually register tools
 
 ```python
-websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+with llm_config:
+    websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 
 websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
