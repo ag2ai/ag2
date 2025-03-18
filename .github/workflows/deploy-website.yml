@@ -33,13 +33,16 @@ jobs:
         with:
           python-version: 3.x
 
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
       # Step 3: Build MkDocs
       - name: Build documentation
         run: |
           uv venv
           . .venv/bin/activate
           uv pip install -e ".[docs]"
-          ./scripts/docs_build_mkdocs.sh
+          ./scripts/docs_build_mkdocs.sh --force
           ls -la ./website/mkdocs/site
         working-directory: .
 
