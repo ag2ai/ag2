@@ -10,6 +10,7 @@ from .... import ConversableAgent
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.contrib.swarm_agent import SwarmResult
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs
 from .chroma_query_engine import VectorChromaQueryEngine
 from .document_utils import preprocess_path
@@ -34,7 +35,7 @@ class DoclingDocIngestAgent(ConversableAgent):
     def __init__(
         self,
         name: Optional[str] = None,
-        llm_config: Optional[Union[dict, Literal[False]]] = None,  # type: ignore[type-arg]
+        llm_config: Optional[Union[LLMConfig, dict, Literal[False]]] = None,  # type: ignore[type-arg]
         parsed_docs_path: Optional[Union[Path, str]] = None,
         query_engine: Optional[RAGQueryEngine] = None,
         return_agent_success: str = "TaskManagerAgent",

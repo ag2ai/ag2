@@ -6,11 +6,12 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple, Union
 
 from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
+from ....llm_config import LLMConfig
 
 __all__ = ["ReasoningAgent", "ThinkNode"]
 
@@ -312,8 +313,8 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: dict[str, Any],
-        grader_llm_config: Optional[dict[str, Any]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: Literal["pool", "best"] = "pool",
@@ -324,8 +325,8 @@ class ReasoningAgent(AssistantAgent):
 
         Args:
             name (str): Name of the agent
-            llm_config (dict): Configuration for the language model
-            grader_llm_config (Optional[dict[str, Any]]): Optional separate configuration for the grader model. If not provided, uses llm_config
+            llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): Configuration for the language model
+            grader_llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): Optional separate configuration for the grader model. If not provided, uses llm_config
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
@@ -365,8 +366,10 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config: dict[str, Any] = llm_config
-        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
+        self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
+        self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (
+            grader_llm_config if grader_llm_config else llm_config
+        )
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
             warnings.warn(

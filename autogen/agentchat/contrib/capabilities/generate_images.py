@@ -10,6 +10,7 @@ from typing import Any, Literal, Optional, Protocol, Union
 from .... import Agent, ConversableAgent, code_utils
 from ....cache import AbstractCache
 from ....import_utils import optional_import_block, require_optional_import
+from ....llm_config import LLMConfig
 from .. import img_utils
 from ..capabilities.agent_capability import AgentCapability
 from ..text_analyzer_agent import TextAnalyzerAgent
@@ -77,13 +78,13 @@ class DalleImageGenerator:
 
     def __init__(
         self,
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         resolution: Literal["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"] = "1024x1024",
         quality: Literal["standard", "hd"] = "standard",
         num_images: int = 1,
     ):
         """Args:
-        llm_config (dict): llm config, must contain a valid dalle model and OpenAI API key in config_list.
+        llm_config (LLMConfig or dict): llm config, must contain a valid dalle model and OpenAI API key in config_list.
         resolution (str): The resolution of the image you want to generate. Must be one of "256x256", "512x512", "1024x1024", "1792x1024", "1024x1792".
         quality (str): The quality of the image you want to generate. Must be one of "standard", "hd".
         num_images (int): The number of images to generate.
@@ -153,7 +154,7 @@ class ImageGeneration(AgentCapability):
         self,
         image_generator: ImageGenerator,
         cache: Optional[AbstractCache] = None,
-        text_analyzer_llm_config: Optional[dict[str, Any]] = None,
+        text_analyzer_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         text_analyzer_instructions: str = PROMPT_INSTRUCTIONS,
         verbosity: int = 0,
         register_reply_position: int = 2,
@@ -162,7 +163,7 @@ class ImageGeneration(AgentCapability):
         image_generator (ImageGenerator): The image generator you would like to use to generate images.
         cache (None or AbstractCache): The cache client to use to store and retrieve generated images. If None,
             no caching will be used.
-        text_analyzer_llm_config (Dict or None): The LLM config for the text analyzer. If None, the LLM config will
+        text_analyzer_llm_config (LLMConfig or Dict or None): The LLM config for the text analyzer. If None, the LLM config will
             be retrieved from the agent you're adding the ability to.
         text_analyzer_instructions (str): Instructions provided to the TextAnalyzerAgent used to analyze
             incoming messages and extract the prompt for image generation. The default instructions focus on
