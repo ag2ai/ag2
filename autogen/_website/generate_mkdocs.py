@@ -163,8 +163,12 @@ def fix_asset_path(content: str) -> str:
 
 def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_docs_dir) -> str:
     # Special case for the API Reference
-    if abs_file_url == "/docs/api-reference":
-        return f"{abs_file_url}/AfterWork"
+    if abs_file_url in {"/docs/api-reference", "/docs/api-reference/autogen"}:
+        return (
+            f"{abs_file_url}/autogen/AfterWork"
+            if abs_file_url == "/docs/api-reference"
+            else f"{abs_file_url}/AfterWork"
+        )
 
     # Handle API reference URLs with hash fragments
     if abs_file_url.startswith("/docs/api-reference/") and "#" in abs_file_url:
