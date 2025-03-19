@@ -152,9 +152,7 @@ llm_config = autogen.LLMConfig(
 
 # This agent's responses will now be based on the MathReasoning model
 with llm_config:
-    assistant = autogen.AssistantAgent(
-        name="Math_solver",
-    )
+    assistant = autogen.AssistantAgent(name="Math_solver")
 ```
 
 A sample response to `how can I solve 8x + 7 = -23` would be:
