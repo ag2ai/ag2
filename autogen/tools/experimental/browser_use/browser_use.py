@@ -4,7 +4,7 @@
 
 from typing import Annotated, Any, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -19,7 +19,32 @@ with optional_import_block():
     from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
 
 
-__all__ = ["BrowserUseResult", "BrowserUseTool"]
+__all__ = ["BrowserUseResult", "BrowserUseTool", "ExtractedContent"]
+
+
+@export_module("autogen.tools.experimental.browser_use")
+class ExtractedContent(BaseModel):
+    """Extracted content from the browser.
+
+    Attributes:
+        content: The extracted content.
+        url: The URL of the extracted content
+    """
+
+    content: str
+    url: Optional[str]
+
+    @field_validator("url")
+    @classmethod
+    def check_url(cls, v: str) -> Optional[str]:
+        """Check if the URL is about:blank and return None if it is.
+
+        Args:
+            v: The URL to check.
+        """
+        if v == "about:blank":
+            return None
+        return v
 
 
 @export_module("autogen.tools.experimental.browser_use")
@@ -31,7 +56,7 @@ class BrowserUseResult(BaseModel):
         final_result: The final result.
     """
 
-    extracted_content: list[str]
+    extracted_content: list[ExtractedContent]
     final_result: Optional[str]
 
 
@@ -108,8 +133,12 @@ class BrowserUseTool(Tool):
 
             result = await agent.run(max_steps=max_steps)
 
+            extracted_content = [
+                ExtractedContent(content=content, url=url)
+                for content, url in zip(result.extracted_content(), result.urls())
+            ]
             return BrowserUseResult(
-                extracted_content=result.extracted_content(),
+                extracted_content=extracted_content,
                 final_result=result.final_result(),
             )
 
