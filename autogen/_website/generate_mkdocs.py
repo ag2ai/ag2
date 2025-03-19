@@ -31,6 +31,17 @@ with optional_import_block():
     from jinja2 import Template
 
 
+root_dir = Path(__file__).resolve().parents[2]
+website_dir = root_dir / "website"
+
+mint_docs_dir = website_dir / "docs"
+
+mkdocs_root_dir = website_dir / "mkdocs"
+
+mkdocs_docs_dir = mkdocs_root_dir / "docs"
+mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
+
+
 def filter_excluded_files(files: list[Path], exclusion_list: list[str], website_dir: Path) -> list[Path]:
     return [
         file
@@ -150,9 +161,33 @@ def fix_asset_path(content: str) -> str:
     return modified_content
 
 
+def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_docs_dir) -> str:
+    # Special case for the API Reference
+    if abs_file_url == "/docs/api-reference":
+        return f"{abs_file_url}/AfterWork"
+
+    # Handle API reference URLs with hash fragments
+    if abs_file_url.startswith("/docs/api-reference/") and "#" in abs_file_url:
+        base_url, fragment = abs_file_url.split("#")
+        module_prefix = base_url.replace("/docs/api-reference/", "").replace("/", ".")
+        return f"{base_url}#{module_prefix}.{fragment.replace('-', '_')}"
+
+    file_path = mkdocs_docs_dir / (abs_file_url.lstrip("/") + ".md")
+    if file_path.is_file():
+        return abs_file_url
+
+    full_path = mkdocs_docs_dir / abs_file_url.lstrip("/")
+
+    if not full_path.is_dir():
+        return abs_file_url
+
+    # Find the first .md file in the directory
+    md_files = sorted(list(full_path.glob("*.md")))
+    return f"{abs_file_url}/{md_files[0].stem}"
+
+
 def absolute_to_relative(source_path: str, dest_path: str) -> str:
-    """
-    Convert an absolute path to a relative path from the source directory.
+    """Convert an absolute path to a relative path from the source directory.
 
     Args:
         source_path: The source file's absolute path
@@ -161,21 +196,19 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
     Returns:
         A relative path from source to destination
     """
-    # Get the directory of the source file
-    source_dir = os.path.dirname(source_path)
-
-    # Calculate the relative path from source_dir to dest_path
-    rel_path = os.path.relpath(dest_path, source_dir)
-
-    return rel_path
+    try:
+        rel_path = Path(dest_path).relative_to(Path(source_path).parent)
+        return f"../{rel_path}" if str(rel_path) == "quick-start" else f"./{rel_path}"
+    except ValueError:
+        return os.path.relpath(dest_path, source_path)
 
 
 def fix_internal_links(source_path: str, content: str) -> str:
     """Detect internal links in content that start with '/docs' and convert them to relative paths.
 
     Args:
-        content: The content with potential internal links
         source_path: The source file's absolute path
+        content: The content with potential internal links
 
     Returns:
         Content with internal links converted to relative paths
@@ -188,14 +221,16 @@ def fix_internal_links(source_path: str, content: str) -> str:
     # Convert HTML links
     def replace_html_link(match: re.Match[str]) -> str:
         absolute_link = match.group(1)
-        relative_link = absolute_to_relative(source_path, absolute_link)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
         return f'href="{relative_link}"'
 
     # Convert Markdown links
     def replace_markdown_link(match: re.Match[str]) -> str:
         link_text = match.group(1)
         absolute_link = match.group(2)
-        relative_link = absolute_to_relative(source_path, absolute_link)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
         return f"[{link_text}]({relative_link})"
 
     # Apply replacements
@@ -274,7 +309,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
             content = file.read_text()
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
-            rel_path = f"/{dest.relative_to(output_dir.parents[1])}"
+            rel_path = f"/{dest.relative_to(output_dir.parents[0])}"
             processed_content = transform_content_for_mkdocs(content, rel_path)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(processed_content)
@@ -922,20 +957,12 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
 
     for file_path in user_stories_dir.glob("**/*.md"):
         content = file_path.read_text(encoding="utf-8")
-        rel_path = f"/{file_path.relative_to(mkdocs_output_dir.parents[1])}"
+        rel_path = f"/{file_path.relative_to(mkdocs_output_dir.parents[0])}"
         updated_content = transform_content_for_mkdocs(content, rel_path)
         file_path.write_text(updated_content, encoding="utf-8")
 
 
 def main(force: bool) -> None:
-    root_dir = Path(__file__).resolve().parents[2]
-    website_dir = root_dir / "website"
-
-    mint_input_dir = website_dir / "docs"
-
-    mkdocs_root_dir = website_dir / "mkdocs"
-    mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
-
     parser = create_base_argument_parser()
     args = parser.parse_args(["render"])
     args.dry_run = False
@@ -955,11 +982,11 @@ def main(force: bool) -> None:
     ]
     nav_exclusions = [""]
 
-    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
+    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_docs_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
 
     copy_assets(website_dir)
-    process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
+    process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
 
     snippets_dir_path = website_dir / "snippets"
     authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"

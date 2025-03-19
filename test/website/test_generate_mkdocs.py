@@ -18,6 +18,7 @@ from autogen._website.generate_mkdocs import (
     filter_excluded_files,
     fix_asset_path,
     fix_internal_links,
+    fix_internal_references,
     fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
@@ -1155,9 +1156,60 @@ search:
         assert summary_md_path.read_text() == expected
 
 
+def test_fix_internal_references() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source directory structure
+        tmpdir_path = Path(tmpdir)
+        mkdocs_dir = tmpdir_path / "mkdocs"
+        mkdocs_dir.mkdir()
+
+        # Create the files
+        file = mkdocs_dir / "quick-start.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        actual = fix_internal_references("/mkdocs/quick-start.md", tmpdir_path)
+        expected = "/mkdocs/quick-start.md"
+
+        assert actual == expected
+
+        notebooks_dir = tmpdir_path / "notebooks"
+        notebooks_dir.mkdir()
+
+        # Create the files
+        file = notebooks_dir / "quick-start.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        # Create the files
+        file = tmpdir_path / "Notebooks.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        actual = fix_internal_references("/Notebooks", tmpdir_path)
+        expected = "/Notebooks"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/mkdocs", tmpdir_path)
+        expected = "/mkdocs/quick-start"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/docs/api-reference", tmpdir_path)
+        expected = "/docs/api-reference/AfterWork"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/docs/api-reference/autogen/ConversableAgent#initiate-all-chats", tmpdir_path)
+        expected = "/docs/api-reference/autogen/ConversableAgent#autogen.ConversableAgent.initiate_all_chats"
+
+        assert actual == expected
+
+
 class TestFixInternalLinks:
     def test_absolute_to_relative(self) -> None:
-        source_path = "/docs/docs/home/quick-start.md"
+        source_path = "/docs/home/quick-start.md"
         content = "/docs/user-guide/basic-concepts/installing-ag2"
 
         expected = "../../user-guide/basic-concepts/installing-ag2"
@@ -1165,16 +1217,40 @@ class TestFixInternalLinks:
 
         assert actual == expected
 
+        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
+        content = "/docs/user-guide/basic-concepts/tools/interop/langchain"
+
+        expected = "./interop/langchain"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
+        content = "/docs/user-guide/basic-concepts/tools/basics"
+
+        expected = "./basics"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/home/home.md"
+        content = "/docs/home/quick-start"
+
+        expected = "../quick-start"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
     def test_fix_internal_links(self) -> None:
-        source_path = "/docs/docs/home/quick-start.md"
+        source_path = "/docs/home/quick-start.md"
         content = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
     Learn more about configuring LLMs for agents
-        [here](/docs/user-guide/basic-concepts/llm-configuration).
+        [here](/docs/user-guide/basic-concepts/llm-configuration.md).
 
 ### Where to Go Next?
 
-- [Sample Link](/docs/docs/home/slow-start.md)
+- [Sample Link](/docs/home/slow-start.md)
 - Go through the [basic concepts](/docs/user-guide/basic-concepts/installing-ag2) to get started
 - Once you're ready, hit the [advanced concepts](/docs/user-guide/advanced-concepts/rag)
 - Explore the [API Reference](/docs/api-reference/autogen/overview)
@@ -1187,11 +1263,11 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
         expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
     Learn more about configuring LLMs for agents
-        [here](../../user-guide/basic-concepts/llm-configuration).
+        [here](../../user-guide/basic-concepts/llm-configuration.md).
 
 ### Where to Go Next?
 
-- [Sample Link](slow-start.md)
+- [Sample Link](./slow-start.md)
 - Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
 - Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
 - Explore the [API Reference](../../api-reference/autogen/overview)
