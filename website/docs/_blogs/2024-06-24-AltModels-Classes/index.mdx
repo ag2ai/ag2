@@ -132,10 +132,10 @@ user_proxy =  UserProxyAgent(
     is_termination_msg=lambda msg: not msg["content"]
 )
 
-assistant = AssistantAgent(
-    name="assistant",
-    llm_config=llm_config,
-)
+with llm_config:
+    assistant = AssistantAgent(
+        name="assistant",
+    )
 ```
 
 ### Start chat
@@ -176,15 +176,15 @@ anthropic_llm_config = LLMConfig(
 
 # Our functionbot, who will be assigned two functions and
 # given directions to use them.
-functionbot = autogen.AssistantAgent(
-    name="functionbot",
-    system_message="For currency exchange tasks, only use "
-    "the functions you have been provided with. Do not "
-    "reply with helpful tips. Once you've recommended functions "
-    "reply with 'TERMINATE'.",
-    is_termination_msg=lambda x: x.get("content", "") and (x.get("content", "").rstrip().endswith("TERMINATE") or x.get("content", "") == ""),
-    llm_config=anthropic_llm_config,
-)
+with anthropic_llm_config:
+    functionbot = autogen.AssistantAgent(
+        name="functionbot",
+        system_message="For currency exchange tasks, only use "
+        "the functions you have been provided with. Do not "
+        "reply with helpful tips. Once you've recommended functions "
+        "reply with 'TERMINATE'.",
+        is_termination_msg=lambda x: x.get("content", "") and (x.get("content", "").rstrip().endswith("TERMINATE") or x.get("content", "") == ""),
+    )
 
 # Our user proxy agent, who will be used to manage the customer
 # request and conversation with the functionbot, terminating

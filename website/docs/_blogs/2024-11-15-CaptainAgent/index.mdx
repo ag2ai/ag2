@@ -54,11 +54,11 @@ from autogen import UserProxyAgent, LLMConfig
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model=["gpt-4o"])
 
 ## build agents
-captain_agent = CaptainAgent(
-    name="captain_agent",
-    llm_config=llm_config,
-    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-)
+with llm_config:
+    captain_agent = CaptainAgent(
+        name="captain_agent",
+        code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    )
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER"
@@ -80,14 +80,14 @@ from autogen import UserProxyAgent, LLMConfig
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model=["gpt-4o"])
 
 ## build agents
-captain_agent = CaptainAgent(
-    name="captain_agent",
-    llm_config=llm_config,
-    nested_config=nested_mode_config,
-    agent_lib="captainagent_expert_library.json",
-    tool_lib="default",
-    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-)
+with llm_config:
+    captain_agent = CaptainAgent(
+        name="captain_agent",
+        nested_config=nested_mode_config,
+        agent_lib="captainagent_expert_library.json",
+        tool_lib="default",
+        code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    )
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER"
