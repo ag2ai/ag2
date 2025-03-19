@@ -230,11 +230,53 @@
     }
   }
 
+  function fixHomePageImagePaths() {
+    const isHomePage =
+      window.location.pathname.startsWith("/ag2/") &&
+      window.location.pathname.includes("/docs/home/home/");
+
+    // Only proceed if we're on the home page
+    if (!isHomePage) {
+      console.log("Not on the home page, skipping image path fixes");
+      return;
+    }
+
+    // Select all image tags with src starting with "/assets"
+    const images = document.querySelectorAll('img[src^="/assets"]');
+
+    // Update each image src
+    images.forEach((img) => {
+      const originalSrc = img.getAttribute("src");
+      const newSrc = "/ag2" + originalSrc;
+      img.setAttribute("src", newSrc);
+    });
+
+    // Find the hero section and update its background-image
+    const heroSection = document.querySelector(".homepage-hero-section");
+
+    // Only proceed if hero section exists
+    if (heroSection) {
+      // Get the current background image CSS
+      const style = window.getComputedStyle(heroSection);
+      const backgroundImage = style.backgroundImage;
+
+      // Simple string replace to insert "/ag2" before "/assets"
+      const newBackgroundImage = backgroundImage.replace(
+        "/assets",
+        "/ag2/assets"
+      );
+
+      // Set the new background-image
+      heroSection.style.backgroundImage = newBackgroundImage;
+    }
+  }
+
   // Initialize everything when the document is ready
   document.addEventListener("DOMContentLoaded", function () {
     handleBlogURLs();
     handleUserStoryURLs();
     loadDependencies();
+    fixHomePageImagePaths();
   });
 
   // Watch for URL changes using MutationObserver
