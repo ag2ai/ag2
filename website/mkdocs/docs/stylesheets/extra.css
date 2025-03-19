@@ -587,3 +587,7 @@ p.hero-subtitle {
     margin-right: 1rem;
 }
   /* Blog page section ends */
+
+.hide-edit-link {
+    display: none;
+}
