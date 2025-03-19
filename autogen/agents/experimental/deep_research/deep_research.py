@@ -35,9 +35,7 @@ class DeepResearchAgent(ConversableAgent):
             max_web_steps: The maximum number of web steps. Defaults to 30.
             **kwargs: Additional keyword arguments to pass to the ConversableAgent.
         """
-
-        if llm_config is None:
-            llm_config = LLMConfig.get_current_llm_config()
+        llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
 
         super().__init__(
             name=name,

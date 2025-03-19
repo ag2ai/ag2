@@ -47,7 +47,7 @@ In the following code sample a `ConversableAgent` named `responder` has:
 - An after-work handoff (`AFTER_WORK`) nominated using one of the preset options (`TERMINATE`, `REVERT_TO_USER`, `STAY`). This could also be a swarm agent.
 
 ```python
-from autogen import register_hand_off, OnCondition, AfterWorkOption
+from autogen import register_hand_off, OnCondition, AfterWorkOption, LLMConfig
 register_hand_off(
     agent=responder,
     hand_to=[
@@ -87,7 +87,7 @@ from autogen import UserProxyAgent
 import os
 
 # All our swarm agents will use GPT-4o-mini from OpenAI
-llm_config = {...}
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
 # We configure our starting context dictionary
 context_variables = {
@@ -114,38 +114,35 @@ def process_refund_payment(context_variables: dict) -> str:
     return SwarmResult(values="Payment processed successfully", context_variables=context_variables)
 
 # Swarm Agents, similar to ConversableAgent, but with functions and hand offs (specified later)
-customer_service = ConversableAgent(
-    name="CustomerServiceRep",
-    system_message="""You are a customer service representative.
-      First verify the customer's identity by asking for the customer's passport number,
-      then calling the verify_customer_identity function,
-      finally, transfer the case to the refund specialist.""",
-    llm_config=llm_config,
-    functions=[verify_customer_identity],
-)
+with llm_config:
+    customer_service = ConversableAgent(
+        name="CustomerServiceRep",
+        system_message="""You are a customer service representative.
+        First verify the customer's identity by asking for the customer's passport number,
+        then calling the verify_customer_identity function,
+        finally, transfer the case to the refund specialist.""",
+        functions=[verify_customer_identity],
+    )
 
-refund_specialist = ConversableAgent(
-    name="RefundSpecialist",
-    system_message="""You are a refund specialist.
-    Review the case and approve the refund, then transfer to the payment processor.""",
-    llm_config=llm_config,
-    functions=[approve_refund_and_transfer],
-)
+    refund_specialist = ConversableAgent(
+        name="RefundSpecialist",
+        system_message="""You are a refund specialist.
+        Review the case and approve the refund, then transfer to the payment processor.""",
+        functions=[approve_refund_and_transfer],
+    )
 
-payment_processor = ConversableAgent(
-    name="PaymentProcessor",
-    system_message="""You are a payment processor.
-    Process the refund payment and provide a confirmation message to the customer.""",
-    llm_config=llm_config,
-    functions=[process_refund_payment],
-)
+    payment_processor = ConversableAgent(
+        name="PaymentProcessor",
+        system_message="""You are a payment processor.
+        Process the refund payment and provide a confirmation message to the customer.""",
+        functions=[process_refund_payment],
+    )
 
-satisfaction_surveyor = ConversableAgent(
-    name="SatisfactionSurveyor",
-    system_message="""You are a customer satisfaction specialist.
-    Ask the customer to rate their experience with the refund process.""",
-    llm_config=llm_config,
-)
+    satisfaction_surveyor = ConversableAgent(
+        name="SatisfactionSurveyor",
+        system_message="""You are a customer satisfaction specialist.
+        Ask the customer to rate their experience with the refund process.""",
+    )
 
 # Conditional and After work hand offs
 
