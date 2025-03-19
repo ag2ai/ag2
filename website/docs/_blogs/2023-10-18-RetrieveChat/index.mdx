@@ -86,11 +86,11 @@ Refer to the [doc](https://docs.ag2.ai/docs/reference/agentchat/contrib/retrieve
 for more information on the detailed configurations.
 
 ```python
-assistant = AssistantAgent(
-    name="assistant",
-    system_message="You are a helpful assistant.",
-    llm_config=llm_config,
-)
+with llm_config:
+    assistant = AssistantAgent(
+        name="assistant",
+        system_message="You are a helpful assistant.",
+    )
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",

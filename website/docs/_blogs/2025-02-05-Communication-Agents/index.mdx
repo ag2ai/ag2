@@ -71,28 +71,27 @@ telegram_send_tool = TelegramRetrieveTool(
 Or, the agents:
 
 ```python
-discord_agent = DiscordAgent(
-    name="discord_agent",
-    llm_config=llm_config,
-    bot_token=my_bot_token,
-    guild_name=my_guild_name,
-    channel_name=my_channel_name,
-    )
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+with llm_config:
+    discord_agent = DiscordAgent(
+        name="discord_agent",
+        bot_token=my_bot_token,
+        guild_name=my_guild_name,
+        channel_name=my_channel_name,
+        )
 
-slack_agent = SlackAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-    bot_token=my_bot_token,
-    channel_id=my_channel_id,
-    )
+    slack_agent = SlackAgent(
+        name="slack_agent",
+        bot_token=my_bot_token,
+        channel_id=my_channel_id,
+        )
 
-telegram_agent = TelegramAgent(
-    name="telegram_agent",
-    llm_config=llm_config,
-    api_id=my_api_id,
-    api_hash=my_api_hash,
-    chat_id=my_group_chat_id,
-    )
+    telegram_agent = TelegramAgent(
+        name="telegram_agent",
+        api_id=my_api_id,
+        api_hash=my_api_hash,
+        chat_id=my_group_chat_id,
+        )
 ```
 
 If you need to send to or retrieve messages from multiple channels, create additional tool instances for each channel and load up your agents or have an agent for each channel.
