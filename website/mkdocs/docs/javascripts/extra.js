@@ -230,11 +230,34 @@
     }
   }
 
+  /**
+   * Updates all anchor tags with hrefs that start with "/docs/" by adding
+   * the prefix before "/docs/" to the href
+   */
+  function fixDocLinks() {
+    // Extract everything before "/docs/" in the current path
+    const pathPrefix = window.location.pathname.split("/docs")[0];
+
+    // Select all anchor tags that have href starting with "/docs/"
+    const docLinks = document.querySelectorAll('a[href^="/docs/"]');
+
+    // Loop through all matching links and update them
+    docLinks.forEach((link) => {
+      const originalHref = link.getAttribute("href");
+      const newHref = pathPrefix + originalHref;
+      link.setAttribute("href", newHref);
+
+      // Optional: For debugging
+      console.log(`Updated link: ${originalHref} → ${newHref}`);
+    });
+  }
+
   // Initialize everything when the document is ready
   document.addEventListener("DOMContentLoaded", function () {
     handleBlogURLs();
     handleUserStoryURLs();
     loadDependencies();
+    fixDocLinks();
   });
 
   // Watch for URL changes using MutationObserver
