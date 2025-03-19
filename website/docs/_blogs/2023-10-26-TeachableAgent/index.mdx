@@ -60,7 +60,7 @@ from autogen import ConversableAgent  # As an example
 llm_config = LLMConfig.from_json(
     path="OAI_CONFIG_LIST",
     timeout=120
-).where(model=["gpt-4"])  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
+).where(model="gpt-4")  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
 ```
 
 4. Create the agents
