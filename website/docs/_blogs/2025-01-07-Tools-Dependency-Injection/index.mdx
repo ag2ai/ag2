@@ -276,12 +276,8 @@ Let's configure a `GroupChat` with two assistant agents.
 ```python
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 with llm_config:
-    assistant_1 = ConversableAgent(
-        name="assistant_1",
-    )
-    assistant_2 = ConversableAgent(
-        name="assistant_2",
-    )
+    assistant_1 = ConversableAgent(name="assistant_1")
+    assistant_2 = ConversableAgent(name="assistant_2")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",

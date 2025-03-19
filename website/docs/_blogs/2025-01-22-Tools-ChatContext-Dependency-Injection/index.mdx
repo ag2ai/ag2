@@ -104,9 +104,7 @@ Configure the agents for the interaction.
 ```python
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 with llm_config:
-    agent = AssistantAgent(
-        name="agent",
-    )
+    agent = AssistantAgent(name="agent")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",
