@@ -14,8 +14,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeV
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
 
-# from .oai.common_utils import _filter_config, _config_list_from_json
-
 if TYPE_CHECKING:
     from .oai.client import ModelClient
 
