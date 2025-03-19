@@ -263,6 +263,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
     base_url: Optional[HttpUrl] = None
+    voice: Optional[str] = None
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None

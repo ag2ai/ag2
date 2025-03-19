@@ -468,6 +468,20 @@ class TestLLMConfig:
                     ]
                 ),
             ),
+            (
+                {
+                    "model": "gpt-4o-realtime-preview",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "voice": "alloy",
+                    "tags": ["gpt-4o-realtime", "realtime"],
+                },
+                LLMConfig(
+                    model="gpt-4o-realtime-preview",
+                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    voice="alloy",
+                    tags=["gpt-4o-realtime", "realtime"],
+                ),
+            ),
         ],
     )
     def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
