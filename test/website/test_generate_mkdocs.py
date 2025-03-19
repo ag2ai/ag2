@@ -10,12 +10,14 @@ from textwrap import dedent
 import pytest
 
 from autogen._website.generate_mkdocs import (
+    absolute_to_relative,
     add_api_ref_to_mkdocs_template,
     add_authors_info_to_user_stories,
     add_excerpt_marker,
     add_notebooks_nav,
     filter_excluded_files,
     fix_asset_path,
+    fix_internal_links,
     fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
@@ -1151,3 +1153,53 @@ search:
 
         assert actual == expected
         assert summary_md_path.read_text() == expected
+
+
+class TestFixInternalLinks:
+    def test_absolute_to_relative(self) -> None:
+        source_path = "/docs/docs/home/quick-start.md"
+        content = "/docs/user-guide/basic-concepts/installing-ag2"
+
+        expected = "../../user-guide/basic-concepts/installing-ag2"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+    def test_fix_internal_links(self) -> None:
+        source_path = "/docs/docs/home/quick-start.md"
+        content = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+!!! tip
+    Learn more about configuring LLMs for agents
+        [here](/docs/user-guide/basic-concepts/llm-configuration).
+
+### Where to Go Next?
+
+- [Sample Link](/docs/docs/home/slow-start.md)
+- Go through the [basic concepts](/docs/user-guide/basic-concepts/installing-ag2) to get started
+- Once you're ready, hit the [advanced concepts](/docs/user-guide/advanced-concepts/rag)
+- Explore the [API Reference](/docs/api-reference/autogen/overview)
+- Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
+- Follow on [X](https://x.com/ag2oss)
+
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](/docs/contributor-guide/contributing).
+
+""")
+        expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+!!! tip
+    Learn more about configuring LLMs for agents
+        [here](../../user-guide/basic-concepts/llm-configuration).
+
+### Where to Go Next?
+
+- [Sample Link](slow-start.md)
+- Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
+- Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
+- Explore the [API Reference](../../api-reference/autogen/overview)
+- Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
+- Follow on [X](https://x.com/ag2oss)
+
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](../../contributor-guide/contributing).
+
+""")
+        actual = fix_internal_links(source_path, content)
+        assert actual == expected

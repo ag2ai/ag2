@@ -4,6 +4,7 @@
 
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -149,7 +150,62 @@ def fix_asset_path(content: str) -> str:
     return modified_content
 
 
-def transform_content_for_mkdocs(content: str) -> str:
+def absolute_to_relative(source_path: str, dest_path: str) -> str:
+    """
+    Convert an absolute path to a relative path from the source directory.
+
+    Args:
+        source_path: The source file's absolute path
+        dest_path: The destination file's absolute path
+
+    Returns:
+        A relative path from source to destination
+    """
+    # Get the directory of the source file
+    source_dir = os.path.dirname(source_path)
+
+    # Calculate the relative path from source_dir to dest_path
+    rel_path = os.path.relpath(dest_path, source_dir)
+
+    return rel_path
+
+
+def fix_internal_links(source_path: str, content: str) -> str:
+    """Detect internal links in content that start with '/docs' and convert them to relative paths.
+
+    Args:
+        content: The content with potential internal links
+        source_path: The source file's absolute path
+
+    Returns:
+        Content with internal links converted to relative paths
+    """
+
+    # Define regex patterns for HTML and Markdown links
+    html_link_pattern = r'href="(/docs/[^"]*)"'
+    markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
+
+    # Convert HTML links
+    def replace_html_link(match: re.Match[str]) -> str:
+        absolute_link = match.group(1)
+        relative_link = absolute_to_relative(source_path, absolute_link)
+        return f'href="{relative_link}"'
+
+    # Convert Markdown links
+    def replace_markdown_link(match: re.Match[str]) -> str:
+        link_text = match.group(1)
+        absolute_link = match.group(2)
+        relative_link = absolute_to_relative(source_path, absolute_link)
+        return f"[{link_text}]({relative_link})"
+
+    # Apply replacements
+    content = re.sub(html_link_pattern, replace_html_link, content)
+    content = re.sub(markdown_link_pattern, replace_markdown_link, content)
+
+    return content
+
+
+def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
     # Transform admonitions (Tip, Warning, Note)
     tag_mappings = {
         "Tip": "tip",
@@ -206,6 +262,9 @@ def transform_content_for_mkdocs(content: str) -> str:
     # Remove the mintlify specific markers
     content = remove_marker_blocks(content, "DELETE-ME-WHILE-BUILDING-MKDOCS")
 
+    # Fix Internal links
+    content = fix_internal_links(rel_file_path, content)
+
     return content
 
 
@@ -213,8 +272,10 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for file in files:
         if file.suffix == ".mdx":
             content = file.read_text()
-            processed_content = transform_content_for_mkdocs(content)
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
+
+            rel_path = f"/{dest.relative_to(output_dir.parents[1])}"
+            processed_content = transform_content_for_mkdocs(content, rel_path)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(processed_content)
         else:
@@ -861,7 +922,8 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
 
     for file_path in user_stories_dir.glob("**/*.md"):
         content = file_path.read_text(encoding="utf-8")
-        updated_content = transform_content_for_mkdocs(content)
+        rel_path = f"/{file_path.relative_to(mkdocs_output_dir.parents[1])}"
+        updated_content = transform_content_for_mkdocs(content, rel_path)
         file_path.write_text(updated_content, encoding="utf-8")
 
 
