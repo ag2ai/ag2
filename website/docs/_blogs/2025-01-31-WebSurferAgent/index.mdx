@@ -57,6 +57,7 @@ import os
 
 import nest_asyncio
 
+from autogen import LLMConfig
 from autogen.agentchat import UserProxyAgent
 from autogen.agents.experimental import WebSurferAgent
 
@@ -72,11 +73,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 ````
 
 [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
@@ -90,7 +87,8 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 - ✅ **Easier setup** – No need to manually register tools
 
 ```python
-websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+with llm_config:
+    websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 
 websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
@@ -107,7 +105,8 @@ This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/
 - ⚠️ **Must manually register tools**
 
 ```python
-websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="browser_use")
+with llm_config:
+    websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 # WebSurferAgent has a list of tools which are registered for LLM
 # We need to register the tools for execution with the UserProxyAgent
@@ -379,6 +378,7 @@ import os
 
 import nest_asyncio
 
+from autogen import LLMConfig
 from autogen.agentchat import UserProxyAgent
 from autogen.agents.experimental import WebSurferAgent
 
@@ -394,11 +394,11 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.environ["OPENAI_API_KEY"],
+)
 ```
 
 The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
@@ -414,7 +414,8 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 
 ```python
 # `web_tool` parameter must be set to `crawl4ai` in order for the `Crawl4AITool` to be used.
-websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
+with llm_config:
+    websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
 
 websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
@@ -432,7 +433,8 @@ This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/
 
 ```python
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-websurfer = WebSurferAgent(name="WebSurfer", llm_config=llm_config, web_tool="crawl4ai")
+with llm_config:
+    websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
 
 websurfer_tools = websurfer.tools
 # WebSurferAgent has a list of tools which are registered for LLM
