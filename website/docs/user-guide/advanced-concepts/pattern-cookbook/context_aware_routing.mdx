@@ -353,123 +353,119 @@ def request_clarification(
         agent=AfterWorkOption.REVERT_TO_USER
     )
 
-# Create the agents for the routing system
-router_agent = ConversableAgent(
-    name="router_agent",
-    system_message="""You are the routing agent responsible for analyzing user requests and directing them to the most appropriate specialist.
+with llm_config:
+    # Create the agents for the routing system
+    router_agent = ConversableAgent(
+        name="router_agent",
+        system_message="""You are the routing agent responsible for analyzing user requests and directing them to the most appropriate specialist.
 
-Your task is to carefully analyze each user query and determine which domain specialist would be best equipped to handle it:
+    Your task is to carefully analyze each user query and determine which domain specialist would be best equipped to handle it:
 
-1. Technology Specialist: For questions about computers, software, programming, IT issues, electronics, digital tools, internet, etc. Use route_to_tech_specialist to transfer.
-2. Finance Specialist: For questions about money, investments, banking, budgeting, financial planning, taxes, economics, etc. Use route_to_finance_specialist to transfer.
-3. Healthcare Specialist: For questions about health, medicine, fitness, nutrition, diseases, medical conditions, wellness, etc. Use route_to_healthcare_specialist to transfer.
-4. General Knowledge Specialist: For general questions that don't clearly fit the other categories or span multiple domains. Use route_to_general_specialist to transfer.
+    1. Technology Specialist: For questions about computers, software, programming, IT issues, electronics, digital tools, internet, etc. Use route_to_tech_specialist to transfer.
+    2. Finance Specialist: For questions about money, investments, banking, budgeting, financial planning, taxes, economics, etc. Use route_to_finance_specialist to transfer.
+    3. Healthcare Specialist: For questions about health, medicine, fitness, nutrition, diseases, medical conditions, wellness, etc. Use route_to_healthcare_specialist to transfer.
+    4. General Knowledge Specialist: For general questions that don't clearly fit the other categories or span multiple domains. Use route_to_general_specialist to transfer.
 
-For each query, you must:
-1. Use the analyze_request tool to process the query and update context
-2. Determine the correct domain by analyzing keywords, themes, and context
-3. Consider the conversation history and previous domains if available
-4. Route to the most appropriate specialist using the corresponding routing tool
+    For each query, you must:
+    1. Use the analyze_request tool to process the query and update context
+    2. Determine the correct domain by analyzing keywords, themes, and context
+    3. Consider the conversation history and previous domains if available
+    4. Route to the most appropriate specialist using the corresponding routing tool
 
-When routing:
-- Provide a confidence level (1-10) based on how certain you are about the domain
-- Include detailed reasoning for your routing decision
-- If a query seems ambiguous or spans multiple domains, route to the specialist who can best handle the primary intent
+    When routing:
+    - Provide a confidence level (1-10) based on how certain you are about the domain
+    - Include detailed reasoning for your routing decision
+    - If a query seems ambiguous or spans multiple domains, route to the specialist who can best handle the primary intent
 
-Always maintain context awareness by considering:
-- Current query content and intent
-- Previously discussed topics
-- User's possible follow-up patterns
-- Domain switches that might indicate changing topics
+    Always maintain context awareness by considering:
+    - Current query content and intent
+    - Previously discussed topics
+    - User's possible follow-up patterns
+    - Domain switches that might indicate changing topics
 
-After a specialist has provided an answer, output the question and answer.
+    After a specialist has provided an answer, output the question and answer.
 
-For ambiguous queries that could belong to multiple domains:
-- If you are CERTAIN that the query is multi-domain but has a primary focus, route to the specialist for that primary domain
-- If you are NOT CERTAIN and there is no clear primary domain, use the request_clarification tool to ask the user for more specifics
-- When a query follows up on a previous topic, consider maintaining consistency by routing to the same specialist unless the domain has clearly changed""",
-    llm_config=llm_config,
-    functions=[
-        analyze_request,
-        route_to_tech_specialist,
-        route_to_finance_specialist,
-        route_to_healthcare_specialist,
-        route_to_general_specialist,
-        request_clarification
-    ]
-)
+    For ambiguous queries that could belong to multiple domains:
+    - If you are CERTAIN that the query is multi-domain but has a primary focus, route to the specialist for that primary domain
+    - If you are NOT CERTAIN and there is no clear primary domain, use the request_clarification tool to ask the user for more specifics
+    - When a query follows up on a previous topic, consider maintaining consistency by routing to the same specialist unless the domain has clearly changed""",
+        functions=[
+            analyze_request,
+            route_to_tech_specialist,
+            route_to_finance_specialist,
+            route_to_healthcare_specialist,
+            route_to_general_specialist,
+            request_clarification
+        ]
+    )
 
-tech_specialist = ConversableAgent(
-    name="tech_specialist",
-    system_message="""You are the technology specialist with deep expertise in computers, software, programming, IT, electronics, digital tools, and internet technologies.
+    tech_specialist = ConversableAgent(
+        name="tech_specialist",
+        system_message="""You are the technology specialist with deep expertise in computers, software, programming, IT, electronics, digital tools, and internet technologies.
 
-When responding to queries in your domain:
-1. Provide accurate, technical information based on current industry knowledge
-2. Explain complex concepts in clear terms appropriate for the user's apparent level of technical understanding
-3. Include practical advice, troubleshooting steps, or implementation guidance when applicable
-4. Reference relevant technologies, programming languages, frameworks, or tools as appropriate
-5. For coding questions, provide correct, well-structured code examples when helpful
+    When responding to queries in your domain:
+    1. Provide accurate, technical information based on current industry knowledge
+    2. Explain complex concepts in clear terms appropriate for the user's apparent level of technical understanding
+    3. Include practical advice, troubleshooting steps, or implementation guidance when applicable
+    4. Reference relevant technologies, programming languages, frameworks, or tools as appropriate
+    5. For coding questions, provide correct, well-structured code examples when helpful
 
-Focus on being informative, precise, and helpful. If a query contains elements outside your domain of expertise, focus on the technology aspects while acknowledging the broader context.
+    Focus on being informative, precise, and helpful. If a query contains elements outside your domain of expertise, focus on the technology aspects while acknowledging the broader context.
 
-Use the provide_tech_response tool to submit your final response.""",
-    llm_config=llm_config,
-    functions=[provide_tech_response]
-)
+    Use the provide_tech_response tool to submit your final response.""",
+        functions=[provide_tech_response]
+    )
 
-finance_specialist = ConversableAgent(
-    name="finance_specialist",
-    system_message="""You are the finance specialist with deep expertise in personal finance, investments, banking, budgeting, financial planning, taxes, economics, and business finance.
+    finance_specialist = ConversableAgent(
+        name="finance_specialist",
+        system_message="""You are the finance specialist with deep expertise in personal finance, investments, banking, budgeting, financial planning, taxes, economics, and business finance.
 
-When responding to queries in your domain:
-1. Provide accurate financial information and advice based on sound financial principles
-2. Explain financial concepts clearly without excessive jargon
-3. Present balanced perspectives on financial decisions, acknowledging risks and benefits
-4. Avoid making specific investment recommendations but provide educational information about investment types
-5. Include relevant financial principles, terms, or calculations when appropriate
+    When responding to queries in your domain:
+    1. Provide accurate financial information and advice based on sound financial principles
+    2. Explain financial concepts clearly without excessive jargon
+    3. Present balanced perspectives on financial decisions, acknowledging risks and benefits
+    4. Avoid making specific investment recommendations but provide educational information about investment types
+    5. Include relevant financial principles, terms, or calculations when appropriate
 
-Focus on being informative, balanced, and helpful. If a query contains elements outside your domain of expertise, focus on the financial aspects while acknowledging the broader context.
+    Focus on being informative, balanced, and helpful. If a query contains elements outside your domain of expertise, focus on the financial aspects while acknowledging the broader context.
 
-Use the provide_finance_response tool to submit your final response.""",
-    llm_config=llm_config,
-    functions=[provide_finance_response]
-)
+    Use the provide_finance_response tool to submit your final response.""",
+        functions=[provide_finance_response]
+    )
 
-healthcare_specialist = ConversableAgent(
-    name="healthcare_specialist",
-    system_message="""You are the healthcare specialist with deep expertise in health, medicine, fitness, nutrition, diseases, medical conditions, and wellness.
+    healthcare_specialist = ConversableAgent(
+        name="healthcare_specialist",
+        system_message="""You are the healthcare specialist with deep expertise in health, medicine, fitness, nutrition, diseases, medical conditions, and wellness.
 
-When responding to queries in your domain:
-1. Provide accurate health information based on current medical understanding
-2. Explain medical concepts in clear, accessible language
-3. Include preventive advice and best practices for health management when appropriate
-4. Reference relevant health principles, systems, or processes
-5. Always clarify that you're providing general information, not personalized medical advice
+    When responding to queries in your domain:
+    1. Provide accurate health information based on current medical understanding
+    2. Explain medical concepts in clear, accessible language
+    3. Include preventive advice and best practices for health management when appropriate
+    4. Reference relevant health principles, systems, or processes
+    5. Always clarify that you're providing general information, not personalized medical advice
 
-Focus on being informative, accurate, and helpful. If a query contains elements outside your domain of expertise, focus on the health aspects while acknowledging the broader context.
+    Focus on being informative, accurate, and helpful. If a query contains elements outside your domain of expertise, focus on the health aspects while acknowledging the broader context.
 
-Use the provide_healthcare_response tool to submit your final response.""",
-    llm_config=llm_config,
-    functions=[provide_healthcare_response]
-)
+    Use the provide_healthcare_response tool to submit your final response.""",
+        functions=[provide_healthcare_response]
+    )
 
-general_specialist = ConversableAgent(
-    name="general_specialist",
-    system_message="""You are the general knowledge specialist with broad expertise across multiple domains and topics.
+    general_specialist = ConversableAgent(
+        name="general_specialist",
+        system_message="""You are the general knowledge specialist with broad expertise across multiple domains and topics.
 
-When responding to queries in your domain:
-1. Provide comprehensive information drawing from relevant knowledge domains
-2. Handle questions that span multiple domains or don't clearly fit into a specialized area
-3. Synthesize information from different fields when appropriate
-4. Provide balanced perspectives on complex topics
-5. Address queries about history, culture, society, ethics, environment, education, arts, and other general topics
+    When responding to queries in your domain:
+    1. Provide comprehensive information drawing from relevant knowledge domains
+    2. Handle questions that span multiple domains or don't clearly fit into a specialized area
+    3. Synthesize information from different fields when appropriate
+    4. Provide balanced perspectives on complex topics
+    5. Address queries about history, culture, society, ethics, environment, education, arts, and other general topics
 
-Focus on being informative, balanced, and helpful. For questions that might benefit from deeper domain expertise, acknowledge this while providing the best general information possible.
+    Focus on being informative, balanced, and helpful. For questions that might benefit from deeper domain expertise, acknowledge this while providing the best general information possible.
 
-Use the provide_general_response tool to submit your final response.""",
-    llm_config=llm_config,
-    functions=[provide_general_response]
-)
+    Use the provide_general_response tool to submit your final response.""",
+        functions=[provide_general_response]
+    )
 
 # User agent for interaction
 user = UserProxyAgent(
