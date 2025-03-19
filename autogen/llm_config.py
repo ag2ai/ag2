@@ -342,7 +342,7 @@ class LLMConfigEntry(BaseModel, ABC):
         # Replace any keys ending with '_key' or '_token' values with stars for security
         # This regex will match any key ending with '_key' or '_token' and its value, and replace the value with stars
         # It also captures the type of quote used (single or double) and reuses it in the replacement
-        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s)
+        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s, flags=re.IGNORECASE)
 
         return s
 
