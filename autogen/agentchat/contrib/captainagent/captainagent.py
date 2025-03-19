@@ -178,8 +178,8 @@ Note that the previous experts will forget everything after you obtain the respo
             description=description,
             **kwargs,
         )
-        if llm_config is None:
-            llm_config = LLMConfig.get_current_llm_config()
+
+        llm_config = LLMConfig.get_current_llm_config(llm_config)
 
         if system_message is None:
             system_message = self.AUTOBUILD_SYSTEM_MESSAGE
