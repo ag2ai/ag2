@@ -200,8 +200,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         r = [f"{k}={repr(v)}" for k, v in d.items()]
 
         s = f"LLMConfig({', '.join(r)})"
-        # Replace api_key values with stars for security
-        s = re.sub(r"(['\"])api_key\1:\s*(['\"])([^'\"]*)(?:\2)", r"\1api_key\1: \2**********\2", s)
+        # Replace any keys ending with 'key' or 'token' values with stars for security
+        s = re.sub(
+            r"(['\"])(\w*(key|token))\1:\s*(['\"])([^'\"]*)(?:\4)", r"\1\2\1: \4**********\4", s, flags=re.IGNORECASE
+        )
         return s
 
     def __str__(self) -> str:
@@ -329,6 +331,23 @@ class LLMConfigEntry(BaseModel, ABC):
     def values(self) -> Iterable[Any]:
         d = self.model_dump()
         return d.values()
+
+    def __repr__(self) -> str:
+        # Override to eliminate none values from the repr
+        d = self.model_dump()
+        r = [f"{k}={repr(v)}" for k, v in d.items()]
+
+        s = f"{self.__class__.__name__}({', '.join(r)})"
+
+        # Replace any keys ending with '_key' or '_token' values with stars for security
+        # This regex will match any key ending with '_key' or '_token' and its value, and replace the value with stars
+        # It also captures the type of quote used (single or double) and reuses it in the replacement
+        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s)
+
+        return s
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []
