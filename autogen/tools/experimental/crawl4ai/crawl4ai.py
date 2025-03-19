@@ -2,13 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Union
 
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....interop import LiteLLmConfigFactory
+from ....llm_config import LLMConfig
 from ... import Tool
 from ...dependency_injection import Depends, on
 
@@ -28,7 +29,7 @@ class Crawl4AITool(Tool):
 
     def __init__(
         self,
-        llm_config: Optional[dict[str, Any]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         extraction_model: Optional[type[BaseModel]] = None,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
@@ -119,7 +120,7 @@ class Crawl4AITool(Tool):
 
     @staticmethod
     def _get_crawl_config(  # type: ignore[no-any-unimported]
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         instruction: str,
         llm_strategy_kwargs: Optional[dict[str, Any]] = None,
         extraction_model: Optional[type[BaseModel]] = None,

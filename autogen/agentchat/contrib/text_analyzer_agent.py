@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Literal, Optional, Union
 
+from ...llm_config import LLMConfig
 from ..agent import Agent
 from ..assistant_agent import ConversableAgent
 
@@ -23,14 +24,14 @@ class TextAnalyzerAgent(ConversableAgent):
         name="analyzer",
         system_message: Optional[str] = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[dict[str, Any], bool]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
         **kwargs: Any,
     ):
         """Args:
         name (str): name of the agent.
         system_message (str): system message for the ChatCompletion inference.
         human_input_mode (str): This agent should NEVER prompt the human for input.
-        llm_config (dict or False): llm inference configuration.
+        llm_config (LLMConfig or dict or False): llm inference configuration.
             Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
             for available options.
             To disable llm-based auto reply, set to False.

@@ -7,6 +7,7 @@
 from typing import Any, Literal, Optional, Union
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
+from ....llm_config import LLMConfig
 from .criterion import Criterion
 from .critic_agent import CriticAgent
 from .quantifier_agent import QuantifierAgent
@@ -15,7 +16,7 @@ from .task import Task
 
 
 def generate_criteria(
-    llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
     task: Task = None,
     additional_instructions: str = "",
     max_round=2,
@@ -24,7 +25,7 @@ def generate_criteria(
     """Creates a list of criteria for evaluating the utility of a given task.
 
     Args:
-        llm_config (dict or bool): llm inference configuration.
+        llm_config (LLMConfig or dict or bool): llm inference configuration.
         task (Task): The task to evaluate.
         additional_instructions (str): Additional instructions for the criteria agent.
         max_round (int): The maximum number of rounds to run the conversation.
@@ -66,7 +67,7 @@ def generate_criteria(
 
 
 def quantify_criteria(
-    llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
     criteria: list[Criterion] = None,
     task: Task = None,
     test_case: str = "",
@@ -75,7 +76,7 @@ def quantify_criteria(
     """Quantifies the performance of a system using the provided criteria.
 
     Args:
-        llm_config (dict or bool): llm inference configuration.
+        llm_config (LLMConfig or dict or bool): llm inference configuration.
         criteria ([Criterion]): A list of criteria for evaluating the utility of a given task.
         task (Task): The task to evaluate.
         test_case (str): The test case to evaluate.
