@@ -9,12 +9,25 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool
+from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool, ExtractedContent
 
 from ....conftest import Credentials, credentials_browser_use
 
 with optional_import_block():
     from browser_use import Controller
+
+
+class TestExtractedContent:
+    @pytest.mark.parametrize(
+        ("url", "expected_url"),
+        [
+            ("https://docs.ag2.ai/docs/Home", "https://docs.ag2.ai/docs/Home"),
+            ("about:blank", None),
+        ],
+    )
+    def test_url_is_proprely_set(self, url: str, expected_url: str) -> None:
+        extracted_content = ExtractedContent(content="content", url=url)
+        assert extracted_content.url == expected_url
 
 
 @run_for_optional_imports(
