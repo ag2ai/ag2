@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .browser_use import BrowserUseResult, BrowserUseTool
+from .browser_use import BrowserUseResult, BrowserUseTool, ExtractedContent
 
-__all__ = ["BrowserUseResult", "BrowserUseTool"]
+__all__ = ["BrowserUseResult", "BrowserUseTool", "ExtractedContent"]
