@@ -216,7 +216,7 @@ However, you may want to initialize the chat with another agent in some cases. T
 you'll need to call it from a function.
 
 ```python
-llm_config = LLMConfig(config_list=config_list, timeout=60, temperature=0)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", timeout=60, temperature=0)
 
 boss = autogen.UserProxyAgent(
     name="Boss",
@@ -284,7 +284,7 @@ groupchat = autogen.GroupChat(
     allow_repeat_speaker=False,
 )
 
-llm_config = LLMConfig(config_list=config_list, timeout=60, temperature=0)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", timeout=60, temperature=0)
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
 # Start chatting with the boss as this is the user proxy agent.

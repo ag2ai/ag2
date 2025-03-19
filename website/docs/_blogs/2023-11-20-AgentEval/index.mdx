@@ -41,7 +41,7 @@ Our previous research on [assistive agents in Minecraft](https://github.com/micr
 * The goal of `CriticAgent` is to suggest the list of criteria (Fig. 1), that can be used to assess task utility. This is an example of how `CriticAgent` is defined using `Autogen`:
 
 ```python
-llm_config = autogen.LLMConfig(config_list=config_list)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
 critic = autogen.AssistantAgent(
     name="critic",
     llm_config=llm_config,
@@ -58,7 +58,7 @@ Next, the critic is given successful and failed examples of the task execution; 
 * The goal of `QuantifierAgent` is to quantify each of the suggested criteria (Fig. 1), providing us with an idea of the utility of this system for the given task. Here is an example of how it can be defined:
 
 ```python
-llm_config = autogen.LLMConfig(config_list=config_list)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
 quantifier = autogen.AssistantAgent(
     name="quantifier",
     llm_config=llm_config,
