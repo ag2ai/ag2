@@ -167,14 +167,12 @@ from typing import Literal
 from typing_extensions import Annotated
 
 # Anthropic configuration, using api_type='anthropic'
-anthropic_llm_config = LLMConfig(config_list=[
-    {
-        "api_type": "anthropic",
-        "model": "claude-3-5-sonnet-20240620",
-        "api_key": os.getenv("ANTHROPIC_API_KEY"),
-        "cache_seed": None
-    }
-])
+anthropic_llm_config = LLMConfig(
+    api_type = "anthropic",
+    model = "claude-3-5-sonnet-20240620",
+    api_key = os.getenv("ANTHROPIC_API_KEY"),
+    cache_seed = None,
+)
 
 # Our functionbot, who will be assigned two functions and
 # given directions to use them.
