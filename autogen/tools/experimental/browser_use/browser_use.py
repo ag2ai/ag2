@@ -102,23 +102,26 @@ class BrowserUseTool(Tool):
                 f"Cannot provide both browser and additional keyword parameters: {browser=}, {browser_config=}"
             )
 
-        if browser is None:
-            # set default value for headless
-            headless = browser_config.pop("headless", True)
-
-            browser_config = BrowserConfig(headless=headless, **browser_config)
-            browser = Browser(config=browser_config)
-
-        # set default value for generate_gif
-        if "generate_gif" not in agent_kwargs:
-            agent_kwargs["generate_gif"] = False
-
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
             llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
-            browser: Annotated[Browser, Depends(on(browser))],
+            browser: Annotated[Optional[Browser], Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
+            browser_config: Annotated[dict[str, Any], Depends(on(browser_config))],
         ) -> BrowserUseResult:
+            agent_kwargs = agent_kwargs.copy()
+            browser_config = browser_config.copy()
+            if browser is None:
+                # set default value for headless
+                headless = browser_config.pop("headless", True)
+
+                browser_config = BrowserConfig(headless=headless, **browser_config)
+                browser = Browser(config=browser_config)
+
+            # set default value for generate_gif
+            if "generate_gif" not in agent_kwargs:
+                agent_kwargs["generate_gif"] = False
+
             llm = LangChainChatModelFactory.create_base_chat_model(llm_config)
 
             max_steps = agent_kwargs.pop("max_steps", 100)
