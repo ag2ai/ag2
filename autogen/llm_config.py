@@ -40,10 +40,10 @@ class MetaLLMConfig(type):
 
     @property
     def current(cls) -> "LLMConfig":
-        current_llm_config = LLMConfig.get_current_llm_config()
+        current_llm_config = LLMConfig.get_current_llm_config(llm_config=None)
         if current_llm_config is None:
             raise ValueError("No current LLMConfig set. Are you inside a context block?")
-        return current_llm_config
+        return current_llm_config  # type: ignore[return-value]
 
     @property
     def default(cls) -> "LLMConfig":
@@ -94,7 +94,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
-    def get_current_llm_config(cls) -> "Optional[LLMConfig]":
+    def get_current_llm_config(cls, llm_config: "Optional[LLMConfig]" = None) -> "Optional[LLMConfig]":
+        if llm_config is not None:
+            return llm_config
         try:
             return LLMConfig._current_llm_config.get()
         except LookupError:

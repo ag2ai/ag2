@@ -45,7 +45,7 @@ pip install "autogen[teachable]"
 2. Import agents
 
 ```python
-from autogen import UserProxyAgent, config_list_from_json
+from autogen import UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen import ConversableAgent  # As an example
 ```
@@ -56,9 +56,11 @@ from autogen import ConversableAgent  # As an example
 # Load LLM inference endpoints from an env variable or a file
 # See https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive#llm-configuration
 # and OAI_CONFIG_LIST_sample
-filter_dict = {"model": ["gpt-4"]}  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
-config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict=filter_dict)
-llm_config={"config_list": config_list, "timeout": 120}
+
+llm_config = LLMConfig.from_json(
+    path="OAI_CONFIG_LIST",
+    timeout=120
+).where(model="gpt-4")  # GPT-3.5 is less reliable than GPT-4 at learning from user feedback.
 ```
 
 4. Create the agents
@@ -66,10 +68,10 @@ llm_config={"config_list": config_list, "timeout": 120}
 ```python
 
 # Start by instantiating any agent that inherits from ConversableAgent, which we use directly here for simplicity.
-teachable_agent = ConversableAgent(
-    name="teachable_agent",  # The name can be anything.
-    llm_config=llm_config
-)
+with llm_config:
+    teachable_agent = ConversableAgent(
+        name="teachable_agent",  # The name can be anything.
+    )
 
 # Instantiate a Teachability object. Its parameters are all optional.
 teachability = Teachability(

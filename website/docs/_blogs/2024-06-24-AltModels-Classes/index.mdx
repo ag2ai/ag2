@@ -107,15 +107,13 @@ Add your model configurations to the `OAI_CONFIG_LIST`. Ensure you specify the `
 
 ### Usage
 
-The `[config_list_from_json](https://docs.ag2.ai/docs/api-reference/autogen/config_list_from_json#config-list-from-json)` function loads a list of configurations from an environment variable or a json file.
+The `[LLMConfig.from_json](https://docs.ag2.ai/docs/api-reference/autogen/LLMConfig#from-json)` method loads a list of configurations from an environment variable or a json file.
 
 ```py
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-config_list = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST"
-)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 ```
 
 ### Construct Agents
@@ -134,10 +132,8 @@ user_proxy =  UserProxyAgent(
     is_termination_msg=lambda msg: not msg["content"]
 )
 
-assistant = AssistantAgent(
-    name="assistant",
-    llm_config = {"config_list": config_list}
-)
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
 ```
 
 ### Start chat
@@ -169,29 +165,24 @@ from typing import Literal
 from typing_extensions import Annotated
 
 # Anthropic configuration, using api_type='anthropic'
-anthropic_llm_config = {
-    "config_list":
-    [
-        {
-            "api_type": "anthropic",
-            "model": "claude-3-5-sonnet-20240620",
-            "api_key": os.getenv("ANTHROPIC_API_KEY"),
-            "cache_seed": None
-        }
-    ]
-}
+anthropic_llm_config = LLMConfig(
+    api_type = "anthropic",
+    model = "claude-3-5-sonnet-20240620",
+    api_key = os.getenv("ANTHROPIC_API_KEY"),
+    cache_seed = None,
+)
 
 # Our functionbot, who will be assigned two functions and
 # given directions to use them.
-functionbot = autogen.AssistantAgent(
-    name="functionbot",
-    system_message="For currency exchange tasks, only use "
-    "the functions you have been provided with. Do not "
-    "reply with helpful tips. Once you've recommended functions "
-    "reply with 'TERMINATE'.",
-    is_termination_msg=lambda x: x.get("content", "") and (x.get("content", "").rstrip().endswith("TERMINATE") or x.get("content", "") == ""),
-    llm_config=anthropic_llm_config,
-)
+with anthropic_llm_config:
+    functionbot = autogen.AssistantAgent(
+        name="functionbot",
+        system_message="For currency exchange tasks, only use "
+        "the functions you have been provided with. Do not "
+        "reply with helpful tips. Once you've recommended functions "
+        "reply with 'TERMINATE'.",
+        is_termination_msg=lambda x: x.get("content", "") and (x.get("content", "").rstrip().endswith("TERMINATE") or x.get("content", "") == ""),
+    )
 
 # Our user proxy agent, who will be used to manage the customer
 # request and conversation with the functionbot, terminating

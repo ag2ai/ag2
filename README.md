@@ -99,8 +99,8 @@ llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
 
 with llm_config:
-    assistant = AssistantAgent("assistant", llm_config=llm_config)
-    user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
+    assistant = AssistantAgent("assistant")
+user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
 # This initiates an automated chat between the two agents to solve the task
 ```
@@ -130,19 +130,18 @@ It serves as a base class for all agents in AG2.
 ```python
 from autogen import ConversableAgent
 
-# Create an AI agent
-assistant = ConversableAgent(
-    name="assistant",
-    system_message="You are an assistant that responds concisely.",
-    llm_config=llm_config
-)
+with llm_config:
+  # Create an AI agent
+  assistant = ConversableAgent(
+      name="assistant",
+      system_message="You are an assistant that responds concisely.",
+  )
 
-# Create another AI agent
-fact_checker = ConversableAgent(
-    name="fact_checker",
-    system_message="You are a fact-checking assistant.",
-    llm_config=llm_config
-)
+  # Create another AI agent
+  fact_checker = ConversableAgent(
+      name="fact_checker",
+      system_message="You are a fact-checking assistant.",
+  )
 
 # Start the conversation
 assistant.initiate_chat(
@@ -166,11 +165,11 @@ We created a class which sets the `human_input_mode` to `ALWAYS` for you. Its ca
 from autogen import ConversableAgent
 
 # Create an AI agent
-assistant = ConversableAgent(
-    name="assistant",
-    system_message="You are a helpful assistant.",
-    llm_config=llm_config
-)
+with llm_config:
+  assistant = ConversableAgent(
+      name="assistant",
+      system_message="You are a helpful assistant.",
+  )
 
 # Create a human agent with manual input mode
 human = ConversableAgent(
@@ -236,11 +235,11 @@ def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     return date.strftime("%A")
 
 # 2. Agent for determining whether to run the tool
-date_agent = ConversableAgent(
-    name="date_agent",
-    system_message="You get the day of the week for a given date.",
-    llm_config=llm_config,
-)
+with llm_config:
+  date_agent = ConversableAgent(
+      name="date_agent",
+      system_message="You get the day of the week for a given date.",
+  )
 
 # 3. And an agent for executing the tool
 executor_agent = ConversableAgent(

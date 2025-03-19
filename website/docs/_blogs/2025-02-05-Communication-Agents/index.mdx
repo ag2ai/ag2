@@ -71,28 +71,27 @@ telegram_send_tool = TelegramRetrieveTool(
 Or, the agents:
 
 ```python
-discord_agent = DiscordAgent(
-    name="discord_agent",
-    llm_config=llm_config,
-    bot_token=my_bot_token,
-    guild_name=my_guild_name,
-    channel_name=my_channel_name,
-    )
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+with llm_config:
+    discord_agent = DiscordAgent(
+        name="discord_agent",
+        bot_token=my_bot_token,
+        guild_name=my_guild_name,
+        channel_name=my_channel_name,
+        )
 
-slack_agent = SlackAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-    bot_token=my_bot_token,
-    channel_id=my_channel_id,
-    )
+    slack_agent = SlackAgent(
+        name="slack_agent",
+        bot_token=my_bot_token,
+        channel_id=my_channel_id,
+        )
 
-telegram_agent = TelegramAgent(
-    name="telegram_agent",
-    llm_config=llm_config,
-    api_id=my_api_id,
-    api_hash=my_api_hash,
-    chat_id=my_group_chat_id,
-    )
+    telegram_agent = TelegramAgent(
+        name="telegram_agent",
+        api_id=my_api_id,
+        api_hash=my_api_hash,
+        chat_id=my_group_chat_id,
+        )
 ```
 
 If you need to send to or retrieve messages from multiple channels, create additional tool instances for each channel and load up your agents or have an agent for each channel.
@@ -175,19 +174,19 @@ my_slack_channel_id = ""
 Creating an equivalent [`DiscordAgent`](/docs/api-reference/autogen/agents/experimental/DiscordAgent) using tools.
 ```python
 # Manually creating a DiscordAgent, start with a ConversableAgent and detailed system message
-discord_agent = ConversableAgent(
-    name="discord_agent",
-    llm_config=llm_config,
-    system_message=(
-        "You are managing a Discord channel for the developers of AG2.\n"
-        "When you get a new issue ask them to create a ticket for it.\n"
-        "\nFormat guidelines for Discord:\n"
-        "1. Max message length: 2000 characters\n"
-        "2. Supports Markdown formatting\n"
-        "3. Can use ** for bold, * for italic, ``` for code blocks\n"
-        "4. Consider using appropriate emojis when suitable\n"
-    ),
-)
+with llm_config:
+    discord_agent = ConversableAgent(
+        name="discord_agent",
+        system_message=(
+            "You are managing a Discord channel for the developers of AG2.\n"
+            "When you get a new issue ask them to create a ticket for it.\n"
+            "\nFormat guidelines for Discord:\n"
+            "1. Max message length: 2000 characters\n"
+            "2. Supports Markdown formatting\n"
+            "3. Can use ** for bold, * for italic, ``` for code blocks\n"
+            "4. Consider using appropriate emojis when suitable\n"
+        ),
+    )
 
 # Create the tools
 discord_send_tool = DiscordSendTool(bot_token=my_discord_bot_token, guild_name=my_discord_guild_name, channel_name=my_discord_channel_name)
@@ -203,42 +202,41 @@ discord_agent.register_for_llm()(discord_retrieve_tool)
 Our Slack and Telegram agents.
 ```python
 # Slack and Telegram agents
-slack_agent = SlackAgent(
-    name="slack_agent",
-    system_message=(
-        "You are managing a Slack channel for announcements of bugs in AG2.\n"
-        "Retrieve the latest message from the channel."
-    ),
-    llm_config=llm_config,
-    bot_token=my_slack_bot_token,
-    channel_id=my_slack_channel_id,
-)
-
-telegram_agent = TelegramAgent(
-    name="telegram_agent",
-    system_message=(
-        "You are managing a Telegram group chat for users of AG2.\n"
-        "Keep them updated on any bugs that are found.\n"
-        "Ask them to help fix it if they can."
+with llm_config:
+    slack_agent = SlackAgent(
+        name="slack_agent",
+        system_message=(
+            "You are managing a Slack channel for announcements of bugs in AG2.\n"
+            "Retrieve the latest message from the channel."
         ),
-    llm_config=llm_config,
-    api_id=my_telegram_api_id,
-    api_hash=my_telegram_api_hash,
-    chat_id=my_telegram_chat_id,
-)
+        bot_token=my_slack_bot_token,
+        channel_id=my_slack_channel_id,
+    )
+
+    telegram_agent = TelegramAgent(
+        name="telegram_agent",
+        system_message=(
+            "You are managing a Telegram group chat for users of AG2.\n"
+            "Keep them updated on any bugs that are found.\n"
+            "Ask them to help fix it if they can."
+            ),
+        api_id=my_telegram_api_id,
+        api_hash=my_telegram_api_hash,
+        chat_id=my_telegram_chat_id,
+    )
 ```
 
 To execute the tools, we create a tool executor and associate the tools to allow it to execute them.
 ```python
 # Create an agent to execute the tools
-tool_executor = ConversableAgent(
-    name="tool_executor",
-    system_message=(
-        "You execute send and retrieve functions for Discord, Slack, and Telegram platforms.\n"
-        "Respond with 'TERMINATE' when finished."
-        ),
-    llm_config=llm_config,
-    human_input_mode="NEVER",
+with llm_config:
+    tool_executor = ConversableAgent(
+        name="tool_executor",
+        system_message=(
+            "You execute send and retrieve functions for Discord, Slack, and Telegram platforms.\n"
+            "Respond with 'TERMINATE' when finished."
+            ),
+        human_input_mode="NEVER",
     )
 
 # Register the tools with the tool executor, here are the Discord tools
