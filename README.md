@@ -93,11 +93,10 @@ You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
 Create a script or a Jupyter Notebook and run your first agent.
 
 ```python
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, LLMConfig
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(
-    config_list=config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+
 
 with llm_config:
     assistant = AssistantAgent("assistant", llm_config=llm_config)

@@ -5,11 +5,12 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from logging import Logger
-from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 from asyncer import create_task_group
 
 from .....doc_utils import export_module
+from .....llm_config import LLMConfig
 from ..realtime_events import InputAudioBufferDelta, RealtimeEvent
 
 __all__ = ["RealtimeClientProtocol", "Role", "get_client", "register_realtime_client"]
@@ -88,7 +89,7 @@ class RealtimeClientProtocol(Protocol):
 
     @classmethod
     def get_factory(
-        cls, llm_config: dict[str, Any], logger: Logger, **kwargs: Any
+        cls, llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any
     ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
         """Create a Realtime API client.
 
@@ -169,7 +170,7 @@ def register_realtime_client() -> Callable[[type[T]], type[T]]:
 
 
 @export_module("autogen.agentchat.realtime.experimental.clients")
-def get_client(llm_config: dict[str, Any], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
+def get_client(llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
     """Get a registered Realtime API client.
 
     Args:

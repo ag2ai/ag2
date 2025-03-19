@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAg
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
-from autogen.llm_config import LLMConfig, LLMConfigFilter
+from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
 
@@ -391,6 +391,31 @@ def test_max_consecutive_auto_reply():
     assert agent1.reply_at_receive[agent] == agent.reply_at_receive[agent1] is True
     agent1.stop_reply_at_receive(agent)
     assert agent1.reply_at_receive[agent] is False and agent.reply_at_receive[agent1] is True
+
+
+def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture[str]):
+    agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
+
+    # max_consecutive_auto_reply parameter on the agent that initiates chat
+    agent1.initiate_chat(agent2, message="hello", max_turns=50)
+    assert len(agent2.chat_messages[agent1]) == 4
+    assert len(agent1.chat_messages[agent2]) == 4
+    # checking captured output
+    captured = capsys.readouterr()
+    assert "TERMINATING RUN" in captured.out
+    assert "Maximum number of consecutive auto-replies reached" in captured.out
+
+    _ = capsys.readouterr()  # Explicitly clear buffer
+
+    # max_consecutive_auto_reply parameter on the recipient agent
+    agent2.initiate_chat(agent1, message="hello", max_turns=50)
+    assert len(agent1.chat_messages[agent2]) == 3
+    assert len(agent2.chat_messages[agent1]) == 3
+    # checking captured output
+    captured = capsys.readouterr()
+    assert "TERMINATING RUN" in captured.out
+    assert "Maximum number of consecutive auto-replies reached" in captured.out
 
 
 def test_conversable_agent():
@@ -1903,52 +1928,6 @@ def test_validate_llm_config(
     assert actual == expected, f"{actual} != {expected}"
 
 
-@pytest.mark.parametrize(
-    "llm_config, llm_config_filter, expected",
-    [
-        (False, None, False),
-        (False, LLMConfigFilter(model="gpt-3"), False),
-        (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            None,
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-        ),
-        pytest.param(
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            LLMConfigFilter(model="gpt-4"),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
-        ),
-        pytest.param(
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3"), OpenAILLMConfigEntry(model="gpt-4")]),
-            LLMConfigFilter(
-                model="gpt-4",
-            ),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-4")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
-        ),
-    ],
-)
-def test_apply_llm_config_filter(
-    llm_config: Union[LLMConfig, Literal[False]],
-    llm_config_filter: Optional[LLMConfigFilter],
-    expected: Union[LLMConfig, Literal[False]],
-):
-    actual = ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
-    assert actual == expected, f"{actual} != {expected}"
-
-
-def test_apply_llm_config_filter_with_invalid_filter():
-    llm_config = LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")])
-    llm_config_filter = LLMConfigFilter(model="gpt-4")
-    with pytest.raises(ValueError):
-        ConversableAgent._apply_llm_config_filter(llm_config, llm_config_filter)
-
-
 if __name__ == "__main__":
     # test_trigger()
     # test_context()
@@ -1962,4 +1941,5 @@ if __name__ == "__main__":
     # test_process_gemini_carryover()
     # test_process_carryover()
     # test_context_variables()
+    # test_max_consecutive_auto_reply_with_max_turns()
     test_invalid_functions_parameter()

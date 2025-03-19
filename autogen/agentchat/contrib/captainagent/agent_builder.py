@@ -18,6 +18,7 @@ from termcolor import colored
 from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent, config_list_from_json
 from ....code_utils import CODE_BLOCK_PATTERN
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 
 __all__ = ["AgentBuilder"]
 
@@ -250,7 +251,7 @@ Match roles in the role set to each expert in expert set.
         self,
         agent_config: dict[str, Any],
         member_name: list[str],
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         use_oai_assistant: Optional[bool] = False,
     ) -> AssistantAgent:
         """Create a group chat participant agent.
@@ -374,7 +375,7 @@ Match roles in the role set to each expert in expert set.
     def build(
         self,
         building_task: str,
-        default_llm_config: dict[str, Any],
+        default_llm_config: Union[LLMConfig, dict[str, Any]],
         coding: Optional[bool] = None,
         code_execution_config: Optional[dict[str, Any]] = None,
         use_oai_assistant: Optional[bool] = False,
@@ -502,7 +503,7 @@ Match roles in the role set to each expert in expert set.
         self,
         building_task: str,
         library_path_or_json: str,
-        default_llm_config: dict[str, Any],
+        default_llm_config: Union[LLMConfig, dict[str, Any]],
         top_k: int = 3,
         coding: Optional[bool] = None,
         code_execution_config: Optional[dict[str, Any]] = None,

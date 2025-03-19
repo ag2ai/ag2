@@ -44,16 +44,11 @@ The [`GoogleSearchTool`](/docs/api-reference/autogen/tools/experimental/GoogleSe
 ### Agent Configuration
 
 ```python
-config_list = autogen.config_list_from_json(
-    env_or_file="OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gemini-2.0-flash"],
-    },
-)
+llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model=["gemini-2.0-flash"])
 
 assistant = AssistantAgent(
     name="assistant",
-    llm_config=LLMConfig(config_list=config_list),
+    llm_config=llm_config,
 )
 ```
 
@@ -139,16 +134,11 @@ For all other LLM providers or if you need to combine Google Search with other t
 ### Agent Configuration
 
 ```python
-config_list = autogen.config_list_from_json(
-    env_or_file="OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gpt-4o-mini"],
-    },
-)
+llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model=["gpt-4o-mini"])
 
 assistant = AssistantAgent(
     name="assistant",
-    llm_config=LLMConfig(config_list=config_list),
+    llm_config=llm_config,
 )
 ```
 
