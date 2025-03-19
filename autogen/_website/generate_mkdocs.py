@@ -300,6 +300,9 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
     # Fix Internal links
     content = fix_internal_links(rel_file_path, content)
 
+    # Fix snippet imports
+    content = fix_snippet_imports(content)
+
     return content
 
 
@@ -486,7 +489,7 @@ def process_blog_contents(contents: str, file: Path) -> str:
     return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}{url_slug}\n---{content_with_excerpt_marker}"
 
 
-def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
+def fix_snippet_imports(content: str, snippets_dir: Path = mkdocs_output_dir.parent / "snippets") -> str:
     """Replace import statements for MDX files from snippets directory with the target format.
 
     Args:
