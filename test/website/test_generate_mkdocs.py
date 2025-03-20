@@ -1197,7 +1197,7 @@ def test_fix_internal_references() -> None:
         assert actual == expected
 
         actual = fix_internal_references("/docs/api-reference", tmpdir_path)
-        expected = "/docs/api-reference/AfterWork"
+        expected = "/docs/api-reference/autogen/AfterWork"
 
         assert actual == expected
 
@@ -1259,6 +1259,10 @@ class TestFixInternalLinks:
 
 If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](/docs/contributor-guide/contributing).
 
+<img alt="DeepResearchAgent workflow" src="/snippets/reference-agents/img/DeepResearchAgent.png">
+
+![DeepResearchAgent workflow](/snippets/reference-agents/img/DeepResearchAgent.png)
+
 """)
         expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
@@ -1275,6 +1279,10 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 - Follow on [X](https://x.com/ag2oss)
 
 If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](../../contributor-guide/contributing).
+
+<img alt="DeepResearchAgent workflow" src="../../../snippets/reference-agents/img/DeepResearchAgent.png">
+
+![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
 
 """)
         actual = fix_internal_links(source_path, content)

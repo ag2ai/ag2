@@ -221,13 +221,23 @@ def fix_internal_links(source_path: str, content: str) -> str:
     # Define regex patterns for HTML and Markdown links
     html_link_pattern = r'href="(/docs/[^"]*)"'
     markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
+    html_img_src_pattern = r'src="(/snippets/[^"]+)"'
+    markdown_img_pattern = r"!\[([^\]]*)\]\((/snippets/[^)]+)\)"
 
     # Convert HTML links
     def replace_html_link(match: re.Match[str]) -> str:
+        # There's only one group in the pattern, which is the path
         absolute_link = match.group(1)
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
         return f'href="{relative_link}"'
+
+    # Convert HTML img src links
+    def replace_html_img_src(match: re.Match[str]) -> str:
+        absolute_link = match.group(1)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
+        return f'src="{relative_link}"'
 
     # Convert Markdown links
     def replace_markdown_link(match: re.Match[str]) -> str:
@@ -237,9 +247,19 @@ def fix_internal_links(source_path: str, content: str) -> str:
         relative_link = absolute_to_relative(source_path, abs_file_path)
         return f"[{link_text}]({relative_link})"
 
+    # Convert Markdown image links
+    def replace_markdown_img(match: re.Match[str]) -> str:
+        alt_text = match.group(1)
+        absolute_link = match.group(2)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
+        return f"![{alt_text}]({relative_link})"
+
     # Apply replacements
     content = re.sub(html_link_pattern, replace_html_link, content)
     content = re.sub(markdown_link_pattern, replace_markdown_link, content)
+    content = re.sub(html_img_src_pattern, replace_html_img_src, content)
+    content = re.sub(markdown_img_pattern, replace_markdown_img, content)
 
     return content
 
