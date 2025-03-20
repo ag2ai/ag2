@@ -266,7 +266,7 @@ class OllamaClient:
 
         ans = None
         if "client_host" in params:
-            # Convert to string as a work around a bug on ollama client
+            # Convert client_host to string as a work around a bug on ollama client
             client = Client(host=str(params["client_host"]))
             response = client.chat(**ollama_params)
         else:
