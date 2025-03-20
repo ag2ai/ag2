@@ -5,6 +5,7 @@
 import json
 import tempfile
 from _collections_abc import dict_items, dict_keys, dict_values
+from copy import copy, deepcopy
 from typing import Any
 
 import pytest
@@ -758,6 +759,23 @@ class TestLLMConfig:
         with pytest.raises(FileNotFoundError) as e:
             LLMConfig.from_json(path="invalid_path")
         assert "No such file or directory: 'invalid_path'" in str(e.value)
+
+    def test_copy(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.copy()
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = openai_llm_config.deepcopy()
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = copy(openai_llm_config)
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = deepcopy(openai_llm_config)
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
 
     def test_current(self) -> None:
         llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
