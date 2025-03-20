@@ -31,9 +31,12 @@ The [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/Reasoning
 
 1. **Thinker Agent**: Generates potential next steps in the reasoning process
 2. **Grader Agent**: Evaluates the quality of each reasoning step
-3. **Tree Structure**: Organizes thoughts hierarchically for systematic exploration
-4. **Visualization Tools**: Built-in Graphviz support for analyzing reasoning paths
-5. **Logging Features**: Log and save thinking trajectories to finetune the language model
+3. **Interim Execution**: Option to execute the selected steps, enabling stepwise reasoning.
+4. **Code Execution**: a child user agent will execute code automatically during reasoning
+5. **Tree Structure**: Organizes thoughts hierarchically for systematic exploration
+6. **Visualization Tools**: Built-in Graphviz support for analyzing reasoning paths
+7. **Logging Features**: Log and save thinking trajectories to finetune the language model
+8. **Configuration Options**: The agent is highly configurable through a single `reason_config` dictionary
 
 ## Configuration Options
 
@@ -89,6 +92,9 @@ By setting `method="dfs"` in the reason_config, the agent will:
 
 Note: The effectiveness depends on the underlying model's training. Models not specifically trained for step-by-step reasoning
 may show limited improvement with this approach.
+
+Note 2: To enable the execution of each selected step before generating the next step suggestions, pass
+`"interim_execution": True` in reason_config.
 
 ```python
 with llm_config:
