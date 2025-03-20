@@ -658,7 +658,6 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                 processed_message["content"] = processed_content
                 processed_messages.append(processed_message)
 
-
     # We'll replace the last tool_use if there's no tool_result (occurs if we finish the conversation before running the function)
     if has_tools and tool_use_messages != tool_result_messages:
         processed_messages[last_tool_use_index] = assistant_continue_message
