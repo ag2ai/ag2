@@ -52,16 +52,17 @@ When `beam_size=1`, ReasoningAgent behaves similarly to Chain-of-Thought (CoT) o
 
 For example:
 ```python
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 # Create a reasoning agent with beam size 1 (O1-style)
-reason_agent = ReasoningAgent(
-    name="reason_agent",
-    llm_config={"config_list": config_list},
-    verbose=False,
-    reason_config={
-        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
-        "max_depth": 3
-    }
-)
+with llm_config:
+    reason_agent = ReasoningAgent(
+        name="reason_agent",
+        verbose=False,
+        reason_config={
+            "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+            "max_depth": 3
+        }
+    )
 ```
 
 This configuration means:
@@ -83,18 +84,18 @@ from autogen.agents.experimental import (
 )
 
 # Configure the model
-config_list = [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]
+llm_config = LLMConfig(api_type="openai", model="gpt-4", api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Create a reasoning agent with beam search
-reasoning_agent = ReasoningAgent(
-    name="reason_agent",
-    llm_config={"config_list": config_list},
-    verbose=False,
-    reason_config={
-        "beam_size": 1,  # Using beam size 1 for O1-style reasoning
-        "max_depth": 3
-    }
-)
+with llm_config:
+    reasoning_agent = ReasoningAgent(
+        name="reason_agent",
+        verbose=False,
+        reason_config={
+            "beam_size": 1,  # Using beam size 1 for O1-style reasoning
+            "max_depth": 3
+        }
+    )
 
 # Create a user proxy agent
 user_proxy = UserProxyAgent(
@@ -143,15 +144,15 @@ def last_meaningful_msg(sender, recipient, summary_args):
             warnings.warn(f"Cannot extract summary using last_msg: {e}. Using an empty str as summary.", UserWarning)
     return summary
 
-reason_agent = ReasoningAgent(
-    name="reason_agent",
-    llm_config={"config_list": config_list},
-    verbose=False,
-    reason_config={
-        "beam_size": 3,
-        "max_depth": 3
-    }
-)
+with llm_config:
+    reason_agent = ReasoningAgent(
+        name="reason_agent",
+        verbose=False,
+        reason_config={
+            "beam_size": 3,
+            "max_depth": 3
+        }
+    )
 
 # Example complex problem
 task = "Design a mixed integer linear program for a coffee roasting supply chain"

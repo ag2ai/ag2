@@ -56,7 +56,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel
 
-from autogen import GroupChat, GroupChatManager
+from autogen import GroupChat, GroupChatManager, LLMConfig
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools.dependency_injection import BaseContext, Depends
 ```
@@ -102,17 +102,15 @@ Dependency injection simplifies passing data to a function. Here, we'll inject a
 
 Configure the agents for the interaction.
 
-- `config_list` defines the LLM configurations, including the model and API key.
+- `LLMConfig` defines the LLM configurations, including the model and API key.
 - [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-assistant = ConversableAgent(
-    name="assistant",
-    llm_config={"config_list": config_list},
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+with llm_config:
+    assistant = ConversableAgent(name="assistant")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",
@@ -186,16 +184,14 @@ Sometimes, you might not want to use [`BaseContext`](/docs/api-reference/autogen
 
 Configure the agents for the interaction.
 
-- `config_list` defines the LLM configurations, including the model and API key.
+- `LLMConfig` defines the LLM configurations, including the model and API key.
 - [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual human interaction (set to `NEVER`).
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-assistant = ConversableAgent(
-    name="assistant",
-    llm_config={"config_list": config_list},
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+with llm_config:
+    assistant = ConversableAgent(name="assistant")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",
@@ -278,16 +274,10 @@ You can assign different contexts, such as distinct account data, to different a
 Let's configure a `GroupChat` with two assistant agents.
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-llm_config = {"config_list": config_list}
-assistant_1 = ConversableAgent(
-    name="assistant_1",
-    llm_config={"config_list": config_list},
-)
-assistant_2 = ConversableAgent(
-    name="assistant_2",
-    llm_config={"config_list": config_list},
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+with llm_config:
+    assistant_1 = ConversableAgent(name="assistant_1")
+    assistant_2 = ConversableAgent(name="assistant_2")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",

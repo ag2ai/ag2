@@ -383,6 +383,8 @@ class ReasoningAgent(AssistantAgent):
             )
             kwargs["silent"] = not kwargs.pop("verbose")
 
+        llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
+
         super().__init__(name=name, llm_config=llm_config, code_execution_config=code_execution_config, **kwargs)
         self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
         self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (

@@ -86,11 +86,11 @@ Refer to the [doc](https://docs.ag2.ai/docs/reference/agentchat/contrib/retrieve
 for more information on the detailed configurations.
 
 ```python
-assistant = AssistantAgent(
-    name="assistant",
-    system_message="You are a helpful assistant.",
-    llm_config=llm_config,
-)
+with llm_config:
+    assistant = AssistantAgent(
+        name="assistant",
+        system_message="You are a helpful assistant.",
+    )
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",
@@ -216,6 +216,8 @@ However, you may want to initialize the chat with another agent in some cases. T
 you'll need to call it from a function.
 
 ```python
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", timeout=60, temperature=0)
+
 boss = autogen.UserProxyAgent(
     name="Boss",
     is_termination_msg=termination_msg,
@@ -235,26 +237,24 @@ boss_aid = RetrieveUserProxyAgent(
     code_execution_config=False,  # we don't want to execute code in this case.
 )
 
-coder = autogen.AssistantAgent(
-    name="Senior_Python_Engineer",
-    is_termination_msg=termination_msg,
-    system_message="You are a senior python engineer. Reply `TERMINATE` in the end when everything is done.",
-    llm_config={"config_list": config_list, "timeout": 60, "temperature": 0},
-)
+with llm_config:
+    coder = autogen.AssistantAgent(
+        name="Senior_Python_Engineer",
+        is_termination_msg=termination_msg,
+        system_message="You are a senior python engineer. Reply `TERMINATE` in the end when everything is done.",
+    )
 
-pm = autogen.AssistantAgent(
-    name="Product_Manager",
-    is_termination_msg=termination_msg,
-    system_message="You are a product manager. Reply `TERMINATE` in the end when everything is done.",
-    llm_config={"config_list": config_list, "timeout": 60, "temperature": 0},
-)
+    pm = autogen.AssistantAgent(
+        name="Product_Manager",
+        is_termination_msg=termination_msg,
+        system_message="You are a product manager. Reply `TERMINATE` in the end when everything is done.",
+    )
 
-reviewer = autogen.AssistantAgent(
-    name="Code_Reviewer",
-    is_termination_msg=termination_msg,
-    system_message="You are a code reviewer. Reply `TERMINATE` in the end when everything is done.",
-    llm_config={"config_list": config_list, "timeout": 60, "temperature": 0},
-)
+    reviewer = autogen.AssistantAgent(
+        name="Code_Reviewer",
+        is_termination_msg=termination_msg,
+        system_message="You are a code reviewer. Reply `TERMINATE` in the end when everything is done.",
+    )
 
 def retrieve_content(
     message: Annotated[
@@ -284,7 +284,7 @@ groupchat = autogen.GroupChat(
     allow_repeat_speaker=False,
 )
 
-llm_config = LLMConfig(config_list=config_list, timeout=60, temperature=0)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", timeout=60, temperature=0)
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
 # Start chatting with the boss as this is the user proxy agent.

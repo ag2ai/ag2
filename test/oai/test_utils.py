@@ -76,6 +76,16 @@ JSON_SAMPLE = """
         "model": "gpt",
         "api_key": "not-needed",
         "base_url": "http://localhost:1234/v1"
+    },
+    {
+        "model": "gpt-4o",
+        "api_type": "openai",
+        "tags": ["gpt-4o"]
+    },
+    {
+        "model": "gpt-4o-mini",
+        "api_type": "openai",
+        "tags": ["gpt-4o-mini"]
     }
 ]
 """
@@ -92,12 +102,22 @@ FILTER_CONFIG_TEST = [
     {
         "filter_dict": {"tags": ["gpt35", "gpt4"]},
         "exclude": True,
-        "expected": JSON_SAMPLE_DICT[2:4],
+        "expected": JSON_SAMPLE_DICT[2:6],
     },
     {
         "filter_dict": {"api_type": "azure", "api_version": "2024-02-01"},
         "exclude": False,
         "expected": [JSON_SAMPLE_DICT[2]],
+    },
+    {
+        "filter_dict": {"model": "gpt-4o-mini"},
+        "exclude": False,
+        "expected": [JSON_SAMPLE_DICT[5]],
+    },
+    {
+        "filter_dict": {"model": "gpt-4o"},
+        "exclude": False,
+        "expected": [JSON_SAMPLE_DICT[4]],
     },
 ]
 
@@ -119,8 +139,12 @@ def test_filter_config(test_case):
     filter_dict = test_case["filter_dict"]
     exclude = test_case["exclude"]
     expected = test_case["expected"]
+    print("hello")
 
     config_list = filter_config(JSON_SAMPLE_DICT, filter_dict, exclude)
+
+    print(f"config_list: {config_list}")
+    print(f"expected: {expected}")
 
     assert _compare_lists_of_dicts(config_list, expected)
 

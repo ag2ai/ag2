@@ -645,6 +645,9 @@ class TestLLMConfig:
         assert agent.llm_config.temperature == 0.5
         assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
 
+        # Test passing LLMConfig object as parameter
+        assert LLMConfig.get_current_llm_config(openai_llm_config) == openai_llm_config
+
         # Test accessing current_llm_config outside the context
         assert LLMConfig.get_current_llm_config() is None
         with openai_llm_config:
