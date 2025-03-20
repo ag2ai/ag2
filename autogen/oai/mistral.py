@@ -62,6 +62,7 @@ class MistralLLMConfigEntry(LLMConfigEntry):
     safe_prompt: bool = False
     random_seed: Optional[int] = None
     stream: bool = False
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     def create_client(self):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")

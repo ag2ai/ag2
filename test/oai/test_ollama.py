@@ -76,6 +76,7 @@ def test_ollama_llm_config_entry():
         "temperature": 0.8,
         "top_k": 40,
         "top_p": 0.9,
+        "hide_tools": "never",
     }
     actual = ollama_llm_config.model_dump()
     assert actual == expected, actual

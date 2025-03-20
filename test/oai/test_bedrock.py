@@ -90,7 +90,7 @@ def test_bedrock_llm_config_entry_repr():
     )
 
     actual = repr(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', hide_tools='never', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
 
     assert actual == expected, actual
 
@@ -106,7 +106,7 @@ def test_bedrock_llm_config_entry_str():
     )
 
     actual = str(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', hide_tools='never', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
 
     assert actual == expected, actual
 

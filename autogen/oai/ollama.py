@@ -58,6 +58,7 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
     top_p: float = Field(default=0.9)
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     def create_client(self):
         raise NotImplementedError("OllamaLLMConfigEntry.create_client is not implemented.")
