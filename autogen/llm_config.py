@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -268,6 +268,7 @@ class LLMConfigEntry(BaseModel, ABC):
     voice: Optional[str] = None
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
     default_headers: Optional[Mapping[str, Any]] = None
     tags: list[str] = Field(default_factory=list)
