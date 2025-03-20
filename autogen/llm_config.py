@@ -98,7 +98,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         if llm_config is not None:
             return llm_config
         try:
-            return LLMConfig._current_llm_config.get()
+            return (LLMConfig._current_llm_config.get()).copy()
         except LookupError:
             return None
 

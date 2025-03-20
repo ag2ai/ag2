@@ -483,7 +483,9 @@ class ConversableAgent(LLMAgent):
                 llm_config = cls.DEFAULT_CONFIG
         elif isinstance(llm_config, dict):
             llm_config = LLMConfig(**llm_config)
-        elif llm_config is False or isinstance(llm_config, LLMConfig):
+        elif isinstance(llm_config, LLMConfig):
+            llm_config = llm_config.copy()
+        elif llm_config is False:
             pass
         else:
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
