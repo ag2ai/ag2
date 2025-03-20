@@ -45,6 +45,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel
 
+from autogen import LLMConfig
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.tools.dependency_injection import BaseContext, ChatContext, Depends
 ```
@@ -93,7 +94,7 @@ def _get_balance(account: Account):
 
 Configure the agents for the interaction.
 
--   `config_list` defines the LLM configurations, including the model
+-   `llm_config` defines the LLM configurations, including the model
     and API key.
 -   [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) simulates user inputs without requiring actual
     human interaction (set to `NEVER`).
@@ -101,11 +102,9 @@ Configure the agents for the interaction.
     settings.
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-agent = AssistantAgent(
-    name="agent",
-    llm_config={"config_list": config_list},
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+with llm_config:
+    agent = AssistantAgent(name="agent")
 user_proxy = UserProxyAgent(
     name="user_proxy_1",
     human_input_mode="NEVER",

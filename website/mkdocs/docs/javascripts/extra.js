@@ -230,11 +230,62 @@
     }
   }
 
+  // Fix edit URLs
+  function fixEditUrls() {
+    // Find the edit link on the page
+    const editLink = document.querySelector('a[title="Edit this page"]');
+
+    // If edit link exists, check and modify if needed
+    if (editLink) {
+      // Hide edit link for API reference pages
+      if (window.location.pathname.includes("/docs/api-reference/")) {
+        console.log("Insede API reference page");
+        editLink.classList.add("hide-edit-link");
+      }
+
+      const href = editLink.getAttribute("href");
+
+      // Special case for notebooks
+      if (
+        href &&
+        href.includes("/website/docs/use-cases/notebooks/notebooks/")
+      ) {
+        // Replace the path segment and change extension from .md to .ipynb
+        const newHref = href
+          .replace("/website/docs/use-cases/notebooks/notebooks/", "/notebook/")
+          .replace(/\.md$/, ".ipynb");
+
+        // Update the href attribute
+        editLink.setAttribute("href", newHref);
+      }
+
+      // Handle blog urls
+      else if (href && href.includes("/blog/posts/")) {
+        const newHref = href
+          .replace("/blog/posts/", "/_blogs/")
+          .replace(/\.md$/, ".mdx");
+
+        // Update the href attribute
+        editLink.setAttribute("href", newHref);
+      }
+
+      // Regular case for other markdown files
+      else if (href && href.endsWith(".md")) {
+        // Replace .md with .mdx at the end
+        const newHref = href.replace(/\.md$/, ".mdx");
+
+        // Update the href attribute
+        editLink.setAttribute("href", newHref);
+      }
+    }
+  }
+
   // Initialize everything when the document is ready
   document.addEventListener("DOMContentLoaded", function () {
     handleBlogURLs();
     handleUserStoryURLs();
     loadDependencies();
+    fixEditUrls();
   });
 
   // Watch for URL changes using MutationObserver

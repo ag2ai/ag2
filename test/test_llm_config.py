@@ -431,9 +431,9 @@ class TestLLMConfig:
                             "api_type": "ollama",
                             "model": "llama3.1:8b",
                             "num_ctx": 2048,
-                            "num_predict": 128,
+                            "num_predict": -1,
                             "repeat_penalty": 1.1,
-                            "seed": 42,
+                            "seed": 0,
                             "stream": False,
                             "tags": [],
                             "temperature": 0.8,
@@ -644,6 +644,9 @@ class TestLLMConfig:
         assert agent.llm_config == openai_llm_config
         assert agent.llm_config.temperature == 0.5
         assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
+
+        # Test passing LLMConfig object as parameter
+        assert LLMConfig.get_current_llm_config(openai_llm_config) == openai_llm_config
 
         # Test accessing current_llm_config outside the context
         assert LLMConfig.get_current_llm_config() is None
