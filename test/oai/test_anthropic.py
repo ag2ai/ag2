@@ -360,3 +360,86 @@ def test_convert_tools_to_functions(anthropic_client):
     ]
     actual = anthropic_client.convert_tools_to_functions(tools=tools)
     assert actual == expected
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_process_image_content_valid_data_url():
+    from autogen.oai.anthropic import process_image_content
+
+    content_item = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}}
+    processed = process_image_content(content_item)
+    expected = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAA"}}
+    assert processed == expected
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_process_image_content_non_image_type():
+    from autogen.oai.anthropic import process_image_content
+
+    content_item = {"type": "text", "text": "Just text"}
+    processed = process_image_content(content_item)
+    assert processed == content_item
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_process_message_content_string():
+    from autogen.oai.anthropic import process_message_content
+
+    message = {"content": "Hello"}
+    processed = process_message_content(message)
+    assert processed == "Hello"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_process_message_content_list():
+    from autogen.oai.anthropic import process_message_content
+
+    message = {
+        "content": [
+            {"type": "text", "text": "Hello"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
+        ]
+    }
+    processed = process_message_content(message)
+    expected = [
+        {"type": "text", "text": "Hello"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAA"}},
+    ]
+    assert processed == expected
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_oai_messages_to_anthropic_messages():
+    from autogen.oai.anthropic import oai_messages_to_anthropic_messages
+
+    params = {
+        "messages": [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "System text."},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,BBB"}},
+                ],
+            },
+        ]
+    }
+    processed = oai_messages_to_anthropic_messages(params)
+
+    # The function should update the system message (in the params dict) by concatenating only its text parts.
+    assert params.get("system") == "System text."
+
+    # The processed messages list should include a user message with the image URL converted to a base64 image format.
+    user_message = next((m for m in processed if m["role"] == "user"), None)
+    expected_content = [
+        {"type": "text", "text": "Hello"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "BBB"}},
+    ]
+    assert user_message is not None
+    assert user_message["content"] == expected_content
