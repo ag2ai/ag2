@@ -206,6 +206,18 @@ class LLMConfig(metaclass=MetaLLMConfig):
         )
         return s
 
+    def __copy__(self) -> "LLMConfig":
+        return LLMConfig(**self.model_dump())
+
+    def __deepcopy__(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+        return self.__copy__()
+
+    def copy(self) -> "LLMConfig":
+        return self.__copy__()
+
+    def deepcopy(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+        return self.__deepcopy__(memo)
+
     def __str__(self) -> str:
         return repr(self)
 
