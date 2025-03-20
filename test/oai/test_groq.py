@@ -40,6 +40,7 @@ def test_groq_llm_config_entry():
         "api_key": "fake_api_key",
         "temperature": 1,
         "stream": False,
+        "hide_tools": "never",
         "tags": [],
     }
     actual = groq_llm_config.model_dump()

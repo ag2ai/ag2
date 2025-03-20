@@ -52,6 +52,7 @@ def test_cerebras_llm_config_entry():
         "seed": 42,
         "stream": False,
         "temperature": 1.0,
+        "hide_tools": "never",
         "tags": [],
     }
     actual = cerebras_llm_config.model_dump()

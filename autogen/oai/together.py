@@ -59,6 +59,7 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     min_p: Optional[float] = Field(default=None, ge=0, le=1)
     safety_model: Optional[str] = None
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     def create_client(self):
         raise NotImplementedError("TogetherLLMConfigEntry.create_client is not implemented.")

@@ -68,11 +68,11 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
     # Create our agent
-    websurfer = WebSurferAgent(
-        name="WebSurfer",
-        llm_config=llm_config,
-        web_tool="browser_use",
-    )
+    with llm_config:
+      websurfer = WebSurferAgent(
+          name="WebSurfer",
+          web_tool="browser_use",
+      )
     ```
   </Tab>
   <Tab title="crawl4ai">
@@ -84,11 +84,11 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
     # Create our agent
-    websurfer = WebSurferAgent(
-        name="WebSurfer",
-        llm_config=llm_config,
-        web_tool="crawl4ai",
-    )
+    with llm_config:
+      websurfer = WebSurferAgent(
+          name="WebSurfer",
+          web_tool="crawl4ai",
+      )
     ```
   </Tab>
 </Tabs>

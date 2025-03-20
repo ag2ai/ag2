@@ -104,13 +104,13 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-telegram_agent = TelegramAgent(
-    name="telegram_agent",
-    llm_config=llm_config,
-    api_id=api_id,
-    api_hash=api_hash,
-    chat_id=_chat_id_group
-)
+with llm_config:
+    telegram_agent = TelegramAgent(
+        name="telegram_agent",
+        api_id=api_id,
+        api_hash=api_hash,
+        chat_id=_chat_id_group
+    )
 
 # We get the registered tools and register them for execution with the tool executor
 for tool in telegram_agent.tools

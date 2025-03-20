@@ -6,7 +6,7 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Union
 
 from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
@@ -59,6 +59,8 @@ Option 4: Thinking 4. Short Description.
 ...
 """
 
+EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, in a way that advances the process of responding to the user's question. Keep your answers as consise as possible."
+
 
 @export_module("autogen.agents.experimental")
 class ThinkNode:
@@ -79,6 +81,7 @@ class ThinkNode:
             parent (Optional[ThinkNode]): Reference to the parent node.
             reflection (str): A string containing reflections on the reasoning process.
             rating_details (str): A string providing details about the rating of this node.
+            output (Optional[str]): The output generated at this node through the `execute_node` method.
             depth (int): The depth of this node in the tree (root = 0).
             children (list[ThinkNode]): list of child nodes.
             visits (int): Number of times this node has been visited during search.
@@ -93,6 +96,7 @@ class ThinkNode:
         self.parent: Optional[ThinkNode] = parent
         self.reflection: str = ""
         self.rating_details: str = ""
+        self.output: Optional[str] = None
         self.depth: int = parent.depth + 1 if parent is not None else 0
         self.children: list[ThinkNode] = []
         self.visits: int = 0
@@ -106,9 +110,12 @@ class ThinkNode:
         Returns:
             list[str]: list containing the content of each node from root to current node
         """
+        step = f"Content: {self.content}"
+        if self.output is not None:
+            step += f"\nOutput: {self.output}"
         if self.parent:
-            return self.parent._trajectory_arr + [self.content]
-        return ["# Question:\n" + self.content + "\n---\n"]
+            return self.parent._trajectory_arr + [step]
+        return ["# Question:\n" + step + "\n---\n"]
 
     @property
     def trajectory(self) -> str:
@@ -120,8 +127,8 @@ class ThinkNode:
         traj = self._trajectory_arr
         ans = traj[0]
         ans += "# Trajectory:\n"
-        for i, option in enumerate(traj[1:]):
-            ans += f"\nStep {i + 1}: {option}"
+        for i, step in enumerate(traj[1:]):
+            ans += f"\nStep {i + 1}:\n{step}"
         return ans
 
     def backpropagate(self, reward: float) -> None:
@@ -154,6 +161,7 @@ class ThinkNode:
             "depth": self.depth,
             "reflection": self.reflection,
             "rating_details": self.rating_details,
+            "output": self.output,
             "visits": self.visits,
             "children": [child.to_dict() for child in self.children],
         }
@@ -175,6 +183,7 @@ class ThinkNode:
         node.visits = data["visits"]
         node.reflection = data.get("reflection", "")
         node.rating_details = data.get("rating_details", "")
+        node.output = data.get("output")
 
         # Recursively create children
         for child_data in data["children"]:
@@ -344,6 +353,7 @@ class ReasoningAgent(AssistantAgent):
                     max_depth (int): Maximum depth of reasoning tree (default: 3)
                     forest_size (int): Number of independent trees to maintain (default: 1)
                     rating_scale (int): Scale for grading responses, e.g. 1-10 (default: 10)
+                    interim_execution (bool): Whether to execute the suggested options between the steps.
 
                 Beam Search specific:
                     beam_size (int): Number of parallel paths to maintain (default: 3)
@@ -421,15 +431,31 @@ class ReasoningAgent(AssistantAgent):
         self._max_depth: int = reason_config.get("max_depth", max_depth)
         self._forest_size: int = reason_config.get("forest_size", 1)
         self._rating_scale: int = reason_config.get("rating_scale", 10)
+        self._interim_execution: bool = reason_config.get("interim_execution", False)
 
         self._root: Optional[ThinkNode] = None
         self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
         tot_msg = TREEOFTHOUGHT_MESSAGE
-        self._user_proxy: Optional[UserProxyAgent] = None
 
-        if self._code_execution_config is not False:
+        # Initialize llm agent for interim step execution
+        self._executor: Optional[AssistantAgent] = None
+        if self._interim_execution:
+            self._executor = AssistantAgent(
+                name="tot_executor", system_message=EXECUTOR_MESSAGE, llm_config=self._llm_config
+            )
+
+        # Initialize user proxy agent for code execution
+        self._user_proxy: Optional[UserProxyAgent] = None
+        if self._code_execution_config:
+            # to execute code interim_execution should be True
+            if not self._interim_execution:
+                raise ValueError(
+                    "Code execution is enabled in the system, but interim_execution is set to False. "
+                    "Please set interim_execution to True to allow code execution between reasoning steps."
+                )
+
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
@@ -437,10 +463,12 @@ class ReasoningAgent(AssistantAgent):
                 max_consecutive_auto_reply=1,
             )
         else:
+            # remove python instructions from the tot message
             tot_msg = "\n".join([
                 line for line in tot_msg.split("\n") if not re.compile(r".*(python|```).*").search(line)
             ])
 
+        # Initialize required agents
         self._thinker = AssistantAgent(name="tot_thinker", system_message=tot_msg, llm_config=self._llm_config)
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
         self._prompt_rewriter = AssistantAgent(name="prompt_rewriter", llm_config=self._llm_config)
@@ -483,7 +511,15 @@ class ReasoningAgent(AssistantAgent):
         else:
             forest_answers_str = "-" + "\n-".join(forest_answers)
             self.send(
-                message=f"Answer the question {prompt}. Here are some students' different answers:\n{forest_answers_str}",
+                message=f"""Given a list of different answers provide a complete response to a user's question.
+Question:
+{prompt}
+
+Answers:
+{forest_answers_str}
+
+Final Answer:
+""",
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
@@ -585,9 +621,75 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
+    def execute_node(self, node: ThinkNode) -> Optional[str]:
+        """Execute the node's content to get the response.
+
+        This method runs the node's content to get the response.
+        If the content contains a Python code snippet, it sends the code to the user proxy agent for execution.
+        Else, it sends the content to the LLM for generating the response.
+
+        Args:
+            node (ThinkNode): The node to run.
+
+        Returns:
+            Optional[str]: The response generated by the node, or None if the node is terminal.
+        """
+        assert isinstance(self._executor, AssistantAgent)
+
+        if node.output is not None:
+            return node.output
+
+        if self._is_terminal(node):
+            return None
+
+        # check for python snippet
+        if "```python" in node.content:
+            # if code execution is disabled, ask to follow a different approach
+            if not self._user_proxy:
+                return "Python code execution is disabled. Follow a different approach."
+            self._user_proxy.clear_history()
+            self.send(
+                message=node.content,
+                recipient=self._user_proxy,
+                request_reply=True,
+                silent=self.silent,
+            )
+            user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
+            print(f"LAST MESSAGE: {user_proxy_last_msg}")
+            user_proxy_last_msg_content: str = user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
+            return user_proxy_last_msg_content
+
+        # run with the LLM
+        if self.method == "lats":
+            prompt = self._lats_context + "\n\n---\n\n" + f"Answer:\n{node.trajectory}\nOutput:"
+        else:
+            prompt = f"Answer:\n{node.trajectory}\nOutput:"
+
+        self._executor.clear_history()
+        self.send(
+            message=prompt,
+            recipient=self._executor,
+            request_reply=True,
+            silent=self.silent,
+        )
+
+        output = ""
+        last_message: Optional[dict[str, Any]] = self._executor.last_message()
+
+        # this agent is not supposed to write Python code, so if there is a need for that ask the thinker to do so
+        if last_message is not None:
+            if "```python" in last_message["content"]:
+                output = (
+                    "To execute Python code please provide the exact snippet in a fenced block like ```python ... ```."
+                )
+            else:
+                output = last_message["content"].strip()
+
+        return output
+
     def _process_prompt(
         self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
         This method checks if the provided messages are None and identifies the prompt.
@@ -695,29 +797,45 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     : self._beam_size - len(final_answers)
                 ]
 
+                # Execute
+                if self._interim_execution:
+                    for node in prev_leafs:
+                        node.output = self.execute_node(node)
+
         assert final_answers, "No final answers found."
         final_answers_list = list(final_answers)
 
         if self._answer_approach == "best":
             # Best the final answers
             best_leaf = max(final_answers_list, key=lambda x: x.value)
-            self.send(
-                message=f"Answer the question {prompt}. Here is my thinking processes:\n{best_leaf.trajectory}",
-                recipient=self,
-                request_reply=True,
-                silent=self.silent,
-            )
+            message = f"""Given a thinking process, you have to provide a complete response to a user's question.
+Question:
+{prompt}
+
+Thinking process:
+{best_leaf.trajectory}
+
+Final Answer:
+"""
         elif self._answer_approach == "pool":
             all_thoughts = "\n\n".join([
                 f"--- Possibility {i + 1} ---\n{node.trajectory}\n" for i, node in enumerate(final_answers_list)
             ])
-            self.send(
-                message=f"Answer the question {prompt}. You can utilize these students' thinking processes.\n\n{all_thoughts}",
-                recipient=self,
-                request_reply=True,
-                silent=self.silent,
-            )
+            message = f"""Given a list of thinking processes, you have to provide a complete response to a user's question.
+Question:
+{prompt}
 
+Thinking processes:
+{all_thoughts}
+
+Final Answer:
+"""
+        self.send(
+            message=message,
+            recipient=self,
+            request_reply=True,
+            silent=self.silent,
+        )
         last_msg: Optional[dict[str, Any]] = self.last_message(self)
         final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
@@ -752,6 +870,10 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 ]
                 node = node.children[choices_weights.index(max(choices_weights))]
 
+                # Execution
+                if self._interim_execution:
+                    node.output = self.execute_node(node)
+
             # Expansion and Simulation
             while not self._is_terminal(node):
                 if len(node.children) == 0:
@@ -761,9 +883,21 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     break
                 node = random.choice(node.children)
 
+                # Execution
+                if self._interim_execution:
+                    node.output = self.execute_node(node)
+
             # Add answer (leaf) node and evaluate answer
             self.send(
-                message=f"Answer the question {prompt}. Here is my thinking process:\n{node.trajectory}",
+                message=f"""Given a thinking process, you have to provide a complete response to a user's question.
+Question:
+{prompt}
+
+Thinking process:
+{node.trajectory}
+
+Final Answer:
+""",
                 recipient=self,
                 request_reply=True,
                 silent=self.silent,
@@ -820,20 +954,6 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
         option_nodes = [ThinkNode(content=option.strip().rstrip(), parent=node) for option in options]
 
-        for node in option_nodes:
-            if self._user_proxy and "```python" in node.content:
-                self._user_proxy.clear_history()
-                self.send(
-                    message=node.content,
-                    recipient=self._user_proxy,
-                    request_reply=True,
-                    silent=self.silent,
-                )
-                user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
-                user_proxy_last_msg_content: str = (
-                    user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
-                )
-                node.content += "\n\n---\nCode Execution Result:\n" + user_proxy_last_msg_content
         return option_nodes
 
     def _is_terminal(self, node: ThinkNode) -> bool:

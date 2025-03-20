@@ -43,9 +43,9 @@ from typing import Any, Union
 
 llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
-agent_mike = ConversableAgent(name="Mike", llm_config=llm_config)
-
-agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+with llm_config:
+  agent_mike = ConversableAgent(name="Mike")
+  agent_bob = ConversableAgent(name="Bob")
 
 # Our function associated with the hook
 def update_message_before_send(
@@ -186,10 +186,10 @@ calendar_prompt = ("You are a calendar agent who answers questions on the date a
                    "The current day is: [CURRENT_DAY]"
 )
 
-# Our calendar agent, we won't set a system_message here as we will set it with the hook
-agent_calendar = ConversableAgent(name="Calendar_Agent", llm_config=llm_config)
-
-agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+with llm_config:
+  # Our calendar agent, we won't set a system_message here as we will set it with the hook
+  agent_calendar = ConversableAgent(name="Calendar_Agent")
+  agent_bob = ConversableAgent(name="Bob")
 
 # Our function to update the agent's system message, this will be attached to the hook
 def update_my_agent_state(
@@ -271,9 +271,9 @@ from typing import Any, Union
 
 llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
-agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
-
-agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
+with llm_config:
+  agent_scientist = ConversableAgent(name="scientist")
+  agent_bob = ConversableAgent(name="Bob")
 
 # Our function for the hook, to replace "blue" with "red" in the last received message
 def replace_blue_with_red(
@@ -353,9 +353,9 @@ import json
 
 llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
-agent_mike = ConversableAgent(name="Mike", llm_config=llm_config, system_message="You are a comedian.")
-
-agent_bob = ConversableAgent(name="Bob", llm_config=llm_config, system_message="You are a comedian.")
+with llm_config:
+  agent_mike = ConversableAgent(name="Mike", system_message="You are a comedian.")
+  agent_bob = ConversableAgent(name="Bob", system_message="You are a comedian.")
 
 # Our function for the hook, to prepend the agent's name on each message
 def prepend_name(
