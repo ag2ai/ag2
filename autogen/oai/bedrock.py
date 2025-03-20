@@ -39,7 +39,7 @@ import warnings
 from typing import Any, Literal, Optional
 
 import requests
-from pydantic import Field
+from pydantic import Field, SecretStr, field_serializer
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config import LLMConfigEntry, register_llm_config
@@ -55,9 +55,9 @@ with optional_import_block():
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
     aws_region: str
-    aws_access_key: Optional[str] = None
-    aws_secret_key: Optional[str] = None
-    aws_session_token: Optional[str] = None
+    aws_access_key: Optional[SecretStr] = None
+    aws_secret_key: Optional[SecretStr] = None
+    aws_session_token: Optional[SecretStr] = None
     aws_profile_name: Optional[str] = None
     temperature: Optional[float] = None
     topP: Optional[float] = None  # noqa: N815
@@ -70,6 +70,10 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     supports_system_prompts: bool = True
     stream: bool = False
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+
+    @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
+    def serialize_aws_secrets(self, v: SecretStr) -> str:
+        return v.get_secret_value()
 
     def create_client(self):
         raise NotImplementedError("BedrockLLMConfigEntry.create_client must be implemented.")
