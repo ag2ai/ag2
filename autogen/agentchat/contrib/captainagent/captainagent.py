@@ -10,6 +10,7 @@ from termcolor import colored
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 from ...conversable_agent import ConversableAgent
 from .agent_builder import AgentBuilder
 from .tool_retriever import ToolBuilder, format_ag2_tool, get_full_tool_description
@@ -135,7 +136,7 @@ Note that the previous experts will forget everything after you obtain the respo
         self,
         name: str,
         system_message: Optional[str] = None,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
         is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "NEVER",
@@ -151,7 +152,7 @@ Note that the previous experts will forget everything after you obtain the respo
         name (str): agent name.
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
-        llm_config (dict): llm inference configuration.
+        llm_config (LLMConfig or dict or False): llm inference configuration.
             Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) for available options.
         is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
@@ -177,6 +178,8 @@ Note that the previous experts will forget everything after you obtain the respo
             description=description,
             **kwargs,
         )
+
+        llm_config = LLMConfig.get_current_llm_config(llm_config)
 
         if system_message is None:
             system_message = self.AUTOBUILD_SYSTEM_MESSAGE
@@ -294,7 +297,7 @@ Collect information from the general task, follow the suggestions from manager t
         human_input_mode: Optional[str] = "NEVER",
         code_execution_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
         default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_AUTO_REPLY,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
         system_message: Optional[Union[str, list]] = "",
         description: Optional[str] = None,
     ):
@@ -331,7 +334,7 @@ Collect information from the general task, follow the suggestions from manager t
             - timeout (Optional, int): The maximum execution time in seconds.
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
-        llm_config (dict or False): llm inference configuration.
+        llm_config (LLMConfig or dict or False): llm inference configuration.
             Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
             for available options.
             Default to false, which disables llm-based auto reply.

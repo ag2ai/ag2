@@ -2,12 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
+from ....llm_config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
 
@@ -18,7 +19,32 @@ with optional_import_block():
     from ....interop.langchain.langchain_chat_model_factory import LangChainChatModelFactory
 
 
-__all__ = ["BrowserUseResult", "BrowserUseTool"]
+__all__ = ["BrowserUseResult", "BrowserUseTool", "ExtractedContent"]
+
+
+@export_module("autogen.tools.experimental.browser_use")
+class ExtractedContent(BaseModel):
+    """Extracted content from the browser.
+
+    Attributes:
+        content: The extracted content.
+        url: The URL of the extracted content
+    """
+
+    content: str
+    url: Optional[str]
+
+    @field_validator("url")
+    @classmethod
+    def check_url(cls, v: str) -> Optional[str]:
+        """Check if the URL is about:blank and return None if it is.
+
+        Args:
+            v: The URL to check.
+        """
+        if v == "about:blank":
+            return None
+        return v
 
 
 @export_module("autogen.tools.experimental.browser_use")
@@ -30,7 +56,7 @@ class BrowserUseResult(BaseModel):
         final_result: The final result.
     """
 
-    extracted_content: list[str]
+    extracted_content: list[ExtractedContent]
     final_result: Optional[str]
 
 
@@ -52,7 +78,7 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         browser: Optional["Browser"] = None,
         agent_kwargs: Optional[dict[str, Any]] = None,
         browser_config: Optional[dict[str, Any]] = None,
@@ -76,23 +102,26 @@ class BrowserUseTool(Tool):
                 f"Cannot provide both browser and additional keyword parameters: {browser=}, {browser_config=}"
             )
 
-        if browser is None:
-            # set default value for headless
-            headless = browser_config.pop("headless", True)
-
-            browser_config = BrowserConfig(headless=headless, **browser_config)
-            browser = Browser(config=browser_config)
-
-        # set default value for generate_gif
-        if "generate_gif" not in agent_kwargs:
-            agent_kwargs["generate_gif"] = False
-
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
-            llm_config: Annotated[dict[str, Any], Depends(on(llm_config))],
-            browser: Annotated[Browser, Depends(on(browser))],
+            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
+            browser: Annotated[Optional[Browser], Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
+            browser_config: Annotated[dict[str, Any], Depends(on(browser_config))],
         ) -> BrowserUseResult:
+            agent_kwargs = agent_kwargs.copy()
+            browser_config = browser_config.copy()
+            if browser is None:
+                # set default value for headless
+                headless = browser_config.pop("headless", True)
+
+                browser_config = BrowserConfig(headless=headless, **browser_config)
+                browser = Browser(config=browser_config)
+
+            # set default value for generate_gif
+            if "generate_gif" not in agent_kwargs:
+                agent_kwargs["generate_gif"] = False
+
             llm = LangChainChatModelFactory.create_base_chat_model(llm_config)
 
             max_steps = agent_kwargs.pop("max_steps", 100)
@@ -107,8 +136,12 @@ class BrowserUseTool(Tool):
 
             result = await agent.run(max_steps=max_steps)
 
+            extracted_content = [
+                ExtractedContent(content=content, url=url)
+                for content, url in zip(result.extracted_content(), result.urls())
+            ]
             return BrowserUseResult(
-                extracted_content=result.extracted_content(),
+                extracted_content=extracted_content,
                 final_result=result.final_result(),
             )
 
@@ -119,7 +152,7 @@ class BrowserUseTool(Tool):
         )
 
     @staticmethod
-    def _get_controller(llm_config: dict[str, Any]) -> Any:
+    def _get_controller(llm_config: Union[LLMConfig, dict[str, Any]]) -> Any:
         response_format = (
             llm_config["config_list"][0].get("response_format", None)
             if "config_list" in llm_config

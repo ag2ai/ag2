@@ -86,9 +86,9 @@ os.environ["MEM0_API_KEY"] = "your_mem0_api_key"
 agent = ConversableAgent(
     "chatbot",
     llm_config=LLMConfig(
-        config_list=[
-            {"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}
-        ]
+        api_type="openai",
+        model="gpt-4",
+        api_key=os.environ.get("OPENAI_API_KEY")
     ),
     code_execution_config=False,
     function_map=None,
@@ -132,9 +132,10 @@ manager = ConversableAgent(
     "manager",
     system_message="You are a manager who helps in resolving customer issues.",
     llm_config=LLMConfig(
-        config_list=[
-            {"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}
-        ]
+        api_type="openai",
+        model="gpt-4",
+        temperature=0,
+        api_key=os.environ.get("OPENAI_API_KEY")
     ),
     human_input_mode="NEVER"
 )
@@ -143,9 +144,10 @@ customer_bot = ConversableAgent(
     "customer_bot",
     system_message="You are a customer service bot who gathers information on issues customers are facing.",
     llm_config=LLMConfig(
-        config_list=[
-            {"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}
-        ]
+        api_type="openai",
+        model="gpt-4",
+        temperature=0,
+        api_key=os.environ.get("OPENAI_API_KEY")
     ),
     human_input_mode="NEVER"
 )

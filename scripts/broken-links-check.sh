@@ -6,6 +6,24 @@
 
 set -o errexit
 
+# Function to display usage
+usage() {
+  echo "Usage: $0 --url <URL>"
+  exit 1
+}
+
+[ "$#" -ne 2 ] && usage
+
+while [ "$1" != "" ]; do
+  case $1 in
+    --url ) shift; URL=$1 ;;
+    * ) usage ;;
+  esac
+  shift
+done
+
+echo "Checking broken links for: $URL"
+
 # Run muffet to check for broken links
 muffet \
   --buffer-size=16384 \
@@ -17,4 +35,4 @@ muffet \
   --max-response-body-size=20000000 \
   --ignore-fragments \
   --exclude="($(paste -sd '|' .muffet-excluded-links.txt))" \
-  https://docs.ag2.ai/docs/Home
+  "$URL"

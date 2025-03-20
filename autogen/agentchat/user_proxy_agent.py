@@ -7,6 +7,7 @@
 from typing import Any, Callable, Literal, Optional, Union
 
 from ..doc_utils import export_module
+from ..llm_config import LLMConfig
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 
@@ -40,7 +41,7 @@ class UserProxyAgent(ConversableAgent):
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = {},
         default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
         system_message: Optional[Union[str, list[str]]] = "",
         description: Optional[str] = None,
         **kwargs: Any,
@@ -78,7 +79,7 @@ class UserProxyAgent(ConversableAgent):
             - timeout (Optional, int): The maximum execution time in seconds.
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
-        llm_config (dict or False or None): llm inference configuration.
+        llm_config (LLMConfig or dict or False or None): llm inference configuration.
             Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
             for available options.
             Default to False, which disables llm-based auto reply.

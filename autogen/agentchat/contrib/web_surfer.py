@@ -12,6 +12,7 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
+from ...llm_config import LLMConfig
 from ...oai.openai_utils import filter_config
 from ...token_count_utils import count_token, get_max_token_limit
 
@@ -38,8 +39,8 @@ class WebSurferAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
-        summarizer_llm_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+        summarizer_llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
         default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
         browser_config: Optional[dict[str, Any]] = None,
         **kwargs: Any,
@@ -89,7 +90,9 @@ class WebSurferAgent(ConversableAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
         self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
 
-    def _create_summarizer_client(self, summarizer_llm_config: dict[str, Any], llm_config: dict[str, Any]) -> None:
+    def _create_summarizer_client(
+        self, summarizer_llm_config: Union[LLMConfig, dict[str, Any]], llm_config: Union[LLMConfig, dict[str, Any]]
+    ) -> None:
         # If the summarizer_llm_config is None, we copy it from the llm_config
         if summarizer_llm_config is None:
             if llm_config is None:  # Nothing to copy

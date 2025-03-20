@@ -6,55 +6,57 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple, Union
 
 from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
+from ....llm_config import LLMConfig
 
 __all__ = ["ReasoningAgent", "ThinkNode"]
 
 EPSILON = 1e-6
 
 TREEOFTHOUGHT_MESSAGE = """
-Role: Expert Planning AI Assistant
+Role: Deep Thinking AI Assistant
 
-Task: Given a question and a list of previous steps (the plan trajectory), generate at least four innovative options for the next step. The user would not answer you anything.
+End Goal: Generate a thinking trajectory of steps to follow in order to provide a high-quality response to the user.
+
+Current Task: Given the question and a list of previous thinking steps (the plan trajectory), generate at least four innovative options for the next step in the thinking process to add in the trajectory. The user will not answer you anything.
 
 Instructions:
-- Review the user's question and the previous steps taken.
-- Identify any mistakes or errors in the previous steps.
-- If you find any mistakes, include options to correct them in your proposed options.
-- Think creatively to propose at least four possible options that logically build upon or correct the previous steps.
+- Review the user's question and the previous steps taken. If only the question is provided and no previous steps, then make your suggestions to initiate the thinking process.
+- The options you will provide must be alternatives for the next step in the thinking trajectory. Not steps that consider another option as given. So, make them focused and not too many.
+- Identify any mistakes or errors in the previous thinking. If you find any mistakes, include options to correct them in your proposed options.
 - Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
-- Provide a brief description for each option.
-- Present your output in the specified format.
 - If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
-- If you need to validate, simulate, or illustrate a reasoning concept with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
+- If you need to validate, simulate, or illustrate a reasoning concept (like mathematical expressions, code execution, algorithms, etc.) with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
 
 (Note: Randomness, floating point precision, or hardware specifics may affect outputs, so your reasoning should not rely heavily on Python results.)
+
+Options Restrictions:
+- Never suggest options that access/consult/cross-check the internet, external sources, literature, datasets, books, or experts.
+- Never suggest options in the physical world like conducting experiments or surveys, your approach in practical problems should still be theoretical.
+- Never suggest options that require data you do not have, or suggest research to collect them.
+- Never use Python when there is no need to.
 
 ---
 
 **Format of Output:**
 
 REFLECTION:
-*Give a few sentence reflections on the previous steps, what are wrong and what are good.*
+*Give a few sentence reflections on the previous steps in the thinking trajectory, what is wrong and what is good.*
 
 **Possible Options:**
-Option 1: Correct the error X in the previous steps.
+Option 1: Thinking 1. Short Description.
 
-Option 2: Reiterate and understand the user's question.
+Option 2: Thinking 2. Short Description.
 
-Option 3: Analyze and validate the results based on the previous steps.
+Option 3: Thinking 3. Short Description.
 
-Option 4: Simulate the experiment and perform stats analysis with python.
-```python
+Option 4: Thinking 4. Short Description.
+
 ...
-print(result)
-```
-
-Option 5: Perform Y.
 """
 
 
@@ -117,6 +119,7 @@ class ThinkNode:
         """
         traj = self._trajectory_arr
         ans = traj[0]
+        ans += "# Trajectory:\n"
         for i, option in enumerate(traj[1:]):
             ans += f"\nStep {i + 1}: {option}"
         return ans
@@ -312,20 +315,21 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: dict[str, Any],
-        grader_llm_config: Optional[dict[str, Any]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: Literal["pool", "best"] = "pool",
         reason_config: Optional[dict[str, Any]] = None,
+        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
 
         Args:
             name (str): Name of the agent
-            llm_config (dict): Configuration for the language model
-            grader_llm_config (Optional[dict[str, Any]]): Optional separate configuration for the grader model. If not provided, uses llm_config
+            llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): Configuration for the language model
+            grader_llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): Optional separate configuration for the grader model. If not provided, uses llm_config
             max_depth (int): Maximum depth of the reasoning tree
             beam_size (int): DEPRECATED. Number of parallel reasoning paths to maintain
             answer_approach (str): DEPRECATED. Either "pool" or "best" - how to generate final answer
@@ -353,6 +357,21 @@ class ReasoningAgent(AssistantAgent):
                     `{"method": "beam_search", "beam_size": 5, "max_depth": 4}`
                     `{"method": "mcts", "nsim": 10, "exploration_constant": 2.0}`
                     `{"method": "lats", "nsim": 5, "forest_size": 3}`
+            code_execution_config (dict or False): config for the code execution.
+                To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:
+                - work_dir (Optional, str): The working directory for the code execution.
+                    If None, a default working directory will be used.
+                    The default working directory is the "extensions" directory under
+                    "path_to_autogen".
+                - use_docker (Optional, list, str or bool): The docker image to use for code execution.
+                    Default is True, which means the code will be executed in a docker container. A default list of images will be used.
+                    If a list or a str of image name(s) is provided, the code will be executed in a docker container
+                    with the first image successfully pulled.
+                    If False, the code will be executed in the current environment.
+                    We strongly recommend using docker for code execution.
+                - timeout (Optional, int): The maximum execution time in seconds.
+                - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
+                    If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
             **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
@@ -364,9 +383,13 @@ class ReasoningAgent(AssistantAgent):
             )
             kwargs["silent"] = not kwargs.pop("verbose")
 
-        super().__init__(name=name, llm_config=llm_config, **kwargs)
-        self._llm_config: dict[str, Any] = llm_config
-        self._grader_llm_config: dict[str, Any] = grader_llm_config if grader_llm_config else llm_config
+        llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
+
+        super().__init__(name=name, llm_config=llm_config, code_execution_config=code_execution_config, **kwargs)
+        self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
+        self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (
+            grader_llm_config if grader_llm_config else llm_config
+        )
 
         if max_depth != 4 or beam_size != 3 or answer_approach != "pool":
             warnings.warn(
@@ -406,8 +429,7 @@ class ReasoningAgent(AssistantAgent):
         tot_msg = TREEOFTHOUGHT_MESSAGE
         self._user_proxy: Optional[UserProxyAgent] = None
 
-        if self._code_execution_config is not None:
-            self._code_execution_config = False
+        if self._code_execution_config is not False:
             self._user_proxy = UserProxyAgent(
                 name="reasoner_user_proxy",
                 human_input_mode="NEVER",
@@ -504,6 +526,11 @@ Additionally, a good answer should:
 
 If the answer fails to meet any of the core requirements above, it should be considered a poor response.
 
+Also, rate poory (with 1) trajectories that:
+- Require access to internet, experts opinions or external sources.
+- Require research, hypotheses or data that are not provided.
+- Include solutions in the physical world, like conducting experiments or surveys.
+
 Please provide your rating along with a brief explanation of your assessment.
 """
         else:
@@ -519,6 +546,11 @@ Additionally, a good trajectory should:
 - Be free of any odd or irrelevant content.
 
 If the trajectory does not meet one of the above requirements, it is considered a bad response.
+
+Also, rate poory (with 1) trajectories that:
+- Require access to internet, experts opinions or external sources.
+- Require research, hypotheses or data that are not provided.
+- Include solutions in the physical world, like conducting experiments or surveys.
 
 Please provide your rating along with a brief explanation of your assessment.
 """
@@ -765,9 +797,13 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
         self._thinker.clear_history()
 
         if self._method == "lats":
-            prompt = self._lats_context + "\n\n---\n\n" + f"{node.trajectory}\n---\nWhat are the possible next steps?"
+            prompt = (
+                self._lats_context
+                + "\n\n---\n\n"
+                + f"{node.trajectory}\n---\nWhat are some options for the next step in the thinking process?"
+            )
         else:
-            prompt = f"{node.trajectory}\n---\nWhat are the possible next steps?"
+            prompt = f"{node.trajectory}\n---\nWhat are some options for the next steps in the thinking process?"
 
         self.send(
             message=prompt,

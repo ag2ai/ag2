@@ -5,6 +5,7 @@
 import json
 import tempfile
 from _collections_abc import dict_items, dict_keys, dict_values
+from copy import copy, deepcopy
 from typing import Any
 
 import pytest
@@ -431,9 +432,9 @@ class TestLLMConfig:
                             "api_type": "ollama",
                             "model": "llama3.1:8b",
                             "num_ctx": 2048,
-                            "num_predict": 128,
+                            "num_predict": -1,
                             "repeat_penalty": 1.1,
-                            "seed": 42,
+                            "seed": 0,
                             "stream": False,
                             "tags": [],
                             "temperature": 0.8,
@@ -466,6 +467,20 @@ class TestLLMConfig:
                             safety_model="Meta-Llama/Llama-Guard-7b",
                         )
                     ]
+                ),
+            ),
+            (
+                {
+                    "model": "gpt-4o-realtime-preview",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "voice": "alloy",
+                    "tags": ["gpt-4o-realtime", "realtime"],
+                },
+                LLMConfig(
+                    model="gpt-4o-realtime-preview",
+                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    voice="alloy",
+                    tags=["gpt-4o-realtime", "realtime"],
                 ),
             ),
         ],
@@ -645,6 +660,9 @@ class TestLLMConfig:
         assert agent.llm_config.temperature == 0.5
         assert agent.llm_config.config_list[0]["model"] == "gpt-4o-mini"
 
+        # Test passing LLMConfig object as parameter
+        assert LLMConfig.get_current_llm_config(openai_llm_config) == openai_llm_config
+
         # Test accessing current_llm_config outside the context
         assert LLMConfig.get_current_llm_config() is None
         with openai_llm_config:
@@ -741,6 +759,23 @@ class TestLLMConfig:
         with pytest.raises(FileNotFoundError) as e:
             LLMConfig.from_json(path="invalid_path")
         assert "No such file or directory: 'invalid_path'" in str(e.value)
+
+    def test_copy(self, openai_llm_config: LLMConfig) -> None:
+        actual = openai_llm_config.copy()
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = openai_llm_config.deepcopy()
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = copy(openai_llm_config)
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
+
+        actual = deepcopy(openai_llm_config)
+        assert actual == openai_llm_config
+        assert actual is not openai_llm_config
 
     def test_current(self) -> None:
         llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)

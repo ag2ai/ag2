@@ -23,6 +23,7 @@ from ....agentchat.contrib.swarm_agent import (
 )
 from ....agentchat.utils import ContextExpression
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
@@ -134,10 +135,10 @@ class DocumentTask(BaseModel):
 class DocumentTriageAgent(ConversableAgent):
     """The DocumentTriageAgent is responsible for deciding what type of task to perform from user requests."""
 
-    def __init__(self, llm_config: dict[str, Any]):
+    def __init__(self, llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None):
         # Add the structured message to the LLM configuration
         structured_config_list = deepcopy(llm_config)
-        structured_config_list["response_format"] = DocumentTask
+        structured_config_list["response_format"] = DocumentTask  # type: ignore[index]
 
         super().__init__(
             name="DocumentTriageAgent",
@@ -165,7 +166,7 @@ class DocAgent(ConversableAgent):
     def __init__(
         self,
         name: Optional[str] = None,
-        llm_config: Optional[dict[str, Any]] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         system_message: Optional[str] = None,
         parsed_docs_path: Optional[Union[str, Path]] = None,
         collection_name: Optional[str] = None,
@@ -175,7 +176,7 @@ class DocAgent(ConversableAgent):
 
         Args:
             name (Optional[str]): The name of the DocAgent.
-            llm_config (Optional[dict[str, Any]]): The configuration for the LLM.
+            llm_config (Optional[LLMConfig, dict[str, Any]]): The configuration for the LLM.
             system_message (Optional[str]): The system message for the DocAgent.
             parsed_docs_path (Union[str, Path]): The path where parsed documents will be stored.
             collection_name (Optional[str]): The unique name for the data store collection. If omitted, a random name will be used. Populate this to reuse previous ingested data.
@@ -194,7 +195,7 @@ class DocAgent(ConversableAgent):
         - Summary Agent: responsible for generating a summary of the user's questions.
         """
         name = name or "DocAgent"
-        llm_config = llm_config or {}
+        llm_config = llm_config or LLMConfig.get_current_llm_config()
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
 

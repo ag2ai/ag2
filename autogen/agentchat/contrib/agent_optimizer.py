@@ -6,10 +6,11 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
+from ...llm_config import LLMConfig
 
 ADD_FUNC = {
     "type": "function",
@@ -175,14 +176,14 @@ class AgentOptimizer:
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
 
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
-            llm_config (dict): llm inference configuration.
+            llm_config (LLMConfig or dict): llm inference configuration.
                 Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
@@ -202,7 +203,7 @@ class AgentOptimizer:
         self._failure_functions_performance = []
         self._best_performance = -1
 
-        assert isinstance(llm_config, dict), "llm_config must be a dict"
+        assert isinstance(llm_config, (dict, LLMConfig)), "llm_config must be a dict or LLMConfig"
         llm_config = copy.deepcopy(llm_config)
         self.llm_config = llm_config
         if self.llm_config in [{}, {"config_list": []}, {"config_list": [{"model": ""}]}]:

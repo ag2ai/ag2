@@ -483,7 +483,9 @@ class ConversableAgent(LLMAgent):
                 llm_config = cls.DEFAULT_CONFIG
         elif isinstance(llm_config, dict):
             llm_config = LLMConfig(**llm_config)
-        elif llm_config is False or isinstance(llm_config, LLMConfig):
+        elif isinstance(llm_config, LLMConfig):
+            llm_config = llm_config.copy()
+        elif llm_config is False:
             pass
         else:
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
@@ -1481,6 +1483,9 @@ class ConversableAgent(LLMAgent):
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
             for i in range(max_turns):
+                # check recipient max consecutive auto reply limit
+                if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
+                    break
                 if i == 0:
                     if isinstance(message, Callable):
                         msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)

@@ -58,6 +58,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
     stream: bool = Field(default=False)
     temperature: float = Field(default=1, ge=0, le=2)
     top_p: float = Field(default=None)
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     def create_client(self):
         raise NotImplementedError("GroqLLMConfigEntry.create_client is not implemented.")

@@ -49,15 +49,16 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     client_host: Optional[HttpUrl] = None
     stream: bool = False
     num_predict: int = Field(
-        default=128,
-        description="Maximum number of tokens to predict, note: -1 is infinite, -2 is fill context, 128 is default",
+        default=-1,
+        description="Maximum number of tokens to predict, note: -1 is infinite (default), -2 is fill context.",
     )
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
-    seed: int = Field(default=42)
+    seed: int = Field(default=0)
     temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
     top_p: float = Field(default=0.9)
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     def create_client(self):
         raise NotImplementedError("OllamaLLMConfigEntry.create_client is not implemented.")
@@ -266,7 +267,8 @@ class OllamaClient:
 
         ans = None
         if "client_host" in params:
-            client = Client(host=params["client_host"])
+            # Convert client_host to string from HttpUrl
+            client = Client(host=str(params["client_host"]))
             response = client.chat(**ollama_params)
         else:
             response = ollama.chat(**ollama_params)

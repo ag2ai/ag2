@@ -11,6 +11,7 @@ from contextlib import suppress
 from typing import Any, Callable, Literal, Optional, Union
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
+from ...llm_config import LLMConfig
 
 
 class SocietyOfMindAgent(ConversableAgent):
@@ -44,7 +45,7 @@ class SocietyOfMindAgent(ConversableAgent):
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
         function_map: Optional[dict[str, Callable[..., Any]]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
         default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
         **kwargs: Any,
     ):

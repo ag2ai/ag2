@@ -35,21 +35,21 @@ Let's start with a simple example using MCTS:
 
 ```python
 import os
-from autogen import UserProxyAgent, ReasoningAgent
+from autogen import UserProxyAgent, ReasoningAgent, LLMConfig
 
 # Configure the model
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Create a reasoning agent with MCTS
-mcts_agent = ReasoningAgent(
-    name="mcts_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "method": "mcts",  # Use MCTS instead of beam search
-        "nsim": 5,  # Number of MCTS simulations
-        "exploration_constant": 1.41  # UCT exploration parameter
-    }
-)
+with llm_config:
+    mcts_agent = ReasoningAgent(
+        name="mcts_agent",
+        reason_config={
+            "method": "mcts",  # Use MCTS instead of beam search
+            "nsim": 5,  # Number of MCTS simulations
+            "exploration_constant": 1.41  # UCT exploration parameter
+        }
+    )
 
 # Create a user proxy agent
 user_proxy = UserProxyAgent(
@@ -69,19 +69,19 @@ Here’s how you can set it up:
 
 ```python
 # Configure the model
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY")}]
-config_list_larger = [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ.get("OPENAI_API_KEY")}]
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY"))
+llm_config_larger = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Create a reasoning agent with MCTS
-mcts_agent = ReasoningAgent(
-    name="mcts_agent",
-    llm_config={"config_list": mini_config_list},
-    grader_llm_config={"config_list": config_list_larger},
-    reason_config={
-        "method": "mcts",
-        "nsim": 5
-    }
-)
+with llm_config:
+    mcts_agent = ReasoningAgent(
+        name="mcts_agent",
+        grader_llm_config=llm_config_larger,
+        reason_config={
+            "method": "mcts",
+            "nsim": 5
+        }
+    )
 ```
 
 
@@ -93,41 +93,41 @@ ReasoningAgent now supports three search strategies:
 As the previous blog, the default method is beam search.
 ```python
 # Beam Search (default)
-beam_agent = ReasoningAgent(
-    name="beam_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "method": "beam_search",
-        "beam_size": 3,
-        "answer_approach": "pool"  # or "best"
-    }
-)
+with llm_config:
+    beam_agent = ReasoningAgent(
+        name="beam_agent",
+        reason_config={
+            "method": "beam_search",
+            "beam_size": 3,
+            "answer_approach": "pool"  # or "best"
+        }
+    )
 ```
 
 MCTS is also included as a common approach.
 ```python
 # Monte Carlo Tree Search
-mcts_agent = ReasoningAgent(
-    name="mcts_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "method": "mcts",
-        "nsim": 5 # number of simulations
-    }
-)
+with llm_config:
+    mcts_agent = ReasoningAgent(
+        name="mcts_agent",
+        reason_config={
+            "method": "mcts",
+            "nsim": 5 # number of simulations
+        }
+    )
 ```
 
 It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach incorporate the reflection into prompt context before next round of simulation. You can define the agent using the LATS approach as follows.
 ```python
 # Language Agent Tree Search
-lats_agent = ReasoningAgent(
-    name="lats_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "method": "lats",
-        "nsim": 5
-    }
-)
+with llm_config:
+    lats_agent = ReasoningAgent(
+        name="lats_agent",
+        reason_config={
+            "method": "lats",
+            "nsim": 5
+        }
+    )
 ```
 
 
@@ -157,14 +157,14 @@ rlhf_data = mcts_agent.extract_rlhf_preference_dataset()
 Enable ensemble reasoning with multiple independent trees:
 
 ```python
-forest_agent = ReasoningAgent(
-    name="forest_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "method": "mcts",
-        "forest_size": 5  # Run 5 independent trees
-    }
-)
+with llm_config:
+    forest_agent = ReasoningAgent(
+        name="forest_agent",
+        reason_config={
+            "method": "mcts",
+            "forest_size": 5  # Run 5 independent trees
+        }
+    )
 ```
 
 
@@ -204,13 +204,13 @@ mcts_agent.visualize_tree()
 Modify the rating scale and evaluation criteria:
 
 ```python
-custom_agent = ReasoningAgent(
-    name="custom_agent",
-    llm_config={"config_list": config_list},
-    reason_config={
-        "rating_scale": 100,  # Use 1-100 scale instead of default 1-10 for grading
-    }
-)
+with llm_config:
+    custom_agent = ReasoningAgent(
+        name="custom_agent",
+        reason_config={
+            "rating_scale": 100,  # Use 1-100 scale instead of default 1-10 for grading
+        }
+    )
 ```
 
 ### 3. Save and Load Trees
