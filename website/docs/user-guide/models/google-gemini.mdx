@@ -81,21 +81,22 @@ import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.code_utils import content_str
 
-llm_config_gemini = LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model=["gemini-2.0-flash-lite"])
-
 seed = 42  # for caching, use None for no caching
-llm_config_gemini.seed = seed
+llm_config_gemini = LLMConfig.from_json(
+    path="OAI_CONFIG_LIST",
+    seed=seed,
+).where(model="gemini-2.0-flash-lite")
 
-assistant = AssistantAgent(
-    name="assistant",
-    system_message=(
-      "You are a helpful coding assistant. "
-      "After your code has been executed and you have a code execution result, say 'ALL DONE'. "
-      "Do not say 'ALL DONE' in the same response as code."
-    ),
-    llm_config=llm_config_gemini,
-    max_consecutive_auto_reply=3
-)
+with llm_config_gemini:
+    assistant = AssistantAgent(
+        name="assistant",
+        system_message=(
+        "You are a helpful coding assistant. "
+        "After your code has been executed and you have a code execution result, say 'ALL DONE'. "
+        "Do not say 'ALL DONE' in the same response as code."
+        ),
+        max_consecutive_auto_reply=3
+    )
 
 user_proxy = UserProxyAgent(
     "user_proxy",
@@ -163,16 +164,17 @@ import autogen
 from autogen import UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 
-llm_config_gemini_vision = LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model=["gemini-2.0-flash"])
-
 seed = None # for caching
-llm_config_gemini_vision.seed = seed
+llm_config_gemini_vision = LLMConfig.from_json(
+    path="OAI_CONFIG_LIST",
+    seed=seed,
+).where(model="gemini-2.0-flash")
 
-image_agent = MultimodalConversableAgent(
-    "Gemini Vision",
-    llm_config=llm_config_gemini_vision,
-    max_consecutive_auto_reply=1
-)
+with llm_config_gemini_vision:
+    image_agent = MultimodalConversableAgent(
+        "Gemini Vision",
+        max_consecutive_auto_reply=1
+    )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
 

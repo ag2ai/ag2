@@ -55,6 +55,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     temperature: float = Field(default=1.0, ge=0.0, le=1.5)
     top_p: Optional[float] = None
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
 
     @field_validator("top_p", mode="before")
     @classmethod

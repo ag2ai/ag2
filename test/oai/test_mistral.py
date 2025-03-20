@@ -44,6 +44,7 @@ def test_mistral_llm_config_entry():
         "safe_prompt": False,
         "stream": False,
         "temperature": 0.7,
+        "hide_tools": "never",
         "tags": [],
     }
     actual = mistral_llm_config.model_dump()

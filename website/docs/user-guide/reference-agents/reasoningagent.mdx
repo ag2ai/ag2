@@ -43,10 +43,10 @@ The agent is highly configurable through a single `reason_config` dictionary:
 import random
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
-from autogen import AssistantAgent, UserProxyAgent, LLMConfig, LLMConfig
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 verbose = True
 
@@ -91,15 +91,15 @@ Note: The effectiveness depends on the underlying model's training. Models not s
 may show limited improvement with this approach.
 
 ```python
-reason_agent = ReasoningAgent(
-    name="reason_agent",
-    system_message="answer math questions",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=verbose,
-    reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
-    # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
-    # reason_config={"method": "beam_search", "beam_size": 1, "max_depth": 3},
-)
+with llm_config:
+   reason_agent = ReasoningAgent(
+      name="reason_agent",
+      system_message="answer math questions",
+      verbose=verbose,
+      reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+      # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
+      # reason_config={"method": "beam_search", "beam_size": 1, "max_depth": 3},
+   )
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER",
@@ -217,12 +217,12 @@ Beam Search is a powerful technique used in tree-based reasoning that allows the
 In this approach, the agent generates multiple reasoning steps in parallel, allowing it to compare different trajectories and select the most promising ones for further exploration. This can lead to more robust and accurate conclusions, especially in scenarios where intermediate evaluations are critical to the final outcome.
 
 ```python
-reason_agent = ReasoningAgent(
-    name="reason_agent",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=verbose,
-    reason_config={"method": "beam_search", "beam_size": 3, "max_depth": 3},
-)
+with llm_config:
+   reason_agent = ReasoningAgent(
+      name="reason_agent",
+      verbose=verbose,
+      reason_config={"method": "beam_search", "beam_size": 3, "max_depth": 3},
+   )
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER",
@@ -321,14 +321,14 @@ This section demonstrates how to use Monte Carlo Tree Search (MCTS) with [`Reaso
 3. You want to generate diverse, high-quality training data
 
 ```python
-mcts_agent = ReasoningAgent(
-    name="mcts_agent",
-    system_message="answer math questions",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=True,
-    # setup small depth and simulations for conciseness.
-    reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
-)
+with llm_config:
+   mcts_agent = ReasoningAgent(
+      name="mcts_agent",
+      system_message="answer math questions",
+      verbose=True,
+      # setup small depth and simulations for conciseness.
+      reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
+   )
 
 user_proxy = UserProxyAgent(
     name="user_proxy",
@@ -405,14 +405,14 @@ Using this combination of theoretical calculations and simulations, you can conf
 It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach incorporate the reflection into prompt context before next round of simulation. You can define the agent using the LATS approach as follows.
 
 ```python
-lats_agent = ReasoningAgent(
-    name="mcts_agent",
-    system_message="answer math questions",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=True,
-    # setup small depth and simulations for conciseness.
-    reason_config={"method": "lats", "nsim": 5, "max_depth": 4},
-)
+with llm_config:
+   lats_agent = ReasoningAgent(
+      name="mcts_agent",
+      system_message="answer math questions",
+      verbose=True,
+      # setup small depth and simulations for conciseness.
+      reason_config={"method": "lats", "nsim": 5, "max_depth": 4},
+   )
 
 user_proxy = UserProxyAgent(
     name="user_proxy",
@@ -938,21 +938,20 @@ The goal is to generate a concise yet engaging blog post about NVIDIA. The proce
 **WARNING:** It may take a long time to run this example (up to 10 minutes).
 
 ```python
-writer = AssistantAgent(
-    name="Writer",
-    llm_config=LLMConfig(config_list=config_list),
-    system_message="""
-    You are a professional writer, known for your insightful and engaging articles.
-    You transform complex concepts into compelling narratives.
-    You should improve the quality of the content based on the feedback from the user.
-    """,
-)
-reason_agent_for_writer = ReasoningAgent(
-    name="reason_agent",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=verbose,
-    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
-)
+with llm_config:
+   writer = AssistantAgent(
+      name="Writer",
+      system_message="""
+      You are a professional writer, known for your insightful and engaging articles.
+      You transform complex concepts into compelling narratives.
+      You should improve the quality of the content based on the feedback from the user.
+      """,
+   )
+   reason_agent_for_writer = ReasoningAgent(
+      name="reason_agent",
+      verbose=verbose,
+      reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+   )
 
 
 def reflection_message(recipient, messages, sender, config):
@@ -998,25 +997,23 @@ To use a different model for grading instead of gpt-4o, pass the `grader_llm_con
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_config_list = [{"api_type": "openai", "model": "gpt-4o-mini"}]
-grader_llm_config = LLMConfig(config_list=grader_config_list)
+grader_llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
-writer = AssistantAgent(
-    name="Writer",
-    llm_config=LLMConfig(config_list=config_list),
-    system_message="""
-    You are a professional writer, known for your insightful and engaging articles.
-    You transform complex concepts into compelling narratives.
-    You should improve the quality of the content based on the feedback from the user.
-    """,
-)
-reason_agent_for_writer = ReasoningAgent(
-    name="reason_agent",
-    llm_config=LLMConfig(config_list=config_list),
-    grader_llm_config=grader_llm_config,
-    verbose=verbose,
-    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
-)
+with llm_config:
+   writer = AssistantAgent(
+      name="Writer",
+      system_message="""
+      You are a professional writer, known for your insightful and engaging articles.
+      You transform complex concepts into compelling narratives.
+      You should improve the quality of the content based on the feedback from the user.
+      """,
+   )
+   reason_agent_for_writer = ReasoningAgent(
+      name="reason_agent",
+      grader_llm_config=grader_llm_config,
+      verbose=verbose,
+      reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+   )
 ```
 
 ## Save data to future training
@@ -1060,14 +1057,14 @@ Therefore, the expected maximum value when rolling a six-sided die three times i
 """
 random.seed(1)  # setup seed for reproducibility
 
-mcts_agent2 = ReasoningAgent(
-    name="mcts_agent",
-    system_message="answer math questions",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=True,
-    # setup small depth and simulations for conciseness.
-    reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
-)
+with llm_config:
+   mcts_agent2 = ReasoningAgent(
+      name="mcts_agent",
+      system_message="answer math questions",
+      verbose=True,
+      # setup small depth and simulations for conciseness.
+      reason_config={"method": "mcts", "nsim": 5, "max_depth": 4},
+   )
 
 
 user_proxy = UserProxyAgent(
@@ -1718,14 +1715,14 @@ The expected maximum value when rolling a 6-sided die three times is approximate
 The concept of a "Forest of Thoughts" allows us to leverage bootstrapping techniques to execute the tree of thoughts multiple times, creating a diverse set of answers. After running these independent reasoning processes, we can aggregate them to form our final answer.
 
 ```python
-forest_agent = ReasoningAgent(
-    name="mcts_agent",
-    system_message="answer math questions",
-    llm_config=LLMConfig(config_list=config_list),
-    verbose=True,
-    # setup small depth and simulations for conciseness.
-    reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},
-)
+with llm_config:
+   forest_agent = ReasoningAgent(
+      name="mcts_agent",
+      system_message="answer math questions",
+      verbose=True,
+      # setup small depth and simulations for conciseness.
+      reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},
+   )
 
 user_proxy = UserProxyAgent(
     name="user_proxy",

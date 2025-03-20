@@ -55,7 +55,7 @@ from typing import Any, Literal, Optional, Type, Union
 
 import requests
 from packaging import version
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
@@ -104,9 +104,13 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
     project_id: Optional[str] = None
     location: Optional[str] = None
+    # google_application_credentials points to the path of the JSON Keyfile
     google_application_credentials: Optional[str] = None
+    # credentials is a google.auth.credentials.Credentials object
+    credentials: Optional[Union[Any, str]] = None
     stream: bool = False
     safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")

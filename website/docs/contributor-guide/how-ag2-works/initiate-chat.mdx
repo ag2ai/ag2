@@ -11,9 +11,9 @@ from autogen import ConversableAgent, LLMConfig
 
 llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai", cache_seed=None)
 
-agent_a = ConversableAgent(name="agent_a", llm_config=llm_config)
-
-agent_b = ConversableAgent(name="agent_b", llm_config=llm_config)
+with llm_config:
+  agent_a = ConversableAgent(name="agent_a")
+  agent_b = ConversableAgent(name="agent_b")
 
 agent_a.initiate_chat(
     recipient=agent_a,

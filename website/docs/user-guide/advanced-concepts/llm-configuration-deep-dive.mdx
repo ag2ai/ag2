@@ -12,9 +12,7 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(
-  config_list=[{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
 ```
 
 <Warning>
@@ -26,7 +24,8 @@ This `llm_config` can then be passed to an agent's constructor to enable it to u
 ```python
 import autogen
 
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 ## Introduction to `config_list`
@@ -105,8 +104,9 @@ llm_config = autogen.LLMConfig.from_json(
     env="OAI_CONFIG_LIST",  # Or path="path/to/config.json"
 )
 
-# Then, create the assistant agent with the config list
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+# Then, create the assistant agent with the config
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
@@ -141,7 +141,7 @@ filter_dict = {"model": ["gpt-4o-mini"]}
 This can then be applied to a config when constructing `LLM_CONFIG` with `where` method:
 
 ```python
-llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(**filter_dict)
 ```
 
 Or, directly when loading the config list using `from_json`:
@@ -189,14 +189,16 @@ class MyHttpClient(httpx.Client):
 
 config_list = [
     {
-        "api_type": "openai",
-        "model": "my-gpt-4o-deployment",
-        "api_key": "",
-        "http_client": MyHttpClient(proxy="http://localhost:8030"),
+
     }
 ]
 
-llm_config = LLMConfig(config_list=config_list)
+llm_config = LLMConfig(
+    api_type="openai",
+    model="my-gpt-4o-deployment",
+    api_key="",
+    http_client=MyHttpClient(proxy="http://localhost:8030"),
+)
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
@@ -278,16 +280,12 @@ Here is an example configuration:
 from autogen import LLMConfig
 
 llm_config = LLMConfig(
-    config_list= [
-        {
-            "model": "gpt-4",
-            "base_url": "YOUR_BASE_URL",
-            "api_type": "azure",
-            "api_version": "2025-01-01",
-            "max_tokens": 1000,
-            "azure_ad_token_provider": "DEFAULT"
-        }
-    ]
+    model="gpt-4",
+    base_url="YOUR_BASE_URL",
+    api_type="azure",
+    api_version="2025-01-01",
+    max_tokens=1000,
+    azure_ad_token_provider="DEFAULT"
 )
 ```
 
@@ -305,7 +303,8 @@ In this configuration:
 import autogen
 
 # Initialize the assistant agent with the AAD authenticated config
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 #### Troubleshooting
