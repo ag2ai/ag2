@@ -49,12 +49,12 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     client_host: Optional[HttpUrl] = None
     stream: bool = False
     num_predict: int = Field(
-        default=128,
-        description="Maximum number of tokens to predict, note: -1 is infinite, -2 is fill context, 128 is default",
+        default=-1,
+        description="Maximum number of tokens to predict, note: -1 is infinite (default), -2 is fill context.",
     )
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
-    seed: int = Field(default=42)
+    seed: int = Field(default=0)
     temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
     top_p: float = Field(default=0.9)
