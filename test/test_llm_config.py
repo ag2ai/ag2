@@ -431,9 +431,9 @@ class TestLLMConfig:
                             "api_type": "ollama",
                             "model": "llama3.1:8b",
                             "num_ctx": 2048,
-                            "num_predict": 128,
+                            "num_predict": -1,
                             "repeat_penalty": 1.1,
-                            "seed": 42,
+                            "seed": 0,
                             "stream": False,
                             "tags": [],
                             "temperature": 0.8,
@@ -466,6 +466,20 @@ class TestLLMConfig:
                             safety_model="Meta-Llama/Llama-Guard-7b",
                         )
                     ]
+                ),
+            ),
+            (
+                {
+                    "model": "gpt-4o-realtime-preview",
+                    "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    "voice": "alloy",
+                    "tags": ["gpt-4o-realtime", "realtime"],
+                },
+                LLMConfig(
+                    model="gpt-4o-realtime-preview",
+                    api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                    voice="alloy",
+                    tags=["gpt-4o-realtime", "realtime"],
                 ),
             ),
         ],
