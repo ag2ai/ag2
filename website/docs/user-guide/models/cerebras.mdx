@@ -194,25 +194,23 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list = [
-    {
-        "model": "llama-3.3-70b",
-        "api_key": os.environ.get("CEREBRAS_API_KEY"),
-        "api_type": "cerebras",
-    }
-]
+llm_config = autogen.LLMConfig(
+    model="llama-3.3-70b",
+    api_key=os.environ.get("CEREBRAS_API_KEY"),
+    api_type="cerebras",
+)
 
 # Create the agent for tool calling
-chatbot = autogen.AssistantAgent(
-    name="chatbot",
-    system_message="""
-        For currency exchange and weather forecasting tasks,
-        only use the functions you have been provided with.
-        When you summarize, make sure you've considered ALL previous instructions.
-        Output 'HAVE FUN!' when an answer has been provided.
-    """,
-    llm_config=autogen.LLMConfig(config_list=config_list),
-)
+with llm_config:
+    chatbot = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="""
+            For currency exchange and weather forecasting tasks,
+            only use the functions you have been provided with.
+            When you summarize, make sure you've considered ALL previous instructions.
+            Output 'HAVE FUN!' when an answer has been provided.
+        """,
+    )
 
 # Note that we have changed the termination string to be "HAVE FUN!"
 user_proxy = autogen.UserProxyAgent(

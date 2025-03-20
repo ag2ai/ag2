@@ -34,7 +34,7 @@ from autogen.agentchat.contrib.captainagent import CaptainAgent
 
 config_path = "OAI_CONFIG_LIST"
 # You can modify the parameters of where method to select your model
-llm_config = LLMConfig.from_json(path=config_path, temperature=0).where(model=["gpt-4o"])
+llm_config = LLMConfig.from_json(path=config_path, temperature=0).where(model="gpt-4o")
 
 ## build agents
 with llm_config:

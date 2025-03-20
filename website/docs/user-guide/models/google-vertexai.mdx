@@ -154,9 +154,9 @@ from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalCon
 from autogen.code_utils import content_str
 
 seed = 25  # for caching
-llm_config_gemini = LLMConfig(path="OAI_CONFIG_LIST", seed=seed).where(model=["gemini-1.5-pro"])
+llm_config_gemini = LLMConfig(path="OAI_CONFIG_LIST", seed=seed).where(model="gemini-1.5-pro")
 
-llm_config_gemini_vision = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(model=["gemini-pro-vision"])
+llm_config_gemini_vision = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(model="gemini-pro-vision")
 
 for llm_config in [llm_config_gemini, llm_config_gemini_vision]:
     for config_list_item in llm_config.config_list:
