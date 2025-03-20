@@ -92,10 +92,10 @@ executor_agent = ConversableAgent(
 
 # The main star of the show, our ConversableAgent-based agent
 # We will attach the tools to this agent
-slack_agent = ConversableAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-)
+with llm_config:
+    slack_agent = ConversableAgent(
+        name="slack_agent",
+    )
 
 # Create tools and register them with the agents
 
