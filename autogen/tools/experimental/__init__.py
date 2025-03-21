@@ -9,6 +9,7 @@ from .google_search import GoogleSearchTool
 from .messageplatform import (
     DiscordRetrieveTool,
     DiscordSendTool,
+    SlackRetrieveRepliesTool,
     SlackRetrieveTool,
     SlackSendTool,
     TelegramRetrieveTool,
@@ -22,6 +23,7 @@ __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "GoogleSearchTool",
+    "SlackRetrieveRepliesTool",
     "SlackRetrieveTool",
     "SlackSendTool",
     "TelegramRetrieveTool",
