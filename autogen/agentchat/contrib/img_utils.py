@@ -10,12 +10,14 @@ import os
 import re
 from io import BytesIO
 from math import ceil
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import requests
 
 from ...import_utils import optional_import_block, require_optional_import
-from .. import utils
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType, utils
 
 with optional_import_block():
     from PIL import Image
@@ -277,7 +279,7 @@ def _to_pil(data: str) -> "Image.Image":
 
 
 @require_optional_import("PIL", "unknown")
-def message_formatter_pil_to_b64(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def message_formatter_pil_to_b64(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Converts the PIL image URLs in the messages to base64 encoded data URIs.
 
     This function iterates over a list of message dictionaries. For each message,

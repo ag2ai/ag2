@@ -411,7 +411,7 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     )
 
     # Define the system message generation for the research agent, getting the next research task
-    def create_research_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+    def create_research_agent_prompt(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
         """Create the research agent prompt with the current research task."""
         current_research_index = agent.get_context("CurrentResearchTaskIndex", -1)
         research_tasks = agent.get_context("ResearchTasks")
@@ -439,7 +439,7 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     )
 
     # Define the system message generation for the writing agent, getting the next writing task
-    def create_writing_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+    def create_writing_agent_prompt(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
         """Create the writing agent prompt with the current writing task."""
         current_writing_index = agent.get_context("CurrentWritingTaskIndex", -1)
         writing_tasks = agent.get_context("WritingTasks")
@@ -468,7 +468,7 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     )
 
     # Summary agent
-    def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+    def create_summary_agent_prompt(agent: ConversableAgent, messages: list["LLMMessageType"]) -> str:
         """Create the summary agent prompt with task completion results."""
         research_tasks = agent.get_context("ResearchTasksCompleted")
         writing_tasks = agent.get_context("WritingTasksCompleted")

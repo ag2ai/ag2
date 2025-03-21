@@ -8,7 +8,7 @@ import re
 import warnings
 from typing import Any, Literal, Optional, Union
 
-from .... import Agent, AssistantAgent, UserProxyAgent
+from .... import Agent, AssistantAgent, LLMMessageType, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
 from ....llm_config import LLMConfig
@@ -475,7 +475,7 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[dict[str, Any]] = None,
     ) -> tuple[bool, str]:
@@ -688,7 +688,7 @@ Please provide your rating along with a brief explanation of your assessment.
         return output
 
     def _process_prompt(
-        self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
+        self, messages: Optional[list["LLMMessageType"]], sender: Optional[Agent]
     ) -> tuple[Optional[str], Optional[str]]:
         """Process the incoming messages to extract the prompt and ground truth.
 
@@ -697,7 +697,7 @@ Please provide your rating along with a brief explanation of your assessment.
         It also looks for a specific keyword "GROUND_TRUTH" in any of the messages to separate the ground truth for evaluation purposes.
 
         Args:
-            messages (Optional[list[dict[str, Any]]]): A list of message dictionaries containing the content to process.
+            messages (Optional[list["LLMMessageType"]]): A list of message dictionaries containing the content to process.
             sender (Optional[Agent]): The agent sending the messages.
 
         Returns:

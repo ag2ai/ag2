@@ -7,8 +7,8 @@
 from threading import Thread
 from typing import Any
 
+from autogen.events.base_event import BaseEvent
 from autogen.io import IOConsole, IOStream
-from autogen.messages.base_message import BaseMessage
 
 
 class TestIOStream:
@@ -20,7 +20,7 @@ class TestIOStream:
             def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
                 pass
 
-            def send(self, message: BaseMessage) -> None:
+            def send(self, message: BaseEvent) -> None:
                 pass
 
             def input(self, prompt: str = "", *, password: bool = False) -> str:

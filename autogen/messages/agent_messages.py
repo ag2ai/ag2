@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 from termcolor import colored
 
+from ..agentchat.agent import LLMMessageType
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
@@ -508,7 +509,7 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
 @wrap_message
 class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
-    messages: list[dict[str, Any]]
+    messages: list[LLMMessageType]
     verbose: Optional[bool] = False
 
     def __init__(
@@ -516,7 +517,7 @@ class GroupChatResumeMessage(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         last_speaker_name: str,
-        messages: list[dict[str, Any]],
+        messages: list["LLMMessageType"],
         silent: Optional[bool] = False,
     ):
         super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)

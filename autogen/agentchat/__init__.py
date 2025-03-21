@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from .agent import Agent, LLMAgent
+from .agent import Agent, LLMAgent, LLMMessageType
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
 
@@ -43,6 +43,7 @@ __all__ = [
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",
+    "LLMMessageType",
     "OnCondition",
     "OnContextCondition",
     "SwarmAgent",

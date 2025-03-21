@@ -19,6 +19,7 @@ from .agentchat import (
     ConversableAgent,
     GroupChat,
     GroupChatManager,
+    LLMMessageType,
     OnCondition,
     OnContextCondition,
     SwarmAgent,
@@ -53,6 +54,7 @@ from .oai import (
     filter_config,
     get_config_list,
 )
+from .run import a_run, run
 from .version import __version__
 
 # Set the root logger.
@@ -79,6 +81,7 @@ __all__ = [
     "GroupChatManager",
     "InvalidCarryOverTypeError",
     "LLMConfig",
+    "LLMMessageType",
     "ModelClient",
     "NoEligibleSpeakerError",
     "OnCondition",
@@ -92,6 +95,7 @@ __all__ = [
     "UserProxyAgent",
     "__version__",
     "a_initiate_swarm_chat",
+    "a_run",
     "config_list_from_dotenv",
     "config_list_from_json",
     "config_list_from_models",
@@ -104,4 +108,5 @@ __all__ = [
     "initiate_swarm_chat",
     "register_function",
     "register_hand_off",
+    "run",
 ]
