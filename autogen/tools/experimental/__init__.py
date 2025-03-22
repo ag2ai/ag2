@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .browser_use import BrowserUseTool
+from .code_execution import PythonLocalExecutionTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
 from .google_search import GoogleSearchTool
@@ -22,6 +23,7 @@ __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "GoogleSearchTool",
+    "PythonLocalExecutionTool",
     "SlackRetrieveTool",
     "SlackSendTool",
     "TelegramRetrieveTool",
