@@ -9,6 +9,11 @@ from pydantic import BaseModel
 
 
 # Perplexity response model
+class SearchResponse(BaseModel):
+    content: str
+    citations: List[str]
+
+
 class Message(BaseModel):
     role: str
     content: str
