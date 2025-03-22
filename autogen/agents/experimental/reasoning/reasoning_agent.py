@@ -20,41 +20,59 @@ EPSILON = 1e-6
 TREEOFTHOUGHT_MESSAGE = """
 Role: Deep Thinking AI Assistant
 
-End Goal: Generate a thinking trajectory of steps to follow in order to provide a high-quality response to the user.
+End Goal: Generate an efficient thinking trajectory of steps to follow in order to provide a high-quality response to the user. Think deep in complex questions and shallow in simple ones.
 
-Current Task: Given the question and a list of previous thinking steps (the plan trajectory), generate at least four innovative options for the next step in the thinking process to add in the trajectory. The user will not answer you anything.
+Current Task: Given the question and a list of previous thinking steps (the plan trajectory), you have two options:
+1) Terminate: if you believe the user's question has been explored, terminate the task.
+2) Continue Thinking: generate at least four innovative options for the next step in the thinking process to add in the trajectory. The user will not answer you anything.
 
-Instructions:
+### 1) Terminate
+#### Instructions:
+- Always terminate the task when you believe the user's question has been explored.
+- The user wants the response the quicker possible, so when a high quality response can be crafted by the exploration performed, terminate the process.
+- Don't terminate from the first step.
+- Never provide additional options when terminating the task.
+
+#### Format of Output:
+REFLECTION:
+*Give a few sentence reflections on the previous steps in the thinking trajectory, explaining why the task has been explored thoroughly.*
+
+** Possible Options:**
+Option 1: TERMINATE
+<Short description>
+
+### 2) Continue thinking
+#### Instructions:
+- Continue thinking when you believe that more exploration is needed to provide a high-quality response.
 - Review the user's question and the previous steps taken. If only the question is provided and no previous steps, then make your suggestions to initiate the thinking process.
 - The options you will provide must be alternatives for the next step in the thinking trajectory. Not steps that consider another option as given. So, make them focused and not too many.
 - Identify any mistakes or errors in the previous thinking. If you find any mistakes, include options to correct them in your proposed options.
-- Reply a single word 'TERMINATE' as an option if you believe the user's question is fully resolved.
 - If the question is a multi-choice question, you should carefully eliminate obviously wrong choices, look for contextual clues in the question, and use logical reasoning to select the most plausible answer.
 - If you need to validate, simulate, or illustrate a reasoning concept (like mathematical expressions, code execution, algorithms, etc.) with Python, place the code in a fenced block like ```python ... ``` and always print the results that you want to see.
 
-(Note: Randomness, floating point precision, or hardware specifics may affect outputs, so your reasoning should not rely heavily on Python results.)
-
-Options Restrictions:
+#### Options Restrictions:
 - Never suggest options that access/consult/cross-check the internet, external sources, literature, datasets, books, or experts.
 - Never suggest options in the physical world like conducting experiments or surveys, your approach in practical problems should still be theoretical.
 - Never suggest options that require data you do not have, or suggest research to collect them.
 - Never use Python when there is no need to.
+- Never include a code option without the script to execute (e.g. not: Use python to make the calculations, but: Use this script to make the calculations: ```python... ```).
 
----
-
-**Format of Output:**
-
+#### Format of Output:
 REFLECTION:
 *Give a few sentence reflections on the previous steps in the thinking trajectory, what is wrong and what is good.*
 
 **Possible Options:**
-Option 1: Thinking 1. Short Description.
+Option 1: <Thinking 1>
+<Short description, optional code snippet to execute>
 
-Option 2: Thinking 2. Short Description.
+Option 2: <Thinking 2>
+<Short description, optional code snippet to execute>
 
-Option 3: Thinking 3. Short Description.
+Option 3: <Thinking 3>
+<Short description, optional code snippet to execute>
 
-Option 4: Thinking 4. Short Description.
+Option 4: <Thinking 4>
+<Short description, optional code snippet to execute>
 
 ...
 """
@@ -462,6 +480,8 @@ class ReasoningAgent(AssistantAgent):
                 code_execution_config=self._code_execution_config,
                 max_consecutive_auto_reply=1,
             )
+
+            self._code_execution_config = False  # code should only be executed by the user proxy
         else:
             # remove python instructions from the tot message
             tot_msg = "\n".join([
@@ -500,7 +520,7 @@ class ReasoningAgent(AssistantAgent):
             if self._method in ["beam_search", "dfs"]:
                 response = self._beam_reply(prompt, ground_truth)
             elif self._method in ["mcts", "lats"]:
-                response = self._mtcs_reply(prompt, ground_truth)
+                response = self._mcts_reply(prompt, ground_truth)
             else:
                 raise ValueError("Invalid reasoning method specified.")
 
@@ -565,7 +585,7 @@ If the answer fails to meet any of the core requirements above, it should be con
 Also, rate poory (with 1) trajectories that:
 - Require access to internet, experts opinions or external sources.
 - Require research, hypotheses or data that are not provided.
-- Include solutions in the physical world, like conducting experiments or surveys.
+- Include solutions in the physical world, like conducting experiments or surveys (code execution is fine).
 
 Please provide your rating along with a brief explanation of your assessment.
 """
@@ -586,7 +606,7 @@ If the trajectory does not meet one of the above requirements, it is considered 
 Also, rate poory (with 1) trajectories that:
 - Require access to internet, experts opinions or external sources.
 - Require research, hypotheses or data that are not provided.
-- Include solutions in the physical world, like conducting experiments or surveys.
+- Include solutions in the physical world, like conducting experiments or surveys (code execution is fine).
 
 Please provide your rating along with a brief explanation of your assessment.
 """
@@ -632,14 +652,14 @@ Please provide your rating along with a brief explanation of your assessment.
             node (ThinkNode): The node to run.
 
         Returns:
-            Optional[str]: The response generated by the node, or None if the node is terminal.
+            Optional[str]: The response generated by the node, or None if the node is TERMINATE.
         """
         assert isinstance(self._executor, AssistantAgent)
 
         if node.output is not None:
             return node.output
 
-        if self._is_terminal(node):
+        if "TERMINATE" in node.content:  # don't use _is_terminal, as the terminal node for beam search can be executed
             return None
 
         # check for python snippet
@@ -840,7 +860,7 @@ Final Answer:
         final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
 
-    def _mtcs_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
+    def _mcts_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
         """Generate a response using Monte Carlo Tree Search (MCTS) reasoning.
 
         Args:
@@ -934,10 +954,10 @@ Final Answer:
             prompt = (
                 self._lats_context
                 + "\n\n---\n\n"
-                + f"{node.trajectory}\n---\nWhat are some options for the next step in the thinking process?"
+                + f"{node.trajectory}\n---\nHow should the thinking process continue?"
             )
         else:
-            prompt = f"{node.trajectory}\n---\nWhat are some options for the next steps in the thinking process?"
+            prompt = f"{node.trajectory}\n---\nHow should the thinking process continue?"
 
         self.send(
             message=prompt,
