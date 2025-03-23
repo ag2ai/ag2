@@ -19,7 +19,8 @@ class PerplexitySearchTool(Tool):
         max_tokens: int = 1000,
         search_domain_filter: Optional[List[str]] = None,
     ):
-        self._validate_tool_config(model, api_key, max_tokens, search_domain_filter)
+        self.api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
+        self._validate_tool_config(model, self.api_key, max_tokens, search_domain_filter)
         self.url = "https://api.perplexity.ai/chat/completions"
         self.model = model
         self.api_key = api_key
