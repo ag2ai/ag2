@@ -16,21 +16,6 @@ from pydantic import BaseModel
 from autogen.tools import Tool
 
 
-class SearchResponse(BaseModel):
-    """
-    Represents the response from a search query.
-
-    Attributes:
-        content (Optional[str]): The textual content returned from the search.
-        citations (Optional[List[str]]): A list of citation URLs relevant to the search result.
-        error (Optional[str]): An error message if the search failed.
-    """
-
-    content: Union[str, None]
-    citations: Union[list[str], None]
-    error: Union[str, None]
-
-
 class Message(BaseModel):
     """
     Represents a message in the chat conversation.
@@ -99,6 +84,21 @@ class PerplexityChatCompletionResponse(BaseModel):
     choices: list[Choice]
 
 
+class SearchResponse(BaseModel):
+    """
+    Represents the response from a search query.
+
+    Attributes:
+        content (Optional[str]): The textual content returned from the search.
+        citations (Optional[List[str]]): A list of citation URLs relevant to the search result.
+        error (Optional[str]): An error message if the search failed.
+    """
+
+    content: Union[str, None]
+    citations: Union[list[str], None]
+    error: Union[str, None]
+
+
 class PerplexitySearchTool(Tool):
     """
     Tool for interacting with the Perplexity AI search API.
@@ -126,7 +126,7 @@ class PerplexitySearchTool(Tool):
 
         Args:
             model (str, optional): The model to use. Defaults to "sonar".
-            api_key (Optional[str], optional): API key for authentication. Must be provided.
+            api_key (Optional[str], optional): API key for authentication.
             max_tokens (int, optional): Maximum number of tokens for the response. Defaults to 1000.
             search_domain_filter (Optional[list[str]], optional): List of domain filters to restrict search.
 
