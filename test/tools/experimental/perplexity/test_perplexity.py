@@ -241,6 +241,24 @@ class TestPerplexitySearchTool:
             "web_search_options": {"search_context_size": "high"},
         })
 
+    def test_search_exception_case(self) -> None:
+        """
+        Test the error handling of the search method in PerplexitySearchTool.
+
+        Tests:
+          - 'content' is set to None.
+          - 'citations' is set to None.
+          - 'error' contains an error message with the expected exception details.
+        """
+        # Patch _execute_query to simulate an exception
+        with patch.object(PerplexitySearchTool, "_execute_query", side_effect=Exception("Test exception")):
+            tool = PerplexitySearchTool(api_key="test_key")
+            response: SearchResponse = tool.search("Test query")
+            assert response.content is None
+            assert response.citations is None
+            assert response.error is not None
+            assert "Test exception" in response.error
+
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
         """
