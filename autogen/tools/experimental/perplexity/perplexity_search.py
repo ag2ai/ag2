@@ -34,7 +34,7 @@ class PerplexitySearchTool(Tool):
 
     @staticmethod
     def _validate_tool_config(
-        model: str, api_key: str | None, max_tokens: int, search_domain_filter: List[str] | None
+        model: str, api_key: Optional[str], max_tokens: int, search_domain_filter: Optional[List[str]]
     ) -> None:
         if not api_key:
             raise ValueError("Perplexity API key is missing")
