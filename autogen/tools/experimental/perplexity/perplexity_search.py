@@ -24,7 +24,7 @@ class PerplexitySearchTool(Tool):
         self.model = model
         self.api_key = api_key
         self.max_tokens = max_tokens
-        self.search_domain_filter = search_domain_filter
+        self.search_domain_filters = search_domain_filter
         super().__init__(
             name="perplexity-search",
             description="Perplexity AI search tool for web search, news search, and conversational search "
@@ -57,7 +57,7 @@ class PerplexitySearchTool(Tool):
             "model": self.model,
             "messages": [{"role": "system", "content": "Be precise and concise."}, {"role": "user", "content": query}],
             "max_tokens": self.max_tokens,
-            "search_domain_filter": self.search_domain_filter,
+            "search_domain_filter": self.search_domain_filters,
             "web_search_options": {"search_context_size": "high"},
         }
         perplexity_response = self._execute_query(payload)

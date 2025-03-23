@@ -2,64 +2,63 @@
 title: Perplexity Search Tool
 ---
 
-The Perplexity AI Search integration in AG2 allows users to perform real-time web searches within the AG2 framework. It uses advanced language models and real-time web search capabilities to provide users with up-to-date information and answers to their queries.
-
-This section outlines how to integrate Perplexity Search with AG2 Agents and additional tools.
-
+The Perplexity AI search integration allows users to perform real-time web searches within the AG2 framework. Follow these steps to integrate `PerplexitySearchTool` with AG2 Agents.
 
 ## Configuring Your Perplexity API Key
 
-1. Create a Perplexity Account:
-   - [Go to Perplexity API Page](https://sonar.perplexity.ai/)
-   - Click `Get Started` and create an account.
-   - Follow to steps and chose Free Tier when proposed.
-2. Get a Perplexity API Key:
-   - Go to [API Section](https://www.perplexity.ai/settings/api) after you create your account.
-   - Set up a payment method (you need to set up a payment method to create an API key).
-   - Navigate to **Settings > API**, search for **API Keys**, click on **Generate** and copy it.
-3. Export Perplexity API Key:
-    ```bash
-    export PERPLEXITY_API_KEY="your_api_key"
-    ```
+1. **Create a Perplexity Account**:
+   - Visit [Perplexity AI](https://www.perplexity.ai/)
+   - Click `Sign Up` and create an account
+   - Select Free Tier during registration
+
+2. **Get API Key**:
+   - Navigate to [API Settings](https://www.perplexity.ai/settings/api)
+   - Add payment method (required)
+   - Generate API key under **API Keys**
+
+3. **Set Environment Variable**:
+   ```bash
+   export PERPLEXITY_API_KEY="your_api_key_here"
+   ```
 
 
-## Installation
+## Package Installation
 
 To get started with the `Perplexity Search` integration in AG2, follow these steps:
 
 Install AG2 with the `perplexity-search` and `openai` extras:
 
 ```bash
-pip install -U ag2[openai,perplexity-search]
+pip install -U "ag2[openai,perplexity-search]"
 ```
 > **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
 > ```bash
-> pip install -U ag2[openai,perplexity-search]
+> pip install -U "autogen[openai,perplexity-search]"
 > ```
 > or
 > ```bash
-> pip install -U ag2[openai,perplexity-search]
+> pip install -U "pyautogen[openai,perplexity-search]"
 > ```
 > as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 
 
 You're all set! Now you can start using Perplexity AI Search with AG2.
 
-## Imports
+## Implementation
+
+### Imports
 
 ```python
 import os
-
 import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.tools.experimental import PerplexitySearchTool
 ```
 
-## Using Perplexity Search Tool with Agents
-
-The `PerplexitySearchTool` enables agents to perform real time AI Powered web search.
 
 ### Agent Configuration
+
+Configure an assistant agent and user proxy to be used for LLM recommendation and execution respectively.
 
 ```python
 config_list = autogen.config_list_from_json(
@@ -82,29 +81,29 @@ user_proxy = UserProxyAgent(
 
 ```
 
-### Tool Initialization
+### Tool Setup
 
 ```python
-api_key = os.getenv("PERPLEXITY_API_KEY")
+perplexity_search_tool = PerplexitySearchTool(
+    api_key=os.getenv("PERPLEXITY_API_KEY"),
+    max_tokens=1000
+)
 
-perplexity_search_tool = PerplexitySearchTool(api_key=api_key, max_tokens=1000)
-
-# Once initialized, register the tool for LLM recommendation and execution
+# Register the tool for LLM recommendation and execution.
 perplexity_search_tool.register_for_llm(assistant)
 perplexity_search_tool.register_for_execution(user_proxy)
 ```
 
-### Start the Conversation
+### Usage Example
 
 With the setup complete, you can now use the assistant to fetch live web search results.
 
 ```python
-result = user_proxy.initiate_chat(
+response = user_proxy.initiate_chat(
     recipient=assistant,
     message="What is AG2?",
     max_turns=2,
 )
-
 ````
 
 ### Output
@@ -152,3 +151,25 @@ TERMINATE
 
 Process finished with exit code 0
 ````
+
+### Key Considerations
+
+#### Cost Management
+
+**Free Tier Limits**:
+- 100 daily queries included.
+- Monitor usage via [Perplexity Dashboard](https://www.perplexity.ai/settings/api).
+
+#### Performance Optimizations
+
+**Best Practices**:
+
+- Start with smaller response lengths by setting `max_tokens` parameter.
+- Filter search domains with `search_domain_filter` parameter to restrict the search results to specific domains.
+```python
+optimized_tool = PerplexitySearchTool(
+    api_key=os.getenv("PERPLEXITY_API_KEY"),
+    max_tokens=1000,
+    search_domain_filter=["arxiv.org", "towardsdatascience.com"],
+)
+```
