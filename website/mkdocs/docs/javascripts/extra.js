@@ -71,10 +71,10 @@
       card.addEventListener("click", function (e) {
         // Don't trigger if user clicked on a link or tag inside the card
         if (!e.target.closest("a") && !e.target.closest(".tag")) {
-          const link = this.getAttribute("data-link");
+          const rel_link = this.getAttribute("data-rel-link");
           const link_target = this.getAttribute("data-link-target");
-          if (link && link !== "#") {
-            window.open(link, link_target);
+          if (rel_link && rel_link !== "#") {
+            window.open(rel_link, link_target);
           }
         }
       });
