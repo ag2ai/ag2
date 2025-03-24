@@ -201,10 +201,12 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
         A relative path from source to destination
     """
     try:
-        rel_path = Path(dest_path).relative_to(Path(source_path).parent)
+        rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
         return f"../{rel_path}" if str(rel_path) == "quick-start" else f"./{rel_path}"
     except ValueError:
-        return os.path.relpath(dest_path, source_path)
+        rel_path = os.path.relpath(dest_path, source_path)
+        ret_val = f"../../{rel_path}" if "blog" in source_path else rel_path
+        return ret_val
 
 
 def fix_internal_links(source_path: str, content: str) -> str:

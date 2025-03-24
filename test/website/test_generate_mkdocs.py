@@ -1217,6 +1217,14 @@ class TestFixInternalLinks:
 
         assert actual == expected
 
+        source_path = "/docs/blog/2025-02-05-Communication-Agents"
+        content = "/docs/api-reference/autogen/UserProxyAgent"
+
+        expected = "../../../../api-reference/autogen/UserProxyAgent"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
         source_path = "/docs/user-guide/basic-concepts/tools/index.md"
         content = "/docs/user-guide/basic-concepts/tools/interop/langchain"
 
