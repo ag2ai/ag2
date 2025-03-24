@@ -282,7 +282,6 @@ class LLMConfigEntry(BaseModel, ABC):
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
-    top_p: Optional[float] = None
     base_url: Optional[HttpUrl] = None
     voice: Optional[str] = None
     model_client_cls: Optional[str] = None
