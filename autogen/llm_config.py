@@ -76,11 +76,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
         ]
-        if "max_tokens" in modified_kwargs:
-            modified_kwargs["config_list"] = [
-                {**v, "max_tokens": modified_kwargs["max_tokens"]} for v in modified_kwargs["config_list"]
-            ]
-            modified_kwargs.pop("max_tokens")
+        for x in ["max_tokens", "top_p"]:
+            if x in modified_kwargs:
+                modified_kwargs["config_list"] = [{**v, x: modified_kwargs[x]} for v in modified_kwargs["config_list"]]
+                modified_kwargs.pop(x)
 
         self._model = self._get_base_model_class()(**modified_kwargs)
 
@@ -276,6 +275,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
     base_url: Optional[HttpUrl] = None
     voice: Optional[str] = None
     model_client_cls: Optional[str] = None
