@@ -521,7 +521,11 @@ def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
     if isinstance(value, list):
         return bool(set(value) & set(criteria_values))  # Non-empty intersection
     else:
-        return value in criteria_values
+        # In filter_dict, filter could be either a list of values or a single value.
+        # For example, filter_dict = {"model": ["gpt-3.5-turbo"]} or {"model": "gpt-3.5-turbo"}
+        if isinstance(criteria_values, list):
+            return value in criteria_values
+        return bool(value == criteria_values)
 
 
 @export_module("autogen")

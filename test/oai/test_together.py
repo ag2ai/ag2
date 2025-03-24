@@ -46,6 +46,7 @@ def test_together_llm_config_entry():
         "tags": [],
         "max_tokens": 512,
         "stream": False,
+        "hide_tools": "never",
     }
     actual = together_llm_config.model_dump()
     assert actual == expected, actual

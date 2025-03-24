@@ -58,11 +58,11 @@ Then, when you create your agents you can pass the LLM configuration object to t
 
 1. By passing the `llm_config` parameter to the agent as a keyword argument.
   ```python
-  my_agent = ConversableAgent(
-      name="helpful_agent",
-      llm_config=llm_config,
-      system_message="You are a poetic AI assistant",
-  )
+  with llm_config:
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant",
+    )
   ```
 
 2. By using the `with` statement to create a context manager for the LLM configuration.

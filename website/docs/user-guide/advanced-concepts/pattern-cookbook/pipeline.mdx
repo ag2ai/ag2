@@ -308,124 +308,119 @@ def complete_notification(notification_result: NotificationResult, context_varia
     )
 
 # Pipeline agents
-entry_agent = ConversableAgent(
-    name="entry_agent",
-    system_message="""You are the entry point for the e-commerce order processing pipeline.
-    Your task is to receive the order details and start the order processing.
+with llm_config:
+    entry_agent = ConversableAgent(
+        name="entry_agent",
+        system_message="""You are the entry point for the e-commerce order processing pipeline.
+        Your task is to receive the order details and start the order processing.
 
-    When you receive an order in JSON format, you should:
-    1. Extract the full JSON string from the message
-    2. Use the start_order_processing tool with the complete JSON string
-    3. Do not modify or reformat the JSON
+        When you receive an order in JSON format, you should:
+        1. Extract the full JSON string from the message
+        2. Use the start_order_processing tool with the complete JSON string
+        3. Do not modify or reformat the JSON
 
-    The order details will be in a valid JSON format containing information about the customer, items, payment, etc.""",
-    llm_config=llm_config,
-    functions=[start_order_processing]
-)
+        The order details will be in a valid JSON format containing information about the customer, items, payment, etc.""",
+        functions=[start_order_processing]
+    )
 
-validation_agent = ConversableAgent(
-    name="validation_agent",
-    system_message="""You are the validation stage of the order processing pipeline.
+    validation_agent = ConversableAgent(
+        name="validation_agent",
+        system_message="""You are the validation stage of the order processing pipeline.
 
-    Your specific role is to validate the order details before further processing.
-    Focus on:
-    - Running a validation check, using the run_validation_check tool
+        Your specific role is to validate the order details before further processing.
+        Focus on:
+        - Running a validation check, using the run_validation_check tool
 
-    When submitting your results, create a ValidationResult object with:
-    - is_valid: boolean indicating if the order passed validation
-    - error_message: explanation if validation failed (optional)
-    - validation_details: any additional validation information (optional)
+        When submitting your results, create a ValidationResult object with:
+        - is_valid: boolean indicating if the order passed validation
+        - error_message: explanation if validation failed (optional)
+        - validation_details: any additional validation information (optional)
 
-    Always use the run_validation_check tool before using the complete_validation tool to submit your ValidationResult and move the order to the next stage.""",
-    llm_config=llm_config,
-    functions=[run_validation_check, complete_validation]
-)
+        Always use the run_validation_check tool before using the complete_validation tool to submit your ValidationResult and move the order to the next stage.""",
+        functions=[run_validation_check, complete_validation]
+    )
 
-inventory_agent = ConversableAgent(
-    name="inventory_agent",
-    system_message="""You are the inventory stage of the order processing pipeline.
+    inventory_agent = ConversableAgent(
+        name="inventory_agent",
+        system_message="""You are the inventory stage of the order processing pipeline.
 
-    Your specific role is to check if all items in the order are available in inventory.
-    Focus on:
-    - Running an inventory check using the run_inventory_check tool
-    - Verifying each item's availability
-    - Checking if requested quantities are in stock
-    - Reserving the items for this order
-    - Updating inventory counts
+        Your specific role is to check if all items in the order are available in inventory.
+        Focus on:
+        - Running an inventory check using the run_inventory_check tool
+        - Verifying each item's availability
+        - Checking if requested quantities are in stock
+        - Reserving the items for this order
+        - Updating inventory counts
 
-    When submitting your results, create an InventoryResult object with:
-    - items_available: boolean indicating if all items are available
-    - error_message: explanation if any items are out of stock (optional)
-    - reserved_items: details of items reserved for this order (optional)
+        When submitting your results, create an InventoryResult object with:
+        - items_available: boolean indicating if all items are available
+        - error_message: explanation if any items are out of stock (optional)
+        - reserved_items: details of items reserved for this order (optional)
 
-    Always use the run_inventory_check tool to do an inventory check before using the complete_inventory_check tool to submit your InventoryResult and move the order to the next stage.""",
-    llm_config=llm_config,
-    functions=[run_inventory_check, complete_inventory_check]
-)
+        Always use the run_inventory_check tool to do an inventory check before using the complete_inventory_check tool to submit your InventoryResult and move the order to the next stage.""",
+        functions=[run_inventory_check, complete_inventory_check]
+    )
 
-payment_agent = ConversableAgent(
-    name="payment_agent",
-    system_message="""You are the payment processing stage of the order processing pipeline.
+    payment_agent = ConversableAgent(
+        name="payment_agent",
+        system_message="""You are the payment processing stage of the order processing pipeline.
 
-    Your specific role is to process the payment for the order.
-    Focus on:
-    - Running the check_payment_info tool to check the validity of the payment information
-    - Verifying payment information
-    - Processing the payment transaction
-    - Recording payment details
-    - Handling payment errors or rejections
+        Your specific role is to process the payment for the order.
+        Focus on:
+        - Running the check_payment_info tool to check the validity of the payment information
+        - Verifying payment information
+        - Processing the payment transaction
+        - Recording payment details
+        - Handling payment errors or rejections
 
-    When submitting your results, create a PaymentResult object with:
-    - payment_successful: boolean indicating if payment was processed successfully
-    - error_message: explanation if payment failed (optional)
-    - transaction_details: details of the payment transaction (optional)
+        When submitting your results, create a PaymentResult object with:
+        - payment_successful: boolean indicating if payment was processed successfully
+        - error_message: explanation if payment failed (optional)
+        - transaction_details: details of the payment transaction (optional)
 
-    Always use the check_payment_info tool before running the complete_payment_processing tool to submit your PaymentResult and move the order to the next stage.""",
-    llm_config=llm_config,
-    functions=[check_payment_info, complete_payment_processing]
-)
+        Always use the check_payment_info tool before running the complete_payment_processing tool to submit your PaymentResult and move the order to the next stage.""",
+        functions=[check_payment_info, complete_payment_processing]
+    )
 
-fulfillment_agent = ConversableAgent(
-    name="fulfillment_agent",
-    system_message="""You are the fulfillment stage of the order processing pipeline.
+    fulfillment_agent = ConversableAgent(
+        name="fulfillment_agent",
+        system_message="""You are the fulfillment stage of the order processing pipeline.
 
-    Your specific role is to create fulfillment instructions for the order.
-    Focus on:
-    - Creating picking instructions for warehouse staff
-    - Generating shipping labels
-    - Selecting appropriate packaging
-    - Determining shipping method based on customer selection
+        Your specific role is to create fulfillment instructions for the order.
+        Focus on:
+        - Creating picking instructions for warehouse staff
+        - Generating shipping labels
+        - Selecting appropriate packaging
+        - Determining shipping method based on customer selection
 
-    When submitting your results, create a FulfillmentResult object with:
-    - fulfillment_instructions: detailed instructions for order fulfillment
-    - shipping_details: information about shipping method, tracking, etc.
-    - estimated_delivery: expected delivery timeframe
+        When submitting your results, create a FulfillmentResult object with:
+        - fulfillment_instructions: detailed instructions for order fulfillment
+        - shipping_details: information about shipping method, tracking, etc.
+        - estimated_delivery: expected delivery timeframe
 
-    Always use the complete_fulfillment tool to submit your FulfillmentResult and move the order to the next stage.""",
-    llm_config=llm_config,
-    functions=[complete_fulfillment]
-)
+        Always use the complete_fulfillment tool to submit your FulfillmentResult and move the order to the next stage.""",
+        functions=[complete_fulfillment]
+    )
 
-notification_agent = ConversableAgent(
-    name="notification_agent",
-    system_message="""You are the notification stage of the order processing pipeline.
+    notification_agent = ConversableAgent(
+        name="notification_agent",
+        system_message="""You are the notification stage of the order processing pipeline.
 
-    Your specific role is to notify the customer about their order status.
-    Focus on:
-    - Creating a clear order confirmation message
-    - Including all relevant order details
-    - Providing shipping and tracking information
-    - Setting expectations for next steps
+        Your specific role is to notify the customer about their order status.
+        Focus on:
+        - Creating a clear order confirmation message
+        - Including all relevant order details
+        - Providing shipping and tracking information
+        - Setting expectations for next steps
 
-    When submitting your results, create a NotificationResult object with:
-    - notification_sent: boolean indicating if notification was sent
-    - notification_method: method used to notify the customer (email, SMS, etc.)
-    - notification_content: content of the notification message
+        When submitting your results, create a NotificationResult object with:
+        - notification_sent: boolean indicating if notification was sent
+        - notification_method: method used to notify the customer (email, SMS, etc.)
+        - notification_content: content of the notification message
 
-    Always use the complete_notification tool to submit your NotificationResult and complete the order processing pipeline.""",
-    llm_config=llm_config,
-    functions=[complete_notification]
-)
+        Always use the complete_notification tool to submit your NotificationResult and complete the order processing pipeline.""",
+        functions=[complete_notification]
+    )
 
 # User agent for interaction
 user = UserProxyAgent(

@@ -356,124 +356,119 @@ def finalize_document(
         context_variables=context_variables,
     )
 
-# Agents for the feedback loop
-entry_agent = ConversableAgent(
-    name="entry_agent",
-    system_message="""You are the entry point for the document creation feedback loop.
-    Your task is to receive document creation requests and start the feedback loop.
+with llm_config:
+    # Agents for the feedback loop
+    entry_agent = ConversableAgent(
+        name="entry_agent",
+        system_message="""You are the entry point for the document creation feedback loop.
+        Your task is to receive document creation requests and start the feedback loop.
 
-    When you receive a request, extract:
-    1. The document prompt with details about what needs to be created
-    2. The type of document being created (essay, article, email, report, or other)
+        When you receive a request, extract:
+        1. The document prompt with details about what needs to be created
+        2. The type of document being created (essay, article, email, report, or other)
 
-    Use the start_document_creation tool to begin the process.""",
-    llm_config=llm_config,
-    functions=[start_document_creation]
-)
+        Use the start_document_creation tool to begin the process.""",
+        functions=[start_document_creation]
+    )
 
-planning_agent = ConversableAgent(
-    name="planning_agent",
-    system_message="""You are the document planning agent responsible for creating the initial structure.
+    planning_agent = ConversableAgent(
+        name="planning_agent",
+        system_message="""You are the document planning agent responsible for creating the initial structure.
 
-    Your task is to analyze the document prompt and create a detailed plan including:
-    - An outline with sections
-    - Main arguments or points
-    - Target audience analysis
-    - Appropriate tone for the document
+        Your task is to analyze the document prompt and create a detailed plan including:
+        - An outline with sections
+        - Main arguments or points
+        - Target audience analysis
+        - Appropriate tone for the document
 
-    Review the document prompt carefully and create a thoughtful plan that provides a strong foundation.
+        Review the document prompt carefully and create a thoughtful plan that provides a strong foundation.
 
-    When your plan is ready, use the submit_document_plan tool to move the document to the drafting stage.""",
-    llm_config=llm_config,
-    functions=[submit_document_plan]
-)
+        When your plan is ready, use the submit_document_plan tool to move the document to the drafting stage.""",
+        functions=[submit_document_plan]
+    )
 
-drafting_agent = ConversableAgent(
-    name="drafting_agent",
-    system_message="""You are the document drafting agent responsible for creating the initial draft.
+    drafting_agent = ConversableAgent(
+        name="drafting_agent",
+        system_message="""You are the document drafting agent responsible for creating the initial draft.
 
-    Your task is to transform the document plan into a complete first draft:
-    - Follow the outline and structure from the planning stage
-    - Incorporate all main arguments and points
-    - Maintain the appropriate tone for the target audience
-    - Create a compelling title
-    - Write complete, well-structured content
+        Your task is to transform the document plan into a complete first draft:
+        - Follow the outline and structure from the planning stage
+        - Incorporate all main arguments and points
+        - Maintain the appropriate tone for the target audience
+        - Create a compelling title
+        - Write complete, well-structured content
 
-    Focus on creating a comprehensive draft that addresses all aspects of the document plan.
-    Don't worry about perfection - this is a first draft that will go through review and revision.
+        Focus on creating a comprehensive draft that addresses all aspects of the document plan.
+        Don't worry about perfection - this is a first draft that will go through review and revision.
 
-    You must call the submit_document_draft tool with your draft and that will move on to the review stage.""",
-    llm_config=llm_config,
-    functions=[submit_document_draft]
-)
+        You must call the submit_document_draft tool with your draft and that will move on to the review stage.""",
+        functions=[submit_document_draft]
+    )
 
-review_agent = ConversableAgent(
-    name="review_agent",
-    system_message="""You are the document review agent responsible for critical evaluation.
+    review_agent = ConversableAgent(
+        name="review_agent",
+        system_message="""You are the document review agent responsible for critical evaluation.
 
-    Your task is to carefully review the current draft and provide constructive feedback:
-    - Evaluate the content against the original document plan
-    - Identify strengths and weaknesses
-    - Note any issues with clarity, structure, logic, or flow
-    - Assess whether the tone matches the target audience
-    - Check for completeness and thoroughness
+        Your task is to carefully review the current draft and provide constructive feedback:
+        - Evaluate the content against the original document plan
+        - Identify strengths and weaknesses
+        - Note any issues with clarity, structure, logic, or flow
+        - Assess whether the tone matches the target audience
+        - Check for completeness and thoroughness
 
-    For the feedback you MUST provide the following:
-    1. items: list of feedback items (seen next section for the collection of feedback items)
-    2. overall_assessment: Overall assessment of the document"
-    3. priority_issues: List of priority issues to address
-    4. iteration_needed: Whether another iteration is needed (True or False)
+        For the feedback you MUST provide the following:
+        1. items: list of feedback items (seen next section for the collection of feedback items)
+        2. overall_assessment: Overall assessment of the document"
+        3. priority_issues: List of priority issues to address
+        4. iteration_needed: Whether another iteration is needed (True or False)
 
-    For each item within feedback, you MUST provide the following:
-    1. section: The specific section the feedback applies to
-    2. feedback: Detailed feedback explaining the issue
-    3. severity: Rate as 'minor', 'moderate', 'major', or 'critical'
-    4. recommendation: A clear, specific action to address the feedback
+        For each item within feedback, you MUST provide the following:
+        1. section: The specific section the feedback applies to
+        2. feedback: Detailed feedback explaining the issue
+        3. severity: Rate as 'minor', 'moderate', 'major', or 'critical'
+        4. recommendation: A clear, specific action to address the feedback
 
-    Provide specific feedback with examples and clear recommendations for improvement.
-    For each feedback item, specify which section it applies to and rate its severity.
+        Provide specific feedback with examples and clear recommendations for improvement.
+        For each feedback item, specify which section it applies to and rate its severity.
 
-    If this is a subsequent review iteration, also evaluate how well previous feedback was addressed.
+        If this is a subsequent review iteration, also evaluate how well previous feedback was addressed.
 
-    Use the submit_feedback tool when your review is complete, indicating whether another iteration is needed.""",
-    llm_config=llm_config,
-    functions=[submit_feedback]
-)
+        Use the submit_feedback tool when your review is complete, indicating whether another iteration is needed.""",
+        functions=[submit_feedback]
+    )
 
-revision_agent = ConversableAgent(
-    name="revision_agent",
-    system_message="""You are the document revision agent responsible for implementing feedback.
+    revision_agent = ConversableAgent(
+        name="revision_agent",
+        system_message="""You are the document revision agent responsible for implementing feedback.
 
-    Your task is to revise the document based on the feedback provided:
-    - Address each feedback item in priority order
-    - Make specific improvements to the content, structure, and clarity
-    - Ensure the revised document still aligns with the original plan
-    - Track and document the changes you make
+        Your task is to revise the document based on the feedback provided:
+        - Address each feedback item in priority order
+        - Make specific improvements to the content, structure, and clarity
+        - Ensure the revised document still aligns with the original plan
+        - Track and document the changes you make
 
-    Focus on substantive improvements that address the feedback while preserving the document's strengths.
+        Focus on substantive improvements that address the feedback while preserving the document's strengths.
 
-    Use the submit_revised_document tool when your revisions are complete. The document may go through
-    multiple revision cycles depending on the feedback.""",
-    llm_config=llm_config,
-    functions=[submit_revised_document]
-)
+        Use the submit_revised_document tool when your revisions are complete. The document may go through
+        multiple revision cycles depending on the feedback.""",
+        functions=[submit_revised_document]
+    )
 
-finalization_agent = ConversableAgent(
-    name="finalization_agent",
-    system_message="""You are the document finalization agent responsible for completing the process.
+    finalization_agent = ConversableAgent(
+        name="finalization_agent",
+        system_message="""You are the document finalization agent responsible for completing the process.
 
-    Your task is to put the finishing touches on the document:
-    - Review the document's revision history
-    - Make any final minor adjustments for clarity and polish
-    - Ensure the document fully satisfies the original prompt
-    - Prepare the document for delivery with proper formatting
+        Your task is to put the finishing touches on the document:
+        - Review the document's revision history
+        - Make any final minor adjustments for clarity and polish
+        - Ensure the document fully satisfies the original prompt
+        - Prepare the document for delivery with proper formatting
 
-    Create a summary of the document's revision journey highlighting how it evolved through the process.
+        Create a summary of the document's revision journey highlighting how it evolved through the process.
 
-    Use the finalize_document tool when the document is complete and ready for delivery.""",
-    llm_config=llm_config,
-    functions=[finalize_document]
-)
+        Use the finalize_document tool when the document is complete and ready for delivery.""",
+        functions=[finalize_document]
+    )
 
 # User agent for interaction
 user = UserProxyAgent(
