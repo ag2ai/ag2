@@ -67,10 +67,8 @@ executor_agent = ConversableAgent(
 )
 
 # Our discord agent, who will construct messages and recommend the tool calls
-discord_agent = ConversableAgent(
-    name="discord_agent",
-    llm_config=llm_config,
-)
+with llm_config:
+    discord_agent = ConversableAgent(name="discord_agent")
 
 _bot_token = "MTMyOTI..."  # Discord bot token
 _guild_name = "My Test Server"  # Name of the server

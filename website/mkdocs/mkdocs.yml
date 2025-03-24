@@ -15,7 +15,7 @@ watch:
 
 repo_name: ag2ai/ag2
 repo_url: https://github.com/ag2ai/ag2
-edit_uri: https://github.com/ag2ai/ag2/website/mkdocs/docs
+edit_uri: edit/main/website/
 
 exclude_docs: |
   navigation_template.txt

@@ -80,10 +80,8 @@ agent_calendar = ConversableAgent(
     # No LLM required for this agent, we'll use a function to reply
 )
 
-agent_bob = ConversableAgent(
-    name="Bob",
-    llm_config=llm_config,
-)
+with llm_config:
+  agent_bob = ConversableAgent(name="Bob")
 
 # Our reply function
 def get_date_time_reply(

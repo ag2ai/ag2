@@ -14,8 +14,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeV
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
 
-# from .oai.common_utils import _filter_config, _config_list_from_json
-
 if TYPE_CHECKING:
     from .oai.client import ModelClient
 
@@ -42,10 +40,10 @@ class MetaLLMConfig(type):
 
     @property
     def current(cls) -> "LLMConfig":
-        current_llm_config = LLMConfig.get_current_llm_config()
+        current_llm_config = LLMConfig.get_current_llm_config(llm_config=None)
         if current_llm_config is None:
             raise ValueError("No current LLMConfig set. Are you inside a context block?")
-        return current_llm_config
+        return current_llm_config  # type: ignore[return-value]
 
     @property
     def default(cls) -> "LLMConfig":
@@ -96,9 +94,11 @@ class LLMConfig(metaclass=MetaLLMConfig):
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
-    def get_current_llm_config(cls) -> "Optional[LLMConfig]":
+    def get_current_llm_config(cls, llm_config: "Optional[LLMConfig]" = None) -> "Optional[LLMConfig]":
+        if llm_config is not None:
+            return llm_config
         try:
-            return LLMConfig._current_llm_config.get()
+            return (LLMConfig._current_llm_config.get()).copy()
         except LookupError:
             return None
 
@@ -200,9 +200,23 @@ class LLMConfig(metaclass=MetaLLMConfig):
         r = [f"{k}={repr(v)}" for k, v in d.items()]
 
         s = f"LLMConfig({', '.join(r)})"
-        # Replace api_key values with stars for security
-        s = re.sub(r"(['\"])api_key\1:\s*(['\"])([^'\"]*)(?:\2)", r"\1api_key\1: \2**********\2", s)
+        # Replace any keys ending with 'key' or 'token' values with stars for security
+        s = re.sub(
+            r"(['\"])(\w*(key|token))\1:\s*(['\"])([^'\"]*)(?:\4)", r"\1\2\1: \4**********\4", s, flags=re.IGNORECASE
+        )
         return s
+
+    def __copy__(self) -> "LLMConfig":
+        return LLMConfig(**self.model_dump())
+
+    def __deepcopy__(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+        return self.__copy__()
+
+    def copy(self) -> "LLMConfig":
+        return self.__copy__()
+
+    def deepcopy(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+        return self.__deepcopy__(memo)
 
     def __str__(self) -> str:
         return repr(self)
@@ -263,6 +277,7 @@ class LLMConfigEntry(BaseModel, ABC):
     api_version: Optional[str] = None
     max_tokens: Optional[int] = None
     base_url: Optional[HttpUrl] = None
+    voice: Optional[str] = None
     model_client_cls: Optional[str] = None
     http_client: Optional[httpxClient] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
@@ -328,6 +343,23 @@ class LLMConfigEntry(BaseModel, ABC):
     def values(self) -> Iterable[Any]:
         d = self.model_dump()
         return d.values()
+
+    def __repr__(self) -> str:
+        # Override to eliminate none values from the repr
+        d = self.model_dump()
+        r = [f"{k}={repr(v)}" for k, v in d.items()]
+
+        s = f"{self.__class__.__name__}({', '.join(r)})"
+
+        # Replace any keys ending with '_key' or '_token' values with stars for security
+        # This regex will match any key ending with '_key' or '_token' and its value, and replace the value with stars
+        # It also captures the type of quote used (single or double) and reuses it in the replacement
+        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s, flags=re.IGNORECASE)
+
+        return s
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 _llm_config_classes: list[Type[LLMConfigEntry]] = []

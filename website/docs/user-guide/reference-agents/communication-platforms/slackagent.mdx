@@ -106,12 +106,12 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-slack_agent = SlackAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-    bot_token=_bot_token,
-    channel_id=_channel_id,
-)
+with llm_config:
+    slack_agent = SlackAgent(
+        name="slack_agent",
+        bot_token=_bot_token,
+        channel_id=_channel_id,
+    )
 
 # We get the registered tools and register them for execution with the tool executor
 for tool in slack_agent.tools:

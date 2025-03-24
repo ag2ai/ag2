@@ -86,10 +86,8 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-telegram_agent = ConversableAgent(
-    name="telegram_agent",
-    llm_config=llm_config,
-)
+with llm_config:
+    telegram_agent = ConversableAgent(name="telegram_agent")
 
 # Authentication and target Chat ID (in this case a Group chat)
 api_id = "123....."
