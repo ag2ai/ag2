@@ -240,6 +240,7 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
 @register_llm_config
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
+    top_p: Optional[float] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
 
     def create_client(self) -> "ModelClient":
@@ -249,6 +250,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
+    top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
 
     def create_client(self) -> "ModelClient":
