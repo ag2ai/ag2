@@ -22,3 +22,4 @@ https://github.com/ag2ai/ag2/edit.*
 https://(gist\.)?github.com/.*#.*
 https://azure.microsoft.com/en-us/*
 https://docs.databricks.com/aws/en/release-notes/runtime/14.3lts-ml
+https://opengraph.githubassets.com/1671805243.560327/ag2ai/ag2
