@@ -15,7 +15,7 @@ from typing import Any, Optional, Union
 
 from termcolor import colored
 
-from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent, config_list_from_json
+from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ....code_utils import CODE_BLOCK_PATTERN
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -220,13 +220,12 @@ Match roles in the role set to each expert in expert set.
         if len(builder_model_tags) != 0:
             builder_filter_dict.update({"tags": builder_model_tags})
 
-        builder_config_list = (
-            config_list_from_json(
-                config_file_or_env, file_location=config_file_location, filter_dict=builder_filter_dict
-            )
+        llm_config = (
+            LLMConfig.from_json(env=config_file_or_env, file_location=config_file_location).where(**builder_filter_dict)
             if llm_config is None
-            else llm_config.config_list
+            else llm_config
         )
+        builder_config_list = llm_config.config_list
 
         if len(builder_config_list) == 0:
             raise RuntimeError(
@@ -298,9 +297,9 @@ Match roles in the role set to each expert in expert set.
         if len(model_tags) > 0:
             filter_dict.update({"tags": model_tags})
         config_list = (
-            config_list_from_json(
-                self.config_file_or_env, file_location=self.config_file_location, filter_dict=filter_dict
-            )
+            LLMConfig.from_json(env=self.config_file_or_env, file_location=self.config_file_location)
+            .where(**filter_dict)
+            .config_list
             if self.llm_config is None
             else self.llm_config.config_list
         )
