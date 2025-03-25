@@ -282,132 +282,128 @@ def evaluate_and_select(
         agent=AfterWorkOption.REVERT_TO_USER
     )
 
-# Create the agents for the redundant pattern
-taskmaster_agent = ConversableAgent(
-    name="taskmaster_agent",
-    system_message="""You are the Task Manager responsible for initiating tasks and coordinating the redundant pattern workflow.
+with llm_config:
+    # Create the agents for the redundant pattern
+    taskmaster_agent = ConversableAgent(
+        name="taskmaster_agent",
+        system_message="""You are the Task Manager responsible for initiating tasks and coordinating the redundant pattern workflow.
 
-Your role is to:
-1. Understand the user's request and frame it as a clear task
-2. Determine the appropriate task type (creative, problem_solving, factual)
-3. Initiate the task to be processed by multiple independent agents
-4. Return to the user with the final selected or synthesized result
+        Your role is to:
+        1. Understand the user's request and frame it as a clear task
+        2. Determine the appropriate task type (creative, problem_solving, factual)
+        3. Initiate the task to be processed by multiple independent agents
+        4. Return to the user with the final selected or synthesized result
 
-For each request:
-1. Use the initiate_task tool to start the process
-2. After all agents have submitted their results and evaluation is complete, present the final result to the user
+        For each request:
+        1. Use the initiate_task tool to start the process
+        2. After all agents have submitted their results and evaluation is complete, present the final result to the user
 
-Always explain to the user that their task is being processed by multiple approaches to ensure the best possible outcome.""",
-    llm_config=llm_config,
-    functions=[initiate_task]
-)
+        Always explain to the user that their task is being processed by multiple approaches to ensure the best possible outcome.""",
+        functions=[initiate_task]
+    )
 
-agent_a = ConversableAgent(
-    name="agent_a",
-    system_message="""You are Agent A, specializing in a structured, analytical approach to tasks.
+    agent_a = ConversableAgent(
+        name="agent_a",
+        system_message="""You are Agent A, specializing in a structured, analytical approach to tasks.
 
-For creative tasks:
-- Use structured frameworks and established patterns
-- Follow proven methodologies and best practices
-- Focus on clarity, organization, and logical progression
+        For creative tasks:
+        - Use structured frameworks and established patterns
+        - Follow proven methodologies and best practices
+        - Focus on clarity, organization, and logical progression
 
-For problem-solving tasks:
-- Use first principles thinking and systematic analysis
-- Break down problems into component parts
-- Consider established solutions and scientific approaches
+        For problem-solving tasks:
+        - Use first principles thinking and systematic analysis
+        - Break down problems into component parts
+        - Consider established solutions and scientific approaches
 
-For factual information:
-- Prioritize objective, verifiable data
-- Present information in a structured, hierarchical manner
-- Focus on accuracy and comprehensiveness
+        For factual information:
+        - Prioritize objective, verifiable data
+        - Present information in a structured, hierarchical manner
+        - Focus on accuracy and comprehensiveness
 
-Always identify your approach clearly and explain your methodology as part of your response.
-Submit your result using the submit_result_a tool, including a description of your approach.""",
-    llm_config=llm_config,
-    functions=[submit_result_a]
-)
+        Always identify your approach clearly and explain your methodology as part of your response.
+        Submit your result using the submit_result_a tool, including a description of your approach.""",
+        functions=[submit_result_a]
+    )
 
-agent_b = ConversableAgent(
-    name="agent_b",
-    system_message="""You are Agent B, specializing in a creative, lateral-thinking approach to tasks.
+    agent_b = ConversableAgent(
+        name="agent_b",
+        system_message="""You are Agent B, specializing in a creative, lateral-thinking approach to tasks.
 
-For creative tasks:
-- Use metaphors, analogies, and unexpected connections
-- Think outside conventional frameworks
-- Explore unique perspectives and novel combinations
+        For creative tasks:
+        - Use metaphors, analogies, and unexpected connections
+        - Think outside conventional frameworks
+        - Explore unique perspectives and novel combinations
 
-For problem-solving tasks:
-- Use creative ideation and divergent thinking
-- Look for non-obvious connections and innovative approaches
-- Consider unconventional solutions outside the mainstream
+        For problem-solving tasks:
+        - Use creative ideation and divergent thinking
+        - Look for non-obvious connections and innovative approaches
+        - Consider unconventional solutions outside the mainstream
 
-For factual information:
-- Present information through narratives and examples
-- Use contextual understanding and practical applications
-- Focus on making information relatable and engaging
+        For factual information:
+        - Present information through narratives and examples
+        - Use contextual understanding and practical applications
+        - Focus on making information relatable and engaging
 
-Always identify your approach clearly and explain your methodology as part of your response.
-Submit your result using the submit_result_b tool, including a description of your approach.""",
-    llm_config=llm_config,
-    functions=[submit_result_b]
-)
+        Always identify your approach clearly and explain your methodology as part of your response.
+        Submit your result using the submit_result_b tool, including a description of your approach.""",
+        functions=[submit_result_b]
+    )
 
-agent_c = ConversableAgent(
-    name="agent_c",
-    system_message="""You are Agent C, specializing in a thorough, comprehensive approach to tasks.
+    agent_c = ConversableAgent(
+        name="agent_c",
+        system_message="""You are Agent C, specializing in a thorough, comprehensive approach to tasks.
 
-For creative tasks:
-- Combine multiple perspectives and diverse inputs
-- Draw from cross-disciplinary knowledge and varied examples
-- Focus on thoroughness and covering all possible angles
+        For creative tasks:
+        - Combine multiple perspectives and diverse inputs
+        - Draw from cross-disciplinary knowledge and varied examples
+        - Focus on thoroughness and covering all possible angles
 
-For problem-solving tasks:
-- Consider multiple solution pathways simultaneously
-- Evaluate trade-offs and present alternative approaches
-- Focus on robustness and addressing edge cases
+        For problem-solving tasks:
+        - Consider multiple solution pathways simultaneously
+        - Evaluate trade-offs and present alternative approaches
+        - Focus on robustness and addressing edge cases
 
-For factual information:
-- Present multiple perspectives and nuanced views
-- Include historical context and future implications
-- Focus on depth and breadth of coverage
+        For factual information:
+        - Present multiple perspectives and nuanced views
+        - Include historical context and future implications
+        - Focus on depth and breadth of coverage
 
-Always identify your approach clearly and explain your methodology as part of your response.
-Submit your result using the submit_result_c tool, including a description of your approach.""",
-    llm_config=llm_config,
-    functions=[submit_result_c]
-)
+        Always identify your approach clearly and explain your methodology as part of your response.
+        Submit your result using the submit_result_c tool, including a description of your approach.""",
+        functions=[submit_result_c]
+    )
 
-evaluator_agent = ConversableAgent(
-    name="evaluator_agent",
-    system_message="""You are the Evaluator Agent responsible for assessing multiple approaches to the same task and selecting or synthesizing the best result.
+    evaluator_agent = ConversableAgent(
+        name="evaluator_agent",
+        system_message="""You are the Evaluator Agent responsible for assessing multiple approaches to the same task and selecting or synthesizing the best result.
 
-Your role is to:
-1. Carefully review each approach and result
-2. Evaluate each solution based on criteria appropriate to the task type
-3. Assign scores to each approach on a scale of 1-10
-4. Either select the best approach or synthesize a superior solution by combining strengths
+        Your role is to:
+        1. Carefully review each approach and result
+        2. Evaluate each solution based on criteria appropriate to the task type
+        3. Assign scores to each approach on a scale of 1-10
+        4. Either select the best approach or synthesize a superior solution by combining strengths
 
-For creative tasks, evaluate based on:
-- Originality and uniqueness
-- Effectiveness in addressing the creative brief
-- Quality of execution and coherence
+        For creative tasks, evaluate based on:
+        - Originality and uniqueness
+        - Effectiveness in addressing the creative brief
+        - Quality of execution and coherence
 
-For problem-solving tasks, evaluate based on:
-- Correctness and accuracy
-- Efficiency and elegance
-- Comprehensiveness and robustness
+        For problem-solving tasks, evaluate based on:
+        - Correctness and accuracy
+        - Efficiency and elegance
+        - Comprehensiveness and robustness
 
-For factual tasks, evaluate based on:
-- Accuracy and correctness
-- Comprehensiveness and depth
-- Clarity and organization
+        For factual tasks, evaluate based on:
+        - Accuracy and correctness
+        - Comprehensiveness and depth
+        - Clarity and organization
 
-When appropriate, rather than just selecting a single approach, synthesize a superior solution by combining the strengths of multiple approaches.
+        When appropriate, rather than just selecting a single approach, synthesize a superior solution by combining the strengths of multiple approaches.
 
-Use the evaluate_and_select tool to submit your final evaluation, including detailed scoring and rationale.""",
-    llm_config=llm_config,
-    functions=[evaluate_and_select]
-)
+        Use the evaluate_and_select tool to submit your final evaluation, including detailed scoring and rationale.""",
+        functions=[evaluate_and_select]
+    )
 
 # User agent for interaction
 user = UserProxyAgent(

@@ -68,14 +68,15 @@ def test_ollama_llm_config_entry():
         "api_type": "ollama",
         "model": "llama3.1:8b",
         "num_ctx": 2048,
-        "num_predict": 128,
+        "num_predict": -1,
         "repeat_penalty": 1.1,
-        "seed": 42,
+        "seed": 0,
         "stream": False,
         "tags": [],
         "temperature": 0.8,
         "top_k": 40,
         "top_p": 0.9,
+        "hide_tools": "never",
     }
     actual = ollama_llm_config.model_dump()
     assert actual == expected, actual
@@ -194,6 +195,35 @@ def test_create_response(mock_chat, ollama_client):
     assert response.model == "llama3.1:8b", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
     assert response.usage.completion_tokens == 20, "Response completion tokens should match the mocked response usage"
+
+
+# Test text generation
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+@patch("autogen.oai.ollama.OllamaClient.create")
+def test_ollama_client_host_value(ollama_client):
+    from autogen import ConversableAgent, LLMConfig
+
+    config_list = [
+        {
+            "model": "llama3.3",
+            "api_type": "ollama",
+            "api_key": "NULL",
+            "client_host": "http://localhost:11434",
+            "stream": False,
+        }
+    ]
+
+    llm_config = LLMConfig(config_list=config_list)
+    system_message = "You are a helpful assistant."
+
+    # Create the agent with the specified configuration
+    my_agent = ConversableAgent(name="helpful_agent", llm_config=llm_config, system_message=system_message)
+    assert my_agent.client is not None, "Client should be initialized"
+    assert my_agent.client._config_list is not None, "Client config list should be initialized"
+    assert my_agent.client._config_list[0]["model"] == "llama3.3", "Model should match the specified value"
+    assert str(my_agent.client._config_list[0]["client_host"]) == "http://localhost:11434/", (
+        "client_host should match the specified value"
+    )
 
 
 # Test functions/tools

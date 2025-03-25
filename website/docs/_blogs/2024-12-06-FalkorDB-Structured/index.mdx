@@ -50,8 +50,8 @@ For example:
 import os
 import autogen
 
-config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-os.environ["OPENAI_API_KEY"] = config_list[0]["api_key"] # Utilised by the FalkorGraphQueryEngine
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST)
+os.environ["OPENAI_API_KEY"] = llm_config.config_list[0].api_key # Utilised by the FalkorGraphQueryEngine
 
 from autogen import ConversableAgent, UserProxyAgent
 from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
@@ -143,23 +143,16 @@ class MathReasoning(BaseModel):
     final_answer: str
 
 # response_format is added to our configuration
-llm_config = {
-    "config_list":
-    [
-        {
-            "api_type": "openai",
-            "model": "gpt-4o-mini",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "response_format": MathReasoning
-        }
-    ]
-}
+llm_config = autogen.LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
+    response_format=MathReasoning
+)
 
 # This agent's responses will now be based on the MathReasoning model
-assistant = autogen.AssistantAgent(
-    name="Math_solver",
-    llm_config=llm_config,
-)
+with llm_config:
+    assistant = autogen.AssistantAgent(name="Math_solver")
 ```
 
 A sample response to `how can I solve 8x + 7 = -23` would be:

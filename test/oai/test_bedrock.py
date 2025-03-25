@@ -79,6 +79,38 @@ def test_bedrock_llm_config_entry():
     assert " List should have at least 2 items after validation, not 1" in str(e.value)
 
 
+def test_bedrock_llm_config_entry_repr():
+    bedrock_llm_config = BedrockLLMConfigEntry(
+        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        aws_region="us-east-1",
+        aws_access_key="test_access_key_id",
+        aws_secret_key="test_secret_access_key",
+        aws_session_token="test_session_token",
+        aws_profile_name="test_profile_name",
+    )
+
+    actual = repr(bedrock_llm_config)
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+
+    assert actual == expected, actual
+
+
+def test_bedrock_llm_config_entry_str():
+    bedrock_llm_config = BedrockLLMConfigEntry(
+        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        aws_region="us-east-1",
+        aws_access_key="test_access_key_id",
+        aws_secret_key="test_secret_access_key",
+        aws_session_token="test_session_token",
+        aws_profile_name="test_profile_name",
+    )
+
+    actual = str(bedrock_llm_config)
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+
+    assert actual == expected, actual
+
+
 # Test initialization and configuration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_initialization():

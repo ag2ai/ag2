@@ -57,13 +57,11 @@ You can also specify the model directly in the agent's configuration as shown be
 
 ```python
 llm_config = LLMConfig(
-    config_list=[{
-        "model": "gpt-4",
-        "api_key": "<azure_api_key>",
-        "base_url": "<azure api base url>",
-        "api_type": "azure",
-        "api_version": "2024-02-01"
-    }],
+    model="gpt-4",
+    api_key="<azure_api_key>",
+    base_url="<azure api base url>",
+    api_type="azure",
+    api_version="2024-02-01",
     temperature=0,
 )
 ```

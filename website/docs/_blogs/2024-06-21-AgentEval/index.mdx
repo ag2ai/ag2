@@ -82,7 +82,7 @@ Parameters:
 
 Example code:
 ```
-config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
 task = Task(
     **{
         "name": "Math problem solving",
@@ -92,7 +92,7 @@ task = Task(
     }
 )
 
-criteria = generate_criteria(task=task, llm_config={"config_list": config_list})
+criteria = generate_criteria(task=task, llm_config=llm_config)
 ```
 
 Note: Only one sample execution chain (success/failure) is required for the task object but AgentEval will perform better with an example for each case.
@@ -156,7 +156,7 @@ test_case="""[
   ]"""
 
 quantifier_output = quantify_criteria(
-    llm_config={"config_list": config_list},
+    llm_config=llm_config,
     criteria=criteria,
     task=task,
     test_case=test_case,

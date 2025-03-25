@@ -64,14 +64,11 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = LLMConfig(
-    config_list=config_list,
-)
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
 ```
 
 ### Web Browsing with Browser Use

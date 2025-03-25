@@ -76,7 +76,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -497,6 +497,60 @@ def _format_json_response(response: Any) -> str:
         return response.model_dump_json()
 
 
+def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
+    """Process an OpenAI image content item into Claude format."""
+    if content_item["type"] != "image_url":
+        return content_item
+
+    url = content_item["image_url"]["url"]
+    try:
+        # Handle data URLs
+        if url.startswith("data:"):
+            data_url_pattern = r"data:image/([a-zA-Z]+);base64,(.+)"
+            match = re.match(data_url_pattern, url)
+            if match:
+                media_type, base64_data = match.groups()
+                return {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": f"image/{media_type}", "data": base64_data},
+                }
+
+        else:
+            print("Error processing image.")
+            # Return original content if image processing fails
+            return content_item
+
+    except Exception as e:
+        print(f"Error processing image image: {e}")
+        # Return original content if image processing fails
+        return content_item
+
+
+def process_message_content(message: dict[str, Any]) -> Union[str, list[dict[str, Any]]]:
+    """Process message content, handling both string and list formats with images."""
+    content = message.get("content", "")
+
+    # Handle empty content
+    if content == "":
+        return content
+
+    # If content is already a string, return as is
+    if isinstance(content, str):
+        return content
+
+    # Handle list content (mixed text and images)
+    if isinstance(content, list):
+        processed_content = []
+        for item in content:
+            if item["type"] == "text":
+                processed_content.append({"type": "text", "text": item["text"]})
+            elif item["type"] == "image_url":
+                processed_content.append(process_image_content(item))
+        return processed_content
+
+    return content
+
+
 @require_optional_import("anthropic", "anthropic")
 def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Anthropic format.
@@ -520,7 +574,13 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     last_tool_result_index = -1
     for message in params["messages"]:
         if message["role"] == "system":
-            params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + message["content"]
+            content = process_message_content(message)
+            if isinstance(content, list):
+                # For system messages with images, concatenate only the text portions
+                text_content = " ".join(item.get("text", "") for item in content if item.get("type") == "text")
+                params["system"] = params.get("system", "") + (" " if "system" in params else "") + text_content
+            else:
+                params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + content
         else:
             # New messages will be added here, manage role alternations
             expected_role = "user" if len(processed_messages) % 2 == 0 else "assistant"
@@ -592,8 +652,11 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
                     processed_messages.append(
                         user_continue_message if expected_role == "user" else assistant_continue_message
                     )
-
-                processed_messages.append(message)
+                # Process messages for images
+                processed_content = process_message_content(message)
+                processed_message = message.copy()
+                processed_message["content"] = processed_content
+                processed_messages.append(processed_message)
 
     # We'll replace the last tool_use if there's no tool_result (occurs if we finish the conversation before running the function)
     if has_tools and tool_use_messages != tool_result_messages:

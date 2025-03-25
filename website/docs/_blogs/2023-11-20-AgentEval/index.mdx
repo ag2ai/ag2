@@ -41,15 +41,16 @@ Our previous research on [assistive agents in Minecraft](https://github.com/micr
 * The goal of `CriticAgent` is to suggest the list of criteria (Fig. 1), that can be used to assess task utility. This is an example of how `CriticAgent` is defined using `Autogen`:
 
 ```python
-critic = autogen.AssistantAgent(
-    name="critic",
-    llm_config={"config_list": config_list},
-    system_message="""You are a helpful assistant. You suggest criteria for evaluating different tasks. They should be distinguishable, quantifiable, and not redundant.
-    Convert the evaluation criteria into a dictionary where the keys are the criteria.
-    The value of each key is a dictionary as follows {"description": criteria description, "accepted_values": possible accepted inputs for this key}
-    Make sure the keys are criteria for assessing the given task. "accepted_values" include the acceptable inputs for each key that are fine-grained and preferably multi-graded levels. "description" includes the criterion description.
-    Return only the dictionary."""
-)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
+with llm_config:
+  critic = autogen.AssistantAgent(
+      name="critic",
+      system_message="""You are a helpful assistant. You suggest criteria for evaluating different tasks. They should be distinguishable, quantifiable, and not redundant.
+      Convert the evaluation criteria into a dictionary where the keys are the criteria.
+      The value of each key is a dictionary as follows {"description": criteria description, "accepted_values": possible accepted inputs for this key}
+      Make sure the keys are criteria for assessing the given task. "accepted_values" include the acceptable inputs for each key that are fine-grained and preferably multi-graded levels. "description" includes the criterion description.
+      Return only the dictionary."""
+  )
 ```
 
 Next, the critic is given successful and failed examples of the task execution; then, it is able to return a list of criteria (Fig. 1). For reference, use the [following notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agenteval_cq_math.ipynb).
@@ -57,17 +58,17 @@ Next, the critic is given successful and failed examples of the task execution; 
 * The goal of `QuantifierAgent` is to quantify each of the suggested criteria (Fig. 1), providing us with an idea of the utility of this system for the given task. Here is an example of how it can be defined:
 
 ```python
-quantifier = autogen.AssistantAgent(
-    name="quantifier",
-    llm_config={"config_list": config_list},
-    system_message = """You are a helpful assistant. You quantify the output of different tasks based on the given criteria.
-    The criterion is given in a dictionary format where each key is a distinct criteria.
-    The value of each key is a dictionary as follows {"description": criteria description , "accepted_values": possible accepted inputs for this key}
-    You are going to quantify each of the criteria for a given task based on the task description.
-    Return a dictionary where the keys are the criteria and the values are the assessed performance based on accepted values for each criteria.
-    Return only the dictionary."""
-
-)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")
+with llm_config:
+  quantifier = autogen.AssistantAgent(
+      name="quantifier",
+      system_message = """You are a helpful assistant. You quantify the output of different tasks based on the given criteria.
+      The criterion is given in a dictionary format where each key is a distinct criteria.
+      The value of each key is a dictionary as follows {"description": criteria description , "accepted_values": possible accepted inputs for this key}
+      You are going to quantify each of the criteria for a given task based on the task description.
+      Return a dictionary where the keys are the criteria and the values are the assessed performance based on accepted values for each criteria.
+      Return only the dictionary."""
+  )
 ```
 
 ## `AgentEval` Results based on Math Problems Dataset
