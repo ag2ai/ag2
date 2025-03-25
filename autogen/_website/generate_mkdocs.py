@@ -303,6 +303,9 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
         return f"style={{ {style_content} }}"
 
     content = re.sub(style_pattern, style_replacement, content)
+    
+    # Fix snippet imports
+    content = fix_snippet_imports(content)
 
     # Transform tab components
     content = transform_tab_component(content)
@@ -318,9 +321,6 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
 
     # Fix Internal links
     content = fix_internal_links(rel_file_path, content)
-
-    # Fix snippet imports
-    content = fix_snippet_imports(content)
 
     return content
 
@@ -531,20 +531,45 @@ def fix_snippet_imports(content: str, snippets_dir: Path = mkdocs_output_dir.par
     # Regular expression to find import statements for MDX files from /snippets/
     import_pattern = re.compile(r'import\s+(\w+)\s+from\s+"(/snippets/[^"]+\.mdx)"\s*;')
 
-    # Function to replace the matched import statement
-    def replace_import(match: re.Match[str]) -> str:
-        relative_path = match.group(2).lstrip("/")
+    # Process all matches
+    matches = list(import_pattern.finditer(content))
 
-        # Remove "snippets/" prefix from the relative path if it exists
-        if relative_path.startswith("snippets/"):
-            relative_path = relative_path[len("snippets/") :]
+    # Process matches in reverse order to avoid offset issues when replacing text
+    for match in reversed(matches):
+        imported_path = match.group(2)
 
-        # Create the new format: {!<full_path_to_snippets>/<relative_path> !}
-        new_path = "{!" + (snippets_dir / relative_path).as_posix() + " !}"
-        return new_path + "\n"
+        # Check if the path starts with /snippets/
+        if not imported_path.startswith("/snippets/"):
+            continue
 
-    # Replace all matching import statements
-    return import_pattern.sub(replace_import, content)
+        # Extract the relative path (without the /snippets/ prefix)
+        relative_path = imported_path[len("/snippets/") :]
+
+        # Construct the full file path
+        file_path = snippets_dir / relative_path
+
+        try:
+            # Read the file content
+            with open(file_path, "r") as f:
+                file_content = f.read()
+
+            # Replace the import statement with the file content
+            start, end = match.span()
+            content = content[:start] + file_content + content[end:]
+
+        except FileNotFoundError:
+            # If the file doesn't exist, add an error comment
+            error_comment = f"/* ERROR: Could not find file: {imported_path} */\n"
+            start = match.start()
+            content = content[:start] + error_comment + content[start:]
+
+        except Exception as e:
+            # Handle other potential errors
+            error_comment = f"/* ERROR: Failed to read file: {imported_path} - {str(e)} */\n"
+            start = match.start()
+            content = content[:start] + error_comment + content[start:]
+
+    return content
 
 
 def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets_src_path: Path) -> None:

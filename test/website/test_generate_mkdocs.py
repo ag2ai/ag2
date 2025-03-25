@@ -429,7 +429,27 @@ def test_add_excerpt_marker() -> None:
 def test_fix_snippet_imports() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_snippets_dir = Path(tmpdir) / "snippets"
-        expected_path = "{!" + tmp_snippets_dir.as_posix() + "/reference-agents/deep-research.mdx" + " !}"
+
+        # Create the directory structure
+        reference_agents_dir = tmp_snippets_dir / "reference-agents"
+        reference_agents_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create the MDX file with some sample content
+        mdx_file_path = reference_agents_dir / "deep-research.mdx"
+        mdx_file_content = dedent("""
+        # Deep Research Component
+
+        This is a deep research component that provides advanced capabilities.
+
+        ## Features
+
+        - Feature 1
+        - Feature 2
+        - Feature 3
+        """)
+
+        with open(mdx_file_path, "w") as f:
+            f.write(mdx_file_content)
 
         content = dedent("""
         ## Introduction
@@ -440,10 +460,19 @@ def test_fix_snippet_imports() -> None:
 
         ## Conclusion
         """)
-        expected = dedent(f"""
+        expected = dedent("""
         ## Introduction
 
-        {expected_path}
+
+        # Deep Research Component
+
+        This is a deep research component that provides advanced capabilities.
+
+        ## Features
+
+        - Feature 1
+        - Feature 2
+        - Feature 3
 
 
         <DeepResearch/>
@@ -454,6 +483,7 @@ def test_fix_snippet_imports() -> None:
         actual = fix_snippet_imports(content, tmp_snippets_dir)
         assert actual == expected
 
+        # Test case 2: Import from a directory outside the snippets directory
         content = dedent("""
         ## Introduction
 
@@ -463,6 +493,8 @@ def test_fix_snippet_imports() -> None:
 
         ## Conclusion
         """)
+
+        # In this case, the import should remain unchanged as we can't read from outside the snippets dir
         expected = dedent("""
         ## Introduction
 
