@@ -1305,6 +1305,8 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 
 <img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
 
+[Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability)
+
 """)
         expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
@@ -1327,6 +1329,8 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 ![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
 
 <img class="hero-logo" noZoom src="../../../assets/img/ag2.svg" alt="AG2 Logo" />
+
+[Cross-Framework LLM Tool Integration](../../blog/2024/12/20/Tools-interoperability)
 
 """)
         actual = fix_internal_links(source_path, content)

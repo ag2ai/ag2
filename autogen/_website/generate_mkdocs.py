@@ -230,10 +230,28 @@ def fix_internal_links(source_path: str, content: str) -> str:
     markdown_img_pattern = r"!\[([^\]]*)\]\((/snippets/[^)]+)\)"
     markdown_assets_pattern = r"!\[([^\]]*)\]\((/assets/[^)]+)\)"
 
+    def handle_blog_url(url: str) -> str:
+        """Special handling for blog URLs, converting date format from YYYY-MM-DD to YYYY/MM/DD.
+
+        Args:
+            url: The URL to process
+
+        Returns:
+            The URL with date format converted if it matches the blog URL pattern
+        """
+        blog_date_pattern = r"/docs/blog/(\d{4})-(\d{2})-(\d{2})-([\w-]+)"
+
+        if re.match(blog_date_pattern, url):
+            return re.sub(blog_date_pattern, r"/docs/blog/\1/\2/\3/\4", url)
+
+        return url
+
     # Convert HTML links
     def replace_html(match: re.Match[str], attr_type: str) -> str:
         # There's only one group in the pattern, which is the path
         absolute_link = match.group(1)
+
+        absolute_link = handle_blog_url(absolute_link)
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
         return f'{attr_type}="{relative_link}"'
@@ -242,6 +260,8 @@ def fix_internal_links(source_path: str, content: str) -> str:
     def replace_markdown(match: re.Match[str], is_image: bool) -> str:
         text = match.group(1)
         absolute_link = match.group(2)
+
+        absolute_link = handle_blog_url(absolute_link)
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
         prefix = "!" if is_image else ""
@@ -303,7 +323,7 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
         return f"style={{ {style_content} }}"
 
     content = re.sub(style_pattern, style_replacement, content)
-    
+
     # Fix snippet imports
     content = fix_snippet_imports(content)
 
