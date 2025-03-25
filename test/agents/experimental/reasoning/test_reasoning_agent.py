@@ -9,6 +9,7 @@
 import os
 import random
 import sys
+from collections import defaultdict
 from typing import Any, Optional, cast
 from unittest.mock import MagicMock, call, patch
 
@@ -347,8 +348,9 @@ def test_code_enabled(mock_credentials: Credentials) -> None:
         code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
         reason_config={"interim_execution": True},
     )
-    assert agent._code_execution_config == {"use_docker": False, "work_dir": "mypy_cache"}
+    assert not agent._code_execution_config
     assert agent._user_proxy is not None
+    assert agent._user_proxy._code_execution_config == {"use_docker": False, "work_dir": "mypy_cache"}
 
 
 @run_for_optional_imports(["openai"], "openai")
@@ -367,14 +369,16 @@ def test_reasoning_agent_code_execution(mock_credentials: Credentials) -> None:
             reason_config={"interim_execution": True, "max_depth": 2, "beam_size": 1},
         )
 
-        def mock_openai_response(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, str]]:
-            instance = args[0]
-            if instance.name == "tot_thinker":
-                return True, {
-                    "content": """Reflection
+        openai_responses = defaultdict(list)
+
+        openai_responses["tot_thinker"] = [
+            (
+                True,
+                {
+                    "content": """REFLECTION
 Let's solve this with Python.
 
-Possible Options:
+**Possible Options:**
 Option 1: Calculate factorial with Python
 ```python
 def factorial(n):
@@ -385,11 +389,34 @@ def factorial(n):
 print(f"Factorial of 5 is {factorial(5)}")
 ```
 
-Option 2: TERMINATE"""
-                }
-            elif instance.name == "test_agent":
-                return True, {"content": "The factorial of 5 is 120"}
-            return True, {"content": "5"}
+Option 2: Calculate by hand
+Use a manual approach"""
+                },
+            ),
+            (
+                True,
+                {
+                    "content": """REFLECTION
+The process has been completed.
+Option 1: TERMINATE
+Terminate the process.
+"""
+                },
+            ),
+        ]
+
+        openai_responses["test_agent"] = [
+            (True, {"content": "The factorial of 5 is 120"}),
+        ]
+
+        openai_responses["tot_grader"] = [
+            (True, {"content": "10"}),
+            (True, {"content": "1"}),
+        ]
+
+        def mock_openai_response(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, str]]:
+            instance = args[0]
+            return openai_responses[instance.name].pop(0)
 
         mock_oai_reply.side_effect = mock_openai_response
 
