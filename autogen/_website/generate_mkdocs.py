@@ -200,6 +200,7 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
     Returns:
         A relative path from source to destination
     """
+
     try:
         rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
         return f"../{rel_path}" if str(rel_path) == "quick-start" else f"./{rel_path}"
@@ -222,46 +223,38 @@ def fix_internal_links(source_path: str, content: str) -> str:
 
     # Define regex patterns for HTML and Markdown links
     html_link_pattern = r'href="(/docs/[^"]*)"'
-    markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
     html_img_src_pattern = r'src="(/snippets/[^"]+)"'
+    html_assets_src_pattern = r'src="(/assets/[^"]+)"'
+
+    markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
     markdown_img_pattern = r"!\[([^\]]*)\]\((/snippets/[^)]+)\)"
+    markdown_assets_pattern = r"!\[([^\]]*)\]\((/assets/[^)]+)\)"
 
     # Convert HTML links
-    def replace_html_link(match: re.Match[str]) -> str:
+    def replace_html(match: re.Match[str], attr_type: str) -> str:
         # There's only one group in the pattern, which is the path
         absolute_link = match.group(1)
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
-        return f'href="{relative_link}"'
-
-    # Convert HTML img src links
-    def replace_html_img_src(match: re.Match[str]) -> str:
-        absolute_link = match.group(1)
-        abs_file_path = fix_internal_references(absolute_link)
-        relative_link = absolute_to_relative(source_path, abs_file_path)
-        return f'src="{relative_link}"'
+        return f'{attr_type}="{relative_link}"'
 
     # Convert Markdown links
-    def replace_markdown_link(match: re.Match[str]) -> str:
-        link_text = match.group(1)
+    def replace_markdown(match: re.Match[str], is_image: bool) -> str:
+        text = match.group(1)
         absolute_link = match.group(2)
         abs_file_path = fix_internal_references(absolute_link)
         relative_link = absolute_to_relative(source_path, abs_file_path)
-        return f"[{link_text}]({relative_link})"
-
-    # Convert Markdown image links
-    def replace_markdown_img(match: re.Match[str]) -> str:
-        alt_text = match.group(1)
-        absolute_link = match.group(2)
-        abs_file_path = fix_internal_references(absolute_link)
-        relative_link = absolute_to_relative(source_path, abs_file_path)
-        return f"![{alt_text}]({relative_link})"
+        prefix = "!" if is_image else ""
+        return f"{prefix}[{text}]({relative_link})"
 
     # Apply replacements
-    content = re.sub(html_link_pattern, replace_html_link, content)
-    content = re.sub(markdown_link_pattern, replace_markdown_link, content)
-    content = re.sub(html_img_src_pattern, replace_html_img_src, content)
-    content = re.sub(markdown_img_pattern, replace_markdown_img, content)
+    content = re.sub(html_link_pattern, lambda match: replace_html(match, "href"), content)
+    content = re.sub(html_img_src_pattern, lambda match: replace_html(match, "src"), content)
+    content = re.sub(html_assets_src_pattern, lambda match: replace_html(match, "src"), content)
+
+    content = re.sub(markdown_link_pattern, lambda match: replace_markdown(match, False), content)
+    content = re.sub(markdown_img_pattern, lambda match: replace_markdown(match, True), content)
+    content = re.sub(markdown_assets_pattern, lambda match: replace_markdown(match, True), content)
 
     return content
 
@@ -351,7 +344,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for md_file in md_files_to_process:
         content = md_file.read_text()
 
-        rel_path = f"/{dest.relative_to(output_dir.parents[0])}"
+        rel_path = f"/{md_file.relative_to(output_dir.parents[0])}"
         processed_content = transform_content_for_mkdocs(content, rel_path)
 
         md_file.write_text(processed_content)

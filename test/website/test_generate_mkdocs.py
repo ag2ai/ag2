@@ -1271,6 +1271,8 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 
 ![DeepResearchAgent workflow](/snippets/reference-agents/img/DeepResearchAgent.png)
 
+<img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
+
 """)
         expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
@@ -1291,6 +1293,8 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 <img alt="DeepResearchAgent workflow" src="../../../snippets/reference-agents/img/DeepResearchAgent.png">
 
 ![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
+
+<img class="hero-logo" noZoom src="../../../assets/img/ag2.svg" alt="AG2 Logo" />
 
 """)
         actual = fix_internal_links(source_path, content)
