@@ -17,6 +17,7 @@ from autogen._website.generate_mkdocs import (
     add_notebooks_nav,
     filter_excluded_files,
     fix_asset_path,
+    fix_edit_links,
     fix_internal_links,
     fix_internal_references,
     fix_snippet_imports,
@@ -1295,3 +1296,61 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 """)
         actual = fix_internal_links(source_path, content)
         assert actual == expected
+
+
+class TestFixEditLinks:
+    def test_fix_edit_links(self) -> None:
+        content = dedent("""<!doctype html>
+<html lang=en class=no-js>
+    <body>
+        <article class="md-content__inner md-typeset">
+            <a href=https://github.com/ag2ai/ag2/edit/main/website/docs/home/home.md title="Edit this page" class="md-content__button md-icon"></a>
+        </article>
+    </body>
+</html>
+""")
+        expected = 'href="https://github.com/ag2ai/ag2/edit/main/website/docs/home/home.mdx"'
+        actual = fix_edit_links(content)
+        assert expected in actual
+
+    def test_fix_edit_links_notebooks(self) -> None:
+        content = dedent("""<!doctype html>
+<html lang=en class=no-js>
+    <body>
+        <article class="md-content__inner md-typeset">
+            <a href=https://github.com/ag2ai/ag2/edit/main/website/docs/use-cases/notebooks/notebooks/agentchat_swarm_enhanced.md title="Edit this page" class="md-content__button md-icon"></a>
+        </article>
+    </body>
+</html>
+""")
+        expected = 'href="https://github.com/ag2ai/ag2/edit/main/notebook/agentchat_swarm_enhanced.ipynb"'
+        actual = fix_edit_links(content)
+        assert expected in actual
+
+    def test_fix_edit_links_api_reference(self) -> None:
+        content = dedent("""<!doctype html>
+<html lang=en class=no-js>
+    <body>
+        <article class="md-content__inner md-typeset">
+            <a href=https://github.com/ag2ai/ag2/edit/main/website/docs/api-reference/autogen/config_list_from_models.md title="Edit this page" class="md-content__button md-icon"></a>
+        </article>
+    </body>
+</html>
+""")
+        expected = '<a class="md-content__button md-icon"'
+        actual = fix_edit_links(content)
+        assert expected not in actual
+
+    def test_fix_edit_links_blog(self) -> None:
+        content = dedent("""<!doctype html>
+<html lang=en class=no-js>
+    <body>
+        <article class="md-content__inner md-typeset">
+            <a href=https://github.com/ag2ai/ag2/edit/main/website/docs/blog/posts/2024-07-25-AgentOps/index.md title="Edit this page" class="md-content__button md-icon"></a>
+        </article>
+    </body>
+</html>
+""")
+        expected = 'href="https://github.com/ag2ai/ag2/edit/main/website/docs/_blogs/2024-07-25-AgentOps/index.mdx"'
+        actual = fix_edit_links(content)
+        assert expected in actual
