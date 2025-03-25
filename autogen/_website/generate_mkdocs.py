@@ -334,18 +334,28 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
 
 
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
+    # Keep track of MD files we need to process
+    md_files_to_process = []
+
+    # Step 1: First copy mdx files to destination as md files
     for file in files:
         if file.suffix == ".mdx":
-            content = file.read_text()
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
-            rel_path = f"/{dest.relative_to(output_dir.parents[0])}"
-            processed_content = transform_content_for_mkdocs(content, rel_path)
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(processed_content)
+            dest.write_text(file.read_text())
+            md_files_to_process.append(dest)
         else:
             copy_files(input_dir, output_dir, [file])
-            # copy_file(file, output_dir)
+
+    # Step 2: Process the MD files we created
+    for md_file in md_files_to_process:
+        content = md_file.read_text()
+
+        rel_path = f"/{dest.relative_to(output_dir.parents[0])}"
+        processed_content = transform_content_for_mkdocs(content, rel_path)
+
+        md_file.write_text(processed_content)
 
 
 def format_title(title: str, keywords: dict[str, str]) -> str:
