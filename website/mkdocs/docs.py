@@ -14,7 +14,6 @@ from create_api_docs import create_api_docs
 from mkdocs.config import load_config
 from typing_extensions import Annotated
 
-from autogen._website.generate_mkdocs import fix_edit_links
 from autogen._website.generate_mkdocs import main as generate_files_for_mkdocs
 
 IGNORE_DIRS = ("assets", "stylesheets", "javascripts")
@@ -214,18 +213,6 @@ def build_api_docs():
     create_api_docs(root_path=BASE_DIR, module="autogen")
 
 
-def process_html_files_in_build_directory():
-    html_files = list(BUILD_DIR.glob("**/*.html"))
-
-    for filename in html_files:
-        filepath = Path(os.path.join(BUILD_DIR, filename))
-
-        contents = filepath.read_text()
-        updated_contents = fix_edit_links(contents)
-
-        filepath.write_text(updated_contents)
-
-
 def _build(force: bool = False):
     generate_files_for_mkdocs(force)
     build_api_docs()
@@ -236,8 +223,6 @@ def _build(force: bool = False):
     # update_release_notes(realease_notes_path=EN_DOCS_DIR / "release.md")
 
     subprocess.run(["mkdocs", "build", "--site-dir", BUILD_DIR], check=True)
-
-    process_html_files_in_build_directory()
 
 
 if __name__ == "__main__":

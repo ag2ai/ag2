@@ -261,7 +261,6 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==2.5.0",
     "nbclient==0.10.2",
-    "beautifulsoup4",
 ]
 
 types = [

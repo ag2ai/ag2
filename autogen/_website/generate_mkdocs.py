@@ -28,7 +28,6 @@ from .utils import (
 
 with optional_import_block():
     import yaml
-    from bs4 import BeautifulSoup, Tag
     from jinja2 import Template
 
 
@@ -1002,38 +1001,6 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
         rel_path = f"/{file_path.relative_to(mkdocs_output_dir.parents[0])}"
         updated_content = transform_content_for_mkdocs(content, rel_path)
         file_path.write_text(updated_content, encoding="utf-8")
-
-
-@require_optional_import("bs4", "docs")
-def fix_edit_links(content: str) -> str:
-    # Parse the HTML
-    soup = BeautifulSoup(content, "html.parser")
-
-    # Find the anchor tag with title="Edit this page"
-    edit_link = soup.find("a", title="Edit this page")
-
-    # If the link is found and it's a Tag (not a NavigableString or other type)
-    if edit_link and isinstance(edit_link, Tag) and "href" in edit_link.attrs:
-        # Get the current href
-        href = str(edit_link["href"])
-
-        if "/docs/api-reference/" in href:
-            # Remove the edit_link from the html
-            edit_link.decompose()
-
-        elif "/website/docs/use-cases/notebooks/notebooks/" in href:
-            edit_link["href"] = href.replace("/website/docs/use-cases/notebooks/notebooks/", "/notebook/").replace(
-                ".md", ".ipynb"
-            )
-
-        elif "/blog/posts/" in href:
-            edit_link["href"] = href.replace("/blog/posts/", "/_blogs/").replace(".md", ".mdx")
-
-        elif href.endswith(".md"):
-            edit_link["href"] = href.replace(".md", ".mdx")
-
-    # Return the modified HTML
-    return str(soup)
 
 
 def main(force: bool) -> None:
