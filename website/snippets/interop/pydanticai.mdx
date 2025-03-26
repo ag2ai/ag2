@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool as PydanticAITool
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.interop import Interoperability
 ```
 
@@ -37,16 +37,14 @@ Configure the agents for the interaction.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]
+llm_config = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
 user_proxy = UserProxyAgent(
     name="User",
     human_input_mode="NEVER",
 )
 
-chatbot = AssistantAgent(
-    name="chatbot",
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    chatbot = AssistantAgent(name="chatbot")
 ```
 
 ### Tool Integration

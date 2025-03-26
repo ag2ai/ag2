@@ -102,22 +102,19 @@ Although we are specifying the model when running the vLLM command, we must stil
 
 
 ```python
-from autogen import UserProxyAgent, ConversableAgent
+from autogen import UserProxyAgent, ConversableAgent, LLMConfig
 
-local_llm_config={
-    "config_list": [
-        {
-            "api_type": "openai",
-            "model": "mistralai/Mistral-7B-Instruct-v0.2", # Same as in vLLM command
-            "api_key": "NotRequired", # Not needed
-            "base_url": "http://0.0.0.0:8000/v1"  # Your vLLM URL, with '/v1' added
-        }
-    ],
-    "cache_seed": None # Turns off caching, useful for testing different models
-}
+local_llm_config = LLMConfig(
+    api_type="openai",
+    model="mistralai/Mistral-7B-Instruct-v0.2", # Same as in vLLM command
+    api_key="NotRequired", # Not needed
+    base_url="http://0.0.0.0:8000/v1",  # Your vLLM URL, with '/v1' added
+    cache_seed=None # Turns off caching, useful for testing different models
+)
 
 # Create the agent that uses the LLM.
-assistant = ConversableAgent("agent", llm_config=local_llm_config,system_message="")
+with llm_config:
+    assistant = ConversableAgent("agent", system_message="")
 
 # Create the agent that represents the user in the conversation.
 user_proxy = UserProxyAgent("user", code_execution_config=False,system_message="")

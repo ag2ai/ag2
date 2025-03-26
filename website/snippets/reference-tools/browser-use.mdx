@@ -43,7 +43,7 @@ You're all set! Now you can start using browsing features in AG2.
 import os
 import nest_asyncio
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.tools.experimental import BrowserUseTool
 
 nest_asyncio.apply()
@@ -64,14 +64,11 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
 ```
 
 ### Web Browsing with Browser Use

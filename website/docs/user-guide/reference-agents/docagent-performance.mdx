@@ -589,25 +589,24 @@ Answer: For NVIDIA's latest quarter ended October 27, 2024, the GAAP operating i
 Here is a basic Python code in line with the tests above. You will need to have `OPENAI_API_KEY` set in your environment variables.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
 import json
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", cache_seed=None)
 
 llm_config_list = {"config_list": [llm_config]}
-
-asking_agent = ConversableAgent(name="asking_agent", llm_config=llm_config, human_input_mode="ALWAYS")
-
 # InMemory Query Engine
 inmemory_qe = InMemoryQueryEngine(llm_config=llm_config_list)
 
-doc_agent = DocAgent(
-    name="doc_agent",
-    llm_config=llm_config,
-    query_engine=inmemory_qe, # Comment this out if you want to use the default chroma vector store
-    # collection_name="my_collection_name", # If using chroma, set unique collection names per run/question
-)
+with llm_config:
+  asking_agent = ConversableAgent(name="asking_agent", human_input_mode="ALWAYS")
+
+  doc_agent = DocAgent(
+      name="doc_agent",
+      query_engine=inmemory_qe, # Comment this out if you want to use the default chroma vector store
+      # collection_name="my_collection_name", # If using chroma, set unique collection names per run/question
+  )
 
 # 1. Markdown URL
 task_message = "Retrieve the document from https://raw.githubusercontent.com/microsoft/FLAML/main/website/docs/Examples/Integrate%20-%20Spark.md and summarise it."

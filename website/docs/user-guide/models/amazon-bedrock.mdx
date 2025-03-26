@@ -122,25 +122,19 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list_bedrock = [
-    {
-        "api_type": "bedrock",
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "aws_region": "us-east-1",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "price": [0.003, 0.015],
-        "temperature": 0.1,
-        "cache_seed": None,  # turn off caching
-    }
-]
-
-assistant = autogen.AssistantAgent(
-    "assistant",
-    llm_config={
-        "config_list": config_list_bedrock,
-    },
+llm_config_bedrock = autogen.LLMConfig(
+    api_type="bedrock",
+    model="anthropic.claude-3-sonnet-20240229-v1:0",
+    aws_region="us-east-1",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    price=[0.003, 0.015],
+    temperature=0.1,
+    cache_seed=None,  # turn off caching
 )
+
+with llm_config_bedrock:
+    assistant = autogen.AssistantAgent("assistant")
 
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",
@@ -218,30 +212,26 @@ from typing import Literal
 
 import autogen
 
-config_list_bedrock = [
-    {
-        "api_type": "bedrock",
-        "model": "meta.llama3-1-70b-instruct-v1:0",
-        "aws_region": "us-west-2",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "price": [0.00265, 0.0035],
-        "cache_seed": None,  # turn off caching
-    }
-]
+llm_config_bedrock = autogen.LLMConfig(
+    api_type="bedrock",
+    model="meta.llama3-1-70b-instruct-v1:0",
+    aws_region="us-west-2",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    price=[0.00265, 0.0035],
+    cache_seed=None,  # turn off caching
+)
 
 # Create the agent and include examples of the function calling JSON in the prompt
 # to help guide the model
-chatbot = autogen.AssistantAgent(
-    name="chatbot",
-    system_message="""For currency exchange and weather forecasting tasks,
-        only use the functions you have been provided with.
-        Output only the word 'TERMINATE' when an answer has been provided.
-        Use both tools together if you can.""",
-    llm_config={
-        "config_list": config_list_bedrock,
-    },
-)
+with llm_config_bedrock:
+    chatbot = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="""For currency exchange and weather forecasting tasks,
+            only use the functions you have been provided with.
+            Output only the word 'TERMINATE' when an answer has been provided.
+            Use both tools together if you can.""",
+    )
 
 user_proxy = autogen.UserProxyAgent(
     name="user_proxy",
@@ -388,82 +378,66 @@ Here we have a conversation that has two models (Anthropic's Claude 3 Sonnet and
 from typing import Annotated, Literal
 
 import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
-config_list_sonnet = [
-    {
-        "api_type": "bedrock",
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "aws_region": "us-east-1",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "price": [0.003, 0.015],
-        "temperature": 0.1,
-        "cache_seed": None,  # turn off caching
-    }
-]
-
-config_list_mistral = [
-    {
-        "api_type": "bedrock",
-        "model": "mistral.mistral-large-2407-v1:0",
-        "aws_region": "us-west-2",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "price": [0.003, 0.009],
-        "temperature": 0.1,
-        "cache_seed": None,  # turn off caching
-    }
-]
-
-config_list_llama31_70b = [
-    {
-        "api_type": "bedrock",
-        "model": "meta.llama3-1-70b-instruct-v1:0",
-        "aws_region": "us-west-2",
-        "aws_access_key": "[FILL THIS IN]",
-        "aws_secret_key": "[FILL THIS IN]",
-        "price": [0.00265, 0.0035],
-        "temperature": 0.1,
-        "cache_seed": None,  # turn off caching
-    }
-]
-
-alice = AssistantAgent(
-    "sonnet_agent",
-    system_message="You are from Anthropic, an AI company that created the Sonnet large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to mistral_agent when you have finished. Start your response with 'I am sonnet_agent'.",
-    llm_config={
-        "config_list": config_list_sonnet,
-    },
-    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+llm_config_sonnet = LLMConfig(
+    api_type="bedrock",
+    model="anthropic.claude-3-sonnet-20240229-v1:0",
+    aws_region="us-east-1",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    price=[0.003, 0.015],
+    temperature=0.1,
+    cache_seed=None,  # turn off caching
 )
 
-bob = autogen.AssistantAgent(
-    "mistral_agent",
-    system_message="You are from Mistral, an AI company that created the Large v2 large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to the judge if you have finished. Start your response with 'I am mistral_agent'.",
-    llm_config={
-        "config_list": config_list_mistral,
-    },
-    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+llm_config_mistral = autogen.LLMConfig(
+    api_type="bedrock",
+    model="mistral.mistral-large-2407-v1:0",
+    aws_region="us-west-2",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    price=[0.003, 0.009],
+    temperature=0.1,
+    cache_seed=None,  # turn off caching
 )
 
-charlie = AssistantAgent(
-    "research_assistant",
-    system_message="You are a helpful assistant to research the latest news and headlines. You have access to call functions to get the latest news articles for research through 'code_interpreter'.",
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
-    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+llm_config_llama31_70b = autogen.LLMConfig(
+    api_type="bedrock",
+    model="meta.llama3-1-70b-instruct-v1:0",
+    aws_region="us-west-2",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    price=[0.00265, 0.0035],
+    cache_seed=None,  # turn off caching
 )
 
-dan = AssistantAgent(
-    "judge",
-    system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing. End your decision with the word 'TERMINATE' to conclude the debate.",
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
-    is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-)
+with llm_config_sonnet:
+    alice = AssistantAgent(
+        "sonnet_agent",
+        system_message="You are from Anthropic, an AI company that created the Sonnet large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to mistral_agent when you have finished. Start your response with 'I am sonnet_agent'.",
+        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    )
+
+with llm_config_mistral:
+    bob = autogen.AssistantAgent(
+        "mistral_agent",
+        system_message="You are from Mistral, an AI company that created the Large v2 large language model. You make arguments to support your company's position. You analyse given text. You are not a programmer and don't use Python. Pass to the judge if you have finished. Start your response with 'I am mistral_agent'.",
+        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    )
+
+with llm_config_llama31_70b:
+    charlie = AssistantAgent(
+        "research_assistant",
+        system_message="You are a helpful assistant to research the latest news and headlines. You have access to call functions to get the latest news articles for research through 'code_interpreter'.",
+        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    )
+
+    dan = AssistantAgent(
+        "judge",
+        system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing. End your decision with the word 'TERMINATE' to conclude the debate.",
+        is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
+    )
 
 code_interpreter = UserProxyAgent(
     "code_interpreter",
@@ -513,9 +487,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config={
-        "config_list": config_list_llama31_70b,
-    },
+    llm_config=llm_config_llama31_70b,
 )
 
 task = "Analyze the potential of Anthropic and Mistral to revolutionize the field of AI based on today's headlines. Today is 06202024. Start by selecting 'research_assistant' to get relevant news articles and then ask sonnet_agent and mistral_agent to respond before the judge evaluates the conversation."
@@ -633,18 +605,14 @@ Here's the image we'll use:
 ![I -heart- AutoGen](https://mintlify.s3.us-west-1.amazonaws.com/ag2ai/blog/2024-03-03-AutoGen-Update/img/love.png "width=400 height=400")
 
 ```python
-config_list_sonnet = {
-    "config_list": [
-        {
-            "api_type": "bedrock",
-            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "aws_region": "us-east-1",
-            "aws_access_key": "[FILL THIS IN]",
-            "aws_secret_key": "[FILL THIS IN]",
-            "cache_seed": None,
-        }
-    ]
-}
+llm_config_sonnet = LLMConfig(
+    api_type="bedrock",
+    model="anthropic.claude-3-sonnet-20240229-v1:0",
+    aws_region="us-east-1",
+    aws_access_key="[FILL THIS IN]",
+    aws_secret_key="[FILL THIS IN]",
+    cache_seed=None,  # turn off caching
+)
 
 # We'll use a Multimodal agent to handle the image
 
@@ -652,11 +620,11 @@ import autogen
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 
-image_agent = MultimodalConversableAgent(
-    name="image-explainer",
-    max_consecutive_auto_reply=10,
-    llm_config=config_list_sonnet,
-)
+with llm_config_sonnet:
+    image_agent = MultimodalConversableAgent(
+        name="image-explainer",
+        max_consecutive_auto_reply=10,
+    )
 
 user_proxy = autogen.UserProxyAgent(
     name="User_proxy",

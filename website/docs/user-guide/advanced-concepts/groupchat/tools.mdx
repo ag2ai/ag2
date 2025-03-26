@@ -31,6 +31,7 @@ from autogen import (
     GroupChatManager,
     UserProxyAgent,
     register_function,
+    LLMConfig,
 )
 ```
 
@@ -42,21 +43,16 @@ The [`GroupChat`](/docs/api-reference/autogen/GroupChat) will contain three agen
 - `user_proxy` - Acts as an intermediary between the user and other agents.
 
 ```python
-llm_config = {
-    "api_type": "openai",
-    "model": "gpt-4o-mini",
-    "api_key": os.environ["OPENAI_API_KEY"]
-}
-
-sales_agent = ConversableAgent(
-    name="SalesAgent",
-    llm_config=llm_config,
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.environ["OPENAI_API_KEY"],
 )
 
-cancellation_agent = ConversableAgent(
-    name="CanelationAgent",
-    llm_config=llm_config,
-)
+with llm_config:
+    sales_agent = ConversableAgent(name="SalesAgent")
+
+    cancellation_agent = ConversableAgent(name="CanelationAgent")
 
 user_proxy = UserProxyAgent(
     name="user_proxy",

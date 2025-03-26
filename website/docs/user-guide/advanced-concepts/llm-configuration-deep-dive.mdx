@@ -10,10 +10,9 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 
 ```python
 import os
+from autogen import LLMConfig
 
-llm_config = {
-    "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
 ```
 
 <Warning>
@@ -25,7 +24,8 @@ This `llm_config` can then be passed to an agent's constructor to enable it to u
 ```python
 import autogen
 
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 ## Introduction to `config_list`
@@ -97,15 +97,16 @@ These will create a model client which assumes an OpenAI API (or compatible) end
 
 ### `OAI_CONFIG_LIST` pattern
 
-A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `config_list_from_json` helper function to load it:
+A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `from_json` method to load it:
 
 ```python
-config_list = autogen.config_list_from_json(
-    env_or_file="OAI_CONFIG_LIST",
+llm_config = autogen.LLMConfig.from_json(
+    env="OAI_CONFIG_LIST",  # Or path="path/to/config.json"
 )
 
-# Then, create the assistant agent with the config list
-assistant = autogen.AssistantAgent(name="assistant", llm_config={"config_list": config_list})
+# Then, create the assistant agent with the config
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
@@ -137,16 +138,16 @@ As described above the list can be filtered based on certain criteria. This is d
 filter_dict = {"model": ["gpt-4o-mini"]}
 ```
 
-This can then be applied to a config list loaded in Python with `filter_config`:
+This can then be applied to a config when constructing `LLM_CONFIG` with `where` method:
 
 ```python
-config_list = autogen.filter_config(config_list, filter_dict)
+llm_config = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(**filter_dict)
 ```
 
-Or, directly when loading the config list using `config_list_from_json`:
+Or, directly when loading the config list using `from_json`:
 
 ```python
-config_list = autogen.config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict=filter_dict)
+llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(**filter_dict)
 ```
 
 #### Tags
@@ -164,8 +165,8 @@ Then when filtering the `config_list` you can can specify the desired tags. A co
 
 ```python
 filter_dict = {"tags": ["llama", "another_tag"]}
-config_list = autogen.filter_config(config_list, filter_dict)
-assert len(config_list) == 1
+llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
+assert len(llm_config.config_list) == 1
 ```
 
 ### Adding http client in llm_config for proxy
@@ -178,6 +179,8 @@ The below example shows how to implement a `__deepcopy__` method for http client
 #!pip install httpx
 import httpx
 
+from autogen import LLMConfig
+
 
 class MyHttpClient(httpx.Client):
     def __deepcopy__(self, memo):
@@ -186,16 +189,16 @@ class MyHttpClient(httpx.Client):
 
 config_list = [
     {
-        "api_type": "openai",
-        "model": "my-gpt-4o-deployment",
-        "api_key": "",
-        "http_client": MyHttpClient(proxy="http://localhost:8030"),
+
     }
 ]
 
-llm_config = {
-    "config_list": config_list,
-}
+llm_config = LLMConfig(
+    api_type="openai",
+    model="my-gpt-4o-deployment",
+    api_key="",
+    http_client=MyHttpClient(proxy="http://localhost:8030"),
+)
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
@@ -274,18 +277,16 @@ To use AAD authentication with Azure OpenAI in AG2, configure the `llm_config` w
 Here is an example configuration:
 
 ```
-llm_config = {
-    "config_list": [
-        {
-            "model": "gpt-4",
-            "base_url": "YOUR_BASE_URL",
-            "api_type": "azure",
-            "api_version": "2025-01-01",
-            "max_tokens": 1000,
-            "azure_ad_token_provider": "DEFAULT"
-        }
-    ]
-}
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    model="gpt-4",
+    base_url="YOUR_BASE_URL",
+    api_type="azure",
+    api_version="2025-01-01",
+    max_tokens=1000,
+    azure_ad_token_provider="DEFAULT"
+)
 ```
 
 For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
@@ -302,7 +303,8 @@ In this configuration:
 import autogen
 
 # Initialize the assistant agent with the AAD authenticated config
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+  assistant = autogen.AssistantAgent(name="assistant")
 ```
 
 #### Troubleshooting
@@ -330,8 +332,11 @@ This is commonly used for things like `temperature`, or `timeout`.
 ## Example
 
 ```python
-llm_config = {
-    "config_list": [
+from autogen import LLMConfig
+
+
+llm_config = LLMConfig(
+    config_list = [
         {
             "model": "my-gpt-4o-deployment",
             "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
@@ -346,9 +351,9 @@ llm_config = {
             "api_type": "openai",
         },
     ],
-    "temperature": 0.9,
-    "timeout": 300,
-}
+    temperature = 0.9,
+    timeout = 300,
+)
 ```
 
 ## Other helpers for loading a config list

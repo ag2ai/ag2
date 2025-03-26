@@ -10,6 +10,7 @@ from anyio import lowlevel
 from asyncer import create_task_group
 
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 from ....tools import Tool
 from .clients.realtime_client import RealtimeClientProtocol, get_client
 from .function_observer import FunctionObserver
@@ -36,7 +37,7 @@ class RealtimeAgent:
         name: str,
         audio_adapter: Optional[RealtimeObserver] = None,
         system_message: str = "You are a helpful AI Assistant.",
-        llm_config: dict[str, Any],
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         logger: Optional[Logger] = None,
         observers: Optional[list[RealtimeObserver]] = None,
         **client_kwargs: Any,
@@ -47,7 +48,7 @@ class RealtimeAgent:
             name (str): The name of the agent.
             audio_adapter (Optional[RealtimeObserver] = None): The audio adapter for the agent.
             system_message (str): The system message for the agent.
-            llm_config (dict[str, Any], bool): The config for the agent.
+            llm_config (LLMConfig, dict[str, Any], bool): The config for the agent.
             logger (Optional[Logger]): The logger for the agent.
             observers (Optional[list[RealtimeObserver]]): The additional observers for the agent.
             **client_kwargs (Any): The keyword arguments for the client.
@@ -55,6 +56,8 @@ class RealtimeAgent:
         self._logger = logger
         self._name = name
         self._system_message = system_message
+
+        llm_config = LLMConfig.get_current_llm_config(llm_config)
 
         self._realtime_client: RealtimeClientProtocol = get_client(
             llm_config=llm_config, logger=self.logger, **client_kwargs

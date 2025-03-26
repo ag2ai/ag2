@@ -1,8 +1,8 @@
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 planner_system_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -12,11 +12,11 @@ Use the following format:
 <script>How to introduce the topic to the kids</script>
 """
 
-my_agent = ConversableAgent(
-    name="lesson_agent",
-    llm_config=llm_config,
-    system_message=planner_system_message,
-)
+with llm_config:
+    my_agent = ConversableAgent(
+        name="lesson_agent",
+        system_message=planner_system_message,
+    )
 
 # 1. Create our "human" agent
 the_human = ConversableAgent(

@@ -87,14 +87,14 @@ Here's a simple example using the [`SlackAgent`](/docs/api-reference/autogen/age
 
 ```python
 # Agents are available in the autogen.agents namespace
-from autogen import ConversableAgent, register_function
+from autogen import ConversableAgent, register_function, LLMConfig
 from autogen.agents.experimental import SlackAgent
 
 # For running the code in Jupyter, use nest_asyncio to allow nested event loops
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 # Our Slack credentials
 _bot_token = "xoxo..."  # OAuth token
@@ -106,12 +106,12 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-slack_agent = SlackAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-    bot_token=_bot_token,
-    channel_id=_channel_id,
-)
+with llm_config:
+    slack_agent = SlackAgent(
+        name="slack_agent",
+        bot_token=_bot_token,
+        channel_id=_channel_id,
+    )
 
 # We get the registered tools and register them for execution with the tool executor
 for tool in slack_agent.tools:

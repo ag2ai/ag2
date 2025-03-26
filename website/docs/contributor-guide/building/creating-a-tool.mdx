@@ -56,6 +56,7 @@ class Crawl4AITool(Tool): # Built on the Tool class
             extraction_model: The Pydantic model to use for extraction. If None, the tool will use the default schema.
             llm_strategy_kwargs: The keyword arguments to pass to the LLM extraction strategy.
         """ # Follow this docstring format
+        llm_config = LLMConfig.get_current_llm_config(llm_config)
         Crawl4AITool._validate_llm_strategy_kwargs(llm_strategy_kwargs, llm_config_provided=(llm_config is not None))
 
         # Helper function inside init
@@ -115,16 +116,16 @@ And this tool can now be registered with any [ConversableAgent](/docs/api-refere
 Here's how to use the Crawl4AITool:
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 # Import the Tool
 from autogen.tools.experimental import Crawl4AITool
 
-config_list = [{"model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]}]
-llm_config = {"config_list": config_list}
+llm_config = LLMConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
 # Agent for LLM tool recommendation
-assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
 
 # Agent for tool execution
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")

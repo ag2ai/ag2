@@ -1,7 +1,7 @@
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # Three chats:
 # 1. Teacher and Curriculum designer > summary is a topic for next chat
@@ -11,22 +11,10 @@ llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
 # Curriculum designer
 curriculum_message = """You are a curriculum designer for a fourth grade class. Nominate an appropriate a topic for a lesson, based on the given subject."""
 
-lesson_curriculum = ConversableAgent(
-    name="curriculm_agent",
-    llm_config=llm_config,
-    system_message=curriculum_message,
-)
-
 # Lesson planner
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class in bullet points. Include the title, learning objectives, and script.
 """
-
-lesson_planner = ConversableAgent(
-    name="planner_agent",
-    llm_config=llm_config,
-    system_message=planner_message,
-)
 
 # Formatter
 formatter_message = """You are a lesson plan formatter. Format the complete plan as follows:
@@ -35,23 +23,32 @@ formatter_message = """You are a lesson plan formatter. Format the complete plan
 <script>How to introduce the topic to the kids</script>
 """
 
-lesson_formatter = ConversableAgent(
-    name="formatter_agent",
-    llm_config=llm_config,
-    system_message=formatter_message,
-)
-
 # Teacher who initiates the chats
 teacher_message = """You are a classroom teacher.
 You decide topics for lessons and work with a lesson planner, you provide one round of feedback on their lesson plan.
 Then you will work with a formatter to get a final output of the lesson plan.
 """
 
-teacher = ConversableAgent(
-    name="teacher_agent",
-    llm_config=llm_config,
-    system_message=teacher_message,
-)
+with llm_config:
+    lesson_curriculum = ConversableAgent(
+        name="curriculm_agent",
+        system_message=curriculum_message,
+    )
+
+    lesson_planner = ConversableAgent(
+        name="planner_agent",
+        system_message=planner_message,
+    )
+
+    lesson_formatter = ConversableAgent(
+        name="formatter_agent",
+        system_message=formatter_message,
+    )
+
+    teacher = ConversableAgent(
+        name="teacher_agent",
+        system_message=teacher_message,
+    )
 
 # Our sequential chat, each chat is a chat between the teacher and the recipient agent
 # max_turns determines if there's back and forth between the teacher and the recipient

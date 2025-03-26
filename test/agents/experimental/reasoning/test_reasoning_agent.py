@@ -9,7 +9,8 @@
 import os
 import random
 import sys
-from typing import Any, Dict, Optional, Tuple
+from collections import defaultdict
+from typing import Any, Optional, cast
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -64,7 +65,7 @@ def test_think_node_init(think_node: ThinkNode) -> None:
 
 def test_think_node_trajectory(think_node: ThinkNode) -> None:
     """Test ThinkNode trajectory property"""
-    first_line = "# Question:\n" + TEST_CONTENT + "\n---\n"
+    first_line = "# Question:\nContent: " + TEST_CONTENT + "\n---\n"
     assert think_node._trajectory_arr == [first_line]
     assert first_line in think_node.trajectory
 
@@ -169,10 +170,15 @@ def helper_test_reasoning_agent_answer(
         agent = ReasoningAgent(
             "test_agent",
             llm_config=mock_credentials.llm_config,
-            reason_config={"beam_size": beam_size, "answer_approach": answer_approach, "max_depth": max_depth},
+            reason_config={
+                "beam_size": beam_size,
+                "answer_approach": answer_approach,
+                "max_depth": max_depth,
+                "interim_execution": True,
+            },
         )
 
-        def mock_response(*args: Any, **kwargs: Any) -> Tuple[bool, Dict[str, str]]:
+        def mock_response(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, str]]:
             # Get the instance that called the mock
             instance = args[0]
             if instance.name == "tot_thinker":
@@ -189,6 +195,8 @@ Option 3: Another option"""
                 return True, {"content": f"{random.randint(1, 5)}"}
             elif instance.name == "test_agent":
                 return True, {"content": "The final answer is here."}
+            elif instance.name == "tot_executor":
+                return True, {"content": "Step successfully executed."}
             return True, {"content": "Unknown agent"}
 
         mock_oai_reply.side_effect = mock_response
@@ -196,7 +204,7 @@ Option 3: Another option"""
         response = agent._beam_reply("Test question")
         assert len(response)
 
-    last_msg: Optional[Dict[str, Any]] = agent._thinker.last_message()
+    last_msg: Optional[dict[str, Any]] = agent._thinker.last_message()
     last_msg_content: str = last_msg["content"] if last_msg is not None else ""
     assert "TERMINATE" in last_msg_content
 
@@ -306,7 +314,7 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent: Reasoni
         "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
     ) as mock_oai_reply:
 
-        def mock_response(*args: Any, **kwargs: Any) -> Dict[str, str]:
+        def mock_response(*args: Any, **kwargs: Any) -> dict[str, str]:
             return {"content": simulated_rewritten_prompt}
 
         mock_oai_reply.side_effect = mock_response
@@ -322,26 +330,55 @@ def test_prepare_prompt_multi_message_with_ground_truth(reasoning_agent: Reasoni
     assert "Paris" in ground_truth
 
 
+def test_code_disabled(reasoning_agent: ReasoningAgent) -> None:
+    """
+    Test that the code execution is disabled by default.
+    """
+    assert not reasoning_agent._code_execution_config
+    assert reasoning_agent._user_proxy is None
+
+
+def test_code_enabled(mock_credentials: Credentials) -> None:
+    """
+    Test that the code execution is enabled when the config is set.
+    """
+    agent = ReasoningAgent(
+        "test_agent",
+        llm_config=mock_credentials.llm_config,
+        code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+        reason_config={"interim_execution": True},
+    )
+    assert not agent._code_execution_config
+    assert agent._user_proxy is not None
+    assert agent._user_proxy._code_execution_config == {"use_docker": False, "work_dir": "mypy_cache"}
+
+
 @run_for_optional_imports(["openai"], "openai")
 def test_reasoning_agent_code_execution(mock_credentials: Credentials) -> None:
     """Test that ReasoningAgent properly executes code in responses"""
 
     # Create agent with code execution enabled
-    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+    with (
+        patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply,
+        patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_code_execution_reply") as mock_code_reply,
+    ):
         agent = ReasoningAgent(
             "test_agent",
             llm_config=mock_credentials.llm_config,
             code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+            reason_config={"interim_execution": True, "max_depth": 2, "beam_size": 1},
         )
 
-        def mock_response(*args: Any, **kwargs: Any) -> Tuple[bool, Dict[str, str]]:
-            instance = args[0]
-            if instance.name == "tot_thinker":
-                return True, {
-                    "content": """Reflection
+        openai_responses = defaultdict(list)
+
+        openai_responses["tot_thinker"] = [
+            (
+                True,
+                {
+                    "content": """REFLECTION
 Let's solve this with Python.
 
-Possible Options:
+**Possible Options:**
 Option 1: Calculate factorial with Python
 ```python
 def factorial(n):
@@ -352,25 +389,192 @@ def factorial(n):
 print(f"Factorial of 5 is {factorial(5)}")
 ```
 
-Option 2: TERMINATE"""
-                }
-            elif instance.name == "reasoner_user_proxy":
-                # Mock the code execution result
-                return True, {"content": "Factorial of 5 is 120"}
-            elif instance.name == "test_agent":
-                return True, {"content": "The factorial of 5 is 120"}
-            return True, {"content": "5"}
+Option 2: Calculate by hand
+Use a manual approach"""
+                },
+            ),
+            (
+                True,
+                {
+                    "content": """REFLECTION
+The process has been completed.
+Option 1: TERMINATE
+Terminate the process.
+"""
+                },
+            ),
+        ]
 
-        mock_oai_reply.side_effect = mock_response
+        openai_responses["test_agent"] = [
+            (True, {"content": "The factorial of 5 is 120"}),
+        ]
 
-        # Test code execution
-        response = agent._beam_reply("Calculate factorial of 5")
+        openai_responses["tot_grader"] = [
+            (True, {"content": "10"}),
+            (True, {"content": "1"}),
+        ]
 
-        # Verify code was executed
-        if agent._root is not None and agent._root.children:  # Add null check
-            assert "Factorial of 5 is 120" in agent._root.children[0].content
-            assert "Code Execution Result:" in agent._root.children[0].content
-        assert response == "The factorial of 5 is 120"
+        def mock_openai_response(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, str]]:
+            instance = args[0]
+            return openai_responses[instance.name].pop(0)
+
+        mock_oai_reply.side_effect = mock_openai_response
+
+        def mock_code_response(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, str]]:
+            instance = args[0]
+            if instance.name == "reasoner_user_proxy":
+                return True, {"content": "Code Output: Factorial of 5 is 120"}
+            return False, {}
+
+        mock_code_reply.side_effect = mock_code_response
+
+    # Test code execution
+    response = agent._beam_reply("Calculate factorial of 5")
+
+    # Verify code was executed
+    assert agent._user_proxy is not None
+    assert type(agent._user_proxy.last_message()) == dict
+
+    # cast last_message for mypy
+    user_proxy_last_message = cast(dict[str, Any], agent._user_proxy.last_message())
+    assert user_proxy_last_message["content"] == "Code Output: Factorial of 5 is 120"
+
+    assert response == "The factorial of 5 is 120"
+
+
+def test_execute_node_with_cached_output(mock_credentials: Credentials) -> None:
+    """
+    Test that execute_node returns the cached output if it exists.
+    """
+    mock_node = MagicMock()
+    mock_node.output = "Cached response."
+    mock_node.depth = 1
+
+    agent = ReasoningAgent(
+        "test_agent",
+        llm_config=mock_credentials.llm_config,
+        reason_config={"interim_execution": True},
+    )
+    response = agent.execute_node(mock_node)
+
+    assert response == "Cached response."
+
+
+def test_execute_node_with_terminate_node(mock_credentials: Credentials) -> None:
+    mock_node = MagicMock()
+    mock_node.content = "TERMINATE"
+    mock_node.output = None
+    mock_node.depth = 1
+
+    agent = ReasoningAgent(
+        "test_agent",
+        llm_config=mock_credentials.llm_config,
+        reason_config={"interim_execution": True},
+    )
+    response = agent.execute_node(mock_node)
+
+    assert response is None
+
+
+def test_execute_node_with_python_code_execution_disabled(mock_credentials: Credentials) -> None:
+    """
+    Test that execute_node returns a message if Python execution is disabled.
+    """
+    mock_node = MagicMock()
+    mock_node.content = """```python
+print("Hello World")
+```
+    """
+    mock_node.output = None
+    mock_node.depth = 1
+
+    agent = ReasoningAgent(
+        "test_agent",
+        llm_config=mock_credentials.llm_config,
+        code_execution_config=False,
+        reason_config={"interim_execution": True},
+    )
+
+    response = agent.execute_node(mock_node)
+
+    assert response == "Python code execution is disabled. Follow a different approach."
+
+
+def test_execute_node_with_python_code_execution_enabled(mock_credentials: Credentials) -> None:
+    """
+    Test that execute_node sends Python code to the user proxy for execution and retrieves the result.
+    """
+    mock_node = MagicMock()
+    mock_node.content = """```python
+print("Hello World")
+```
+"""
+    mock_node.output = None
+    mock_node.depth = 1
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_code_execution_reply") as mock_code_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+            reason_config={"interim_execution": True, "max_depth": 2, "beam_size": 1},
+        )
+
+        mock_code_reply.return_value = (True, {"content": "Code Output: Hello World"})
+
+    response = agent.execute_node(mock_node)
+
+    assert response == "Code Output: Hello World"
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_execute_node_without_python_code(mock_credentials: Credentials) -> None:
+    """
+    Test that execute_node correctly processes a node without Python code.
+    """
+    mock_node = MagicMock()
+    mock_node.content = "What is the capital of France?"
+    mock_node.output = None
+    mock_node.depth = 1
+    mock_node.trajectory = TEST_TRAJECTORY
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"interim_execution": True},
+        )
+        mock_oai_reply.return_value = (True, {"content": "The capital of France is Paris."})
+
+    response = agent.execute_node(mock_node)
+
+    assert response == "The capital of France is Paris."
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_execute_node_with_python_response_from_llm(mock_credentials: Credentials) -> None:
+    """
+    Test that execute_node correctly handles cases where the LLM mistakenly generates Python code.
+    """
+    mock_node = MagicMock()
+    mock_node.content = "What is the capital of France?"
+    mock_node.output = None
+    mock_node.depth = 1
+    mock_node.trajectory = TEST_TRAJECTORY
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"interim_execution": True},
+        )
+        mock_oai_reply.return_value = (True, {"content": "```python\nprint('Paris')\n```"})
+
+    response = agent.execute_node(mock_node)
+
+    assert (
+        response == "To execute Python code please provide the exact snippet in a fenced block like ```python ... ```."
+    )
 
 
 def test_prepare_prompt_single_message(reasoning_agent: ReasoningAgent) -> None:
@@ -438,7 +642,7 @@ def test_prepare_prompt_multi_message(reasoning_agent: ReasoningAgent) -> None:
         "autogen.agentchat.conversable_agent.ConversableAgent._generate_oai_reply_from_client"
     ) as mock_oai_reply:
 
-        def mock_response(*args: Any, **kwargs: Any) -> Dict[str, str]:
+        def mock_response(*args: Any, **kwargs: Any) -> dict[str, str]:
             return {"content": simulated_rewritten_prompt}
 
         mock_oai_reply.side_effect = mock_response

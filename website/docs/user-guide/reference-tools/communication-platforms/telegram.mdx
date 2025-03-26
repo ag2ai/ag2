@@ -71,14 +71,14 @@ Let’s add the Telegram Send and Retrieve tools to an agent and have them execu
 
 ```python
 # Tools are available in the autogen.tools namespace
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.tools.experimental import TelegramRetrieveTool, TelegramSendTool
 
 # For running the code in Jupyter, use nest_asyncio to allow nested event loops
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 # Our tool executor agent, which will run the tools once recommended by the telegram_agent, no LLM required
 executor_agent = ConversableAgent(
@@ -86,10 +86,8 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-telegram_agent = ConversableAgent(
-    name="telegram_agent",
-    llm_config=llm_config,
-)
+with llm_config:
+    telegram_agent = ConversableAgent(name="telegram_agent")
 
 # Authentication and target Chat ID (in this case a Group chat)
 api_id = "123....."

@@ -69,21 +69,19 @@ Here's an example of registering a reply function that returns the date and time
 
 ```python
 from autogen.oai.client import OpenAIWrapper
-from autogen import ConversableAgent, Agent
+from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Optional
 import json
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai"}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
 
 agent_calendar = ConversableAgent(
     name="Calendar_agent",
     # No LLM required for this agent, we'll use a function to reply
 )
 
-agent_bob = ConversableAgent(
-    name="Bob",
-    llm_config=llm_config,
-)
+with llm_config:
+  agent_bob = ConversableAgent(name="Bob")
 
 # Our reply function
 def get_date_time_reply(

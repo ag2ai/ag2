@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from .... import ConversableAgent
 from ....agentchat.contrib.rag import RAGQueryEngine
 from ....doc_utils import export_module
+from ....llm_config import LLMConfig
 
 __all__ = ["InMemoryQueryEngine"]
 
@@ -45,7 +46,7 @@ class InMemoryQueryEngine:
 
     def __init__(
         self,
-        llm_config: dict[str, Any],
+        llm_config: Union[LLMConfig, dict[str, Any]],
     ) -> None:
         # Deep copy the llm config to avoid changing the original
         structured_config = copy.deepcopy(llm_config)

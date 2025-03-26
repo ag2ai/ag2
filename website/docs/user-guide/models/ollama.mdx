@@ -128,28 +128,27 @@ We'll use Meta's Llama 3.1 model which is suitable for coding.
 In this example we will specify the URL for the Ollama installation using `client_host`.
 
 ```python
-config_list = [
-    {
-        # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
-        "model": "llama3.1:8b",
-        # We specify the API Type as 'ollama' so it uses the Ollama client class
-        "api_type": "ollama",
-        "stream": False,
-        "client_host": "http://192.168.0.1:11434",
-    }
-]
-
 # Importantly, we have tweaked the system message so that the model doesn't return the termination keyword, which we've changed to FINISH, with the code block.
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
 workdir = Path("coding")
 workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
+
+# Setting up the LLM configuration
+llm_config = LLMConfig(
+    # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
+    model="llama3.1:8b",
+    # We specify the API Type as 'ollama' so it uses the Ollama client class
+    api_type="ollama",
+    stream=False,
+    client_host="http://192.168.0.1:11434",
+)
 
 # Setting up the agents
 
@@ -176,11 +175,11 @@ If the result indicates there is an error, fix the error.
 IMPORTANT: If it has executed successfully, ONLY output 'FINISH'."""
 
 # The AssistantAgent, using the Ollama config, will take the coding request and return code
-assistant_agent = AssistantAgent(
-    name="Ollama Assistant",
-    system_message=system_message,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    assistant_agent = AssistantAgent(
+        name="Ollama Assistant",
+        system_message=system_message,
+    )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
@@ -304,40 +303,38 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list = [
-    {
-        # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
-        "model": "llama3.1:8b",
-        "api_type": "ollama",
-        "stream": False,
-        "client_host": "http://192.168.0.1:11434",
-        "hide_tools": "if_any_run",
-    }
-]
+llm_config = autogen.LLMConfig(
+    # Let's choose the Meta's Llama 3.1 model (model names must match Ollama exactly)
+    model="llama3.1:8b",
+    api_type="ollama",
+    stream=False,
+    client_host="http://192.168.0.1:11434",
+    hide_tools="if_any_run",
+)
 
 # We'll create our agents. Importantly, we're using native Ollama tool calling and to help guide it we add the JSON to the system_message so that the number fields aren't wrapped in quotes (becoming strings).
 
 # Create the agent for tool calling
-chatbot = autogen.AssistantAgent(
-    name="chatbot",
-    system_message="""For currency exchange and weather forecasting tasks,
-        only use the functions you have been provided with.
-        Example of the return JSON is:
-        {
-            "parameter_1_name": 100.00,
-            "parameter_2_name": "ABC",
-            "parameter_3_name": "DEF",
-        }.
-        Another example of the return JSON is:
-        {
-            "parameter_1_name": "GHI",
-            "parameter_2_name": "ABC",
-            "parameter_3_name": "DEF",
-            "parameter_4_name": 123.00,
-        }.
-        Output 'HAVE FUN!' when an answer has been provided.""",
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    chatbot = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="""For currency exchange and weather forecasting tasks,
+            only use the functions you have been provided with.
+            Example of the return JSON is:
+            {
+                "parameter_1_name": 100.00,
+                "parameter_2_name": "ABC",
+                "parameter_3_name": "DEF",
+            }.
+            Another example of the return JSON is:
+            {
+                "parameter_1_name": "GHI",
+                "parameter_2_name": "ABC",
+                "parameter_3_name": "DEF",
+                "parameter_4_name": 123.00,
+            }.
+            Output 'HAVE FUN!' when an answer has been provided.""",
+    )
 
 # Note that we have changed the termination string to be "HAVE FUN!"
 user_proxy = autogen.UserProxyAgent(

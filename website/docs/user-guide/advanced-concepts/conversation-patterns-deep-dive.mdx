@@ -34,18 +34,18 @@ The example below is a two-agent chat between a student agent and a teacher agen
 ```python
 import os
 
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
+llm_config=LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
-student_agent = ConversableAgent(
-    name="Student_Agent",
-    system_message="You are a student willing to learn.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]},
-)
-teacher_agent = ConversableAgent(
-    name="Teacher_Agent",
-    system_message="You are a math teacher.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}]},
-)
+with llm_config:
+    student_agent = ConversableAgent(
+        name="Student_Agent",
+        system_message="You are a student willing to learn.",
+    )
+    teacher_agent = ConversableAgent(
+        name="Teacher_Agent",
+        system_message="You are a math teacher.",
+    )
 
 chat_result = student_agent.initiate_chat(
     teacher_agent,
@@ -98,44 +98,42 @@ To illustrate this pattern, let's consider a simple example of arithmetic operat
 
 ```python
 # The Number Agent always returns the same numbers.
-number_agent = ConversableAgent(
-    name="Number_Agent",
-    system_message="You return me the numbers I give you, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+llm_config=LLMConfig(api_type="openai", model="gpt-4", api_key=os.environ["OPENAI_API_KEY"])
 
-# The Adder Agent adds 1 to each number it receives.
-adder_agent = ConversableAgent(
-    name="Adder_Agent",
-    system_message="You add 1 to each number I give you and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+with llm_config:
+    number_agent = ConversableAgent(
+        name="Number_Agent",
+        system_message="You return me the numbers I give you, one number each line.",
+        human_input_mode="NEVER",
+    )
 
-# The Multiplier Agent multiplies each number it receives by 2.
-multiplier_agent = ConversableAgent(
-    name="Multiplier_Agent",
-    system_message="You multiply each number I give you by 2 and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+    # The Adder Agent adds 1 to each number it receives.
+    adder_agent = ConversableAgent(
+        name="Adder_Agent",
+        system_message="You add 1 to each number I give you and return me the new numbers, one number each line.",
+        human_input_mode="NEVER",
+    )
 
-# The Subtracter Agent subtracts 1 from each number it receives.
-subtracter_agent = ConversableAgent(
-    name="Subtracter_Agent",
-    system_message="You subtract 1 from each number I give you and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+    # The Multiplier Agent multiplies each number it receives by 2.
+    multiplier_agent = ConversableAgent(
+        name="Multiplier_Agent",
+        system_message="You multiply each number I give you by 2 and return me the new numbers, one number each line.",
+        human_input_mode="NEVER",
+    )
 
-# The Divider Agent divides each number it receives by 2.
-divider_agent = ConversableAgent(
-    name="Divider_Agent",
-    system_message="You divide each number I give you by 2 and return me the new numbers, one number each line.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+    # The Subtracter Agent subtracts 1 from each number it receives.
+    subtracter_agent = ConversableAgent(
+        name="Subtracter_Agent",
+        system_message="You subtract 1 from each number I give you and return me the new numbers, one number each line.",
+        human_input_mode="NEVER",
+    )
+
+    # The Divider Agent divides each number it receives by 2.
+    divider_agent = ConversableAgent(
+        name="Divider_Agent",
+        system_message="You divide each number I give you by 2 and return me the new numbers, one number each line.",
+        human_input_mode="NEVER",
+    )
 ```
 
 The Number Agent chats with the first operator agent, then the second operator agent, and so on.
@@ -263,7 +261,7 @@ from autogen import GroupChatManager
 
 group_chat_manager = GroupChatManager(
     groupchat=group_chat,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=llm_config,
 )
 ```
 
@@ -308,7 +306,7 @@ In this case, the Group Chat Manager is treated as a regular agent in the sequen
 # Let's use the group chat with introduction messages created above.
 group_chat_manager_with_intros = GroupChatManager(
     groupchat=group_chat_with_introductions,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=llm_config,
 )
 
 # Start a sequence of two-agent chats between the number agent and
@@ -373,7 +371,7 @@ constrained_graph_chat = GroupChat(
 
 constrained_group_chat_manager = GroupChatManager(
     groupchat=constrained_graph_chat,
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+    llm_config=llm_config,
 )
 
 chat_result = number_agent.initiate_chat(
@@ -435,19 +433,18 @@ arithmetic_agent = ConversableAgent(
     code_execution_config={"use_docker": False, "work_dir": temp_dir},
 )
 
-code_writer_agent = ConversableAgent(
-    name="Code_Writer_Agent",
-    system_message="You are a code writer. You write Python script in Markdown code blocks.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+with llm_config:
+    code_writer_agent = ConversableAgent(
+        name="Code_Writer_Agent",
+        system_message="You are a code writer. You write Python script in Markdown code blocks.",
+        human_input_mode="NEVER",
+    )
 
-poetry_agent = ConversableAgent(
-    name="Poetry_Agent",
-    system_message="You are an AI poet.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
-    human_input_mode="NEVER",
-)
+    poetry_agent = ConversableAgent(
+        name="Poetry_Agent",
+        system_message="You are an AI poet.",
+        human_input_mode="NEVER",
+    )
 ```
 
 Now we define the nested chats using the sequential chat pattern. All the senders are always `artihmetic_agent`.

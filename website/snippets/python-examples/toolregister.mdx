@@ -2,10 +2,10 @@
 from datetime import datetime
 from typing import Annotated
 
-from autogen import ConversableAgent, register_function
+from autogen import ConversableAgent, register_function, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
@@ -14,11 +14,11 @@ def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
 
 
 # 2. Agent for determining whether to run the tool
-date_agent = ConversableAgent(
-    name="date_agent",
-    system_message="You get the day of the week for a given date.",
-    llm_config=llm_config,
-)
+with llm_config:
+    date_agent = ConversableAgent(
+        name="date_agent",
+        system_message="You get the day of the week for a given date.",
+    )
 
 # 3. And an agent for executing the tool
 executor_agent = ConversableAgent(

@@ -4,14 +4,26 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import List
+
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.oai.ollama import OllamaClient, response_to_tool_call
+from autogen.llm_config import LLMConfig
+from autogen.oai.ollama import OllamaClient, OllamaLLMConfigEntry, response_to_tool_call
+
+
+# Define test Pydantic model
+class Step(BaseModel):
+    explanation: str
+    output: str
+
+
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
 
 
 # Fixtures for mock data
@@ -37,6 +49,44 @@ def ollama_client():
     client._tools_in_conversation = False
 
     return client
+
+
+@pytest.fixture
+def ollama_client_maths_format():
+    # Set Ollama client with some default values
+    client = OllamaClient(response_format=MathReasoning)
+
+    client._native_tool_calls = True
+    client._tools_in_conversation = False
+
+    return client
+
+
+def test_ollama_llm_config_entry():
+    ollama_llm_config = OllamaLLMConfigEntry(model="llama3.1:8b")
+    expected = {
+        "api_type": "ollama",
+        "model": "llama3.1:8b",
+        "num_ctx": 2048,
+        "num_predict": -1,
+        "repeat_penalty": 1.1,
+        "seed": 0,
+        "stream": False,
+        "tags": [],
+        "temperature": 0.8,
+        "top_k": 40,
+        "top_p": 0.9,
+        "hide_tools": "never",
+    }
+    actual = ollama_llm_config.model_dump()
+    assert actual == expected, actual
+
+    llm_config = LLMConfig(
+        config_list=[ollama_llm_config],
+    )
+    assert llm_config.model_dump() == {
+        "config_list": [expected],
+    }
 
 
 # Test initialization and configuration
@@ -145,6 +195,35 @@ def test_create_response(mock_chat, ollama_client):
     assert response.model == "llama3.1:8b", "Response model should match the mocked response model"
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
     assert response.usage.completion_tokens == 20, "Response completion tokens should match the mocked response usage"
+
+
+# Test text generation
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+@patch("autogen.oai.ollama.OllamaClient.create")
+def test_ollama_client_host_value(ollama_client):
+    from autogen import ConversableAgent, LLMConfig
+
+    config_list = [
+        {
+            "model": "llama3.3",
+            "api_type": "ollama",
+            "api_key": "NULL",
+            "client_host": "http://localhost:11434",
+            "stream": False,
+        }
+    ]
+
+    llm_config = LLMConfig(config_list=config_list)
+    system_message = "You are a helpful assistant."
+
+    # Create the agent with the specified configuration
+    my_agent = ConversableAgent(name="helpful_agent", llm_config=llm_config, system_message=system_message)
+    assert my_agent.client is not None, "Client should be initialized"
+    assert my_agent.client._config_list is not None, "Client config list should be initialized"
+    assert my_agent.client._config_list[0]["model"] == "llama3.3", "Model should match the specified value"
+    assert str(my_agent.client._config_list[0]["client_host"]) == "http://localhost:11434/", (
+        "client_host should match the specified value"
+    )
 
 
 # Test functions/tools
@@ -305,15 +384,6 @@ def test_oai_messages_to_ollama_messages(ollama_client):
 # Test message conversion from OpenAI to Ollama format
 @run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
 def test_extract_json_response(ollama_client):
-    # Define test Pydantic model
-    class Step(BaseModel):
-        explanation: str
-        output: str
-
-    class MathReasoning(BaseModel):
-        steps: List[Step]
-        final_answer: str
-
     # Set up the response format
     ollama_client._response_format = MathReasoning
 
@@ -353,3 +423,69 @@ def test_extract_json_response(ollama_client):
         match="Failed to parse response as valid JSON matching the schema for Structured Output:",
     ):
         ollama_client._convert_json_response(no_json_response)
+
+
+# Test message conversion from OpenAI to Ollama format
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_extract_json_response_client(ollama_client_maths_format):
+    # Test case 1: JSON within tags - CORRECT
+    tagged_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }"""
+
+    result = ollama_client_maths_format._convert_json_response(tagged_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
+
+    # Test case 2: Invalid JSON - RAISE ERROR
+    invalid_response = """{
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Missing closing brace"
+                ],
+                "final_answer": "x = -3.75"
+            """
+
+    with pytest.raises(
+        ValueError, match="Failed to parse response as valid JSON matching the schema for Structured Output: "
+    ):
+        ollama_client_maths_format._convert_json_response(invalid_response)
+
+    # Test case 3: No JSON content - RAISE ERROR
+    no_json_response = "This response contains no JSON at all."
+
+    with pytest.raises(
+        ValueError,
+        match="Failed to parse response as valid JSON matching the schema for Structured Output:",
+    ):
+        ollama_client_maths_format._convert_json_response(no_json_response)
+
+
+# Test message conversion from OpenAI to Ollama format
+@run_for_optional_imports(["ollama", "fix_busted_json"], "ollama")
+def test_extract_json_response_params(ollama_client):
+    # All parameters (with default values)
+    params = {
+        "model": "llama3.1:8b",
+        "temperature": 0.8,
+        "num_predict": 128,
+        "num_ctx": 2048,
+        "repeat_penalty": 1.1,
+        "seed": 42,
+        "top_k": 40,
+        "top_p": 0.9,
+        "stream": False,
+        "response_format": MathReasoning,
+    }
+
+    ollama_params = ollama_client.parse_params(params)
+
+    converted_dict = MathReasoning.model_json_schema()
+
+    assert isinstance(ollama_params["format"], dict)
+    assert ollama_params["format"] == converted_dict

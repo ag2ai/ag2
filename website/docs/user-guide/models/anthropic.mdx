@@ -100,15 +100,13 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list_claude = [
-    {
-        # Choose your model name.
-        "model": "claude-3-5-sonnet-20240620",
-        # You need to provide your API key here.
-        "api_key": os.getenv("ANTHROPIC_API_KEY"),
-        "api_type": "anthropic",
-    }
-]
+llm_config_claude = autogen.LLMConfig(
+    # Choose your model name.
+    model="claude-3-5-sonnet-20240620",
+    # You need to provide your API key here.
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+    api_type="anthropic",
+)
 ```
 
 ### Alternative Anthropic VertexAI Client (GCP)
@@ -122,22 +120,16 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 ```python
 import os
 
-config_list_vertexai = [
-    {
-        "model": "claude-3-5-sonnet-20240620-v1:0",
-        "gcp_project_id": "your_project_id",
-        "gcp_region": "us-west-2",  # Replace with your GCP region
-        "gcp_auth_token": None,  # Optional: If not passed, Google Default Authentication will be used
-        "api_type": "anthropic",
-    }
-]
-
-assistant = autogen.AssistantAgent(
-    "assistant",
-    llm_config={
-        "config_list": config_list_vertexai,
-    },
+llm_config_vertexai = LLMConfig(
+    model="claude-3-5-sonnet-20240620-v1:0",
+    gcp_project_id="your_project_id",
+    gcp_region="us-west-2",  # Replace with your GCP region
+    gcp_auth_token=None,  # Optional: If not passed, Google Default Authentication will be used
+    api_type="anthropic",
 )
+
+with llm_config_vertexai:
+    assistant = autogen.AssistantAgent("assistant")
 ```
 
 ### Alternative Anthropic VertexAI Client (Google Default Authentication)
@@ -163,12 +155,8 @@ This allows seamless integration without explicitly specifying the authenticatio
 Construct a simple conversation between a User proxy and an ConversableAgent based on Claude-3 model.
 
 ```python
-assistant = autogen.AssistantAgent(
-    "assistant",
-    llm_config={
-        "config_list": config_list_claude,
-    },
-)
+with llm_config_claude:
+    assistant = autogen.AssistantAgent("assistant")
 
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",
@@ -333,60 +321,47 @@ TERMINATE
 ### A group chat with GPT-4 as the judge
 
 ```python
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
-config_list_gpt4 = [
-    {
-        # Choose your model name.
-        "model": "gpt-4",
-        # You need to provide your API key here.
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "api_type": "openai",
-    }
-]
-
-
-config_list_gpt35 = [
-    {
-        # Choose your model name.
-        "model": "gpt-3.5-turbo",
-        # You need to provide your API key here.
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "api_type": "openai",
-    }
-]
-
-alice = AssistantAgent(
-    "Openai_agent",
-    system_message="You are from OpenAI. You make arguments to support your company's position.",
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+llm_config_gpt4 = autogen.LLMConfig(
+    # Choose your model name.
+    model="gpt-4",
+    # You need to provide your API key here.
+    api_key=os.getenv("OPENAI_API_KEY"),
+    api_type="openai",
 )
 
-bob = autogen.AssistantAgent(
-    "Anthropic_agent",
-    system_message="You are from Anthropic. You make arguments to support your company's position.",
-    llm_config={
-        "config_list": config_list_claude,
-    },
+llm_config_gpt35 = autogen.LLMConfig(
+    # Choose your model name.
+    model="gpt-3.5-turbo",
+    # You need to provide your API key here.
+    api_key=os.getenv("OPENAI_API_KEY"),
+    api_type="openai",
 )
 
-charlie = AssistantAgent(
-    "Research_Assistant",
-    system_message="You are a helpful assistant to research the latest news and headlines.",
-    llm_config={
-        "config_list": config_list_gpt35,
-    },
-)
+with llm_config_gpt4:
+    alice = AssistantAgent(
+        "Openai_agent",
+        system_message="You are from OpenAI. You make arguments to support your company's position.",
+    )
 
-dan = AssistantAgent(
-    "Judge",
-    system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
-)
+    dan = AssistantAgent(
+        "Judge",
+        system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
+    )
+
+with llm_config_claude:
+    bob = autogen.AssistantAgent(
+        "Anthropic_agent",
+        system_message="You are from Anthropic. You make arguments to support your company's position.",
+    )
+
+with llm_config_gpt35:
+    charlie = AssistantAgent(
+        "Research_Assistant",
+        system_message="You are a helpful assistant to research the latest news and headlines.",
+    )
+
 
 code_interpreter = UserProxyAgent(
     "code-interpreter",
@@ -421,9 +396,7 @@ groupchat = GroupChat(
 
 manager = GroupChatManager(
     groupchat=groupchat,
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=llm_config_gpt4,
 )
 
 task = "Analyze the potential of OpenAI and Anthropic to revolutionize the field of AI based on today's headlines. Today is 06202024."
@@ -609,13 +582,11 @@ While we're proud of our record and the merits you've recognized in our argument
 ### Same group chat with Claude 3.5 Sonnet as the judge
 
 ```python
-dan = AssistantAgent(
-    "Judge",
-    system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
-    llm_config={
-        "config_list": config_list_claude,
-    },
-)
+with llm_config_claude:
+    dan = AssistantAgent(
+        "Judge",
+        system_message="You are a judge. You will evaluate the arguments and make a decision on which one is more convincing.",
+    )
 
 groupchat = GroupChat(
     agents=[alice, bob, charlie, dan, code_interpreter],
@@ -627,9 +598,7 @@ groupchat = GroupChat(
 manager = GroupChatManager(
     groupchat=groupchat,
     # is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-    llm_config={
-        "config_list": config_list_gpt4,
-    },
+    llm_config=llm_config_gpt4,
 )
 
 user_proxy.initiate_chat(manager, message=task)

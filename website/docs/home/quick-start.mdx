@@ -11,6 +11,9 @@ Install AG2 with your preferred model provider(s), for example:
 - `pip install ag2[openai]`
 - `pip install ag2[gemini]`
 - `pip install ag2[anthropic,cohere,mistral]`
+
+On Mac OS, if you get "no matches found:", add a quote to the package name, for example:
+- `pip install "ag2[openai]"`
 </Warning>
 
 ### Let's go
@@ -35,18 +38,18 @@ as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
 
 ```python
 # 1. Import our agent class
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # 3. Create our LLM agent
-my_agent = ConversableAgent(
-    name="helpful_agent",
-    llm_config=llm_config,
-    system_message="You are a poetic AI assistant, respond in rhyme.",
-)
+with llm_config:
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+    )
 
 # 4. Run the agent with a prompt
 chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
@@ -61,32 +64,31 @@ print(chat_result.chat_history)
 # Chat between two comedian agents
 
 # 1. Import our agent class
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini,
 #    uses the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # 3. Create our agents who will tell each other jokes,
 #    with Jack ending the chat when Emma says FINISH
-jack = ConversableAgent(
-    "Jack",
-    llm_config=llm_config,
-    system_message=(
-      "Your name is Jack and you are a comedian "
-      "in a two-person comedy show."
-    ),
-    is_termination_msg=lambda x: True if "FINISH" in x["content"] else False
-)
-emma = ConversableAgent(
-    "Emma",
-    llm_config=llm_config,
-    system_message=(
-      "Your name is Emma and you are a comedian "
-      "in a two-person comedy show. Say the word FINISH "
-      "ONLY AFTER you've heard 2 of Jack's jokes."
-    ),
-)
+with llm_config:
+    jack = ConversableAgent(
+        "Jack",
+        system_message=(
+        "Your name is Jack and you are a comedian "
+        "in a two-person comedy show."
+        ),
+        is_termination_msg=lambda x: True if "FINISH" in x["content"] else False
+    )
+    emma = ConversableAgent(
+        "Emma",
+        system_message=(
+        "Your name is Emma and you are a comedian "
+        "in a two-person comedy show. Say the word FINISH "
+        "ONLY AFTER you've heard 2 of Jack's jokes."
+        ),
+    )
 
 # 4. Run the chat
 chat_result = jack.initiate_chat(
@@ -107,37 +109,35 @@ print(chat_result.chat_history)
 # should be Teacher > Planner > Reviewer > Teacher (repeats if necessary)
 
 # 1. Import our agent and group chat classes
-from autogen import ConversableAgent, GroupChat, GroupChatManager
+from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 
 # Define our LLM configuration for OpenAI's GPT-4o mini
 # uses the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
-# Planner agent setup
-planner_message = "Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>"
-planner = ConversableAgent(
-    name="planner_agent",
-    llm_config=llm_config,
-    system_message=planner_message,
-    description="Creates lesson plans"
-)
+with llm_config:
+    # Planner agent setup
+    planner_message = "Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>"
+    planner = ConversableAgent(
+        name="planner_agent",
+        system_message=planner_message,
+        description="Creates lesson plans"
+    )
 
-# Reviewer agent setup
-reviewer_message = "Review lesson plans against 4th grade curriculum. Provide max 3 changes."
-reviewer = ConversableAgent(
-    name="reviewer_agent",
-    llm_config=llm_config,
-    system_message=reviewer_message,
-    description="Reviews lesson plans"
-)
+    # Reviewer agent setup
+    reviewer_message = "Review lesson plans against 4th grade curriculum. Provide max 3 changes."
+    reviewer = ConversableAgent(
+        name="reviewer_agent",
+        system_message=reviewer_message,
+        description="Reviews lesson plans"
+    )
 
-# Teacher agent setup
-teacher_message = "Choose topics and work with planner and reviewer. Say DONE! when finished."
-teacher = ConversableAgent(
-    name="teacher_agent",
-    llm_config=llm_config,
-    system_message=teacher_message,
-)
+    # Teacher agent setup
+    teacher_message = "Choose topics and work with planner and reviewer. Say DONE! when finished."
+    teacher = ConversableAgent(
+        name="teacher_agent",
+        system_message=teacher_message,
+    )
 
 # Setup group chat
 groupchat = GroupChat(

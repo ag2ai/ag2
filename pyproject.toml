@@ -60,8 +60,9 @@ dependencies = [
     "docker",
     "packaging",
     "asyncer==0.0.8",
-    "fast-depends>=2.4.12,<3",
+#    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
+    "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends
 ]
 
 [project.optional-dependencies]
@@ -76,7 +77,7 @@ flaml = [
 # public distributions
 
 openai = [
-    "openai>=1.58",
+    "openai>=1.66.2",
 ]
 
 openai-realtime = [
@@ -156,11 +157,14 @@ browser-use = [
     "browser-use==0.1.37",
 ]
 
+google-search = [
+    "google-api-python-client>=2.163.0,<3.0",
+]
+
 neo4j = [
     "docx2txt==0.8",
-    "llama-index==0.12.22",
+    "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-core==0.12.22",
     "llama-index-readers-web==0.3.7",
 ]
 
@@ -181,8 +185,7 @@ interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
 ]
 
-# pysqlite3-binary used so it doesn't need to compile pysqlite3
-autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
+autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "wolframalpha"]
@@ -197,7 +200,6 @@ gemini = [
     "google-auth",
     "pillow",
     "jsonschema",
-    "jsonref>=1,<2",
 ]
 
 gemini-realtime = [
@@ -216,7 +218,7 @@ cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 mistral = ["mistralai>=1.0.1"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
-ollama = ["ollama>=0.4.5", "fix_busted_json>=0.0.18"]
+ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 deepseek = ["pyautogen[openai]"]
 
@@ -234,16 +236,18 @@ test = [
     "pytest-cov==6.0.0",
     "pytest-asyncio==0.25.3",
     "pytest==8.3.5",
-    "mock==5.1.0",
+    "mock==5.2.0",
     "pandas==2.2.3",
     "fastapi==0.115.11",
+    "dirty-equals==0.9.0",
 ]
 
 docs = [
-    "mkdocs-material==9.6.7",
-    "mkdocstrings[python]==0.28.2",
+    "mkdocs-material==9.6.9",
+    "mkdocstrings[python]==0.29.0",
     "mkdocs-literate-nav==0.6.1",
     "mdx-include==1.4.2",
+    # currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.3.0",
     "mike==2.1.3",
     "typer==0.15.2",
@@ -254,7 +258,7 @@ docs = [
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
     "pdoc3==0.11.5",
-    "jinja2==3.1.5",
+    "jinja2==3.1.6",
     "pyyaml==6.0.2",
     "termcolor==2.5.0",
     "nbclient==0.10.2",
@@ -276,7 +280,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.4",
+    "uv==0.6.6",
 ]
 
 
@@ -341,6 +345,7 @@ markers = [
     "interop",
     "browser_use",
     "crawl4ai",
+    "google_search",
     "websockets",
     "commsagent_discord",
     "commsagent_slack",
@@ -430,6 +435,7 @@ convention = "google"
 [tool.mypy]
 files = [
     "autogen/agentchat/agent.py",
+#    "autogen/agentchat/cenversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -438,9 +444,12 @@ files = [
     "autogen/agents",
     "autogen/coding",
     "autogen/exception_utils.py",
+    "autogen/fast_depends",
     "autogen/import_utils.py",
     "autogen/interop",
     "autogen/io",
+    "autogen/json_utils.py",
+    "autogen/llm_config.py",
     "autogen/logger",
     "autogen/messages",
     "autogen/oai/oai_models",
@@ -454,8 +463,11 @@ files = [
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",
+#    "test/fast_depends",
     "test/interop",
     "test/io",
+    "test/test_json_utils.py",
+    "test/test_llm_config.py",
     "test/messages",
     "test/test_import_utils.py",
     "test/test_import.py",

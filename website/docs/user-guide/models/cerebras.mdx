@@ -91,14 +91,14 @@ We'll use Meta's LLama-3.1-70B model which is suitable for coding.
 ```python
 import os
 
-config_list = [{"model": "llama-3.3-70b", "api_key": os.environ.get("CEREBRAS_API_KEY"), "api_type": "cerebras"}]
-
 # Importantly, we have tweaked the system message so that the model doesn't return the termination keyword, which we've changed to FINISH, with the code block.
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
+
+llm_config = LLMConfig(model="llama-3.3-70b", api_key=os.environ.get("CEREBRAS_API_KEY"), api_type="cerebras")
 
 # Setting up the code executor
 workdir = Path("coding")
@@ -125,11 +125,11 @@ When you find an answer, verify the answer carefully. Include verifiable evidenc
 IMPORTANT: Wait for the user to execute your code and then you can reply with the word "FINISH". DO NOT OUTPUT "FINISH" after your code block."""
 
 # The AssistantAgent, using Llama-3.1-70B on Cerebras Inference, will take the coding request and return code
-assistant_agent = AssistantAgent(
-    name="Cerebras Assistant",
-    system_message=system_message,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    assistant_agent = AssistantAgent(
+        name="Cerebras Assistant",
+        system_message=system_message,
+    )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
@@ -194,25 +194,23 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list = [
-    {
-        "model": "llama-3.3-70b",
-        "api_key": os.environ.get("CEREBRAS_API_KEY"),
-        "api_type": "cerebras",
-    }
-]
+llm_config = autogen.LLMConfig(
+    model="llama-3.3-70b",
+    api_key=os.environ.get("CEREBRAS_API_KEY"),
+    api_type="cerebras",
+)
 
 # Create the agent for tool calling
-chatbot = autogen.AssistantAgent(
-    name="chatbot",
-    system_message="""
-        For currency exchange and weather forecasting tasks,
-        only use the functions you have been provided with.
-        When you summarize, make sure you've considered ALL previous instructions.
-        Output 'HAVE FUN!' when an answer has been provided.
-    """,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    chatbot = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="""
+            For currency exchange and weather forecasting tasks,
+            only use the functions you have been provided with.
+            When you summarize, make sure you've considered ALL previous instructions.
+            Output 'HAVE FUN!' when an answer has been provided.
+        """,
+    )
 
 # Note that we have changed the termination string to be "HAVE FUN!"
 user_proxy = autogen.UserProxyAgent(

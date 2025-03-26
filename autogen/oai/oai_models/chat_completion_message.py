@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Taken over from https://github.com/openai/openai-python/blob/3e69750d47df4f0759d4a28ddc68e4b38756d9ca/src/openai/types/chat/chat_completion_message.py
+# Taken over from https://github.com/openai/openai-python/blob/16a10604fbd0d82c1382b84b417a1d6a2d33a7f1/src/openai/types/chat/chat_completion_message.py
 
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
@@ -14,7 +14,29 @@ from ._models import BaseModel
 from .chat_completion_audio import ChatCompletionAudio
 from .chat_completion_message_tool_call import ChatCompletionMessageToolCall
 
-__all__ = ["ChatCompletionMessage", "FunctionCall"]
+__all__ = ["Annotation", "AnnotationURLCitation", "ChatCompletionMessage", "FunctionCall"]
+
+
+class AnnotationURLCitation(BaseModel):
+    end_index: int
+    """The index of the last character of the URL citation in the message."""
+
+    start_index: int
+    """The index of the first character of the URL citation in the message."""
+
+    title: str
+    """The title of the web resource."""
+
+    url: str
+    """The URL of the web resource."""
+
+
+class Annotation(BaseModel):
+    type: Literal["url_citation"]
+    """The type of the URL citation. Always `url_citation`."""
+
+    url_citation: AnnotationURLCitation
+    """A URL citation when using web search."""
 
 
 class FunctionCall(BaseModel):
@@ -39,6 +61,12 @@ class ChatCompletionMessage(BaseModel):
 
     role: Literal["assistant"]
     """The role of the author of this message."""
+
+    annotations: Optional[List[Annotation]] = None
+    """
+    Annotations for the message, when applicable, as when using the
+    [web search tool](https://platform.openai.com/docs/guides/tools-web-search?api-mode=chat).
+    """
 
     audio: Optional[ChatCompletionAudio] = None
     """

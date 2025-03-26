@@ -15,35 +15,65 @@ Install AG2 with your preferred model provider(s), for example:
 - `pip install ag2[anthropic,cohere,mistral]`
 </Warning>
 
-First, we define our configuration with the API type, model, and, if necessary, the key.
+First, we create the LLM configuration object with the API type, model, and, if necessary, the key. There are two ways to create an LLM configuration object:
 
-```python
-import os
+1. By passing the `config_list` parameter with a list of dictionaries containing the API type, model, and key.
+  ```python
+  import os
+  from autogen import LLMConfig
 
-llm_config = {
-  "config_list": [
-    {
-      "api_type": "openai",
-      "model": "gpt-4o-mini",
-      "api_key": os.environ["OPENAI_API_KEY"]
-    }
-  ],
-}
-```
+  llm_config = LLMConfig(
+    config_list = [
+      {
+        "api_type": "openai",
+        "model": "gpt-4o-mini",
+        "api_key": os.environ["OPENAI_API_KEY"]
+      },
+      {
+        "api_type": "openai",
+        "model": "gpt-4o",
+        "api_key": os.environ["OPENAI_API_KEY"]
+      }
+    ],
+  )
+  ```
+
+2. By passing the `api_type`, `model`, and `api_key` as parameters.
+  ```python
+  import os
+  from autogen import LLMConfig
+
+  llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.environ["OPENAI_API_KEY"],
+  )
+  ```
 
 <Warning>
 It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
 </Warning>
 
-Then, when you create your agents you'll set your LLM configuration:
+Then, when you create your agents you can pass the LLM configuration object to the agent in two ways:
 
-```python
-my_agent = ConversableAgent(
-    name="helpful_agent",
-    llm_config=llm_config,
-    system_message="You are a poetic AI assistant",
-)
-```
+1. By passing the `llm_config` parameter to the agent as a keyword argument.
+  ```python
+  with llm_config:
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant",
+    )
+  ```
+
+2. By using the `with` statement to create a context manager for the LLM configuration.
+  ```python
+  with llm_config:
+      my_agent = ConversableAgent(
+          name="helpful_agent",
+          system_message="You are a poetic AI assistant",
+      )
+  ```
+  This will set the LLM configuration for the agent.
 
 The default LLM provider is OpenAI but if you would like to use a different provider, [see the available providers](/docs/user-guide/models/).
 

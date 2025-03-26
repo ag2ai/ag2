@@ -17,17 +17,17 @@ import autogen
 import random
 
 from autogen import (
- AfterWork,
- OnCondition,
- AfterWorkOption,
- AssistantAgent,
- SwarmResult,
- initiate_swarm_chat,
- register_hand_off
+    AfterWork,
+    OnCondition,
+    AfterWorkOption,
+    AssistantAgent,
+    SwarmResult,
+    initiate_swarm_chat,
+    register_hand_off,
+    LLMConfig,
 )
 
-config_list = autogen.config_list_from_json("<path_to_your_config_file>")
-llm_config = {"config_list": config_list}
+llm_config = LLMConfig.from_json(path="<path_to_your_config_file>")
 
 # 1. A function that returns a value of "success" and updates the context variable "1" to True
 def update_context_1(context_variables: dict) -> SwarmResult:
@@ -56,39 +56,35 @@ def update_context_3_with_random_number(context_variables: dict, random_number: 
     return SwarmResult(value="success", context_variables=context_variables)
 
 
-agent_1 = AssistantAgent(
-    name="Agent_1",
-    system_message="You are Agent 1, first, call the function to update context 1, and transfer to Agent 2",
-    llm_config=llm_config,
-    functions=[update_context_1, transfer_to_agent_2],
-)
+with llm_config:
+    agent_1 = AssistantAgent(
+        name="Agent_1",
+        system_message="You are Agent 1, first, call the function to update context 1, and transfer to Agent 2",
+        functions=[update_context_1, transfer_to_agent_2],
+    )
 
-agent_2 = AssistantAgent(
-    name="Agent_2",
-    system_message="You are Agent 2, call the function that updates context 2 and transfer to Agent 3",
-    llm_config=llm_config,
-    functions=[update_context_2_and_transfer_to_3],
-)
+    agent_2 = AssistantAgent(
+        name="Agent_2",
+        system_message="You are Agent 2, call the function that updates context 2 and transfer to Agent 3",
+        functions=[update_context_2_and_transfer_to_3],
+    )
 
-agent_3 = AssistantAgent(
-    name="Agent_3",
-    system_message="You are Agent 3, please transfer to Agent 4",
-    llm_config=llm_config,
-)
+    agent_3 = AssistantAgent(
+        name="Agent_3",
+        system_message="You are Agent 3, please transfer to Agent 4",
+    )
 
-agent_4 = AssistantAgent(
-    name="Agent_4",
-    system_message="You are Agent 4, call the function to get a random number",
-    llm_config=llm_config,
-    functions=[get_random_number],
-)
+    agent_4 = AssistantAgent(
+        name="Agent_4",
+        system_message="You are Agent 4, call the function to get a random number",
+        functions=[get_random_number],
+    )
 
-agent_5 = AssistantAgent(
-    name="Agent_5",
-    system_message="Update context 3 with the random number.",
-    llm_config=llm_config,
-    functions=[update_context_3_with_random_number],
-)
+    agent_5 = AssistantAgent(
+        name="Agent_5",
+        system_message="Update context 3 with the random number.",
+        functions=[update_context_3_with_random_number],
+    )
 
 
 # 5. This is equivalent to writing a transfer function
@@ -119,17 +115,16 @@ from autogen import UserProxyAgent
 
 user_agent = UserProxyAgent(name="User", code_execution_config=False)
 
-agent_6 = AssistantAgent(
-    name="Agent_6",
-    system_message="You are Agent 6. Your job is to tell jokes.",
-    llm_config=llm_config,
-)
+with llm_config:
+    agent_6 = AssistantAgent(
+        name="Agent_6",
+        system_message="You are Agent 6. Your job is to tell jokes.",
+    )
 
-agent_7 = AssistantAgent(
-    name="Agent_7",
-    system_message="You are Agent 7, explain the joke.",
-    llm_config=llm_config,
-)
+    agent_7 = AssistantAgent(
+        name="Agent_7",
+        system_message="You are Agent 7, explain the joke.",
+    )
 
 register_hand_off(
     agent=agent_6,

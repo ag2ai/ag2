@@ -63,14 +63,14 @@ Models like `gpt-4o-mini` often don’t perform well enough for complex tasks.
 </Tip>
 
 ```python
-llm_config = {
-    "config_list": [{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-}
+from autogen import LLMConfig
 
-agent = DeepResearchAgent(
-    name="DeepResearchAgent",
-    llm_config=llm_config,
+llm_config = LLMConfig(
+    config_list=[{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
 )
+
+with llm_config:
+    agent = DeepResearchAgent(name="DeepResearchAgent")
 
 message = "What was the impact of DeepSeek on stock prices and why?"
 

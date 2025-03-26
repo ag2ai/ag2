@@ -66,7 +66,7 @@ Here's a simple example using the [`DiscordAgent`](/docs/api-reference/autogen/a
 
 ```python
 # Agents are available in the autogen.agents namespace
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.agents.experimental import DiscordAgent
 
 # For running the code in Jupyter, use nest_asyncio to allow nested event loops
@@ -75,32 +75,31 @@ from autogen.agents.experimental import DiscordAgent
 
 # LLM configuration for our agent to select the tools and craft the message
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # Tokens and Ids (CHANGE THESE)
 my_discord_bot_token = "ABC..."
 my_discord_guild_name = "My Discord Server Name"
 my_discord_channel_name = "general"
 
-# Create DiscordAgent with defaults
-discord_agent = DiscordAgent(
-    name="discord_agent",
-    llm_config=llm_config,
-    bot_token=my_discord_bot_token,
-    guild_name=my_discord_guild_name,
-    channel_name=my_discord_channel_name,
-)
+with llm_config:
+    # Create DiscordAgent with defaults
+    discord_agent = DiscordAgent(
+        name="discord_agent",
+        bot_token=my_discord_bot_token,
+        guild_name=my_discord_guild_name,
+        channel_name=my_discord_channel_name,
+    )
 
-# Tool execution is carried out by another agent
-# Will output TERMINATE to end the conversation when complete
-tool_executor = ConversableAgent(
-    name="tool_executor",
-    system_message=(
-        "You execute send and retrieve functions for Discord platforms.\n"
-        "Respond with 'TERMINATE' when finished."
-        ),
-    llm_config=llm_config,
-    human_input_mode="NEVER",
+    # Tool execution is carried out by another agent
+    # Will output TERMINATE to end the conversation when complete
+    tool_executor = ConversableAgent(
+        name="tool_executor",
+        system_message=(
+            "You execute send and retrieve functions for Discord platforms.\n"
+            "Respond with 'TERMINATE' when finished."
+            ),
+        human_input_mode="NEVER",
     )
 
 # Register the tools from the DiscordAgent with the tool_executor for execution

@@ -73,7 +73,7 @@ Here's a simple example using the Slack tools with a [`ConversableAgent`](/docs/
 
 ```python
 # Tools are available in the autogen.tools namespace
-from autogen import ConversableAgent, register_function
+from autogen import ConversableAgent, register_function, LLMConfig
 from autogen.tools.experimental import SlackRetrieveTool, SlackSendTool
 
 # For running the code in Jupyter, use nest_asyncio to allow nested event loops
@@ -82,7 +82,7 @@ from autogen.tools.experimental import SlackRetrieveTool, SlackSendTool
 
 # LLM configuration for our agent to select the tools and craft the message
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 # Our tool executor agent, which will run the tools once recommended by the slack_agent, no LLM required
 executor_agent = ConversableAgent(
@@ -92,10 +92,10 @@ executor_agent = ConversableAgent(
 
 # The main star of the show, our ConversableAgent-based agent
 # We will attach the tools to this agent
-slack_agent = ConversableAgent(
-    name="slack_agent",
-    llm_config=llm_config,
-)
+with llm_config:
+    slack_agent = ConversableAgent(
+        name="slack_agent",
+    )
 
 # Create tools and register them with the agents
 

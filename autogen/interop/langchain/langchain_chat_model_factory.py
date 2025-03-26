@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Union
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
+from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
 
 with optional_import_block():
@@ -32,7 +33,7 @@ class LangChainChatModelFactory(ABC):
     _factories: set["LangChainChatModelFactory"] = set()
 
     @classmethod
-    def create_base_chat_model(cls, llm_config: dict[str, Any]) -> "BaseChatModel":  # type: ignore [no-any-unimported]
+    def create_base_chat_model(cls, llm_config: Union[LLMConfig, dict[str, Any]]) -> "BaseChatModel":  # type: ignore [no-any-unimported]
         first_llm_config = get_first_llm_config(llm_config)
         for factory in LangChainChatModelFactory._factories:
             if factory.accepts(first_llm_config):

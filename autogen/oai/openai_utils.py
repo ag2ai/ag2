@@ -19,12 +19,14 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from dotenv import find_dotenv, load_dotenv
 from packaging.version import parse
+from pydantic_core import to_jsonable_python
 
 if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.beta.assistant import Assistant
 
 from ..doc_utils import export_module
+from ..llm_config import LLMConfig
 
 NON_CACHE_KEY = [
     "api_key",
@@ -117,12 +119,7 @@ def get_key(config: dict[str, Any]) -> str:
         if key in config:
             config, copied = config.copy() if not copied else config, True
             config.pop(key)
-    # if isinstance(config, dict):
-    #     return tuple(get_key(x) for x in sorted(config.items()))
-    # if isinstance(config, list):
-    #     return tuple(get_key(x) for x in config)
-    # return config
-    return json.dumps(config, sort_keys=True)
+    return to_jsonable_python(config)  # type: ignore [no-any-return]
 
 
 def is_valid_api_key(api_key: str) -> bool:
@@ -193,7 +190,9 @@ def get_config_list(
 
 
 @export_module("autogen")
-def get_first_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
+def get_first_llm_config(
+    llm_config: Union[LLMConfig, dict[str, Any]],
+) -> dict[str, Any]:
     """Get the first LLM config from the given LLM config.
 
     Args:
@@ -208,12 +207,14 @@ def get_first_llm_config(llm_config: dict[str, Any]) -> dict[str, Any]:
     llm_config = deepcopy(llm_config)
     if "config_list" not in llm_config:
         if "model" in llm_config:
-            return llm_config
+            return llm_config  # type: ignore [return-value]
         raise ValueError("llm_config must be a valid config dictionary.")
 
     if len(llm_config["config_list"]) == 0:
         raise ValueError("Config list must contain at least one config.")
-    return llm_config["config_list"][0]  # type: ignore [no-any-return]
+
+    to_return = llm_config["config_list"][0]
+    return to_return if isinstance(to_return, dict) else to_return.model_dump()  # type: ignore [no-any-return]
 
 
 @export_module("autogen")
@@ -520,7 +521,11 @@ def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
     if isinstance(value, list):
         return bool(set(value) & set(criteria_values))  # Non-empty intersection
     else:
-        return value in criteria_values
+        # In filter_dict, filter could be either a list of values or a single value.
+        # For example, filter_dict = {"model": ["gpt-3.5-turbo"]} or {"model": "gpt-3.5-turbo"}
+        if isinstance(criteria_values, list):
+            return value in criteria_values
+        return bool(value == criteria_values)
 
 
 @export_module("autogen")
@@ -749,17 +754,17 @@ def detect_gpt_assistant_api_version() -> str:
 def create_gpt_vector_store(client: "OpenAI", name: str, fild_ids: list[str]) -> Any:
     """Create a openai vector store for gpt assistant"""
     try:
-        vector_store = client.beta.vector_stores.create(name=name)
+        vector_store = client.vector_stores.create(name=name)
     except Exception as e:
         raise AttributeError(f"Failed to create vector store, please install the latest OpenAI python package: {e}")
 
     # poll the status of the file batch for completion.
-    batch = client.beta.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=fild_ids)
+    batch = client.vector_stores.file_batches.create_and_poll(vector_store_id=vector_store.id, file_ids=fild_ids)
 
     if batch.status == "in_progress":
         time.sleep(1)
         logging.debug(f"file batch status: {batch.file_counts}")
-        batch = client.beta.vector_stores.file_batches.poll(vector_store_id=vector_store.id, batch_id=batch.id)
+        batch = client.vector_stores.file_batches.poll(vector_store_id=vector_store.id, batch_id=batch.id)
 
     if batch.status == "completed":
         return vector_store

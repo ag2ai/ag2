@@ -53,23 +53,20 @@ To confirm that `config.yaml` is correctly mounted, check the logs:
 To communicate with LiteLLM, configure the model in `config_list` and initiate a chat session.
 
 ```python
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-config_list = [
-    {
-        "model": "openai-gpt-4o-mini",
-        "base_url": "http://0.0.0.0:4000",
-    }
-]
+llm_config = LLMConfig(
+    model="openai-gpt-4o-mini",
+    base_url="http://0.0.0.0:4000",
+)
 
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER",
 )
-assistant = AssistantAgent(
-    name="assistant",
-    llm_config={"config_list": config_list},
-)
+
+with llm_config:
+    assistant = AssistantAgent(name="assistant")
 
 
 user_proxy.initiate_chat(

@@ -7,13 +7,13 @@ API Reference: [initiate_chat](/docs/api-reference/autogen/ConversableAgent#init
 `initiate_chat` is the typical method of starting a conversation in AG2. You can call this directly, as shown in the code below, and it is also the mechanism that sits within ConversableAgent's [run](/docs/api-reference/autogen/ConversableAgent#run) method.
 
 ```python
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
-llm_config = {"model": "gpt-4o-mini", "api_type": "openai", "cache_seed": None}
+llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai", cache_seed=None)
 
-agent_a = ConversableAgent(name="agent_a", llm_config=llm_config)
-
-agent_b = ConversableAgent(name="agent_b", llm_config=llm_config)
+with llm_config:
+  agent_a = ConversableAgent(name="agent_a")
+  agent_b = ConversableAgent(name="agent_b")
 
 agent_a.initiate_chat(
     recipient=agent_a,

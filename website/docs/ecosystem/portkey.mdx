@@ -22,21 +22,19 @@ Portkey adds 4 core production capabilities to any AG2 agent:
    **Configure AG2 with Portkey:**
 
    ```python
-   from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
+   from autogen import AssistantAgent, UserProxyAgent, LLMConfig
    from portkey_ai import PORTKEY_GATEWAY_URL, createHeaders
 
-   config = [
-       {
-           "api_key": "OPENAI_API_KEY",
-           "model": "gpt-3.5-turbo",
-           "base_url": PORTKEY_GATEWAY_URL,
-           "api_type": "openai",
-           "default_headers": createHeaders(
-               api_key="YOUR_PORTKEY_API_KEY",
-               provider="openai",
-           )
-       }
-   ]
+   llm_config = LLMConfig(
+      api_key="OPENAI_API_KEY",
+      model="gpt-3.5-turbo",
+      base_url=PORTKEY_GATEWAY_URL,
+      api_type="openai",
+      default_headers=createHeaders(
+          api_key="YOUR_PORTKEY_API_KEY",
+          provider="openai",
+      )
+   )
    ```
 
    Generate your API key in the [Portkey Dashboard](https://app.portkey.ai/).
@@ -58,17 +56,16 @@ user_proxy = autogen.UserProxyAgent(
     human_input_mode="ALWAYS",
 )
 
-
-coder = autogen.AssistantAgent(
-    name="Coder",
-    system_message = "You are a Python developer who is good at developing games. You work with Product Manager.",
-    llm_config={"config_list": config},
-)
+with llm_config:
+  coder = autogen.AssistantAgent(
+      name="Coder",
+      system_message = "You are a Python developer who is good at developing games. You work with Product Manager.",
+  )
 
 # Create groupchat
 groupchat = autogen.GroupChat(
     agents=[user_proxy, coder], messages=[])
-manager = autogen.GroupChatManager(groupchat=groupchat, llm_config={"config_list": config})
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
 
 

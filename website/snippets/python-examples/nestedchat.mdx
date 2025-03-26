@@ -1,67 +1,61 @@
 ```python
-from autogen import ConversableAgent, GroupChatManager, GroupChat
+from autogen import ConversableAgent, GroupChatManager, GroupChat, LLMConfig
 
-llm_config = {
-    "api_type": "openai",
-    "model": "gpt-4o-mini",
-}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
-# Curriculum Standards Agent
-curriculum_agent = ConversableAgent(
-    name="Curriculum_Agent",
-    system_message="""You are a curriculum standards expert for fourth grade education.
-    When given a topic, you provide relevant grade-level standards and learning objectives.
-    Format every response as:
-    STANDARDS:
-    - [Standard 1]
-    - [Standard 2]
-    OBJECTIVES:
-    - By the end of this lesson, students will be able to [objective 1]
-    - By the end of this lesson, students will be able to [objective 2]""",
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
+with llm_config:
+    # Curriculum Standards Agent
+    curriculum_agent = ConversableAgent(
+        name="Curriculum_Agent",
+        system_message="""You are a curriculum standards expert for fourth grade education.
+        When given a topic, you provide relevant grade-level standards and learning objectives.
+        Format every response as:
+        STANDARDS:
+        - [Standard 1]
+        - [Standard 2]
+        OBJECTIVES:
+        - By the end of this lesson, students will be able to [objective 1]
+        - By the end of this lesson, students will be able to [objective 2]""",
+        human_input_mode="NEVER",
+    )
 
-# Lesson Planner Agent
-lesson_planner_agent = ConversableAgent(
-    name="Lesson_Planner_Agent",
-    system_message="""You are a lesson planning specialist.
-    Given standards and objectives, you create detailed lesson plans including:
-    - Opening/Hook (5-10 minutes)
-    - Main Activity (20-30 minutes)
-    - Practice Activity (15-20 minutes)
-    - Assessment/Closure (5-10 minutes)
-    Format as a structured lesson plan with clear timing and materials needed.""",
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
+    # Lesson Planner Agent
+    lesson_planner_agent = ConversableAgent(
+        name="Lesson_Planner_Agent",
+        system_message="""You are a lesson planning specialist.
+        Given standards and objectives, you create detailed lesson plans including:
+        - Opening/Hook (5-10 minutes)
+        - Main Activity (20-30 minutes)
+        - Practice Activity (15-20 minutes)
+        - Assessment/Closure (5-10 minutes)
+        Format as a structured lesson plan with clear timing and materials needed.""",
+        human_input_mode="NEVER",
+    )
 
-# Lesson Reviewer Agent
-lesson_reviewer_agent = ConversableAgent(
-    name="Lesson_Reviewer_Agent",
-    system_message="""You are a lesson plan reviewer who ensures:
-    1. Age-appropriate content and activities
-    2. Alignment with provided standards
-    3. Realistic timing
-    4. Clear instructions
-    5. Differentiation opportunities
-    Provide specific feedback in these areas and suggest improvements if needed.""",
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
+    # Lesson Reviewer Agent
+    lesson_reviewer_agent = ConversableAgent(
+        name="Lesson_Reviewer_Agent",
+        system_message="""You are a lesson plan reviewer who ensures:
+        1. Age-appropriate content and activities
+        2. Alignment with provided standards
+        3. Realistic timing
+        4. Clear instructions
+        5. Differentiation opportunities
+        Provide specific feedback in these areas and suggest improvements if needed.""",
+        human_input_mode="NEVER",
+    )
 
-# Lead Teacher Agent
-lead_teacher_agent = ConversableAgent(
-    name="Lead_Teacher_Agent",
-    system_message="""You are an experienced fourth grade teacher who oversees the lesson planning process.
-    Your role is to:
-    1. Initiate the planning process with a clear topic
-    2. Review and integrate feedback from other agents
-    3. Ensure the final lesson plan is practical and engaging
-    4. Make final adjustments based on classroom experience""",
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
+    # Lead Teacher Agent
+    lead_teacher_agent = ConversableAgent(
+        name="Lead_Teacher_Agent",
+        system_message="""You are an experienced fourth grade teacher who oversees the lesson planning process.
+        Your role is to:
+        1. Initiate the planning process with a clear topic
+        2. Review and integrate feedback from other agents
+        3. Ensure the final lesson plan is practical and engaging
+        4. Make final adjustments based on classroom experience""",
+        human_input_mode="NEVER",
+    )
 
 # Create the group chat for collaborative lesson planning
 planning_chat = GroupChat(
@@ -86,11 +80,11 @@ formatter_message = """You are a lesson plan formatter. Format the complete plan
 <assessment>Assessment details</assessment>
 """
 
-lesson_formatter = ConversableAgent(
-    name="formatter_agent",
-    llm_config=llm_config,
-    system_message=formatter_message,
-)
+with llm_config:
+    lesson_formatter = ConversableAgent(
+        name="formatter_agent",
+        system_message=formatter_message,
+    )
 
 # Create nested chats configuration
 nested_chats = [

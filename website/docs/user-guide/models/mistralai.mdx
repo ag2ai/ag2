@@ -126,28 +126,27 @@ We'll use Mistral's Mixtral 8x22B model which is suitable for coding.
 ```python
 import os
 
-config_list = [
-    {
-        # Let's choose the Mixtral 8x22B model
-        "model": "open-mixtral-8x22b",
-        # Provide your Mistral AI API key here or put it into the MISTRAL_API_KEY environment variable.
-        "api_key": os.environ.get("MISTRAL_API_KEY"),
-        # We specify the API Type as 'mistral' so it uses the Mistral AI client class
-        "api_type": "mistral",
-    }
-]
-
 # Importantly, we have tweaked the system message so that the model doesn't return the termination keyword, which we've changed to FINISH, with the code block.
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
 workdir = Path("coding")
 workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
+
+# Setting up the LLM configuration
+llm_config = LLMConfig(
+    # Let's choose the Mixtral 8x22B model
+    model="open-mixtral-8x22b",
+    # Provide your Mistral AI API key here or put it into the MISTRAL_API_KEY environment variable.
+    api_key=os.environ.get("MISTRAL_API_KEY"),
+    # We specify the API Type as 'mistral' so it uses the Mistral AI client class
+    api_type="mistral",
+)
 
 # Setting up the agents
 
@@ -169,11 +168,11 @@ When you find an answer, verify the answer carefully. Include verifiable evidenc
 IMPORTANT: Wait for the user to execute your code and then you can reply with the word "FINISH". DO NOT OUTPUT "FINISH" after your code block."""
 
 # The AssistantAgent, using Mistral AI's model, will take the coding request and return code
-assistant_agent = AssistantAgent(
-    name="Mistral Assistant",
-    system_message=system_message,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    assistant_agent = AssistantAgent(
+        name="Mistral Assistant",
+        system_message=system_message,
+    )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
@@ -286,14 +285,14 @@ In this example, instead of writing code, we will have two agents playing chess 
 We'll change models to Mistral AI's large model for this challenging task.
 
 ```python
-config_list = [
-    {
-        # Let's choose the Mistral AI's largest model which is better at Chess than the Mixtral model
-        "model": "mistral-large-latest",
-        "api_key": os.environ.get("MISTRAL_API_KEY"),
-        "api_type": "mistral",
-    }
-]
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    # Let's choose the Mistral AI's largest model which is better at Chess than the Mixtral model
+    model="mistral-large-latest",
+    api_key=os.environ.get("MISTRAL_API_KEY"),
+    api_type="mistral",
+)
 ```
 
 First install the `chess` package by running the following command:
@@ -330,17 +329,16 @@ def make_move() -> Annotated[str, "A move in UCI format"]:
 
 from autogen import ConversableAgent, register_function
 
-player_white = ConversableAgent(
-    name="Player White",
-    system_message="You are a chess player and you play as white. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
-)
+with llm_config:
+    player_white = ConversableAgent(
+        name="Player White",
+        system_message="You are a chess player and you play as white. Always call make_move() to make a move",
+    )
 
-player_black = ConversableAgent(
-    name="Player Black",
-    system_message="You are a chess player and you play as black. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
-)
+    player_black = ConversableAgent(
+        name="Player Black",
+        system_message="You are a chess player and you play as black. Always call make_move() to make a move",
+    )
 
 board_proxy = ConversableAgent(
     name="Board Proxy",

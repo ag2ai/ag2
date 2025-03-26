@@ -118,29 +118,28 @@ We'll use Mistral's Mixtral-8x7B instruct model which is suitable for coding.
 ```python
 import os
 
-config_list = [
-    {
-        # Let's choose the Mixtral 8x7B model
-        "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        # Provide your Together.AI API key here or put it into the TOGETHER_API_KEY environment variable.
-        "api_key": os.environ.get("TOGETHER_API_KEY"),
-        # We specify the API Type as 'together' so it uses the Together.AI client class
-        "api_type": "together",
-        "stream": False,
-    }
-]
-
 # Importantly, we have tweaked the system message so that the model doesn't return the termination keyword, which we've changed to FINISH, with the code block.
 
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
 workdir = Path("coding")
 workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
+
+# Setting up the LLM configuration
+llm_config = LLMConfig(
+    # Let's choose the Mixtral 8x7B model
+    model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+    # Provide your Together.AI API key here or put it into the TOGETHER_API_KEY environment variable.
+    api_key=os.environ.get("TOGETHER_API_KEY"),
+    # We specify the API Type as 'together' so it uses the Together.AI client class
+    api_type="together",
+    stream=False,
+)
 
 # Setting up the agents
 
@@ -162,11 +161,11 @@ When you find an answer, verify the answer carefully. Include verifiable evidenc
 IMPORTANT: Wait for the user to execute your code and then you can reply with the word "FINISH". DO NOT OUTPUT "FINISH" after your code block."""
 
 # The AssistantAgent, using Together.AI's Code Llama model, will take the coding request and return code
-assistant_agent = AssistantAgent(
-    name="Together Assistant",
-    system_message=system_message,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    assistant_agent = AssistantAgent(
+        name="Together Assistant",
+        system_message=system_message,
+    )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
@@ -238,15 +237,14 @@ We are utilising a parameter that's supported by certain client classes, such as
 Here we are using `if_all_run`, indicating that we want to hide the tools if all the tools have already been run. This will apply in each nested chat, so each time a player takes a turn it will aim to run both functions and then finish with a text response so we can hand control back to the other player.
 
 ```python
-config_list = [
-    {
-        # Let's choose Meta's CodeLlama 34b instruct model which supports function calling through the Together.AI API
-        "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        "api_key": os.environ.get("TOGETHER_API_KEY"),
-        "api_type": "together",
-        "hide_tools": "if_all_run",
-    }
-]
+llm_config = LLMConfig(
+    # Let's choose Meta's CodeLlama 34b instruct model which supports function calling through the Together.AI API
+    model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+    api_key=os.environ.get("TOGETHER_API_KEY"),
+    api_type="together",
+    hide_tools="if_all_run",
+    cache_seed=None,
+)
 ```
 
 
@@ -284,17 +282,16 @@ def make_move() -> Annotated[str, "A move in UCI format"]:
 
 from autogen import ConversableAgent, register_function
 
-player_white = ConversableAgent(
-    name="Player White",
-    system_message="You are a chess player and you play as white. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
-)
+with llm_config:
+    player_white = ConversableAgent(
+        name="Player White",
+        system_message="You are a chess player and you play as white. Always call make_move() to make a move",
+    )
 
-player_black = ConversableAgent(
-    name="Player Black",
-    system_message="You are a chess player and you play as black. Always call make_move() to make a move",
-    llm_config={"config_list": config_list, "cache_seed": None},
-)
+    player_black = ConversableAgent(
+        name="Player Black",
+        system_message="You are a chess player and you play as black. Always call make_move() to make a move",
+    )
 
 board_proxy = ConversableAgent(
     name="Board Proxy",

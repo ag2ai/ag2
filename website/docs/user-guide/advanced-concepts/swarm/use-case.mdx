@@ -42,11 +42,12 @@ from autogen import (
     SwarmResult,
     UserProxyAgent,
     initiate_swarm_chat,
-    register_hand_off
+    register_hand_off,
+    LLMConfig,
 )
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 ```
 
 #### Context
@@ -222,23 +223,22 @@ Logged in: {logged_in}
 Enquiring for Order ID: {order_id}
 """
 
-order_triage_agent = AssistantAgent(
-    name="order_triage_agent",
-    update_agent_state_before_reply=[
-        UpdateSystemMessage(order_triage_prompt),
-    ],
-    functions=[check_order_id, record_order_id],
-    llm_config=llm_config,
-)
-
 authentication_prompt = "You are an authentication agent that verifies the identity of the customer."
 
-authentication_agent = AssistantAgent(
-    name="authentication_agent",
-    system_message=authentication_prompt,
-    functions=[login_customer_by_username],
-    llm_config=llm_config,
-)
+with llm_config:
+    order_triage_agent = AssistantAgent(
+        name="order_triage_agent",
+        update_agent_state_before_reply=[
+            UpdateSystemMessage(order_triage_prompt),
+        ],
+        functions=[check_order_id, record_order_id],
+    )
+
+    authentication_agent = AssistantAgent(
+        name="authentication_agent",
+        system_message=authentication_prompt,
+        functions=[login_customer_by_username],
+    )
 
 order_management_prompt = """You are an order management agent that manages inquiries related to e-commerce orders.
 
@@ -251,15 +251,14 @@ Customer name: {customer_name}
 Logged in: {logged_in}
 Enquiring for Order ID: {order_id}
 """
-
-order_mgmt_agent = AssistantAgent(
-    name="order_mgmt_agent",
-    update_agent_state_before_reply=[
-        UpdateSystemMessage(order_management_prompt),
-    ],
-    functions=[check_order_id, record_order_id],
-    llm_config=llm_config,
-)
+with llm_config:
+    order_mgmt_agent = AssistantAgent(
+        name="order_mgmt_agent",
+        update_agent_state_before_reply=[
+            UpdateSystemMessage(order_management_prompt),
+        ],
+        functions=[check_order_id, record_order_id],
+    )
 ```
 #### Nested chats
 For tasks that require a separate AG2 chat to occur, nested chats are a great option. This is the second enhanced feature we're covering, nested chats as hand-offs.
@@ -270,17 +269,16 @@ Our nested chats are setup as a queue of two chats, the first is for the `order_
 
 ```python
 # NESTED CHAT - Delivery Status
-order_retrieval_agent = AssistantAgent(
-    name="order_retrieval_agent",
-    system_message="You are an order retrieval agent that gets details about an order.",
-    llm_config=llm_config,
-)
+with llm_config:
+    order_retrieval_agent = AssistantAgent(
+        name="order_retrieval_agent",
+        system_message="You are an order retrieval agent that gets details about an order.",
+    )
 
-order_summarizer_agent = AssistantAgent(
-    name="order_summarizer_agent",
-    system_message="You are an order summarizer agent that provides a summary of the order details.",
-    llm_config=llm_config,
-)
+    order_summarizer_agent = AssistantAgent(
+        name="order_summarizer_agent",
+        system_message="You are an order summarizer agent that provides a summary of the order details.",
+    )
 
 
 def extract_order_summary(recipient: AssistantAgent, messages, sender: AssistantAgent, config):

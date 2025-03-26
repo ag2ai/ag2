@@ -112,11 +112,11 @@ llm_config_list = {"config_list": {"api_type": "openai", "model": "gpt-4o-mini",
 inmemory_qe = InMemoryQueryEngine(llm_config=llm_config_list)
 
 # Include the Query Engine when creating your DocAgent
-doc_agent = DocAgent(
-    name="doc_agent",
-    llm_config=llm_config,
-    query_engine=inmemory_qe,
-)
+with llm_config
+    doc_agent = DocAgent(
+        name="doc_agent",
+        query_engine=inmemory_qe,
+    )
 
 ...
 
@@ -139,12 +139,14 @@ In the following simple example we ask the [`DocAgent`](/docs/api-reference/auto
 Note that the request is handled in natural language and the output will show the internal agents working together to understand, classify, ingest, and query.
 
 ```python
+from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = {"api_type": "openai", "model": "gpt-4o"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
 # Create our DocAgent
-document_agent = DocAgent(llm_config=llm_config)
+with llm_config:
+    document_agent = DocAgent()
 
 # Update this path to suit your environment
 document_agent.run(
@@ -450,20 +452,20 @@ By default, [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgen
 However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent)s or want to ingest into a clean or specific vector store collection, you can use the `collection_name` parameter when creating the agent to set a unique collection name.
 
 ```python
+from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = {"api_type": "openai", "model": "gpt-4o"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
 # Create our DocAgents with their own collections
 # so that their ingested data and queries will be unique to them
-document_agent_apple = DocAgent(
-    llm_config=llm_config,
-    collection_name="apple_financials"
+with llm_config:
+    document_agent_apple = DocAgent(
+        collection_name="apple_financials"
     )
 
-document_agent_nvidia = DocAgent(
-    llm_config=llm_config,
-    collection_name="nvidia_financials"
+    document_agent_nvidia = DocAgent(
+        collection_name="nvidia_financials"
     )
 
 ...

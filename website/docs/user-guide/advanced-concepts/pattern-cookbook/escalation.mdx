@@ -1,0 +1,967 @@
+---
+title: Escalation
+---
+
+The Escalation Pattern is a resource-efficient approach to task handling where simpler, less resource-intensive agents handle tasks first, with more capable (but potentially more expensive) agents only being engaged when necessary.
+
+### Key Characteristics
+
+![Escalation Pattern](./assets/escalation.jpeg)
+
+The Escalation Pattern optimizes resource usage by intelligently routing tasks to appropriate agents based on complexity and agent capabilities. At its core, this pattern recognizes that not all queries require the same level of expertise or computational resources to address effectively. By establishing a hierarchy of agents with increasing capabilities and costs, the system can balance efficiency and quality.
+
+* **Progressive Capability**: Tasks start with basic agents and escalate through progressively more capable agents only when needed.
+
+* **Resource Efficiency**: Simpler, less expensive agents handle straightforward tasks, while more powerful agents are reserved for complex problems.
+
+* **Clear Escalation Criteria**: Well-defined confidence thresholds and structured responses determine when to escalate to the next level.
+
+* **Context Preservation**: All context and query information is maintained throughout the escalation process.
+
+* **Graceful Degradation**: System handles varying complexity levels efficiently, providing the best available answer.
+
+### Information Flow
+
+![Escalation Flow](./assets/escalation_flow.jpeg)
+
+The flow of information in the Escalation Pattern follows a deliberate path designed to maximize efficiency while ensuring that queries receive appropriate attention. Each query undergoes evaluation at multiple levels if necessary, with decisions made based on structured confidence assessments rather than subjective impressions. This systematic approach ensures consistent handling of queries and optimal resource allocation.
+
+* **Query Reception**: The triage agent receives the user query and routes it to the basic agent.
+
+* **Confidence Assessment**: Each agent evaluates the query and provides a structured response with a confidence score.
+
+* **Escalation Decision**:
+   - If confidence is below threshold (typically < 8/10), escalate to the next agent level
+   - If confidence is above threshold, return the response to the user
+
+* **Context Tracking**: Context variables track each agent's confidence score, escalation count, and reasons.
+
+* **Result Delivery**: The final answer is returned through the triage agent to the user.
+
+### Implementation
+
+Implementing the Escalation Pattern requires careful design of both the agent architecture and the communication protocol between agents. The implementation leverages structured data formats and explicit confidence reporting to make escalation decisions transparent and consistent. By using the Swarm orchestration engine, the pattern can be implemented with minimal custom code while maintaining robust escalation logic and context preservation.
+
+* **Structured Response Format**: A Pydantic model (`ConsideredResponse`) captures answer, confidence, reasoning, and escalation information.
+
+* **Confidence Thresholds**: Agents escalate queries when their confidence falls below a defined threshold (8/10).
+
+* **Agent-Specific Context Variables**: Each agent's confidence and escalation decisions are tracked independently.
+
+* **OnContextCondition**: Transitions between agents are triggered by evaluating context variables.
+
+* **Tool Functions**: Specialized tool functions process structured responses and manage escalation logic.
+
+## Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TriageAgent
+    participant BasicAgent
+    participant IntermediateAgent
+    participant AdvancedAgent
+    participant ToolExecutor
+
+    User->>TriageAgent: Complex RL question about<br>non-stationary bandits with HMM
+    TriageAgent->>ToolExecutor: new_question_asked()
+    ToolExecutor->>BasicAgent: Route complex question
+
+    Note over BasicAgent: Assesses complexity<br>Confidence: 3/10<br>Needs escalation
+    BasicAgent->>ToolExecutor: answer_question_basic()
+
+    Note over ToolExecutor: Checks confidence < 8
+    ToolExecutor->>IntermediateAgent: Escalate question (low confidence)
+
+    Note over IntermediateAgent: More knowledge but still<br>complex for capabilities<br>Confidence: 7/10<br>Needs escalation
+    IntermediateAgent->>ToolExecutor: answer_question_intermediate()
+
+    Note over ToolExecutor: Checks confidence < 8
+    ToolExecutor->>AdvancedAgent: Escalate question (specialized knowledge)
+
+    Note over AdvancedAgent: Deep expertise in RL<br>Returns confidence: 9/10<br>Provides complete solution
+    AdvancedAgent->>ToolExecutor: answer_question_advanced()
+    ToolExecutor->>TriageAgent: Returns AdvancedAgent's answer
+    TriageAgent->>User: Complete mathematical model<br>for HMM-UCB algorithm
+
+    User->>TriageAgent: Simple math question:<br>"What is 100 divided by 5?"
+    TriageAgent->>ToolExecutor: new_question_asked()
+    ToolExecutor->>BasicAgent: Route simple question
+
+    Note over BasicAgent: Simple arithmetic<br>Returns confidence: 10/10<br>No escalation needed
+    BasicAgent->>ToolExecutor: answer_question_basic()
+    ToolExecutor->>TriageAgent: Returns BasicAgent's answer
+    TriageAgent->>User: "100 divided by 5 is 20."
+
+    Note over User: The escalation pattern efficiently routed<br>complex questions to advanced agents<br>while handling simple questions<br>with the most efficient agent
+```
+
+## Code
+
+<Tip>
+In this code example we use OpenAI's GPT-4o mini with structured outputs.
+</Tip>
+
+
+```python
+#!/usr/bin/env python3
+# Copyright (c) 2023 - 2025, AG2ai, Inc.
+#
+# Example implementation of the Escalation Pattern for agent orchestration
+# with structured confidence outputs and agent-specific context variables
+
+import json
+from typing import Any, Dict, List, Optional, Union
+from pydantic import BaseModel, Field
+from autogen import (
+    ConversableAgent,
+    UserProxyAgent,
+    register_hand_off,
+    OnCondition,
+    OnContextCondition,
+    AfterWork,
+    AfterWorkOption,
+    initiate_swarm_chat,
+    ContextExpression,
+    SwarmResult,
+    LLMConfig,
+)
+
+# Define structured output models
+class ConsideredResponse(BaseModel):
+    """Structured response format for agents in the escalation pattern"""
+    answer: str = Field(..., description="The agent's answer to the query")
+    confidence: int = Field(
+        ...,
+        description="Confidence level from 1-10 where 1 is extremely uncertain and 10 is absolutely certain",
+    )
+    reasoning: str = Field(..., description="The agent's reasoning process")
+    escalation_reason: Optional[str] = Field(
+        None,
+        description="Reason for possible escalation if confidence < 8."
+    )
+
+    class Config:
+        arbitrary_types_allowed = True
+
+def new_question_asked(question: str, context_variables: dict[str, Any]) -> SwarmResult:
+    """If a new question is asked, this tool will reset context variables and route to the basic_agent. Only call this if the user has just asked a new question. If you have just received an answer, output it to the user."""
+    context_variables["basic_agent_confidence"] = 0
+    context_variables["intermediate_agent_confidence"] = 0
+    context_variables["advanced_agent_confidence"] = 0
+    context_variables["escalation_count"] = 0
+    context_variables["last_escalation_reason"] = ""
+    context_variables["last_escalating_agent"] = ""
+
+    context_variables["current_question"] = question
+    return SwarmResult(
+        agent="basic_agent",
+        context_variables=context_variables,
+        values=f"New question received, context variables reset.\n\nbasic_agent try and answer this question:\n{question}"
+    )
+
+def answer_question_common(response: ConsideredResponse, agent_level: str, context_variables: dict[str, Any]) -> SwarmResult:
+    """Common question answer function that updates context variables and routes based on the answer confidence.
+
+    agent_level will be one of "basic", "intermediate", or "advanced".
+    """
+    context_variables[f"{agent_level}_agent_confidence"] = response.confidence
+
+    if response.confidence < 8:
+        context_variables["escalation_count"] = context_variables["escalation_count"] + 1
+        context_variables["last_escalation_reason"] = response.escalation_reason
+        context_variables["last_escalating_agent"] = f"{agent_level}_agent"
+
+        if agent_level == "advanced":
+            return SwarmResult(agent="triage_agent", context_variables=context_variables, values=f"I am not confident with my answer (confidence level {response.confidence}/10, reason:\n{response.escalation_reason}\n\nanswer: {response.answer}\n\nPlease consult a human expert.")
+
+        next_agent_level = "intermediate" if agent_level == "basic" else "advanced"
+        return SwarmResult(agent=f"{next_agent_level}_agent", context_variables=context_variables, values=f"Need to escalate with confidence {response.confidence}/10, reason:\n{response.escalation_reason}")
+    else:
+        return SwarmResult(agent="triage_agent", context_variables=context_variables, values=f"Successfully answered with confidence ({response.confidence}/10):\n{response.answer}")
+
+
+def answer_question_basic(response: ConsideredResponse, context_variables: dict[str, Any]) -> SwarmResult:
+    """Always call this tool with your answer."""
+    return answer_question_common(response, "basic", context_variables)
+
+def answer_question_intermediate(response: ConsideredResponse, context_variables: dict[str, Any]) -> SwarmResult:
+    """Always call this tool with your answer."""
+    return answer_question_common(response, "intermediate", context_variables)
+
+def answer_question_advanced(response: ConsideredResponse, context_variables: dict[str, Any]) -> SwarmResult:
+    """Always call this tool with your answer."""
+    return answer_question_common(response, "advanced", context_variables)
+
+def main():
+    """
+    Main function to demonstrate the Escalation Pattern with the Swarm orchestration engine.
+    """
+    # Triage agent will handle the user interaction
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent that routes queries to the appropriate level of expertise.
+        If there's a new question, call the new_question_asked tool to process it.
+        If a question has been successfully answered, output the question and answer and don't call a tool.
+        You should never answer the question yourself.
+        """,
+        functions=[new_question_asked],
+        llm_config=LLMConfig(
+            model="gpt-4o-mini",
+            temperature=0,
+            cache_seed=None,
+        )
+    )
+
+    # Create agents of increasing capability/cost
+    basic_agent = ConversableAgent(
+        name="basic_agent",
+        system_message="""You are a basic agent that handles simple tasks efficiently.
+        You can answer common knowledge questions and perform basic calculations.
+
+        You MUST provide your responses in the required structured format, including a confidence score from 1-10.
+
+        If a query requires specialized knowledge beyond your capabilities or is complex, set needs_escalation to True
+        and provide a brief reason in escalation_reason.
+
+        Confidence level guide:
+        - 1-3: Very uncertain, likely to be incorrect
+        - 4-6: Moderate confidence, might be correct
+        - 7-8: Good confidence, probably correct
+        - 9-10: High confidence, almost certainly correct
+
+        For simple factual questions and basic calculations that you can handle well, your confidence should be 8-10.
+        For it's not a simple question, rate accordingly lower.
+
+        Always call the answer_question_basic tool when answering.
+        """,
+        functions=[answer_question_basic],
+        llm_config=LLMConfig(
+            api_type="openai",
+            model="gpt-4o-mini",
+            temperature=0,
+            cache_seed=None,
+        )
+    )
+
+    intermediate_agent = ConversableAgent(
+        name="intermediate_agent",
+        system_message="""You are an intermediate agent that handles moderately complex tasks.
+        You can perform more nuanced analysis, provide detailed explanations, and handle domain-specific knowledge.
+
+        You MUST provide your responses in the required structured format, including a confidence score from 1-10.
+
+        If a query requires deep expertise or is very complex beyond your capabilities, set needs_escalation to True
+        and provide a brief reason in escalation_reason.
+
+        Confidence level guide:
+        - 1-3: Very uncertain, likely to be incorrect
+        - 4-6: Moderate confidence, might be correct
+        - 7-8: Good confidence, probably correct
+        - 9-10: High confidence, almost certainly correct
+
+        For questions within your knowledge domain that you can handle well, your confidence should be 8-10.
+        For more specialized or complex questions where you're less certain, rate accordingly lower.
+        """,
+        functions=[answer_question_intermediate],
+        llm_config=LLMConfig(
+            api_type="openai",
+            model="gpt-4o",
+            temperature=0,
+            seed=42,
+        )
+    )
+
+    advanced_agent = ConversableAgent(
+        name="advanced_agent",
+        system_message="""You are an advanced agent with extensive knowledge and reasoning capabilities.
+        You can handle complex reasoning, specialized domains, and difficult problem-solving tasks.
+
+        You MUST provide your responses in the required structured format, including a confidence score from 1-10.
+
+        If a task is beyond even your capabilities, set needs_escalation to True and recommend consulting a human expert
+        in the escalation_reason field.
+
+        Confidence level guide:
+        - 1-3: Very uncertain, likely to be incorrect
+        - 4-6: Moderate confidence, might be correct
+        - 7-8: Good confidence, probably correct
+        - 9-10: High confidence, almost certainly correct
+
+        For questions that you can handle well, your confidence should be 8-10.
+        For extremely specialized or cutting-edge questions where you're less certain, rate accordingly lower.
+        """,
+        functions=[answer_question_advanced],
+        llm_config=LLMConfig(
+            api_type="anthropic",
+            model="claude-3-7-sonnet-20250219",
+            seed=42,
+        )
+    )
+
+    # Create a user proxy agent
+    user_proxy = UserProxyAgent(
+        name="user_proxy",
+        system_message="You are a proxy for the human user.",
+        human_input_mode="ALWAYS"
+    )
+
+    register_hand_off(
+        triage_agent,
+        hand_to=[
+            AfterWork(agent=AfterWorkOption.REVERT_TO_USER)
+        ]
+    )
+
+    # Register escalation paths for the basic agent
+    register_hand_off(
+        basic_agent,
+        [
+            # Escalate based on agent-specific context variables
+            OnContextCondition(
+                target=intermediate_agent,
+                condition=ContextExpression("${basic_agent_confidence} > 0 and ${basic_agent_confidence} < 8")
+            ),
+            AfterWork(agent=AfterWorkOption.STAY)
+        ]
+    )
+
+    # Register escalation paths for the intermediate agent
+    register_hand_off(
+        intermediate_agent,
+        [
+            # Escalate based on agent-specific context variables
+            OnContextCondition(
+                target=advanced_agent,
+                condition=ContextExpression("${intermediate_agent_confidence} > 0 and ${intermediate_agent_confidence} < 8")
+            )
+        ]
+    )
+
+    # Advanced agent falls back to user when all agents are insufficient
+    register_hand_off(
+        advanced_agent,
+        AfterWork(agent=AfterWorkOption.REVERT_TO_USER)
+    )
+
+    # Initial context variables with agent-specific confidence and escalation flags
+    context_variables = {
+        # Agent-specific variables
+        "basic_agent_confidence": 0,
+        "intermediate_agent_confidence": 0,
+        "advanced_agent_confidence": 0,
+
+        # Global tracking variables
+        "escalation_count": 0,
+        "last_escalation_reason": "",
+        "last_escalating_agent": "",
+
+        "current_question": ""
+    }
+
+    basic_question = "What is 100 divided by 5?"
+    intermediate_question = (
+        "Calculate the energy of a quantum system with three particles in a harmonic oscillator potential. "
+        "The first particle has energy level n=2, the second particle has energy level n=1, and the third particle has energy level n=0. "
+        "Assume the harmonic oscillator has a frequency of ω = 2.5 eV/ħ."
+        )
+    advanced_question = (
+        "Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a "
+        "non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. "
+        "Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain "
+        "how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window."
+        )
+
+    # Start the conversation with a welcome message
+    chat_result, final_context, last_speaker = initiate_swarm_chat(
+        initial_agent=triage_agent,
+        messages=advanced_question, # Try different questions
+        agents=[basic_agent, intermediate_agent, advanced_agent, triage_agent],
+        user_agent=user_proxy,
+        context_variables=context_variables,
+        max_rounds=20,
+        after_work=AfterWorkOption.TERMINATE
+    )
+
+    print("\n===== SUMMARY =====\n")
+    print(chat_result.summary)
+    print("\n\n===== FINAL CONTEXT VARIABLES =====\n")
+    print(json.dumps(final_context, indent=2))
+    print("\n\n===== SPEAKER ORDER =====\n")
+    for message in chat_result.chat_history:
+        if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+            print(f"{message['name']}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+## Output
+
+```console
+user_proxy (to chat_manager):
+
+Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+***** Suggested tool call (call_UELe6AXv5mgBKyZW9CQxvwqq): new_question_asked *****
+Arguments:
+{"question":"Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window."}
+***********************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION new_question_asked...
+Call ID: call_UELe6AXv5mgBKyZW9CQxvwqq
+Input arguments: {'question': 'Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_UELe6AXv5mgBKyZW9CQxvwqq) *****
+New question received, context variables reset.
+
+basic_agent try and answer this question:
+Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: basic_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+basic_agent (to chat_manager):
+
+***** Suggested tool call (call_hEcCWFqnOhFqdmCeURL6cd6E): answer_question_basic *****
+Arguments:
+{"response":{"answer":"This question requires specialized knowledge in reinforcement learning and mathematical modeling, which exceeds my capabilities. Therefore, I cannot provide a detailed answer or formal equations for the UCB algorithm modification in this context.","confidence":3,"reasoning":"The complexity of the question involves advanced concepts in reinforcement learning and mathematical modeling that I am not equipped to handle.","escalation_reason":"Requires specialized knowledge in reinforcement learning and mathematical modeling."}}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_basic...
+Call ID: call_hEcCWFqnOhFqdmCeURL6cd6E
+Input arguments: {'response': {'answer': 'This question requires specialized knowledge in reinforcement learning and mathematical modeling, which exceeds my capabilities. Therefore, I cannot provide a detailed answer or formal equations for the UCB algorithm modification in this context.', 'confidence': 3, 'reasoning': 'The complexity of the question involves advanced concepts in reinforcement learning and mathematical modeling that I am not equipped to handle.', 'escalation_reason': 'Requires specialized knowledge in reinforcement learning and mathematical modeling.'}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_hEcCWFqnOhFqdmCeURL6cd6E) *****
+Need to escalate with confidence 3/10, reason:
+Requires specialized knowledge in reinforcement learning and mathematical modeling.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: intermediate_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+intermediate_agent (to chat_manager):
+
+***** Suggested tool call (call_Od6X0eFgpwElfylocyHbyHRc): answer_question_intermediate *****
+Arguments:
+{"response":{"answer":"This question involves advanced concepts in reinforcement learning, particularly in dealing with non-stationary environments using a hidden Markov model. Developing a mathematical model for optimizing the exploration-exploitation tradeoff in such a scenario requires deep expertise in both reinforcement learning algorithms and statistical modeling. Therefore, I recommend escalating this query to a domain expert who can provide a detailed and accurate response.","confidence":3,"reasoning":"The problem involves complex mathematical modeling and algorithmic design that goes beyond typical intermediate-level knowledge. It requires understanding of hidden Markov models, non-stationary processes, and advanced reinforcement learning techniques.","escalation_reason":"The question requires specialized knowledge in reinforcement learning and mathematical modeling, particularly in non-stationary environments and hidden Markov models."}}
+*********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_intermediate...
+Call ID: call_Od6X0eFgpwElfylocyHbyHRc
+Input arguments: {'response': {'answer': 'This question involves advanced concepts in reinforcement learning, particularly in dealing with non-stationary environments using a hidden Markov model. Developing a mathematical model for optimizing the exploration-exploitation tradeoff in such a scenario requires deep expertise in both reinforcement learning algorithms and statistical modeling. Therefore, I recommend escalating this query to a domain expert who can provide a detailed and accurate response.', 'confidence': 3, 'reasoning': 'The problem involves complex mathematical modeling and algorithmic design that goes beyond typical intermediate-level knowledge. It requires understanding of hidden Markov models, non-stationary processes, and advanced reinforcement learning techniques.', 'escalation_reason': 'The question requires specialized knowledge in reinforcement learning and mathematical modeling, particularly in non-stationary environments and hidden Markov models.'}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_Od6X0eFgpwElfylocyHbyHRc) *****
+Need to escalate with confidence 3/10, reason:
+The question requires specialized knowledge in reinforcement learning and mathematical modeling, particularly in non-stationary environments and hidden Markov models.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: advanced_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+[autogen.oai.client: 03-07 23:17:07] {652} WARNING - Model o3-mini-2025-01-31 is not found. The cost will be 0. In your config_list, add field {"price" : [prompt_price_per_1k, completion_token_price_per_1k]} for customized pricing.
+advanced_agent (to chat_manager):
+
+functions.answer_question_advanced({
+  "response": {
+    "answer": "We consider a non‐stationary K‐armed bandit problem where the reward distribution of each arm i ∈ {1, …, K} at time t is affected by an unobserved state sₜ of a hidden Markov model (HMM). In our approach the underlying state sₜ governs the reward distribution parameters (for example, the mean μ_{i,sₜ}) so that when the HMM transitions the reward distributions may shift. To handle non‐stationarity smoothly, we propose a modified Upper Confidence Bound (UCB) algorithm that uses exponential discounting together with an adaptive bonus term reflecting both the uncertainty due to limited data and additional variance that may arise when the hidden state changes.\n\nAssume we have a discount factor γ ∈ (0, 1) that weights more recent observations higher. For each arm i, at time t we maintain:\n\n1. A discounted count (or effective number of pulls):\n\n  Nᵢ(t) = Σₛ₌₁ᵗ γ^(t-s) · 𝟙{Aₛ = i}\n\n2. A discounted sum of observed rewards:\n\n  Sᵢ(t) = Σₛ₌₁ᵗ γ^(t-s) · rₛ · 𝟙{Aₛ = i}\n\n3. A discounted sample mean (reward estimate):\n\n  μ̂ᵢ(t) = Sᵢ(t)/Nᵢ(t)                 (1)\n\n4. An adaptive estimate of the variance that may be influenced by regime shifts. For example, one can update the empirical variance vᵢ(t) recursively (only when arm i is played):\n\n  vᵢ(t) = γ · vᵢ(t-1) + 𝟙{Aₜ = i} · [rₜ - μ̂ᵢ(t-1)]²      (2)\n\nwhere vᵢ(t) can be interpreted as capturing additional uncertainty (i.e. volatility) potentially induced by the hidden state transitions.\n\nThen, we propose that the UCB index for arm i at time t be defined as:\n\n  UCBᵢ(t) = μ̂ᵢ(t) + c · √[ (1 + vᵢ(t)) · ln(t) / Nᵢ(t) ]      (3)\n\nHere, c > 0 is a tuning parameter that controls the balance between exploration and exploitation. The term (1 + vᵢ(t)) serves as a multiplicative factor on the exploration bonus that enlarges the confidence bounds when higher variance (i.e. uncertainty due to possible HMM transitions) is detected. \n\nThe overall decision rule is to select at time t the arm i maximizing UCBᵢ(t).\n\nHow Does This Approach Address Non-Stationarity Better than Thompson Sampling with a Sliding Window?\n\n• Discounting Versus Hard Cutoffs: Thompson Sampling with a sliding window discards older observations completely. In contrast, our discounting approach continuously down-weights past data which allows a smooth transition and rapid adaptation to new regimes, while still leveraging all available information.\n\n• Variance Awareness: Including an adaptive variance estimate vᵢ(t) in the bonus term makes the algorithm more sensitive to sudden changes induced by the HMM’s transitions. When a regime change occurs, vᵢ(t) increases, thereby increasing the exploration bonus and prompting the algorithm to gather more data in the current regime. This is more nuanced than the binary inclusion/exclusion of data in a sliding window.\n\n• Theoretical Grounding: The above formulation follows from established approaches in non-stationary bandit literature that use discounting (or fading memory) to adjust for non-stationarity. By explicitly incorporating the variance from potential state shifts, the algorithm is better equipped to handle environments where reward distributions evolve in a structured (Markovian) way rather than a purely adversarial or abruptly cut-off manner.\n\nIn summary, the tradeoff is optimized by dynamically adjusting the confidence bound via both an exponential discount factor and a variance term sensitive to hidden state dynamics, allowing for a more refined response to non-stationarity compared to a sliding window technique in Thompson Sampling.\n\nConfidence: 9",
+    "confidence": 9,
+    "reasoning": "We first modeled the non-stationary multi-armed bandit problem by assuming that each arm’s reward distribution depends on a hidden Markov state. To tackle non-stationarity, we introduced exponential discounting (a continuous weighting mechanism) to ensure that older data is down-weighted but still used. Furthermore, we incorporated an adaptive variance term in the UCB formula that responds to increased uncertainty when the underlying state shifts. This provides a smoother and more sensitive approach to tracking changes than a sliding window in Thompson Sampling, which abruptly discards data. These elements together give us the necessary mathematical framework and rationale.",
+    "escalation_reason": null
+  }
+})
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+Replying as user_proxy. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Thank you, please answer: What is 100 divided by 5?
+user_proxy (to chat_manager):
+
+Thank you, please answer: What is 100 divided by 5?
+
+--------------------------------------------------------------------------------
+
+Next speaker: advanced_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+[autogen.oai.client: 03-07 23:17:31] {652} WARNING - Model o3-mini-2025-01-31 is not found. The cost will be 0. In your config_list, add field {"price" : [prompt_price_per_1k, completion_token_price_per_1k]} for customized pricing.
+advanced_agent (to chat_manager):
+
+***** Suggested tool call (call_vVxo4qMviDeMcwVpg4nPF0wA): answer_question_advanced *****
+Arguments:
+{"response": {"answer": "100 divided by 5 is 20.", "confidence": 10, "reasoning": "The division of 100 by 5 gives 20, which is straightforward arithmetic.", "escalation_reason": null}}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_advanced...
+Call ID: call_vVxo4qMviDeMcwVpg4nPF0wA
+Input arguments: {'response': {'answer': '100 divided by 5 is 20.', 'confidence': 10, 'reasoning': 'The division of 100 by 5 gives 20, which is straightforward arithmetic.', 'escalation_reason': None}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_vVxo4qMviDeMcwVpg4nPF0wA) *****
+Successfully answered with confidence (10/10):
+100 divided by 5 is 20.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+The question was: What is 100 divided by 5?
+The answer is: 100 divided by 5 is 20.
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+developer@2a73c01b1baa:~$ ^C
+
+developer@2a73c01b1baa:~$  cd /app ; /usr/bin/env /usr/local/bin/python /app/.vscode-server/extensions/ms-python.debugpy-2025.4.0-linux-arm64/bundled/libs/debugpy/adapter/../../debugpy/launcher 47239 -- /app/ag2/ms_code/sample_06_escalation.py
+developer@2a73c01b1baa:~$ nano ~/.env
+developer@2a73c01b1baa:~$ ^C
+
+developer@2a73c01b1baa:~$  cd /app ; /usr/bin/env /usr/local/bin/python /app/.vscode-server/extensions/ms-python.debugpy-2025.4.0-linux-arm64/bundled/libs/debugpy/adapter/../../debugpy/launcher 47251 -- /app/ag2/ms_code/sample_06_escalation.py
+/app/.local/lib/python3.11/site-packages/pydantic/main.py:1630: RuntimeWarning: fields may not start with an underscore, ignoring "_x"
+  warnings.warn(f'fields may not start with an underscore, ignoring "{f_name}"', RuntimeWarning)
+user_proxy (to chat_manager):
+
+Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+***** Suggested tool call (call_J07ECbwyKq4QM9gWZBU2smgz): new_question_asked *****
+Arguments:
+{"question":"Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window."}
+***********************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION new_question_asked...
+Call ID: call_J07ECbwyKq4QM9gWZBU2smgz
+Input arguments: {'question': 'Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_J07ECbwyKq4QM9gWZBU2smgz) *****
+New question received, context variables reset.
+
+basic_agent try and answer this question:
+Develop a mathematical model for optimizing the tradeoff between exploration and exploitation in reinforcement learning for a non-stationary multi-armed bandit problem where the reward distributions shift according to a hidden Markov model. Include the formal equations for the Upper Confidence Bound (UCB) algorithm modification you would propose, and explain how your approach addresses the non-stationarity challenge better than Thompson Sampling with a sliding window.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: basic_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+basic_agent (to chat_manager):
+
+***** Suggested tool call (call_sQEGe8LvN4cd35lvbMkjo6pe): answer_question_basic *****
+Arguments:
+{"response":{"answer":"This question requires specialized knowledge in reinforcement learning and mathematical modeling, which exceeds my capabilities. Therefore, I cannot provide a detailed answer or formal equations for the UCB algorithm modification in this context.","confidence":3,"reasoning":"The question involves complex concepts in reinforcement learning and requires advanced mathematical modeling that I am not equipped to handle.","escalation_reason":"Complexity of the topic and need for specialized knowledge."}}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_basic...
+Call ID: call_sQEGe8LvN4cd35lvbMkjo6pe
+Input arguments: {'response': {'answer': 'This question requires specialized knowledge in reinforcement learning and mathematical modeling, which exceeds my capabilities. Therefore, I cannot provide a detailed answer or formal equations for the UCB algorithm modification in this context.', 'confidence': 3, 'reasoning': 'The question involves complex concepts in reinforcement learning and requires advanced mathematical modeling that I am not equipped to handle.', 'escalation_reason': 'Complexity of the topic and need for specialized knowledge.'}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_sQEGe8LvN4cd35lvbMkjo6pe) *****
+Need to escalate with confidence 3/10, reason:
+Complexity of the topic and need for specialized knowledge.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: intermediate_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+intermediate_agent (to chat_manager):
+
+***** Suggested tool call (call_8IuYMZlJXePEqlQr3LosO1TZ): answer_question_intermediate *****
+Arguments:
+{"response":{"answer":"To address the non-stationary multi-armed bandit problem where reward distributions shift according to a hidden Markov model, we can modify the Upper Confidence Bound (UCB) algorithm to better handle non-stationarity. The traditional UCB algorithm is designed for stationary environments, so it needs to be adapted for environments where the reward distributions change over time.\n\n### Proposed UCB Modification:\n\n1. **Incorporate a Decay Factor:** Introduce a decay factor \\( \\gamma \\) to give more weight to recent observations. This helps in adapting to changes in the reward distribution.\n\n2. **Dynamic Confidence Bound:** Modify the confidence bound to account for the uncertainty in the hidden Markov model. The modified UCB can be expressed as:\n   \\[\n   A_t = \\arg\\max_{a} \\left( \\hat{\\mu}_a(t) + \\sqrt{\\frac{2 \\log t}{N_a(t)}} \\cdot \\gamma^{t - t_{last}(a)} \\right)\n   \\]\n   where:\n   - \\( \\hat{\\mu}_a(t) \\) is the estimated mean reward for arm \\( a \\) at time \\( t \\).\n   - \\( N_a(t) \\) is the number of times arm \\( a \\) has been played up to time \\( t \\).\n   - \\( t_{last}(a) \\) is the last time arm \\( a \\) was played.\n   - \\( \\gamma \\) is the decay factor, \\( 0 < \\gamma \\leq 1 \\).\n\n### Addressing Non-Stationarity:\n\n- **Adaptation to Changes:** The decay factor \\( \\gamma \\) allows the algorithm to adapt to changes in the reward distribution by giving more importance to recent rewards.\n- **Handling Hidden Markov Model:** By dynamically adjusting the confidence bound, the algorithm can better handle the uncertainty introduced by the hidden Markov model.\n\n### Comparison with Thompson Sampling with Sliding Window:\n\n- **UCB with Decay Factor:** This approach explicitly incorporates a mechanism to handle non-stationarity through the decay factor, which can be more effective than a fixed sliding window.\n- **Thompson Sampling Limitations:** While Thompson Sampling with a sliding window can adapt to changes, it may not be as responsive to rapid shifts in the environment as the proposed UCB modification, which continuously adjusts the confidence bounds based on recent data.\n\nOverall, the proposed UCB modification provides a more flexible and responsive approach to handling non-stationary environments compared to Thompson Sampling with a sliding window.","confidence":7,"reasoning":"The proposed modification to the UCB algorithm introduces a decay factor to handle non-stationarity, which is a common approach in adaptive algorithms. The reasoning is based on the need to prioritize recent observations in a changing environment, which is a well-understood concept in reinforcement learning. However, the specific application to a hidden Markov model adds complexity, which is why the confidence is not higher.","escalation_reason":"The complexity of integrating a hidden Markov model with UCB and comparing it to Thompson Sampling requires deeper expertise."}}
+*********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_intermediate...
+Call ID: call_8IuYMZlJXePEqlQr3LosO1TZ
+Input arguments: {'response': {'answer': 'To address the non-stationary multi-armed bandit problem where reward distributions shift according to a hidden Markov model, we can modify the Upper Confidence Bound (UCB) algorithm to better handle non-stationarity. The traditional UCB algorithm is designed for stationary environments, so it needs to be adapted for environments where the reward distributions change over time.\n\n### Proposed UCB Modification:\n\n1. **Incorporate a Decay Factor:** Introduce a decay factor \\( \\gamma \\) to give more weight to recent observations. This helps in adapting to changes in the reward distribution.\n\n2. **Dynamic Confidence Bound:** Modify the confidence bound to account for the uncertainty in the hidden Markov model. The modified UCB can be expressed as:\n   \\[\n   A_t = \\arg\\max_{a} \\left( \\hat{\\mu}_a(t) + \\sqrt{\\frac{2 \\log t}{N_a(t)}} \\cdot \\gamma^{t - t_{last}(a)} \\right)\n   \\]\n   where:\n   - \\( \\hat{\\mu}_a(t) \\) is the estimated mean reward for arm \\( a \\) at time \\( t \\).\n   - \\( N_a(t) \\) is the number of times arm \\( a \\) has been played up to time \\( t \\).\n   - \\( t_{last}(a) \\) is the last time arm \\( a \\) was played.\n   - \\( \\gamma \\) is the decay factor, \\( 0 < \\gamma \\leq 1 \\).\n\n### Addressing Non-Stationarity:\n\n- **Adaptation to Changes:** The decay factor \\( \\gamma \\) allows the algorithm to adapt to changes in the reward distribution by giving more importance to recent rewards.\n- **Handling Hidden Markov Model:** By dynamically adjusting the confidence bound, the algorithm can better handle the uncertainty introduced by the hidden Markov model.\n\n### Comparison with Thompson Sampling with Sliding Window:\n\n- **UCB with Decay Factor:** This approach explicitly incorporates a mechanism to handle non-stationarity through the decay factor, which can be more effective than a fixed sliding window.\n- **Thompson Sampling Limitations:** While Thompson Sampling with a sliding window can adapt to changes, it may not be as responsive to rapid shifts in the environment as the proposed UCB modification, which continuously adjusts the confidence bounds based on recent data.\n\nOverall, the proposed UCB modification provides a more flexible and responsive approach to handling non-stationary environments compared to Thompson Sampling with a sliding window.', 'confidence': 7, 'reasoning': 'The proposed modification to the UCB algorithm introduces a decay factor to handle non-stationarity, which is a common approach in adaptive algorithms. The reasoning is based on the need to prioritize recent observations in a changing environment, which is a well-understood concept in reinforcement learning. However, the specific application to a hidden Markov model adds complexity, which is why the confidence is not higher.', 'escalation_reason': 'The complexity of integrating a hidden Markov model with UCB and comparing it to Thompson Sampling requires deeper expertise.'}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_8IuYMZlJXePEqlQr3LosO1TZ) *****
+Need to escalate with confidence 7/10, reason:
+The complexity of integrating a hidden Markov model with UCB and comparing it to Thompson Sampling requires deeper expertise.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: advanced_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+/app/ag2/autogen/oai/anthropic.py:606: UserWarning: Cost calculation not available for model claude-3-7-sonnet-20250219
+  warnings.warn(f"Cost calculation not available for model {model}", UserWarning)
+advanced_agent (to chat_manager):
+
+
+***** Suggested tool call (toolu_01KCbPuXibD119vQLraX6TaH): answer_question_advanced *****
+Arguments:
+{"response": {"answer": "# Mathematical Model for Non-Stationary Multi-Armed Bandit Problem with HMM\n\n## Problem Formulation\n\nWe consider a non-stationary multi-armed bandit problem with $K$ arms, where the reward distributions shift according to a hidden Markov model (HMM). Let's define the key components:\n\n- Let $S = \\{s_1, s_2, ..., s_M\\}$ be the set of $M$ possible hidden states\n- At each time step $t$, the environment is in a hidden state $z_t \\in S$\n- The transition probability matrix $P$ where $P_{ij} = P(z_{t+1} = s_j | z_t = s_i)$\n- For each arm $a \\in \\{1, 2, ..., K\\}$ and each state $s \\in S$, there exists a reward distribution $\\mathcal{R}_{a,s}$ with mean $\\mu_{a,s}$ and variance $\\sigma^2_{a,s}$\n- At time $t$, pulling arm $a_t$ yields a reward $r_t \\sim \\mathcal{R}_{a_t,z_t}$\n\n## Proposed Approach: HMM-UCB Algorithm\n\nI propose a novel modification to the UCB algorithm called HMM-UCB that incorporates state inference and transition dynamics.\n\n### 1. State Inference Component\n\nUse a Bayesian approach to maintain a belief state $b_t$ over the hidden states:\n\n$b_t(s) = P(z_t = s | a_1, r_1, ..., a_{t-1}, r_{t-1})$\n\nAfter observing reward $r_t$ from action $a_t$, update the belief using Bayes' rule:\n\n$b_{t+1}(s_j) = \\frac{\\sum_{s_i \\in S} b_t(s_i) P_{ij} f_{a_t, s_j}(r_t)}{\\sum_{s_k \\in S} \\sum_{s_i \\in S} b_t(s_i) P_{ik} f_{a_t, s_k}(r_t)}$\n\nwhere $f_{a,s}(r)$ is the probability density function of reward $r$ from arm $a$ in state $s$.\n\n### 2. Dynamic Parameter Estimation\n\nFor each arm $a$ and state $s$, maintain the following statistics:\n- $N_{a,s}(t)$: Effective number of pulls of arm $a$ in state $s$ up to time $t$\n- $\\hat{\\mu}_{a,s}(t)$: Estimated mean reward of arm $a$ in state $s$\n\nUpdate these estimates using state-dependent weighted averages:\n\n$N_{a,s}(t) = \\sum_{\\tau=1}^{t-1} \\lambda^{t-\\tau-1} \\mathbb{I}\\{a_\\tau = a\\} b_{\\tau}(s)$\n\n$\\hat{\\mu}_{a,s}(t) = \\frac{\\sum_{\\tau=1}^{t-1} \\lambda^{t-\\tau-1} \\mathbb{I}\\{a_\\tau = a\\} b_{\\tau}(s) r_\\tau}{N_{a,s}(t)}$\n\nwhere $\\lambda \\in (0,1]$ is a discount factor that handles natural non-stationarity within each state.\n\n### 3. UCB Action Selection Formula\n\nThe HMM-UCB algorithm selects actions according to:\n\n$a_t = \\arg\\max_{a \\in \\{1,2,...,K\\}} \\sum_{s \\in S} b_t(s) \\left[ \\hat{\\mu}_{a,s}(t) + \\alpha \\sqrt{\\frac{\\log(t)}{\\max(N_{a,s}(t), 1)}} + \\beta H(b_t, s, a) \\right]$\n\nwhere:\n- $\\alpha > 0$ is an exploration parameter\n- $\\beta > 0$ controls the state information gain importance\n- $H(b_t, s, a)$ is an information gain term that measures how much pulling arm $a$ would reduce uncertainty about state $s$:\n\n$H(b_t, s, a) = \\mathbb{E}_{r \\sim \\mathcal{R}_{a,s}} [D_{KL}(b_{t+1}(\\cdot|r) || b_t(\\cdot))]$\n\nwhere $D_{KL}$ is the Kullback-Leibler divergence and $b_{t+1}(\\cdot|r)$ is the posterior belief after observing reward $r$.\n\n## Advantages Over Thompson Sampling with Sliding Window\n\n1. **Explicit State Modeling**: HMM-UCB explicitly models the underlying state transitions through the HMM, allowing it to anticipate regime changes rather than merely react to them.\n\n2. **Adaptive Learning Rate**: Instead of discarding old data with a hard sliding window, we use a soft discounting approach that retains historically useful information while prioritizing recent observations.\n\n3. **Information-Directed Exploration**: The information gain term $H(b_t, s, a)$ directs exploration toward arms that help disambiguate the current hidden state, accelerating adaptation to state changes.\n\n4. **Theoretical Guarantees**: This approach allows for regret bounds of order $O(\\sqrt{KMTH})$, where $H$ is the entropy of the stationary distribution of the HMM, which is tighter than the $O(\\sqrt{KMT\\log(T)})$ regret of sliding window approaches.\n\n5. **Computational Efficiency**: While Thompson Sampling requires sampling from posterior distributions, our approach uses deterministic upper confidence bounds, making it more computationally efficient for online applications.\n\n6. **Handling Different Timescales**: The discount factor $\\lambda$ can be adjusted to match the expected rate of change within states, while the transition matrix $P$ captures the larger regime shifts between states.\n\nIn conclusion, the HMM-UCB algorithm provides a principled approach to handling non-stationarity through explicit state modeling, adaptive estimation, and information-directed exploration, outperforming Thompson Sampling with sliding windows particularly in environments with structured state transitions governed by a hidden Markov model.", "confidence": 9, "reasoning": "I've developed a comprehensive mathematical model by combining concepts from multi-armed bandits, hidden Markov models, and Bayesian inference. The approach integrates:\n\n1. Rigorous mathematical framework for the non-stationary bandit problem with HMM state transitions\n2. A novel UCB algorithm modification with three key components: state inference, dynamic parameter estimation, and an information-theoretic action selection formula\n3. Formal equations that explicitly account for state uncertainty and transition dynamics\n4. Clear advantages over Thompson Sampling with sliding windows, supported by theoretical arguments\n\nThe confidence is high (9/10) because this solution follows established principles in reinforcement learning while introducing novel elements that directly address the problem requirements. The mathematical formulation is sound and incorporates the necessary components for handling non-stationarity through a hidden Markov model. The comparison with Thompson Sampling is thorough and identifies specific advantages of the proposed approach.\n\nThe model balances mathematical rigor with practical implementation considerations and provides a solution that could reasonably be implemented in real applications. The only reason for not giving a perfect 10 is that real-world validation through simulation or experimentation would be needed to fully confirm the approach's superiority.", "escalation_reason": null}}
+******************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_advanced...
+Call ID: toolu_01KCbPuXibD119vQLraX6TaH
+Input arguments: {'response': {'answer': "# Mathematical Model for Non-Stationary Multi-Armed Bandit Problem with HMM\n\n## Problem Formulation\n\nWe consider a non-stationary multi-armed bandit problem with $K$ arms, where the reward distributions shift according to a hidden Markov model (HMM). Let's define the key components:\n\n- Let $S = \\{s_1, s_2, ..., s_M\\}$ be the set of $M$ possible hidden states\n- At each time step $t$, the environment is in a hidden state $z_t \\in S$\n- The transition probability matrix $P$ where $P_{ij} = P(z_{t+1} = s_j | z_t = s_i)$\n- For each arm $a \\in \\{1, 2, ..., K\\}$ and each state $s \\in S$, there exists a reward distribution $\\mathcal{R}_{a,s}$ with mean $\\mu_{a,s}$ and variance $\\sigma^2_{a,s}$\n- At time $t$, pulling arm $a_t$ yields a reward $r_t \\sim \\mathcal{R}_{a_t,z_t}$\n\n## Proposed Approach: HMM-UCB Algorithm\n\nI propose a novel modification to the UCB algorithm called HMM-UCB that incorporates state inference and transition dynamics.\n\n### 1. State Inference Component\n\nUse a Bayesian approach to maintain a belief state $b_t$ over the hidden states:\n\n$b_t(s) = P(z_t = s | a_1, r_1, ..., a_{t-1}, r_{t-1})$\n\nAfter observing reward $r_t$ from action $a_t$, update the belief using Bayes' rule:\n\n$b_{t+1}(s_j) = \\frac{\\sum_{s_i \\in S} b_t(s_i) P_{ij} f_{a_t, s_j}(r_t)}{\\sum_{s_k \\in S} \\sum_{s_i \\in S} b_t(s_i) P_{ik} f_{a_t, s_k}(r_t)}$\n\nwhere $f_{a,s}(r)$ is the probability density function of reward $r$ from arm $a$ in state $s$.\n\n### 2. Dynamic Parameter Estimation\n\nFor each arm $a$ and state $s$, maintain the following statistics:\n- $N_{a,s}(t)$: Effective number of pulls of arm $a$ in state $s$ up to time $t$\n- $\\hat{\\mu}_{a,s}(t)$: Estimated mean reward of arm $a$ in state $s$\n\nUpdate these estimates using state-dependent weighted averages:\n\n$N_{a,s}(t) = \\sum_{\\tau=1}^{t-1} \\lambda^{t-\\tau-1} \\mathbb{I}\\{a_\\tau = a\\} b_{\\tau}(s)$\n\n$\\hat{\\mu}_{a,s}(t) = \\frac{\\sum_{\\tau=1}^{t-1} \\lambda^{t-\\tau-1} \\mathbb{I}\\{a_\\tau = a\\} b_{\\tau}(s) r_\\tau}{N_{a,s}(t)}$\n\nwhere $\\lambda \\in (0,1]$ is a discount factor that handles natural non-stationarity within each state.\n\n### 3. UCB Action Selection Formula\n\nThe HMM-UCB algorithm selects actions according to:\n\n$a_t = \\arg\\max_{a \\in \\{1,2,...,K\\}} \\sum_{s \\in S} b_t(s) \\left[ \\hat{\\mu}_{a,s}(t) + \\alpha \\sqrt{\\frac{\\log(t)}{\\max(N_{a,s}(t), 1)}} + \\beta H(b_t, s, a) \\right]$\n\nwhere:\n- $\\alpha > 0$ is an exploration parameter\n- $\\beta > 0$ controls the state information gain importance\n- $H(b_t, s, a)$ is an information gain term that measures how much pulling arm $a$ would reduce uncertainty about state $s$:\n\n$H(b_t, s, a) = \\mathbb{E}_{r \\sim \\mathcal{R}_{a,s}} [D_{KL}(b_{t+1}(\\cdot|r) || b_t(\\cdot))]$\n\nwhere $D_{KL}$ is the Kullback-Leibler divergence and $b_{t+1}(\\cdot|r)$ is the posterior belief after observing reward $r$.\n\n## Advantages Over Thompson Sampling with Sliding Window\n\n1. **Explicit State Modeling**: HMM-UCB explicitly models the underlying state transitions through the HMM, allowing it to anticipate regime changes rather than merely react to them.\n\n2. **Adaptive Learning Rate**: Instead of discarding old data with a hard sliding window, we use a soft discounting approach that retains historically useful information while prioritizing recent observations.\n\n3. **Information-Directed Exploration**: The information gain term $H(b_t, s, a)$ directs exploration toward arms that help disambiguate the current hidden state, accelerating adaptation to state changes.\n\n4. **Theoretical Guarantees**: This approach allows for regret bounds of order $O(\\sqrt{KMTH})$, where $H$ is the entropy of the stationary distribution of the HMM, which is tighter than the $O(\\sqrt{KMT\\log(T)})$ regret of sliding window approaches.\n\n5. **Computational Efficiency**: While Thompson Sampling requires sampling from posterior distributions, our approach uses deterministic upper confidence bounds, making it more computationally efficient for online applications.\n\n6. **Handling Different Timescales**: The discount factor $\\lambda$ can be adjusted to match the expected rate of change within states, while the transition matrix $P$ captures the larger regime shifts between states.\n\nIn conclusion, the HMM-UCB algorithm provides a principled approach to handling non-stationarity through explicit state modeling, adaptive estimation, and information-directed exploration, outperforming Thompson Sampling with sliding windows particularly in environments with structured state transitions governed by a hidden Markov model.", 'confidence': 9, 'reasoning': "I've developed a comprehensive mathematical model by combining concepts from multi-armed bandits, hidden Markov models, and Bayesian inference. The approach integrates:\n\n1. Rigorous mathematical framework for the non-stationary bandit problem with HMM state transitions\n2. A novel UCB algorithm modification with three key components: state inference, dynamic parameter estimation, and an information-theoretic action selection formula\n3. Formal equations that explicitly account for state uncertainty and transition dynamics\n4. Clear advantages over Thompson Sampling with sliding windows, supported by theoretical arguments\n\nThe confidence is high (9/10) because this solution follows established principles in reinforcement learning while introducing novel elements that directly address the problem requirements. The mathematical formulation is sound and incorporates the necessary components for handling non-stationarity through a hidden Markov model. The comparison with Thompson Sampling is thorough and identifies specific advantages of the proposed approach.\n\nThe model balances mathematical rigor with practical implementation considerations and provides a solution that could reasonably be implemented in real applications. The only reason for not giving a perfect 10 is that real-world validation through simulation or experimentation would be needed to fully confirm the approach's superiority.", 'escalation_reason': None}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (toolu_01KCbPuXibD119vQLraX6TaH) *****
+Successfully answered with confidence (9/10):
+# Mathematical Model for Non-Stationary Multi-Armed Bandit Problem with HMM
+
+## Problem Formulation
+
+We consider a non-stationary multi-armed bandit problem with $K$ arms, where the reward distributions shift according to a hidden Markov model (HMM). Let's define the key components:
+
+- Let $S = \{s_1, s_2, ..., s_M\}$ be the set of $M$ possible hidden states
+- At each time step $t$, the environment is in a hidden state $z_t \in S$
+- The transition probability matrix $P$ where $P_{ij} = P(z_{t+1} = s_j | z_t = s_i)$
+- For each arm $a \in \{1, 2, ..., K\}$ and each state $s \in S$, there exists a reward distribution $\mathcal{R}_{a,s}$ with mean $\mu_{a,s}$ and variance $\sigma^2_{a,s}$
+- At time $t$, pulling arm $a_t$ yields a reward $r_t \sim \mathcal{R}_{a_t,z_t}$
+
+## Proposed Approach: HMM-UCB Algorithm
+
+I propose a novel modification to the UCB algorithm called HMM-UCB that incorporates state inference and transition dynamics.
+
+### 1. State Inference Component
+
+Use a Bayesian approach to maintain a belief state $b_t$ over the hidden states:
+
+$b_t(s) = P(z_t = s | a_1, r_1, ..., a_{t-1}, r_{t-1})$
+
+After observing reward $r_t$ from action $a_t$, update the belief using Bayes' rule:
+
+$b_{t+1}(s_j) = \frac{\sum_{s_i \in S} b_t(s_i) P_{ij} f_{a_t, s_j}(r_t)}{\sum_{s_k \in S} \sum_{s_i \in S} b_t(s_i) P_{ik} f_{a_t, s_k}(r_t)}$
+
+where $f_{a,s}(r)$ is the probability density function of reward $r$ from arm $a$ in state $s$.
+
+### 2. Dynamic Parameter Estimation
+
+For each arm $a$ and state $s$, maintain the following statistics:
+- $N_{a,s}(t)$: Effective number of pulls of arm $a$ in state $s$ up to time $t$
+- $\hat{\mu}_{a,s}(t)$: Estimated mean reward of arm $a$ in state $s$
+
+Update these estimates using state-dependent weighted averages:
+
+$N_{a,s}(t) = \sum_{\tau=1}^{t-1} \lambda^{t-\tau-1} \mathbb{I}\{a_\tau = a\} b_{\tau}(s)$
+
+$\hat{\mu}_{a,s}(t) = \frac{\sum_{\tau=1}^{t-1} \lambda^{t-\tau-1} \mathbb{I}\{a_\tau = a\} b_{\tau}(s) r_\tau}{N_{a,s}(t)}$
+
+where $\lambda \in (0,1]$ is a discount factor that handles natural non-stationarity within each state.
+
+### 3. UCB Action Selection Formula
+
+The HMM-UCB algorithm selects actions according to:
+
+$a_t = \arg\max_{a \in \{1,2,...,K\}} \sum_{s \in S} b_t(s) \left[ \hat{\mu}_{a,s}(t) + \alpha \sqrt{\frac{\log(t)}{\max(N_{a,s}(t), 1)}} + \beta H(b_t, s, a) \right]$
+
+where:
+- $\alpha > 0$ is an exploration parameter
+- $\beta > 0$ controls the state information gain importance
+- $H(b_t, s, a)$ is an information gain term that measures how much pulling arm $a$ would reduce uncertainty about state $s$:
+
+$H(b_t, s, a) = \mathbb{E}_{r \sim \mathcal{R}_{a,s}} [D_{KL}(b_{t+1}(\cdot|r) || b_t(\cdot))]$
+
+where $D_{KL}$ is the Kullback-Leibler divergence and $b_{t+1}(\cdot|r)$ is the posterior belief after observing reward $r$.
+
+## Advantages Over Thompson Sampling with Sliding Window
+
+1. **Explicit State Modeling**: HMM-UCB explicitly models the underlying state transitions through the HMM, allowing it to anticipate regime changes rather than merely react to them.
+
+2. **Adaptive Learning Rate**: Instead of discarding old data with a hard sliding window, we use a soft discounting approach that retains historically useful information while prioritizing recent observations.
+
+3. **Information-Directed Exploration**: The information gain term $H(b_t, s, a)$ directs exploration toward arms that help disambiguate the current hidden state, accelerating adaptation to state changes.
+
+4. **Theoretical Guarantees**: This approach allows for regret bounds of order $O(\sqrt{KMTH})$, where $H$ is the entropy of the stationary distribution of the HMM, which is tighter than the $O(\sqrt{KMT\log(T)})$ regret of sliding window approaches.
+
+5. **Computational Efficiency**: While Thompson Sampling requires sampling from posterior distributions, our approach uses deterministic upper confidence bounds, making it more computationally efficient for online applications.
+
+6. **Handling Different Timescales**: The discount factor $\lambda$ can be adjusted to match the expected rate of change within states, while the transition matrix $P$ captures the larger regime shifts between states.
+
+In conclusion, the HMM-UCB algorithm provides a principled approach to handling non-stationarity through explicit state modeling, adaptive estimation, and information-directed exploration, outperforming Thompson Sampling with sliding windows particularly in environments with structured state transitions governed by a hidden Markov model.
+***********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+The question has been successfully answered. Here is the response:
+
+---
+
+# Mathematical Model for Non-Stationary Multi-Armed Bandit Problem with HMM
+
+## Problem Formulation
+
+We consider a non-stationary multi-armed bandit problem with \( K \) arms, where the reward distributions shift according to a hidden Markov model (HMM). Let's define the key components:
+
+- Let \( S = \{s_1, s_2, ..., s_M\} \) be the set of \( M \) possible hidden states.
+- At each time step \( t \), the environment is in a hidden state \( z_t \in S \).
+- The transition probability matrix \( P \) where \( P_{ij} = P(z_{t+1} = s_j | z_t = s_i) \).
+- For each arm \( a \in \{1, 2, ..., K\} \) and each state \( s \in S \), there exists a reward distribution \( \mathcal{R}_{a,s} \) with mean \( \mu_{a,s} \) and variance \( \sigma^2_{a,s} \).
+- At time \( t \), pulling arm \( a_t \) yields a reward \( r_t \sim \mathcal{R}_{a_t,z_t} \).
+
+## Proposed Approach: HMM-UCB Algorithm
+
+I propose a novel modification to the UCB algorithm called HMM-UCB that incorporates state inference and transition dynamics.
+
+### 1. State Inference Component
+
+Use a Bayesian approach to maintain a belief state \( b_t \) over the hidden states:
+
+\[ b_t(s) = P(z_t = s | a_1, r_1, ..., a_{t-1}, r_{t-1}) \]
+
+After observing reward \( r_t \) from action \( a_t \), update the belief using Bayes' rule:
+
+\[ b_{t+1}(s_j) = \frac{\sum_{s_i \in S} b_t(s_i) P_{ij} f_{a_t, s_j}(r_t)}{\sum_{s_k \in S} \sum_{s_i \in S} b_t(s_i) P_{ik} f_{a_t, s_k}(r_t)} \]
+
+where \( f_{a,s}(r) \) is the probability density function of reward \( r \) from arm \( a \) in state \( s \).
+
+### 2. Dynamic Parameter Estimation
+
+For each arm \( a \) and state \( s \), maintain the following statistics:
+- \( N_{a,s}(t) \): Effective number of pulls of arm \( a \) in state \( s \) up to time \( t \).
+- \( \hat{\mu}_{a,s}(t) \): Estimated mean reward of arm \( a \) in state \( s \).
+
+Update these estimates using state-dependent weighted averages:
+
+\[ N_{a,s}(t) = \sum_{\tau=1}^{t-1} \lambda^{t-\tau-1} \mathbb{I}\{a_\tau = a\} b_{\tau}(s) \]
+
+\[ \hat{\mu}_{a,s}(t) = \frac{\sum_{\tau=1}^{t-1} \lambda^{t-\tau-1} \mathbb{I}\{a_\tau = a\} b_{\tau}(s) r_\tau}{N_{a,s}(t)} \]
+
+where \( \lambda \in (0,1] \) is a discount factor that handles natural non-stationarity within each state.
+
+### 3. UCB Action Selection Formula
+
+The HMM-UCB algorithm selects actions according to:
+
+\[ a_t = \arg\max_{a \in \{1,2,...,K\}} \sum_{s \in S} b_t(s) \left[ \hat{\mu}_{a,s}(t) + \alpha \sqrt{\frac{\log(t)}{\max(N_{a,s}(t), 1)}} + \beta H(b_t, s, a) \right] \]
+
+where:
+- \( \alpha > 0 \) is an exploration parameter.
+- \( \beta > 0 \) controls the state information gain importance.
+- \( H(b_t, s, a) \) is an information gain term that measures how much pulling arm \( a \) would reduce uncertainty about state \( s \):
+
+\[ H(b_t, s, a) = \mathbb{E}_{r \sim \mathcal{R}_{a,s}} [D_{KL}(b_{t+1}(\cdot|r) || b_t(\cdot))] \]
+
+where \( D_{KL} \) is the Kullback-Leibler divergence and \( b_{t+1}(\cdot|r) \) is the posterior belief after observing reward \( r \).
+
+## Advantages Over Thompson Sampling with Sliding Window
+
+1. **Explicit State Modeling**: HMM-UCB explicitly models the underlying state transitions through the HMM, allowing it to anticipate regime changes rather than merely react to them.
+
+2. **Adaptive Learning Rate**: Instead of discarding old data with a hard sliding window, we use a soft discounting approach that retains historically useful information while prioritizing recent observations.
+
+3. **Information-Directed Exploration**: The information gain term \( H(b_t, s, a) \) directs exploration toward arms that help disambiguate the current hidden state, accelerating adaptation to state changes.
+
+4. **Theoretical Guarantees**: This approach allows for regret bounds of order \( O(\sqrt{KMTH}) \), where \( H \) is the entropy of the stationary distribution of the HMM, which is tighter than the \( O(\sqrt{KMT\log(T)}) \) regret of sliding window approaches.
+
+5. **Computational Efficiency**: While Thompson Sampling requires sampling from posterior distributions, our approach uses deterministic upper confidence bounds, making it more computationally efficient for online applications.
+
+6. **Handling Different Timescales**: The discount factor \( \lambda \) can be adjusted to match the expected rate of change within states, while the transition matrix \( P \) captures the larger regime shifts between states.
+
+In conclusion, the HMM-UCB algorithm provides a principled approach to handling non-stationarity through explicit state modeling, adaptive estimation, and information-directed exploration, outperforming Thompson Sampling with sliding windows particularly in environments with structured state transitions governed by a hidden Markov model.
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+Replying as user_proxy. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Thank you, please answer: What is 100 divided by 5?
+user_proxy (to chat_manager):
+
+Thank you, please answer: What is 100 divided by 5?
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+***** Suggested tool call (call_gkmKIkpX9CyKgKwN4N1mWDqr): new_question_asked *****
+Arguments:
+{"question":"What is 100 divided by 5?"}
+***********************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION new_question_asked...
+Call ID: call_gkmKIkpX9CyKgKwN4N1mWDqr
+Input arguments: {'question': 'What is 100 divided by 5?'}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_gkmKIkpX9CyKgKwN4N1mWDqr) *****
+New question received, context variables reset.
+
+basic_agent try and answer this question:
+What is 100 divided by 5?
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: basic_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+basic_agent (to chat_manager):
+
+***** Suggested tool call (call_dEWHzrdIurOVlBFOu6vOwxAB): answer_question_basic *****
+Arguments:
+{"response":{"answer":"100 divided by 5 is 20.","confidence":10,"reasoning":"This is a straightforward division problem, and the calculation is simple and direct.","escalation_reason":null}}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Swarm_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION answer_question_basic...
+Call ID: call_dEWHzrdIurOVlBFOu6vOwxAB
+Input arguments: {'response': {'answer': '100 divided by 5 is 20.', 'confidence': 10, 'reasoning': 'This is a straightforward division problem, and the calculation is simple and direct.', 'escalation_reason': None}}
+_Swarm_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_dEWHzrdIurOVlBFOu6vOwxAB) *****
+Successfully answered with confidence (10/10):
+100 divided by 5 is 20.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+The question has been successfully answered. Here is the response:
+
+100 divided by 5 is 20.
+
+--------------------------------------------------------------------------------
+
+Next speaker: user_proxy
+
+Replying as user_proxy. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+===== SUMMARY =====
+
+The question has been successfully answered. Here is the response:
+
+100 divided by 5 is 20.
+
+
+===== FINAL CONTEXT VARIABLES =====
+
+{
+  "basic_agent_confidence": 10,
+  "intermediate_agent_confidence": 0,
+  "advanced_agent_confidence": 0,
+  "escalation_count": 0,
+  "last_escalation_reason": "",
+  "last_escalating_agent": "",
+  "current_question": "What is 100 divided by 5?"
+}
+
+
+===== SPEAKER ORDER =====
+
+user_proxy
+triage_agent
+basic_agent
+intermediate_agent
+advanced_agent
+triage_agent
+user_proxy
+triage_agent
+basic_agent
+triage_agent
+```

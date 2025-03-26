@@ -149,33 +149,24 @@ safety_settings = {
 }
 
 import autogen
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 from autogen.code_utils import content_str
 
-config_list_gemini = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gemini-1.5-pro"],
-    },
-)
-
-config_list_gemini_vision = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gemini-pro-vision"],
-    },
-)
-
-for config_list in [config_list_gemini, config_list_gemini_vision]:
-    for config_list_item in config_list:
-        config_list_item["safety_settings"] = safety_settings
-
 seed = 25  # for caching
+llm_config_gemini = LLMConfig(path="OAI_CONFIG_LIST", seed=seed).where(model="gemini-1.5-pro")
 
-assistant = AssistantAgent(
-    "assistant", llm_config={"config_list": config_list_gemini, "seed": seed}, max_consecutive_auto_reply=3
-)
+llm_config_gemini_vision = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(model="gemini-pro-vision")
+
+for llm_config in [llm_config_gemini, llm_config_gemini_vision]:
+    for config_list_item in llm_config.config_list:
+        config_list_item.safety_settings = safety_settings
+
+with llm_config_gemini:
+    assistant = AssistantAgent(
+        "assistant",
+        max_consecutive_auto_reply=3
+    )
 
 user_proxy = UserProxyAgent(
     "user_proxy",
@@ -271,20 +262,21 @@ scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
 credentials, project_id = google.auth.default(scopes)
 
-gemini_vision_config = [
-    {
-        "model": "gemini-pro-vision",
-        "api_type": "google",
-        "project_id": project_id,
-        "credentials": credentials,
-        "location": "us-west1",
-        "safety_settings": safety_settings,
-    }
-]
-
-image_agent = MultimodalConversableAgent(
-    "Gemini Vision", llm_config={"config_list": gemini_vision_config, "seed": seed}, max_consecutive_auto_reply=1
+llm_config_gemini_vision = LLMConfig(
+    model="gemini-pro-vision",
+    api_type="google",
+    project_id=project_id,
+    credentials=credentials,
+    location="us-west1",
+    safety_settings=safety_settings,
+    seed=seed,
 )
+
+with llm_config_gemini_vision:
+    image_agent = MultimodalConversableAgent(
+        "Gemini Vision",
+        max_consecutive_auto_reply=1,
+    )
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
 
@@ -343,17 +335,16 @@ completion_token_price_per_1k = (
     0.000375  # For more up-to-date prices see https://cloud.google.com/vertex-ai/generative-ai/pricing
 )
 
-openai_gemini_config = [
-    {
-        "model": "google/gemini-1.5-pro-001",
-        "api_type": "openai",
-        "base_url": f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/endpoints/openapi",
-        "api_key": creds.token,
-        "price": [prompt_price_per_1k, completion_token_price_per_1k],
-    }
-]
+llm_config_openai_gemini = LLMConfig(
+    model="google/gemini-1.5-pro-001",
+    api_type="openai",
+    base_url=f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/endpoints/openapi",
+    api_key=creds.token,
+    price=[prompt_price_per_1k, completion_token_price_per_1k],
+)
 
-assistant = AssistantAgent("assistant", llm_config={"config_list": openai_gemini_config}, max_consecutive_auto_reply=3)
+with llm_config_openai_gemini:
+    assistant = AssistantAgent("assistant", max_consecutive_auto_reply=3)
 
 user_proxy = UserProxyAgent(
     "user_proxy",

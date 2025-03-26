@@ -75,7 +75,7 @@ This example demonstrates how to use Mem0 with AG2 to create a conversational AI
 
 ```python
 import os
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from mem0 import MemoryClient
 
 # Set up environment variables
@@ -85,7 +85,11 @@ os.environ["MEM0_API_KEY"] = "your_mem0_api_key"
 # Initialize Agent and Memory
 agent = ConversableAgent(
     "chatbot",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "api_key": os.environ.get("OPENAI_API_KEY")}]},
+    llm_config=LLMConfig(
+        api_type="openai",
+        model="gpt-4",
+        api_key=os.environ.get("OPENAI_API_KEY")
+    ),
     code_execution_config=False,
     function_map=None,
     human_input_mode="NEVER",
@@ -127,14 +131,24 @@ print("Reply :", reply)
 manager = ConversableAgent(
     "manager",
     system_message="You are a manager who helps in resolving customer issues.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}]},
+    llm_config=LLMConfig(
+        api_type="openai",
+        model="gpt-4",
+        temperature=0,
+        api_key=os.environ.get("OPENAI_API_KEY")
+    ),
     human_input_mode="NEVER"
 )
 
 customer_bot = ConversableAgent(
     "customer_bot",
     system_message="You are a customer service bot who gathers information on issues customers are facing.",
-    llm_config={"config_list": [{"api_type": "openai", "model": "gpt-4", "temperature": 0, "api_key": os.environ.get("OPENAI_API_KEY")}]},
+    llm_config=LLMConfig(
+        api_type="openai",
+        model="gpt-4",
+        temperature=0,
+        api_key=os.environ.get("OPENAI_API_KEY")
+    ),
     human_input_mode="NEVER"
 )
 

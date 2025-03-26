@@ -87,26 +87,24 @@ We'll use DeepSeek-V3 in our example.
 
 ```python
 import os
-
-config_list = [
-    {
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": os.environ.get("DEEPSEEK_API_KEY"),
-        "api_type": "deepseek",
-        "tags": ["deepseek"],
-    }
-]
-
 from pathlib import Path
 
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.coding import LocalCommandLineCodeExecutor
 
 # Setting up the code executor
 workdir = Path("coding")
 workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
+
+# Setting up the configuration for DeepSeek-V3
+llm_config = LLMConfig(
+    model="deepseek-chat",
+    base_url="https://api.deepseek.com/v1",
+    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+    api_type="deepseek",
+    tags=["deepseek"],
+)
 
 # Setting up the agents
 
@@ -128,11 +126,11 @@ When you find an answer, verify the answer carefully. Include verifiable evidenc
 IMPORTANT: Wait for the user to execute your code and then you can reply with the word "FINISH". DO NOT OUTPUT "FINISH" after your code block."""
 
 # The AssistantAgent, using DeepSeek-V3 model, will take the coding request and return code
-assistant_agent = AssistantAgent(
-    name="DeepSeek_Assistant",
-    system_message=system_message,
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    assistant_agent = AssistantAgent(
+        name="DeepSeek_Assistant",
+        system_message=system_message,
+    )
 
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
@@ -224,24 +222,22 @@ from typing_extensions import Annotated
 
 import autogen
 
-config_list = [
-    {
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": os.environ.get("DEEPSEEK_API_KEY"),
-        "api_type": "deepseek",
-        "tags": ["deepseek"],
-    }
-]
+llm_config = autogen.LLMConfig(
+    model="deepseek-chat",
+    base_url="https://api.deepseek.com/v1",
+    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+    api_type="deepseek",
+    tags=["deepseek"],
+)
 
 # Create the agent for tool calling
-chatbot = autogen.AssistantAgent(
-    name="chatbot",
-    system_message="""For currency exchange and weather forecasting tasks,
-        only use the functions you have been provided with.
-        Output 'HAVE FUN!' when an answer has been provided.""",
-    llm_config={"config_list": config_list},
-)
+with llm_config:
+    chatbot = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="""For currency exchange and weather forecasting tasks,
+            only use the functions you have been provided with.
+            Output 'HAVE FUN!' when an answer has been provided.""",
+    )
 
 # Note that we have changed the termination string to be "HAVE FUN!"
 user_proxy = autogen.UserProxyAgent(

@@ -81,16 +81,16 @@ from autogen.agentchat.contrib.capabilities import transform_messages
 
 system_message = "You are a world-class researcher."
 # Put your key in the OPENAI_API_KEY environment variable
-config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o")
 
 # Define your agent; the user proxy and an assistant
-researcher = autogen.ConversableAgent(
-    "assistant",
-    llm_config={"config_list": config_list},
-    max_consecutive_auto_reply=1,
-    system_message=system_message,
-    human_input_mode="NEVER",
-)
+with llm_config:
+    researcher = autogen.ConversableAgent(
+        "assistant",
+        max_consecutive_auto_reply=1,
+        system_message=system_message,
+        human_input_mode="NEVER",
+    )
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",
     human_input_mode="NEVER",
@@ -142,15 +142,15 @@ LLMLingua's flexibility allows for various configurations, such as customizing i
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-config_list = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
-researcher = autogen.ConversableAgent(
-    "assistant",
-    llm_config={"config_list": config_list},
-    max_consecutive_auto_reply=1,
-    system_message=system_message,
-    human_input_mode="NEVER",
-)
+with llm_config:
+    researcher = autogen.ConversableAgent(
+        "assistant",
+        max_consecutive_auto_reply=1,
+        system_message=system_message,
+        human_input_mode="NEVER",
+    )
 
 text_compressor = TextMessageCompressor(
     text_compressor=llm_lingua,

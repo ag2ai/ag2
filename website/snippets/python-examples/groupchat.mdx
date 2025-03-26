@@ -1,8 +1,8 @@
 ```python
-from autogen import ConversableAgent, GroupChat, GroupChatManager
+from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = {"api_type": "openai", "model": "gpt-4o-mini"}
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -12,30 +12,29 @@ Use the following format:
 <script>How to introduce the topic to the kids</script>
 """
 
-# 1. Add a separate 'description' for our planner and reviewer agents
-planner_description = "Creates or revises lesson plans."
-
-lesson_planner = ConversableAgent(
-    name="planner_agent",
-    llm_config=llm_config,
-    system_message=planner_message,
-    description=planner_description,
-)
-
 reviewer_message = """You are a classroom lesson reviewer.
 You compare the lesson plan to the fourth grade curriculum and provide a maximum of 3 recommended changes.
 Provide only one round of reviews to a lesson plan.
 """
 
+# 1. Add a separate 'description' for our planner and reviewer agents
+planner_description = "Creates or revises lesson plans."
+
 reviewer_description = """Provides one round of reviews to a lesson plan
 for the lesson_planner to revise."""
 
-lesson_reviewer = ConversableAgent(
-    name="reviewer_agent",
-    llm_config=llm_config,
-    system_message=reviewer_message,
-    description=reviewer_description,
-)
+with llm_config:
+    lesson_planner = ConversableAgent(
+        name="planner_agent",
+        system_message=planner_message,
+        description=planner_description,
+    )
+
+    lesson_reviewer = ConversableAgent(
+        name="reviewer_agent",
+        system_message=reviewer_message,
+        description=reviewer_description,
+    )
 
 # 2. The teacher's system message can also be used as a description, so we don't define it
 teacher_message = """You are a classroom teacher.
@@ -44,13 +43,13 @@ and reviewer to create and finalise lesson plans.
 When you are happy with a lesson plan, output "DONE!".
 """
 
-teacher = ConversableAgent(
-    name="teacher_agent",
-    llm_config=llm_config,
-    system_message=teacher_message,
-    # 3. Our teacher can end the conversation by saying DONE!
-    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
-)
+with llm_config:
+    teacher = ConversableAgent(
+        name="teacher_agent",
+        system_message=teacher_message,
+        # 3. Our teacher can end the conversation by saying DONE!
+        is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
+    )
 
 # 4. Create the GroupChat with agents and selection method
 groupchat = GroupChat(

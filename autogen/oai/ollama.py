@@ -28,11 +28,12 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, HttpUrl
 
 from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -40,6 +41,27 @@ with optional_import_block():
     import ollama
     from fix_busted_json import repair_json
     from ollama import Client
+
+
+@register_llm_config
+class OllamaLLMConfigEntry(LLMConfigEntry):
+    api_type: Literal["ollama"] = "ollama"
+    client_host: Optional[HttpUrl] = None
+    stream: bool = False
+    num_predict: int = Field(
+        default=-1,
+        description="Maximum number of tokens to predict, note: -1 is infinite (default), -2 is fill context.",
+    )
+    num_ctx: int = Field(default=2048)
+    repeat_penalty: float = Field(default=1.1)
+    seed: int = Field(default=0)
+    temperature: float = Field(default=0.8)
+    top_k: int = Field(default=40)
+    top_p: float = Field(default=0.9)
+    hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+
+    def create_client(self):
+        raise NotImplementedError("OllamaLLMConfigEntry.create_client is not implemented.")
 
 
 class OllamaClient:
@@ -77,11 +99,11 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self):
+    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]] = None, **kwargs):
         """Note that no api_key or environment variable is required for Ollama."""
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[type[BaseModel]] = None
+        self._response_format: Optional[Union[BaseModel, dict[str, Any]]] = response_format
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -176,6 +198,17 @@ class OllamaClient:
         if len(options_dict) != 0:
             ollama_params["options"] = options_dict
 
+        # Structured outputs (see https://ollama.com/blog/structured-outputs)
+        if not self._response_format and params.get("response_format"):
+            self._response_format = params["response_format"]
+
+        if self._response_format:
+            if isinstance(self._response_format, dict):
+                ollama_params["format"] = self._response_format
+            else:
+                # Keep self._response_format as a Pydantic model for when process the response
+                ollama_params["format"] = self._response_format.model_json_schema()
+
         return ollama_params
 
     @require_optional_import(["ollama", "fix_busted_json"], "ollama")
@@ -227,17 +260,6 @@ class OllamaClient:
 
         ollama_params["messages"] = ollama_messages
 
-        # If response_format exists, we want structured outputs
-        # Based on:
-        # https://ollama.com/blog/structured-outputs
-        if params.get("response_format"):
-            self._response_format = params["response_format"]
-            ollama_params["format"] = (
-                params.get("response_format").model_json_schema()
-                if isinstance(self._response_format, BaseModel)
-                else params.get("response_format")
-            )
-
         # Token counts will be returned
         prompt_tokens = 0
         completion_tokens = 0
@@ -245,7 +267,8 @@ class OllamaClient:
 
         ans = None
         if "client_host" in params:
-            client = Client(host=params["client_host"])
+            # Convert client_host to string from HttpUrl
+            client = Client(host=str(params["client_host"]))
             response = client.chat(**ollama_params)
         else:
             response = ollama.chat(**ollama_params)
