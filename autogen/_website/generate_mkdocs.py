@@ -893,8 +893,9 @@ def post_process_func(
     # Add render_macros: false to the front matter
     front_matter_str += "render_macros: false\n"
 
-    # Convert callout blocks
-    # content = convert_callout_blocks(content)
+    # transform content for mkdocs
+    rel_path = f"/{rendered_mdx.relative_to(website_build_directory.parents[0])}"
+    content = transform_content_for_mkdocs(content, rel_path)
 
     # Convert mdx image syntax to mintly image syntax
     # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
