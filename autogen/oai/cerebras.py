@@ -56,6 +56,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(default=1.0, ge=0.0, le=1.5)
     top_p: Optional[float] = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     @field_validator("top_p", mode="before")
     @classmethod
@@ -134,6 +135,9 @@ class CerebrasClient:
             params, "temperature", (int, float), True, 1, (0, 1.5), None
         )
         cerebras_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+        cerebras_params["tool_choice"] = validate_parameter(
+            params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
+        )
 
         return cerebras_params
 
