@@ -305,6 +305,87 @@
     }
   }
 
+  function normalizePath(path, isFromSnippets, url, isImage = false) {
+    // Remove all ../ from the beginning
+    const cleanPath = path.replace(/^(\.\.\/)+/, "");
+
+    // Special case for images with date prefixes
+    if (isImage && /^\d{4}-\d{2}-\d{2}-/.test(cleanPath)) {
+      return `../../${cleanPath}`;
+    }
+
+    const levels = url.endsWith("/docs/blog/")
+      ? isFromSnippets
+        ? 2
+        : 1
+      : isFromSnippets
+      ? 4
+      : 3;
+    return "../".repeat(levels) + cleanPath;
+  }
+
+  function processElements(
+    selector,
+    attribute,
+    document,
+    url,
+    isImage = false
+  ) {
+    const elements = document.querySelectorAll(selector);
+
+    elements.forEach((element) => {
+      const path = element.getAttribute(attribute);
+
+      // Skip if no attribute or it's not a relative path
+      if (!path || !(path.startsWith("../") || path.startsWith("./"))) {
+        return;
+      }
+
+      // Check if the path is from the snippets directory
+      const isFromSnippets = path
+        .replace(/^(\.\.\/)+/, "")
+        .startsWith("snippets/");
+
+      // Normalize the path
+      element.setAttribute(
+        attribute,
+        normalizePath(path, isFromSnippets, url, isImage)
+      );
+    });
+  }
+
+  function isBlogUrl(url) {
+    return (
+      url.endsWith("/docs/blog/") || // Exact match for root
+      url.includes("/blog/category/") || // Any category page
+      /\/blog\/page\/\d+\//.test(url) // Any paginated blog
+    );
+  }
+
+  function fixBlogUrls() {
+    const { href } = document.location;
+
+    // Check if URL matches the target patterns
+    if (!isBlogUrl(href)) return;
+
+    // Process both img src and anchor href attributes
+    processElements(
+      'main img[src^="../"], img[src^="./"]',
+      "src",
+      document,
+      href,
+      true
+    );
+    processElements(
+      '.md-post a[href^="../"]:not(.toclink):not(.md-meta__link):not(nav.md-post__action > a), ' +
+        '.md-post a[href^="./"]:not(.toclink):not(.md-meta__link):not(nav.md-post__action > a)',
+      "href",
+      document,
+      href,
+      false
+    );
+  }
+
   // Initialize everything when the document is ready
   document.addEventListener("DOMContentLoaded", function () {
     handleBlogURLs();
@@ -312,6 +393,7 @@
     loadDependencies();
     fixHomePageImagePaths();
     fixEditUrls();
+    fixBlogUrls();
   });
 
   // Watch for URL changes using MutationObserver
