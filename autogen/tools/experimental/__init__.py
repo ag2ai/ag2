@@ -14,6 +14,7 @@ from .messageplatform import (
     TelegramRetrieveTool,
     TelegramSendTool,
 )
+from .perplexity import PerplexitySearchTool
 
 __all__ = [
     "BrowserUseTool",
@@ -22,6 +23,7 @@ __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "GoogleSearchTool",
+    "PerplexitySearchTool",
     "SlackRetrieveTool",
     "SlackSendTool",
     "TelegramRetrieveTool",
