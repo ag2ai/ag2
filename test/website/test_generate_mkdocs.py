@@ -252,14 +252,18 @@ def test_fix_asset_path() -> None:
     <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
-</div>""")
+</div>
+![I -heart- AutoGen](/static/img/love.png)
+""")
     expected = dedent("""This is a sample quick start page.
 <div class="key-feature">
     <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
     <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
-</div>""")
+</div>
+![I -heart- AutoGen](/assets/img/love.png)
+""")
     actual = fix_asset_path(content)
     assert actual == expected
 

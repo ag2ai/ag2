@@ -154,6 +154,7 @@ def transform_card_grp_component(content: str) -> str:
 def fix_asset_path(content: str) -> str:
     # Replace static/img paths with /assets/img
     modified_content = re.sub(r'src="/static/img/([^"]+)"', r'src="/assets/img/\1"', content)
+    modified_content = re.sub(r"!\[([^\]]*)\]\(/static/img/([^)]+)\)", r"![\1](/assets/img/\2)", modified_content)
 
     # Replace docs paths with /docs
     modified_content = re.sub(r'href="/docs/([^"]+)"', r'href="/docs/\1"', modified_content)
