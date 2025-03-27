@@ -35,8 +35,5 @@ muffet \
   --max-response-body-size=20000000 \
   --ignore-fragments \
   --accepted-status-codes='200..300,503' \
-  --exclude '^https://harishmohanraj.github.io/ag2/latest/docs/blog/$' \
-  --exclude '^https://harishmohanraj.github.io/ag2/latest/docs/blog/category/.*$' \
-  --exclude '^https://harishmohanraj.github.io/ag2/latest/docs/blog/page/.*$' \
   --exclude="($(paste -sd '|' .muffet-excluded-links.txt))" \
   "$URL"

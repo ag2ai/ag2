@@ -6,15 +6,15 @@ API Reference: [ConversableAgent.generate_reply](/docs/api-reference/autogen/Con
 
 A critical part to any AG2 workflow is an agent's reply. Their reply is what ends up in the messages list for evaluation by the next agent(s).
 
-If you are creating a new agent and want to control what they generate (their *reply*), then understanding ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) method is important.
+If you are creating a new agent and want to control what they generate (their *reply*), then understanding ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method is important.
 
-Let's look at how the standard ConversableAgent's [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) method works.
+Let's look at how the standard ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method works.
 
 ![generate_reply](./assets/generate-reply.png)
 
-### Breakdown of [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply):
+### Breakdown of [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply):
 
-1. [generate_reply](./docs/api-reference/autogen/ConversableAgent#generate-reply) is a ConversableAgent's primary function for getting its reply. It is called on the first turn of [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then when messages are received by an agent (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)). In a GroupChat, it's called by the GroupChatManager in their [run_chat](./docs/api-reference/autogen/GroupChatManager#run-chat) method.
+1. [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) is a ConversableAgent's primary function for getting its reply. It is called on the first turn of [initiate_chat](/docs/api-reference/autogen/ConversableAgent#initiate-chat) and then when messages are received by an agent (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)). In a GroupChat, it's called by the GroupChatManager in their [run_chat](/docs/api-reference/autogen/GroupChatManager#run-chat) method.
 
 2. Three hooks are evaluated, in the order shown, to update agent and message state in preparation for the upcoming reply functions. These hooks are functions and you will find out more in the [Hooks](/docs/contributor-guide/how-ag2-works/hooks) section.
 

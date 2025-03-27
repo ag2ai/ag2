@@ -1293,6 +1293,14 @@ class TestFixInternalLinks:
 
         assert actual == expected
 
+        source_path = "/docs/user-guide/reference-tools/index.md"
+        content = "/docs/api-reference/autogen/tools/experimental/GoogleSearchTool"
+
+        expected = "../../api-reference/autogen/tools/experimental/GoogleSearchTool"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
     def test_fix_internal_links(self) -> None:
         source_path = "/docs/home/quick-start.md"
         content = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
@@ -1327,7 +1335,7 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 
 ### Where to Go Next?
 
-- [Sample Link](./slow-start.md)
+- [Sample Link](../slow-start.md)
 - Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
 - Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
 - Explore the [API Reference](../../api-reference/autogen/overview)
