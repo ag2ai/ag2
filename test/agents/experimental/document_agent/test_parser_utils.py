@@ -19,7 +19,7 @@ with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument
 
 
-@run_for_optional_imports("docling", "rag")
+@run_for_optional_imports(["docling", "requests", "selenium", "webdriver_manager"], "rag")
 class TestDoclingParseDocs:
     @fixture
     def mock_document_input(self) -> MagicMock:

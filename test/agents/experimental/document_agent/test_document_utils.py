@@ -126,7 +126,7 @@ class TestDownloadUrl:
             content = html_file.read()
             assert content == mock_html_value
 
-    @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+    @skip_on_missing_imports(["selenium", "webdriver_manager", "requests"], "rag")
     def test_download_url_non_html(self, tmp_path: Path) -> None:
         url = "https://www.example.com/image.jpg"
         with pytest.raises(ValueError):

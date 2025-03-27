@@ -54,6 +54,8 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         list[ConversionResult]: The result of the conversion.
     """
     output_dir_path = output_dir_path or Path("./output")
+    output_dir_path = Path(output_dir_path)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
     output_formats = output_formats or ["markdown"]
 
     input_doc_paths: list[Path] = handle_input(input_file_path, output_dir=output_dir_path)
