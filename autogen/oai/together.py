@@ -33,7 +33,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from pydantic import Field
 
@@ -60,6 +60,9 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
     min_p: Optional[float] = Field(default=None, ge=0, le=1)
     safety_model: Optional[str] = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    tool_choice: Optional[Union[str, dict[str, Union[str, dict[str, str]]]]] = (
+        None  # dict is the tool to call: {"type": "function", "function": {"name": "my_function"}}
+    )
 
     def create_client(self):
         raise NotImplementedError("TogetherLLMConfigEntry.create_client is not implemented.")
@@ -148,6 +151,9 @@ class TogetherClient:
             )
 
             together_params["stream"] = False
+
+        if "tool_choice" in params:
+            together_params["tool_choice"] = params["tool_choice"]
 
         return together_params
 
