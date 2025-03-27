@@ -61,6 +61,7 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol
+from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -111,8 +112,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    # tool_config: Optional["ToolConfig"] = None
-    tool_config: Optional[Any] = None
+    tool_config: Optional[ToolConfig] = None
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
