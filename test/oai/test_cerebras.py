@@ -115,7 +115,7 @@ def test_parsing_params(cerebras_client):
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
-        'tool_choice': None,
+        "tool_choice": None,
     }
     result = cerebras_client.parse_params(params)
     assert result == expected_params
@@ -131,7 +131,7 @@ def test_parsing_params(cerebras_client):
         "stream": False,
         "temperature": 1,
         "top_p": None,
-        'tool_choice': None,
+        "tool_choice": None,
     }
     result = cerebras_client.parse_params(params)
     assert result == expected_params
