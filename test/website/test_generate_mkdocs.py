@@ -1285,6 +1285,14 @@ class TestFixInternalLinks:
 
         assert actual == expected
 
+        source_path = "/docs/contributor-guide/how-ag2-works/hooks.md"
+        content = "/docs/contributor-guide/how-ag2-works/initiate-chat"
+
+        expected = "../initiate-chat"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
     def test_fix_internal_links(self) -> None:
         source_path = "/docs/home/quick-start.md"
         content = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents

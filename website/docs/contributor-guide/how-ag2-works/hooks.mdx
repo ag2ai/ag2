@@ -6,7 +6,7 @@ API Reference: [ConversableAgent.register_hook](/docs/api-reference/autogen/Conv
 
 Hooks are a means to update/review agent state before replying, and messages before sending and replying.
 
-You can define functions and associate them with these hooks and they will execute at certain points in the workflow, see the [initiate_chat](./initiate-chat) page to see where these occur (blue circles).
+You can define functions and associate them with these hooks and they will execute at certain points in the workflow, see the [initiate_chat](/docs/contributor-guide/how-ag2-works/initiate-chat) page to see where these occur (blue circles).
 
 ### How to register a hook
 
@@ -20,7 +20,7 @@ There are **four hooks** available on a ConversableAgent, let's look at them and
 
 ### 1. "process_message_before_send"
 
-This hook is the only hook not in ConversableAgent's [generate_reply](./generate-reply) method and is designed to intercept a message before it is sent to another agent.
+This hook is the only hook not in ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method and is designed to intercept a message before it is sent to another agent.
 
 You can change the message with the hook and the change will be permanent. This is because this hook is called before a message is displayed or added to the message list.
 

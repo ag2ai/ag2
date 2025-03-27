@@ -204,7 +204,7 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
 
     try:
         rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
-        return f"../{rel_path}" if str(rel_path) == "quick-start" else f"./{rel_path}"
+        return f"./{rel_path}" if Path(source_path).stem == "index" else f"../{rel_path}"
     except ValueError:
         rel_path = os.path.relpath(dest_path, source_path)
         ret_val = f"../../{rel_path}" if "blog" in source_path else rel_path
