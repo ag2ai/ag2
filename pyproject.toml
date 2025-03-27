@@ -452,6 +452,7 @@ files = [
     "autogen/llm_config.py",
     "autogen/logger",
     "autogen/messages",
+    "autogen/oai/gemini_types.py",
     "autogen/oai/oai_models",
     "autogen/oai/openai_utils.py",
     "autogen/tools",
@@ -466,6 +467,8 @@ files = [
 #    "test/fast_depends",
     "test/interop",
     "test/io",
+    "test/oai/test_oai_models.py",
+    "test/oai/test_gemini_types.py",
     "test/test_json_utils.py",
     "test/test_llm_config.py",
     "test/messages",
@@ -473,7 +476,6 @@ files = [
     "test/test_import.py",
     "test/tools",
     "test/website",
-    "test/oai/test_oai_models.py",
 ]
 
 exclude = [
