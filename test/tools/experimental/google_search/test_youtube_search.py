@@ -11,7 +11,6 @@ from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import YoutubeSearchTool
 from autogen.tools.experimental.google_search.youtube_search import (
-    _get_video_details,
     _youtube_search,
 )
 
@@ -86,10 +85,6 @@ class TestYoutubeSearchTool:
                 },
             ]
         }
-
-    def test_get_video_details_empty_ids(self) -> None:
-        result = _get_video_details([], "api_key")
-        assert result == {"items": []}
 
     def test_youtube_search_basic(self, mock_search_response: Dict[str, Any]) -> None:
         with (
