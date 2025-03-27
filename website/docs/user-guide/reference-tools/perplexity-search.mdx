@@ -1,0 +1,169 @@
+---
+title: Perplexity Search Tool
+---
+
+The Perplexity AI search integration allows users to perform real-time web searches within the AG2 framework. Follow these steps to integrate `PerplexitySearchTool` with AG2 Agents.
+
+## Configuring Your Perplexity API Key
+
+1. **Create a Perplexity Account**:
+   - Visit [Perplexity AI](https://www.perplexity.ai/)
+   - Click `Sign Up` and create an account
+   - Select Free Tier during registration
+
+2. **Get API Key**:
+   - Navigate to [API Settings](https://www.perplexity.ai/settings/api)
+   - Add payment method (required)
+   - Generate API key under **API Keys**
+
+3. **Set Environment Variable**:
+   ```bash
+   export PERPLEXITY_API_KEY="your_api_key_here"
+   ```
+
+
+## Package Installation
+
+To get started with the `Perplexity Search` integration in AG2, follow these steps:
+
+Install AG2 with `openai` since we use OpenAI's LLMs in our example:
+
+```bash
+pip install -U "ag2[openai]"
+```
+> **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+> ```bash
+> pip install -U "autogen[openai]"
+> ```
+> or
+> ```bash
+> pip install -U "pyautogen[openai]"
+> ```
+> as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+
+You're all set! Now you can start using Perplexity AI Search with AG2.
+
+## Implementation
+
+### Imports
+
+```python
+import os
+import autogen
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from autogen.tools.experimental import PerplexitySearchTool
+```
+
+
+### Agent Configuration
+
+Configure an assistant agent and user proxy to be used for LLM recommendation and execution respectively.
+
+```python
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER"
+)
+
+```
+
+### Tool Setup
+
+```python
+perplexity_search_tool = PerplexitySearchTool(
+    api_key=os.getenv("PERPLEXITY_API_KEY"),
+    max_tokens=1000
+)
+
+# Register the tool for LLM recommendation and execution.
+perplexity_search_tool.register_for_llm(assistant)
+perplexity_search_tool.register_for_execution(user_proxy)
+```
+
+### Usage Example
+
+With the setup complete, you can now use the assistant to fetch live web search results.
+
+```python
+response = user_proxy.initiate_chat(
+    recipient=assistant,
+    message="What is AG2?",
+    max_turns=2,
+)
+````
+
+### Output
+
+```console
+user_proxy (to assistant):
+
+What is AG2?
+
+--------------------------------------------------------------------------------
+assistant (to user_proxy):
+
+***** Suggested tool call (call_kOW9AP9YmrCJbxhnnqiNjXVz): perplexity-search *****
+Arguments:
+{"query":"What is AG2?"}
+**********************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION perplexity-search...
+Call ID: call_kOW9AP9YmrCJbxhnnqiNjXVz
+Input arguments: {'query': 'What is AG2?'}
+user_proxy (to assistant):
+
+***** Response from calling tool (call_kOW9AP9YmrCJbxhnnqiNjXVz) *****
+{"content":"AG2 is an open-source framework for building AI-powered agents, originally a community-driven fork of the AutoGen project. It is led by Dr. Chi Wang of Google DeepMind and Dr. Qingyun Wu of Penn State University. AG2 focuses on **multi-agent systems**, enabling autonomous agents to collaborate and solve complex problems across various domains such as education, enterprise workflows, and healthcare[1][3][5]. It provides tools for enhanced Large Language Model (LLM) inference and optimization, facilitating the creation of diverse applications[3][4].","citations":["https://www.forwardfuture.ai/p/agents-in-action-the-rise-of-ag2-and-the-future-of-intelligent-agents","https://www.youtube.com/watch?v=UItthyY71UU","https://docs.ag2.ai/docs/home/home","https://ag2ai.github.io/ag2/latest/docs/home/home/","https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/develop/ag2","https://atmosphericg2.com/homepage/products/ag2data/","https://atmosphericg2.com/ag2trader/"]}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user_proxy):
+
+AG2 is an open-source framework for building AI-powered agents, initially a community-driven fork of the AutoGen project. It is led by researchers Dr. Chi Wang of Google DeepMind and Dr. Qingyun Wu of Penn State University. AG2 emphasizes **multi-agent systems**, allowing autonomous agents to collaborate and tackle complex problems in various fields, including education, enterprise workflows, and healthcare.
+
+The framework provides tools for improved Large Language Model (LLM) inference and optimization, facilitating the development of diverse applications.
+
+For more detailed information, you can explore the following resources:
+- [Forward Future Article](https://www.forwardfuture.ai/p/agents-in-action-the-rise-of-ag2-and-the-future-of-intelligent-agents)
+- [Official Documentation](https://docs.ag2.ai/docs/home/home)
+
+TERMINATE
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (2ab104c4-cfe6-4ce7-88e3-fb83b9623a7a): Maximum turns (2) reached
+
+Process finished with exit code 0
+````
+
+### Key Considerations
+
+#### Cost Management
+
+**Free Tier Limits**:
+- 100 daily queries included.
+- Monitor usage via [Perplexity Dashboard](https://www.perplexity.ai/settings/api).
+
+#### Performance Optimizations
+
+**Best Practices**:
+
+- Start with smaller response lengths by setting the `max_tokens` parameter.
+- Filter search domains with `search_domain_filter` parameter to restrict the search results to specific domains.
+```python
+optimized_tool = PerplexitySearchTool(
+    api_key=os.getenv("PERPLEXITY_API_KEY"),
+    max_tokens=1000,
+    search_domain_filter=["arxiv.org", "towardsdatascience.com"],
+)
+```

@@ -76,11 +76,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
         ]
-        if "max_tokens" in modified_kwargs:
-            modified_kwargs["config_list"] = [
-                {**v, "max_tokens": modified_kwargs["max_tokens"]} for v in modified_kwargs["config_list"]
-            ]
-            modified_kwargs.pop("max_tokens")
+        for x in ["max_tokens", "top_p"]:
+            if x in modified_kwargs:
+                modified_kwargs["config_list"] = [{**v, x: modified_kwargs[x]} for v in modified_kwargs["config_list"]]
+                modified_kwargs.pop(x)
 
         self._model = self._get_base_model_class()(**modified_kwargs)
 
@@ -113,7 +112,12 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     @classmethod
     def from_json(
-        cls, *, env: Optional[str] = None, path: Optional[Union[str, Path]] = None, **kwargs: Any
+        cls,
+        *,
+        env: Optional[str] = None,
+        path: Optional[Union[str, Path]] = None,
+        file_location: Optional[str] = None,
+        **kwargs: Any,
     ) -> "LLMConfig":
         from .oai.openai_utils import config_list_from_json
 
@@ -122,7 +126,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
         if env is not None and path is not None:
             raise ValueError("Only one of 'env' or 'path' can be provided")
 
-        config_list = config_list_from_json(env_or_file=env if env is not None else str(path))
+        config_list = config_list_from_json(
+            env_or_file=env if env is not None else str(path), file_location=file_location
+        )
         return LLMConfig(config_list=config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
