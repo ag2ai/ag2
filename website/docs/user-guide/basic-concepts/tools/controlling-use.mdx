@@ -31,11 +31,13 @@ This table outlines the tool calling features available to control tool calling.
 | OpenAI / Azure OpenAI | `tool_choice` | ✅ | ✅ | - |
 | Together AI | `tool_choice` | - | - | ✅ |
 
-<Warning>
-Using these parameters to force tool calling or no tool calling can make it difficult to have the agents perform different actions. For example, you may want your agent to call a tool and then do something else on their next turn, however, by using these parameters this can't be achieved unless you change the agent's LLM configuration before their next turn.
+### Warnings
 
-Additionally, in a Swarm the AfterWork will never be triggered if an agent always makes a tool call.
-</Warning>
+1. Using these parameters to force tool calling or no tool calling can make it difficult to have the agents perform different actions. For example, you may want your agent to call a tool and then do something else on their next turn, however, by using these parameters this can't be achieved unless you change the agent's LLM configuration before their next turn.
+
+2. Typically, using these parameters will force models to **not** output any other tokens besides the tool call and this may affect the models ability to do reasoning before the tool call.
+
+3. In a Swarm the AfterWork will never be triggered if an agent always makes a tool call.
 
 ### Anthropic
 
