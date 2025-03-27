@@ -376,6 +376,7 @@ class ReasoningAgent(AssistantAgent):
                 Beam Search specific:
                     beam_size (int): Number of parallel paths to maintain (default: 3)
                     answer_approach (str): How to select final answer, "pool" or "best" (default: "pool")
+                    batch_grading(bool): Whether to grade all options at once or one by one (default: False).
 
                 MCTS/LATS specific:
                     nsim (int): Number of simulations to run (default: 3)
@@ -442,6 +443,7 @@ class ReasoningAgent(AssistantAgent):
                 raise ValueError(
                     f"Invalid answer_approach specified: '{self._answer_approach}'. Should be one of 'pool' or 'best'."
                 )
+            self._batch_grading: bool = reason_config.get("batch_grading", False)
         elif self._method in ["mcts", "lats"]:
             self._nsim: int = reason_config.get("nsim", 3)
             self._exploration_constant: float = reason_config.get("exploration_constant", 1.41)
@@ -641,6 +643,90 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
+    def rate_batch_nodes(self, nodes: list[ThinkNode], ground_truth: Optional[str] = None) -> list[float]:
+        """Rate a batch of nodes using a single call of the grader agent.
+
+        This method evaluates all given nodes while considering the other available options.
+
+        Args:
+            nodes (list[ThinkNode]): List of nodes to rate
+            ground_truth (Optional[str]): Optional ground truth to provide to the grader
+        """
+        # Update Grader's system message
+        message = f"""Please rate the provided options for the given thinking trajectory on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
+
+A great thinking option must:
+- Advance the process of solving the problem.
+
+Additionally, a good option should:
+- Be appropriate in conversation.
+- Contain no inaccuracies.
+- Be free of any odd or irrelevant content.
+
+If the option does not meet one of the above requirements, it is considered a bad response.
+
+Also, rate poory (with 1) options that:
+- Require access to internet, experts opinions or external sources.
+- Require research, hypotheses or data that are not provided.
+- Include solutions in the physical world, like conducting experiments or surveys (code execution is fine).
+
+Please provide your rating along with a brief explanation of your assessment.
+
+**Output Format:**
+Option 1: <explanation>
+Rating: <rating>
+
+Option 2: <explanation>
+Rating: <rating>
+...
+"""
+        # Add ground truth to the message.
+        if ground_truth:
+            # override the system message
+            message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
+        self._grader.update_system_message(message)
+
+        # add lats context if necessary
+        prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
+
+        # add current trajectory
+        prompt = f"Trajectory:\n{nodes[0].parent.trajectory}"
+
+        # add options
+        for i, node in enumerate(nodes):
+            prompt += f"\nOption {i + 1}:\n{node.content}"
+
+        self._grader.clear_history()
+        self.send(
+            message=prompt,
+            recipient=self._grader,
+            request_reply=True,
+            silent=self.silent,
+        )
+        rating: str = ""
+        last_message: Optional[dict[str, Any]] = self._grader.last_message()
+        if last_message is not None:
+            rating = last_message["content"].strip()
+
+        # Extract ratings and details for each option
+        options_with_ratings = re.findall(r"(Option \d+:.*?Rating:\s*[\d.]+)", rating, re.DOTALL)
+        ratings = [re.search(r"Rating:\s*([\d.]+)", option).group(1) for option in options_with_ratings]
+
+        # if the response wasn't of the expected format, return default rewards
+        if len(ratings) != len(nodes):
+            return [0.0] * len(nodes)
+
+        rewards = []
+        # Get rewards and assign rating details to corresponding nodes
+        for node, rating, details in zip(nodes, ratings, options_with_ratings):
+            if node.value > 0 and node.rating_details:
+                # we already calculated the rating for the node
+                rewards.append(node.value)
+                continue
+            node.rating_details = details
+            rewards.append((float(rating) - 1.0) / (self._rating_scale - 1.0))
+        return rewards
+
     def execute_node(self, node: ThinkNode) -> Optional[str]:
         """Execute the node's content to get the response.
 
@@ -810,8 +896,13 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     break
 
                 # Rate
-                for node in prev_leafs:
-                    node.value = self.rate_node(node, ground_truth)
+                if self._batch_grading:
+                    rewards = self.rate_batch_nodes(prev_leafs, ground_truth)
+                    for node, reward in zip(prev_leafs, rewards):
+                        node.value = reward
+                else:
+                    for node in prev_leafs:
+                        node.value = self.rate_node(node, ground_truth)
                 # Beam search: keep top beam_size leaf nodes
                 prev_leafs = sorted(prev_leafs, key=lambda x: x.value if x.value else 0, reverse=True)[
                     : self._beam_size - len(final_answers)
