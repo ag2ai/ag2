@@ -31,6 +31,12 @@ This table outlines the tool calling features available to control tool calling.
 | OpenAI / Azure OpenAI | `tool_choice` | ✅ | ✅ | - |
 | Together AI | `tool_choice` | - | - | ✅ |
 
+<Warning>
+Using these parameters to force tool calling or no tool calling can make it difficult to have the agents perform different actions. For example, you may want your agent to call a tool and then do something else on their next turn, however, by using these parameters this can't be achieved unless you change the agent's LLM configuration before their next turn.
+
+Additionally, in a Swarm the AfterWork will never be triggered if an agent always makes a tool call.
+</Warning>
+
 ### Anthropic
 
 Anthropic supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
