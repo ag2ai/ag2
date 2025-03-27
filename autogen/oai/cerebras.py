@@ -28,7 +28,7 @@ import math
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import Field, ValidationInfo, field_validator
 
@@ -45,6 +45,9 @@ CEREBRAS_PRICING_1K = {
     "llama3.1-8b": (0.10 / 1000, 0.10 / 1000),
     "llama-3.3-70b": (0.85 / 1000, 1.20 / 1000),
 }
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 @register_llm_config
@@ -266,7 +269,7 @@ class CerebrasClient:
         return response_oai
 
 
-def oai_messages_to_cerebras_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_cerebras_messages(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Cerebras's format.
     We correct for any specific role orders and types.
     """

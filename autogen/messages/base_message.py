@@ -16,6 +16,7 @@ PetType = TypeVar("PetType", bound=Literal["cat", "dog"])
 __all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_message"]
 
 
+# @deprecated_by(BaseEvent)
 @export_module("autogen.messages")
 class BaseMessage(BaseModel, ABC):
     uuid: UUID

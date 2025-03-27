@@ -51,7 +51,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Type, Union
 
 import requests
 from packaging import version
@@ -95,6 +95,10 @@ with optional_import_block():
     from vertexai.generative_models import (
         Tool as vaiTool,
     )
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
+
 
 logger = logging.getLogger(__name__)
 
@@ -534,7 +538,7 @@ class GeminiClient:
 
         return concatenated_parts
 
-    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _oai_messages_to_gemini_messages(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Convert messages from OAI format to Gemini format.
         Make sure the "user" role and "model" role are interleaved.
         Also, make sure the last item is from the "user" role.

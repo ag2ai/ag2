@@ -11,37 +11,42 @@ import random
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
 
-from ..code_utils import content_str
-from ..doc_utils import export_module
-from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
-from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
-from ..io.base import IOStream
-from ..llm_config import LLMConfig
-from ..messages.agent_messages import (
-    ClearAgentsHistoryMessage,
-    GroupChatResumeMessage,
-    GroupChatRunChatMessage,
-    SelectSpeakerInvalidInputMessage,
-    SelectSpeakerMessage,
-    SelectSpeakerTryCountExceededMessage,
-    SpeakerAttemptFailedMultipleAgentsMessage,
-    SpeakerAttemptFailedNoAgentsMessage,
-    SpeakerAttemptSuccessfulMessage,
-    TerminationMessage,
+from ...code_utils import content_str
+from ...doc_utils import export_module
+from ...events.agent_events import (
+    ClearAgentsHistoryEvent,
+    GroupChatResumeEvent,
+    GroupChatRunChatEvent,
+    SelectSpeakerEvent,
+    SelectSpeakerInvalidInputEvent,
+    SelectSpeakerTryCountExceededEvent,
+    SpeakerAttemptFailedMultipleAgentsEvent,
+    SpeakerAttemptFailedNoAgentsEvent,
+    SpeakerAttemptSuccessfulEvent,
+    TerminationEvent,
 )
-from ..oai.client import ModelClient
-from ..runtime_logging import log_new_agent, logging_enabled
-from .agent import Agent
-from .contrib.capabilities import transform_messages
-from .conversable_agent import ConversableAgent
+from ...exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
+from ...graph_utils import check_graph_validity, invert_disallowed_to_allowed
+from ...io.base import IOStream
+from ...oai.client import ModelClient
+from ...runtime_logging import log_new_agent, logging_enabled
+from ..agent import Agent, LLMMessageType
+from ..contrib.capabilities import transform_messages
+from ..conversable_agent import ConversableAgent
+
+if TYPE_CHECKING:
+    from ...run_patterns.run_pattern import RunPatternProtocol
 
 logger = logging.getLogger(__name__)
 
 SELECT_SPEAKER_PROMPT_TEMPLATE = (
     "Read the above conversation. Then select the next role from {agentlist} to play. Only return the role."
 )
+
+if TYPE_CHECKING:
+    from ... import LLMConfig
 
 
 @dataclass
@@ -129,8 +134,8 @@ class GroupChat:
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
     """
 
-    agents: list[Agent]
-    messages: list[dict[str, Any]] = field(default_factory=list)
+    agents: Sequence[Agent]
+    messages: list["LLMMessageType"] = field(default_factory=list)
     max_round: int = 10
     admin_name: str = "Admin"
     func_call_filter: bool = True
@@ -162,7 +167,7 @@ class GroupChat:
     select_speaker_transform_messages: Optional[transform_messages.TransformMessages] = None
     select_speaker_auto_verbose: Optional[bool] = False
     select_speaker_auto_model_client_cls: Optional[Union[ModelClient, list[ModelClient]]] = None
-    select_speaker_auto_llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None
+    select_speaker_auto_llm_config: Optional[Union["LLMConfig", dict[str, Any], Literal[False]]] = None
     role_for_select_speaker_messages: Optional[str] = "system"
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
@@ -405,14 +410,14 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        iostream.send(SelectSpeakerMessage(agents=agents))
+        iostream.send(SelectSpeakerEvent(agents=agents))
 
         try_count = 0
         # Assume the user will enter a valid number within 3 tries, otherwise use auto selection to avoid blocking.
         while try_count <= 3:
             try_count += 1
             if try_count >= 3:
-                iostream.send(SelectSpeakerTryCountExceededMessage(try_count=try_count, agents=agents))
+                iostream.send(SelectSpeakerTryCountExceededEvent(try_count=try_count, agents=agents))
                 break
             try:
                 i = iostream.input(
@@ -426,7 +431,7 @@ class GroupChat:
                 else:
                     raise ValueError
             except ValueError:
-                iostream.send(SelectSpeakerInvalidInputMessage(agents=agents))
+                iostream.send(SelectSpeakerInvalidInputEvent(agents=agents))
         return None
 
     def random_select_speaker(self, agents: Optional[list[Agent]] = None) -> Union[Agent, None]:
@@ -477,19 +482,20 @@ class GroupChat:
         )
 
         agents = self.agents
-        n_agents = len(agents)
+        # TODO: Is this check necessary?
+        # n_agents = len(agents)
         # Warn if GroupChat is underpopulated
-        if n_agents < 2:
-            raise ValueError(
-                f"GroupChat is underpopulated with {n_agents} agents. "
-                "Please add more agents to the GroupChat or use direct communication instead."
-            )
-        elif n_agents == 2 and speaker_selection_method.lower() != "round_robin" and allow_repeat_speaker:
-            logger.warning(
-                f"GroupChat is underpopulated with {n_agents} agents. "
-                "Consider setting speaker_selection_method to 'round_robin' or allow_repeat_speaker to False, "
-                "or use direct communication, unless repeated speaker is desired."
-            )
+        # if n_agents < 2:
+        #     raise ValueError(
+        #         f"GroupChat is underpopulated with {n_agents} agents. "
+        #         "Please add more agents to the GroupChat or use direct communication instead."
+        #     )
+        # elif n_agents == 2 and speaker_selection_method.lower() != "round_robin" and allow_repeat_speaker:
+        #     logger.warning(
+        #         f"GroupChat is underpopulated with {n_agents} agents. "
+        #         "Consider setting speaker_selection_method to 'round_robin' or allow_repeat_speaker to False, "
+        #         "or use direct communication, unless repeated speaker is desired."
+        #     )
 
         if (
             self.func_call_filter
@@ -691,7 +697,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -776,7 +782,7 @@ class GroupChat:
         self,
         last_speaker: Agent,
         selector: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: Optional[list["LLMMessageType"]],
         agents: Optional[list[Agent]],
     ) -> Agent:
         """(Asynchronous) Selects next speaker for the "auto" speaker selection method. Utilises its own two-agent chat to determine the next speaker and supports requerying.
@@ -875,7 +881,7 @@ class GroupChat:
             if no_of_mentions == 1:
                 # Success on retry, we have just one name mentioned
                 iostream.send(
-                    SpeakerAttemptSuccessfulMessage(
+                    SpeakerAttemptSuccessfulEvent(
                         mentions=mentions,
                         attempt=attempt,
                         attempts_left=attempts_left,
@@ -884,7 +890,7 @@ class GroupChat:
                 )
             elif no_of_mentions == 1:
                 iostream.send(
-                    SpeakerAttemptFailedMultipleAgentsMessage(
+                    SpeakerAttemptFailedMultipleAgentsEvent(
                         mentions=mentions,
                         attempt=attempt,
                         attempts_left=attempts_left,
@@ -893,7 +899,7 @@ class GroupChat:
                 )
             else:
                 iostream.send(
-                    SpeakerAttemptFailedNoAgentsMessage(
+                    SpeakerAttemptFailedNoAgentsEvent(
                         mentions=mentions,
                         attempt=attempt,
                         attempts_left=attempts_left,
@@ -1024,19 +1030,46 @@ class GroupChat:
         return mentions
 
 
-@export_module("autogen")
+@export_module("autogen.run_patterns")
 class GroupChatManager(ConversableAgent):
     """(In preview) A chat manager agent that can manage a group chat of multiple agents."""
 
     def __init__(
         self,
-        groupchat: GroupChat,
+        groupchat: Optional[GroupChat] = None,
         name: Optional[str] = "chat_manager",
         # unlimited consecutive auto reply by default
         max_consecutive_auto_reply: Optional[int] = sys.maxsize,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
         system_message: Optional[Union[str, list]] = "Group chat manager.",
         silent: bool = False,
+        select_speaker_message_template: str = """You are in a role play game. The following roles are available:
+            {roles}.
+            Read the following conversation.
+            Then select the next role from {agentlist} to play. Only return the role.""",
+        select_speaker_prompt_template: str = SELECT_SPEAKER_PROMPT_TEMPLATE,
+        select_speaker_auto_multiple_template: str = """You provided more than one name in your text, please return just the name of the next speaker. To determine the speaker use these prioritised rules:
+        1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
+        2. If it refers to the "next" speaker name, choose that name
+        3. Otherwise, choose the first provided speaker's name in the context
+        The names are case-sensitive and should not be abbreviated or changed.
+        Respond with ONLY the name of the speaker and DO NOT provide a reason.""",
+        select_speaker_auto_none_template: str = """You didn't choose a speaker. As a reminder, to determine the speaker use these prioritised rules:
+        1. If the context refers to themselves as a speaker e.g. "As the..." , choose that speaker's name
+        2. If it refers to the "next" speaker name, choose that name
+        3. Otherwise, choose the first provided speaker's name in the context
+        The names are case-sensitive and should not be abbreviated or changed.
+        The only names that are accepted are {agentlist}.
+        Respond with ONLY the name of the speaker and DO NOT provide a reason.""",
+        func_call_filter: bool = True,
+        max_retries_for_selecting_speaker: int = 2,
+        allow_repeat_speaker: Optional[Union[bool, list[Agent]]] = None,
+        allowed_or_disallowed_speaker_transitions: Optional[dict[str, Any]] = None,
+        speaker_transitions_type: Literal["allowed", "disallowed", None] = None,
+        enable_clear_history: bool = False,
+        send_introductions: bool = False,
+        select_speaker_transform_messages: Optional[transform_messages.TransformMessages] = None,
+        select_speaker_auto_model_client_cls: Optional[Union[ModelClient, list[ModelClient]]] = None,
         **kwargs: Any,
     ):
         if (
@@ -1057,11 +1090,30 @@ class GroupChatManager(ConversableAgent):
         )
         if logging_enabled():
             log_new_agent(self, locals())
-        # Store groupchat
-        self._groupchat = groupchat
 
         self._last_speaker = None
         self._silent = silent
+        self._groupchat = None
+        self._select_speaker_message_template = select_speaker_message_template
+        self._select_speaker_prompt_template = select_speaker_prompt_template
+        self._select_speaker_auto_multiple_template = select_speaker_auto_multiple_template
+        self._select_speaker_auto_none_template = select_speaker_auto_none_template
+        self._func_call_filter = func_call_filter
+        self._max_retries_for_selecting_speaker = max_retries_for_selecting_speaker
+        self._allow_repeat_speaker = allow_repeat_speaker
+        self._allowed_or_disallowed_speaker_transitions = allowed_or_disallowed_speaker_transitions
+        self._speaker_transitions_type = speaker_transitions_type
+        self._enable_clear_history = enable_clear_history
+        self._send_introductions = send_introductions
+        self._select_speaker_transforms = select_speaker_transform_messages
+        self._select_speaker_auto_model_client_cls = select_speaker_auto_model_client_cls
+
+        if groupchat is not None:
+            self.initialize_groupchat(groupchat)
+
+    def initialize_groupchat(self, groupchat: GroupChat) -> None:
+        """Initialize a group chat manager with a group chat."""
+        self._groupchat = groupchat
 
         # Order of register_reply is important.
         # Allow sync chat if initiated using initiate_chat
@@ -1078,6 +1130,10 @@ class GroupChatManager(ConversableAgent):
     @property
     def groupchat(self) -> GroupChat:
         """Returns the group chat managed by the group chat manager."""
+        if not self._groupchat:
+            raise ValueError(
+                "GroupChat has not been initialized. Please class initialize_groupchat with a GroupChat object."
+            )
         return self._groupchat
 
     def chat_messages_for_summary(self, agent: Agent) -> list[dict[str, Any]]:
@@ -1145,7 +1201,7 @@ class GroupChatManager(ConversableAgent):
 
     def run_chat(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ) -> tuple[bool, Optional[str]]:
@@ -1193,7 +1249,7 @@ class GroupChatManager(ConversableAgent):
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
-                    iostream.send(GroupChatRunChatMessage(speaker=speaker, silent=silent))
+                    iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
                 # let the speaker speak
                 reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
@@ -1233,13 +1289,13 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationMessage(termination_reason=termination_reason))
+            iostream.send(TerminationEvent(termination_reason=termination_reason))
 
         return True, None
 
     async def a_run_chat(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[GroupChat] = None,
     ):
@@ -1316,7 +1372,7 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationMessage(termination_reason=termination_reason))
+            iostream.send(TerminationEvent(termination_reason=termination_reason))
 
         return True, None
 
@@ -1416,7 +1472,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
+            iostream.send(GroupChatResumeEvent(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
@@ -1519,14 +1575,14 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.send(GroupChatResumeMessage(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
+            iostream.send(GroupChatResumeEvent(last_speaker_name=last_speaker_name, messages=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False
 
         return previous_last_agent, last_message
 
-    def _valid_resume_messages(self, messages: list[dict[str, Any]]):
+    def _valid_resume_messages(self, messages: list["LLMMessageType"]):
         """Validates the messages used for resuming
 
         Args:
@@ -1551,7 +1607,7 @@ class GroupChatManager(ConversableAgent):
                 raise Exception(f"Agent name in message doesn't exist as agent in group chat: {message['name']}")
 
     def _process_resume_termination(
-        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list[dict[str, Any]]
+        self, remove_termination_string: Union[str, Callable[[str], str]], messages: list["LLMMessageType"]
     ):
         """Removes termination string, if required, and checks if termination may occur.
 
@@ -1598,7 +1654,7 @@ class GroupChatManager(ConversableAgent):
 
         return state
 
-    def messages_to_string(self, messages: list[dict[str, Any]]) -> str:
+    def messages_to_string(self, messages: list["LLMMessageType"]) -> str:
         """Converts the provided messages into a Json string that can be used for resuming the chat.
         The state is made up of a list of messages
 
@@ -1669,7 +1725,7 @@ class GroupChatManager(ConversableAgent):
             )
         # clear history
         iostream.send(
-            ClearAgentsHistoryMessage(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
+            ClearAgentsHistoryEvent(agent=agent_to_memory_clear, nr_messages_to_preserve=nr_messages_to_preserve)
         )
         if agent_to_memory_clear:
             agent_to_memory_clear.clear_history(nr_messages_to_preserve=nr_messages_to_preserve)
@@ -1691,3 +1747,9 @@ class GroupChatManager(ConversableAgent):
         reply_content = " ".join(words[:clear_word_index] + words[clear_word_index + skip_words_number :])
 
         return reply_content
+
+
+if TYPE_CHECKING:
+
+    def check_group_chat_manager_implements_chat_manager_protocol(x: GroupChatManager) -> RunPatternProtocol:
+        return x

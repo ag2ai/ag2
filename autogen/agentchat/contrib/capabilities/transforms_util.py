@@ -5,12 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from .... import token_count_utils
 from ....cache.abstract_cache_base import AbstractCache
 from ....oai.openai_utils import filter_config
 from ....types import MessageContentType
+
+if TYPE_CHECKING:
+    from .... import LLMMessageType
 
 
 def cache_key(content: MessageContentType, *args: Hashable) -> str:
@@ -51,7 +54,7 @@ def cache_content_set(cache: Optional[AbstractCache], key: str, content: Message
         cache.set(key, cache_value)
 
 
-def min_tokens_reached(messages: list[dict[str, Any]], min_tokens: Optional[int]) -> bool:
+def min_tokens_reached(messages: list["LLMMessageType"], min_tokens: Optional[int]) -> bool:
     """Returns True if the total number of tokens in the messages is greater than or equal to the specified value.
 
     Args:

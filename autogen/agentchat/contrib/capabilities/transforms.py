@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import sys
-from typing import Any, Optional, Protocol, Union
+from typing import TYPE_CHECKING, Any, Optional, Protocol, Union
 
 import tiktoken
 from termcolor import colored
@@ -17,6 +17,9 @@ from ....types import MessageContentType
 from . import transforms_util
 from .text_compressors import LLMLingua, TextCompressor
 
+if TYPE_CHECKING:
+    from ... import LLMMessageType
+
 
 class MessageTransform(Protocol):
     """Defines a contract for message transformation.
@@ -25,7 +28,7 @@ class MessageTransform(Protocol):
     that takes a list of messages and returns the transformed list.
     """
 
-    def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply_transform(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Applies a transformation to a list of messages.
 
         Args:
@@ -37,7 +40,7 @@ class MessageTransform(Protocol):
         ...
 
     def get_logs(
-        self, pre_transform_messages: list[dict[str, Any]], post_transform_messages: list[dict[str, Any]]
+        self, pre_transform_messages: list["LLMMessageType"], post_transform_messages: list["LLMMessageType"]
     ) -> tuple[str, bool]:
         """Creates the string including the logs of the transformation
 
@@ -70,7 +73,7 @@ class MessageHistoryLimiter:
         self._max_messages = max_messages
         self._keep_first_message = keep_first_message
 
-    def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply_transform(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Truncates the conversation history to the specified maximum number of messages.
 
         This method returns a new list containing the most recent messages up to the specified
@@ -110,7 +113,7 @@ class MessageHistoryLimiter:
         return truncated_messages
 
     def get_logs(
-        self, pre_transform_messages: list[dict[str, Any]], post_transform_messages: list[dict[str, Any]]
+        self, pre_transform_messages: list["LLMMessageType"], post_transform_messages: list["LLMMessageType"]
     ) -> tuple[str, bool]:
         pre_transform_messages_len = len(pre_transform_messages)
         post_transform_messages_len = len(post_transform_messages)
@@ -185,7 +188,7 @@ class MessageTokenLimiter:
         self._filter_dict = filter_dict
         self._exclude_filter = exclude_filter
 
-    def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply_transform(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Applies token truncation to the conversation history.
 
         Args:
@@ -238,7 +241,7 @@ class MessageTokenLimiter:
         return processed_messages
 
     def get_logs(
-        self, pre_transform_messages: list[dict[str, Any]], post_transform_messages: list[dict[str, Any]]
+        self, pre_transform_messages: list["LLMMessageType"], post_transform_messages: list["LLMMessageType"]
     ) -> tuple[str, bool]:
         pre_transform_messages_tokens = sum(
             transforms_util.count_text_tokens(msg["content"]) for msg in pre_transform_messages if "content" in msg
@@ -363,7 +366,7 @@ class TextMessageCompressor:
         # Optimizing savings calculations to optimize log generation
         self._recent_tokens_savings = 0
 
-    def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply_transform(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Applies compression to messages in a conversation history based on the specified configuration.
 
         The function processes each message according to the `compression_args` and `min_tokens` settings, applying
@@ -414,7 +417,7 @@ class TextMessageCompressor:
         return processed_messages
 
     def get_logs(
-        self, pre_transform_messages: list[dict[str, Any]], post_transform_messages: list[dict[str, Any]]
+        self, pre_transform_messages: list["LLMMessageType"], post_transform_messages: list["LLMMessageType"]
     ) -> tuple[str, bool]:
         if self._recent_tokens_savings > 0:
             return f"{self._recent_tokens_savings} tokens saved with text compression.", True
@@ -509,7 +512,7 @@ class TextMessageContentName:
         # Track the number of messages changed for logging
         self._messages_changed = 0
 
-    def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply_transform(self, messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
         """Applies the name change to the message based on the position and format string.
 
         Args:
@@ -558,7 +561,7 @@ class TextMessageContentName:
         return processed_messages
 
     def get_logs(
-        self, pre_transform_messages: list[dict[str, Any]], post_transform_messages: list[dict[str, Any]]
+        self, pre_transform_messages: list["LLMMessageType"], post_transform_messages: list["LLMMessageType"]
     ) -> tuple[str, bool]:
         if self._messages_changed > 0:
             return f"{self._messages_changed} message(s) changed to incorporate name.", True

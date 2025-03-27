@@ -10,7 +10,7 @@ import traceback
 from contextlib import suppress
 from typing import Any, Callable, Literal, Optional, Union
 
-from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
+from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, LLMMessageType, OpenAIWrapper
 from ...llm_config import LLMConfig
 
 
@@ -158,7 +158,7 @@ class SocietyOfMindAgent(ConversableAgent):
 
     def generate_inner_monologue_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: Optional[list["LLMMessageType"]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:

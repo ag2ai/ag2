@@ -28,7 +28,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -41,6 +41,9 @@ with optional_import_block():
     import ollama
     from fix_busted_json import repair_json
     from ollama import Client
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 @register_llm_config
@@ -397,7 +400,7 @@ class OllamaClient:
 
         return response_oai
 
-    def oai_messages_to_ollama_messages(self, messages: list[dict[str, Any]], tools: list) -> list[dict[str, Any]]:
+    def oai_messages_to_ollama_messages(self, messages: list["LLMMessageType"], tools: list) -> list[dict[str, Any]]:
         """Convert messages from OAI format to Ollama's format.
         We correct for any specific role orders and types, and convert tools to messages (as Ollama can't use tool messages)
         """

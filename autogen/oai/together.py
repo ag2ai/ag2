@@ -33,7 +33,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import Field
 
@@ -44,6 +44,9 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 
 with optional_import_block():
     from together import Together
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 
 @register_llm_config
@@ -237,7 +240,7 @@ class TogetherClient:
         return response_oai
 
 
-def oai_messages_to_together_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_together_messages(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Together.AI format.
     We correct for any specific role orders and types.
     """

@@ -27,7 +27,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
@@ -38,6 +38,9 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 
 with optional_import_block():
     from groq import Groq, Stream
+
+if TYPE_CHECKING:
+    from .. import LLMMessageType
 
 # Cost per thousand tokens - Input / Output (NOTE: Convert $/Million to $/K)
 GROQ_PRICING_1K = {
@@ -271,7 +274,7 @@ class GroqClient:
         return response_oai
 
 
-def oai_messages_to_groq_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def oai_messages_to_groq_messages(messages: list["LLMMessageType"]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Groq's format.
     We correct for any specific role orders and types.
     """
