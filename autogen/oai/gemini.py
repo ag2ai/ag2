@@ -112,7 +112,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    tool_config: Optional[ToolConfig] = None
+    tool_config: Optional["ToolConfig"] = None
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
