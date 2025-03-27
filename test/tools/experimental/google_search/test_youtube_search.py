@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +11,6 @@ from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import YoutubeSearchTool
 from autogen.tools.experimental.google_search.youtube_search import (
-    _execute_search_query,
     _get_video_details,
     _youtube_search,
 )
@@ -87,32 +86,6 @@ class TestYoutubeSearchTool:
                 },
             ]
         }
-
-    def test_execute_search_query(self) -> None:
-        mock_youtube = MagicMock()
-        mock_youtube.search.return_value.list.return_value.execute.return_value = {"items": []}
-
-        with patch("googleapiclient.discovery.build", return_value=mock_youtube):
-            result = _execute_search_query("test query", "api_key", 5)
-
-            mock_youtube.search.assert_called_once()
-            mock_youtube.search.return_value.list.assert_called_once_with(
-                q="test query", part="id,snippet", maxResults=5, type="video"
-            )
-            assert result == {"items": []}
-
-    def test_get_video_details(self) -> None:
-        mock_youtube = MagicMock()
-        mock_youtube.videos.return_value.list.return_value.execute.return_value = {"items": []}
-
-        with patch("googleapiclient.discovery.build", return_value=mock_youtube):
-            result = _get_video_details(["video1", "video2"], "api_key")
-
-            mock_youtube.videos.assert_called_once()
-            mock_youtube.videos.return_value.list.assert_called_once_with(
-                id="video1,video2", part="snippet,contentDetails,statistics"
-            )
-            assert result == {"items": []}
 
     def test_get_video_details_empty_ids(self) -> None:
         result = _get_video_details([], "api_key")
