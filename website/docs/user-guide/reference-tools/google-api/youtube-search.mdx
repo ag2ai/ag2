@@ -1,0 +1,189 @@
+---
+title: YouTube Search Tool
+---
+
+The YouTube Search integration in AG2 allows users to search for YouTube videos and retrieve video details directly within the AG2 framework. This is useful for extracting valuable information from video content, staying updated with the latest tutorials, reviews, and educational materials.
+
+## Installation
+
+To get started with the `YouTube Search` integration in AG2, follow these steps:
+
+Install AG2 with the `google-search` extra, which includes the necessary dependencies for YouTube search.
+Since our examples also use `openai`, install it as well:
+
+```bash
+pip install -U ag2[openai,google-search]
+```
+> **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+> ```bash
+> pip install -U autogen[openai,google-search]
+> ```
+> or
+> ```bash
+> pip install -U pyautogen[openai,google-search]
+> ```
+> as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+You're all set! Now you can start using YouTube Search with AG2.
+
+## Imports
+
+```python
+import os
+
+import autogen
+from autogen import AssistantAgent, LLMConfig
+from autogen.tools.experimental import YoutubeSearchTool
+```
+
+## Setup YouTube Data API
+
+Before using the YouTube Search tool, you need to set up a YouTube Data API key:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to **APIs & Services > Library**
+4. Search for **YouTube Data API v3** and enable it
+5. Go to **APIs & Services > Credentials**
+6. Click on **Create Credentials > API key** and copy your API key
+7. Set the API key as an environment variable:
+
+```bash
+export YOUTUBE_API_KEY="your_api_key"
+```
+
+## Agent Configuration
+
+```python
+llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model=["gpt-4o-mini"])
+
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
+```
+
+## YoutubeSearchTool Initialization
+
+Create a [`YoutubeSearchTool`](/docs/api-reference/autogen/tools/experimental/YoutubeSearchTool) with your YouTube API key.
+
+```python
+youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+
+assert youtube_api_key is not None, "Please set YOUTUBE_API_KEY environment variable"
+
+youtube_tool = YoutubeSearchTool(
+    youtube_api_key=youtube_api_key,
+)
+# Register the tool with the assistant
+youtube_tool.register_for_llm(assistant)
+```
+
+## Basic YouTube Search
+
+Let's start with a basic search to find YouTube videos on a particular topic.
+
+```python
+assistant.run(
+    message="Find the latest YouTube videos on large language models. List the titles and provide brief summaries.",
+    tools=assistant.tools,
+    max_turns=2,
+    user_input=False,
+)
+```
+
+### Output
+```console
+# AG2 output will be added here manually
+user (to assistant):
+
+Find the latest YouTube videos on large language models. List the titles and provide brief summaries.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_P52uj5K2QuKtHi9t6dcMzZxv): youtube_search *****
+Arguments:
+{"query":"large language models","max_results":5,"include_video_details":true}
+*******************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION youtube_search...
+Call ID: call_P52uj5K2QuKtHi9t6dcMzZxv
+Input arguments: {'query': 'large language models', 'max_results': 5, 'include_video_details': True}
+user (to assistant):
+
+***** Response from calling tool (call_P52uj5K2QuKtHi9t6dcMzZxv) *****
+[{'title': 'Large Language Models explained briefly', 'description': 'Dig deeper here: https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi Technical details as a talk: ...', 'publishedAt': '2024-11-20T15:07:15Z', 'channelTitle': '3Blue1Brown', 'videoId': 'LPZh9BOjkQs', 'url': 'https://www.youtube.com/watch?v=LPZh9BOjkQs', 'viewCount': '1987657', 'likeCount': '78393', 'commentCount': '1299', 'duration': 'PT7M58S', 'definition': 'hd'}, {'title': 'How Large Language Models Work', 'description': 'Learn in-demand Machine Learning skills now → https://ibm.biz/BdK65D Learn about watsonx → https://ibm.biz/BdvxRj Large ...', 'publishedAt': '2023-07-28T13:13:59Z', 'channelTitle': 'IBM Technology', 'videoId': '5sLYAQS9sWQ', 'url': 'https://www.youtube.com/watch?v=5sLYAQS9sWQ', 'viewCount': '868455', 'likeCount': '13446', 'commentCount': '268', 'duration': 'PT5M34S', 'definition': 'hd'}, {'title': 'What are Large Language Models (LLMs)?', 'description': 'Learn about Large Language Models (LLMs), a powerful neural network that enables computers to process and generate ...', 'publishedAt': '2023-05-05T23:00:18Z', 'channelTitle': 'Google for Developers', 'videoId': 'iR2O2GPbB0E', 'url': 'https://www.youtube.com/watch?v=iR2O2GPbB0E', 'viewCount': '314003', 'likeCount': '5439', 'commentCount': '105', 'duration': 'PT5M30S', 'definition': 'hd'}, {'title': 'Introduction to large language models', 'description': 'Enroll in this course on Google Cloud Skills Boost → https://goo.gle/3nXSmLs Large Language Models (LLMs) and Generative AI ...', 'publishedAt': '2023-05-08T23:14:24Z', 'channelTitle': 'Google Cloud Tech', 'videoId': 'zizonToFXDs', 'url': 'https://www.youtube.com/watch?v=zizonToFXDs', 'viewCount': '795943', 'likeCount': '11355', 'commentCount': '128', 'duration': 'PT15M46S', 'definition': 'hd'}, {'title': '[1hr Talk] Intro to Large Language Models', 'description': 'This is a 1 hour general-audience introduction to Large Language Models: the core technical component behind systems like ...', 'publishedAt': '2023-11-23T02:27:48Z', 'channelTitle': 'Andrej Karpathy', 'videoId': 'zjkBMFhNj_g', 'url': 'https://www.youtube.com/watch?v=zjkBMFhNj_g', 'viewCount': '2641973', 'likeCount': '78024', 'commentCount': '4760', 'duration': 'PT59M48S', 'definition': 'hd'}]
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+Here are the latest YouTube videos on large language models, including their titles and brief summaries:
+
+1. **[Large Language Models explained briefly](https://www.youtube.com/watch?v=LPZh9BOjkQs)**
+   - **Published on:** November 20, 2024
+   - **Channel:** 3Blue1Brown
+   - **Description:** A brief overview of large language models with technical details and additional resources.
+   - **Views:** 1,987,657 | **Likes:** 78,393 | **Comments:** 1,299
+   - **Duration:** 7 minutes 58 seconds
+
+2. **[How Large Language Models Work](https://www.youtube.com/watch?v=5sLYAQS9sWQ)**
+   - **Published on:** July 28, 2023
+   - **Channel:** IBM Technology
+   - **Description:** An informative video explaining the workings of large language models and related machine learning skills.
+   - **Views:** 868,455 | **Likes:** 13,446 | **Comments:** 268
+   - **Duration:** 5 minutes 34 seconds
+
+3. **[What are Large Language Models (LLMs)?](https://www.youtube.com/watch?v=iR2O2GPbB0E)**
+   - **Published on:** May 5, 2023
+   - **Channel:** Google for Developers
+   - **Description:** An introduction to large language models, discussing their abilities in processing and generating language.
+   - **Views:** 314,003 | **Likes:** 5,439 | **Comments:** 105
+   - **Duration:** 5 minutes 30 seconds
+
+4. **[Introduction to large language models](https://www.youtube.com/watch?v=zizonToFXDs)**
+   - **Published on:** May 8, 2023
+   - **Channel:** Google Cloud Tech
+   - **Description:** A course overview related to large language models and generative AI, aimed at beginners.
+   - **Views:** 795,943 | **Likes:** 11,355 | **Comments:** 128
+   - **Duration:** 15 minutes 46 seconds
+
+5. **[[1hr Talk] Intro to Large Language Models](https://www.youtube.com/watch?v=zjkBMFhNj_g)**
+   - **Published on:** November 23, 2023
+   - **Channel:** Andrej Karpathy
+   - **Description:** A comprehensive introduction targeting a general audience on large language models, highlighting their significance.
+   - **Views:** 2,641,973 | **Likes:** 78,024 | **Comments:** 4,760
+   - **Duration:** 59 minutes 48 seconds
+
+These videos cover various aspects of large language models, from basic introductions to more technical explanations. Enjoy watching!
+
+TERMINATE
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (51ce9cc4-c5de-4341-9a58-c4d54e3c08b4): Maximum turns (2) reached
+```
+
+
+## Advanced Features
+
+The `YoutubeSearchTool` provides several advanced features:
+
+### 1. Video Details Retrieval
+
+The tool can retrieve detailed information about videos, including:
+- Video title and description
+- Channel name
+- Publication date
+- View count, like count, and comment count
+- Video duration and quality
+
+
+### 2. Customizable Search Parameters
+
+You can customize your search with these parameters:
+- `max_results`: Control the number of videos returned (default is 5)
+- `include_video_details`: Whether to include detailed video statistics (default is True)
