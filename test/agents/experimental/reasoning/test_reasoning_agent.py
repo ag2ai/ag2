@@ -442,6 +442,72 @@ Terminate the process.
     assert response == "The factorial of 5 is 120"
 
 
+def test_rate_batch_nodes_valid_response(mock_credentials: Credentials) -> None:
+    """
+    Test for when gpt rating response is valid.
+    """
+    mock_node1 = MagicMock()
+    mock_node1.content = "The capital of France is Paris."
+    mock_node1.rating_details = None
+    mock_node1.value = 0.0
+    mock_node1.parent.trajectory = "# Trajectory:\n"
+    mock_node2 = MagicMock()
+    mock_node2.content = "We can conduct a survey to find out the capital of France."
+    mock_node2.rating_details = None
+    mock_node2.value = 0.0
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"batch_grading": True},
+        )
+
+        mock_oai_reply.return_value = (
+            True,
+            {
+                "content": "Option 1: Answers the question correctly.\nRating: 10\n\nOption 2: Suggests a non-executable approach to a very simple question.\nRating: 1"
+            },
+        )
+
+        rewards = agent.rate_batch_nodes([mock_node1, mock_node2])
+
+        assert rewards == [1.0, 0.0]
+        assert mock_node1.rating_details == "Option 1: Answers the question correctly.\nRating: 10"
+        assert (
+            mock_node2.rating_details
+            == "Option 2: Suggests a non-executable approach to a very simple question.\nRating: 1"
+        )
+
+
+def test_rate_batch_nodes_invalid_response(mock_credentials: Credentials) -> None:
+    """
+    Test for when gpt rating response is invalid.
+    """
+    mock_node1 = MagicMock()
+    mock_node1.content = "The capital of France is Paris."
+    mock_node1.rating_details = None
+    mock_node1.value = 0.0
+    mock_node1.parent.trajectory = "# Trajectory:\n"
+    mock_node2 = MagicMock()
+    mock_node2.content = "We can conduct a survey to find out the capital of France."
+    mock_node2.rating_details = None
+    mock_node2.value = 0.0
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"batch_grading": True},
+        )
+
+        mock_oai_reply.return_value = (True, {"content": "First option is good, the next one not so good."})
+
+        rewards = agent.rate_batch_nodes([mock_node1, mock_node2])
+
+        assert rewards == [0.0, 0.0]
+
+
 def test_execute_node_with_cached_output(mock_credentials: Credentials) -> None:
     """
     Test that execute_node returns the cached output if it exists.
