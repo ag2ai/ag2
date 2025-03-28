@@ -4,6 +4,7 @@
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Annotated, Optional, Union
@@ -53,9 +54,15 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     Returns:
         list[ConversionResult]: The result of the conversion.
     """
-    output_dir_path = output_dir_path or Path("./output")
-    output_dir_path = Path(output_dir_path)
+    output_dir_path = output_dir_path or (Path.cwd() / "output")
+    output_dir_path = Path(output_dir_path).resolve()
     output_dir_path.mkdir(parents=True, exist_ok=True)
+    # ToDo: For some reason, output_dir_path.mkdir is not creating the directory.
+    # This is a workaround to create the directory if it does not exist.
+    # Following test is failing without this workaround:
+    # test/agents/experimental/document_agent/test_parser_utils.py::TestDoclingParseDocs::test_default_output_dir_path
+    if not os.path.exists(output_dir_path):
+        os.makedirs(output_dir_path)
     output_formats = output_formats or ["markdown"]
 
     input_doc_paths: list[Path] = handle_input(input_file_path, output_dir=output_dir_path)
@@ -101,8 +108,6 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         if "markdown" in output_formats:
             # Export Docling document format to markdown:
             output_file = out_path / f"{doc_filename}.md"
-            out_path.mkdir(parents=True, exist_ok=True)
-            output_file.touch(exist_ok=True)
             with output_file.open("w") as fp:
                 fp.write(res.document.export_to_markdown())
                 conv_files.append(output_file)
