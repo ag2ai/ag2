@@ -644,14 +644,18 @@ Please provide your rating along with a brief explanation of your assessment.
         return reward
 
     def rate_batch_nodes(self, nodes: list[ThinkNode], ground_truth: Optional[str] = None) -> list[float]:
-        """Rate a batch of nodes using a single call of the grader agent.
+        """Rate a batch of nodes using a single call of the grader agent. All the nodes must have the same parent.
 
         This method evaluates all given nodes while considering the other available options.
 
         Args:
-            nodes (list[ThinkNode]): List of nodes to rate
+            nodes (list[ThinkNode]): List of nodes to rate, all nodes must have the same parent
             ground_truth (Optional[str]): Optional ground truth to provide to the grader
         """
+        # Assert that all nodes have the same parent and it is not None
+        assert all(node.parent == nodes[0].parent for node in nodes), "All nodes must have the same parent."
+        assert nodes[0].parent is not None, "Parent node must not be None."
+
         # Update Grader's system message
         message = f"""You will be provided a a thinking trajectory and a list of options for the next step.
 Please rate the thinking trajectory created by each option on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
@@ -691,7 +695,6 @@ Rating: <rating>
         prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
 
         # add current trajectory
-        assert nodes[0].parent is not None, "Expected node to have a parent"
         prompt = f"Trajectory:\n{nodes[0].parent.trajectory}\n\n---\n\nOptions:\n"
 
         # add options
