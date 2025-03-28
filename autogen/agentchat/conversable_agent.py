@@ -11,6 +11,7 @@ import inspect
 import json
 import logging
 import re
+import threading
 import warnings
 from collections import defaultdict
 from contextlib import contextmanager
@@ -26,6 +27,8 @@ from typing import (
     TypeVar,
     Union,
 )
+
+from autogen.io.run_response import RunResponse, RunResponseProtocol, ThreadIOStream
 
 from ..cache.cache import AbstractCache
 from ..code_utils import (
@@ -46,6 +49,7 @@ from ..events.agent_events import (
     ClearConversableAgentHistoryWarningEvent,
     ConversableAgentUsageSummaryEvent,
     ConversableAgentUsageSummaryNoCostIncurredEvent,
+    ErrorEvent,
     ExecuteCodeBlockEvent,
     ExecuteFunctionEvent,
     ExecutedFunctionEvent,
@@ -1522,6 +1526,35 @@ class ConversableAgent(LLMAgent):
             human_input=self._human_input,
         )
         return chat_result
+
+    def initiate_chat_stream(
+        self,
+        *args,
+        **kwargs: Any,
+    ) -> RunResponseProtocol:
+        iostream = ThreadIOStream()
+        response = RunResponse(iostream)
+
+        def stream_initiate_chat(
+            self=self,
+            iostream: IOStream = iostream,
+            response: RunResponse = response,
+            args=args,
+            kwargs=kwargs,
+        ) -> None:
+            with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                try:
+                    chat_result = self.initiate_chat(*args, **kwargs)
+
+                    response._summary = chat_result.summary
+                except Exception as e:
+                    response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(
+            target=stream_initiate_chat,
+        ).start()
+
+        return response
 
     async def a_initiate_chat(
         self,
@@ -3531,6 +3564,35 @@ class ConversableAgent(LLMAgent):
                     max_turns=max_turns,
                     summary_method=summary_method,
                 )
+
+    def run_stream(
+        self,
+        *args,
+        **kwargs: Any,
+    ) -> RunResponseProtocol:
+        iostream = ThreadIOStream()
+        response = RunResponse(iostream)
+
+        def stream_run(
+            self=self,
+            iostream: IOStream = iostream,
+            response: RunResponse = response,
+            args=args,
+            kwargs=kwargs,
+        ) -> None:
+            with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                try:
+                    chat_result = self.run(*args, **kwargs)
+
+                    response._summary = chat_result.summary
+                except Exception as e:
+                    response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(
+            target=stream_run,
+        ).start()
+
+        return response
 
     async def a_run(
         self,
