@@ -588,13 +588,13 @@ def fix_snippet_imports(content: str, snippets_dir: Path = mkdocs_output_dir.par
 
         except FileNotFoundError:
             # If the file doesn't exist, add an error comment
-            error_comment = f"/* ERROR: Could not find file: {imported_path} */\n"
+            error_comment = f"/* FileNotFoundError: Could not find file: {file_path} */\n"
             start = match.start()
             content = content[:start] + error_comment + content[start:]
 
         except Exception as e:
             # Handle other potential errors
-            error_comment = f"/* ERROR: Failed to read file: {imported_path} - {str(e)} */\n"
+            error_comment = f"/* Exception: Failed to read file: {file_path} - {str(e)} */\n"
             start = match.start()
             content = content[:start] + error_comment + content[start:]
 
