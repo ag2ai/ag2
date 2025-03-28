@@ -691,6 +691,7 @@ Rating: <rating>
         prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
 
         # add current trajectory
+        assert nodes[0].parent is not None, "Expected node to have a parent"
         prompt = f"Trajectory:\n{nodes[0].parent.trajectory}\n\n---\n\nOptions:\n"
 
         # add options
@@ -711,7 +712,11 @@ Rating: <rating>
 
         # Extract ratings and details for each option
         options_with_ratings = re.findall(r"(Option \d+:.*?Rating:\s*[\d.]+)", rating, re.DOTALL)
-        ratings = [re.search(r"Rating:\s*([\d.]+)", option).group(1) for option in options_with_ratings]
+        ratings = []
+        for option in options_with_ratings:
+            match = re.search(r"Rating:\s*([\d.]+)", option)
+            if match:
+                ratings.append(match.group(1))
 
         # if the response wasn't of the expected format, return default rewards
         if len(ratings) != len(nodes):
