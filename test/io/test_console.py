@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autogen.io import IOConsole
 from autogen.events.print_event import PrintEvent
+from autogen.io import IOConsole
 
 
 class TestConsoleIO:

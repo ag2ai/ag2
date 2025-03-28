@@ -11,6 +11,8 @@ from ..doc_utils import export_module
 __all__ = ["Agent", "LLMAgent", "LLMMessageType"]
 
 LLMMessageType = dict[str, Any]
+
+
 @runtime_checkable
 @export_module("autogen")
 class Agent(Protocol):

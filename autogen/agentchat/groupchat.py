@@ -15,22 +15,22 @@ from typing import Any, Callable, Literal, Optional, Union
 
 from ..code_utils import content_str
 from ..doc_utils import export_module
-from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
-from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
-from ..io.base import IOStream
-from ..llm_config import LLMConfig
 from ..events.agent_events import (
     ClearAgentsHistoryEvent,
     GroupChatResumeEvent,
     GroupChatRunChatEvent,
-    SelectSpeakerInvalidInputEvent,
     SelectSpeakerEvent,
+    SelectSpeakerInvalidInputEvent,
     SelectSpeakerTryCountExceededEvent,
     SpeakerAttemptFailedMultipleAgentsEvent,
     SpeakerAttemptFailedNoAgentsEvent,
     SpeakerAttemptSuccessfulEvent,
     TerminationEvent,
 )
+from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
+from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
+from ..io.base import IOStream
+from ..llm_config import LLMConfig
 from ..oai.client import ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent

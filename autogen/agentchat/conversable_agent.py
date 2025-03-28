@@ -41,9 +41,6 @@ from ..code_utils import (
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
-from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
-from ..io.base import IOStream
-from ..llm_config import LLMConfig
 from ..events.agent_events import (
     ClearConversableAgentHistoryEvent,
     ClearConversableAgentHistoryWarningEvent,
@@ -58,6 +55,9 @@ from ..events.agent_events import (
     UsingAutoReplyEvent,
     create_received_event_model,
 )
+from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..io.base import IOStream
+from ..llm_config import LLMConfig
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
@@ -1804,9 +1804,7 @@ class ConversableAgent(LLMAgent):
                         no_messages_preserved += 1
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
-                iostream.send(
-                    ClearConversableAgentHistoryEvent(agent=self, no_events_preserved=no_messages_preserved)
-                )
+                iostream.send(ClearConversableAgentHistoryEvent(agent=self, no_events_preserved=no_messages_preserved))
             else:
                 self._oai_messages.clear()
         else:

@@ -13,9 +13,9 @@ from uuid import UUID
 
 import autogen
 from autogen.cache.cache import Cache
+from autogen.events.base_event import BaseEvent, wrap_event
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.io import IOWebsockets
-from autogen.events.base_event import BaseEvent, wrap_event
 
 from ..conftest import Credentials
 
