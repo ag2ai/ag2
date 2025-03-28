@@ -138,8 +138,8 @@ class TestDoclingParseDocs:
             docling_parse_docs(invalid_input_file_path, output_dir_path)
 
     def test_register_docling_parse_docs_as_a_tool(self, tmp_path: Path, mock_credentials: Credentials) -> None:
-        input_file_path = tmp_path / "input_file_path.md"
-        output_dir_path = tmp_path / "output"
+        input_file_path = (tmp_path / "input_file_path.md").resolve()
+        output_dir_path = (tmp_path / "output").resolve()
 
         input_file_path.write_text("# Mock Markdown")
 
