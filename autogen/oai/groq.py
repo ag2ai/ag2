@@ -27,7 +27,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import Field
 
@@ -59,6 +59,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(default=1, ge=0, le=2)
     top_p: float = Field(default=None)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     def create_client(self):
         raise NotImplementedError("GroqLLMConfigEntry.create_client is not implemented.")
@@ -133,6 +134,10 @@ class GroqClient:
         groq_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
         groq_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 1, (0, 2), None)
         groq_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+        if "tool_choice" in params:
+            groq_params["tool_choice"] = validate_parameter(
+                params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
+            )
 
         # Groq parameters not supported by their models yet, ignoring
         # logit_bias, logprobs, top_logprobs
