@@ -1061,6 +1061,10 @@ def main(force: bool) -> None:
     files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_docs_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
 
+    # Copy snippet files
+    snippet_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "snippets")
+    copy_files(website_dir / "snippets", mkdocs_output_dir.parent / "snippets", snippet_files)
+
     copy_assets(website_dir)
     process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
 
