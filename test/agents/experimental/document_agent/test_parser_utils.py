@@ -184,7 +184,7 @@ class TestDoclingParseDocs:
                                 "description": "Path to the input file or directory",
                             },
                             "output_dir_path": {
-                                "anyOf": [{"type": "string"}, {"format": "path", "type": "string"}, {"type": "null"}],
+                                "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}, {"type": "null"}],
                                 "default": None,
                                 "description": "Path to the output directory",
                             },
@@ -192,6 +192,11 @@ class TestDoclingParseDocs:
                                 "anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}],
                                 "default": None,
                                 "description": "List of output formats (markdown, json)",
+                            },
+                            "table_output_format": {
+                                "default": "html",
+                                "description": "table_output_format",
+                                "type": "string",
                             },
                         },
                         "required": ["input_file_path"],
