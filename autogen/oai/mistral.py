@@ -63,6 +63,7 @@ class MistralLLMConfigEntry(LLMConfigEntry):
     random_seed: Optional[int] = None
     stream: bool = False
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    tool_choice: Optional[Literal["none", "auto", "any"]] = None
 
     def create_client(self):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
@@ -118,6 +119,9 @@ class MistralAIClient:
             params, "safe_prompt", bool, False, False, None, [True, False]
         )
         mistral_params["random_seed"] = validate_parameter(params, "random_seed", int, True, None, False, None)
+        mistral_params["tool_choice"] = validate_parameter(
+            params, "tool_choice", str, False, None, None, ["none", "auto", "any"]
+        )
 
         # TODO
         if params.get("stream", False):
