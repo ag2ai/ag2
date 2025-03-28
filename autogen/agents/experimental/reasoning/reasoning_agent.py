@@ -376,7 +376,7 @@ class ReasoningAgent(AssistantAgent):
                 Beam Search specific:
                     beam_size (int): Number of parallel paths to maintain (default: 3)
                     answer_approach (str): How to select final answer, "pool" or "best" (default: "pool")
-                    batch_grading(bool): Whether to grade all options at once or one by one (default: False).
+                    batch_grading(bool): Whether to grade all options on each beam at once or one by one (default: False).
 
                 MCTS/LATS specific:
                     nsim (int): Number of simulations to run (default: 3)
@@ -653,19 +653,20 @@ Please provide your rating along with a brief explanation of your assessment.
             ground_truth (Optional[str]): Optional ground truth to provide to the grader
         """
         # Update Grader's system message
-        message = f"""Please rate the provided options for the given thinking trajectory on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
+        message = f"""You will be provided a a thinking trajectory and a list of options for the next step.
+Please rate the thinking trajectory created by each option on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
-A great thinking option must:
+A great thinking trajectory must:
 - Advance the process of solving the problem.
 
-Additionally, a good option should:
+Additionally, a good trajectory should:
 - Be appropriate in conversation.
 - Contain no inaccuracies.
 - Be free of any odd or irrelevant content.
 
-If the option does not meet one of the above requirements, it is considered a bad response.
+If the trajectory does not meet one of the above requirements, it is considered a bad response.
 
-Also, rate poory (with 1) options that:
+Also, rate poory (with 1) trajectories that:
 - Require access to internet, experts opinions or external sources.
 - Require research, hypotheses or data that are not provided.
 - Include solutions in the physical world, like conducting experiments or surveys (code execution is fine).
@@ -673,10 +674,10 @@ Also, rate poory (with 1) options that:
 Please provide your rating along with a brief explanation of your assessment.
 
 **Output Format:**
-Option 1: <explanation>
+Option 1: <your explanation here for the trajectory>
 Rating: <rating>
 
-Option 2: <explanation>
+Option 2: <your explanation here for the trajectory>
 Rating: <rating>
 ...
 """
@@ -690,7 +691,7 @@ Rating: <rating>
         prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
 
         # add current trajectory
-        prompt = f"Trajectory:\n{nodes[0].parent.trajectory}"
+        prompt = f"Trajectory:\n{nodes[0].parent.trajectory}\n\n---\n\nOptions:\n"
 
         # add options
         for i, node in enumerate(nodes):
@@ -878,6 +879,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
         while prev_leafs and len(final_answers) < self._beam_size:
             new_leafs: list[ThinkNode] = []
+            new_leafs_per_beam: list[list[ThinkNode]] = []  # used for batch grading
             for node in prev_leafs:
                 if self._is_terminal(node):
                     # Reached max depth; collect possible answers
@@ -886,7 +888,9 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                     final_answers.add(node)
                     continue
 
-                new_leafs += self._expand(node)
+                expansion_leafs = self._expand(node)
+                new_leafs += expansion_leafs
+                new_leafs_per_beam.append(expansion_leafs)
 
             prev_leafs = new_leafs
 
@@ -897,9 +901,10 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
                 # Rate
                 if self._batch_grading:
-                    rewards = self.rate_batch_nodes(prev_leafs, ground_truth)
-                    for node, reward in zip(prev_leafs, rewards):
-                        node.value = reward
+                    for beam_nodes in new_leafs_per_beam:
+                        rewards = self.rate_batch_nodes(beam_nodes, ground_truth)
+                        for node, reward in zip(beam_nodes, rewards):
+                            node.value = reward
                 else:
                     for node in prev_leafs:
                         node.value = self.rate_node(node, ground_truth)
