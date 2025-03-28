@@ -149,6 +149,15 @@ def test_filter_config(test_case):
     assert _compare_lists_of_dicts(config_list, expected)
 
 
+def test_filter_config_warning() -> None:
+    test_case = FILTER_CONFIG_TEST[0]
+    filter_dict = test_case["filter_dict"]
+    exclude = test_case["exclude"]
+
+    with pytest.warns(DeprecationWarning):
+        filter_config(JSON_SAMPLE_DICT, filter_dict, exclude)
+
+
 def test_config_list_from_json():
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp_file:
         json_data = json.loads(JSON_SAMPLE)
@@ -198,6 +207,15 @@ def test_config_list_from_json():
     # Test that an error is thrown when the config list is missing
     with pytest.raises(FileNotFoundError):
         autogen.config_list_from_json("OAI_CONFIG_LIST.missing")
+
+
+def test_config_list_from_json_warning():
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp_file:
+        tmp_file.write(JSON_SAMPLE)
+        tmp_file.flush()
+
+        with pytest.warns(DeprecationWarning):
+            autogen.config_list_from_json(tmp_file.name)
 
 
 def test_config_list_openai_aoai():
