@@ -233,6 +233,68 @@ Execute this script to compute the expected value using the derived probabilitie
 
 We can see that in this case the agent suggests to execute a script. Later, we will see how it can do this internally.
 
+### Beam Search with Batch Grading
+By default, node grading is performed one at a time. While this approach is often sufficient, certain applications benefit from a batched grading approach on each beam expansion. In other words, instead of grading all nodes across the entire search in a single pass, we group each beam's newly expanded nodes into a single batch for grading. This yields:
+
+1. **Context-aware evaluation**: Within a single beam iteration, the grader can compare and contrast multiple node expansions at once.
+2. **Improved efficiency**: Combining multiple evaluations into one request per beam iteration can reduce the total number of LLM calls.
+
+To enable batch grading, set `batch_execution=True` in the `reason_config`. By default, `batch_execution` is set to `False`, meaning individual node grading is performed without batching.
+
+
+```python
+with llm_config:
+    reason_agent = ReasoningAgent(
+        name="reason_agent", reason_config={"method": "beam_search", "beam_size": 3, "batch_grading": True}
+    )
+
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+````console
+To determine the expected maximum value when rolling a 6-sided dice three times, we need to follow the steps below:
+
+### Step 1: Determine cumulative distribution function (CDF)
+First, identify the probability that the maximum roll is less than or equal to each possible value (from 1 to 6).
+
+### Step 2: Derive probabilities for each possible maximum in three rolls
+Next, use the cumulative distribution function to calculate the probabilities of obtaining a specific maximum outcome.
+
+### Step 3: Compute the expectation
+Calculate the expected maximum value by taking the weighted sum of possible maximum values and their corresponding probabilities.
+
+### Step 4: Detailed Expected Value Calculation
+Calculate the expected maximum dice value with detailed intermediate steps.
+
+Here's the Python code to accomplish the task:
+
+```python
+import numpy as np
+
+# Number of sides on the dice
+n_sides = 6
+# Number of rolls
+n_rolls = 3
+
+# Function to calculate the probability of the maximum roll being k
+def prob_max_is_k(k, n_sides, n_rolls):
+    return (k**n_rolls - (k-1)**n_rolls) / n_sides**n_rolls
+
+# Calculate probabilities for each maximum value
+probabilities = [prob_max_is_k(k, n_sides, n_rolls) for k in range(1, n_sides + 1)]
+
+# Calculate expected maximum value
+expected_max_value = sum(k * prob for k, prob in enumerate(probabilities, 1))
+
+print(f"Probabilities for each maximum value: {probabilities}")
+print(f"Expected maximum value: {expected_max_value}")
+```
+
+Execute the code to get the result and follow through step-by-step calculations.
+````
+
 ## MCTS
 This section demonstrates how to use Monte Carlo Tree Search (MCTS) with [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent) for complex reasoning tasks. MCTS provides several advantages over beam search when:
 

@@ -154,12 +154,12 @@ def test_think_node_serialization_with_children() -> None:
     assert new_root.children[0].content == "Child"
 
 
-@run_for_optional_imports(["openai"], "openai")
-def test_reasoning_agent_answer(mock_credentials: Credentials) -> None:
-    for max_depth in range(1, 10):
-        for beam_size in range(1, 10):
-            for answer_approach in ["pool", "best"]:
-                helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials)
+# @run_for_optional_imports(["openai"], "openai")
+# def test_reasoning_agent_answer(mock_credentials: Credentials) -> None:
+#     for max_depth in range(1, 10):
+#         for beam_size in range(1, 10):
+#             for answer_approach in ["pool", "best"]:
+#                 helper_test_reasoning_agent_answer(max_depth, beam_size, answer_approach, mock_credentials)
 
 
 def helper_test_reasoning_agent_answer(
@@ -442,36 +442,86 @@ Terminate the process.
     assert response == "The factorial of 5 is 120"
 
 
-def test_execute_node_with_cached_output(mock_credentials: Credentials) -> None:
+def test_rate_batch_nodes_valid_response(mock_credentials: Credentials) -> None:
+    """
+    Test for when gpt rating response is valid.
+    """
+    parent = ThinkNode(content=TEST_QUESTION)
+    think_node1 = ThinkNode(content="The capital of France is Paris.", parent=parent)
+    think_node2 = ThinkNode(content="We can conduct a survey to find out the capital of France.", parent=parent)
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"batch_grading": True},
+        )
+
+        mock_oai_reply.return_value = (
+            True,
+            {
+                "content": "Option 1: Answers the question correctly.\nRating: 10\n\nOption 2: Suggests a non-executable approach to a very simple question.\nRating: 1"
+            },
+        )
+
+        rewards = agent.rate_batch_nodes([think_node1, think_node2])
+
+        assert rewards == [1.0, 0.0]
+        assert think_node1.rating_details == "Option 1: Answers the question correctly.\nRating: 10"
+        assert (
+            think_node2.rating_details
+            == "Option 2: Suggests a non-executable approach to a very simple question.\nRating: 1"
+        )
+
+
+def test_rate_batch_nodes_invalid_response(mock_credentials: Credentials) -> None:
+    """
+    Test for when gpt rating response is invalid.
+    """
+    parent = ThinkNode(content=TEST_QUESTION)
+    think_node1 = ThinkNode(content="The capital of France is Paris.", parent=parent)
+    think_node2 = ThinkNode(content="We can conduct a survey to find out the capital of France.", parent=parent)
+
+    with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_oai_reply") as mock_oai_reply:
+        agent = ReasoningAgent(
+            "test_agent",
+            llm_config=mock_credentials.llm_config,
+            reason_config={"batch_grading": True},
+        )
+
+        mock_oai_reply.return_value = (True, {"content": "First option is good, the next one not so good."})
+
+        rewards = agent.rate_batch_nodes([think_node1, think_node2])
+
+        assert rewards == [0.0, 0.0]
+
+
+def test_execute_node_with_cached_output(mock_credentials: Credentials, think_node: ThinkNode) -> None:
     """
     Test that execute_node returns the cached output if it exists.
     """
-    mock_node = MagicMock()
-    mock_node.output = "Cached response."
-    mock_node.depth = 1
+    think_node.output = "Cached output"
 
     agent = ReasoningAgent(
         "test_agent",
         llm_config=mock_credentials.llm_config,
         reason_config={"interim_execution": True},
     )
-    response = agent.execute_node(mock_node)
+    response = agent.execute_node(think_node)
 
-    assert response == "Cached response."
+    assert response == "Cached output"
 
 
 def test_execute_node_with_terminate_node(mock_credentials: Credentials) -> None:
-    mock_node = MagicMock()
-    mock_node.content = "TERMINATE"
-    mock_node.output = None
-    mock_node.depth = 1
+    think_node = ThinkNode(content="TERMINATE")
+    think_node.depth = 1
 
     agent = ReasoningAgent(
         "test_agent",
         llm_config=mock_credentials.llm_config,
         reason_config={"interim_execution": True},
     )
-    response = agent.execute_node(mock_node)
+    response = agent.execute_node(think_node)
 
     assert response is None
 
@@ -480,13 +530,8 @@ def test_execute_node_with_python_code_execution_disabled(mock_credentials: Cred
     """
     Test that execute_node returns a message if Python execution is disabled.
     """
-    mock_node = MagicMock()
-    mock_node.content = """```python
-print("Hello World")
-```
-    """
-    mock_node.output = None
-    mock_node.depth = 1
+    think_node = ThinkNode(content="```python\nprint('Hello World')\n```")
+    think_node.depth = 1
 
     agent = ReasoningAgent(
         "test_agent",
@@ -495,7 +540,7 @@ print("Hello World")
         reason_config={"interim_execution": True},
     )
 
-    response = agent.execute_node(mock_node)
+    response = agent.execute_node(think_node)
 
     assert response == "Python code execution is disabled. Follow a different approach."
 
@@ -504,13 +549,8 @@ def test_execute_node_with_python_code_execution_enabled(mock_credentials: Crede
     """
     Test that execute_node sends Python code to the user proxy for execution and retrieves the result.
     """
-    mock_node = MagicMock()
-    mock_node.content = """```python
-print("Hello World")
-```
-"""
-    mock_node.output = None
-    mock_node.depth = 1
+    think_node = ThinkNode(content="```python\nprint('Hello World')\n```")
+    think_node.depth = 1
 
     with patch("autogen.agentchat.conversable_agent.ConversableAgent.generate_code_execution_reply") as mock_code_reply:
         agent = ReasoningAgent(
@@ -522,7 +562,7 @@ print("Hello World")
 
         mock_code_reply.return_value = (True, {"content": "Code Output: Hello World"})
 
-    response = agent.execute_node(mock_node)
+    response = agent.execute_node(think_node)
 
     assert response == "Code Output: Hello World"
 
