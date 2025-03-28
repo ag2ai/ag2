@@ -70,6 +70,7 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     supports_system_prompts: bool = True
     stream: bool = False
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    timeout: Optional[int] = None
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:
@@ -92,6 +93,7 @@ class BedrockClient:
         self._aws_session_token = kwargs.get("aws_session_token")
         self._aws_region = kwargs.get("aws_region")
         self._aws_profile_name = kwargs.get("aws_profile_name")
+        self._timeout = kwargs.get("timeout")
 
         if not self._aws_access_key:
             self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
@@ -108,11 +110,15 @@ class BedrockClient:
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")
 
+        if self._timeout is None:
+            self._timeout = 60
+
         # Initialize Bedrock client, session, and runtime
         bedrock_config = Config(
             region_name=self._aws_region,
             signature_version="v4",
             retries={"max_attempts": self._retries, "mode": "standard"},
+            read_timeout=self._timeout,
         )
 
         session = boto3.Session(

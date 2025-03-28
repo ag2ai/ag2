@@ -79,6 +79,7 @@ class CohereLLMConfigEntry(LLMConfigEntry):
     client_name: Optional[str] = None
     strict_tools: bool = False
     stream: bool = False
+    tool_choice: Optional[Literal["NONE", "REQUIRED"]] = None
 
     def create_client(self):
         raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
@@ -216,6 +217,11 @@ class CohereClient:
         if "presence_penalty" in params:
             cohere_params["presence_penalty"] = validate_parameter(
                 params, "presence_penalty", (int, float), True, 0, (0, 1), None
+            )
+
+        if "tool_choice" in params:
+            cohere_params["tool_choice"] = validate_parameter(
+                params, "tool_choice", str, True, None, None, ["NONE", "REQUIRED"]
             )
 
         return cohere_params

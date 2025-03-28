@@ -3,5 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .google_search import GoogleSearchTool
+from .youtube_search import YoutubeSearchTool
 
-__all__ = ["GoogleSearchTool"]
+__all__ = ["GoogleSearchTool", "YoutubeSearchTool"]
