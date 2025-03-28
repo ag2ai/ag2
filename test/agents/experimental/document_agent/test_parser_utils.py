@@ -223,7 +223,7 @@ class TestDoclingParseDocs:
             patch("builtins.open", mock_open()) as mock_file,
         ):
             # Call the function with output_dir_path=None
-            docling_parse_docs(input_file_path, output_dir_path=None)
+            docling_parse_docs(input_file_path.resolve(), output_dir_path=None)
 
             # Check that Path('./output') was created
             mock_mkdir.assert_called_with(parents=True, exist_ok=True)
