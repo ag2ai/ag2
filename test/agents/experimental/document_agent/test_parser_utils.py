@@ -162,7 +162,7 @@ class TestDoclingParseDocs:
         )
 
         assert isinstance(results, str)
-        assert str(output_dir_path) in results
+        assert str(output_dir_path).replace("\\", "/") in results
 
         assistant = AssistantAgent(
             name="AssistantAgent",
