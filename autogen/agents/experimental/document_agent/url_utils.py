@@ -6,7 +6,10 @@ from enum import Enum
 from typing import Any, Optional, Tuple
 from urllib.parse import urlparse
 
-import requests
+from ....import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    import requests
 
 
 class InputFormat(Enum):
@@ -243,6 +246,7 @@ class URLAnalyzer:
             "extension": None,
         }
 
+    @require_optional_import(["requests"], "rag")
     def _analyze_by_request(self, follow_redirects: bool = True) -> Optional[dict[str, Any]]:
         """
         Analyze URL by making a HEAD request to check Content-Type.
@@ -375,6 +379,7 @@ class URLAnalyzer:
             "redirect_chain": self.redirect_chain,
         }
 
+    @require_optional_import(["requests"], "rag")
     def follow_redirects(self) -> Tuple[str, list[str]]:
         """
         Follow redirects for the URL without analyzing content types.
