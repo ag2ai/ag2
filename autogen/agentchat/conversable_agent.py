@@ -1427,7 +1427,7 @@ class ConversableAgent(LLMAgent):
                             This field is only needed to distinguish between "function" or "assistant"/"user".
                         5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                         6. "context" (dict): the context of the message, which will be passed to
-                            [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                            `OpenAIWrapper.create`.
 
                 - If a callable is provided, it will be called to get the initial message in the form of a string or a dict.
                     If the returned type is dict, it may contain the reserved fields mentioned above.
