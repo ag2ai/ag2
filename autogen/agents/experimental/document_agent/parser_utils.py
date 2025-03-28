@@ -87,13 +87,13 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     logger.info(f"Document converted in {end_time:.2f} seconds.")
 
     # Export results
-    output_dir = Path(output_dir_path)
+    output_dir = Path(output_dir_path).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     conv_files = []
 
     for res in conv_results:
-        out_path = Path(output_dir_path)
+        out_path = Path(output_dir_path).resolve()
         doc_filename = res.input.file.stem
         logger.debug(f"Document {res.input.file.name} converted.\nSaved markdown output to: {out_path!s}")
         logger.debug(res.document._export_to_indented_text(max_text_len=16))
