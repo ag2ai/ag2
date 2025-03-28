@@ -117,6 +117,7 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
     stop_sequences: Optional[list[str]] = None
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=1)
+    tool_choice: Optional[dict] = None
 
     gcp_project_id: Optional[str] = None
     gcp_region: Optional[str] = None
@@ -212,6 +213,11 @@ class AnthropicClient:
             )
             anthropic_params["stream"] = False
 
+        # Note the Anthropic API supports "tool" for tool_choice but you must specify the tool name so we will ignore that here
+        # Dictionary, see options here: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#controlling-claudes-output
+        # type = auto, any, tool, none | name = the name of the tool if type=tool
+        anthropic_params["tool_choice"] = validate_parameter(params, "tool_choice", dict, True, None, None, None)
+
         return anthropic_params
 
     def cost(self, response) -> float:
@@ -288,6 +294,8 @@ class AnthropicClient:
             del anthropic_params["top_p"]
         if anthropic_params["stop_sequences"] is None:
             del anthropic_params["stop_sequences"]
+        if anthropic_params["tool_choice"] is None:
+            del anthropic_params["tool_choice"]
 
         response = self._client.messages.create(**anthropic_params)
 
