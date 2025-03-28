@@ -28,8 +28,6 @@ from typing import (
     Union,
 )
 
-from autogen.io.run_response import RunResponse, RunResponseProtocol, ThreadIOStream
-
 from ..cache.cache import AbstractCache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -61,6 +59,8 @@ from ..events.agent_events import (
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
+from ..io.run_response import RunResponse, RunResponseProtocol
+from ..io.thread_io_stream import ThreadIOStream
 from ..llm_config import LLMConfig
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
@@ -1537,7 +1537,7 @@ class ConversableAgent(LLMAgent):
 
         def stream_initiate_chat(
             self=self,
-            iostream: IOStream = iostream,
+            iostream: ThreadIOStream = iostream,
             response: RunResponse = response,
             args=args,
             kwargs=kwargs,
@@ -3575,7 +3575,7 @@ class ConversableAgent(LLMAgent):
 
         def stream_run(
             self=self,
-            iostream: IOStream = iostream,
+            iostream: ThreadIOStream = iostream,
             response: RunResponse = response,
             args=args,
             kwargs=kwargs,

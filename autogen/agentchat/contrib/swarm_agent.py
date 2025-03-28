@@ -4,16 +4,21 @@
 
 import copy
 import inspect
+import threading
 import warnings
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from types import MethodType
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Optional, Sequence, Union
 
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
+from ...events.agent_events import ErrorEvent
+from ...io.base import IOStream
+from ...io.run_response import RunResponse, RunResponseProtocol
+from ...io.thread_io_stream import ThreadIOStream
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -36,6 +41,7 @@ __all__ = [
     "a_initiate_swarm_chat",
     "create_swarm_transition",
     "initiate_swarm_chat",
+    "initiate_swarm_chat_stream",
     "register_hand_off",
 ]
 
@@ -994,6 +1000,34 @@ def initiate_swarm_chat(
     _cleanup_temp_user_messages(chat_result)
 
     return chat_result, context_variables if context_variables != {} else None, manager.last_speaker  # type: ignore[return-value]
+
+
+def initiate_swarm_chat_stream(
+    *args: Sequence[Any],
+    **kwargs: dict[str, Any],
+) -> RunResponseProtocol:
+    iostream = ThreadIOStream()
+    response = RunResponse(iostream)
+
+    def stream_run(
+        iostream: ThreadIOStream = iostream,
+        response: RunResponse = response,
+        args: Sequence[Any] = args,
+        kwargs: dict[str, Any] = kwargs,
+    ) -> None:
+        with IOStream.set_default(iostream):  # type: ignore[arg-type]
+            try:
+                chat_result, _, _ = initiate_swarm_chat(*args, **kwargs)
+
+                response._summary = chat_result.summary
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+
+    threading.Thread(
+        target=stream_run,
+    ).start()
+
+    return response
 
 
 @export_module("autogen")

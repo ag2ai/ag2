@@ -29,6 +29,7 @@ from .agentchat import (
     gather_usage_summary,
     initiate_chats,
     initiate_swarm_chat,
+    initiate_swarm_chat_stream,
     register_function,
     register_hand_off,
 )
@@ -102,6 +103,7 @@ __all__ = [
     "get_config_list",
     "initiate_chats",
     "initiate_swarm_chat",
+    "initiate_swarm_chat_stream",
     "register_function",
     "register_hand_off",
 ]
