@@ -78,6 +78,7 @@ __CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 
 
 @dataclass
+@export_module("autogen")
 class UpdateSystemMessage:
     """Update the agent's system message before they reply
 
