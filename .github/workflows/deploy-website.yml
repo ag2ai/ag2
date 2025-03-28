@@ -42,12 +42,12 @@ jobs:
           uv venv
           . .venv/bin/activate
           uv pip install -e ".[docs]"
-          ./scripts/docs_build_mkdocs.sh --force
-          ls -la ./website/mkdocs/site
           echo "Current directory"
           pwd
           echo "Snippets folder"
           ls -la ./website/mkdocs/docs/snippets/python-examples
+          ./scripts/docs_build_mkdocs.sh --force
+          ls -la ./website/mkdocs/site
         working-directory: .
 
       # Step 3: Configure Git user
