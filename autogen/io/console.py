@@ -8,8 +8,8 @@ import getpass
 from typing import Any
 
 from ..doc_utils import export_module
-from ..messages.base_message import BaseMessage
-from ..messages.print_message import PrintMessage
+from ..events.base_event import BaseEvent
+from ..events.print_event import PrintEvent
 from .base import IOStream
 
 __all__ = ("IOConsole",)
@@ -28,11 +28,11 @@ class IOConsole(IOStream):
             end (str, optional): The end of the output. Defaults to "\n".
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
-        print_message = PrintMessage(*objects, sep=sep, end=end)
+        print_message = PrintEvent(*objects, sep=sep, end=end)
         self.send(print_message)
         # print(*objects, sep=sep, end=end, flush=flush)
 
-    def send(self, message: BaseMessage) -> None:
+    def send(self, message: BaseEvent) -> None:
         """Send a message to the output stream.
 
         Args:

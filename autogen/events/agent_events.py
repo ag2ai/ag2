@@ -12,38 +12,9 @@ from termcolor import colored
 
 from ..agentchat.agent import LLMMessageType
 from ..code_utils import content_str
-from ..events import deprecated_by
-from ..events.agent_events import (
-    ClearAgentsHistoryEvent,
-    ClearConversableAgentHistoryEvent,
-    ClearConversableAgentHistoryWarningEvent,
-    ConversableAgentUsageSummaryEvent,
-    ConversableAgentUsageSummaryNoCostIncurredEvent,
-    ExecuteCodeBlockEvent,
-    ExecuteFunctionEvent,
-    ExecutedFunctionEvent,
-    FunctionCallEvent,
-    FunctionResponseEvent,
-    GenerateCodeExecutionReplyEvent,
-    GroupChatResumeEvent,
-    GroupChatRunChatEvent,
-    PostCarryoverProcessingEvent,
-    SelectSpeakerEvent,
-    SelectSpeakerInvalidInputEvent,
-    SelectSpeakerTryCountExceededEvent,
-    SpeakerAttemptFailedMultipleAgentsEvent,
-    SpeakerAttemptFailedNoAgentsEvent,
-    SpeakerAttemptSuccessfulEvent,
-    TerminationAndHumanReplyNoInputEvent,
-    TerminationEvent,
-    TextEvent,
-    ToolCallEvent,
-    ToolResponseEvent,
-    UsingAutoReplyEvent,
-)
 from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
-from .base_message import BaseMessage, wrap_message
+from .base_event import BaseEvent, wrap_event
 
 with optional_import_block() as result:
     from PIL.Image import Image
@@ -56,33 +27,33 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "ClearAgentsHistoryMessage",
-    "ClearConversableAgentHistoryMessage",
-    "ConversableAgentUsageSummaryMessage",
-    "ConversableAgentUsageSummaryNoCostIncurredMessage",
-    "ExecuteCodeBlockMessage",
-    "ExecuteFunctionMessage",
-    "FunctionCallMessage",
-    "FunctionResponseMessage",
-    "GenerateCodeExecutionReplyMessage",
-    "GroupChatResumeMessage",
-    "GroupChatRunChatMessage",
-    "PostCarryoverProcessingMessage",
-    "SelectSpeakerMessage",
-    "SpeakerAttemptFailedMultipleAgentsMessage",
-    "SpeakerAttemptFailedNoAgentsMessage",
-    "SpeakerAttemptSuccessfulMessage",
-    "TerminationAndHumanReplyNoInputMessage",
-    "TerminationMessage",
-    "TextMessage",
-    "ToolCallMessage",
-    "ToolResponseMessage",
+    "ClearAgentsHistoryEvent",
+    "ClearConversableAgentHistoryEvent",
+    "ConversableAgentUsageSummaryEvent",
+    "ConversableAgentUsageSummaryNoCostIncurredEvent",
+    "ExecuteCodeBlockEvent",
+    "ExecuteFunctionEvent",
+    "FunctionCallEvent",
+    "FunctionResponseEvent",
+    "GenerateCodeExecutionReplyEvent",
+    "GroupChatResumeEvent",
+    "GroupChatRunChatEvent",
+    "PostCarryoverProcessingEvent",
+    "SelectSpeakerEvent",
+    "SpeakerAttemptFailedMultipleAgentsEvent",
+    "SpeakerAttemptFailedNoAgentsEvent",
+    "SpeakerAttemptSuccessfulEvent",
+    "TerminationAndHumanReplyNoInputEvent",
+    "TerminationEvent",
+    "TextEvent",
+    "ToolCallEvent",
+    "ToolResponseEvent",
 ]
 
-MessageRole = Literal["assistant", "function", "tool"]
+EventRole = Literal["assistant", "function", "tool"]
 
 
-class BasePrintReceivedMessage(BaseMessage, ABC):
+class BasePrintReceivedEvent(BaseEvent, ABC):
     content: Union[str, int, float, bool]
     sender_name: str
     recipient_name: str
@@ -92,11 +63,10 @@ class BasePrintReceivedMessage(BaseMessage, ABC):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
-@deprecated_by(FunctionResponseEvent)
-@wrap_message
-class FunctionResponseMessage(BasePrintReceivedMessage):
+@wrap_event
+class FunctionResponseEvent(BasePrintReceivedEvent):
     name: Optional[str] = None
-    role: MessageRole = "function"
+    role: EventRole = "function"
     content: Union[str, int, float, bool]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -114,7 +84,7 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
 
 class ToolResponse(BaseModel):
     tool_call_id: Optional[str] = None
-    role: MessageRole = "tool"
+    role: EventRole = "tool"
     content: Union[str, int, float, bool]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -126,10 +96,9 @@ class ToolResponse(BaseModel):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
-@deprecated_by(ToolResponseEvent)
-@wrap_message
-class ToolResponseMessage(BasePrintReceivedMessage):
-    role: MessageRole = "tool"
+@wrap_event
+class ToolResponseEvent(BasePrintReceivedEvent):
+    role: EventRole = "tool"
     tool_responses: list[ToolResponse]
     content: Union[str, int, float, bool]
 
@@ -163,9 +132,8 @@ class FunctionCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-@deprecated_by(FunctionCallEvent)
-@wrap_message
-class FunctionCallMessage(BasePrintReceivedMessage):
+@wrap_event
+class FunctionCallEvent(BasePrintReceivedEvent):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     function_call: FunctionCall
 
@@ -205,12 +173,11 @@ class ToolCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-@deprecated_by(ToolCallEvent)
-@wrap_message
-class ToolCallMessage(BasePrintReceivedMessage):
+@wrap_event
+class ToolCallEvent(BasePrintReceivedEvent):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
     refusal: Optional[str] = None
-    role: Optional[MessageRole] = None
+    role: Optional[EventRole] = None
     audio: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     tool_calls: list[ToolCall]
@@ -228,9 +195,8 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@deprecated_by(TextEvent)
-@wrap_message
-class TextMessage(BasePrintReceivedMessage):
+@wrap_event
+class TextEvent(BasePrintReceivedEvent):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
 
     @classmethod
@@ -266,49 +232,46 @@ class TextMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-def create_received_message_model(
-    *, uuid: Optional[UUID] = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
-) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:
-    # print(f"{message=}")
-    # print(f"{sender=}")
-
-    role = message.get("role")
+def create_received_event_model(
+    *, uuid: Optional[UUID] = None, event: dict[str, Any], sender: "Agent", recipient: "Agent"
+) -> Union[FunctionResponseEvent, ToolResponseEvent, FunctionCallEvent, ToolCallEvent, TextEvent]:
+    role = event.get("role")
     if role == "function":
-        return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return FunctionResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
     if role == "tool":
-        return ToolResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return ToolResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
 
     # Role is neither function nor tool
 
-    if message.get("function_call"):
-        return FunctionCallMessage(
-            **message,
+    if event.get("function_call"):
+        return FunctionCallEvent(
+            **event,
             sender_name=sender.name,
             recipient_name=recipient.name,
             uuid=uuid,
         )
 
-    if message.get("tool_calls"):
-        return ToolCallMessage(
-            **message,
+    if event.get("tool_calls"):
+        return ToolCallEvent(
+            **event,
             sender_name=sender.name,
             recipient_name=recipient.name,
             uuid=uuid,
         )
 
     # Now message is a simple content message
-    content = message.get("content")
+    content = event.get("content")
     allow_format_str_template = (
         recipient.llm_config.get("allow_format_str_template", False) if recipient.llm_config else False  # type: ignore [attr-defined]
     )
-    if content is not None and "context" in message:
+    if content is not None and "context" in event:
         content = OpenAIWrapper.instantiate(
             content,  # type: ignore [arg-type]
-            message["context"],
+            event["context"],
             allow_format_str_template,
         )
 
-    return TextMessage(
+    return TextEvent(
         content=content,
         sender_name=sender.name,
         recipient_name=recipient.name,
@@ -316,9 +279,8 @@ def create_received_message_model(
     )
 
 
-@deprecated_by(PostCarryoverProcessingEvent)
-@wrap_message
-class PostCarryoverProcessingMessage(BaseMessage):
+@wrap_event
+class PostCarryoverProcessingEvent(BaseEvent):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
     message: str
     verbose: bool = False
@@ -395,47 +357,45 @@ class PostCarryoverProcessingMessage(BaseMessage):
             flush=True,
         )
         if self.verbose:
-            f(colored("Message:\n" + self.message, "blue"), flush=True)
+            f(colored("Event:\n" + self.message, "blue"), flush=True)
             f(colored("Carryover:\n" + print_carryover, "blue"), flush=True)
         f(colored("\n" + "*" * 80, "blue"), flush=True, sep="")
 
 
-@deprecated_by(ClearAgentsHistoryEvent, param_mapping={"nr_messages_to_preserve": "nr_events_to_preserve"})
-@wrap_message
-class ClearAgentsHistoryMessage(BaseMessage):
+@wrap_event
+class ClearAgentsHistoryEvent(BaseEvent):
     agent_name: Optional[str] = None
-    nr_messages_to_preserve: Optional[int] = None
+    nr_events_to_preserve: Optional[int] = None
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         agent: Optional["Agent"] = None,
-        nr_messages_to_preserve: Optional[int] = None,
+        nr_events_to_preserve: Optional[int] = None,
     ):
         return super().__init__(
-            uuid=uuid, agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve
+            uuid=uuid, agent_name=agent.name if agent else None, nr_events_to_preserve=nr_events_to_preserve
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         if self.agent_name:
-            if self.nr_messages_to_preserve:
-                f(f"Clearing history for {self.agent_name} except last {self.nr_messages_to_preserve} messages.")
+            if self.nr_events_to_preserve:
+                f(f"Clearing history for {self.agent_name} except last {self.nr_events_to_preserve} events.")
             else:
                 f(f"Clearing history for {self.agent_name}.")
         else:
-            if self.nr_messages_to_preserve:
-                f(f"Clearing history for all agents except last {self.nr_messages_to_preserve} messages.")
+            if self.nr_events_to_preserve:
+                f(f"Clearing history for all agents except last {self.nr_events_to_preserve} events.")
             else:
                 f("Clearing history for all agents.")
 
 
-# todo: break into multiple messages
-@deprecated_by(SpeakerAttemptSuccessfulEvent)
-@wrap_message
-class SpeakerAttemptSuccessfulMessage(BaseMessage):
+# todo: break into multiple events
+@wrap_event
+class SpeakerAttemptSuccessfulEvent(BaseEvent):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -471,9 +431,8 @@ class SpeakerAttemptSuccessfulMessage(BaseMessage):
         )
 
 
-@deprecated_by(SpeakerAttemptFailedMultipleAgentsEvent)
-@wrap_message
-class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
+@wrap_event
+class SpeakerAttemptFailedMultipleAgentsEvent(BaseEvent):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -508,9 +467,8 @@ class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
         )
 
 
-@deprecated_by(SpeakerAttemptFailedNoAgentsEvent)
-@wrap_message
-class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
+@wrap_event
+class SpeakerAttemptFailedNoAgentsEvent(BaseEvent):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
@@ -545,11 +503,10 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
         )
 
 
-@deprecated_by(GroupChatResumeEvent, param_mapping={"messages": "events"})
-@wrap_message
-class GroupChatResumeMessage(BaseMessage):
+@wrap_event
+class GroupChatResumeEvent(BaseEvent):
     last_speaker_name: str
-    messages: list[LLMMessageType]
+    events: list[LLMMessageType]
     verbose: Optional[bool] = False
 
     def __init__(
@@ -557,24 +514,23 @@ class GroupChatResumeMessage(BaseMessage):
         *,
         uuid: Optional[UUID] = None,
         last_speaker_name: str,
-        messages: list["LLMMessageType"],
+        events: list["LLMMessageType"],
         silent: Optional[bool] = False,
     ):
-        super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
+        super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, events=events, verbose=not silent)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f(
-            f"Prepared group chat with {len(self.messages)} messages, the last speaker is",
+            f"Prepared group chat with {len(self.events)} events, the last speaker is",
             colored(self.last_speaker_name, "yellow"),
             flush=True,
         )
 
 
-@deprecated_by(GroupChatRunChatEvent)
-@wrap_message
-class GroupChatRunChatMessage(BaseMessage):
+@wrap_event
+class GroupChatRunChatEvent(BaseEvent):
     speaker_name: str
     verbose: Optional[bool] = False
 
@@ -587,9 +543,8 @@ class GroupChatRunChatMessage(BaseMessage):
         f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
-@deprecated_by(TerminationAndHumanReplyNoInputEvent)
-@wrap_message
-class TerminationAndHumanReplyNoInputMessage(BaseMessage):
+@wrap_event
+class TerminationAndHumanReplyNoInputEvent(BaseEvent):
     """When the human-in-the-loop is prompted but provides no input."""
 
     no_human_input_msg: str
@@ -617,9 +572,8 @@ class TerminationAndHumanReplyNoInputMessage(BaseMessage):
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
 
 
-@deprecated_by(UsingAutoReplyEvent)
-@wrap_message
-class UsingAutoReplyMessage(BaseMessage):
+@wrap_event
+class UsingAutoReplyEvent(BaseEvent):
     human_input_mode: str
     sender_name: str
     recipient_name: str
@@ -645,9 +599,8 @@ class UsingAutoReplyMessage(BaseMessage):
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
 
-@deprecated_by(TerminationEvent)
-@wrap_message
-class TerminationMessage(BaseMessage):
+@wrap_event
+class TerminationEvent(BaseEvent):
     """When a workflow termination condition is met"""
 
     termination_reason: str
@@ -669,9 +622,8 @@ class TerminationMessage(BaseMessage):
         f(colored(f"\n>>>>>>>> TERMINATING RUN ({str(self.uuid)}): {self.termination_reason}", "red"), flush=True)
 
 
-@deprecated_by(ExecuteCodeBlockEvent)
-@wrap_message
-class ExecuteCodeBlockMessage(BaseMessage):
+@wrap_event
+class ExecuteCodeBlockEvent(BaseEvent):
     code: str
     language: str
     code_block_count: int
@@ -696,9 +648,8 @@ class ExecuteCodeBlockMessage(BaseMessage):
         )
 
 
-@deprecated_by(ExecuteFunctionEvent)
-@wrap_message
-class ExecuteFunctionMessage(BaseMessage):
+@wrap_event
+class ExecuteFunctionEvent(BaseEvent):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
@@ -729,9 +680,8 @@ class ExecuteFunctionMessage(BaseMessage):
         )
 
 
-@deprecated_by(ExecutedFunctionEvent)
-@wrap_message
-class ExecutedFunctionMessage(BaseMessage):
+@wrap_event
+class ExecutedFunctionEvent(BaseEvent):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
@@ -769,9 +719,8 @@ class ExecutedFunctionMessage(BaseMessage):
         )
 
 
-@deprecated_by(SelectSpeakerEvent)
-@wrap_message
-class SelectSpeakerMessage(BaseMessage):
+@wrap_event
+class SelectSpeakerEvent(BaseEvent):
     agent_names: Optional[list[str]] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
@@ -787,9 +736,8 @@ class SelectSpeakerMessage(BaseMessage):
             f(f"{i + 1}: {agent_name}")
 
 
-@deprecated_by(SelectSpeakerTryCountExceededEvent)
-@wrap_message
-class SelectSpeakerTryCountExceededMessage(BaseMessage):
+@wrap_event
+class SelectSpeakerTryCountExceededEvent(BaseEvent):
     try_count: int
     agent_names: Optional[list[str]] = None
 
@@ -803,9 +751,8 @@ class SelectSpeakerTryCountExceededMessage(BaseMessage):
         f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
 
 
-@deprecated_by(SelectSpeakerInvalidInputEvent)
-@wrap_message
-class SelectSpeakerInvalidInputMessage(BaseMessage):
+@wrap_event
+class SelectSpeakerInvalidInputEvent(BaseEvent):
     agent_names: Optional[list[str]] = None
 
     def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
@@ -818,34 +765,32 @@ class SelectSpeakerInvalidInputMessage(BaseMessage):
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
 
 
-@deprecated_by(ClearConversableAgentHistoryEvent, param_mapping={"no_messages_preserved": "no_events_preserved"})
-@wrap_message
-class ClearConversableAgentHistoryMessage(BaseMessage):
+@wrap_event
+class ClearConversableAgentHistoryEvent(BaseEvent):
     agent_name: str
     recipient_name: str
-    no_messages_preserved: int
+    no_events_preserved: int
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_messages_preserved: Optional[int] = None):
+    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_events_preserved: Optional[int] = None):
         super().__init__(
             uuid=uuid,
             agent_name=agent.name,
             recipient_name=agent.name,
-            no_messages_preserved=no_messages_preserved,
+            no_events_preserved=no_events_preserved,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        for _ in range(self.no_messages_preserved):
+        for _ in range(self.no_events_preserved):
             f(
-                f"Preserving one more message for {self.agent_name} to not divide history between tool call and "
+                f"Preserving one more event for {self.agent_name} to not divide history between tool call and "
                 f"tool response."
             )
 
 
-@deprecated_by(ClearConversableAgentHistoryWarningEvent)
-@wrap_message
-class ClearConversableAgentHistoryWarningMessage(BaseMessage):
+@wrap_event
+class ClearConversableAgentHistoryWarningEvent(BaseEvent):
     recipient_name: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
@@ -859,16 +804,15 @@ class ClearConversableAgentHistoryWarningMessage(BaseMessage):
 
         f(
             colored(
-                "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
+                "WARNING: `nr_preserved_events` is ignored when clearing chat history with a specific agent.",
                 "yellow",
             ),
             flush=True,
         )
 
 
-@deprecated_by(GenerateCodeExecutionReplyEvent)
-@wrap_message
-class GenerateCodeExecutionReplyMessage(BaseMessage):
+@wrap_event
+class GenerateCodeExecutionReplyEvent(BaseEvent):
     code_block_languages: list[str]
     sender_name: Optional[str] = None
     recipient_name: str
@@ -912,9 +856,8 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
             )
 
 
-@deprecated_by(ConversableAgentUsageSummaryNoCostIncurredEvent)
-@wrap_message
-class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
+@wrap_event
+class ConversableAgentUsageSummaryNoCostIncurredEvent(BaseEvent):
     recipient_name: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
@@ -926,9 +869,8 @@ class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
         f(f"No cost incurred from agent '{self.recipient_name}'.")
 
 
-@deprecated_by(ConversableAgentUsageSummaryEvent)
-@wrap_message
-class ConversableAgentUsageSummaryMessage(BaseMessage):
+@wrap_event
+class ConversableAgentUsageSummaryEvent(BaseEvent):
     recipient_name: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
@@ -938,3 +880,31 @@ class ConversableAgentUsageSummaryMessage(BaseMessage):
         f = f or print
 
         f(f"Agent '{self.recipient_name}':")
+
+
+@wrap_event
+class InputRequestEvent(BaseEvent):
+    prompt: str
+    password: bool = False
+    respond: Optional[Callable[[str], None]] = None
+
+    type: str = "input_request"
+
+
+@wrap_event
+class AsyncInputRequestEvent(BaseEvent):
+    prompt: str
+    password: bool = False
+
+    async def a_respond(self, response: "InputResponseEvent") -> None:
+        pass
+
+
+@wrap_event
+class InputResponseEvent(BaseEvent):
+    value: str
+
+
+@wrap_event
+class ErrorEvent(BaseEvent):
+    error: Any

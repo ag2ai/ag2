@@ -7,14 +7,11 @@ import json
 from typing import Any, Callable, Optional
 from uuid import UUID
 
-from ..events import deprecated_by
-from ..events.print_event import PrintEvent
-from .base_message import BaseMessage, wrap_message
+from .base_event import BaseEvent, wrap_event
 
 
-@deprecated_by(PrintEvent)
-@wrap_message
-class PrintMessage(BaseMessage):
+@wrap_event
+class PrintEvent(BaseEvent):
     """Print message"""
 
     objects: list[str]

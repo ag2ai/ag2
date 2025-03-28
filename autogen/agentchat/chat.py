@@ -15,7 +15,7 @@ from typing import Any
 
 from ..doc_utils import export_module
 from ..io.base import IOStream
-from ..messages.agent_messages import PostCarryoverProcessingMessage
+from ..events.agent_events import PostCarryoverProcessingEvent
 from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             UserWarning,
         )
 
-    iostream.send(PostCarryoverProcessingMessage(chat_info=chat_info))
+    iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
 
 
 @export_module("autogen")
