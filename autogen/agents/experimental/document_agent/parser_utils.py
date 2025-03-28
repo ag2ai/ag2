@@ -101,6 +101,7 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
         if "markdown" in output_formats:
             # Export Docling document format to markdown:
             output_file = out_path / f"{doc_filename}.md"
+            out_path.mkdir(parents=True, exist_ok=True)
             with output_file.open("w") as fp:
                 fp.write(res.document.export_to_markdown())
                 conv_files.append(output_file)
