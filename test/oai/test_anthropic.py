@@ -176,6 +176,7 @@ def test_load_config(anthropic_client):
         "max_tokens": 100,
         "stop_sequences": None,
         "top_k": None,
+        "tool_choice": None,
     }
     result = anthropic_client.load_config(params)
     assert result == expected_params, "Config should be correctly loaded"
