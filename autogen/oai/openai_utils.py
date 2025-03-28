@@ -580,7 +580,7 @@ def config_list_from_json(
     """
     if inspect.stack()[1].function != "from_json":
         warnings.warn(
-            "filter_config is deprecated and will be removed in a future release. "
+            "config_list_from_json is deprecated and will be removed in a future release. "
             'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead.',
             DeprecationWarning,
         )
