@@ -41,6 +41,8 @@ setuptools.setup(
         "rag": ["pyautogen[rag]==" + __version__],
         "crawl4ai": ["pyautogen[crawl4ai]==" + __version__],
         "browser-use": ["pyautogen[browser-use]==" + __version__],
+        "google-client": ["pyautogen[google-client]==" + __version__],
+        "google-api": ["pyautogen[google-api]==" + __version__],
         "google-search": ["pyautogen[google-search]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
         "twilio": ["pyautogen[twilio]==" + __version__],
