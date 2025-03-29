@@ -7,9 +7,6 @@
 import logging
 
 from .agentchat import (
-    AFTER_WORK,
-    ON_CONDITION,
-    UPDATE_SYSTEM_MESSAGE,
     AfterWork,
     AfterWorkOption,
     Agent,
@@ -61,11 +58,8 @@ logger.setLevel(logging.INFO)
 
 
 __all__ = [
-    "AFTER_WORK",
     "DEFAULT_MODEL",
     "FAST_MODEL",
-    "ON_CONDITION",
-    "UPDATE_SYSTEM_MESSAGE",
     "AfterWork",
     "AfterWorkOption",
     "Agent",

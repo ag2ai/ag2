@@ -10,8 +10,6 @@ from .chat import ChatResult, a_initiate_chats, initiate_chats
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
-    AFTER_WORK,
-    ON_CONDITION,
     AfterWork,
     AfterWorkOption,
     ContextStr,
@@ -23,15 +21,12 @@ from .contrib.swarm_agent import (
     initiate_swarm_chat,
     register_hand_off,
 )
-from .conversable_agent import UPDATE_SYSTEM_MESSAGE, ConversableAgent, UpdateSystemMessage, register_function
+from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
 from .utils import ContextExpression, gather_usage_summary
 
 __all__ = [
-    "AFTER_WORK",
-    "ON_CONDITION",
-    "UPDATE_SYSTEM_MESSAGE",
     "AfterWork",
     "AfterWorkOption",
     "Agent",

@@ -63,6 +63,11 @@ from ..runtime_logging import log_event, log_function_use, log_new_agent, loggin
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
+from .group.after_work import AfterWork
+from .group.context_variables import ContextVariables
+from .group.handoffs import Handoffs
+from .group.on_condition import OnCondition
+from .group.on_context_condition import OnContextCondition
 from .utils import consolidate_chat_info, gather_usage_summary
 
 __all__ = ("ConversableAgent",)
@@ -70,11 +75,6 @@ __all__ = ("ConversableAgent",)
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
-
-# Parameter name for context variables
-# Use the value in functions and they will be substituted with the context variables:
-# e.g. def my_function(context_variables: Dict[str, Any], my_other_parameters: Any) -> Any:
-__CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 
 
 @dataclass
@@ -107,18 +107,6 @@ class UpdateSystemMessage:
                 raise ValueError("The update function must return a string")
         else:
             raise ValueError("The update function must be either a string or a callable")
-
-
-class UPDATE_SYSTEM_MESSAGE(UpdateSystemMessage):  # noqa: N801
-    """Deprecated: Use UpdateSystemMessage instead. This class will be removed in a future version (TBD)."""
-
-    def __init__(self, *args: Any, **kwargs):
-        warnings.warn(
-            "UPDATE_SYSTEM_MESSAGE is deprecated and will be removed in a future version (TBD). Use UpdateSystemMessage instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(*args, **kwargs)
 
 
 @export_module("autogen")
@@ -157,11 +145,12 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
         silent: Optional[bool] = None,
-        context_variables: Optional[dict[str, Any]] = None,
+        context_variables: Optional[ContextVariables] = None,
         functions: Union[list[Callable[..., Any]], Callable[..., Any]] = None,
         update_agent_state_before_reply: Optional[
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
         ] = None,
+        handoffs: Optional[Handoffs] = None,
     ):
         """
         Args:
@@ -212,15 +201,15 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
-            context_variables (dict or None): Context variables that provide a persistent context for the agent.
-                Note: Will maintain a reference to the passed in context variables (enabling a shared context)
-                Only used in Swarms at this stage:
-                https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
+            context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
+                Note: This will be a reference to a shared context for multi-agent chats.
+                Behaves like a dictionary with keys and values (akin to dict[str, Any]).
             functions (List[Callable[..., Any]]): A list of functions to register with the agent.
                 These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
                 If the agent is in a swarm, the swarm's tool executor will execute the function.
                 When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
+            handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -283,7 +272,7 @@ class ConversableAgent(LLMAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
 
-        self._context_variables = context_variables if context_variables is not None else {}
+        self.context_variables = context_variables if context_variables is not None else ContextVariables()
 
         self._tools: list[Tool] = []
 
@@ -366,6 +355,8 @@ class ConversableAgent(LLMAgent):
 
         # Associate agent update state hooks
         self._register_update_agent_state_before_reply(update_agent_state_before_reply)
+
+        self.handoffs = handoffs if handoffs is not None else Handoffs()
 
     def _validate_name(self, name: str) -> None:
         if not self.llm_config:
@@ -452,7 +443,7 @@ class ConversableAgent(LLMAgent):
                             # use the context_variables for substitution
                             sys_message = OpenAIWrapper.instantiate(
                                 template=update_func.content_updater,
-                                context=agent._context_variables,
+                                context=agent.context_variables.to_dict(),
                                 allow_format_str_template=True,
                             )
                         else:
@@ -930,45 +921,6 @@ class ConversableAgent(LLMAgent):
                 not use_async if use_async is not None else kwargs.get("ignore_async_in_sync_chat")
             ),
         )
-
-    def get_context(self, key: str, default: Any = None) -> Any:
-        """Get a context variable by key.
-
-        Args:
-            key: The key to look up
-            default: Value to return if key doesn't exist
-        Returns:
-            The value associated with the key, or default if not found
-        """
-        return self._context_variables.get(key, default)
-
-    def set_context(self, key: str, value: Any) -> None:
-        """Set a context variable.
-
-        Args:
-            key: The key to set
-            value: The value to associate with the key
-        """
-        self._context_variables[key] = value
-
-    def update_context(self, context_variables: dict[str, Any]) -> None:
-        """Update multiple context variables at once.
-
-        Args:
-            context_variables: Dictionary of variables to update/add
-        """
-        self._context_variables.update(context_variables)
-
-    def pop_context(self, key: str, default: Any = None) -> Any:
-        """Remove and return a context variable.
-
-        Args:
-            key: The key to remove
-            default: Value to return if key doesn't exist
-        Returns:
-            The value that was removed, or default if key not found
-        """
-        return self._context_variables.pop(key, default)
 
     @property
     def system_message(self) -> str:
@@ -3584,6 +3536,24 @@ class ConversableAgent(LLMAgent):
                     max_turns=max_turns,
                     summary_method=summary_method,
                 )
+
+    def register_handoff(self, condition: Union[OnContextCondition, OnCondition, AfterWork]) -> None:
+        """
+        Register a single handoff condition.
+
+        Args:
+            condition: The condition to add (OnContextCondition, OnCondition, or AfterWork)
+        """
+        self.handoffs.add(condition)
+
+    def register_handoffs(self, conditions: list[Union[OnContextCondition, OnCondition, AfterWork]]) -> None:
+        """
+        Register multiple handoff conditions.
+
+        Args:
+            conditions: List of conditions to add
+        """
+        self.handoffs.add_many(conditions)
 
 
 @export_module("autogen")

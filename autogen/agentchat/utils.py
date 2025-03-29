@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 
 from ..doc_utils import export_module
 from .agent import Agent
+from .group.context_variables import ContextVariables
 
 
 def consolidate_chat_info(
@@ -359,7 +360,7 @@ class ContextExpression:
         for child in ast.iter_child_nodes(node):
             self._validate_operations(child)
 
-    def evaluate(self, context_variables: dict[str, Any]) -> bool:
+    def evaluate(self, context_variables: ContextVariables) -> bool:
         """Evaluate the expression using the provided context variables.
 
         Args:
@@ -382,7 +383,7 @@ class ContextExpression:
 
             # Calculate the length - works for lists, strings, dictionaries, etc.
             try:
-                length_value = len(var_value)
+                length_value = len(var_value)  # type: ignore[arg-type]
             except TypeError:
                 # If the value doesn't support len(), treat as 0
                 length_value = 0

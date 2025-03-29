@@ -15,7 +15,6 @@ from autogen.agentchat.contrib.swarm_agent import (
     __TOOL_EXECUTOR_NAME__,
     AfterWork,
     AfterWorkOption,
-    ContextStr,
     OnCondition,
     OnContextCondition,
     SwarmResult,
@@ -35,6 +34,8 @@ from autogen.agentchat.contrib.swarm_agent import (
     register_hand_off,
 )
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
+from autogen.agentchat.group.context_str import ContextStr
+from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.agentchat.utils import ContextExpression
@@ -378,7 +379,7 @@ def test_context_variables_updating_multi_tools() -> None:
     }
 
     # Starting context variable, this will increment in the swarm
-    test_context_variables = {"my_key": 0}
+    test_context_variables = ContextVariables(data={"my_key": 0})
 
     # Increment the context variable
     def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
@@ -445,7 +446,7 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     class MyKey(BaseModel):
         key: int = 0
 
-    test_context_variables = {"my_key": MyKey(key=0)}
+    test_context_variables = ContextVariables(data={"my_key": MyKey(key=0)})
 
     # Increment the pydantic context variable
     def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
@@ -509,7 +510,7 @@ def test_function_transfer() -> None:
     }
 
     # Starting context variable, this will increment in the swarm
-    test_context_variables = {"my_key": 0}
+    test_context_variables = ContextVariables(data={"my_key": 0})
 
     # Increment the context variable
     def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
@@ -639,7 +640,7 @@ def test_update_system_message() -> None:
 
     # 1. Test with a callable function
     def custom_update_function(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
-        return f"System message with {agent.get_context('test_var')} and {len(messages)} messages"
+        return f"System message with {agent.context_variables.get('test_var')} and {len(messages)} messages"
 
     # 2. Test with a string template
     template_message = "Template message with {test_var}"
@@ -660,7 +661,7 @@ def test_update_system_message() -> None:
     agent2.register_reply([ConversableAgent, None], mock_generate_oai_reply)
 
     # Test context and messages
-    test_context = {"test_var": "test_value"}
+    test_context = ContextVariables(data={"test_var": "test_value"})
     test_messages = [{"role": "user", "content": "Test message"}]
 
     # Run chat with first agent (using callable function)
@@ -769,7 +770,7 @@ def test_string_agent_params_for_transfer() -> None:
     chat_result, final_context, last_active_agent = initiate_swarm_chat(
         initial_agent=agent_1,
         agents=[agent_1, agent_2],
-        context_variables={},
+        context_variables=ContextVariables(),
         messages="Begin by calling the hello_world() function.",
         after_work=AfterWorkOption.TERMINATE,
         max_rounds=5,
@@ -807,7 +808,7 @@ def test_string_agent_params_for_transfer() -> None:
         chat_result, final_context, last_active_agent = initiate_swarm_chat(
             initial_agent=agent_1,
             agents=[agent_1, agent_2],
-            context_variables={},
+            context_variables=ContextVariables(),
             messages="Begin by calling the hello_world() function.",
             after_work=AfterWorkOption.TERMINATE,
             max_rounds=5,
@@ -987,7 +988,7 @@ def test_prepare_swarm_agents() -> None:
     register_hand_off(agent=agent1, hand_to=AfterWork(agent=agent2))
 
     # Test valid preparation
-    tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2], {})
+    tool_executor, nested_chat_agents = _prepare_swarm_agents(agent1, [agent1, agent2], ContextVariables())
 
     assert nested_chat_agents == []
 
@@ -998,16 +999,16 @@ def test_prepare_swarm_agents() -> None:
 
     # Test invalid initial agent type
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(invalid_agent("invalid"), [agent1, agent2], {})  # type: ignore[arg-type]
+        _prepare_swarm_agents(invalid_agent("invalid"), [agent1, agent2], ContextVariables())  # type: ignore[arg-type]
 
     # Test invalid agents list
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(agent1, [agent1, invalid_agent("invalid")], {})  # type: ignore[list-item]
+        _prepare_swarm_agents(agent1, [agent1, invalid_agent("invalid")], ContextVariables())  # type: ignore[list-item]
 
     # Test missing handoff agent
     register_hand_off(agent=agent3, hand_to=AfterWork(agent=ConversableAgent("missing")))
     with pytest.raises(ValueError):
-        _prepare_swarm_agents(agent1, [agent1, agent2, agent3], {})
+        _prepare_swarm_agents(agent1, [agent1, agent2, agent3], ContextVariables())
 
 
 @run_for_optional_imports(["openai"], "openai")
@@ -1112,15 +1113,15 @@ def test_setup_context_variables() -> None:
     groupchat = GroupChat(agents=[tool_execution, agent1, agent2], messages=[])
     manager = GroupChatManager(groupchat)
 
-    test_context = {"test_key": "test_value"}
+    test_context = ContextVariables(data={"test_key": "test_value"})
 
     _setup_context_variables(tool_execution, [agent1, agent2], manager, test_context)
 
     # Verify all agents share the same context_variables reference
-    assert tool_execution._context_variables is test_context
-    assert agent1._context_variables is test_context
-    assert agent2._context_variables is test_context
-    assert manager._context_variables is test_context
+    assert tool_execution.context_variables is test_context
+    assert agent1.context_variables is test_context
+    assert agent2.context_variables is test_context
+    assert manager.context_variables is test_context
 
 
 def test_cleanup_temp_user_messages() -> None:
@@ -1173,12 +1174,12 @@ async def test_a_initiate_swarm_chat() -> None:
     assert len(chat_result.chat_history) > 1
 
     # Test context variables
-    test_context = {"test_key": "test_value"}
+    test_context = ContextVariables(data={"test_key": "test_value"})
     chat_result, context_vars, last_speaker = await a_initiate_swarm_chat(
         initial_agent=agent1, messages="Test", agents=[agent1, agent2], context_variables=test_context, max_rounds=3
     )
 
-    assert context_vars == test_context
+    assert context_vars == test_context.to_dict()
     assert last_speaker is None
 
 
@@ -1189,7 +1190,7 @@ def test_swarmresult_afterworkoption() -> None:
         next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         last_speaker_agent = ConversableAgent("dummy_1")
-        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent], {})
+        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent], ContextVariables())
         user = UserProxyAgent("User")
         groupchat = GroupChat(
             agents=[last_speaker_agent],
@@ -1283,7 +1284,7 @@ def test_update_on_condition_str() -> None:
         initial_agent=agent1,
         messages=TEST_MESSAGES,
         agents=[agent1, agent2],
-        context_variables={"test_var": "condition1"},
+        context_variables=ContextVariables({"test_var": "condition1"}),
         max_rounds=3,
     )
 
@@ -1317,7 +1318,7 @@ def test_update_on_condition_str() -> None:
         initial_agent=agent2,
         messages=TEST_MESSAGES,
         agents=[agent2, agent3],
-        context_variables={"test_var": "condition2"},
+        context_variables=ContextVariables({"test_var": "condition2"}),
         max_rounds=3,
     )
     assert chat_result is not None
@@ -1345,7 +1346,7 @@ def test_agent_tool_registration_for_execution(mock_credentials: Credentials) ->
 
     # Prepare swarm agents, this is where the tool will be registered for execution
     # with the internal tool executor agent
-    tool_execution, _ = _prepare_swarm_agents(agent, [agent], {})
+    tool_execution, _ = _prepare_swarm_agents(agent, [agent], ContextVariables())
 
     # Check that the tool is register for execution with the tool_execution agent
     assert "test_tool" in tool_execution._function_map
@@ -1410,7 +1411,9 @@ def test_swarmresult_afterworkoption_tool_swarmresult() -> None:
         swarm_afterworkoption: AfterWorkOption,
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         another_agent = ConversableAgent(name="another_agent")
-        tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent, another_agent], {})
+        tool_executor, _ = _prepare_swarm_agents(
+            last_speaker_agent, [last_speaker_agent, another_agent], ContextVariables()
+        )
         tool_executor._swarm_next_agent = tool_execution_swarm_result  # type: ignore[attr-defined]
         user = UserProxyAgent("User")
         groupchat = GroupChat(
@@ -1510,7 +1513,7 @@ def test_on_condition_available() -> None:
 
     # 2. Test with an available parameter that equates to True
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
-    agent1.set_context("context_var_is_true", True)
+    agent1.context_variables.set("context_var_is_true", True)
 
     register_hand_off(
         agent1,
@@ -1525,7 +1528,7 @@ def test_on_condition_available() -> None:
 
     # 3. Test with an available parameter that equates to False
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
-    agent1.set_context("context_var_is_false", False)
+    agent1.context_variables.set("context_var_is_false", False)
 
     register_hand_off(
         agent1,
@@ -1540,7 +1543,7 @@ def test_on_condition_available() -> None:
 
     # 4. Test with an available parameter that equates to True using NOT operator "!"
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)
-    agent1.set_context("context_var_is_false", False)
+    agent1.context_variables.set("context_var_is_false", False)
 
     register_hand_off(
         agent1,
@@ -1646,7 +1649,7 @@ def test_on_context_condition_run() -> None:
     agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_to_agent2")]  # type: ignore[attr-defined]
 
     # Set up context variables for agent1
-    agent1._context_variables = {"transfer_to_agent2": True}
+    agent1.context_variables = ContextVariables({"transfer_to_agent2": True})
 
     # Call _run_oncontextconditions
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
@@ -1659,7 +1662,7 @@ def test_on_context_condition_run() -> None:
     assert tool_executor._swarm_next_agent == agent2  # type: ignore[attr-defined]
 
     # Check that the function returns False when the condition is not met
-    agent1._context_variables = {"transfer_to_agent2": False}
+    agent1.context_variables = ContextVariables({"transfer_to_agent2": False})
     tool_executor._swarm_next_agent = None  # type: ignore[attr-defined]
 
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
@@ -1677,7 +1680,7 @@ def test_on_context_condition_run() -> None:
     }
 
     agent1._swarm_oncontextconditions = [OnContextCondition(target=nested_chat_config, condition="transfer_to_nested")]  # type: ignore[attr-defined]
-    agent1._context_variables = {"transfer_to_nested": True}
+    agent1.context_variables = ContextVariables({"transfer_to_nested": True})
 
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
 
@@ -1706,7 +1709,7 @@ def test_on_context_condition_available() -> None:
     # 1. Test with no available parameter (should be available)
     agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_condition")]  # type: ignore[attr-defined]
 
-    agent1._context_variables = {"transfer_condition": True}
+    agent1.context_variables = ContextVariables({"transfer_condition": True})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
@@ -1715,12 +1718,12 @@ def test_on_context_condition_available() -> None:
         OnContextCondition(target=agent2, condition="transfer_condition", available="is_available")
     ]
 
-    agent1._context_variables = {"transfer_condition": True, "is_available": True}
+    agent1.context_variables = ContextVariables({"transfer_condition": True, "is_available": True})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
     # 3. Test with string available parameter that's False
-    agent1._context_variables = {"transfer_condition": True, "is_available": False}
+    agent1.context_variables = ContextVariables({"transfer_condition": True, "is_available": False})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
@@ -1730,29 +1733,37 @@ def test_on_context_condition_available() -> None:
         OnContextCondition(target=agent2, condition="transfer_condition", available=expr)
     ]
 
-    agent1._context_variables = {"transfer_condition": True, "feature_enabled": True, "user_authorized": True}
+    agent1.context_variables = ContextVariables({
+        "transfer_condition": True,
+        "feature_enabled": True,
+        "user_authorized": True,
+    })
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
     # 5. Test with ContextExpression available parameter that's False
-    agent1._context_variables = {"transfer_condition": True, "feature_enabled": True, "user_authorized": False}
+    agent1.context_variables = ContextVariables({
+        "transfer_condition": True,
+        "feature_enabled": True,
+        "user_authorized": False,
+    })
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
     # 6. Test with callable available parameter
     def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
-        return agent._context_variables.get("dynamic_availability", False)  # type: ignore[no-any-return]
+        return agent.context_variables.get("dynamic_availability", False)  # type: ignore[return-value]
 
     agent1._swarm_oncontextconditions = [  # type: ignore[attr-defined]
         OnContextCondition(target=agent2, condition="transfer_condition", available=is_available)
     ]
 
-    agent1._context_variables = {"transfer_condition": True, "dynamic_availability": True}
+    agent1.context_variables = ContextVariables({"transfer_condition": True, "dynamic_availability": True})
     agent1._oai_messages[agent2].append({"role": "user", "content": "Test"})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
-    agent1._context_variables = {"transfer_condition": True, "dynamic_availability": False}
+    agent1.context_variables = ContextVariables({"transfer_condition": True, "dynamic_availability": False})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
@@ -1811,7 +1822,7 @@ def test_change_tool_context_variables_to_depends() -> None:
     assert "context_variables" in tool_with_context.tool_schema["function"]["parameters"]["properties"]
 
     # Test context variables
-    context_variables = {"test_key": "test_value"}
+    context_variables = ContextVariables({"test_key": "test_value"})
 
     # Keep track of the number of tools before the change
     tools_count_before = len(agent.tools)
@@ -1859,8 +1870,8 @@ def test_change_tool_context_variables_dependency_injection() -> None:
     agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
 
     # Context variables to be injected
-    context_variables = {"test_key": "injected_value"}
-    agent._context_variables = context_variables
+    context_variables = ContextVariables({"test_key": "injected_value"})
+    agent.context_variables = context_variables
 
     # Create a test function that has a context_variables parameter
     def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
@@ -1947,7 +1958,7 @@ def test_change_tool_context_variables_function_signature() -> None:
     orig_default = orig_param.default
 
     # Context variables
-    context_variables = {"test_key": "test_value"}
+    context_variables = ContextVariables({"test_key": "test_value"})
 
     # Call the function to modify the tool
     _change_tool_context_variables_to_depends(agent, original_tool, context_variables)
