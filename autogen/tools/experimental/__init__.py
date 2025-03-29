@@ -16,6 +16,12 @@ from .messageplatform import (
     TelegramSendTool,
 )
 from .perplexity import PerplexitySearchTool
+from .wikipedia import (
+    WikipediaPrefixSearchTool,
+    WikipediaSummaryRetrieverTool,
+    WikipediaTextRetrieverTool,
+    WikipediaTopicSearchTool,
+)
 
 __all__ = [
     "BrowserUseTool",
@@ -29,5 +35,9 @@ __all__ = [
     "SlackSendTool",
     "TelegramRetrieveTool",
     "TelegramSendTool",
+    "WikipediaPrefixSearchTool",
+    "WikipediaSummaryRetrieverTool",
+    "WikipediaTextRetrieverTool",
+    "WikipediaTopicSearchTool",
     "YoutubeSearchTool",
 ]
