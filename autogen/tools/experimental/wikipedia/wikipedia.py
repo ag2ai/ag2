@@ -37,11 +37,17 @@ class WikipediaPrefixSearchTool(Tool):
         self.base_url = f"https://{language}.wikipedia.org/w/api.php"
         super().__init__(
             name="wikipedia-prefix-search",
-            description="Provides real-time Wikipedia article title suggestions using prefix matching",
+            description=(
+                "Search Wikipedia article titles starting with input text. "
+                "Use when the input text is incomplete, partial, or ambiguous search terms.\n\n"
+                "Input: A partial title string (case-insensitive).\n"
+                "Output: A List[str] of matching titles or an error message.\n\n"
+                "Next Steps: Chain with summary tool for condensed insights or page content retrieval tool for detailed results."
+            ),
             func_or_tool=self.prefix_search,
         )
 
-    def prefix_search(self, query: str, limit: int = 10) -> Union[str, Any]:
+    def prefix_search(self, query: str, limit: int = 3) -> Union[str, Any]:
         """
         Retrieve Wikipedia article titles matching a search prefix.
 
@@ -172,7 +178,7 @@ class WikipediaSummaryRetrieverTool(Tool):
         self.base_url = f"https://{language}.wikipedia.org/w/api.php"
         super().__init__(
             name="wikipedia-summary-extractor",
-            description="Retrieves structured summaries from Wikipedia articles by exact title",
+            description="Retrieves structured summary of Wikipedia pages by exact title",
             func_or_tool=self.get_page_summary,
         )
 
@@ -236,11 +242,11 @@ class WikipediaTopicSearchTool(Tool):
         self.base_url = f"https://{language}.wikipedia.org/w/api.php"
         super().__init__(
             name="wikipedia-topic-search",
-            description="Performs contextual Wikipedia research with batch content extraction",
+            description="Search a topic on Wikipedia without and return the content of the pages found. You should terminate or wait for user instructions after returning the results",
             func_or_tool=self.search_topic,
         )
 
-    def _get_pages(self, topic: str, limit: int = 10) -> dict[str, Any]:
+    def _get_pages(self, topic: str, limit: int = 3) -> dict[str, Any]:
         """
         Internal method: Execute Wikipedia search query and process raw results.
 
