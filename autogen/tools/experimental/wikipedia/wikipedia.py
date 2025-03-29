@@ -232,7 +232,7 @@ class WikipediaTopicSearchTool(Tool):
         Initialize Wikipedia API client with research-focused configuration.
 
         Args:
-            language: Supported Wikipedia language code (e.g., 'fr' for French)
+            language: Supported Wikipedia language code (e.g., 'es' for Spanish)
         """
         self.wiki = wikipediaapi.Wikipedia(
             language=language,
