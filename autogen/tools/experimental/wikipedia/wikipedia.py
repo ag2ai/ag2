@@ -283,7 +283,7 @@ class WikipediaTopicSearchTool(Tool):
 
         return result
 
-    def search_topic(self, topic: str, limit: int = 3, truncate: int = 2000) -> Union[dict[str, Any], str]:
+    def search_topic(self, topic: str, limit: int = 3, truncate: int = 2000) -> dict[str, str]:
         """
         Retrieve and process content for multiple related Wikipedia pages.
 
@@ -298,6 +298,10 @@ class WikipediaTopicSearchTool(Tool):
             - Error: {"error": description}
         """
         try:
+            # Add parameter validation
+            limit = max(1, min(50, limit))
+            truncate = max(0, min(10000, truncate))
+
             search_results = self._get_pages(topic, limit=limit)
             content_dict = {}
 
@@ -309,4 +313,4 @@ class WikipediaTopicSearchTool(Tool):
             return content_dict or {"error": "No valid pages found"}
 
         except Exception as e:
-            return f"Topic search failed: {str(e)}"
+            return {"Error": f"topic search failed: {str(e)}"}
