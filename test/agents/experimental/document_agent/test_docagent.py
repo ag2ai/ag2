@@ -4,6 +4,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from autogen.agents.experimental.document_agent.document_agent import (
     DocAgent,
     DocumentTask,
@@ -21,6 +23,7 @@ def test_document_triage_agent_init(credentials_gpt_4o_mini: Credentials) -> Non
     assert triage_agent.llm_config["response_format"] == DocumentTask  # type: ignore [index]
 
 
+@pytest.mark.openai
 @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
 def test_document_agent_init(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config

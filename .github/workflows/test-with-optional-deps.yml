@@ -62,6 +62,7 @@ jobs:
           - "commsagent-slack"
           - "commsagent-telegram"
           - "jupyter-executor"
+          - "rag"
           - "retrievechat"
           - "retrievechat-pgvector"
           - "retrievechat-mongodb"
@@ -115,6 +116,13 @@ jobs:
           - os: windows-latest
             python-version: "3.13"
             optional-dependencies: "retrievechat-mongodb"
+          # Skip RAG tests on macOS and Windows with Python 3.13 due to issues with dependencies like PyTorch and sentence_transformers
+          - os: macos-latest
+            python-version: "3.13"
+            optional-dependencies: "rag"
+          - os: windows-latest
+            python-version: "3.13"
+            optional-dependencies: "rag"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
