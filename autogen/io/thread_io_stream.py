@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import queue
+from asyncio import Queue as AsyncQueue
 from typing import Any
 
 from ..events.agent_events import InputRequestEvent
@@ -27,4 +28,26 @@ class ThreadIOStream:
 
     @property
     def input_stream(self) -> queue.Queue:  # type: ignore[type-arg]
+        return self._input_stream
+
+
+class AsyncThreadIOStream:
+    def __init__(self) -> None:
+        self._input_stream: AsyncQueue = AsyncQueue()  # type: ignore[type-arg]
+        self._output_stream: AsyncQueue = AsyncQueue()  # type: ignore[type-arg]
+
+    async def input(self, prompt: str = "", *, password: bool = False) -> str:
+        self.send(InputRequestEvent(prompt=prompt, password=password))  # type: ignore[call-arg]
+        return await self._output_stream.get()  # type: ignore[no-any-return]
+
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+        print_message = PrintEvent(*objects, sep=sep, end=end)
+        self.send(print_message)
+
+    def send(self, message: Any) -> None:
+        print(message)
+        self._input_stream.put_nowait(message)
+
+    @property
+    def input_stream(self) -> AsyncQueue[Any]:
         return self._input_stream

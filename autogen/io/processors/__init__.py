@@ -2,6 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 from .base import AsyncEventProcessorProtocol, EventProcessorProtocol
-from .console_event_processor import ConsoleEventProcessor
+from .console_event_processor import AsyncConsoleEventProcessor, ConsoleEventProcessor
 
-__all__ = ["AsyncEventProcessorProtocol", "ConsoleEventProcessor", "EventProcessorProtocol"]
+__all__ = [
+    "AsyncConsoleEventProcessor",
+    "AsyncEventProcessorProtocol",
+    "ConsoleEventProcessor",
+    "EventProcessorProtocol",
+]
