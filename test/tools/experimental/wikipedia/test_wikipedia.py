@@ -69,8 +69,8 @@ class TestWikipediaClient(unittest.TestCase):
             client.search("Test")
 
     def test_get_page_exists(self) -> None:
-        client = WikipediaClient()
         # Simulate a page that exists.
+        client = WikipediaClient()
         fake_page = FakePage(True, summary="Fake summary", text="Fake text")
         with patch.object(client.wiki, "page", return_value=fake_page):
             page = client.get_page("Fake Page")
@@ -80,8 +80,8 @@ class TestWikipediaClient(unittest.TestCase):
             self.assertEqual(page.summary, "Fake summary")
 
     def test_get_page_nonexistent(self) -> None:
-        client = WikipediaClient()
         # Simulate a page that does not exist.
+        client = WikipediaClient()
         fake_page = FakePage(False)
         with patch.object(client.wiki, "page", return_value=fake_page):
             page = client.get_page("Nonexistent Page")
@@ -120,6 +120,7 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
         self.addCleanup(self.patcher_get_page.stop)
 
     def test_query_run_success(self) -> None:
+        # Simulate query run success scenario
         result = self.tool.query_run("Some test query")
         # Expect a list with formatted summary.
         self.assertIsInstance(result, list)
@@ -146,9 +147,7 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
-        """
-        Integration test for verifying the registration of the WikipediaQueryRunTool with an AssistantAgent.
-        """
+        # Integration test for verifying the registration of the WikipediaQueryRunTool with an AssistantAgent.
         search_tool = WikipediaPageLoadTool()
         assistant = AssistantAgent(
             name="assistant",
@@ -192,6 +191,7 @@ class TestWikipediaPageLoadTool(unittest.TestCase):
         self.addCleanup(self.patcher_get_page.stop)
 
     def test_content_search_success(self) -> None:
+        # Simulate successful search results.
         result = self.tool.content_search("Some test query")
         if isinstance(result, list):
             self.assertGreater(len(result), 0)
@@ -218,9 +218,7 @@ class TestWikipediaPageLoadTool(unittest.TestCase):
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
-        """
-        Integration test for verifying the registration of the WikipediaPageLoadTool with an AssistantAgent.
-        """
+        # Integration test for verifying the registration of the WikipediaPageLoadTool with an AssistantAgent.
         search_tool = WikipediaPageLoadTool()
         assistant = AssistantAgent(
             name="assistant",
@@ -230,7 +228,3 @@ class TestWikipediaPageLoadTool(unittest.TestCase):
         search_tool.register_for_llm(assistant)
         assert isinstance(assistant.tools[0], WikipediaPageLoadTool)
         assert assistant.tools[0].name == "wikipedia-page-load"
-
-
-if __name__ == "__main__":
-    unittest.main()
