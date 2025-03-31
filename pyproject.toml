@@ -157,8 +157,18 @@ browser-use = [
     "browser-use==0.1.37",
 ]
 
-google-search = [
+google-client = [
     "google-api-python-client>=2.163.0,<3.0",
+]
+
+google-api = [
+    "pyautogen[google-client]",
+    "google-auth-httplib2>=0.2.0,<0.3",
+    "google-auth-oauthlib>=1.2.1,<2.0",
+]
+
+google-search = [
+    "pyautogen[google-client]",
 ]
 
 neo4j = [
@@ -344,6 +354,7 @@ markers = [
     "interop",
     "browser_use",
     "crawl4ai",
+    "google_api",
     "google_search",
     "websockets",
     "commsagent_discord",
