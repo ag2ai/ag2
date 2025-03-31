@@ -71,10 +71,10 @@
       card.addEventListener("click", function (e) {
         // Don't trigger if user clicked on a link or tag inside the card
         if (!e.target.closest("a") && !e.target.closest(".tag")) {
-          const link = this.getAttribute("data-link");
+          const rel_link = this.getAttribute("data-rel-link");
           const link_target = this.getAttribute("data-link-target");
-          if (link && link !== "#") {
-            window.open(link, link_target);
+          if (rel_link && rel_link !== "#") {
+            window.open(rel_link, link_target);
           }
         }
       });
@@ -230,6 +230,37 @@
     }
   }
 
+  function fixHomePageImagePaths() {
+    const isHomePage =
+      window.location.pathname.startsWith("/ag2/") &&
+      window.location.pathname.includes("/docs/home/home/");
+
+    // Only proceed if we're on the home page
+    if (!isHomePage) {
+      console.log("Not on the home page, skipping image path fixes");
+      return;
+    }
+
+    // Find the hero section and update its background-image
+    const heroSection = document.querySelector(".homepage-hero-section");
+
+    // Only proceed if hero section exists
+    if (heroSection) {
+      // Get the current background image CSS
+      const style = window.getComputedStyle(heroSection);
+      const backgroundImage = style.backgroundImage;
+
+      // Simple string replace to insert "/ag2" before "/assets"
+      const newBackgroundImage = backgroundImage.replace(
+        "/assets",
+        "/ag2/assets"
+      );
+
+      // Set the new background-image
+      heroSection.style.backgroundImage = newBackgroundImage;
+    }
+  }
+
   // Fix edit URLs
   function fixEditUrls() {
     // Find the edit link on the page
@@ -239,12 +270,9 @@
     if (editLink) {
       // Hide edit link for API reference pages
       if (window.location.pathname.includes("/docs/api-reference/")) {
-        console.log("Insede API reference page");
         editLink.classList.add("hide-edit-link");
       }
-
       const href = editLink.getAttribute("href");
-
       // Special case for notebooks
       if (
         href &&
@@ -258,7 +286,6 @@
         // Update the href attribute
         editLink.setAttribute("href", newHref);
       }
-
       // Handle blog urls
       else if (href && href.includes("/blog/posts/")) {
         const newHref = href
@@ -268,16 +295,95 @@
         // Update the href attribute
         editLink.setAttribute("href", newHref);
       }
-
       // Regular case for other markdown files
       else if (href && href.endsWith(".md")) {
         // Replace .md with .mdx at the end
         const newHref = href.replace(/\.md$/, ".mdx");
-
         // Update the href attribute
         editLink.setAttribute("href", newHref);
       }
     }
+  }
+
+  function normalizePath(path, isFromSnippets, url, isImage = false) {
+    // Remove all ../ from the beginning
+    const cleanPath = path.replace(/^(\.\.\/)+/, "");
+
+    // Special case for images with date prefixes
+    if (isImage && /^\d{4}-\d{2}-\d{2}-/.test(cleanPath)) {
+      return `../../${cleanPath}`;
+    }
+
+    const levels = url.endsWith("/docs/blog/")
+      ? isFromSnippets
+        ? 2
+        : 1
+      : isFromSnippets
+      ? 4
+      : 3;
+    return "../".repeat(levels) + cleanPath;
+  }
+
+  function processElements(
+    selector,
+    attribute,
+    document,
+    url,
+    isImage = false
+  ) {
+    const elements = document.querySelectorAll(selector);
+
+    elements.forEach((element) => {
+      const path = element.getAttribute(attribute);
+
+      // Skip if no attribute or it's not a relative path
+      if (!path || !(path.startsWith("../") || path.startsWith("./"))) {
+        return;
+      }
+
+      // Check if the path is from the snippets directory
+      const isFromSnippets = path
+        .replace(/^(\.\.\/)+/, "")
+        .startsWith("snippets/");
+
+      // Normalize the path
+      element.setAttribute(
+        attribute,
+        normalizePath(path, isFromSnippets, url, isImage)
+      );
+    });
+  }
+
+  function isBlogUrl(url) {
+    return (
+      url.endsWith("/docs/blog/") || // Exact match for root
+      url.includes("/blog/category/") || // Any category page
+      /\/blog\/page\/\d+\//.test(url) // Any paginated blog
+    );
+  }
+
+  function fixBlogUrls() {
+    const { href } = document.location;
+
+    // Check if URL matches the target patterns
+    if (!isBlogUrl(href)) return;
+
+    // Process both img src and anchor href attributes
+    processElements(
+      'main img[src^="../"], img[src^="./"]',
+      "src",
+      document,
+      href,
+      true
+    );
+    processElements(
+      '.md-post a[href^="../"]:not(.toclink):not(.md-meta__link):not(nav.md-post__action > a), ' +
+        '.md-post a[href^="./"]:not(.toclink):not(.md-meta__link):not(nav.md-post__action > a)',
+      "href",
+      document,
+      href,
+      false
+    );
   }
 
   // Initialize everything when the document is ready
@@ -285,7 +391,9 @@
     handleBlogURLs();
     handleUserStoryURLs();
     loadDependencies();
+    fixHomePageImagePaths();
     fixEditUrls();
+    fixBlogUrls();
   });
 
   // Watch for URL changes using MutationObserver

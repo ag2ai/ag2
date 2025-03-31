@@ -358,9 +358,9 @@ llm_config = LLMConfig(
 
 ## Other helpers for loading a config list
 
-- [`get_config_list`](/docs/api-reference/autogen/oai/openai_utils/): Generates configurations for API calls, primarily from provided API keys.
-- [`config_list_openai_aoai`](/docs/api-reference/autogen/oai/openai_utils/): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
-- [`config_list_from_models`](/docs/api-reference/autogen/oai/openai_utils/): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
-- [`config_list_from_dotenv`](/docs/api-reference/autogen/oai/openai_utils/): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
+- [`get_config_list`](/docs/api-reference/autogen/get_config_list): Generates configurations for API calls, primarily from provided API keys.
+- [`config_list_openai_aoai`](/docs/api-reference/autogen/config_list_openai_aoai): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
+- [`config_list_from_models`](/docs/api-reference/autogen/config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
+- [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
 See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.
