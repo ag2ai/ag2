@@ -3,338 +3,233 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import unittest
-from typing import Any
-from unittest.mock import MagicMock, Mock, create_autospec, patch
+from unittest.mock import MagicMock, patch
 
 import requests
-import wikipediaapi
 
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
-from autogen.tools.experimental import (
-    WikipediaPrefixSearchTool,
-    WikipediaSummaryRetrieverTool,
-    WikipediaTextRetrieverTool,
-    WikipediaTopicSearchTool,
+from autogen.tools.experimental.wikipedia.wikipedia import (
+    Document,
+    WikipediaClient,
+    WikipediaPageLoadTool,
+    WikipediaQueryRunTool,
 )
 
 from ....conftest import Credentials
 
 
-# Fake page object to simulate wikipediaapi behavior.
+# A simple fake page class to simulate a wikipediaapi.WikipediaPage.
 class FakePage:
-    def __init__(self, exists: bool, text: str = "", summary: str = ""):
+    def __init__(self, exists: bool, summary: str = "", text: str = "") -> None:
         self._exists = exists
-        self.text = text
         self.summary = summary
+        self.text = text
 
     def exists(self) -> bool:
         return self._exists
 
 
-class TestWikipediaPrefixSearchTool(unittest.TestCase):
-    def setUp(self) -> None:
-        # Initialize the tool instance (using English Wikipedia)
-        self.tool = WikipediaPrefixSearchTool(language="en")
-
-    @patch("requests.get")
-    def test_prefix_search_success(self, mock_get: Mock) -> None:
-        # Simulate a successful response from Wikipedia's OpenSearch API
-        fake_titles = ["Apple", "Applesauce", "Applet"]
-        fake_json = ["App", fake_titles, ["desc1", "desc2", "desc3"], ["url1", "url2", "url3"]]
-
-        fake_response = Mock()
-        fake_response.json.return_value = fake_json
-        fake_response.raise_for_status.return_value = None  # No HTTP error
-
-        mock_get.return_value = fake_response
-
-        # Call the prefix_search method with a query string and a limit of 3
-        result = self.tool.prefix_search("App", limit=3)
-
-        # Verify that the method returns the list of titles from the fake response
-        self.assertEqual(result, fake_titles)
-
-        # Verify that the correct URL and parameters were used in the API request
-        mock_get.assert_called_once()
-        called_args = mock_get.call_args[1]
-        self.assertEqual(called_args["url"], self.tool.base_url)
-        self.assertEqual(called_args["params"]["search"], "App")
-        self.assertEqual(called_args["params"]["limit"], "3")
-        self.assertEqual(called_args["params"]["namespace"], "0")
-        self.assertEqual(called_args["params"]["format"], "json")
-        self.assertIn("User-Agent", called_args["headers"])
-
-    @patch("requests.get")
-    def test_prefix_search_failure(self, mock_get: Mock) -> None:
-        # Simulate an exception (e.g., network error)
-        mock_get.side_effect = Exception("Network error")
-
-        result = self.tool.prefix_search("App", limit=3)
-
-        # Check that an error message is returned indicating failure
-        self.assertTrue(result.startswith("Prefix search failed:"))
-        self.assertIn("Network error", result)
-
-    @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
-        """
-        Test integration with AssistantAgent.
-        """
-        assistant = AssistantAgent(
-            name="assistant",
-            system_message="You are a helpful assistant.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
-        )
-        self.tool.register_for_llm(assistant)
-        assert isinstance(assistant.tools[0], WikipediaPrefixSearchTool)
-        assert assistant.tools[0].name == "wikipedia-prefix-search"
-
-
-class TestWikipediaTextRetrieverTool(unittest.TestCase):
-    def setUp(self) -> None:
-        # Initialize the tool with the default language (English)
-        self.tool = WikipediaTextRetrieverTool(language="en")
-
-    def test_get_page_text_success(self) -> None:
-        # Simulate a successful page retrieval: page exists and contains content.
-        fake_page = FakePage(exists=True, text="Sample article content")
-        # Patch the wiki.page method to return our fake page
-        self.tool.wiki.page = MagicMock(return_value=fake_page)
-
-        result: Any = self.tool.get_page_text("Sample Title")
-        self.assertEqual(result, "Sample article content")
-        self.tool.wiki.page.assert_called_once_with("Sample Title")
-
-    def test_get_page_text_page_not_found(self) -> None:
-        # Simulate the case where the page does not exist.
-        fake_page = FakePage(exists=False, text="")
-        self.tool.wiki.page = MagicMock(return_value=fake_page)
-
-        result: Any = self.tool.get_page_text("Nonexistent Title")
-        expected_message = "No Wikipedia page found with title: 'Nonexistent Title'"
-        self.assertEqual(result, expected_message)
-        self.tool.wiki.page.assert_called_once_with("Nonexistent Title")
-
-    def test_get_page_text_exception(self) -> None:
-        # Simulate an exception occurring during the API call.
-        self.tool.wiki.page = MagicMock(side_effect=Exception("API error"))
-
-        result: Any = self.tool.get_page_text("Any Title")
-        self.assertTrue(result.startswith("Text content retrieve failed:"))
-        self.assertIn("API error", result)
-
-    @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
-        """
-        Test integration with AssistantAgent.
-        """
-        assistant = AssistantAgent(
-            name="assistant",
-            system_message="You are a helpful assistant.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
-        )
-        self.tool.register_for_llm(assistant)
-        assert isinstance(assistant.tools[0], WikipediaTextRetrieverTool)
-        assert assistant.tools[0].name == "wikipedia-text-extractor"
-
-
-class TestWikipediaSummaryRetrieverTool(unittest.TestCase):
-    def setUp(self) -> None:
-        # Initialize the tool instance (default language 'en')
-        self.tool = WikipediaSummaryRetrieverTool(language="en")
-
-    def test_get_page_summary_success(self) -> None:
-        # Simulate a page that exists with a valid summary
-        fake_page = FakePage(exists=True, summary="This is the article summary.")
-        self.tool.wiki.page = MagicMock(return_value=fake_page)
-
-        result: Any = self.tool.get_page_summary("Sample Title")
-        self.assertEqual(result, "This is the article summary.")
-        self.tool.wiki.page.assert_called_once_with("Sample Title")
-
-    def test_get_page_summary_page_not_found(self) -> None:
-        # Simulate a page that does not exist
-        fake_page = FakePage(exists=False, summary="")
-        self.tool.wiki.page = MagicMock(return_value=fake_page)
-
-        result: Any = self.tool.get_page_summary("Nonexistent Title")
-        expected = "No Wikipedia page found with title: 'Nonexistent Title'"
-        self.assertEqual(result, expected)
-        self.tool.wiki.page.assert_called_once_with("Nonexistent Title")
-
-    def test_get_page_summary_exception(self) -> None:
-        # Simulate an exception during the API call
-        self.tool.wiki.page = MagicMock(side_effect=Exception("API error"))
-
-        result: Any = self.tool.get_page_summary("Any Title")
-        self.assertTrue(result.startswith("Summary retrieve failed:"))
-        self.assertIn("API error", result)
-
-    @run_for_optional_imports("openai", "openai")
-    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
-        """
-        Test integration with AssistantAgent.
-        """
-        assistant = AssistantAgent(
-            name="assistant",
-            system_message="You are a helpful assistant.",
-            llm_config=credentials_gpt_4o_mini.llm_config,
-        )
-        self.tool.register_for_llm(assistant)
-        assert isinstance(assistant.tools[0], WikipediaSummaryRetrieverTool)
-        assert assistant.tools[0].name == "wikipedia-summary-extractor"
-
-
-class TestWikipediaTopicSearchTool(unittest.TestCase):
-    """
-    Unit tests for the WikipediaTopicSearchTool class.
-
-    This test suite validates:
-    - Initialization of the tool with default and custom languages.
-    - Parameter validation for search limits and truncation.
-    - Successful retrieval of Wikipedia pages.
-    - Error handling for network issues and invalid pages.
-    - Correct truncation of page content.
-    """
-
-    def setUp(self) -> None:
-        """Set up mocks and the tool instance."""
-        self.mock_wiki = create_autospec(wikipediaapi.Wikipedia)
-        self.mock_page = MagicMock()
-        self.mock_page.exists.return_value = True
-        self.mock_page.text = "Sample content " * 200  # 3000+ characters
-        self.mock_wiki.page.return_value = self.mock_page
-
-        self.tool = WikipediaTopicSearchTool()
-        self.tool.wiki = self.mock_wiki
-
-    @patch("requests.get")
-    def test_initialization_default_language(self, mock_get: Mock) -> None:
-        tool = WikipediaTopicSearchTool()
-        self.assertEqual(tool.base_url, "https://en.wikipedia.org/w/api.php")
-        self.assertEqual(tool.wiki.language, "en")
-
-    @patch("requests.get")
-    def test_initialization_custom_language(self, mock_get: Mock) -> None:
-        tool = WikipediaTopicSearchTool(language="es")
-        self.assertEqual(tool.base_url, "https://es.wikipedia.org/w/api.php")
-        self.assertEqual(tool.wiki.language, "es")
-
-    @patch("requests.get")
-    def test_get_pages_success(self, mock_get: Mock) -> None:
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
+class TestWikipediaClient(unittest.TestCase):
+    @patch("autogen.tools.experimental.wikipedia.wikipedia.requests.get")
+    def test_search_success(self, mock_get: MagicMock) -> None:
+        # Simulate a valid JSON response from Wikipedia API.
+        fake_json = {
             "query": {
                 "search": [
                     {
-                        "title": "Test Page 1",
+                        "title": "Test Page",
                         "pageid": 123,
-                        "size": 4500,
-                        "wordcount": 700,
-                        "timestamp": "2024-01-01T12:00:00Z",
+                        "timestamp": "2023-01-01T00:00:00Z",
+                        "wordcount": 100,
+                        "size": 500,
                     }
                 ]
             }
         }
+        mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = fake_json
         mock_get.return_value = mock_response
 
-        result = self.tool._get_pages("test", limit=3)
+        client = WikipediaClient()
+        results = client.search("Test")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "Test Page")
 
-        self.assertIn("results", result)
-        self.assertEqual(len(result["results"]), 1)
-        self.assertEqual(result["results"][0]["title"], "Test Page 1")
-        mock_response.raise_for_status.assert_called_once()
-
-    @patch("requests.get")
-    def test_get_pages_api_error(self, mock_get: Mock) -> None:
+    @patch("autogen.tools.experimental.wikipedia.wikipedia.requests.get")
+    def test_search_http_error(self, mock_get: MagicMock) -> None:
+        # Simulate an HTTP error response.
         mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.HTTPError("API Error")
+        mock_response.raise_for_status.side_effect = requests.HTTPError("HTTP Error")
         mock_get.return_value = mock_response
 
+        client = WikipediaClient()
         with self.assertRaises(requests.HTTPError):
-            self.tool._get_pages("test")
+            client.search("Test")
 
-    # In TestWikipediaTopicSearchTool2 class
-    @patch.object(WikipediaTopicSearchTool, "_get_pages")
-    def test_search_topic_success(self, mock_get_pages: Mock) -> None:
-        # Configure mock to return consistent data
-        mock_get_pages.return_value = {"results": [{"title": "Test Page 1"}]}
+    def test_get_page_exists(self) -> None:
+        client = WikipediaClient()
+        # Simulate a page that exists.
+        fake_page = FakePage(True, summary="Fake summary", text="Fake text")
+        with patch.object(client.wiki, "page", return_value=fake_page):
+            page = client.get_page("Fake Page")
+            self.assertIsNotNone(page)
+            if page is None:
+                self.fail("Expected page to be not None")
+            self.assertEqual(page.summary, "Fake summary")
 
-        result = self.tool.search_topic("test")
-        self.assertIn("Test Page 1", result)
+    def test_get_page_nonexistent(self) -> None:
+        client = WikipediaClient()
+        # Simulate a page that does not exist.
+        fake_page = FakePage(False)
+        with patch.object(client.wiki, "page", return_value=fake_page):
+            page = client.get_page("Nonexistent Page")
+            self.assertIsNone(page)
 
-    def test_search_topic_no_valid_pages(self) -> None:
-        self.mock_page.exists.return_value = False
 
-        result = self.tool.search_topic("test")
-        self.assertEqual(result, {"error": "No valid pages found"})
+class TestWikipediaQueryRunTool(unittest.TestCase):
+    def setUp(self) -> None:
+        # Create an instance of the tool with verbose off.
+        self.tool = WikipediaQueryRunTool(verbose=False)
+        # Patch the search method.
+        self.patcher_search = patch.object(
+            self.tool.wiki_cli,
+            "search",
+            return_value=[
+                {
+                    "title": "Test Page",
+                    "pageid": 123,
+                    "timestamp": "2023-01-01T00:00:00Z",
+                    "wordcount": 100,
+                    "size": 500,
+                }
+            ],
+        )
+        self.mock_search = self.patcher_search.start()
+        self.addCleanup(self.patcher_search.stop)
 
-    def test_search_topic_truncation(self) -> None:
-        with patch.object(self.tool, "_get_pages") as mock_get_pages:
-            mock_get_pages.return_value = {"results": [{"title": "Test Page 1"}]}
+        # Patch the get_page method.
+        fake_page = FakePage(True, summary="Test summary", text="Test text")
+        self.patcher_get_page = patch.object(
+            self.tool.wiki_cli,
+            "get_page",
+            return_value=fake_page,
+        )
+        self.mock_get_page = self.patcher_get_page.start()
+        self.addCleanup(self.patcher_get_page.stop)
 
-            # Test zero truncation
-            result = self.tool.search_topic("test", truncate=0)
-            self.assertEqual(len(result["Test Page 1"]), 0)
+    def test_query_run_success(self) -> None:
+        result = self.tool.query_run("Some test query")
+        # Expect a list with formatted summary.
+        self.assertIsInstance(result, list)
+        if isinstance(result, list):
+            self.assertIn("Page: Test Page", result[0])
+            self.assertIn("Summary: Test summary", result[0])
+        else:
+            self.fail("Expected result to be a list")
 
-            # Test exact truncation
-            result = self.tool.search_topic("test", truncate=50)
-            self.assertEqual(len(result["Test Page 1"]), 50)
+    def test_query_run_no_results(self) -> None:
+        # Simulate no search results.
+        self.mock_search.return_value = []
+        result = self.tool.query_run("Some test query")
+        self.assertEqual(result, "No good Wikipedia Search Result was found")
 
-    @patch("requests.get")
-    def test_search_topic_error_handling(self, mock_get: Mock) -> None:
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.RequestException("Connection error")
-        mock_get.return_value = mock_response
-
-        result = self.tool.search_topic("test")
-        self.assertEqual("topic search failed: Connection error", result["Error"])
-
-    @patch.object(WikipediaTopicSearchTool, "_get_pages")
-    def test_parameter_validation(self, mock_get_pages: Mock) -> None:
-        # Test lower boundary
-        self.tool.search_topic("test", limit=0)
-        self.assertEqual(mock_get_pages.call_args[1]["limit"], 1)
-
-        # Test upper boundary
-        self.tool.search_topic("test", limit=100)
-        self.assertEqual(mock_get_pages.call_args[1]["limit"], 50)
-
-        # Test valid middle value
-        self.tool.search_topic("test", limit=5)
-        self.assertEqual(mock_get_pages.call_args[1]["limit"], 5)
-
-    @patch.object(WikipediaTopicSearchTool, "_get_pages")
-    def test_content_retrieval_priority(self, mock_get_pages: Mock) -> None:
-        # Test multiple results handling
-        mock_get_pages.return_value = {
-            "results": [
-                {"title": "Page1"},
-                {"title": "Page2"},
-                {"title": "Page3"},
-            ]
-        }
-
-        result = self.tool.search_topic("test", limit=3)
-
-        self.assertEqual(len(result), 3)
-        self.assertEqual(self.mock_wiki.page.call_count, 3)
+    def test_query_run_exception(self) -> None:
+        # Simulate an exception during search.
+        self.mock_search.side_effect = Exception("fail")
+        result = self.tool.query_run("Some test query")
+        if isinstance(result, str):
+            self.assertTrue(result.startswith("wikipedia search failed: "))
+        else:
+            self.fail("Expected result to be a string error message")
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
         """
-        Test integration with AssistantAgent.
+        Integration test for verifying the registration of the WikipediaQueryRunTool with an AssistantAgent.
         """
+        search_tool = WikipediaPageLoadTool()
         assistant = AssistantAgent(
             name="assistant",
-            system_message="You are a helpful assistant.",
+            system_message="You are a helpful assistant. Use the wikipedia page load tool when needed.",
             llm_config=credentials_gpt_4o_mini.llm_config,
         )
-        self.tool.register_for_llm(assistant)
-        assert isinstance(assistant.tools[0], WikipediaTopicSearchTool)
-        assert assistant.tools[0].name == "wikipedia-topic-search"
+        search_tool.register_for_llm(assistant)
+        assert isinstance(assistant.tools[0], WikipediaQueryRunTool)
+        assert assistant.tools[0].name == "wikipedia-query-run"
+
+
+class TestWikipediaPageLoadTool(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tool = WikipediaPageLoadTool(verbose=False)
+        self.fake_search_result = [
+            {
+                "title": "Test Page",
+                "pageid": 123,
+                "timestamp": "2023-01-01T00:00:00Z",
+                "wordcount": 100,
+                "size": 500,
+            }
+        ]
+        # Patch the search method.
+        self.patcher_search = patch.object(
+            self.tool.wiki_cli,
+            "search",
+            return_value=self.fake_search_result,
+        )
+        self.mock_search = self.patcher_search.start()
+        self.addCleanup(self.patcher_search.stop)
+
+        # Patch the get_page method.
+        fake_page = FakePage(True, summary="Test summary", text="Test text content that is long enough")
+        self.patcher_get_page = patch.object(
+            self.tool.wiki_cli,
+            "get_page",
+            return_value=fake_page,
+        )
+        self.mock_get_page = self.patcher_get_page.start()
+        self.addCleanup(self.patcher_get_page.stop)
+
+    def test_content_search_success(self) -> None:
+        result = self.tool.content_search("Some test query")
+        if isinstance(result, list):
+            self.assertGreater(len(result), 0)
+            self.assertIsInstance(result[0], Document)
+            self.assertEqual(result[0].metadata["title"], "Test Page")
+            self.assertTrue(result[0].page_content.startswith("Test text"))
+        else:
+            self.fail("Expected result to be a list of Document objects")
+
+    def test_content_search_no_results(self) -> None:
+        # Simulate no search results.
+        self.mock_search.return_value = []
+        result = self.tool.content_search("Some test query")
+        self.assertEqual(result, "No good Wikipedia Search Result was found")
+
+    def test_content_search_exception(self) -> None:
+        # Simulate an exception during search.
+        self.mock_search.side_effect = Exception("fail")
+        result = self.tool.content_search("Some test query")
+        if isinstance(result, str):
+            self.assertTrue(result.startswith("wikipedia search failed: "))
+        else:
+            self.fail("Expected result to be a string error message")
+
+    @run_for_optional_imports("openai", "openai")
+    def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
+        """
+        Integration test for verifying the registration of the WikipediaPageLoadTool with an AssistantAgent.
+        """
+        search_tool = WikipediaPageLoadTool()
+        assistant = AssistantAgent(
+            name="assistant",
+            system_message="You are a helpful assistant. Use the wikipedia page load tool when needed.",
+            llm_config=credentials_gpt_4o_mini.llm_config,
+        )
+        search_tool.register_for_llm(assistant)
+        assert isinstance(assistant.tools[0], WikipediaPageLoadTool)
+        assert assistant.tools[0].name == "wikipedia-page-load"
 
 
 if __name__ == "__main__":

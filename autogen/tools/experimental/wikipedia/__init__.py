@@ -2,16 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .wikipedia import (
-    WikipediaPrefixSearchTool,
-    WikipediaSummaryRetrieverTool,
-    WikipediaTextRetrieverTool,
-    WikipediaTopicSearchTool,
-)
+from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
-__all__ = [
-    "WikipediaPrefixSearchTool",
-    "WikipediaSummaryRetrieverTool",
-    "WikipediaTextRetrieverTool",
-    "WikipediaTopicSearchTool",
-]
+__all__ = ["WikipediaPageLoadTool", "WikipediaQueryRunTool"]
