@@ -19,7 +19,7 @@ with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument
 
 
-@run_for_optional_imports("docling", "rag")
+@run_for_optional_imports(["docling", "requests", "selenium", "webdriver_manager"], "rag")
 class TestDoclingParseDocs:
     @fixture
     def mock_document_input(self) -> MagicMock:
@@ -138,8 +138,8 @@ class TestDoclingParseDocs:
             docling_parse_docs(invalid_input_file_path, output_dir_path)
 
     def test_register_docling_parse_docs_as_a_tool(self, tmp_path: Path, mock_credentials: Credentials) -> None:
-        input_file_path = tmp_path / "input_file_path.md"
-        output_dir_path = tmp_path / "output"
+        input_file_path = (tmp_path / "input_file_path.md").resolve()
+        output_dir_path = (tmp_path / "output").resolve()
 
         input_file_path.write_text("# Mock Markdown")
 
@@ -162,7 +162,7 @@ class TestDoclingParseDocs:
         )
 
         assert isinstance(results, str)
-        assert str(output_dir_path) in results
+        assert str(output_dir_path).replace("\\", "/") in results
 
         assistant = AssistantAgent(
             name="AssistantAgent",
@@ -184,7 +184,7 @@ class TestDoclingParseDocs:
                                 "description": "Path to the input file or directory",
                             },
                             "output_dir_path": {
-                                "anyOf": [{"type": "string"}, {"format": "path", "type": "string"}, {"type": "null"}],
+                                "anyOf": [{"format": "path", "type": "string"}, {"type": "string"}, {"type": "null"}],
                                 "default": None,
                                 "description": "Path to the output directory",
                             },
@@ -192,6 +192,11 @@ class TestDoclingParseDocs:
                                 "anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}],
                                 "default": None,
                                 "description": "List of output formats (markdown, json)",
+                            },
+                            "table_output_format": {
+                                "default": "html",
+                                "description": "table_output_format",
+                                "type": "string",
                             },
                         },
                         "required": ["input_file_path"],
@@ -218,7 +223,7 @@ class TestDoclingParseDocs:
             patch("builtins.open", mock_open()) as mock_file,
         ):
             # Call the function with output_dir_path=None
-            docling_parse_docs(input_file_path, output_dir_path=None)
+            docling_parse_docs(input_file_path.resolve(), output_dir_path=None)
 
             # Check that Path('./output') was created
             mock_mkdir.assert_called_with(parents=True, exist_ok=True)

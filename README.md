@@ -271,7 +271,7 @@ AG2 supports more advanced concepts to help you build your AI agent workflows. Y
 - [Ending a conversation](https://docs.ag2.ai/docs/user-guide/basic-concepts/ending-a-chat)
 - [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/docs/user-guide/advanced-concepts/rag)
 - [Code Execution](https://docs.ag2.ai/docs/user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/advanced-concepts/tools-with-secrets)
+- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/basic-concepts/tools/tools-with-secrets)
 
 ## Announcements
 

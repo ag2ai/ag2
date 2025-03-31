@@ -172,7 +172,7 @@ class DiscordSendTool(Tool): # Built on the Tool class
         )
 ```
 
-An important aspect of this tool is the use of AG2's dependency injection functionality. This protects the bot_token, guild_name, and channel_name, from the tool definition for the LLMs, so the LLM will not see the attributes or values. See [Tools with Secrets](/docs/user-guide/advanced-concepts/tools-with-secrets) for guidance.
+An important aspect of this tool is the use of AG2's dependency injection functionality. This protects the bot_token, guild_name, and channel_name, from the tool definition for the LLMs, so the LLM will not see the attributes or values. See [Tools with Secrets](/docs/user-guide/basic-concepts/tools/tools-with-secrets) for guidance.
 
 And, that's all that's needed to create a brand new agent powered by tools.
 

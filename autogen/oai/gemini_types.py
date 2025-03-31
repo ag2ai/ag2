@@ -4,7 +4,7 @@
 
 import enum
 import warnings
-from typing import Any, Optional, Type, TypeVar, TypedDict, Union, get_args, get_origin
+from typing import Any, Optional, Type, TypeVar, Union, get_args, get_origin
 
 from pydantic import BaseModel as BaseModel
 from pydantic import ConfigDict, Field, alias_generators
@@ -118,19 +118,6 @@ class FunctionCallingConfig(CommonBaseModel):
     )
 
 
-class FunctionCallingConfigDict(TypedDict, total=False):
-    """Function calling config."""
-
-    mode: Optional[FunctionCallingConfigMode]
-    """Optional. Function calling mode."""
-
-    allowed_function_names: Optional[list[str]]
-    """Optional. Function names to call. Only set when the Mode is ANY. Function names should match [FunctionDeclaration.name]. With mode set to ANY, model will predict a function call from the set of function names provided."""
-
-
-FunctionCallingConfigOrDict = Union[FunctionCallingConfig, FunctionCallingConfigDict]
-
-
 class ToolConfig(CommonBaseModel):
     """Tool config.
 
@@ -140,16 +127,3 @@ class ToolConfig(CommonBaseModel):
     function_calling_config: Optional[FunctionCallingConfig] = Field(
         default=None, description="""Optional. Function calling config."""
     )
-
-
-class ToolConfigDict(TypedDict, total=False):
-    """Tool config.
-
-    This config is shared for all tools provided in the request.
-    """
-
-    function_calling_config: Optional[FunctionCallingConfigDict]
-    """Optional. Function calling config."""
-
-
-ToolConfigOrDict = Union[ToolConfig, ToolConfigDict]

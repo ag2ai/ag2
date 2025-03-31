@@ -14,7 +14,7 @@ Changes at version >= 0.7.4:
 Swarms provide controllable flows between agents that are determined at the agent level. You define handoff, post-tool, and post-work transitions from one agent to another (or to end the swarm).
 
 In this Swarm deep-dive we run through all the components of AG2's Swarm.
-You can learn about Swarm's high-level concepts in the [Basic Concepts](/docs/user-guide/basic-concepts/swarm) section.
+You can learn about Swarm's high-level concepts in the [Basic Concepts](/docs/user-guide/basic-concepts/orchestration/swarm) section.
 
 ## Components
 
@@ -211,7 +211,7 @@ How we handle the `messages` parameter:
     - If there is no name:
         - 1. User agent passed in: we assume this message is from the user agent.
         - 2. No user agent passed in: we will create a temporary user agent just to start the chat.
-- Case 2: We will use the [Resume GroupChat](/docs/user-guide/advanced-concepts/resuming-group-chat) feature to resume the chat. The `name` fields in these messages must match the names of the agents you passed in.
+- Case 2: We will use the [Resume GroupChat](/docs/user-guide/advanced-concepts/groupchat/resuming-group-chat) feature to resume the chat. The `name` fields in these messages must match the names of the agents you passed in.
 
 
 ### AfterWork
