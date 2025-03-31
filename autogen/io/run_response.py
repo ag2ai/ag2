@@ -5,8 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import queue
-from typing import Any, AsyncIterable, Iterable, Optional, Protocol
+from typing import Any, AsyncIterable, Iterable, Optional, Protocol, Sequence
 from uuid import UUID, uuid4
+
+from autogen.agentchat.agent import LLMMessageType
 
 from ..events.agent_events import ErrorEvent, InputRequestEvent, TerminationEvent
 from ..events.base_event import BaseEvent
@@ -49,6 +51,7 @@ class RunResponse:
     def __init__(self, iostream: ThreadIOStream):
         self.iostream = iostream
         self._summary: Optional[str] = None
+        self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
 
     def _queue_generator(self, q: queue.Queue) -> Iterable[BaseEvent]:  # type: ignore[type-arg]
@@ -77,7 +80,7 @@ class RunResponse:
 
     @property
     def messages(self) -> Iterable[Message]:
-        return []
+        return self._messages
 
     @property
     def summary(self) -> Optional[str]:

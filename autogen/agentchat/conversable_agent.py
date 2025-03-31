@@ -1548,6 +1548,7 @@ class ConversableAgent(LLMAgent):
                     chat_result = self.initiate_chat(*args, **kwargs)
 
                     response._summary = chat_result.summary
+                    response._messages = chat_result.chat_history
                 except Exception as e:
                     response.iostream.send(ErrorEvent(error=e))
 
@@ -3586,6 +3587,7 @@ class ConversableAgent(LLMAgent):
                     chat_result = self.run(*args, **kwargs)
 
                     response._summary = chat_result.summary
+                    response._messages = chat_result.chat_history
                 except Exception as e:
                     response.iostream.send(ErrorEvent(error=e))
 

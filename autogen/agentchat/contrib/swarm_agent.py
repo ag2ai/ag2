@@ -1020,6 +1020,7 @@ def initiate_swarm_chat_stream(
                 chat_result, _, _ = initiate_swarm_chat(*args, **kwargs)
 
                 response._summary = chat_result.summary
+                response._messages = chat_result.chat_history
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
