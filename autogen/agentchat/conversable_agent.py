@@ -1539,42 +1539,75 @@ class ConversableAgent(LLMAgent):
         summary_args: Optional[dict[str, Any]] = {},
         message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
         executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        user_input: Optional[bool] = False,
+        msg_to: Optional[str] = "agent",
         **kwargs: Any,
     ) -> RunResponseProtocol:
         iostream = ThreadIOStream()
         response = RunResponse(iostream)
 
-        # todo
         if recipient is None:
-            with self._create_or_get_executor(executor_kwargs) as executor:
-                raise NotImplementedError("Recipient is not implemented yet.")
 
-        def stream_initiate_chat(
-            self=self,
-            iostream: ThreadIOStream = iostream,
-            response: RunResponse = response,
-        ) -> None:
-            with IOStream.set_default(iostream):  # type: ignore[arg-type]
-                try:
-                    chat_result = self.initiate_chat(
-                        recipient,
-                        clear_history=clear_history,
-                        silent=silent,
-                        cache=cache,
-                        max_turns=max_turns,
-                        summary_method=summary_method,
-                        summary_args=summary_args,
-                        message=message,
-                        **kwargs,
-                    )
+            def initiate_chat(
+                self=self,
+                iostream: ThreadIOStream = iostream,
+                response: RunResponse = response,
+            ) -> None:
+                with (
+                    IOStream.set_default(iostream),
+                    self._create_or_get_executor(
+                        executor_kwargs=executor_kwargs,
+                        tools=tools,
+                        agent_name="user",
+                        agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                    ) as executor,
+                ):
+                    if msg_to == "agent":
+                        return executor.initiate_chat(
+                            self,
+                            message=message,
+                            clear_history=clear_history,
+                            max_turns=max_turns,
+                            summary_method=summary_method,
+                        )
+                    else:
+                        return self.initiate_chat(
+                            executor,
+                            message=message,
+                            clear_history=clear_history,
+                            max_turns=max_turns,
+                            summary_method=summary_method,
+                        )
 
-                    response._summary = chat_result.summary
-                    response._messages = chat_result.chat_history
-                except Exception as e:
-                    response.iostream.send(ErrorEvent(error=e))
+        else:
+
+            def initiate_chat(
+                self=self,
+                iostream: ThreadIOStream = iostream,
+                response: RunResponse = response,
+            ) -> None:
+                with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                    try:
+                        chat_result = self.initiate_chat(
+                            recipient,
+                            clear_history=clear_history,
+                            silent=silent,
+                            cache=cache,
+                            max_turns=max_turns,
+                            summary_method=summary_method,
+                            summary_args=summary_args,
+                            message=message,
+                            **kwargs,
+                        )
+
+                        response._summary = chat_result.summary
+                        response._messages = chat_result.chat_history
+                    except Exception as e:
+                        response.iostream.send(ErrorEvent(error=e))
 
         threading.Thread(
-            target=stream_initiate_chat,
+            target=initiate_chat,
         ).start()
 
         return response
@@ -3587,36 +3620,6 @@ class ConversableAgent(LLMAgent):
                     max_turns=max_turns,
                     summary_method=summary_method,
                 )
-
-    def run_stream(
-        self,
-        *args,
-        **kwargs: Any,
-    ) -> RunResponseProtocol:
-        iostream = ThreadIOStream()
-        response = RunResponse(iostream)
-
-        def stream_run(
-            self=self,
-            iostream: ThreadIOStream = iostream,
-            response: RunResponse = response,
-            args=args,
-            kwargs=kwargs,
-        ) -> None:
-            with IOStream.set_default(iostream):  # type: ignore[arg-type]
-                try:
-                    chat_result = self.run(*args, **kwargs)
-
-                    response._summary = chat_result.summary
-                    response._messages = chat_result.chat_history
-                except Exception as e:
-                    response.iostream.send(ErrorEvent(error=e))
-
-        threading.Thread(
-            target=stream_run,
-        ).start()
-
-        return response
 
     async def a_run(
         self,

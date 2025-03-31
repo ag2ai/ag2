@@ -52,10 +52,11 @@ with llm_config:
     )
 
 # 4. Run the agent with a prompt
-chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+response = my_agent.run(message="In one sentence, what's the big deal about AI?")
+response.process()
 
 # 5. Print the chat
-print(chat_result.chat_history)
+print(response.messages)
 ```
     </Tab>
     <Tab title="Two agent chat">

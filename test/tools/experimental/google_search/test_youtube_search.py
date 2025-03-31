@@ -161,7 +161,7 @@ class TestYoutubeSearchTool:
             ) as mock_details,
         ):
             assistant.run(
-                "Find YouTube videos about machine learning",
+                message="Find YouTube videos about machine learning",
                 tools=assistant.tools,
                 max_turns=3,
                 user_input=False,
