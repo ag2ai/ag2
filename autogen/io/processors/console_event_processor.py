@@ -4,17 +4,18 @@
 import getpass
 from typing import TYPE_CHECKING
 
-from autogen.io.run_response import RunResponseProtocol
-
 from ...doc_utils import export_module
 from ...events.agent_events import InputRequestEvent
 from ...events.base_event import BaseEvent
-from .event_processor import EventProcessorProtocol
+
+if TYPE_CHECKING:
+    from ..run_response import RunResponseProtocol
+    from .base import EventProcessorProtocol
 
 
-@export_module("autogen.io.event_processors")
+@export_module("autogen.io")
 class ConsoleEventProcessor:
-    def process(self, response: RunResponseProtocol) -> None:
+    def process(self, response: "RunResponseProtocol") -> None:
         for event in response.events:
             self.process_event(event)
 
@@ -31,5 +32,5 @@ class ConsoleEventProcessor:
 
 if TYPE_CHECKING:
 
-    def check_group_chat_manager_implements_chat_manager_protocol(x: ConsoleEventProcessor) -> EventProcessorProtocol:
+    def check_type(x: ConsoleEventProcessor) -> EventProcessorProtocol:
         return x

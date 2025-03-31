@@ -29,9 +29,9 @@ from .agentchat import (
     gather_usage_summary,
     initiate_chats,
     initiate_swarm_chat,
-    initiate_swarm_chat_stream,
     register_function,
     register_hand_off,
+    run_swarm,
 )
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
 from .exception_utils import (
@@ -103,7 +103,7 @@ __all__ = [
     "get_config_list",
     "initiate_chats",
     "initiate_swarm_chat",
-    "initiate_swarm_chat_stream",
     "register_function",
     "register_hand_off",
+    "run_swarm",
 ]

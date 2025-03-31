@@ -8,10 +8,10 @@ import queue
 from typing import Any, AsyncIterable, Iterable, Optional, Protocol, Sequence
 from uuid import UUID, uuid4
 
-from autogen.agentchat.agent import LLMMessageType
-
+from ..agentchat.agent import Agent, LLMMessageType
 from ..events.agent_events import ErrorEvent, InputRequestEvent, TerminationEvent
 from ..events.base_event import BaseEvent
+from .processors import AsyncEventProcessorProtocol, ConsoleEventProcessor, EventProcessorProtocol
 from .thread_io_stream import ThreadIOStream
 
 Message = dict[str, Any]
@@ -35,6 +35,14 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     @property
     def summary(self) -> Optional[str]: ...
 
+    @property
+    def context_variables(self) -> Optional[dict[str, Any]]: ...
+
+    @property
+    def last_speaker(self) -> Optional[Agent]: ...
+
+    def process(self, processor: Optional[EventProcessorProtocol] = None) -> None: ...
+
 
 class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     @property
@@ -46,6 +54,14 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     @property
     async def summary(self) -> str: ...
 
+    @property
+    async def context_variables(self) -> Optional[dict[str, Any]]: ...
+
+    @property
+    async def last_speaker(self) -> Optional[Agent]: ...
+
+    async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None: ...
+
 
 class RunResponse:
     def __init__(self, iostream: ThreadIOStream):
@@ -53,6 +69,8 @@ class RunResponse:
         self._summary: Optional[str] = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
+        self._context_variables: Optional[dict[str, Any]] = None
+        self._last_speaker: Optional[Agent] = None
 
     def _queue_generator(self, q: queue.Queue) -> Iterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
@@ -93,3 +111,15 @@ class RunResponse:
     @property
     def uuid(self) -> UUID:
         return self._uuid
+
+    @property
+    def context_variables(self) -> Optional[dict[str, Any]]:
+        return self._context_variables
+
+    @property
+    def last_speaker(self) -> Optional[Agent]:
+        return self._last_speaker
+
+    def process(self, processor: Optional[EventProcessorProtocol] = None) -> None:
+        processor = processor or ConsoleEventProcessor()
+        processor.process(self)

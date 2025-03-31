@@ -1528,24 +1528,45 @@ class ConversableAgent(LLMAgent):
         )
         return chat_result
 
-    def initiate_chat_stream(
+    def run(
         self,
-        *args,
+        recipient: Optional["ConversableAgent"] = None,
+        clear_history: bool = True,
+        silent: Optional[bool] = False,
+        cache: Optional[AbstractCache] = None,
+        max_turns: Optional[int] = None,
+        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_args: Optional[dict[str, Any]] = {},
+        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> RunResponseProtocol:
         iostream = ThreadIOStream()
         response = RunResponse(iostream)
 
+        # todo
+        if recipient is None:
+            with self._create_or_get_executor(executor_kwargs) as executor:
+                raise NotImplementedError("Recipient is not implemented yet.")
+
         def stream_initiate_chat(
             self=self,
             iostream: ThreadIOStream = iostream,
             response: RunResponse = response,
-            args=args,
-            kwargs=kwargs,
         ) -> None:
             with IOStream.set_default(iostream):  # type: ignore[arg-type]
                 try:
-                    chat_result = self.initiate_chat(*args, **kwargs)
+                    chat_result = self.initiate_chat(
+                        recipient,
+                        clear_history=clear_history,
+                        silent=silent,
+                        cache=cache,
+                        max_turns=max_turns,
+                        summary_method=summary_method,
+                        summary_args=summary_args,
+                        message=message,
+                        **kwargs,
+                    )
 
                     response._summary = chat_result.summary
                     response._messages = chat_result.chat_history
@@ -3516,7 +3537,7 @@ class ConversableAgent(LLMAgent):
                 for tool in tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
-    def run(
+    def _deprecated_run(
         self,
         message: str,
         *,
