@@ -18,7 +18,7 @@ pip install ag2[openai,interop-crewai]
 Import necessary modules and tools.
 - [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool): A CrewAI tool for web scraping.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent): Core AG2 classes.
-- [`Interoperability`](/docs/api-reference/autogen/interop/overview): This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability): This module acts as a bridge, making it easier to integrate CrewAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -50,7 +50,7 @@ with llm_config:
 ### Tool Integration
 
 Integrate the CrewAI tool with AG2.
-- [`Interoperability`](/docs/reference/interop/interoperability) converts the CrewAI tool to a format compatible with AG2.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) converts the CrewAI tool to a format compatible with AG2.
 - [ScrapeWebsiteTool](https://docs.crewai.com/tools/scrapewebsitetool) is used for web scraping tasks.
 - Register the tool for both execution and interaction with LLMs.
 

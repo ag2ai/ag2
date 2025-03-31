@@ -210,7 +210,7 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
         rel_path = os.path.relpath(dest_path, source_path)
 
         # Special case for blog directories: add deeper path traversal
-        ret_val = f"../../{rel_path}" if "blog" in source_path else rel_path
+        ret_val = f"../../../{rel_path}" if "blog" in source_path else rel_path
 
         # Special case for index files: strip leading "../"
         if Path(source_path).stem == "index":
