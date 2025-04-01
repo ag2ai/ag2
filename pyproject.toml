@@ -186,11 +186,7 @@ twilio = [
 ]
 
 interop-mcp = [
-    # TODO: Remove langchain dependencies
-    "langchain-mcp-adapters",
-    "langgraph",
-    "langchain_openai"
-
+    "mcp>=1.6.0,<2; python_version>='3.10' and python_version<'3.13'"
 ]
 
 interop-crewai = [
