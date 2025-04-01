@@ -31,7 +31,7 @@ Now, let’s import the necessary modules and tools.
 
 - [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) and [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html) are the tools for querying Wikipedia.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) are the agents for interaction within AG2.
-- [`Interoperability`](/docs/api-reference/autogen/interop/overview) is what helps connect LangChain tools with AG2.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) is what helps connect LangChain tools with AG2.
 
 ```python
 import os
@@ -63,9 +63,10 @@ with llm_config:
 
 ### Tool Integration
 Here’s where we connect everything.
+
 - First, we set up [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html), which fetches the top Wikipedia result (with a character limit).
 - Then, we use [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) to perform Wikipedia queries.
-- [`Interoperability`](/docs/reference/interop/interoperability) helps convert the LangChain tool to AG2’s format.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) helps convert the LangChain tool to AG2’s format.
 - Finally, we register the tool for use with both the `user_proxy` and `chatbot`.
 
 ```python
