@@ -1779,8 +1779,11 @@ class ConversableAgent(LLMAgent):
                         response._summary = chat_result.summary
                         response._messages = chat_result.chat_history
                         if hasattr(recipient, "last_speaker"):
+                            print("!" * 100)
+                            print(recipient.last_speaker)
                             response._last_speaker = recipient.last_speaker
                         else:
+                            print("!" * 100)
                             response._last_speaker = (
                                 recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
                             )
@@ -1995,6 +1998,7 @@ class ConversableAgent(LLMAgent):
 
                         response._summary = chat_res.summary
                         response._messages = chat_res.chat_history
+                        response._last_speaker = self if chat_res.chat_history[-1]["name"] == self.name else sender
                         finished_chats.append(chat_res)
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))
@@ -2057,6 +2061,7 @@ class ConversableAgent(LLMAgent):
 
                         response._summary = chat_res.summary
                         response._messages = chat_res.chat_history
+                        response._last_speaker = self if chat_res.chat_history[-1]["name"] == self.name else sender
                         finished_chats.append(chat_res)
 
             except Exception as e:

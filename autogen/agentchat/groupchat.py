@@ -1269,6 +1269,7 @@ class GroupChatManager(ConversableAgent):
                 a.client_cache = self.client_cache
         for i in range(groupchat.max_round):
             groupchat.append(message, speaker)
+            self._last_speaker = speaker
 
             if self._is_termination_msg(message):
                 # The conversation is over
