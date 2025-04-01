@@ -7,10 +7,10 @@ from typing import Any, Callable
 from ...agentchat.conversable_agent import ConversableAgent
 from ...tools import Tool
 
-__all__ = ["PydanticAITool"]
+__all__ = ["SchemaDefinedTool"]
 
 
-class PydanticAITool(Tool):
+class SchemaDefinedTool(Tool):
     """A class representing a Pydantic AI Tool that extends the general Tool functionality
     with additional functionality specific to Pydantic AI tools.
 
@@ -26,7 +26,7 @@ class PydanticAITool(Tool):
     def __init__(
         self, name: str, description: str, func: Callable[..., Any], parameters_json_schema: dict[str, Any]
     ) -> None:
-        """Initializes a PydanticAITool object with the provided name, description,
+        """Initializes a SchemaDefinedTool object with the provided name, description,
         function, and parameter schema.
 
         Args:
