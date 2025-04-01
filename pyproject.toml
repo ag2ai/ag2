@@ -185,7 +185,7 @@ twilio = [
     "twilio>=9.3.2"
 ]
 
-mcp = [
+interop-mcp = [
     # TODO: Remove langchain dependencies
     "langchain-mcp-adapters",
     "langgraph",
@@ -200,7 +200,7 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.31"]
 interop =[
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai, interop-mcp]",
 ]
 
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
