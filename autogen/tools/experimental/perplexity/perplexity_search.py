@@ -193,24 +193,32 @@ class PerplexitySearchTool(Tool):
         try:
             response.raise_for_status()
         except requests.exceptions.Timeout as e:
-            raise RuntimeError(f"Request timed out: {response.text}. Status code: {response.status_code}") from e
+            raise RuntimeError(
+                f"Perplexity API => Request timed out: {response.text}. Status code: {response.status_code}"
+            ) from e
         except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"HTTP error occurred: {response.text}. Status code: {response.status_code}") from e
+            raise RuntimeError(
+                f"Perplexity API => HTTP error occurred: {response.text}. Status code: {response.status_code}"
+            ) from e
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Error during request: {response.text}. Status code: {response.status_code}") from e
+            raise RuntimeError(
+                f"Perplexity API => Error during request: {response.text}. Status code: {response.status_code}"
+            ) from e
 
         try:
             response_json = response.json()
         except json.JSONDecodeError as e:
-            raise RuntimeError("Invalid JSON response received from Perplexity API") from e
+            raise RuntimeError(f"Perplexity API => Invalid JSON response received. Error: {e}") from e
 
         try:
             # This may raise a pydantic.ValidationError if the response structure is not as expected.
             perp_resp = PerplexityChatCompletionResponse(**response_json)
         except ValidationError as e:
-            raise RuntimeError("Validation error when parsing API response: " + str(e)) from e
+            raise RuntimeError("Perplexity API => Validation error when parsing API response: " + str(e)) from e
         except Exception as e:
-            raise RuntimeError("Failed to parse API response into PerplexityChatCompletionResponse: " + str(e)) from e
+            raise RuntimeError(
+                "Perplexity API => Failed to parse API response into PerplexityChatCompletionResponse: " + str(e)
+            ) from e
 
         return perp_resp
 
