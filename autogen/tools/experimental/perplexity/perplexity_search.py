@@ -71,9 +71,9 @@ class PerplexityChatCompletionResponse(BaseModel):
         model (str): The model name used for generating the response.
         created (int): Timestamp when the response was created.
         usage (Usage): Token usage details.
-        citations (list[str]): List of citation strings included in the response.
+        citations (list[str]): list of citation strings included in the response.
         object (str): Type of the response object.
-        choices (list[Choice]): List of choices returned by the API.
+        choices (list[Choice]): list of choices returned by the API.
     """
 
     id: str
@@ -91,7 +91,7 @@ class SearchResponse(BaseModel):
 
     Attributes:
         content (Optional[str]): The textual content returned from the search.
-        citations (Optional[List[str]]): A list of citation URLs relevant to the search result.
+        citations (Optional[list[str]]): A list of citation URLs relevant to the search result.
         error (Optional[str]): An error message if the search failed.
     """
 
@@ -112,7 +112,7 @@ class PerplexitySearchTool(Tool):
         model (str): Name of the model to be used.
         api_key (str): API key for authenticating with the Perplexity API.
         max_tokens (int): Maximum tokens allowed for the API response.
-        search_domain_filters (Optional[List[str]]): Optional list of domain filters for the search.
+        search_domain_filters (Optional[list[str]]): Optional list of domain filters for the search.
     """
 
     def __init__(
@@ -129,7 +129,7 @@ class PerplexitySearchTool(Tool):
             model (str, optional): The model to use. Defaults to "sonar".
             api_key (Optional[str], optional): API key for authentication.
             max_tokens (int, optional): Maximum number of tokens for the response. Defaults to 1000.
-            search_domain_filter (Optional[List[str]], optional): List of domain filters to restrict search.
+            search_domain_filter (Optional[list[str]], optional): list of domain filters to restrict search.
 
         Raises:
             ValueError: If the API key is missing, the model is empty, max_tokens is not positive,
@@ -159,7 +159,7 @@ class PerplexitySearchTool(Tool):
             model (str): The model to use.
             api_key (Union[str, None]): The API key for authentication.
             max_tokens (int): Maximum tokens allowed.
-            search_domain_filter (Union[List[str], None]): Domain filters for search.
+            search_domain_filter (Union[list[str], None]): Domain filters for search.
 
         Raises:
             ValueError: If the API key is missing, model is empty, max_tokens is not positive,
