@@ -28,7 +28,7 @@ class TestInteroperability:
             assert actual == ["langchain", "pydanticai"]
 
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-            assert actual == ["crewai", "mcp", "langchain", "pydanticai"]
+            assert actual == ["crewai", "langchain", "mcp", "pydanticai"]
 
         if sys.version_info >= (3, 13):
             assert actual == ["mcp", "langchain", "pydanticai"]
