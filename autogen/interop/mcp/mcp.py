@@ -28,9 +28,8 @@ with optional_import_block():
 @register_interoperable_class("mcp")
 @export_module("autogen.interop")
 class MCPInteroperability:
-    @classmethod
+    @staticmethod
     def _convert_call_tool_result(  # type: ignore[no-any-unimported]
-        cls,
         call_tool_result: "CallToolResult",  # type: ignore[no-any-unimported]
     ) -> tuple[Union[str, list[str]], Any]:
         text_contents: list[TextContent] = []  # type: ignore[no-any-unimported]
@@ -41,7 +40,7 @@ class MCPInteroperability:
             else:
                 non_text_contents.append(content)
 
-        tool_content: str | list[str] = [content.text for content in text_contents]
+        tool_content: Union[str, list[str]] = [content.text for content in text_contents]
         if len(text_contents) == 1:
             tool_content = tool_content[0]
 
@@ -53,8 +52,10 @@ class MCPInteroperability:
     @classmethod
     @require_optional_import("mcp", "interop-mcp")
     def convert_tool(  # type: ignore[no-any-unimported]
-        cls, tool: Any, session: "ClientSession", **kwargs: Any
-    ) -> SchemaDefinedTool:
+        cls, tool: Any, session: Optional["ClientSession"] = None, **kwargs: Any
+    ) -> Tool:
+        if session is None:
+            raise ValueError("Session must be provided for MCP interoperability.")
         if not isinstance(tool, MCPTool):
             raise ValueError(f"Expected an instance of `mcp.types.Tool`, got {type(tool)}")
 
@@ -65,14 +66,15 @@ class MCPInteroperability:
             **arguments: dict[str, Any],
         ) -> tuple[Union[str, list[str]], Any]:
             call_tool_result = await session.call_tool(tool.name, arguments)
-            return cls._convert_call_tool_result(call_tool_result)
+            return MCPInteroperability._convert_call_tool_result(call_tool_result)
 
-        return SchemaDefinedTool(
+        ag2_tool: Tool = SchemaDefinedTool(
             name=mcp_tool.name,
             description=mcp_tool.description,
             func=call_tool,
             parameters_json_schema=mcp_tool.inputSchema,
         )
+        return ag2_tool
 
     @classmethod
     @require_optional_import("mcp", "interop-mcp")
