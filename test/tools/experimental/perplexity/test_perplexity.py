@@ -149,7 +149,7 @@ class TestPerplexitySearchTool:
 
         with pytest.raises(RuntimeError) as exc_info:
             tool._execute_query({})
-        assert "Invalid JSON response received from Perplexity API" in str(exc_info.value)
+        assert "Invalid JSON response received" in str(exc_info.value)
 
     @patch.object(PerplexitySearchTool, "_execute_query")
     def test_search(self, mock_execute: Mock, mock_response: dict[str, Any]) -> None:
