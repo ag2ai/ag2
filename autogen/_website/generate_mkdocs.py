@@ -354,6 +354,11 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
     return content
 
 
+def rename_user_story(p: Path) -> Path:
+    name = p.parent.name.split("-")[3:]
+    return p.parent / ("_".join(name).lower() + p.suffix)
+
+
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
     # Keep track of MD files we need to process
     md_files_to_process = []
@@ -362,6 +367,9 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for file in files:
         if file.suffix == ".mdx":
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
+
+            if "/user-stories/" in str(dest):
+                dest = rename_user_story(dest)
 
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(file.read_text())
@@ -650,8 +658,8 @@ def add_front_matter_to_metadata_yml(
 
     # Create new entry for current notebook
     title = front_matter.get("title", "")
-    link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}"
-    rel_link = f"../notebooks/{rendered_mdx.stem}"
+    link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}.md"
+    rel_link = f"../notebooks/{rendered_mdx.stem}.md"
     description = front_matter.get("description", "")
     tags = front_matter.get("tags", []) or []
 
@@ -983,7 +991,7 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
     user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
 
     # Read all user story files and sort them by date (newest first)
-    files = sorted(user_stories_dir.glob("**/index.md"), key=sort_files_by_date, reverse=True)
+    files = sorted(user_stories_dir.glob("**/*.md"), key=sort_files_by_date, reverse=True)
 
     # Prepare user stories navigation entries
     user_stories_entries = []
@@ -1007,7 +1015,7 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
         path_for_link = str(relative_path).replace("\\", "/")
 
         # Format navigation entry
-        user_stories_entries.append(f"    - [{title}]({path_for_link})")
+        user_stories_entries.append(f"    - [{title}]({path_for_link}/{file.name})")
 
     # Read existing navigation template
     nav_content = mkdocs_nav_path.read_text()

@@ -69,6 +69,8 @@ def test_process_and_copy_files() -> None:
             src_dir / "user-guide" / "advanced-concepts" / "groupchat" / "chat.txt",
             src_dir / "home" / "agent.png",
             src_dir / "home" / "quick-start.mdx",
+            src_dir / "user-stories" / "2025-02-11-NOVA" / "index.mdx",
+            src_dir / "user-stories" / "2023-02-11-HELLO-World" / "index.mdx",
         ]
         # Create the content for quick-start.mdx
         quick_start_content = dedent("""
@@ -109,9 +111,11 @@ def test_process_and_copy_files() -> None:
             mkdocs_output_dir / "home" / "quick-start.md",
             mkdocs_output_dir / "user-guide" / "advanced-concepts" / "groupchat" / "chat.txt",
             mkdocs_output_dir / "user-guide" / "advanced-concepts" / "groupchat" / "groupchat.md",
+            mkdocs_output_dir / "user-stories" / "2025-02-11-NOVA" / "nova.md",
+            mkdocs_output_dir / "user-stories" / "2023-02-11-HELLO-World" / "hello_world.md",
         ]
         assert len(actual) == len(expected)
-        assert sorted(actual) == sorted(actual)
+        assert sorted(actual) == sorted(expected)
 
         # Assert the content of the transformed markdown file
         expected_quick_start_content = dedent("""
@@ -604,7 +608,7 @@ def test_generate_user_stories_nav() -> None:
         # Create User Stories directory
         user_stories_dir = Path(tmpdir) / "docs" / "user-stories"
 
-        file_1 = user_stories_dir / "2025-03-11-NOVA" / "index.md"
+        file_1 = user_stories_dir / "2025-03-11-NOVA" / "nova.md"
         file_1.parent.mkdir(parents=True, exist_ok=True)
         file_1.write_text("""---
 title: Unlocking the Power of Agentic Workflows at Nexla with AG2
@@ -617,7 +621,7 @@ tags: [data automation, agents, AG2, Nexla]
 > AG2 has been instrumental in helping Nexla build NOVA,
 """)
 
-        file_2 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
+        file_2 = user_stories_dir / "2025-02-11-NOVA" / "nova.md"
         file_2.parent.mkdir(parents=True, exist_ok=True)
         file_2.write_text("""---
 title: Some other text
@@ -661,8 +665,8 @@ tags: [data automation, agents, AG2, Nexla]
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
 - User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA)
+    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
 - Contributor Guide
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
