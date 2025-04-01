@@ -37,6 +37,14 @@ class TestMCPInteroperability:
         )
 
     @pytest.mark.asyncio
+    async def test_mcp_issue_with_stdio_client_context_manager(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as _:
+                pass
+            print("exit ClientSession")
+        print("exit stdio_client")
+
+    @pytest.mark.asyncio
     async def test_convert_tool(self, server_params: "StdioServerParameters", mock_credentials: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
             # Initialize the connection
