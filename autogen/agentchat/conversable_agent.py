@@ -52,6 +52,7 @@ from ..events.agent_events import (
     ExecuteFunctionEvent,
     ExecutedFunctionEvent,
     GenerateCodeExecutionReplyEvent,
+    PostCarryoverProcessingEvent,
     TerminationAndHumanReplyNoInputEvent,
     TerminationEvent,
     UsingAutoReplyEvent,
@@ -66,7 +67,13 @@ from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
-from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
+from .chat import (
+    ChatResult,
+    _post_process_carryover_item,
+    _validate_recipients,
+    a_initiate_chats,
+    initiate_chats,
+)
 from .utils import consolidate_chat_info, gather_usage_summary
 
 __all__ = ("ConversableAgent",)
@@ -1936,12 +1943,13 @@ class ConversableAgent(LLMAgent):
         """
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
         self._finished_chats = initiate_chats(_chat_queue)
+
         return self._finished_chats
 
     def sequential_run(
         self,
         chat_queue: list[dict[str, Any]],
-    ) -> RunResponseProtocol:
+    ) -> list[RunResponseProtocol]:
         """(Experimental) Initiate chats with multiple agents sequentially.
 
         Args:
@@ -1950,23 +1958,50 @@ class ConversableAgent(LLMAgent):
 
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
-        iostream = ThreadIOStream()
-        response = RunResponse(iostream)
+        iostreams = [ThreadIOStream() for _ in range(len(chat_queue))]
+        responses = [RunResponse(iostream) for iostream in iostreams]
 
         def _initiate_chats(
-            iostream: ThreadIOStream = iostream,
-            response: RunResponseProtocol = response,
+            iostreams: list[ThreadIOStream] = iostreams,
+            responses: list[RunResponseProtocol] = responses,
         ) -> None:
-            with IOStream.set_default(iostream):
-                try:
-                    self._finished_chats = self.initiate_chats(chat_queue)
-                    response._summary = self._finished_chats
-                except Exception as e:
-                    response.iostream.send(ErrorEvent(error=e))
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
+
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+
+                        if not chat_info.get("silent", False):
+                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+
+                        sender = chat_info["sender"]
+                        chat_res = sender.initiate_chat(**chat_info)
+
+                        response._summary = chat_res.summary
+                        response._messages = chat_res.chat_history
+                        finished_chats.append(chat_res)
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))
 
         threading.Thread(target=_initiate_chats).start()
 
-        return response
+        return responses
 
     async def a_initiate_chats(self, chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
@@ -1976,7 +2011,7 @@ class ConversableAgent(LLMAgent):
     async def a_sequential_run(
         self,
         chat_queue: list[dict[str, Any]],
-    ) -> AsyncRunResponseProtocol:
+    ) -> list[AsyncRunResponseProtocol]:
         """(Experimental) Initiate chats with multiple agents sequentially.
 
         Args:
@@ -1985,23 +2020,51 @@ class ConversableAgent(LLMAgent):
 
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
-        iostream = AsyncThreadIOStream()
-        response = AsyncRunResponse(iostream)
+        iostreams = [AsyncThreadIOStream() for _ in range(len(chat_queue))]
+        responses = [AsyncRunResponse(iostream) for iostream in iostreams]
 
-        async def _initiate_chats(
-            iostream: AsyncThreadIOStream = iostream,
-            response: AsyncRunResponseProtocol = response,
+        async def _a_initiate_chats(
+            iostreams: list[AsyncThreadIOStream] = iostreams,
+            responses: list[AsyncRunResponseProtocol] = responses,
         ) -> None:
-            with IOStream.set_default(iostream):
-                try:
-                    self._finished_chats = await self.a_initiate_chats(chat_queue)
-                    response._summary = self._finished_chats
-                except Exception as e:
-                    response.iostream.send(ErrorEvent(error=e))
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
 
-        asyncio.create_task(_initiate_chats())
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
 
-        return response
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+
+                        if not chat_info.get("silent", False):
+                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+
+                        sender = chat_info["sender"]
+                        chat_res = await sender.a_initiate_chat(**chat_info)
+
+                        response._summary = chat_res.summary
+                        response._messages = chat_res.chat_history
+                        finished_chats.append(chat_res)
+
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))
+
+        asyncio.create_task(_a_initiate_chats())
+
+        return responses
 
     def get_chat_results(self, chat_index: Optional[int] = None) -> Union[list[ChatResult], ChatResult]:
         """A summary from the finished chats of particular agents."""
