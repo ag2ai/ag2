@@ -55,7 +55,7 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     def events(self) -> AsyncIterable[BaseEvent]: ...
 
     @property
-    def messages(self) -> Iterable[Message]: ...
+    async def messages(self) -> Iterable[Message]: ...
 
     @property
     async def summary(self) -> Optional[str]: ...
@@ -169,7 +169,7 @@ class AsyncRunResponse:
         return self._queue_generator(self.iostream.input_stream)
 
     @property
-    def messages(self) -> Iterable[Message]:
+    async def messages(self) -> Iterable[Message]:
         return self._messages
 
     @property
