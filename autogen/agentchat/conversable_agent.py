@@ -1582,6 +1582,7 @@ class ConversableAgent(LLMAgent):
 
                     response._summary = chat_result.summary
                     response._messages = chat_result.chat_history
+                    response._last_speaker = self
 
         else:
 
@@ -1606,6 +1607,12 @@ class ConversableAgent(LLMAgent):
 
                         response._summary = chat_result.summary
                         response._messages = chat_result.chat_history
+                        if hasattr(recipient, "last_speaker"):
+                            response._last_speaker = recipient.last_speaker
+                        else:
+                            response._last_speaker = (
+                                recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                            )
                     except Exception as e:
                         response.iostream.send(ErrorEvent(error=e))
 
@@ -1739,6 +1746,7 @@ class ConversableAgent(LLMAgent):
 
                     response._summary = chat_result.summary
                     response._messages = chat_result.chat_history
+                    response._last_speaker = self
 
         else:
 
@@ -1763,6 +1771,12 @@ class ConversableAgent(LLMAgent):
 
                         response._summary = chat_result.summary
                         response._messages = chat_result.chat_history
+                        if hasattr(recipient, "last_speaker"):
+                            response._last_speaker = recipient.last_speaker
+                        else:
+                            response._last_speaker = (
+                                recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                            )
                     except Exception as e:
                         response.iostream.send(ErrorEvent(error=e))
 
@@ -1924,10 +1938,70 @@ class ConversableAgent(LLMAgent):
         self._finished_chats = initiate_chats(_chat_queue)
         return self._finished_chats
 
+    def sequential_run(
+        self,
+        chat_queue: list[dict[str, Any]],
+    ) -> RunResponseProtocol:
+        """(Experimental) Initiate chats with multiple agents sequentially.
+
+        Args:
+            chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
+                Each dictionary should contain the input arguments for [`initiate_chat`](#initiate-chat)
+
+        Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        """
+        iostream = ThreadIOStream()
+        response = RunResponse(iostream)
+
+        def _initiate_chats(
+            iostream: ThreadIOStream = iostream,
+            response: RunResponseProtocol = response,
+        ) -> None:
+            with IOStream.set_default(iostream):
+                try:
+                    self._finished_chats = self.initiate_chats(chat_queue)
+                    response._summary = self._finished_chats
+                except Exception as e:
+                    response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(target=_initiate_chats).start()
+
+        return response
+
     async def a_initiate_chats(self, chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
         self._finished_chats = await a_initiate_chats(_chat_queue)
         return self._finished_chats
+
+    async def a_sequential_run(
+        self,
+        chat_queue: list[dict[str, Any]],
+    ) -> AsyncRunResponseProtocol:
+        """(Experimental) Initiate chats with multiple agents sequentially.
+
+        Args:
+            chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
+                Each dictionary should contain the input arguments for [`initiate_chat`](#initiate-chat)
+
+        Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        """
+        iostream = AsyncThreadIOStream()
+        response = AsyncRunResponse(iostream)
+
+        async def _initiate_chats(
+            iostream: AsyncThreadIOStream = iostream,
+            response: AsyncRunResponseProtocol = response,
+        ) -> None:
+            with IOStream.set_default(iostream):
+                try:
+                    self._finished_chats = await self.a_initiate_chats(chat_queue)
+                    response._summary = self._finished_chats
+                except Exception as e:
+                    response.iostream.send(ErrorEvent(error=e))
+
+        asyncio.create_task(_initiate_chats())
+
+        return response
 
     def get_chat_results(self, chat_index: Optional[int] = None) -> Union[list[ChatResult], ChatResult]:
         """A summary from the finished chats of particular agents."""
