@@ -45,7 +45,6 @@ class AsyncThreadIOStream:
         self.send(print_message)
 
     def send(self, message: Any) -> None:
-        print(message)
         self._input_stream.put_nowait(message)
 
     @property

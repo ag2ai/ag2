@@ -1638,6 +1638,8 @@ class ConversableAgent(LLMAgent):
         Returns:
             ChatResult: an ChatResult object.
         """
+        iostream = IOStream.get_default()
+
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1657,6 +1659,8 @@ class ConversableAgent(LLMAgent):
                 if msg2send is None:
                     break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
+            else:  # No breaks in the for loop, so we have reached max turns
+                iostream.send(TerminationEvent(termination_reason=f"Maximum turns ({max_turns}) reached"))
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
