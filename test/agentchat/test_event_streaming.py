@@ -66,7 +66,6 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
             "Jack",
             system_message=("Your name is Jack and you are a comedian in a two-person comedy show."),
             is_termination_msg=lambda x: "FINISH" in x["content"],
-            human_input_mode="NEVER",
         )
         emma = ConversableAgent(
             "Emma",
@@ -75,13 +74,14 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
                 "in a two-person comedy show. Say the word FINISH "
                 "ONLY AFTER you've heard 2 of Jack's jokes."
             ),
-            human_input_mode="NEVER",
         )
 
     # 3. Run the chat
     response = jack.run(emma, message="Emma, tell me a joke about goldfish and peanut butter.")
 
-    response.process()
+    for event in response.events:
+        if event.type == "input_request":
+            event.content.respond("exit")
 
     assert response.last_speaker in [jack, emma], "Last speaker should be one of the agents"
     assert response.summary is not None, "Summary should not be None"
@@ -115,7 +115,9 @@ async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
         emma, message="Emma, tell me a joke about goldfish and peanut butter."
     )
 
-    await response.process()
+    async for event in response.events:
+        if event.type == "input_request":
+            await event.content.respond("exit")
 
     assert await response.last_speaker in [jack, emma], "Last speaker should be one of the agents"
     assert await response.summary is not None, "Summary should not be None"
