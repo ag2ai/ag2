@@ -202,7 +202,7 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
     response = x_assistant.run(
-        "Find out today's hot topic and an influencer who is talking about it on X",
+        message="Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
         user_input=False,
     )
@@ -225,7 +225,7 @@ async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
     response = await x_assistant.a_run(
-        "Find out today's hot topic and an influencer who is talking about it on X",
+        message="Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
         user_input=False,
     )
