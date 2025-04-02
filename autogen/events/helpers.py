@@ -20,7 +20,7 @@ def deprecated_by(
         old_class: type[BaseModel],
         param_mapping: dict[str, str] = param_mapping,
     ) -> Callable[..., BaseModel]:
-        @wraps(old_class.__init__)
+        @wraps(old_class)
         def wrapper(*args, **kwargs) -> BaseModel:
             logger.warning(
                 f"{old_class.__name__} is deprecated by {new_class.__name__}. Please import it from {new_class.__module__} and use it instead."
