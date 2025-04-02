@@ -105,10 +105,12 @@ class TestMCPClient:
             toolkit.register_for_llm(agent)
 
             result = await agent.a_run(
-                "What is 1234 + 5678?",
+                message="What is 1234 + 5678?",
                 tools=toolkit.tools,
                 max_turns=3,
                 user_input=False,
                 summary_method="reflection_with_llm",
             )
-            assert "6912" in result.summary
+            await result.process()
+            summary = await result.summary
+            assert "6912" in summary

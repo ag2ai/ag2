@@ -102,6 +102,7 @@ async with stdio_client(server_params) as (read, write), ClientSession(read, wri
         max_turns=2,
         user_input=False,
     )
+    await result.process()
 ```
 
 ## Expected Output
