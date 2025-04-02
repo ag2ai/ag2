@@ -275,7 +275,6 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
     assert isinstance(response.last_speaker, ConversableAgent), "Last speaker should be an agent"
 
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_swarm_async(credentials_gpt_4o_mini: Credentials):

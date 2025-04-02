@@ -2971,9 +2971,26 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: human input.
         """
-        loop = asyncio.get_running_loop()
-        reply = await loop.run_in_executor(None, functools.partial(self.get_human_input, prompt))
+        iostream = IOStream.get_default()
+
+        reply = await iostream.input(prompt)
+        self._human_input.append(reply)
         return reply
+
+        # def _get_human_input(
+        #     self, iostream: IOStream, prompt: str,
+        # ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        #     with IOStream.set_default(iostream):
+        #         print("!"*100)
+        #         print("Getting human input...")
+        #         return self.get_human_input(prompt)
+
+        # return await asyncio.get_event_loop().run_in_executor(
+        #     None,
+        #     functools.partial(
+        #         _get_human_input, self=self, iostream=iostream, prompt=prompt,
+        #     ),
+        # )
 
     def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
         """Run the code and return the result.
