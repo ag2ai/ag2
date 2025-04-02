@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def deprecated_by(
     new_class: type[BaseModel],
     param_mapping: dict[str, str] = None,
-) -> Callable[[type[BaseModel]], Callable[..., BaseModel] :]:
+) -> Callable[[type[BaseModel]], Callable[..., BaseModel]]:
     param_mapping = param_mapping or {}
 
     def decorator(
