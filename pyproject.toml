@@ -171,6 +171,10 @@ google-search = [
     "pyautogen[google-client]",
 ]
 
+wikipedia = [
+    "wikipedia-api>=0.8.1, <1.0"
+]
+
 neo4j = [
     "docx2txt==0.8",
     "llama-index>=0.12,<1",
