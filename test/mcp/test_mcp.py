@@ -19,7 +19,7 @@ with optional_import_block():
 
 @pytest.mark.interop
 @run_for_optional_imports("mcp", "mcp")
-class TestMCPInteroperability:
+class TestMCPClient:
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
         server_file = Path(__file__).parent / "math_server.py"

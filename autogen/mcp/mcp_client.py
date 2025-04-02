@@ -23,7 +23,7 @@ with optional_import_block():
     )
 
 
-class MCPInteroperability:
+class MCPClient:
     @staticmethod
     def _convert_call_tool_result(  # type: ignore[no-any-unimported]
         call_tool_result: "CallToolResult",  # type: ignore[no-any-unimported]
@@ -62,7 +62,7 @@ class MCPInteroperability:
             **arguments: dict[str, Any],
         ) -> tuple[Union[str, list[str]], Any]:
             call_tool_result = await session.call_tool(tool.name, arguments)
-            return MCPInteroperability._convert_call_tool_result(call_tool_result)
+            return MCPClient._convert_call_tool_result(call_tool_result)
 
         ag2_tool = Tool(
             name=mcp_tool.name,
@@ -97,4 +97,4 @@ class MCPInteroperability:
 
 @export_module("autogen.mcp")
 async def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
-    return await MCPInteroperability.load_mcp_toolkit(session=session)
+    return await MCPClient.load_mcp_toolkit(session=session)
