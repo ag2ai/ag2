@@ -8,10 +8,9 @@ import pytest
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.interop import Interoperable
-from autogen.interop.mcp import MCPInteroperability
+from autogen.mcp import create_toolkit
 
-from ...conftest import Credentials
+from ..conftest import Credentials
 
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
@@ -21,13 +20,6 @@ with optional_import_block():
 @pytest.mark.interop
 @run_for_optional_imports("mcp", "mcp")
 class TestMCPInteroperability:
-    def test_type_checks(self) -> None:
-        # mypy should fail if the type checks are not correct
-        interop: Interoperable = MCPInteroperability()
-
-        # runtime check
-        assert isinstance(interop, Interoperable)
-
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
         server_file = Path(__file__).parent / "math_server.py"
@@ -49,7 +41,7 @@ class TestMCPInteroperability:
         async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
             # Initialize the connection
             await session.initialize()
-            toolkit = await MCPInteroperability.load_mcp_toolkit(session=session)
+            toolkit = await create_toolkit(session=session)
             assert len(toolkit) == 2
 
             agent = AssistantAgent(
@@ -99,7 +91,7 @@ class TestMCPInteroperability:
         async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
             # Initialize the connection
             await session.initialize()
-            toolkit = await MCPInteroperability.load_mcp_toolkit(session=session)
+            toolkit = await create_toolkit(session=session)
 
             agent = AssistantAgent(
                 name="agent",

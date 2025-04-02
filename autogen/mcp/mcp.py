@@ -8,7 +8,7 @@ from typing import Any, Optional, Union
 
 from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
-from ..tools import SchemaDefinedTool, Tool, Toolkit
+from ..tools import Tool, Toolkit
 
 __all__ = ["create_toolkit"]
 
@@ -64,10 +64,10 @@ class MCPInteroperability:
             call_tool_result = await session.call_tool(tool.name, arguments)
             return MCPInteroperability._convert_call_tool_result(call_tool_result)
 
-        ag2_tool: Tool = SchemaDefinedTool(
+        ag2_tool = Tool(
             name=mcp_tool.name,
             description=mcp_tool.description,
-            func=call_tool,
+            func_or_tool=call_tool,
             parameters_json_schema=mcp_tool.inputSchema,
         )
         return ag2_tool
@@ -96,5 +96,5 @@ class MCPInteroperability:
 
 
 @export_module("autogen.mcp")
-def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
-    return MCPInteroperability.load_mcp_toolkit(session=session)
+async def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
+    return await MCPInteroperability.load_mcp_toolkit(session=session)
