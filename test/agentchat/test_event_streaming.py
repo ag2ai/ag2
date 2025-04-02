@@ -29,7 +29,9 @@ def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
     # 2. Run the agent with a prompt
     response = my_agent.run(message="In one sentence, what's the big deal about AI?", max_turns=1)
 
-    response.process()
+    for event in response.events:
+        if event.type == "input_request":
+            event.content.respond("exit")
 
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) == 2, "Messages should not be empty"
@@ -50,7 +52,9 @@ async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
     # 2. Run the agent with a prompt
     response = await my_agent.a_run(message="In one sentence, what's the big deal about AI?", max_turns=1)
 
-    await response.process()
+    async for event in response.events:
+        if event.type == "input_request":
+            await event.content.respond("exit")
 
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) == 2, "Messages should not be empty"
@@ -164,7 +168,9 @@ def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
     # Start the conversation
     response = teacher.run(recipient=manager, message="Let's teach the kids about the solar system.")
 
-    response.process()
+    for event in response.events:
+        if event.type == "input_request":
+            event.content.respond("exit")
 
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) > 0, "Messages should not be empty"
@@ -212,7 +218,9 @@ async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
     # Start the conversation
     response = await teacher.a_run(recipient=manager, message="Let's teach the kids about the solar system.")
 
-    await response.process()
+    async for event in response.events:
+        if event.type == "input_request":
+            await event.content.respond("exit")
 
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) > 0, "Messages should not be empty"
@@ -263,8 +271,6 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
         swarm_manager_args={"llm_config": llm_config},
         after_work=AfterWorkOption.SWARM_MANAGER,
     )
-
-    # response.process()
 
     for events in response.events:
         if events.type == "input_request":
@@ -395,7 +401,9 @@ def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
     ])
 
     for response in responses:
-        response.process()
+        for event in response.events:
+            if event.type == "input_request":
+                event.content.respond("exit")
 
     for response in responses:
         assert len(response.messages) > 0, "Messages should not be empty"
@@ -468,7 +476,9 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
     ])
 
     for response in responses:
-        await response.process()
+        async for event in response.events:
+            if event.type == "input_request":
+                await event.content.respond("exit")
 
         assert len(await response.messages) > 0, "Messages should not be empty"
         assert isinstance(await response.last_speaker, ConversableAgent), "Last speaker should be one of the agents"
