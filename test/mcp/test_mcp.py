@@ -19,7 +19,8 @@ with optional_import_block():
 
 @skip_on_missing_imports(
     [
-        "mcp",
+        "mcp.client.stdio",
+        "mcp.server.fastmcp",
     ],
     "mcp",
 )
