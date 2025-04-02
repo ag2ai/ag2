@@ -33,6 +33,7 @@ jobs:
         optional-dependencies:
           - "browser-use"
           - "crawl4ai"
+          - "mcp"
           - "interop"
           - "google-api"
         # Add more LLMs if needed
