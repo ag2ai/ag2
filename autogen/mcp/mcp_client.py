@@ -10,8 +10,6 @@ from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
-__all__ = ["create_toolkit"]
-
 with optional_import_block():
     from mcp import ClientSession
     from mcp.types import (
@@ -21,6 +19,8 @@ with optional_import_block():
     from mcp.types import (
         Tool as MCPTool,
     )
+
+__all__ = ["create_toolkit"]
 
 
 class MCPClient:
@@ -95,4 +95,12 @@ class MCPClient:
 
 @export_module("autogen.mcp")
 async def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
+    """Create a toolkit from the MCP client session.
+
+    Args:
+        session (ClientSession): The MCP client session.
+    Returns:
+        Toolkit: The toolkit containing the converted tools.
+    """
+
     return await MCPClient.load_mcp_toolkit(session=session)
