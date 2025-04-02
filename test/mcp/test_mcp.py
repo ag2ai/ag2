@@ -17,7 +17,7 @@ with optional_import_block():
     from mcp.client.stdio import stdio_client
 
 
-@pytest.mark.interop
+@pytest.mark.mcp
 @run_for_optional_imports("mcp", "mcp")
 class TestMCPClient:
     @pytest.fixture

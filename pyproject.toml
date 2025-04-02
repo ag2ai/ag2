@@ -357,6 +357,7 @@ markers = [
     "graph_rag_falkor_db",
     "neo4j",
     "twilio",
+    "mcp",
     "interop",
     "browser_use",
     "crawl4ai",
