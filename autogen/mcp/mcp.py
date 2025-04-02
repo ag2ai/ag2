@@ -6,13 +6,11 @@
 import sys
 from typing import Any, Optional, Union
 
-from ...doc_utils import export_module
-from ...import_utils import optional_import_block, require_optional_import
-from ...tools import Tool, Toolkit
-from ..registry import register_interoperable_class
-from ..schema_defined_tool import SchemaDefinedTool
+from ..doc_utils import export_module
+from ..import_utils import optional_import_block, require_optional_import
+from ..tools import SchemaDefinedTool, Tool, Toolkit
 
-__all__ = ["MCPInteroperability"]
+__all__ = ["create_toolkit"]
 
 with optional_import_block():
     from mcp import ClientSession
@@ -25,8 +23,6 @@ with optional_import_block():
     )
 
 
-@register_interoperable_class("mcp")
-@export_module("autogen.interop")
 class MCPInteroperability:
     @staticmethod
     def _convert_call_tool_result(  # type: ignore[no-any-unimported]
@@ -50,7 +46,7 @@ class MCPInteroperability:
         return tool_content, non_text_contents or None
 
     @classmethod
-    @require_optional_import("mcp", "interop-mcp")
+    @require_optional_import("mcp", "mcp")
     def convert_tool(  # type: ignore[no-any-unimported]
         cls, tool: Any, session: Optional["ClientSession"] = None, **kwargs: Any
     ) -> Tool:
@@ -77,7 +73,7 @@ class MCPInteroperability:
         return ag2_tool
 
     @classmethod
-    @require_optional_import("mcp", "interop-mcp")
+    @require_optional_import("mcp", "mcp")
     async def load_mcp_toolkit(cls, session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
         """Load all available MCP tools and convert them to AG2 Toolkit."""
         tools = await session.list_tools()
@@ -94,6 +90,11 @@ class MCPInteroperability:
             import mcp  # noqa: F401
 
         if not result.is_successful:
-            return "Please install `interop-mcp` extra to use this module:\n\n\tpip install ag2[interop-mcp]"
+            return "Please install `mcp` extra to use this module:\n\n\tpip install ag2[mcp]"
 
         return None
+
+
+@export_module("autogen.mcp")
+def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
+    return MCPInteroperability.load_mcp_toolkit(session=session)

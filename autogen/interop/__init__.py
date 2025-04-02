@@ -7,7 +7,6 @@ from .interoperability import Interoperability
 from .interoperable import Interoperable
 from .langchain import LangChainChatModelFactory, LangChainInteroperability
 from .litellm import LiteLLmConfigFactory
-from .mcp import MCPInteroperability
 from .pydantic_ai import PydanticAIInteroperability
 from .registry import register_interoperable_class
 
@@ -18,7 +17,6 @@ __all__ = [
     "LangChainChatModelFactory",
     "LangChainInteroperability",
     "LiteLLmConfigFactory",
-    "MCPInteroperability",
     "PydanticAIInteroperability",
     "register_interoperable_class",
 ]

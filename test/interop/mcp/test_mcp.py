@@ -19,7 +19,7 @@ with optional_import_block():
 
 
 @pytest.mark.interop
-@run_for_optional_imports("mcp", "interop-mcp")
+@run_for_optional_imports("mcp", "mcp")
 class TestMCPInteroperability:
     def test_type_checks(self) -> None:
         # mypy should fail if the type checks are not correct

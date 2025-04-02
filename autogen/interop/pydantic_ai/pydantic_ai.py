@@ -11,8 +11,8 @@ from typing import Any, Callable, Optional
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
+from ...tools import SchemaDefinedTool
 from ..registry import register_interoperable_class
-from ..schema_defined_tool import SchemaDefinedTool
 
 __all__ = ["PydanticAIInteroperability"]
 

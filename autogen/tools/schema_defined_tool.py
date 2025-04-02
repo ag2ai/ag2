@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
-from ...agentchat.conversable_agent import ConversableAgent
-from ...tools import Tool
+from ..tools import Tool
+
+if TYPE_CHECKING:
+    from ..agentchat.conversable_agent import ConversableAgent
 
 __all__ = ["SchemaDefinedTool"]
 
@@ -46,7 +48,7 @@ class SchemaDefinedTool(Tool):
             },
         }
 
-    def register_for_llm(self, agent: ConversableAgent) -> None:
+    def register_for_llm(self, agent: "ConversableAgent") -> None:
         """Registers the tool with the ConversableAgent for use with a language model (LLM).
 
         This method updates the agent's tool signature to include the function schema,

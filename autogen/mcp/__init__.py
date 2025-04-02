@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .schema_defined_tool import SchemaDefinedTool
+from .mcp import create_toolkit
 
-__all__ = ["SchemaDefinedTool"]
+__all__ = ["create_toolkit"]
