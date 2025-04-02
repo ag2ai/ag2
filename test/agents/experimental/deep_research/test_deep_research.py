@@ -60,11 +60,13 @@ class TestDeepResearchAgent:
             human_input_mode="NEVER",
         )
 
-        result = agent.run(
+        run_response = agent.run(
             message="Who are the founders of the AG2 framework?",
             user_input=False,
             tools=agent.tools[0],
-        ).summary
+        )
+        run_response.process()
+        result = run_response.summary
 
         assert isinstance(result, str)
         assert result.startswith("Answer confirmed:")
