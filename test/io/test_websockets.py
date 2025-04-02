@@ -13,9 +13,9 @@ from uuid import UUID
 
 import autogen
 from autogen.cache.cache import Cache
+from autogen.events.base_event import BaseEvent, wrap_event
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.io import IOWebsockets
-from autogen.messages.base_message import BaseMessage, wrap_message
 
 from ..conftest import Credentials
 
@@ -25,8 +25,8 @@ with optional_import_block() as result:
     from websockets.sync.client import connect as ws_connect
 
 
-@wrap_message
-class TestTextMessage(BaseMessage):
+@wrap_event
+class TestTextEvent(BaseEvent):
     text: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, text: str):
@@ -58,7 +58,7 @@ class TestConsoleIOWithWebsockets:
             for msg in ["Hello, World!", "Over and out!"]:
                 print(f" - on_connect(): Sending message '{msg}' to client.", flush=True)
 
-                text_message = TestTextMessage(text=msg)
+                text_message = TestTextEvent(text=msg)
                 text_message.print(iostream.print)
 
             print(" - on_connect(): Receiving message from client.", flush=True)

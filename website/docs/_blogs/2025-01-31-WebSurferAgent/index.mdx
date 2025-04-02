@@ -90,12 +90,13 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
@@ -417,12 +418,13 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method

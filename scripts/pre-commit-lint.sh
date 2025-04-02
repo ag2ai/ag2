@@ -15,7 +15,7 @@ cd "$(dirname "$0")"/..
 # In my case, I need to use a custom index URL.
 # Avoid pip spending time quietly retrying since
 # likely cause of failure is lack of VPN connection.
-pip uninstall pyautogen --yes --quiet
+pip uninstall pyautogen ag2 --yes --quiet
 
 pip install --editable ".[lint]" \
  --retries 1 \

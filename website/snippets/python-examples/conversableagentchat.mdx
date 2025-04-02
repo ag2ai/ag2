@@ -14,5 +14,6 @@ with llm_config:
     )
 
 # 4. Chat directly with our agent
-my_agent.run("In one sentence, what's the big deal about AI?")
+response = my_agent.run(message="In one sentence, what's the big deal about AI?")
+response.process()
 ```

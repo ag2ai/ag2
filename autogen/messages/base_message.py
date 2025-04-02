@@ -21,6 +21,12 @@ class BaseMessage(BaseModel, ABC):
     uuid: UUID
 
     def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+        """Base message class
+
+        Args:
+            uuid (Optional[UUID], optional): Unique identifier for the message. Defaults to None.
+            **kwargs (Any): Additional keyword arguments
+        """
         uuid = uuid or uuid4()
         super().__init__(uuid=uuid, **kwargs)
 
