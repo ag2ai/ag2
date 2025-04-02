@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
 from autogen.mcp import create_toolkit
 
 from ..conftest import Credentials
@@ -17,8 +17,12 @@ with optional_import_block():
     from mcp.client.stdio import stdio_client
 
 
-@pytest.mark.mcp
-@run_for_optional_imports("mcp", "mcp")
+@skip_on_missing_imports(
+    [
+        "mcp",
+    ],
+    "mcp",
+)
 class TestMCPClient:
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
