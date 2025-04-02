@@ -52,7 +52,10 @@ with llm_config:
     )
 
 # 4. Run the agent with a prompt
-response = my_agent.run(message="In one sentence, what's the big deal about AI?")
+response = my_agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=3,
+)
 response.process()
 
 # 5. Print the chat
@@ -99,7 +102,7 @@ response = jack.run(
 response.process()
 
 # 5. Print the chat
-print(response.chat_history)
+print(response.messages)
 ```
 
     </Tab>
@@ -166,7 +169,7 @@ response = teacher.run(
 response.process()
 
 # Print the chat
-print(response.chat_history)
+print(response.messages)
 ```
 
     </Tab>
