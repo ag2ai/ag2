@@ -1094,6 +1094,7 @@ async def a_initiate_swarm_chat(
     return chat_result, context_variables if context_variables != {} else None, manager.last_speaker  # type: ignore[return-value]
 
 
+@export_module("autogen")
 class SwarmResult(BaseModel):
     """Encapsulates the possible return values for a swarm agent function."""
 
@@ -1125,6 +1126,7 @@ def _set_to_tool_execution(agent: ConversableAgent) -> None:
     agent.register_reply([Agent, None], _generate_swarm_tool_reply)
 
 
+@export_module("autogen")
 def register_hand_off(
     agent: ConversableAgent,
     hand_to: Union[list[Union[OnCondition, OnContextCondition, AfterWork]], OnCondition, OnContextCondition, AfterWork],

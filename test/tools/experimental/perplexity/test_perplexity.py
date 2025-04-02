@@ -1,21 +1,17 @@
 """
 Test suite for the PerplexitySearchTool class.
 Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
-SPDX-License-Identifier: Apache-2.0"
+SPDX-License-Identifier: Apache-2.0
 
 This module contains unit tests that verify the functionality of the Perplexity AI
 search integration, including authentication, query execution, and response handling.
-
-Classes:
-    TestPerplexitySearchTool: Test suite for PerplexitySearchTool functionality
 """
 
-from json import JSONDecodeError
+import json
 from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
-import requests
 
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
@@ -28,19 +24,12 @@ from ....conftest import Credentials
 class TestPerplexitySearchTool:
     """
     Test suite for the PerplexitySearchTool class.
-
-    This class contains comprehensive tests for validating the functionality
-    of the PerplexitySearchTool, including initialization, schema validation,
-    parameter validation, and API interactions.
     """
 
     @pytest.fixture
     def mock_response(self) -> dict[str, Any]:
         """
         Provide a mock response fixture for testing.
-
-        Returns:
-            dict[str, Any]: A dictionary containing a simulated Perplexity API response
         """
         return {
             "id": "test-id",
@@ -62,12 +51,6 @@ class TestPerplexitySearchTool:
     def test_initialization(self, use_internal_auth: bool) -> None:
         """
         Test the initialization of PerplexitySearchTool.
-
-        Args:
-            use_internal_auth (bool): Flag to test with/without internal authentication
-
-        Raises:
-            ValueError: When API key is missing in internal auth mode
         """
         if use_internal_auth:
             with pytest.raises(ValueError) as exc_info:
@@ -83,16 +66,6 @@ class TestPerplexitySearchTool:
     def test_tool_schema(self) -> None:
         """
         Test the validation of the tool's JSON schema.
-
-        Verifies:
-            - Correct function name
-            - Proper description inclusion
-            - Parameter structure and requirements
-            - Schema type definition
-            - Query parameter specification
-
-        Raises:
-            AssertionError: When the schema does not match expected values
         """
         tool = PerplexitySearchTool(api_key="test_key")
         expected_schema = {
@@ -101,7 +74,7 @@ class TestPerplexitySearchTool:
                 "description": tool.description,
                 "parameters": {
                     "type": "object",
-                    "properties": {"query": {"type": "string", "description": "The search query."}},
+                    "properties": {"query": {"type": "string", "description": "query"}},
                     "required": ["query"],
                 },
             },
@@ -121,13 +94,6 @@ class TestPerplexitySearchTool:
     def test_parameter_validation(self, search_params: dict[str, Any], expected_error: str) -> None:
         """
         Test validation of tool parameters.
-
-        Args:
-            search_params (dict[str, Any]): Input parameters to test
-            expected_error (str): Expected error message
-
-        Raises:
-            ValueError: When invalid parameters are provided
         """
         with pytest.raises(ValueError) as exc_info:
             PerplexitySearchTool(**search_params)
@@ -136,17 +102,7 @@ class TestPerplexitySearchTool:
     @patch("requests.request")
     def test_execute_query_success(self, mock_request: Mock, mock_response: dict[str, Any]) -> None:
         """
-        Test successful execution of API query.
-
-        Args:
-            mock_request (Mock): Mocked requests.request function
-            mock_response (dict[str, Any]): Fixture containing mock API response
-
-        Tests:
-            - API request formatting
-            - Response parsing
-            - Header validation
-            - Payload structure
+        Test successful execution of an API query.
         """
         mock_request.return_value = Mock(
             status_code=200, json=Mock(return_value=mock_response), raise_for_status=Mock()
@@ -154,7 +110,6 @@ class TestPerplexitySearchTool:
 
         tool = PerplexitySearchTool(api_key="valid_test_key")
 
-        # Execute the query
         payload = {
             "model": "sonar",
             "messages": [
@@ -167,68 +122,46 @@ class TestPerplexitySearchTool:
         }
 
         response = tool._execute_query(payload)
-
-        # Validate response
         assert isinstance(response, PerplexityChatCompletionResponse)
         assert response.choices[0].message.content == "Test response content"
         assert response.citations == mock_response["citations"]
 
-        # Verify API call parameters
         mock_request.assert_called_once_with(
             "POST",
             "https://api.perplexity.ai/chat/completions",
             headers={"Authorization": "Bearer valid_test_key", "Content-Type": "application/json"},
             json=payload,
+            timeout=10,
         )
 
-    @patch("requests.post")
-    def test_execute_query_error(self, mock_post: Mock) -> None:
+    @patch("requests.request")
+    def test_execute_query_error(self, mock_request: Mock) -> None:
         """
-        Test error handling during query execution.
-
-        Args:
-            mock_post (Mock): Mocked requests.post function
-
-        Tests:
-            - Invalid JSON response handling
-            - Error status code handling
-            - Exception propagation
+        Test error handling during query execution (invalid JSON response).
         """
-        mock_post.return_value = Mock(
-            status_code=401,
-            text="<html>Unauthorized</html>",
-            json=Mock(side_effect=JSONDecodeError("Expecting value", "", 0)),
-        )
+        # Create a mock response that raises JSONDecodeError when calling .json()
+        mock_response_obj = Mock(status_code=401, text="<html>Unauthorized</html>")
+        mock_response_obj.raise_for_status.side_effect = None  # No HTTP error is raised here
+        mock_response_obj.json.side_effect = json.JSONDecodeError("Expecting value", "", 0)
+        mock_request.return_value = mock_response_obj
 
         tool = PerplexitySearchTool(api_key="test_key")
 
-        with pytest.raises(requests.exceptions.JSONDecodeError) as exc_info:
+        with pytest.raises(RuntimeError) as exc_info:
             tool._execute_query({})
-        assert "Expecting value" in str(exc_info.value)
+        assert "Invalid JSON response received" in str(exc_info.value)
 
     @patch.object(PerplexitySearchTool, "_execute_query")
     def test_search(self, mock_execute: Mock, mock_response: dict[str, Any]) -> None:
         """
         Test the main search functionality.
-
-        Args:
-            mock_execute (Mock): Mocked _execute_query method
-            mock_response (dict[str, Any]): Fixture containing mock API response
-
-        Tests:
-            - Search response formatting
-            - Content extraction
-            - Citation handling
-            - Query parameter validation
         """
         mock_execute.return_value = PerplexityChatCompletionResponse(**mock_response)
         tool = PerplexitySearchTool(api_key="test_key")
         result = tool.search("Test query")
         assert isinstance(result, SearchResponse)
         assert result.content == "Test response content"
-        assert result.citations is not None
-        assert result.citations[0] == "https://example.com/source1"
-        assert result.citations[1] == "https://example.com/source2"
+        assert result.citations == mock_response["citations"]
         assert result.error is None
         mock_execute.assert_called_once_with({
             "model": "sonar",
@@ -241,16 +174,19 @@ class TestPerplexitySearchTool:
             "web_search_options": {"search_context_size": "high"},
         })
 
+    def test_search_invalid_query(self) -> None:
+        """
+        Test that an invalid (empty) query string raises a ValueError.
+        """
+        tool = PerplexitySearchTool(api_key="test_key")
+        with pytest.raises(ValueError) as exc_info:
+            tool.search("")
+        assert "A valid non-empty query string must be provided" in str(exc_info.value)
+
     def test_search_exception_case(self) -> None:
         """
-        Test the error handling of the search method in PerplexitySearchTool.
-
-        Tests:
-          - 'content' is set to None.
-          - 'citations' is set to None.
-          - 'error' contains an error message with the expected exception details.
+        Test error handling in the search method when an exception occurs.
         """
-        # Patch _execute_query to simulate an exception
         with patch.object(PerplexitySearchTool, "_execute_query", side_effect=Exception("Test exception")):
             tool = PerplexitySearchTool(api_key="test_key")
             response: SearchResponse = tool.search("Test query")
@@ -263,14 +199,6 @@ class TestPerplexitySearchTool:
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
         """
         Test integration with AssistantAgent.
-
-        Args:
-            credentials_gpt_4o_mini (Credentials): Test credentials fixture
-
-        Tests:
-            - Tool registration with agent
-            - Configuration verification
-            - Tool accessibility in agent
         """
         search_tool = PerplexitySearchTool(api_key="test_key")
         assistant = AssistantAgent(
