@@ -1088,12 +1088,13 @@ def main(force: bool) -> None:
     if args.notebook_directory is None:
         args.notebook_directory = mkdocs_root_dir / "../../notebook"
 
-    if force and mkdocs_output_dir.exists():
+    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
+
+    if not metadata_yml_path.exists() or (force and mkdocs_output_dir.exists()):
         process_notebooks_core(args, post_process_func, target_dir_func)
 
     # Render Notebooks Gallery HTML
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
     inject_gallery_html(notebooks_md_path, metadata_yml_path)
 
     # Add Notebooks Navigation to Summary.md
