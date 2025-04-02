@@ -35,7 +35,7 @@ jobs:
           - "crawl4ai"
           - "interop"
           - "google-api"
-          - "wikipedia"
+          - "wikipedia-api"
         # Add more LLMs if needed
         llm: ["openai", "gemini", "anthropic", "deepseek"]
         # Run tests only for py versions 3.11
