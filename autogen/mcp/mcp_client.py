@@ -48,10 +48,8 @@ class MCPClient:
     @classmethod
     @require_optional_import("mcp", "mcp")
     def convert_tool(  # type: ignore[no-any-unimported]
-        cls, tool: Any, session: Optional["ClientSession"] = None, **kwargs: Any
+        cls, tool: Any, session: "ClientSession", **kwargs: Any
     ) -> Tool:
-        if session is None:
-            raise ValueError("Session must be provided for MCP interoperability.")
         if not isinstance(tool, MCPTool):
             raise ValueError(f"Expected an instance of `mcp.types.Tool`, got {type(tool)}")
 
@@ -84,7 +82,7 @@ class MCPClient:
     @classmethod
     def get_unsupported_reason(cls) -> Optional[str]:
         if sys.version_info < (3, 10):
-            return "This submodule is only supported for Python versions 3.9 and above"
+            return "This submodule is only supported for Python versions 3.10 and above"
 
         with optional_import_block() as result:
             import mcp  # noqa: F401
