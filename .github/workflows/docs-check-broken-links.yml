@@ -28,4 +28,4 @@ jobs:
         run: go install github.com/raviqqe/muffet/v2@latest
 
       - name: Check for broken links
-        run: ./scripts/broken-links-check.sh --url "https://docs.ag2.ai/docs/Home"
+        run: ./scripts/broken-links-check.sh --url "https://docs.ag2.ai"
