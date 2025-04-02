@@ -96,7 +96,7 @@ async with stdio_client(server_params) as (read, write), ClientSession(read, wri
     toolkit.register_for_llm(agent)
 
     # Make a request using the MCP tool
-    await agent.a_run(
+    result = await agent.a_run(
         message="Add 123223 and 456789",
         tools=toolkit.tools,
         max_turns=2,
