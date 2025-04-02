@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, runtime_checka
 
 from ..doc_utils import export_module
 
-__all__ = ["Agent", "LLMAgent"]
+__all__ = ["Agent", "LLMAgent", "LLMMessageType"]
+
+LLMMessageType = dict[str, Any]
 
 
 @runtime_checkable
