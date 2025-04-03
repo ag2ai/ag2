@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import unittest
+import pytest
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -31,7 +31,11 @@ class FakePage:
 
 
 @run_for_optional_imports("wikipediaapi", "wikipedia")
-class TestWikipediaClient(unittest.TestCase):
+class TestWikipediaClient:
+    """
+    Test suite for the WikipediaClient class.
+    """
+
     @patch("autogen.tools.experimental.wikipedia.wikipedia.requests.get")
     def test_search_success(self, mock_get: MagicMock) -> None:
         # Simulate a valid JSON response from Wikipedia API.
@@ -55,8 +59,8 @@ class TestWikipediaClient(unittest.TestCase):
 
         client = WikipediaClient()
         results = client.search("Test")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["title"], "Test Page")
+        assert len(results) == 1
+        assert results[0]["title"] == "Test Page"
 
     @patch("autogen.tools.experimental.wikipedia.wikipedia.requests.get")
     def test_search_http_error(self, mock_get: MagicMock) -> None:
@@ -66,7 +70,7 @@ class TestWikipediaClient(unittest.TestCase):
         mock_get.return_value = mock_response
 
         client = WikipediaClient()
-        with self.assertRaises(requests.HTTPError):
+        with pytest.raises(requests.HTTPError):
             client.search("Test")
 
     def test_get_page_exists(self) -> None:
@@ -75,10 +79,8 @@ class TestWikipediaClient(unittest.TestCase):
         fake_page = FakePage(True, summary="Fake summary", text="Fake text")
         with patch.object(client.wiki, "page", return_value=fake_page):
             page = client.get_page("Fake Page")
-            self.assertIsNotNone(page)
-            if page is None:
-                self.fail("Expected page to be not None")
-            self.assertEqual(page.summary, "Fake summary")
+            assert page is not None
+            assert page.summary == "Fake summary"
 
     def test_get_page_nonexistent(self) -> None:
         # Simulate a page that does not exist.
@@ -86,17 +88,29 @@ class TestWikipediaClient(unittest.TestCase):
         fake_page = FakePage(False)
         with patch.object(client.wiki, "page", return_value=fake_page):
             page = client.get_page("Nonexistent Page")
-            self.assertIsNone(page)
+            assert page is None
 
 
 @run_for_optional_imports("wikipediaapi", "wikipedia")
-class TestWikipediaQueryRunTool(unittest.TestCase):
-    def setUp(self) -> None:
-        # Create an instance of the tool with verbose off.
-        self.tool = WikipediaQueryRunTool(verbose=False)
+class TestWikipediaQueryRunTool:
+    """
+    Test suite for the WikipediaQueryRunTool class.
+    """
+    
+    @pytest.fixture
+    def tool(self) -> WikipediaQueryRunTool:
+        """
+        Provide a WikipediaQueryRunTool instance for testing.
+        
+        Returns:
+            WikipediaQueryRunTool: A configured tool instance with verbose off
+        """
+        return WikipediaQueryRunTool(verbose=False)
+
+    def test_query_run_success(self, tool) -> None:
         # Patch the search method.
-        self.patcher_search = patch.object(
-            self.tool.wiki_cli,
+        with patch.object(
+            tool.wiki_cli,
             "search",
             return_value=[
                 {
@@ -107,45 +121,30 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
                     "size": 500,
                 }
             ],
-        )
-        self.mock_search = self.patcher_search.start()
-        self.addCleanup(self.patcher_search.stop)
-
-        # Patch the get_page method.
-        fake_page = FakePage(True, summary="Test summary", text="Test text")
-        self.patcher_get_page = patch.object(
-            self.tool.wiki_cli,
+        ), patch.object(
+            tool.wiki_cli,
             "get_page",
-            return_value=fake_page,
-        )
-        self.mock_get_page = self.patcher_get_page.start()
-        self.addCleanup(self.patcher_get_page.stop)
+            return_value=FakePage(True, summary="Test summary", text="Test text"),
+        ):
+            # Simulate query run success scenario
+            result = tool.query_run("Some test query")
+            # Expect a list with formatted summary.
+            assert isinstance(result, list)
+            assert "Page: Test Page" in result[0]
+            assert "Summary: Test summary" in result[0]
 
-    def test_query_run_success(self) -> None:
-        # Simulate query run success scenario
-        result = self.tool.query_run("Some test query")
-        # Expect a list with formatted summary.
-        self.assertIsInstance(result, list)
-        if isinstance(result, list):
-            self.assertIn("Page: Test Page", result[0])
-            self.assertIn("Summary: Test summary", result[0])
-        else:
-            self.fail("Expected result to be a list")
-
-    def test_query_run_no_results(self) -> None:
+    def test_query_run_no_results(self, tool) -> None:
         # Simulate no search results.
-        self.mock_search.return_value = []
-        result = self.tool.query_run("Some test query")
-        self.assertEqual(result, "No good Wikipedia Search Result was found")
+        with patch.object(tool.wiki_cli, "search", return_value=[]):
+            result = tool.query_run("Some test query")
+            assert result == "No good Wikipedia Search Result was found"
 
-    def test_query_run_exception(self) -> None:
+    def test_query_run_exception(self, tool) -> None:
         # Simulate an exception during search.
-        self.mock_search.side_effect = Exception("fail")
-        result = self.tool.query_run("Some test query")
-        if isinstance(result, str):
-            self.assertTrue(result.startswith("wikipedia search failed: "))
-        else:
-            self.fail("Expected result to be a string error message")
+        with patch.object(tool.wiki_cli, "search", side_effect=Exception("fail")):
+            result = tool.query_run("Some test query")
+            assert isinstance(result, str)
+            assert result.startswith("wikipedia search failed: ")
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
@@ -162,10 +161,24 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
 
 
 @run_for_optional_imports("wikipediaapi", "wikipedia")
-class TestWikipediaPageLoadTool(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tool = WikipediaPageLoadTool(verbose=False)
-        self.fake_search_result = [
+class TestWikipediaPageLoadTool:
+    """
+    Test suite for the WikipediaPageLoadTool class.
+    """
+    
+    @pytest.fixture
+    def tool(self) -> WikipediaPageLoadTool:
+        """
+        Provide a WikipediaPageLoadTool instance for testing.
+        
+        Returns:
+            WikipediaPageLoadTool: A configured tool instance with verbose off
+        """
+        return WikipediaPageLoadTool(verbose=False)
+
+    def test_content_search_success(self, tool) -> None:
+        # Simulate successful search results.
+        fake_search_result = [
             {
                 "title": "Test Page",
                 "pageid": 123,
@@ -174,50 +187,35 @@ class TestWikipediaPageLoadTool(unittest.TestCase):
                 "size": 500,
             }
         ]
-        # Patch the search method.
-        self.patcher_search = patch.object(
-            self.tool.wiki_cli,
+        
+        with patch.object(
+            tool.wiki_cli,
             "search",
-            return_value=self.fake_search_result,
-        )
-        self.mock_search = self.patcher_search.start()
-        self.addCleanup(self.patcher_search.stop)
-
-        # Patch the get_page method.
-        fake_page = FakePage(True, summary="Test summary", text="Test text content that is long enough")
-        self.patcher_get_page = patch.object(
-            self.tool.wiki_cli,
+            return_value=fake_search_result,
+        ), patch.object(
+            tool.wiki_cli,
             "get_page",
-            return_value=fake_page,
-        )
-        self.mock_get_page = self.patcher_get_page.start()
-        self.addCleanup(self.patcher_get_page.stop)
+            return_value=FakePage(True, summary="Test summary", text="Test text content that is long enough"),
+        ):
+            result = tool.content_search("Some test query")
+            assert isinstance(result, list)
+            assert len(result) > 0
+            assert isinstance(result[0], Document)
+            assert result[0].metadata["title"] == "Test Page"
+            assert result[0].page_content.startswith("Test text")
 
-    def test_content_search_success(self) -> None:
-        # Simulate successful search results.
-        result = self.tool.content_search("Some test query")
-        if isinstance(result, list):
-            self.assertGreater(len(result), 0)
-            self.assertIsInstance(result[0], Document)
-            self.assertEqual(result[0].metadata["title"], "Test Page")
-            self.assertTrue(result[0].page_content.startswith("Test text"))
-        else:
-            self.fail("Expected result to be a list of Document objects")
-
-    def test_content_search_no_results(self) -> None:
+    def test_content_search_no_results(self, tool) -> None:
         # Simulate no search results.
-        self.mock_search.return_value = []
-        result = self.tool.content_search("Some test query")
-        self.assertEqual(result, "No good Wikipedia Search Result was found")
+        with patch.object(tool.wiki_cli, "search", return_value=[]):
+            result = tool.content_search("Some test query")
+            assert result == "No good Wikipedia Search Result was found"
 
-    def test_content_search_exception(self) -> None:
+    def test_content_search_exception(self, tool) -> None:
         # Simulate an exception during search.
-        self.mock_search.side_effect = Exception("fail")
-        result = self.tool.content_search("Some test query")
-        if isinstance(result, str):
-            self.assertTrue(result.startswith("wikipedia search failed: "))
-        else:
-            self.fail("Expected result to be a string error message")
+        with patch.object(tool.wiki_cli, "search", side_effect=Exception("fail")):
+            result = tool.content_search("Some test query")
+            assert isinstance(result, str)
+            assert result.startswith("wikipedia search failed: ")
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
