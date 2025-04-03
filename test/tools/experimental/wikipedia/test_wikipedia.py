@@ -30,6 +30,7 @@ class FakePage:
         return self._exists
 
 
+@run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaClient(unittest.TestCase):
     @patch("autogen.tools.experimental.wikipedia.wikipedia.requests.get")
     def test_search_success(self, mock_get: MagicMock) -> None:
@@ -87,7 +88,7 @@ class TestWikipediaClient(unittest.TestCase):
             page = client.get_page("Nonexistent Page")
             self.assertIsNone(page)
 
-
+@run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaQueryRunTool(unittest.TestCase):
     def setUp(self) -> None:
         # Create an instance of the tool with verbose off.
@@ -158,7 +159,7 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
         assert isinstance(assistant.tools[0], WikipediaQueryRunTool)
         assert assistant.tools[0].name == "wikipedia-query-run"
 
-
+@run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaPageLoadTool(unittest.TestCase):
     def setUp(self) -> None:
         self.tool = WikipediaPageLoadTool(verbose=False)
