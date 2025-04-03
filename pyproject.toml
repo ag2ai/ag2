@@ -185,6 +185,12 @@ twilio = [
     "twilio>=9.3.2"
 ]
 
+mcp = [
+    # mcp 1.6.0 keeps hanging in stdio_client context manager
+    # test_mcp_issue_with_stdio_client_context_manager is failing for mcp=1.6.0
+    "mcp>=1.4.0,<1.6; python_version>='3.10'"
+]
+
 interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
@@ -192,7 +198,7 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.31"]
 interop =[
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
 
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
@@ -351,6 +357,7 @@ markers = [
     "graph_rag_falkor_db",
     "neo4j",
     "twilio",
+    "mcp",
     "interop",
     "browser_use",
     "crawl4ai",

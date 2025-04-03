@@ -11,8 +11,8 @@ from typing import Any, Callable, Optional
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
+from ...tools import Tool
 from ..registry import register_interoperable_class
-from .pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
 
 __all__ = ["PydanticAIInteroperability"]
 
@@ -92,7 +92,7 @@ class PydanticAIInteroperability:
 
     @classmethod
     @require_optional_import("pydantic_ai", "interop-pydantic-ai")
-    def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> AG2PydanticAITool:
+    def convert_tool(cls, tool: Any, deps: Any = None, **kwargs: Any) -> Tool:
         """Converts a given Pydantic AI tool into a general `Tool` format.
 
         This method verifies that the provided tool is a valid `PydanticAITool`,
@@ -105,7 +105,7 @@ class PydanticAIInteroperability:
             **kwargs (Any): Additional arguments that are not used in this method.
 
         Returns:
-            AG2PydanticAITool: A standardized `Tool` object converted from the Pydantic AI tool.
+            Tool: A standardized `Tool` object converted from the Pydantic AI tool.
 
         Raises:
             ValueError: If the provided tool is not an instance of `PydanticAITool`, or if
@@ -147,10 +147,10 @@ class PydanticAIInteroperability:
             tool=pydantic_ai_tool,
         )
 
-        return AG2PydanticAITool(
+        return Tool(
             name=pydantic_ai_tool.name,
             description=pydantic_ai_tool.description,
-            func=func,
+            func_or_tool=func,
             parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
         )
 

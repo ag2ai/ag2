@@ -1,0 +1,140 @@
+## Installation
+
+To integrate MCP tools into the AG2 framework, install the required dependencies:
+
+```bash
+pip install -U ag2[openai,mcp]
+```
+
+> **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+> ```bash
+> pip install -U autogen[openai,mcp]
+> ```
+> or
+> ```bash
+> pip install -U pyautogen[openai,mcp]
+> ```
+> as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+## Imports
+
+```python
+from pathlib import Path
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+from autogen.agentchat import AssistantAgent
+from autogen.mcp import create_toolkit
+
+# Only needed for Jupyter notebooks
+import nest_asyncio
+
+nest_asyncio.apply()
+```
+
+## Setting Up an MCP Server
+
+We will create a simple MCP server that exposes two tools: `add` and `multiply`.
+
+For more details on creating MCP servers, visit the [MCP Python SDK documentation](https://github.com/modelcontextprotocol/python-sdk).
+
+Let's create a Python script (`math_server.py`) with the following content:
+
+```python
+math_server_file_content = """# math_server.py
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("Math")
+
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    \"\"\"Add two numbers\"\"\"
+    return a + b
+
+
+@mcp.tool()
+def multiply(a: int, b: int) -> int:
+    \"\"\"Multiply two numbers\"\"\"
+    return a * b
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+"""
+
+# Write content to a file
+math_server_path = Path("math_server.py")
+math_server_path.write_text(math_server_file_content)
+```
+
+## Connecting AG2 to the MCP Server
+
+To connect AG2 to the MCP server, follow these steps:
+- **Set up connection parameters** – Define how AG2 will communicate with the MCP server.
+- **Start a client session** – This session handles communication between AG2 and the server.
+- **Wrap MCP tools into a toolkit** – This makes them accessible to AG2.
+- **Register the toolkit with an AG2 agent** – This enables AG2 to use MCP tools.
+- **Start conversation** - Send a message with desired goal (e.g. adding two numbers).
+
+```python
+# Create server parameters for stdio connection
+server_params = StdioServerParameters(
+    command="python",  # Executable
+    args=[str(math_server_path)],  # Optional command line arguments
+)
+
+async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+    # Initialize the connection
+    await session.initialize()
+
+    # Create a toolkit with available MCP tools
+    toolkit = await create_toolkit(session=session)
+    agent = AssistantAgent(name="assistant", llm_config={"model": "gpt-4o-mini", "api_type": "openai"})
+    # Register MCP tools with the agent
+    toolkit.register_for_llm(agent)
+
+    # Make a request using the MCP tool
+    result = await agent.a_run(
+        message="Add 123223 and 456789",
+        tools=toolkit.tools,
+        max_turns=2,
+        user_input=False,
+    )
+    await result.process()
+```
+
+## Expected Output
+
+```console
+user (to assistant):
+
+Add 123223 and 456789
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_kO3xnTqJyOxTYaJCdyS1VOKw): add *****
+Arguments:
+{"a": 123223, "b": 456789}
+********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+Call ID: call_kO3xnTqJyOxTYaJCdyS1VOKw
+Input arguments: {'a': 123223, 'b': 456789}
+user (to assistant):
+
+***** Response from calling tool (call_kO3xnTqJyOxTYaJCdyS1VOKw) *****
+('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+The sum of 123223 and 456789 is 580012.
+
+TERMINATE
+```
