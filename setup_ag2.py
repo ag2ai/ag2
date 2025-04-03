@@ -44,6 +44,7 @@ setuptools.setup(
         "google-client": ["pyautogen[google-client]==" + __version__],
         "google-api": ["pyautogen[google-api]==" + __version__],
         "google-search": ["pyautogen[google-search]==" + __version__],
+        "wikipedia": ["pyautogen[wikipedia]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
         "twilio": ["pyautogen[twilio]==" + __version__],
         "mcp": ["pyautogen[mcp]==" + __version__],

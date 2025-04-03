@@ -16,6 +16,8 @@ class TestToolImports:
             SlackSendTool,
             TelegramRetrieveTool,
             TelegramSendTool,
+            WikipediaPageLoadTool,
+            WikipediaQueryRunTool,
         )
 
         assert isinstance(BrowserUseTool, type)
@@ -27,6 +29,8 @@ class TestToolImports:
         assert isinstance(TelegramRetrieveTool, type)
         assert isinstance(TelegramSendTool, type)
         assert isinstance(PerplexitySearchTool, type)
+        assert isinstance(WikipediaQueryRunTool, type)
+        assert isinstance(WikipediaPageLoadTool, type)
 
     def test_imports_experimental_messageplatform(self) -> None:
         """Ensure all tool imports are correct."""
