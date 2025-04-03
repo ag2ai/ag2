@@ -695,7 +695,7 @@ Rating: <rating>
         prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
 
         # add current trajectory
-        prompt = f"Trajectory:\n{nodes[0].parent.trajectory}\n\n---\n\nOptions:\n"
+        prompt += f"Trajectory:\n{nodes[0].parent.trajectory}\n\n---\n\nOptions:\n"
 
         # add options
         for i, node in enumerate(nodes):
