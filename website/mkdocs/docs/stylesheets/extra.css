@@ -114,6 +114,23 @@ a.internal-link::after {
     color: var(--md-primary-fg-color);
 }
 
+.doc-object-name,
+.doc-label,
+code.doc-symbol-class::after,
+code.doc-symbol-attribute::after,
+code.doc-symbol-method::after,
+code.doc-symbol-function::after{
+    text-transform: none !important;
+    font-family: "Inter", sans-serif !important;
+}
+
+body.reference-page .doc-object-name {
+    font-family: monospace;
+    font-size: 1.25rem;
+    margin: 0 0.25rem;
+    display: inline-block;
+}
+
 /* Home page hero section starts */
 .homepage-hero-section {
     background-image: url('/assets/img/homepage-hero-background.png');
