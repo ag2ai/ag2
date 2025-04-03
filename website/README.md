@@ -1,80 +1,106 @@
 # Website
 
-This website is built using [Mintlify](https://mintlify.com/docs/quickstart), a modern website generator.
+This website is built using [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/), a modern website generator.
 
-## How to get a notebook rendered on the website
+## Building Documentation Locally
 
-See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website) for instructions on how to get a notebook in the `notebook` directory rendered on the website.
+You can build and serve the documentation locally by following these steps:
 
-## Build documentation locally
 
-Follow these steps to build and serve the documentation on your local machine:
+### Prerequisites
 
-1. Install Node.js:
-    - Download and install [Node.js](https://nodejs.org/en/download/)
-
-2.  Install Quarto:
-    - Visit the Quarto download [page](https://quarto.org/docs/download/).
-    - Click on the Pre-release tab and download the latest version of Quarto.
+1.  Install Quarto:
+    - Visit the Quarto download <a href="https://quarto.org/docs/download/" target="_blank">page</a>.
+    - Navigate to the Pre-release tab and download the latest version
     - Ensure you install version `1.5.23` or higher.
 
-3. Install Required Python Packages:
-    - From the project root directory, install the necessary Python packages by running:
+### Installation
+
+From the project root directory, install the necessary Python packages:
+
+```console
+pip install -e ".[docs]"
+```
+
+### Building the Documentation
+
+To build the documentation locally, run the following command from the project root directory:
+
+```console
+./scripts/docs_build_mkdocs.sh
+```
+
+Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
+
+```console
+./scripts/docs_build_mkdocs.sh --force
+```
+
+### Serving the documentation
+
+Once the build is complete, please run the following command to serve the docs:
+
+```console
+./scripts/docs_serve_mkdocs.sh
+```
+
+This will spin up a server at port 8000, which you can access by visiting `http://localhost:8000` in your browser.
+
+## Build with Dev Containers
+
+If you prefer to use a containerized development environment, you can build and test the documentation using Dev Containers.
+
+### Setting up Dev Containers
+
+- Install <a href="https://code.visualstudio.com" target="_blank">VSCode</a> if you haven't already.
+- Open the project in VSCode.
+- Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) and select `Dev Containers: Reopen in Container`.
+
+This will open the project in a Dev Container with all the required dependencies pre-installed.
+
+### Building and serving in the container
+
+Once your project is open in the Dev Container:
+
+- Open a terminal in VSCode and install the project with docs dependencies:
 
     ```console
     pip install -e ".[docs]"
     ```
 
-4. Build and Serve the Documentation:
+- Build the documentation:
 
-    - To build and serve the documentation locally, run the following command from the project root directory:
+    ```console
+    ./scripts/docs_build_mkdocs.sh
+    ```
 
-        ```console
-        ./scripts/docs_serve.sh
-        ```
+- Serve the documentation:
 
-    - Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
+    ```console
+    ./scripts/docs_serve_mkdocs.sh
+    ```
 
-        ```console
-        ./scripts/docs_serve.sh --force
-        ```
+The documentation will be accessible at `http://localhost:8000` in your browser.
 
-    - The above command starts a local development server and opens up a browser window.
+## Handling updates or changes
 
-5. Handling Updates or Changes:
+For any changes to be reflected in the documentation, you will need to:
 
-    - Whenever you update the documentation, stop the server and re-run the `./scripts/docs_serve.sh` command to serve the docs with the latest changes and view them live.
+- Stop the running server
+- Run the build command again
+- Start the server again
 
-    - If deleted files are still displayed, it indicates cached or temporary files may be causing issues. To resolve this, use the `--force` flag to clean the build directory and regenerate the documentation.
 
-By following these steps, you can build, serve, and update the documentation locally.
+When switching branches or making major changes to the documentation structure, you might occasionally notice deleted files still appearing or changes not showing up properly. This happens due to cached build files. In such cases, running the commands with the `--force` flag will clear the cache and rebuild everything from scratch:
 
-## Build with Dev Containers
+```console
+./scripts/docs_build_mkdocs.sh --force
+./scripts/docs_serve_mkdocs.sh
+```
 
-To build and test documentation using Dev Containers, open the project using [VSCode](https://code.visualstudio.com/), press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
 
-This will open the project in a Dev Container with all the required dependencies installed.
+## Adding Notebooks to the Website
 
-Build and Serve the Documentation:
+When you want to add a new Jupyter notebook and have it rendered in the documentation, you need to follow specific guidelines to ensure proper integration with the website.
 
-    - Open a terminal and run the following commands from the project root directory to build and serve the documentation:
-
-        ```console
-        pip install -e ".[docs]"
-        ./scripts/docs_serve.sh
-        ```
-
-    - Optionally, you can pass the `--force` flag to clean up all temporary files and generate the documentation from scratch:
-
-        ```console
-        pip install -e ".[docs]"
-        ./scripts/docs_serve.sh --force
-        ```
-
-    Once done you should be able to access the documentation at `http://localhost:3000/`.
-
-Handling Updates or Changes:
-
-    - Whenever you update the documentation, stop the server and re-run the `./scripts/docs_serve.sh` command to serve the docs with the latest changes and view them live.
-
-    - If deleted files are still displayed, it indicates cached or temporary files may be causing issues. To resolve this, use the `--force` flag to clean the build directory and regenerate the documentation.
+Please refer to <a href="https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website" target="_blank">this</a> guideline for more details.
