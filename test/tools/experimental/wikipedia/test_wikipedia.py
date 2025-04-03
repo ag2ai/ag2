@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
 from autogen import AssistantAgent
@@ -96,35 +96,38 @@ class TestWikipediaQueryRunTool:
     """
     Test suite for the WikipediaQueryRunTool class.
     """
-    
+
     @pytest.fixture
     def tool(self) -> WikipediaQueryRunTool:
         """
         Provide a WikipediaQueryRunTool instance for testing.
-        
+
         Returns:
             WikipediaQueryRunTool: A configured tool instance with verbose off
         """
         return WikipediaQueryRunTool(verbose=False)
 
-    def test_query_run_success(self, tool) -> None:
+    def test_query_run_success(self, tool: WikipediaQueryRunTool) -> None:
         # Patch the search method.
-        with patch.object(
-            tool.wiki_cli,
-            "search",
-            return_value=[
-                {
-                    "title": "Test Page",
-                    "pageid": 123,
-                    "timestamp": "2023-01-01T00:00:00Z",
-                    "wordcount": 100,
-                    "size": 500,
-                }
-            ],
-        ), patch.object(
-            tool.wiki_cli,
-            "get_page",
-            return_value=FakePage(True, summary="Test summary", text="Test text"),
+        with (
+            patch.object(
+                tool.wiki_cli,
+                "search",
+                return_value=[
+                    {
+                        "title": "Test Page",
+                        "pageid": 123,
+                        "timestamp": "2023-01-01T00:00:00Z",
+                        "wordcount": 100,
+                        "size": 500,
+                    }
+                ],
+            ),
+            patch.object(
+                tool.wiki_cli,
+                "get_page",
+                return_value=FakePage(True, summary="Test summary", text="Test text"),
+            ),
         ):
             # Simulate query run success scenario
             result = tool.query_run("Some test query")
@@ -133,13 +136,13 @@ class TestWikipediaQueryRunTool:
             assert "Page: Test Page" in result[0]
             assert "Summary: Test summary" in result[0]
 
-    def test_query_run_no_results(self, tool) -> None:
+    def test_query_run_no_results(self, tool: WikipediaQueryRunTool) -> None:
         # Simulate no search results.
         with patch.object(tool.wiki_cli, "search", return_value=[]):
             result = tool.query_run("Some test query")
             assert result == "No good Wikipedia Search Result was found"
 
-    def test_query_run_exception(self, tool) -> None:
+    def test_query_run_exception(self, tool: WikipediaQueryRunTool) -> None:
         # Simulate an exception during search.
         with patch.object(tool.wiki_cli, "search", side_effect=Exception("fail")):
             result = tool.query_run("Some test query")
@@ -165,18 +168,18 @@ class TestWikipediaPageLoadTool:
     """
     Test suite for the WikipediaPageLoadTool class.
     """
-    
+
     @pytest.fixture
     def tool(self) -> WikipediaPageLoadTool:
         """
         Provide a WikipediaPageLoadTool instance for testing.
-        
+
         Returns:
             WikipediaPageLoadTool: A configured tool instance with verbose off
         """
         return WikipediaPageLoadTool(verbose=False)
 
-    def test_content_search_success(self, tool) -> None:
+    def test_content_search_success(self, tool: WikipediaPageLoadTool) -> None:
         # Simulate successful search results.
         fake_search_result = [
             {
@@ -187,15 +190,18 @@ class TestWikipediaPageLoadTool:
                 "size": 500,
             }
         ]
-        
-        with patch.object(
-            tool.wiki_cli,
-            "search",
-            return_value=fake_search_result,
-        ), patch.object(
-            tool.wiki_cli,
-            "get_page",
-            return_value=FakePage(True, summary="Test summary", text="Test text content that is long enough"),
+
+        with (
+            patch.object(
+                tool.wiki_cli,
+                "search",
+                return_value=fake_search_result,
+            ),
+            patch.object(
+                tool.wiki_cli,
+                "get_page",
+                return_value=FakePage(True, summary="Test summary", text="Test text content that is long enough"),
+            ),
         ):
             result = tool.content_search("Some test query")
             assert isinstance(result, list)
@@ -204,13 +210,13 @@ class TestWikipediaPageLoadTool:
             assert result[0].metadata["title"] == "Test Page"
             assert result[0].page_content.startswith("Test text")
 
-    def test_content_search_no_results(self, tool) -> None:
+    def test_content_search_no_results(self, tool: WikipediaPageLoadTool) -> None:
         # Simulate no search results.
         with patch.object(tool.wiki_cli, "search", return_value=[]):
             result = tool.content_search("Some test query")
             assert result == "No good Wikipedia Search Result was found"
 
-    def test_content_search_exception(self, tool) -> None:
+    def test_content_search_exception(self, tool: WikipediaPageLoadTool) -> None:
         # Simulate an exception during search.
         with patch.object(tool.wiki_cli, "search", side_effect=Exception("fail")):
             result = tool.content_search("Some test query")
