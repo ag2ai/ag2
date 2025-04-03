@@ -247,6 +247,8 @@ response = assistant.run(
     tools=google_drive_toolkit.tools,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
 response.process()
 ```
 

@@ -38,9 +38,11 @@ with llm_config:
 
 # 4. Chat directly with our agent
 response = my_agent.run(message="In one sentence, what's the big deal about AI?")
+
+# 5. Iterate through the chat automatically with console output
 response.process()
 
-# 5. Get and print our lesson plan
+# 6. Get and print our lesson plan
 lesson_plan_json = json.loads(response.messages[-1]["content"])
 print(json.dumps(lesson_plan_json, indent=2))
 ```

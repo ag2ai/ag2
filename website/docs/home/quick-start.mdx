@@ -56,9 +56,11 @@ response = my_agent.run(
     message="In one sentence, what's the big deal about AI?",
     max_turns=3,
 )
+
+# 5. Iterate through the chat automatically with console output
 response.process()
 
-# 5. Print the chat
+# 6. Print the chat
 print(response.messages)
 ```
     </Tab>
@@ -99,9 +101,11 @@ response = jack.run(
     emma,
     message="Emma, tell me a joke about goldfish and peanut butter.",
 )
+
+# 5. Iterate through the chat automatically with console output
 response.process()
 
-# 5. Print the chat
+# 6. Print the chat
 print(response.messages)
 ```
 
@@ -166,6 +170,8 @@ response = teacher.run(
     recipient=manager,
     message="Let's teach the kids about the solar system."
 )
+
+# Iterate through the chat automatically with console output
 response.process()
 
 # Print the chat
