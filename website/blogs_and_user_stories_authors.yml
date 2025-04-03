@@ -208,3 +208,9 @@ authors:
     description: Developer
     url: https://www.linkedin.com/in/xingyu-xiang/
     avatar: https://github.com/stellaxiang.png
+
+  tyler_suard:
+    name: Tyler Suard
+    description: AI Developer
+    url: https://www.manning.com/books/enterprise-rag
+    avatar: ../img/profile.png
