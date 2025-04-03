@@ -26,6 +26,7 @@ class Tool:
         name (str): The name of the tool.
         description (str): The description of the tool.
         func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
+        parameters_json_schema (Optional[ict[str, Any]]): A schema describing the parameters that the function accepts. If None, the schema will be generated from the function signature.
     """
 
     def __init__(
@@ -34,6 +35,7 @@ class Tool:
         name: Optional[str] = None,
         description: Optional[str] = None,
         func_or_tool: Union["Tool", Callable[..., Any]],
+        parameters_json_schema: Optional[dict[str, Any]] = None,
     ) -> None:
         """Create a new Tool object.
 
@@ -41,6 +43,7 @@ class Tool:
             name (str): The name of the tool.
             description (str): The description of the tool.
             func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
+            parameters_json_schema (Optional[dict[str, Any]]): A schema describing the parameters that the function accepts. If None, the schema will be generated from the function signature.
         """
         if isinstance(func_or_tool, Tool):
             self._name: str = name or func_or_tool.name
@@ -56,6 +59,19 @@ class Tool:
             raise ValueError(
                 f"Parameter 'func_or_tool' must be a function, method or a Tool instance, it is '{type(func_or_tool)}' instead."
             )
+
+        self._func_schema = (
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": parameters_json_schema,
+                },
+            }
+            if parameters_json_schema
+            else None
+        )
 
     @property
     def name(self) -> str:
@@ -78,7 +94,10 @@ class Tool:
         Args:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
-        agent.register_for_llm()(self)
+        if self._func_schema:
+            agent.update_tool_signature(self._func_schema, is_remove=False)
+        else:
+            agent.register_for_llm()(self)
 
     def register_for_execution(self, agent: "ConversableAgent") -> None:
         """Registers the tool for direct execution by a ConversableAgent.

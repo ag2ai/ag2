@@ -19,7 +19,7 @@ class UserProxyAgent(ConversableAgent):
     UserProxyAgent is a subclass of ConversableAgent configured with `human_input_mode` to ALWAYS
     and `llm_config` to False. By default, the agent will prompt for human input every time a message is received.
     Code execution is enabled by default. LLM-based auto reply is disabled by default.
-    To modify auto reply, register a method with [`register_reply`](/docs/api-reference/autogen/ConversableAgent#register-reply).
+    To modify auto reply, register a method with [`register_reply`](../ConversableAgent#register-reply).
     To modify the way to get human input, override `get_human_input` method.
     To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`,
     `run_code`, and `execute_function` methods respectively.
@@ -80,7 +80,7 @@ class UserProxyAgent(ConversableAgent):
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (LLMConfig or dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
             for available options.
             Default to False, which disables llm-based auto reply.
             When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
@@ -89,7 +89,7 @@ class UserProxyAgent(ConversableAgent):
         description (str): a short description of the agent. This description is used by other agents
             (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
         **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](/docs/api-reference/autogen/ConversableAgent#conversableagent).
+            [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent).
         """
         super().__init__(
             name=name,

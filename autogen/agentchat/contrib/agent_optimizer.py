@@ -184,7 +184,7 @@ class AgentOptimizer:
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
             llm_config (LLMConfig or dict): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) for available options.
+                Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
         """

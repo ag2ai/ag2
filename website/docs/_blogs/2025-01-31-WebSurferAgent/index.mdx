@@ -5,7 +5,7 @@ tags: [tools, tool calling, web surfing, browser use, crawl4ai, WebSurferAgent]
 ---
 
 ## Introduction
-In our [Adding Browsing Capabilities to AG2](/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
+In our [Adding Browsing Capabilities to AG2](/docs/blog/2025-01-31-Websurfing-Tools) guide, we explored how to build agents with basic web surfing capabilities. Now, let's take it to the next level with [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent)—a powerful agent that comes with built-in web browsing tools right out of the box!
 
 With [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent), your agents can seamlessly browse the web, retrieve real-time information, and interact with web pages—all with minimal setup.
 
@@ -90,12 +90,13 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
@@ -417,12 +418,13 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method

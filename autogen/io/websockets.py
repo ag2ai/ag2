@@ -13,9 +13,9 @@ from time import sleep
 from typing import Any, Callable, Iterable, Iterator, Optional, Protocol, Union
 
 from ..doc_utils import export_module
+from ..events.base_event import BaseEvent
+from ..events.print_event import PrintEvent
 from ..import_utils import optional_import_block, require_optional_import
-from ..messages.base_message import BaseMessage
-from ..messages.print_message import PrintMessage
 from .base import IOStream
 
 # Check if the websockets module is available
@@ -183,10 +183,10 @@ class IOWebsockets(IOStream):
             end (str, optional): The end of the output. Defaults to "\n".
             flush (bool, optional): Whether to flush the output. Defaults to False.
         """
-        print_message = PrintMessage(*objects, sep=sep, end=end)
+        print_message = PrintEvent(*objects, sep=sep, end=end)
         self.send(print_message)
 
-    def send(self, message: BaseMessage) -> None:
+    def send(self, message: BaseEvent) -> None:
         """Send a message to the output stream.
 
         Args:

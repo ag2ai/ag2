@@ -46,7 +46,7 @@ AutoGen's ability to associate specific configurations to each agent means you c
 
 The common requirements of text generation and function/tool calling are supported by these client classes.
 
-Multi-modal support, such as for image/audio/video, is an area of active development. The [Google Gemini](https://docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini) client class can be
+Multi-modal support, such as for image/audio/video, is an area of active development. The [Google Gemini](/docs/user-guide/models/google-gemini) client class can be
 used to create a multimodal agent.
 
 ## Tips
@@ -56,8 +56,8 @@ Here are some tips when working with these client classes:
 - **Most to least capable** - start with larger models and get your workflow working, then iteratively try smaller models.
 - **Right model** - choose one that's suited to your task, whether it's coding, function calling, knowledge, or creative writing.
 - **Agent names** - these cloud providers do not use the `name` field on a message, so be sure to use your agent's name in their `system_message` and `description` fields, as well as instructing the LLM to 'act as' them. This is particularly important for "auto" speaker selection in group chats as we need to guide the LLM to choose the next agent based on a name, so tweak `select_speaker_message_template`, `select_speaker_prompt_template`, and `select_speaker_auto_multiple_template` with more guidance.
-- **Context length** - as your conversation gets longer, models need to support larger context lengths, be mindful of what the model supports and consider using [Transform Messages](https://docs.ag2.ai/docs/topics/handling_long_contexts/intro_to_transform_messages) to manage context size.
-- **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's [API Reference](https://docs.ag2.ai/docs/reference/oai/gemini) or [documentation](https://docs.ag2.ai/docs/topics/non-openai-models/cloud-gemini) for details.
+- **Context length** - as your conversation gets longer, models need to support larger context lengths, be mindful of what the model supports and consider using [Transform Messages](/docs/use-cases/notebooks/notebooks/agentchat_transform_messages) to manage context size.
+- **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's [API Reference](/docs/api-reference/autogen/oai/gemini/GeminiClient) or [documentation](/docs/user-guide/models/google-gemini) for details.
 - **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent), [GroupChat](https://docs.ag2.ai/docs/reference/agentchat/groupchat), [UserProxyAgent](https://docs.ag2.ai/docs/api-reference/autogen/UserProxyAgent), and [AssistantAgent](https://docs.ag2.ai/docs/api-reference/autogen/AssistantAgent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://www.llama.com/docs/how-to-guides/prompting/).
 - **Help!** - reach out on the AutoGen [Discord](https://discord.gg/pAbnFJrkgZ) or [log an issue](https://github.com/ag2ai/ag2/issues) if you need help with or can help improve these client classes.
 
@@ -107,7 +107,7 @@ Add your model configurations to the `OAI_CONFIG_LIST`. Ensure you specify the `
 
 ### Usage
 
-The `[LLMConfig.from_json](https://docs.ag2.ai/docs/api-reference/autogen/LLMConfig#from-json)` method loads a list of configurations from an environment variable or a json file.
+The `[LLMConfig.from_json](https://docs.ag2.ai/docs/api-reference/autogen/llm_config/LLMConfig)` method loads a list of configurations from an environment variable or a json file.
 
 ```py
 import autogen

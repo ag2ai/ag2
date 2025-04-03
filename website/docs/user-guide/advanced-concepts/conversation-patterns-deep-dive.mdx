@@ -2,7 +2,7 @@
 title: Conversation Patterns Deep-dive
 ---
 
-In this conversation patterns deep-dive we run through conversation patterns (with the exception of Swarm, [see more here](/docs/user-guide/advanced-concepts/swarm-deep-dive)).
+In this conversation patterns deep-dive we run through conversation patterns (with the exception of Swarm, [see more here](/docs/user-guide/advanced-concepts/swarm/deep-dive)).
 
 1. **Two-agent chat**: the simplest form of conversation pattern where two agents chat with each other.
 2. **Sequential chat**: a sequence of chats between two agents, chained together by a carryover mechanism, which brings the summary of the previous chat to the context of the next chat.
@@ -405,7 +405,7 @@ Nested chats is powered by the nested chats handler, which is a pluggable compon
 
 ![nested_chat](./assets/nested-chats.png)
 
-When a message comes in and passes the [human-in-the-loop component](./human-in-the-loop), the nested chats handler checks if the message should trigger a nested chat based on conditions specified by the user.
+When a message comes in and passes the [human-in-the-loop component](/docs/user-guide/basic-concepts/human-in-the-loop), the nested chats handler checks if the message should trigger a nested chat based on conditions specified by the user.
 
 If the conditions are met, the nested chats handler starts a sequence of nested chats specified using the sequential chats pattern.
 

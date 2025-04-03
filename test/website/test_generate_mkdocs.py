@@ -10,12 +10,15 @@ from textwrap import dedent
 import pytest
 
 from autogen._website.generate_mkdocs import (
+    absolute_to_relative,
     add_api_ref_to_mkdocs_template,
     add_authors_info_to_user_stories,
     add_excerpt_marker,
     add_notebooks_nav,
     filter_excluded_files,
     fix_asset_path,
+    fix_internal_links,
+    fix_internal_references,
     fix_snippet_imports,
     format_navigation,
     generate_mkdocs_navigation,
@@ -66,6 +69,8 @@ def test_process_and_copy_files() -> None:
             src_dir / "user-guide" / "advanced-concepts" / "groupchat" / "chat.txt",
             src_dir / "home" / "agent.png",
             src_dir / "home" / "quick-start.mdx",
+            src_dir / "user-stories" / "2025-02-11-NOVA" / "index.mdx",
+            src_dir / "user-stories" / "2023-02-11-HELLO-World" / "index.mdx",
         ]
         # Create the content for quick-start.mdx
         quick_start_content = dedent("""
@@ -106,9 +111,11 @@ def test_process_and_copy_files() -> None:
             mkdocs_output_dir / "home" / "quick-start.md",
             mkdocs_output_dir / "user-guide" / "advanced-concepts" / "groupchat" / "chat.txt",
             mkdocs_output_dir / "user-guide" / "advanced-concepts" / "groupchat" / "groupchat.md",
+            mkdocs_output_dir / "user-stories" / "2025-02-11-NOVA" / "nova.md",
+            mkdocs_output_dir / "user-stories" / "2023-02-11-HELLO-World" / "hello_world.md",
         ]
         assert len(actual) == len(expected)
-        assert sorted(actual) == sorted(actual)
+        assert sorted(actual) == sorted(expected)
 
         # Assert the content of the transformed markdown file
         expected_quick_start_content = dedent("""
@@ -154,7 +161,7 @@ my_agent = ConversableAgent(
 )
 
 # 4. Run the agent with a prompt
-chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+chat_result = my_agent.run(message="In one sentence, what's the big deal about AI?")
 
 # 5. Print the chat
 print(chat_result.chat_history)
@@ -191,7 +198,7 @@ Some conclusion
     )
 
     # 4. Run the agent with a prompt
-    chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+    chat_result = my_agent.run(message="In one sentence, what's the big deal about AI?")
 
     # 5. Print the chat
     print(chat_result.chat_history)
@@ -249,14 +256,18 @@ def test_fix_asset_path() -> None:
     <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
-</div>""")
+</div>
+![I -heart- AutoGen](/static/img/love.png)
+""")
     expected = dedent("""This is a sample quick start page.
 <div class="key-feature">
     <img noZoom src="/assets/img/conv_2.svg" alt="Multi-Agent Conversation Framework" />
     <a class="hero-btn" href="/docs/home/quick-start">
         <div>Getting Started - 3 Minute</div>
     </a>
-</div>""")
+</div>
+![I -heart- AutoGen](/assets/img/love.png)
+""")
     actual = fix_asset_path(content)
     assert actual == expected
 
@@ -426,7 +437,27 @@ def test_add_excerpt_marker() -> None:
 def test_fix_snippet_imports() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_snippets_dir = Path(tmpdir) / "snippets"
-        expected_path = "{!" + tmp_snippets_dir.as_posix() + "/reference-agents/deep-research.mdx" + " !}"
+
+        # Create the directory structure
+        reference_agents_dir = tmp_snippets_dir / "reference-agents"
+        reference_agents_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create the MDX file with some sample content
+        mdx_file_path = reference_agents_dir / "deep-research.mdx"
+        mdx_file_content = dedent("""
+        # Deep Research Component
+
+        This is a deep research component that provides advanced capabilities.
+
+        ## Features
+
+        - Feature 1
+        - Feature 2
+        - Feature 3
+        """)
+
+        with open(mdx_file_path, "w") as f:
+            f.write(mdx_file_content)
 
         content = dedent("""
         ## Introduction
@@ -437,10 +468,19 @@ def test_fix_snippet_imports() -> None:
 
         ## Conclusion
         """)
-        expected = dedent(f"""
+        expected = dedent("""
         ## Introduction
 
-        {expected_path}
+
+        # Deep Research Component
+
+        This is a deep research component that provides advanced capabilities.
+
+        ## Features
+
+        - Feature 1
+        - Feature 2
+        - Feature 3
 
 
         <DeepResearch/>
@@ -451,6 +491,7 @@ def test_fix_snippet_imports() -> None:
         actual = fix_snippet_imports(content, tmp_snippets_dir)
         assert actual == expected
 
+        # Test case 2: Import from a directory outside the snippets directory
         content = dedent("""
         ## Introduction
 
@@ -460,6 +501,8 @@ def test_fix_snippet_imports() -> None:
 
         ## Conclusion
         """)
+
+        # In this case, the import should remain unchanged as we can't read from outside the snippets dir
         expected = dedent("""
         ## Introduction
 
@@ -565,7 +608,7 @@ def test_generate_user_stories_nav() -> None:
         # Create User Stories directory
         user_stories_dir = Path(tmpdir) / "docs" / "user-stories"
 
-        file_1 = user_stories_dir / "2025-03-11-NOVA" / "index.md"
+        file_1 = user_stories_dir / "2025-03-11-NOVA" / "nova.md"
         file_1.parent.mkdir(parents=True, exist_ok=True)
         file_1.write_text("""---
 title: Unlocking the Power of Agentic Workflows at Nexla with AG2
@@ -578,7 +621,7 @@ tags: [data automation, agents, AG2, Nexla]
 > AG2 has been instrumental in helping Nexla build NOVA,
 """)
 
-        file_2 = user_stories_dir / "2025-02-11-NOVA" / "index.md"
+        file_2 = user_stories_dir / "2025-02-11-NOVA" / "nova.md"
         file_2.parent.mkdir(parents=True, exist_ok=True)
         file_2.write_text("""---
 title: Some other text
@@ -622,8 +665,8 @@ tags: [data automation, agents, AG2, Nexla]
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
 - User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA)
+    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
 - Contributor Guide
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
@@ -1151,3 +1194,168 @@ search:
 
         assert actual == expected
         assert summary_md_path.read_text() == expected
+
+
+def test_fix_internal_references() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create source directory structure
+        tmpdir_path = Path(tmpdir)
+        mkdocs_dir = tmpdir_path / "mkdocs"
+        mkdocs_dir.mkdir()
+
+        # Create the files
+        file = mkdocs_dir / "quick-start.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        actual = fix_internal_references("/mkdocs/quick-start.md", tmpdir_path)
+        expected = "/mkdocs/quick-start.md"
+
+        assert actual == expected
+
+        notebooks_dir = tmpdir_path / "notebooks"
+        notebooks_dir.mkdir()
+
+        # Create the files
+        file = notebooks_dir / "quick-start.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        # Create the files
+        file = tmpdir_path / "Notebooks.md"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+
+        actual = fix_internal_references("/Notebooks", tmpdir_path)
+        expected = "/Notebooks"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/mkdocs", tmpdir_path)
+        expected = "/mkdocs/quick-start"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/docs/api-reference", tmpdir_path)
+        expected = "/docs/api-reference/autogen/AfterWork"
+
+        assert actual == expected
+
+        actual = fix_internal_references("/docs/api-reference/autogen/ConversableAgent#initiate-all-chats", tmpdir_path)
+        expected = "/docs/api-reference/autogen/ConversableAgent#autogen.ConversableAgent.initiate_all_chats"
+
+        assert actual == expected
+
+
+class TestFixInternalLinks:
+    def test_absolute_to_relative(self) -> None:
+        source_path = "/docs/home/quick-start.md"
+        content = "/docs/user-guide/basic-concepts/installing-ag2"
+
+        expected = "../../user-guide/basic-concepts/installing-ag2"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/blog/2025-02-05-Communication-Agents"
+        content = "/docs/api-reference/autogen/UserProxyAgent"
+
+        expected = "../../../../../api-reference/autogen/UserProxyAgent"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
+        content = "/docs/user-guide/basic-concepts/tools/interop/langchain"
+
+        expected = "./interop/langchain"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
+        content = "/docs/user-guide/basic-concepts/tools/basics"
+
+        expected = "./basics"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/home/home.md"
+        content = "/docs/home/quick-start"
+
+        expected = "../quick-start"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/contributor-guide/how-ag2-works/hooks.md"
+        content = "/docs/contributor-guide/how-ag2-works/initiate-chat"
+
+        expected = "../initiate-chat"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+        source_path = "/docs/user-guide/reference-tools/index.md"
+        content = "/docs/api-reference/autogen/tools/experimental/GoogleSearchTool"
+
+        expected = "../../api-reference/autogen/tools/experimental/GoogleSearchTool"
+        actual = absolute_to_relative(source_path, content)
+
+        assert actual == expected
+
+    def test_fix_internal_links(self) -> None:
+        source_path = "/docs/home/quick-start.md"
+        content = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+!!! tip
+    Learn more about configuring LLMs for agents
+        [here](/docs/user-guide/basic-concepts/llm-configuration.md).
+
+### Where to Go Next?
+
+- [Sample Link](/docs/home/slow-start.md)
+- Go through the [basic concepts](/docs/user-guide/basic-concepts/installing-ag2) to get started
+- Once you're ready, hit the [advanced concepts](/docs/user-guide/advanced-concepts/rag)
+- Explore the [API Reference](/docs/api-reference/autogen/overview)
+- Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
+- Follow on [X](https://x.com/ag2oss)
+
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](/docs/contributor-guide/contributing).
+
+<img alt="DeepResearchAgent workflow" src="/snippets/reference-agents/img/DeepResearchAgent.png">
+
+![DeepResearchAgent workflow](/snippets/reference-agents/img/DeepResearchAgent.png)
+
+<img class="hero-logo" noZoom src="/assets/img/ag2.svg" alt="AG2 Logo" />
+
+[Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability)
+
+""")
+        expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+!!! tip
+    Learn more about configuring LLMs for agents
+        [here](../../user-guide/basic-concepts/llm-configuration.md).
+
+### Where to Go Next?
+
+- [Sample Link](../slow-start.md)
+- Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
+- Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
+- Explore the [API Reference](../../api-reference/autogen/overview)
+- Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
+- Follow on [X](https://x.com/ag2oss)
+
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](../../contributor-guide/contributing).
+
+<img alt="DeepResearchAgent workflow" src="../../../snippets/reference-agents/img/DeepResearchAgent.png">
+
+![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
+
+<img class="hero-logo" noZoom src="../../../assets/img/ag2.svg" alt="AG2 Logo" />
+
+[Cross-Framework LLM Tool Integration](../../blog/2024/12/20/Tools-interoperability)
+
+""")
+        actual = fix_internal_links(source_path, content)
+        assert actual == expected

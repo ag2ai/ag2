@@ -22,3 +22,11 @@ https://github.com/ag2ai/ag2/edit.*
 https://(gist\.)?github.com/.*#.*
 https://azure.microsoft.com/en-us/*
 https://docs.databricks.com/aws/en/release-notes/runtime/14.3lts-ml
+https://opengraph.githubassets.com/1671805243.560327/ag2ai/ag2
+https://github.com/ag2ai/ag2/edit/main/*
+https://www.perplexity.ai/*
+https://www.anthropic.com/
+https://docs.anthropic.com/*
+https://docs.ag2.ai/latest/docs/blog
+https://docs.ag2.ai/latest/docs/blog/category/*
+https://docs.ag2.ai/latest/docs/blog/page/*

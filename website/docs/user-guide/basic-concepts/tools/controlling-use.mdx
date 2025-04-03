@@ -1,0 +1,286 @@
+---
+title: Controlling Tool Use
+sidebarTitle: Controlling Use
+---
+
+By default, agents will decide to use their registered tools as and when needed. However, you may want to force an agent to use their tools or, alternatively, not use their tools.
+
+<Tip>
+You can use prompting techniques to "encourage" an LLM to use or not to use tools, however there is no guarantee through prompting that they will adhere to those instructions.
+</Tip>
+
+Most model providers provide a parameter that instructs the model whether to use tools, and in some cases, which tools they must call.
+
+These parameters can be added to your [`LLMConfig`](/docs/api-reference/autogen/llm_config/LLMConfig).
+
+### Model provider summary
+
+This table outlines the tool calling features available to control tool calling.
+
+| Model Provider | Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| --- | :---: | :---: | :---: | :---: |
+| Amazon Bedrock | Not Implemented | - | - | - |
+| Anthropic | `tool_choice` | ✅ | ✅ | - |
+| Cerebras | `tool_choice` | ✅ | ✅ | - |
+| Cohere | `tool_choice` | ✅ | ✅ | - |
+| DeepSeek | `tool_choice` | ✅ | ✅ | - |
+| Gemini / Vertex AI | `tool_config` | ✅ | ✅ | - |
+| Groq | `tool_choice` | ✅ | ✅ | - |
+| Mistral AI | `tool_choice` | ✅ | ✅ | - |
+| Ollama | - | - | - | - |
+| OpenAI / Azure OpenAI | `tool_choice` | ✅ | ✅ | - |
+| Together AI | `tool_choice` | - | - | ✅ |
+
+### Warnings
+
+1. Using these parameters to force tool calling or no tool calling can make it difficult to have the agents perform different actions. For example, you may want your agent to call a tool and then do something else on their next turn, however, by using these parameters this can't be achieved unless you change the agent's LLM configuration before their next turn.
+
+2. Typically, using these parameters will force models to **not** output any other tokens besides the tool call and this may affect the models ability to do reasoning before the tool call.
+
+3. In a Swarm the AfterWork will never be triggered if an agent always makes a tool call.
+
+### Anthropic
+
+Anthropic supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Model Provider | Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| --- | :---: | :---: | :---: | :---: |
+| Anthropic | `tool_choice` | `{'type': 'any'}` | `{'none': 'none'}` | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="anthropic",
+    model="claude-3-7-sonnet-latest",
+    tool_choice={"type": "any"},
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="anthropic",
+    model="claude-3-7-sonnet-latest",
+    tool_choice={"type": "none"},
+    )
+```
+
+### Cerebras
+
+Cerebras supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "required" | "none" | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="cerebras",
+    model="llama-3.3-70b",
+    tool_choice="required",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="cerebras",
+    model="llama-3.3-70b",
+    tool_choice="none",
+    )
+```
+
+### Cohere
+
+Cohere supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "REQUIRED" | "NONE" | - |
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="cohere",
+    model="command-r7b-12-2024",
+    tool_choice="REQUIRED",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="cohere",
+    model="command-r7b-12-2024",
+    tool_choice="NONE",
+    )
+```
+
+### DeepSeek
+
+DeepSeek supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "required" | "none" | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="deepseeek",
+    base_url="https://api.deepseek.com/v1",
+    model="deekseek-chat",
+    tool_choice="required",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="deepseeek",
+    base_url="https://api.deepseek.com/v1",
+    model="deekseek-chat",
+    tool_choice="none",
+    )
+```
+
+### Gemini / Vertex AI
+
+Gemini / Vertex AI supports the ability to force the model to call at least one call or to call no tools using the `tool_config` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_config` | `ANY` | `NONE` | - |
+
+```python
+from google.genai.types import FunctionCallingConfig, FunctionCallingConfigMode, ToolConfig
+
+# Must call a tool
+function_calling_config = FunctionCallingConfig(
+    mode=FunctionCallingConfigMode.ANY,
+    )
+
+tool_config = ToolConfig(
+    function_calling_config=function_calling_config,
+    )
+
+llm_config = LLMConfig(
+    api_type="google",
+    model="models/gemini-2.0-flash-lite",
+    tool_config=tool_config,
+    )
+
+# Must not call a tool
+function_calling_config = FunctionCallingConfig(
+    mode=FunctionCallingConfigMode.NONE, # No tool call
+    )
+
+tool_config = ToolConfig(
+    function_calling_config=function_calling_config,
+    )
+
+llm_config = LLMConfig(
+    api_type="google",
+    model="models/gemini-2.0-flash-lite",
+    tool_config=tool_config,
+    )
+```
+
+### Groq
+
+Groq supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "required" | "none" | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="groq",
+    model="llama-3.3-70b-versatile",
+    tool_choice="required",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="groq",
+    model="llama-3.3-70b-versatile",
+    tool_choice="none",
+    )
+```
+
+### Mistral AI
+
+Mistral AI supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "any" | "none" | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="mistral",
+    model="mistral-large-latest",
+    tool_choice="any",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="mistral",
+    model="mistral-large-latest",
+    tool_choice="none",
+    )
+```
+
+### OpenAI / Azure OpenAI
+
+OpenAI / Azure OpenAI supports the ability to force the model to call at least one call or to call no tools using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | "required" | "none" | - |
+
+The default value is "auto" and doesn't need to be provided.
+
+```python
+# Must call a tool
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    tool_choice="required",
+    )
+
+# Must not call a tool
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    tool_choice="none",
+    )
+```
+
+### Together AI
+
+Together AI supports the ability to specify a tool that the model has to call using the `tool_choice` parameter.
+
+| Parameter | Must Call Tools | Must Not Call Tools | Call Specific Tool |
+| :---: | :---: | :---: | :---: |
+| `tool_choice` | - | - | `{'type': 'function', 'function': {'name': 'your_tool_name'}}` |
+
+<Warning>
+This parameter wasn't always adhered to during testing with no tool calls made even though the parameter was set.
+</Warning>
+
+```python
+# Must call the tool named 'my_tool'
+llm_config = LLMConfig(
+    api_type="together",
+    model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    cache_seed=None,
+    tool_choice={"type": "function", "function": {"name": "my_tool"}},
+    )
+```

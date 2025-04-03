@@ -267,11 +267,11 @@ chat_result = executor_agent.initiate_chat(
 
 AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
-- [Structured Output](https://docs.ag2.ai/docs/user-guide/basic-concepts/structured-outputs)
+- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/llm-configuration/structured-outputs)
 - [Ending a conversation](https://docs.ag2.ai/docs/user-guide/basic-concepts/ending-a-chat)
 - [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/docs/user-guide/advanced-concepts/rag)
 - [Code Execution](https://docs.ag2.ai/docs/user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/advanced-concepts/tools-with-secrets)
+- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/basic-concepts/tools/tools-with-secrets)
 
 ## Announcements
 

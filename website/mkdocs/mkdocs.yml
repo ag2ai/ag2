@@ -1,7 +1,7 @@
 site_name: AG2
 # description to improve website indexing
 site_description: A programming framework for agentic AI
-site_url: http://docs.ag2.ai/
+site_url: https://docs.ag2.ai/
 site_author: Chi Wang & Qingyun Wu
 copyright: '&copy; 2025 <a href="https://ag2.ai/" target="_blank" rel="noopener">ag2</a>'
 
@@ -123,7 +123,6 @@ plugins:
   - blog:
       blog_dir: docs/blog
       blog_toc: true
-  - ezlinks
 
 hooks:
   - create_api_docs.py

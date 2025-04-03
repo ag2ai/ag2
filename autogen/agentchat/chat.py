@@ -14,8 +14,8 @@ from functools import partial
 from typing import Any
 
 from ..doc_utils import export_module
+from ..events.agent_events import PostCarryoverProcessingEvent
 from ..io.base import IOStream
-from ..messages.agent_messages import PostCarryoverProcessingMessage
 from .utils import consolidate_chat_info
 
 logger = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ def __post_carryover_processing(chat_info: dict[str, Any]) -> None:
             UserWarning,
         )
 
-    iostream.send(PostCarryoverProcessingMessage(chat_info=chat_info))
+    iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
 
 
 @export_module("autogen")
@@ -144,7 +144,7 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
 
             Each dictionary should contain the input arguments for
-            [`ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat).
+            [`ConversableAgent.initiate_chat`](../ConversableAgent#initiate-chat).
             For example:
                 - `"sender"` - the sender agent.
                 - `"recipient"` - the recipient agent.
@@ -255,7 +255,7 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
         chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
 
             Each dictionary should contain the input arguments for
-            [`ConversableAgent.initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat).
+            [`ConversableAgent.initiate_chat`](../../../ConversableAgent#initiate-chat).
             For example:
                 - `"sender"` - the sender agent.
                 - `"recipient"` - the recipient agent.

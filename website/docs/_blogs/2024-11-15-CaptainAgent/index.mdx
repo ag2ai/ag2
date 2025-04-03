@@ -10,6 +10,8 @@ tags: [LLM, GPT, AutoBuild]
 - We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats) conversation pattern in AG2.
 - CaptainAgent supports all types of `ConversableAgents` implemented in AG2.
 
+\<!-- more -->
+
 ![Illustration of how CaptainAgent build a team](img/overall.webp)
 
 # Introduction
@@ -69,7 +71,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 
 # Using CaptainAgent with pre-specified agent/tool libraries
 To use CaptainAgent with pre-specified agent/tool libraries, we just need to specify the path to the agent library and tool library. The two libraries are independent, so you can choose to use one of the libraries or both.
-The tool library we provide requires subscribing to specific APIs, please refer to the [docs](https://docs.ag2.ai/docs/topics/captainagent/tool_library) for details. The following example does not necessarily require tool usage, so it's fine if you are subscribing to them.
+The tool library we provide requires subscribing to specific APIs, please refer to the [docs](/docs/user-guide/reference-agents/captainagent) for details. The following example does not necessarily require tool usage, so it's fine if you are subscribing to them.
 
 To use agents from an agent library, you just need to specify a `library_path` sub-field or a `autobuild_tool_config` field in CaptainAgent's configuration.
 
@@ -98,7 +100,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 
 # Further Reading
 For a detailed description of how to configure the CaptainAgent, please refer to
-- [document](https://docs.ag2.ai/docs/topics/captainagent/agent_library).
+- [document](/docs/user-guide/reference-agents/captainagent).
 - [Notebook example](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_captainagent)
 
 Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.

@@ -503,7 +503,6 @@ def fix_internal_references_in_mdx_files(website_build_directory: Path) -> None:
             if content != fixed_content:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(fixed_content)
-                print(f"Fixed internal references in {file_path}")
 
         except Exception:
             print(f"Error: {file_path}")

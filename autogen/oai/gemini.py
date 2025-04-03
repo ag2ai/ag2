@@ -61,6 +61,7 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol
+from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -111,6 +112,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    tool_config: Optional[ToolConfig] = None
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -231,7 +233,7 @@ class GeminiClient:
             raise ValueError(
                 "Please provide a model name for the Gemini Client. "
                 "You can configure it in the OAI Config List file. "
-                "See this [LLM configuration tutorial](https://docs.ag2.ai/docs/topics/llm_configuration/) for more details."
+                "See this [LLM configuration tutorial](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/llm-configuration/llm-configuration//) for more details."
             )
 
         params.get("api_type", "google")  # not used
@@ -242,6 +244,7 @@ class GeminiClient:
         system_instruction = self._extract_system_instruction(messages)
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
+        tool_config = params.get("tool_config")
 
         generation_config = {
             gemini_term: params[autogen_term]
@@ -293,6 +296,7 @@ class GeminiClient:
                 generation_config=GenerationConfig(**generation_config),
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
+                tool_config=tool_config,
                 tools=tools,
             )
 
@@ -304,6 +308,7 @@ class GeminiClient:
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
+                tool_config=tool_config,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])

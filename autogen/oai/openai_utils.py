@@ -7,12 +7,14 @@
 
 import importlib
 import importlib.metadata
+import inspect
 import json
 import logging
 import os
 import re
 import tempfile
 import time
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -505,6 +507,13 @@ def filter_config(
           dictionaries that do not have that key will also be considered a match.
 
     """
+    if inspect.stack()[1].function != "where":
+        warnings.warn(
+            "filter_config is deprecated and will be removed in a future release. "
+            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead.',
+            DeprecationWarning,
+        )
+
     if filter_dict:
         return [
             item
@@ -569,6 +578,13 @@ def config_list_from_json(
     Raises:
         FileNotFoundError: if env_or_file is neither found as an environment variable nor a file
     """
+    if inspect.stack()[1].function != "from_json":
+        warnings.warn(
+            "config_list_from_json is deprecated and will be removed in a future release. "
+            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead.',
+            DeprecationWarning,
+        )
+
     env_str = os.environ.get(env_or_file)
 
     if env_str:

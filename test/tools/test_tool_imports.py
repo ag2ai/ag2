@@ -11,6 +11,7 @@ class TestToolImports:
             Crawl4AITool,
             DiscordRetrieveTool,
             DiscordSendTool,
+            PerplexitySearchTool,
             SlackRetrieveRepliesTool,
             SlackRetrieveTool,
             SlackSendTool,
@@ -27,6 +28,7 @@ class TestToolImports:
         assert isinstance(SlackSendTool, type)
         assert isinstance(TelegramRetrieveTool, type)
         assert isinstance(TelegramSendTool, type)
+        assert isinstance(PerplexitySearchTool, type)
 
     def test_imports_experimental_messageplatform(self) -> None:
         """Ensure all tool imports are correct."""

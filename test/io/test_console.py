@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.events.print_event import PrintEvent
 from autogen.io import IOConsole
-from autogen.messages.print_message import PrintMessage
 
 
 class TestConsoleIO:
@@ -25,7 +25,7 @@ class TestConsoleIO:
     @patch("builtins.print")
     def test_send(self, mock_print: MagicMock) -> None:
         # calling the send method should call the print method
-        message = PrintMessage("Hello, World!", "How are you", sep=" ", end="\n", flush=False)
+        message = PrintEvent("Hello, World!", "How are you", sep=" ", end="\n", flush=False)
         self.console_io.send(message)
         mock_print.assert_called_once_with("Hello, World!", "How are you", sep=" ", end="\n", flush=True)
 

@@ -1,0 +1,300 @@
+## Installation
+
+Before using Google APIs, you need to enable them in your Google Cloud project. You can enable multiple APIs within a single project.
+
+1. Follow the [Setup environment](https://developers.google.com/workspace/drive/api/quickstart/python#set-up-environment) guide from Google Workspace to get started.
+2. Once you've completed the setup, you should have the `credentials.json` file downloaded to your local machine.
+3. Install AG2 with the `google-api` extra. Since our examples also use `openai`, install it as well:
+
+    ```bash
+    pip install -U ag2[openai,google-api]
+    ```
+    > **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+    > ```bash
+    > pip install -U autogen[openai,google-api]
+    > ```
+    > or
+    > ```bash
+    > pip install -U pyautogen[openai,google-api]
+    > ```
+    > as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+You're all set! Now you can start using Google Drive with AG2.
+
+## Imports
+```python
+from typing import Annotated, Optional
+
+from autogen import AssistantAgent, LLMConfig
+from autogen.tools import tool
+from autogen.tools.experimental.google import GoogleCredentialsLocalProvider, GoogleDriveToolkit
+from autogen.tools.experimental.google.model import GoogleFileInfo
+```
+
+## Google Authentication
+
+Configure authentication to allow AG2 to access Google Drive:
+- `client_secret_file`: The path to the client secret file, which you can download from the Google Cloud Console. This file contains the necessary credentials to authenticate the user with Google services.
+- `token_file`: The path to a file that will store the access token. After the first run of the script, this token will be saved and used for subsequent authentications, avoiding the need for repeated login processes.
+- `provider` ([`GoogleCredentialsLocalProvider`](/docs/api-reference/autogen/tools/experimental/google/authentication/GoogleCredentialsLocalProvider)): The provider is responsible for managing the authentication process.
+- `credentials`: This variable stores the credentials object, which will be used by the system to authenticate the user and gain access to their Google Drive resources.
+
+> **Note:** The first execution opens a Google Authentication page in your browser.
+
+```python
+client_secret_file = "../credentials.json"
+token_file = "../my_token.json"
+
+provider = GoogleCredentialsLocalProvider(
+    client_secret_file=client_secret_file,
+    scopes=GoogleDriveToolkit.recommended_scopes(),
+    token_file=token_file,
+)
+
+credentials = provider.get_credentials()
+```
+
+## Agent Configuration
+```python
+llm_config = LLMConfig.from_json(
+    path="OAI_CONFIG_LIST",
+).where(model="gpt-4o-mini")
+
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+```
+
+## Register Google Drive Tools
+
+AG2 provides predefined tools for interacting with Google Drive:
+- `list_drive_files_and_folders`: Allows the user to list all files and folders in their Google Drive.
+- `download_file_from_drive`: Enables downloading files directly from Google Drive to a specified local folder.
+
+Once the tool map is registered with the agent using `register_for_llm`, the agent becomes capable of suggesting these tool calls.
+
+```python
+google_drive_toolkit = GoogleDriveToolkit(
+    credentials=credentials,
+    download_folder="ag2_drive_downloads",
+)
+
+google_drive_toolkit.register_for_llm(assistant)
+```
+
+## Start the Conversation
+
+With the setup complete, you can now use the assistant to list and download files from your Google Drive.
+
+### Output
+```console
+user (to assistant):
+
+Get me the last 3 files and download all docs/sheets/slides meme types.
+Ignore subfolders for now.
+Once done, write 'TERMINATE'.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_8Y7ebDznG8SxLwPvpZPsoF3C): list_drive_files_and_folders *****
+Arguments:
+{"page_size":3}
+*********************************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION list_drive_files_and_folders...
+Call ID: call_8Y7ebDznG8SxLwPvpZPsoF3C
+Input arguments: {'page_size': 3}
+/Users/robert/projects/ag2/autogen/agentchat/conversable_agent.py:3091: UserWarning: Function 'download_file_from_drive' is being overridden.
+  warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
+user (to assistant):
+
+***** Response from calling tool (call_8Y7ebDznG8SxLwPvpZPsoF3C) *****
+[{'name': 'Stock Analysis', 'id': '1bt3TbmE1n_MoY3JNbfUAQT9T1I6C_1D4hbfsNGjob5k', 'mime_type': 'application/vnd.google-apps.spreadsheet'}, {'name': '2025-03-27 Meeting Notes', 'id': '1Y0SqiFZDktmhb2xqLBBhMPpIOozuilKRj8lU_uUdBko', 'mime_type': 'application/vnd.google-apps.document'}, {'name': '2025-03-26 Meeting Notes', 'id': '1Yqwapbydy5xd-73i8uzLMnnmNamhs6aTn-l2_l_YgDc', 'mime_type': 'application/vnd.google-apps.document'}]
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_GzHEYDuIstJunY6MtPHsYGgX): download_file_from_drive *****
+Arguments:
+{"file_info": {"name": "Stock Analysis", "id": "1bt3TbmE1n_MoY3JNbfUAQT9T1I6C_1D4hbfsNGjob5k", "mimeType": "application/vnd.google-apps.spreadsheet"}}
+*****************************************************************************************
+***** Suggested tool call (call_BltCW3GNoRkz95JYDX3FkHbt): download_file_from_drive *****
+Arguments:
+{"file_info": {"name": "2025-03-27 Meeting Notes", "id": "1Y0SqiFZDktmhb2xqLBBhMPpIOozuilKRj8lU_uUdBko", "mimeType": "application/vnd.google-apps.document"}}
+*****************************************************************************************
+***** Suggested tool call (call_kXGJahD6a9VQHLhjpylSURul): download_file_from_drive *****
+Arguments:
+{"file_info": {"name": "2025-03-26 Meeting Notes", "id": "1Yqwapbydy5xd-73i8uzLMnnmNamhs6aTn-l2_l_YgDc", "mimeType": "application/vnd.google-apps.document"}}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION download_file_from_drive...
+Call ID: call_GzHEYDuIstJunY6MtPHsYGgX
+Input arguments: {'file_info': {'name': 'Stock Analysis', 'id': '1bt3TbmE1n_MoY3JNbfUAQT9T1I6C_1D4hbfsNGjob5k', 'mimeType': 'application/vnd.google-apps.spreadsheet'}}
+
+>>>>>>>> EXECUTING FUNCTION download_file_from_drive...
+Call ID: call_BltCW3GNoRkz95JYDX3FkHbt
+Input arguments: {'file_info': {'name': '2025-03-27 Meeting Notes', 'id': '1Y0SqiFZDktmhb2xqLBBhMPpIOozuilKRj8lU_uUdBko', 'mimeType': 'application/vnd.google-apps.document'}}
+
+>>>>>>>> EXECUTING FUNCTION download_file_from_drive...
+Call ID: call_kXGJahD6a9VQHLhjpylSURul
+Input arguments: {'file_info': {'name': '2025-03-26 Meeting Notes', 'id': '1Yqwapbydy5xd-73i8uzLMnnmNamhs6aTn-l2_l_YgDc', 'mimeType': 'application/vnd.google-apps.document'}}
+user (to assistant):
+
+***** Response from calling tool (call_GzHEYDuIstJunY6MtPHsYGgX) *****
+✅ Downloaded: Stock Analysis.csv
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_BltCW3GNoRkz95JYDX3FkHbt) *****
+✅ Downloaded: 2025-03-27 Meeting Notes.docx
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_kXGJahD6a9VQHLhjpylSURul) *****
+✅ Downloaded: 2025-03-26 Meeting Notes.docx
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+All requested files have been downloaded successfully:
+
+- Stock Analysis as CSV
+- 2025-03-27 Meeting Notes as DOCX
+- 2025-03-26 Meeting Notes as DOCX
+
+TERMINATE
+```
+
+## Custom GoogleDriveToolkit
+You can easily customize the predefined [`GoogleDriveToolkit`](/docs/api-reference/autogen/tools/experimental/google/drive/GoogleDriveToolkit) based on your specific requirements. By subclassing [`GoogleDriveToolkit`](/docs/api-reference/autogen/tools/experimental/google/drive/GoogleDriveToolkit), you can modify the toolset available to your agent.
+
+For example:
+- **Add custom tools**: You can introduce new tools, like `list_docs`, to specifically retrieve document files from a folder.
+- **Remove existing tools**: You can eliminate unnecessary tools, such as `list_drive_files_and_folders`, to streamline functionality and focus on relevant features.
+
+```python
+class MyGoogleDriveToolkit(GoogleDriveToolkit):
+    def __init__(
+        self,
+        *,
+        credentials,
+        download_folder,
+    ):
+        super().__init__(credentials=credentials, download_folder=download_folder)
+
+        # Define a custom tool
+        @tool(description="List documents in a folder")
+        def list_docs(
+            page_size: Annotated[int, "The number of files to list per page."] = 10,
+            folder_id: Annotated[
+                Optional[str],
+                "The ID of the folder to list files from. If not provided, lists all files in the root folder.",
+            ] = None,
+        ) -> list[GoogleFileInfo]:
+            doc_mime_types = [
+                "application/vnd.google-apps.document",  # Google Docs
+                "application/pdf",  # PDFs
+                "application/msword",  # MS Word
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
+            ]
+
+            mime_type_filter = " or ".join(f"mimeType='{mime}'" for mime in doc_mime_types)
+            query = f"({mime_type_filter}) and trashed=false"
+
+            if folder_id:
+                query = f"'{folder_id}' in parents and {query}"
+
+            kwargs = {
+                "pageSize": page_size,
+                "fields": "nextPageToken, files(id, name, mimeType)",
+                "q": query,  # Apply filtering in the query itself
+            }
+
+            response = self.service.files().list(**kwargs).execute()
+            result = response.get("files", [])
+
+            if not isinstance(result, list):
+                raise ValueError(f"Expected a list of files, but got {result}")
+
+            return [GoogleFileInfo(**file_info) for file_info in result]
+
+        # Remove tool which you don't want to use
+        self.remove_tool("list_drive_files_and_folders")
+
+        # Add your custom tool
+        self.set_tool(list_docs)
+```
+
+## Start the Conversation
+```python
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
+
+google_drive_toolkit = MyGoogleDriveToolkit(
+    credentials=credentials,
+    download_folder="ag2_drive_downloads",
+)
+
+google_drive_toolkit.register_for_llm(assistant)
+
+response = assistant.run(
+    message="List the latest 3 files and write a short summary based on the file names and meme types.",
+    max_turns=4,
+    tools=google_drive_toolkit.tools,
+    user_input=False,
+)
+response.process()
+```
+
+### Output
+```console
+user (to assistant):
+
+List the latest 3 files and write a short summary based on the file names and meme types.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_kGLlthRV0NJ5OyZJQMnJ0rtj): list_docs *****
+Arguments:
+{"page_size":3}
+**************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION list_docs...
+Call ID: call_kGLlthRV0NJ5OyZJQMnJ0rtj
+Input arguments: {'page_size': 3}
+/Users/robert/projects/ag2/autogen/agentchat/conversable_agent.py:3091: UserWarning: Function 'list_docs' is being overridden.
+  warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
+user (to assistant):
+
+***** Response from calling tool (call_kGLlthRV0NJ5OyZJQMnJ0rtj) *****
+[{'name': '2025-03-27 Meeting Notes', 'id': '1Y0SqiFZDktmhb2xqLBBhMPpIOozuilKRj8lU_uUdBko', 'mime_type': 'application/vnd.google-apps.document'}, {'name': '2025-03-26 Meeting Notes', 'id': '1Yqwapbydy5xd-73i8uzLMnnmNamhs6aTn-l2_l_YgDc', 'mime_type': 'application/vnd.google-apps.document'}, {'name': '2025-03-25 Meeting Notes', 'id': '1SZ4WqT9bXy9_EyLos9pZSo_v2g0BrQdLLe5pbrJ7oRI', 'mime_type': 'application/vnd.google-apps.document'}]
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+Here are the latest 3 files along with their summaries based on the file names and MIME types:
+
+1. **File Name:** 2025-03-27 Meeting Notes
+   - **MIME Type:** Google Document
+   - **Summary:** This document likely contains the notes and discussions from a meeting held on March 27, 2025. It may include action items, decisions made, and topics covered during the meeting.
+
+2. **File Name:** 2025-03-26 Meeting Notes
+   - **MIME Type:** Google Document
+   - **Summary:** This document probably summarizes the meeting that took place on March 26, 2025. Similarly, it may contain detailed notes regarding the participants, agendas, and any significant outcomes from that meeting.
+
+3. **File Name:** 2025-03-25 Meeting Notes
+   - **MIME Type:** Google Document
+   - **Summary:** This file is expected to have the notes from a meeting conducted on March 25, 2025. As with the others, it might include various discussions, decisions, and follow-up actions that were agreed upon.
+
+All three files are Google Documents containing meeting notes, reflecting ongoing discussions and activities from the latter part of March 2025.
+
+TERMINATE
+```

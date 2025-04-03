@@ -21,12 +21,12 @@ from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
 from ..doc_utils import export_module
+from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
 from ..llm_config import LLMConfigEntry, register_llm_config
 from ..logger.logger_utils import get_current_ts
-from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
 from .client_utils import FormatterProtocol, logging_formatter
@@ -240,7 +240,9 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
 @register_llm_config
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
+    top_p: Optional[float] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -249,7 +251,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 @register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
+    top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
@@ -262,6 +266,7 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     @field_validator("top_p", mode="before")
     @classmethod
@@ -573,7 +578,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            iostream.send(StreamMessage(content=content))
+                            iostream.send(StreamEvent(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -752,7 +757,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -1394,7 +1399,7 @@ class OpenAIWrapper:
                 mode = "total"
 
         iostream.send(
-            UsageSummaryMessage(
+            UsageSummaryEvent(
                 actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
             )
         )

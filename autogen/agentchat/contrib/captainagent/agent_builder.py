@@ -15,7 +15,7 @@ from typing import Any, Optional, Union
 
 from termcolor import colored
 
-from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent, config_list_from_json
+from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ....code_utils import CODE_BLOCK_PATTERN
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -186,6 +186,7 @@ Match roles in the role set to each expert in expert set.
         self,
         config_file_or_env: Optional[str] = "OAI_CONFIG_LIST",
         config_file_location: Optional[str] = "",
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         builder_model: Optional[Union[str, list]] = [],
         agent_model: Optional[Union[str, list]] = [],
         builder_model_tags: Optional[list] = [],
@@ -199,6 +200,7 @@ Match roles in the role set to each expert in expert set.
                 variable containing the OpenAI API configurations. Defaults to "OAI_CONFIG_LIST".
             config_file_location (Optional[str], optional): Location of the config file if not in the
                 current directory. Defaults to "".
+            llm_config (Optional[Union[LLMConfig, dict[str, Any]]], optional): Specific configs for LLM
             builder_model (Optional[Union[str, list]], optional): Model identifier(s) to use as the
                 builder/manager model that coordinates agent creation. Can be a string or list of strings.
                 Filters the config list to match these models. Defaults to [].
@@ -217,9 +219,14 @@ Match roles in the role set to each expert in expert set.
             builder_filter_dict.update({"model": builder_model})
         if len(builder_model_tags) != 0:
             builder_filter_dict.update({"tags": builder_model_tags})
-        builder_config_list = config_list_from_json(
-            config_file_or_env, file_location=config_file_location, filter_dict=builder_filter_dict
+
+        llm_config = (
+            LLMConfig.from_json(env=config_file_or_env, file_location=config_file_location).where(**builder_filter_dict)
+            if llm_config is None
+            else llm_config
         )
+        builder_config_list = llm_config.config_list
+
         if len(builder_config_list) == 0:
             raise RuntimeError(
                 f"Fail to initialize build manager: {builder_model}{builder_model_tags} does not exist in {config_file_or_env}. "
@@ -231,6 +238,7 @@ Match roles in the role set to each expert in expert set.
         self.agent_model_tags = agent_model_tags
         self.config_file_or_env = config_file_or_env
         self.config_file_location = config_file_location
+        self.llm_config = llm_config
 
         self.building_task: str = None
         self.agent_configs: list[dict[str, Any]] = []
@@ -288,8 +296,12 @@ Match roles in the role set to each expert in expert set.
             filter_dict.update({"model": model_name_or_hf_repo})
         if len(model_tags) > 0:
             filter_dict.update({"tags": model_tags})
-        config_list = config_list_from_json(
-            self.config_file_or_env, file_location=self.config_file_location, filter_dict=filter_dict
+        config_list = (
+            LLMConfig.from_json(env=self.config_file_or_env, file_location=self.config_file_location)
+            .where(**filter_dict)
+            .config_list
+            if self.llm_config is None
+            else self.llm_config.config_list
         )
         if len(config_list) == 0:
             raise RuntimeError(
