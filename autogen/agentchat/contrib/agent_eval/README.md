@@ -1,4 +1,4 @@
-Agents for running the [AgentEval](https://docs.ag2.ai/blog/2023-11-20-AgentEval/) pipeline.
+Agents for running the [AgentEval](https://docs.ag2.ai/latest/docs/blog/2023/11/20/AgentEval/) pipeline.
 
 AgentEval is a process for evaluating a LLM-based system's performance on a given task.
 

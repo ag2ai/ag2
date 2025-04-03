@@ -11,11 +11,12 @@ pip install ag2[openai,interop-pydantic-ai]
 ### Imports
 
 Import necessary modules and tools.
+
 - [BaseModel](https://docs.pydantic.dev/latest/api/base_model/): Used to define data structures for tool inputs and outputs.
 - [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext): Provides context during the execution of tools.
 - [PydanticAITool](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.Tool): Represents a tool in the PydanticAI framework.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent): Agents that facilitate communication in the AG2 framework.
-- [`Interoperability`](/docs/api-reference/autogen/interop/overview): This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability): This module acts as a bridge, making it easier to integrate PydanticAI tools with AG2’s architecture.
 
 ```python
 import os
@@ -54,7 +55,7 @@ To integrate a PydanticAI tool into AG2:
 - First, define a `Player` model using [BaseModel](https://docs.pydantic.dev/latest/api/base_model/) to structure the input data.
 - Use [RunContext](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.RunContext) to inject dependencies (like the `Player` instance) securely into the tool.
 - The `get_player` function defines the tool’s functionality, retrieving injected data through `ctx.deps`.
-- Then, convert the tool into an AG2-compatible format with [`Interoperability`](/docs/reference/interop/interoperability).
+- Then, convert the tool into an AG2-compatible format with [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability).
 - Register the tool for execution and interaction with both the `user_proxy` and `chatbot`.
 
 ```python

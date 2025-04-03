@@ -12,27 +12,34 @@ class TestToolImports:
             DiscordRetrieveTool,
             DiscordSendTool,
             PerplexitySearchTool,
+            SlackRetrieveRepliesTool,
             SlackRetrieveTool,
             SlackSendTool,
             TelegramRetrieveTool,
             TelegramSendTool,
+            WikipediaPageLoadTool,
+            WikipediaQueryRunTool,
         )
 
         assert isinstance(BrowserUseTool, type)
         assert isinstance(Crawl4AITool, type)
         assert isinstance(DiscordRetrieveTool, type)
         assert isinstance(DiscordSendTool, type)
+        assert isinstance(SlackRetrieveRepliesTool, type)
         assert isinstance(SlackRetrieveTool, type)
         assert isinstance(SlackSendTool, type)
         assert isinstance(TelegramRetrieveTool, type)
         assert isinstance(TelegramSendTool, type)
         assert isinstance(PerplexitySearchTool, type)
+        assert isinstance(WikipediaQueryRunTool, type)
+        assert isinstance(WikipediaPageLoadTool, type)
 
     def test_imports_experimental_messageplatform(self) -> None:
         """Ensure all tool imports are correct."""
         from autogen.tools.experimental.messageplatform import (
             DiscordRetrieveTool,
             DiscordSendTool,
+            SlackRetrieveRepliesTool,
             SlackRetrieveTool,
             SlackSendTool,
             TelegramRetrieveTool,
@@ -41,6 +48,7 @@ class TestToolImports:
 
         assert isinstance(DiscordRetrieveTool, type)
         assert isinstance(DiscordSendTool, type)
+        assert isinstance(SlackRetrieveRepliesTool, type)
         assert isinstance(SlackRetrieveTool, type)
         assert isinstance(SlackSendTool, type)
         assert isinstance(TelegramRetrieveTool, type)
@@ -57,13 +65,14 @@ class TestToolImports:
 
         # Verify each module's __all__ contains expected tools
         assert set(discord_all) == {"DiscordRetrieveTool", "DiscordSendTool"}
-        assert set(slack_all) == {"SlackRetrieveTool", "SlackSendTool"}
+        assert set(slack_all) == {"SlackRetrieveRepliesTool", "SlackRetrieveTool", "SlackSendTool"}
         assert set(telegram_all) == {"TelegramRetrieveTool", "TelegramSendTool"}
         assert all(
             tool in messageplatform_all
             for tool in (
                 "DiscordRetrieveTool",
                 "DiscordSendTool",
+                "SlackRetrieveRepliesTool",
                 "SlackRetrieveTool",
                 "SlackSendTool",
                 "TelegramRetrieveTool",

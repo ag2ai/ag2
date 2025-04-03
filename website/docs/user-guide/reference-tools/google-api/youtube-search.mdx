@@ -84,12 +84,15 @@ youtube_tool.register_for_llm(assistant)
 Let's start with a basic search to find YouTube videos on a particular topic.
 
 ```python
-assistant.run(
+response = assistant.run(
     message="Find the latest YouTube videos on large language models. List the titles and provide brief summaries.",
     tools=assistant.tools,
     max_turns=2,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
+response.process()
 ```
 
 ### Output
