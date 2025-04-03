@@ -129,7 +129,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.6.1",
+    "graphrag_sdk==0.7.1",
     "falkordb>=1.0.10",
 ]
 
@@ -142,7 +142,7 @@ rag = [
     "llama-index-vector-stores-chroma==0.4.1",
     "llama-index-vector-stores-mongodb==0.6.0",
     "llama-index-embeddings-huggingface==0.5.2",
-    "llama-index-llms-langchain==0.6.0",
+    "llama-index-llms-langchain==0.6.1",
     "requests>=2.32.3,<3",
 ]
 
@@ -176,10 +176,10 @@ wikipedia = [
 ]
 
 neo4j = [
-    "docx2txt==0.8",
+    "docx2txt==0.9",
     "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-readers-web==0.3.7",
+    "llama-index-readers-web==0.3.8",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
