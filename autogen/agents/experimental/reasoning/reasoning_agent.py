@@ -670,7 +670,7 @@ Additionally, a good trajectory should:
 
 If the trajectory does not meet one of the above requirements, it is considered a bad response.
 
-Also, rate poory (with 1) trajectories that:
+Also, rate poorly (with 1) trajectories that:
 - Require access to internet, experts opinions or external sources.
 - Require research, hypotheses or data that are not provided.
 - Include solutions in the physical world, like conducting experiments or surveys (code execution is fine).
