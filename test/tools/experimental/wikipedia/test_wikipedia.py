@@ -88,6 +88,7 @@ class TestWikipediaClient(unittest.TestCase):
             page = client.get_page("Nonexistent Page")
             self.assertIsNone(page)
 
+
 @run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaQueryRunTool(unittest.TestCase):
     def setUp(self) -> None:
@@ -158,6 +159,7 @@ class TestWikipediaQueryRunTool(unittest.TestCase):
         search_tool.register_for_llm(assistant)
         assert isinstance(assistant.tools[0], WikipediaQueryRunTool)
         assert assistant.tools[0].name == "wikipedia-query-run"
+
 
 @run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaPageLoadTool(unittest.TestCase):
