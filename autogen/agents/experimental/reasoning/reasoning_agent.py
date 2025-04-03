@@ -657,7 +657,7 @@ Please provide your rating along with a brief explanation of your assessment.
         assert nodes[0].parent is not None, "Parent node must not be None."
 
         # Update Grader's system message
-        message = f"""You will be provided a a thinking trajectory and a list of options for the next step.
+        message = f"""You will be provided a thinking trajectory and a list of options for the next step.
 Please rate the thinking trajectory created by each option on a scale of 1 to {self._rating_scale}, where 1 is the worst and {self._rating_scale} is the best.
 
 A great thinking trajectory must:
