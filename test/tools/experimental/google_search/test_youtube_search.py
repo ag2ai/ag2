@@ -160,12 +160,13 @@ class TestYoutubeSearchTool:
                 return_value=expected_details_result,
             ) as mock_details,
         ):
-            assistant.run(
-                "Find YouTube videos about machine learning",
+            run_response = assistant.run(
+                message="Find YouTube videos about machine learning",
                 tools=assistant.tools,
                 max_turns=3,
                 user_input=False,
             )
+            run_response.process()
             assert mock_search.called
             assert mock_details.called
 

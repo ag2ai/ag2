@@ -74,3 +74,41 @@ jobs:
           else
             cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
           fi
+    outputs:
+      is_rc: ${{ env.IS_RC }}
+
+  copy-latest-to-root:
+    needs: deploy
+    if: needs.deploy.outputs.is_rc == 'False'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 1
+
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Copy latest docs to root
+        run: |
+          # Verify the latest directory exists or fail immediately
+          if [ ! -d "latest" ]; then
+            echo "ERROR: 'latest' directory not found in gh-pages branch"
+            echo "Current directory structure:"
+            ls -la
+            exit 1
+          fi
+
+          # Copy content from latest to root (except index.html)
+          cd latest
+          cp -r $(ls -A | grep -v "index.html") ../
+          cd ..
+
+          # Commit and push changes
+          git add .
+          git commit -m "Copy latest docs to root level (except index.html)" || echo "No changes to commit"
+          git push

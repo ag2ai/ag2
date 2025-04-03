@@ -11,7 +11,7 @@ from contextvars import ContextVar
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from ..doc_utils import export_module
-from ..messages.base_message import BaseMessage
+from ..events.base_event import BaseEvent
 
 __all__ = ("IOStream", "InputStream", "OutputStream")
 
@@ -32,11 +32,11 @@ class OutputStream(Protocol):
         """
         ...  # pragma: no cover
 
-    def send(self, message: BaseMessage) -> None:
+    def send(self, message: BaseEvent) -> None:
         """Send data to the output stream.
 
         Args:
-            message (BaseMessage): BaseMessage from autogen.messages.base_message
+            message (BaseEvent): BaseEvent from autogen.messages.base_message
         """
         ...
 

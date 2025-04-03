@@ -161,7 +161,7 @@ my_agent = ConversableAgent(
 )
 
 # 4. Run the agent with a prompt
-chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+chat_result = my_agent.run(message="In one sentence, what's the big deal about AI?")
 
 # 5. Print the chat
 print(chat_result.chat_history)
@@ -198,7 +198,7 @@ Some conclusion
     )
 
     # 4. Run the agent with a prompt
-    chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+    chat_result = my_agent.run(message="In one sentence, what's the big deal about AI?")
 
     # 5. Print the chat
     print(chat_result.chat_history)

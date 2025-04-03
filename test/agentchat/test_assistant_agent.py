@@ -201,14 +201,16 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
     def get_twitter_hot_topic() -> str:
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
-    hot_topic_res = x_assistant.run(
-        "Find out today's hot topic and an influencer who is talking about it on X",
+    response = x_assistant.run(
+        message="Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
         user_input=False,
     )
 
-    assert "AI" in hot_topic_res.summary
-    assert "elonmusk" in hot_topic_res.summary
+    response.process()
+
+    assert "AI" in response.summary
+    assert "elonmusk" in response.summary
 
 
 @run_for_optional_imports("openai", "openai")
@@ -222,14 +224,15 @@ async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
     def get_twitter_hot_topic() -> str:
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
-    hot_topic_res = await x_assistant.a_run(
-        "Find out today's hot topic and an influencer who is talking about it on X",
+    response = await x_assistant.a_run(
+        message="Find out today's hot topic and an influencer who is talking about it on X",
         tools=get_twitter_hot_topic,
         user_input=False,
     )
 
-    assert "AI" in hot_topic_res.summary
-    assert "elonmusk" in hot_topic_res.summary
+    await response.process()
+    assert "AI" in await response.summary
+    assert "elonmusk" in await response.summary
 
 
 if __name__ == "__main__":

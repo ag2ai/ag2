@@ -295,7 +295,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://ag2.ai/"
-Documentation = "https://docs.ag2.ai/docs/Home"
+Documentation = "https://docs.ag2.ai"
 Tracker = "https://github.com/ag2ai/ag2/issues"
 Source = "https://github.com/ag2ai/ag2"
 Discord = "https://discord.gg/pAbnFJrkgZ"
