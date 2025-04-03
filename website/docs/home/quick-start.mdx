@@ -52,10 +52,14 @@ with llm_config:
     )
 
 # 4. Run the agent with a prompt
-chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+response = my_agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=3,
+)
+response.process()
 
 # 5. Print the chat
-print(chat_result.chat_history)
+print(response.messages)
 ```
     </Tab>
     <Tab title="Two agent chat">
@@ -79,7 +83,7 @@ with llm_config:
         "Your name is Jack and you are a comedian "
         "in a two-person comedy show."
         ),
-        is_termination_msg=lambda x: True if "FINISH" in x["content"] else False
+        is_termination_msg=lambda x: "FINISH" in x["content"]
     )
     emma = ConversableAgent(
         "Emma",
@@ -91,13 +95,14 @@ with llm_config:
     )
 
 # 4. Run the chat
-chat_result = jack.initiate_chat(
+response = jack.run(
     emma,
     message="Emma, tell me a joke about goldfish and peanut butter.",
 )
+response.process()
 
 # 5. Print the chat
-print(chat_result.chat_history)
+print(response.messages)
 ```
 
     </Tab>
@@ -157,13 +162,14 @@ manager = GroupChatManager(
 )
 
 # Start the conversation
-chat_result = teacher.initiate_chat(
+response = teacher.run(
     recipient=manager,
     message="Let's teach the kids about the solar system."
 )
+response.process()
 
 # Print the chat
-print(chat_result.chat_history)
+print(response.messages)
 ```
 
     </Tab>

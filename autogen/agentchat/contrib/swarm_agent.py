@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import copy
 import inspect
+import threading
 import warnings
 from dataclasses import dataclass
 from enum import Enum
@@ -14,6 +16,10 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
+from ...events.agent_events import ErrorEvent
+from ...io.base import IOStream
+from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -37,6 +43,7 @@ __all__ = [
     "create_swarm_transition",
     "initiate_swarm_chat",
     "register_hand_off",
+    "run_swarm",
 ]
 
 
@@ -997,6 +1004,60 @@ def initiate_swarm_chat(
 
 
 @export_module("autogen")
+def run_swarm(
+    initial_agent: ConversableAgent,
+    messages: Union[list[dict[str, Any]], str],
+    agents: list[ConversableAgent],
+    user_agent: Optional[UserProxyAgent] = None,
+    swarm_manager_args: Optional[dict[str, Any]] = None,
+    max_rounds: int = 20,
+    context_variables: Optional[dict[str, Any]] = None,
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWorkOption.TERMINATE,
+    exclude_transit_message: bool = True,
+) -> RunResponseProtocol:
+    iostream = ThreadIOStream()
+    response = RunResponse(iostream)
+
+    def stream_run(
+        iostream: ThreadIOStream = iostream,
+        response: RunResponse = response,
+    ) -> None:
+        with IOStream.set_default(iostream):  # type: ignore[arg-type]
+            try:
+                chat_result, returned_context_variables, last_speaker = initiate_swarm_chat(
+                    initial_agent=initial_agent,
+                    messages=messages,
+                    agents=agents,
+                    user_agent=user_agent,
+                    swarm_manager_args=swarm_manager_args,
+                    max_rounds=max_rounds,
+                    context_variables=context_variables,
+                    after_work=after_work,
+                    exclude_transit_message=exclude_transit_message,
+                )
+
+                response._summary = chat_result.summary
+                response._messages = chat_result.chat_history
+                response._context_variables = returned_context_variables
+                response._last_speaker = last_speaker
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+
+    threading.Thread(
+        target=stream_run,
+    ).start()
+
+    return response
+
+
+@export_module("autogen")
 async def a_initiate_swarm_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
@@ -1092,6 +1153,58 @@ async def a_initiate_swarm_chat(
     _cleanup_temp_user_messages(chat_result)
 
     return chat_result, context_variables if context_variables != {} else None, manager.last_speaker  # type: ignore[return-value]
+
+
+@export_module("autogen")
+async def a_run_swarm(
+    initial_agent: ConversableAgent,
+    messages: Union[list[dict[str, Any]], str],
+    agents: list[ConversableAgent],
+    user_agent: Optional[UserProxyAgent] = None,
+    swarm_manager_args: Optional[dict[str, Any]] = None,
+    max_rounds: int = 20,
+    context_variables: Optional[dict[str, Any]] = None,
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWorkOption.TERMINATE,
+    exclude_transit_message: bool = True,
+) -> AsyncRunResponseProtocol:
+    iostream = AsyncThreadIOStream()
+    response = AsyncRunResponse(iostream)
+
+    async def stream_run(
+        iostream: AsyncThreadIOStream = iostream,
+        response: AsyncRunResponse = response,
+    ) -> None:
+        with IOStream.set_default(iostream):  # type: ignore[arg-type]
+            try:
+                chat_result, returned_context_variables, last_speaker = await a_initiate_swarm_chat(
+                    initial_agent=initial_agent,
+                    messages=messages,
+                    agents=agents,
+                    user_agent=user_agent,
+                    swarm_manager_args=swarm_manager_args,
+                    max_rounds=max_rounds,
+                    context_variables=context_variables,
+                    after_work=after_work,
+                    exclude_transit_message=exclude_transit_message,
+                )
+
+                response._summary = chat_result.summary
+                response._messages = chat_result.chat_history
+                response._context_variables = returned_context_variables
+                response._last_speaker = last_speaker
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+
+    asyncio.create_task(stream_run())
+
+    return response
 
 
 @export_module("autogen")

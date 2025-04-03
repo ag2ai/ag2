@@ -76,12 +76,13 @@ class TestGoogleSearchTool:
             "autogen.tools.experimental.google_search.google_search._execute_query",
             return_value=expected_search_result,
         ) as mock_execute_query:
-            assistant.run(
-                "Get me the latest news on DeepSeek",
+            run_response = assistant.run(
+                message="Get me the latest news on DeepSeek",
                 tools=assistant.tools,
                 max_turns=3,
                 user_input=False,
             )
+            run_response.process()
             assert mock_execute_query.called == execute_query_called
 
     @run_for_optional_imports("openai", "openai")

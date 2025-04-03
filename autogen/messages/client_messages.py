@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from ..events import deprecated_by
+from ..events.client_events import StreamEvent, UsageSummaryEvent
 from .base_message import BaseMessage, wrap_message
 
 __all__ = ["UsageSummaryMessage"]
@@ -71,6 +73,7 @@ def _change_usage_summary_format(
     return summary
 
 
+@deprecated_by(UsageSummaryEvent)
 @wrap_message
 class UsageSummaryMessage(BaseMessage):
     """Usage summary message."""
@@ -145,6 +148,7 @@ class UsageSummaryMessage(BaseMessage):
         f("-" * 100, flush=True)
 
 
+@deprecated_by(StreamEvent)
 @wrap_message
 class StreamMessage(BaseMessage):
     """Stream message."""

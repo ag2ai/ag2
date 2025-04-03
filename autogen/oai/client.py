@@ -21,12 +21,12 @@ from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
 from ..doc_utils import export_module
+from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
 from ..llm_config import LLMConfigEntry, register_llm_config
 from ..logger.logger_utils import get_current_ts
-from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
 from .client_utils import FormatterProtocol, logging_formatter
@@ -578,7 +578,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            iostream.send(StreamMessage(content=content))
+                            iostream.send(StreamEvent(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -757,7 +757,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](https://ag2.airt.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -1399,7 +1399,7 @@ class OpenAIWrapper:
                 mode = "total"
 
         iostream.send(
-            UsageSummaryMessage(
+            UsageSummaryEvent(
                 actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
             )
         )
