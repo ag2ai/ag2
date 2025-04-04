@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from textwrap import dedent
@@ -1249,58 +1250,58 @@ def test_fix_internal_references() -> None:
 
 class TestFixInternalLinks:
     def test_absolute_to_relative(self) -> None:
-        source_path = "/docs/home/quick-start.md"
-        content = "/docs/user-guide/basic-concepts/installing-ag2"
+        source_path = os.path.join("docs", "home", "quick-start.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "installing-ag2")
 
-        expected = "../../user-guide/basic-concepts/installing-ag2"
+        expected = os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/blog/2025-02-05-Communication-Agents"
-        content = "/docs/api-reference/autogen/UserProxyAgent"
+        source_path = os.path.join("docs", "blog", "2025-02-05-Communication-Agents")
+        content = os.path.join("docs", "api-reference", "autogen", "UserProxyAgent")
 
-        expected = "../../../../../api-reference/autogen/UserProxyAgent"
+        expected = os.path.join("..", "..", "..", "..", "..", "api-reference", "autogen", "UserProxyAgent")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
-        content = "/docs/user-guide/basic-concepts/tools/interop/langchain"
+        source_path = os.path.join("docs", "user-guide", "basic-concepts", "tools", "index.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "tools", "interop", "langchain")
 
-        expected = "./interop/langchain"
+        expected = os.path.join(".", "interop", "langchain")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
-        content = "/docs/user-guide/basic-concepts/tools/basics"
+        source_path = os.path.join("docs", "user-guide", "basic-concepts", "tools", "index.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "tools", "basics")
 
-        expected = "./basics"
+        expected = os.path.join(".", "basics")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/home/home.md"
-        content = "/docs/home/quick-start"
+        source_path = os.path.join("docs", "home", "home.md")
+        content = os.path.join("docs", "home", "quick-start")
 
-        expected = "../quick-start"
+        expected = os.path.join("..", "quick-start")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/contributor-guide/how-ag2-works/hooks.md"
-        content = "/docs/contributor-guide/how-ag2-works/initiate-chat"
+        source_path = os.path.join("docs", "contributor-guide", "how-ag2-works", "hooks.md")
+        content = os.path.join("docs", "contributor-guide", "how-ag2-works", "initiate-chat")
 
-        expected = "../initiate-chat"
+        expected = os.path.join("..", "initiate-chat")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/reference-tools/index.md"
-        content = "/docs/api-reference/autogen/tools/experimental/GoogleSearchTool"
+        source_path = os.path.join("docs", "user-guide", "reference-tools", "index.md")
+        content = os.path.join("docs", "api-reference", "autogen", "tools", "experimental", "GoogleSearchTool")
 
-        expected = "../../api-reference/autogen/tools/experimental/GoogleSearchTool"
+        expected = os.path.join("..", "..", "api-reference", "autogen", "tools", "experimental", "GoogleSearchTool")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected

@@ -201,16 +201,17 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
     Returns:
         A relative path from source to destination (e.g., "../../user-guide/basic-concepts/installing-ag2")
     """
+    sep = os.sep
     try:
         # Primary approach: Use pathlib for clean path calculation
-        rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
-        return f"./{rel_path}" if Path(source_path).stem == "index" else f"../{rel_path}"
+        rel_path = str(Path(dest_path).relative_to(Path(source_path).parent))
+        return f".{sep}{rel_path}" if Path(source_path).stem == "index" else f"..{sep}{rel_path}"
     except ValueError:
         # Fallback approach: Use os.path.relpath when paths don't share a common parent
         rel_path = os.path.relpath(dest_path, source_path)
 
         # Special case for blog directories: add deeper path traversal
-        ret_val = f"../../../{rel_path}" if "blog" in source_path else rel_path
+        ret_val = os.path.join("..", "..", "..", rel_path) if "blog" in source_path else rel_path
 
         # Special case for index files: strip leading "../"
         if Path(source_path).stem == "index":
