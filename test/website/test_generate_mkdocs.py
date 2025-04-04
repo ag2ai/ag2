@@ -1189,7 +1189,7 @@ search:
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )
-            + "\n- Blog\n    - [Blog](docs/blog)"
+            + "\n- Blog\n    - [Blog](docs/blog/index.md)"
             + "\n"
         )
 
