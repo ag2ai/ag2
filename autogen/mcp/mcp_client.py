@@ -4,7 +4,7 @@
 
 
 import sys
-from typing import Any, Optional, Union
+from typing import Annotated, Any, Optional, Union
 
 from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
@@ -14,6 +14,7 @@ with optional_import_block():
     from mcp import ClientSession
     from mcp.types import (
         CallToolResult,
+        ResourceTemplate,
         TextContent,
     )
     from mcp.types import (
@@ -72,12 +73,59 @@ class MCPClient:
 
     @classmethod
     @require_optional_import("mcp", "mcp")
-    async def load_mcp_toolkit(cls, session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
-        """Load all available MCP tools and convert them to AG2 Toolkit."""
-        tools = await session.list_tools()
-        ag2_tools: list[Tool] = [cls.convert_tool(tool=tool, session=session) for tool in tools.tools]
+    def convert_resource(  # type: ignore[no-any-unimported]
+        cls, resource_template: Any, session: "ClientSession", **kwargs: Any
+    ) -> Tool:
+        if not isinstance(resource_template, ResourceTemplate):
+            raise ValueError(f"Expected an instance of `mcp.types.ResourceTemplate`, got {type(resource_template)}")
 
-        return Toolkit(tools=ag2_tools)
+        # needed for type checking
+        mcp_resource: ResourceTemplate = resource_template  # type: ignore[no-any-unimported]
+
+        uri_description = f"""A URI template (according to RFC 6570) that can be used to construct resource URIs.
+    Here is the correct format for the URI template:
+    {mcp_resource.uriTemplate}
+    """
+
+        # call_resource should check resource_template.mimeType... We need to check how to handle different mime types...
+        # Write warning if some mimeType is not supported
+        async def call_resource(uri: Annotated[str, uri_description]) -> Any:
+            return await session.read_resource(uri)
+
+        # Wrap resource as AG2 tool
+        ag2_tool = Tool(
+            name=mcp_resource.name,
+            description=mcp_resource.description,
+            func_or_tool=call_resource,
+        )
+        return ag2_tool
+
+    @classmethod
+    @require_optional_import("mcp", "mcp")
+    async def load_mcp_toolkit(
+        cls,
+        session: "ClientSession",
+        *,
+        use_mcp_tools: bool,
+        use_mcp_resources: bool,
+    ) -> Toolkit:  # type: ignore[no-any-unimported]
+        """Load all available MCP tools and convert them to AG2 Toolkit."""
+        all_ag2_tools: list[Tool] = []
+
+        if use_mcp_tools:
+            tools = await session.list_tools()
+            ag2_tools: list[Tool] = [cls.convert_tool(tool=tool, session=session) for tool in tools.tools]
+            all_ag2_tools.extend(ag2_tools)
+
+        if use_mcp_resources:
+            resource_templates = await session.list_resource_templates()
+            ag2_resources: list[Tool] = [
+                cls.convert_resource(resource_template=resource_template, session=session)
+                for resource_template in resource_templates.resourceTemplates
+            ]
+            all_ag2_tools.extend(ag2_resources)
+
+        return Toolkit(tools=all_ag2_tools)
 
     @classmethod
     def get_unsupported_reason(cls) -> Optional[str]:
@@ -94,13 +142,24 @@ class MCPClient:
 
 
 @export_module("autogen.mcp")
-async def create_toolkit(session: "ClientSession") -> Toolkit:  # type: ignore[no-any-unimported]
+async def create_toolkit(
+    session: "ClientSession",
+    *,
+    use_mcp_tools: bool = True,
+    use_mcp_resources: bool = True,
+) -> Toolkit:  # type: ignore[no-any-unimported]
     """Create a toolkit from the MCP client session.
 
     Args:
         session (ClientSession): The MCP client session.
+        use_mcp_tools (bool): Whether to include MCP tools in the toolkit.
+        use_mcp_resources (bool): Whether to include MCP resources in the toolkit.
     Returns:
         Toolkit: The toolkit containing the converted tools.
     """
 
-    return await MCPClient.load_mcp_toolkit(session=session)
+    return await MCPClient.load_mcp_toolkit(
+        session=session,
+        use_mcp_tools=use_mcp_tools,
+        use_mcp_resources=use_mcp_resources,
+    )
