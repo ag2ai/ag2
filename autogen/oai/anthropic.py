@@ -143,6 +143,7 @@ class AnthropicClient:
         self._gcp_project_id = kwargs.get("gcp_project_id")
         self._gcp_region = kwargs.get("gcp_region")
         self._gcp_auth_token = kwargs.get("gcp_auth_token")
+        self._base_url = kwargs.get("base_url")
 
         if not self._api_key:
             self._api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -170,20 +171,28 @@ class AnthropicClient:
                 raise ValueError("API key or AWS credentials or GCP credentials are required to use the Anthropic API.")
 
         if self._api_key is not None:
-            self._client = Anthropic(api_key=self._api_key)
+            client_kwargs = {"api_key": self._api_key}
+            if self._base_url:
+                client_kwargs["base_url"] = self._base_url
+            self._client = Anthropic(**client_kwargs)
         elif self._gcp_region is not None:
             kw = {}
             for i, p in enumerate(inspect.signature(AnthropicVertex).parameters):
                 if hasattr(self, f"_gcp_{p}"):
                     kw[p] = getattr(self, f"_gcp_{p}")
+            if self._base_url:
+                kw["base_url"] = self._base_url
             self._client = AnthropicVertex(**kw)
         else:
-            self._client = AnthropicBedrock(
-                aws_access_key=self._aws_access_key,
-                aws_secret_key=self._aws_secret_key,
-                aws_session_token=self._aws_session_token,
-                aws_region=self._aws_region,
-            )
+            client_kwargs = {
+                "aws_access_key": self._aws_access_key,
+                "aws_secret_key": self._aws_secret_key,
+                "aws_session_token": self._aws_session_token,
+                "aws_region": self._aws_region,
+            }
+            if self._base_url:
+                client_kwargs["base_url"] = self._base_url
+            self._client = AnthropicBedrock(**client_kwargs)
 
         self._last_tooluse_status = {}
 
