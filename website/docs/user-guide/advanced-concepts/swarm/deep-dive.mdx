@@ -5,6 +5,7 @@ sidebarTitle: Deep-dive
 
 <Tip>
 Changes at version >= 0.7.4:
+
 1. Deprecated: `SwarmAgent.register_hand_off` is no longer available. Instead, [`register_hand_off`](/docs/api-reference/autogen/register_hand_off) is now a standalone function.
 2. Compatibility with [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent): Now you can directly use any [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent)-based class, such as [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) in a swarm chat. We recommend switching to [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) since `SwarmAgent` might be deprecated in the future.
 3. Deprecation Warning: `ON_CONDITION` and `AFTER_WORK` will be deprecated in the future. Please use [`OnCondition`](/docs/api-reference/autogen/OnCondition) and [`AfterWork`](/docs/api-reference/autogen/AfterWork) instead.
