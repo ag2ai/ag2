@@ -1333,30 +1333,43 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 [Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability)
 
 """)
-        expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+        expected = dedent(
+            """AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
     Learn more about configuring LLMs for agents
-        [here](../../user-guide/basic-concepts/llm-configuration.md).
+        [here]({}).
 
 ### Where to Go Next?
 
-- [Sample Link](../slow-start.md)
-- Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
-- Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
-- Explore the [API Reference](../../api-reference/autogen/overview)
+- [Sample Link]({})
+- Go through the [basic concepts]({}) to get started
+- Once you're ready, hit the [advanced concepts]({})
+- Explore the [API Reference]({})
 - Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
 - Follow on [X](https://x.com/ag2oss)
 
-If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](../../contributor-guide/contributing).
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide]({}).
 
-<img alt="DeepResearchAgent workflow" src="../../../snippets/reference-agents/img/DeepResearchAgent.png">
+<img alt="DeepResearchAgent workflow" src="{}">
 
-![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
+![DeepResearchAgent workflow]({})
 
-<img class="hero-logo" noZoom src="../../../assets/img/ag2.svg" alt="AG2 Logo" />
+<img class="hero-logo" noZoom src="{}" alt="AG2 Logo" />
 
-[Cross-Framework LLM Tool Integration](../../blog/2024/12/20/Tools-interoperability)
+[Cross-Framework LLM Tool Integration]({})
 
-""")
+""".format(
+                os.path.join("..", "..", "user-guide", "basic-concepts", "llm-configuration.md"),
+                os.path.join("..", "slow-start.md"),
+                os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2"),
+                os.path.join("..", "..", "user-guide", "advanced-concepts", "rag"),
+                os.path.join("..", "..", "api-reference", "autogen", "overview"),
+                os.path.join("..", "..", "contributor-guide", "contributing"),
+                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
+                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
+                os.path.join("..", "..", "..", "assets", "img", "ag2.svg"),
+                os.path.join("..", "..", "blog", "2024", "12", "20", "Tools-interoperability"),
+            )
+        )
         actual = fix_internal_links(source_path, content)
         assert actual == expected
