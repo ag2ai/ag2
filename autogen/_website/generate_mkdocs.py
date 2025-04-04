@@ -466,7 +466,7 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mkdocs_nav = format_navigation(filtered_nav)
     mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    blog_nav = "- Blog\n    - [Blog](docs/blog)"
+    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
 
     mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
