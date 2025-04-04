@@ -214,3 +214,9 @@ authors:
     description: AI Developer
     url: https://www.manning.com/books/enterprise-rag
     avatar: ../img/profile.png
+
+  rui_wang:
+    name: Rui Wang
+    description: CTO at AgentWeb
+    url: https://agentweb.pro
+    avatar: ../img/profile.png
