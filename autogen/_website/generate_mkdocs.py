@@ -361,6 +361,7 @@ def rename_user_story(p: Path) -> Path:
 
 
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
+    sep = os.sep
     # Keep track of MD files we need to process
     md_files_to_process = []
 
@@ -369,7 +370,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
         if file.suffix == ".mdx":
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
-            if "/user-stories/" in str(dest):
+            if f"{sep}user-stories{sep}" in str(dest):
                 dest = rename_user_story(dest)
 
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -382,7 +383,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for md_file in md_files_to_process:
         content = md_file.read_text()
 
-        rel_path = f"/{md_file.relative_to(output_dir.parents[0])}"
+        rel_path = f"{sep}{md_file.relative_to(output_dir.parents[0])}"
         processed_content = transform_content_for_mkdocs(content, rel_path)
 
         md_file.write_text(processed_content)

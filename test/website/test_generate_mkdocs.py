@@ -116,7 +116,7 @@ def test_process_and_copy_files() -> None:
             mkdocs_output_dir / "user-stories" / "2023-02-11-HELLO-World" / "hello_world.md",
         ]
         assert len(actual) == len(expected)
-        assert sorted(actual) == sorted(expected)
+        assert sorted(actual) == sorted(expected), f"{sorted(actual)} != {sorted(expected)}"
 
         # Assert the content of the transformed markdown file
         expected_quick_start_content = dedent("""
