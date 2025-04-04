@@ -5,6 +5,7 @@
 from .deep_research import DeepResearchAgent
 from .discord import DiscordAgent
 from .document_agent import DocAgent, DoclingDocIngestAgent, InMemoryQueryEngine, VectorChromaQueryEngine
+from .evaluation import EvaluationAgent
 from .reasoning import ReasoningAgent, ThinkNode
 from .slack import SlackAgent
 from .telegram import TelegramAgent
@@ -15,6 +16,7 @@ __all__ = [
     "DiscordAgent",
     "DocAgent",
     "DoclingDocIngestAgent",
+    "EvaluationAgent",
     "InMemoryQueryEngine",
     "ReasoningAgent",
     "SlackAgent",
