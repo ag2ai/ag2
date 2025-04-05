@@ -8,7 +8,9 @@ from typing import Literal, Optional, Union
 
 from .... import ConversableAgent
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
-from ....agentchat.contrib.swarm_agent import SwarmResult
+from ....agentchat.group.context_variables import ContextVariables
+from ....agentchat.group.reply_result import ReplyResult
+from ....agentchat.group.targets.transition_target import AgentNameTarget
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs
@@ -61,16 +63,16 @@ class DoclingDocIngestAgent(ConversableAgent):
 
         self._query_engine = query_engine or VectorChromaQueryEngine(collection_name=collection_name)
 
-        def data_ingest_task(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
+        def data_ingest_task(context_variables: ContextVariables) -> ReplyResult:
             """
             A tool for Swarm agent to ingests documents using the docling_parse_docs to parse documents to markdown
             and add them to the docling_query_engine.
 
             Args:
-            context_variables (dict): The context variables for the task.
+            context_variables (ContextVariables): The context variables for the task.
 
             Returns:
-            SwarmResult: The result of the task.
+            ReplyResult: The result of the task.
             """
 
             try:
@@ -93,18 +95,18 @@ class DoclingDocIngestAgent(ConversableAgent):
                     context_variables["DocumentsIngested"].append(input_file_path)
 
                 context_variables["CompletedTaskCount"] += 1
-                logger.info("data_ingest_task context_variables:", context_variables)
+                logger.info(f"data_ingest_task context_variables: {context_variables.to_dict()}")
 
             except Exception as e:
-                return SwarmResult(
-                    agent=return_agent_error,
-                    values=f"Data Ingestion Task Failed, Error {e}: '{input_file_path}'",
+                return ReplyResult(
+                    target=AgentNameTarget(agent_name=return_agent_error),
+                    message=f"Data Ingestion Task Failed, Error {e}: '{input_file_path}'",
                     context_variables=context_variables,
                 )
 
-            return SwarmResult(
-                agent=return_agent_success,
-                values=f"Data Ingestion Task Completed for {input_file_path}",
+            return ReplyResult(
+                target=AgentNameTarget(agent_name=return_agent_success),
+                message=f"Data Ingestion Task Completed for {input_file_path}",
                 context_variables=context_variables,
             )
 

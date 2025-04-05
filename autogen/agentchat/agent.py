@@ -12,6 +12,8 @@ __all__ = ["Agent", "LLMAgent", "LLMMessageType"]
 
 LLMMessageType = dict[str, Any]
 
+DEFAULT_SUMMARY_METHOD = "last_msg"
+
 
 @runtime_checkable
 @export_module("autogen")
