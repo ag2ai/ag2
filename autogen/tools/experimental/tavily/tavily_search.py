@@ -18,10 +18,11 @@ with optional_import_block():
     ],
     "tavily",
 )
-def _execute_tavily_query(query: str, tavily_api_key: str, search_depth: str = "basic", include_answer: str = "basic", include_raw_content: bool = False, include_domains: list[str] = [], num_results: int = 5) -> Any:
+def _execute_tavily_query(query: str, tavily_api_key: str, search_depth: str = "basic", topic: str = "general", include_answer: str = "basic", include_raw_content: bool = False, include_domains: list[str] = [], num_results: int = 5) -> Any:
     tavily_client = TavilyClient(api_key=tavily_api_key)
     return tavily_client.search(query=query,
                                 search_depth=search_depth,
+                                topic=topic,
                                 include_answer=include_answer,
                                 include_raw_content=include_raw_content,
                                 include_domains=include_domains,
@@ -32,13 +33,14 @@ def _tavily_search(
     query: str,
     tavily_api_key: str,
     search_depth: str = "basic",
+    topic: str = "general",
     include_answer: str = "basic",
     include_raw_content: bool = False,
     include_domains: list[str] = [],
     num_results: int = 5,
 ) -> list[dict[str, Any]]:
     res = _execute_tavily_query(
-        query=query, tavily_api_key=tavily_api_key, search_depth=search_depth, include_answer=include_answer,
+        query=query, tavily_api_key=tavily_api_key, search_depth=search_depth, topic=topic, include_answer=include_answer,
          include_raw_content=include_raw_content, include_domains=include_domains, num_results=num_results
     )
 
