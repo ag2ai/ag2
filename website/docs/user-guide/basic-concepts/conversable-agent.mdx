@@ -2,36 +2,62 @@
 title: ConversableAgent
 ---
 
-ConversableAgent is at the heart of all AG2 agents while also being a fully functioning agent.
+ConversableAgent is at the heart of all AG2 agents while also being a fully functioning agent on its own. It provides the foundation for creating conversational AI agents that can communicate with users, other agents, and execute functions.
 
-Let's *converse* with ConversableAgent in just 5 simple steps.
+## What is ConversableAgent?
+
+ConversableAgent is a versatile base class that enables agents to:
+
+- Exchange messages with users and other agents
+- Generate responses using language models
+- Execute functions and tools
+- Process and maintain conversation history
+- Support human-in-the-loop interactions
+- Execute code securely
+
+Whether you're creating a simple assistant or building a complex multi-agent system, ConversableAgent provides the essential building blocks for agent-based AI applications.
+
+---
+
+## ConversableAgent at a Glance
+
+![nested_chat](assets/conversable_agent.png "width=400 height=400")
+
+---
+
+## Example: Talking to Your Own AI Agent
 
 import Example from "/snippets/python-examples/conversableagentchat.mdx";
 
-<Example/>
+<Example />
 
-Let's break it down:
+---
 
-1. Import `ConversableAgent`, you'll find the most popular classes available directly from `autogen`.
+## Step-by-Step Breakdown
 
-2. Create our LLM configuration to define the LLM that our agent will use.
+1. **Import the class**
+   Bring in `ConversableAgent` and `LLMConfig` from the `autogen` library.
 
-3. Create our ConversableAgent give them a unique name, and use `system_message` to define their purpose.
+2. **Define your LLM**
+   Use `LLMConfig` to set up your preferred model and API credentials.
 
-4. Ask the agent a question using their `run` method, passing in our starting message.
+3. **Create the Agent**
+   Instantiate a `ConversableAgent`, assign it a name, and give it a purpose using the `system_message`.
 
-    ```console
-    user (to helpful_agent):
+4. **Chat with the Agent**
+   Call `.run()` to send your first message. The agent will reply immediately.
 
-    In one sentence, what's the big deal about AI?
+5. **Handle the Conversation**
+   Use `.process()` to continue the conversation or respond programmatically.
 
-    --------------------------------------------------------------------------------
+---
 
-    >>>>>>>> USING AUTO REPLY...
-    helpful_agent (to user):
+## Why Use ConversableAgent?
 
-    AI transforms our world with endless potential, enhancing lives and knowledge, truly essential.
+- Great for quick tests or prototypes
+- Easily extended into multi-agent workflows
+- Supports tool usage, memory, and more
 
-    --------------------------------------------------------------------------------
-    Replying as user. Provide feedback to helpful_agent. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
-    ```
+---
+
+For more advanced usage, check out [AssistantAgent](/docs/api-reference/autogen/AssistantAgent) or [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent).
