@@ -11,6 +11,7 @@ https://github.com/squidfunk/mkdocs-material/blob/master/src/assets/stylesheets/
     --md-primary-bg-color: #FFF;
     --md-primary-fg-color--light: #4b9cd6;
     --md-primary-fg-color--dark: #4b9cd6;
+    --md-primary-text-color--light: #000000;
 }
 
 [data-md-color-accent=indigo] {
@@ -98,16 +99,46 @@ a.internal-link::after {
     background-color: #323A52;
 }
 
-.md-typeset h1,
+.md-typeset h1 {
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--md-primary-text-color--light);
+    margin: 0 0 0.25em;
+    font-family: 'Jersey 10', sans-serif;
+    font-weight: 400;
+    /* text-transform: uppercase; */
+    /* letter-spacing: 0.01em; */
+}
+
 .md-typeset h2,
 .md-typeset h3,
 .md-typeset h4,
 .md-typeset h5,
 .md-typeset h6 {
-    letter-spacing: 0.01em;
-    font-family: 'Jersey 10', sans-serif;
-    text-transform: uppercase;
+    font-family: "JetBrains Mono", monospace;
+}
+
+
+.md-typeset h2 {
+    margin: 2em 0 0.2em 0;
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.md-typeset h3 {
+    margin: 2em 0 0.3em 0;
     font-weight: 400;
+    font-size: .9rem;
+}
+
+.md-typeset h2+h3 {
+    margin-top: .6em;
+}
+
+p {
+    margin-block-start: 0.3em;
+    margin-block-end: 0.8em;
+    line-height: 1.4;
 }
 
 .md-banner__inner strong.primary-text {
@@ -282,13 +313,24 @@ p.hero-subtitle {
 @media (min-width: 640px) {
     .md-typeset .key-features {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: repeat(3, minmax(0, 1fr));
     }
 }
 
 .md-typeset .key-features .card .key-feature > b {
+    font-size: 1em;
+    line-height: 1.2
+}
+
+.md-typeset .key-features .card .key-feature {
+    display:flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+}
+
+.md-typeset .key-features .card .key-feature-text {
     display: block;
-    font-size: 0.75em;
 }
 
 .md-typeset .key-features.grid>.card {
@@ -300,28 +342,29 @@ p.hero-subtitle {
     box-shadow: none;
     border: none;
     background: transparent;
-    text-align: center;
+    /* text-align: center; */
+    cursor: default;
 }
 .key-features .card .px-6.py-5 {
     padding: 0;
-    text-align: center;
+    /* text-align: center; */
 }
 
 .key-features .card .key-feature img {
-    width:132px;
-    height:132px;
-    margin:0 auto 10px;
+    width:112px;
+    height:112px;
+    margin:0 auto 0.2em;
 }
 
 .key-features .card p {
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.1;
     font-size: 1em;
 }
 
 .key-features .card p:last-child {
-    margin-top: 1em;
-    line-height: 1.75;
+    margin-top: 0.2em;
+    line-height: 1.2;
     font-size: 0.85em;
 }
 
@@ -607,4 +650,8 @@ p.hero-subtitle {
 
 .hide-edit-link {
     display: none;
+}
+
+.md-footer {
+    margin-top: 3rem;
 }
