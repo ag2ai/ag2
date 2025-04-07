@@ -96,7 +96,10 @@ jupyter-executor = [
 retrievechat = [
     "protobuf==5.29.3",
     "chromadb==0.6.3",
-    "sentence_transformers",
+    # ToDo: wait for sentence_transformers to integrate new version of transformers
+    "sentence_transformers<=4.0.2",
+    # transformers version 4.51.0 is not integrated with sentence_transformers and throws error
+    "transformers<4.51.0",
     "pypdf",
     "ipython",
     "beautifulsoup4",
