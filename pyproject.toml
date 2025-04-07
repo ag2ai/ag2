@@ -208,7 +208,13 @@ interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
 
-autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
+autobuild = [
+    "chromadb",
+    # ToDo: wait for sentence_transformers to integrate new version of transformers
+    "sentence_transformers<=4.0.2",
+    # transformers version 4.51.0 is not integrated with sentence_transformers and throws error
+    "huggingface-hub"
+]
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "wolframalpha"]
