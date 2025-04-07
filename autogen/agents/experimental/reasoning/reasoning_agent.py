@@ -403,7 +403,7 @@ class ReasoningAgent(AssistantAgent):
                 - timeout (Optional, int): The maximum execution time in seconds.
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
-            scope (Optional[str]): The scope of the agent, includes information on how the agent should operate. If None, no scope is added to the prompts.
+            scope (Optional[str]): The scope of the agent, includes information on how the agent should operate. It is appended to all system prompts of the internal agents. If None, no scope is added to the prompts.
             **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
