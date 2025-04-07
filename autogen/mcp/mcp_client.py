@@ -8,8 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
-import aiofiles
-import aiofiles.os
 from pydantic import BaseModel
 
 from ..doc_utils import export_module
@@ -17,6 +15,8 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
 with optional_import_block():
+    import aiofiles
+    import aiofiles.os
     from mcp import ClientSession
     from mcp.types import (
         CallToolResult,

@@ -6,7 +6,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import aiofiles
 import pytest
 from pydantic.networks import AnyUrl
 
@@ -17,6 +16,7 @@ from autogen.mcp.mcp_client import ResultSaved, create_toolkit
 from ..conftest import Credentials
 
 with optional_import_block():
+    import aiofiles
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     from mcp.types import ReadResourceResult, TextResourceContents
@@ -24,6 +24,7 @@ with optional_import_block():
 
 @skip_on_missing_imports(
     [
+        "aiofiles",
         "mcp.client.stdio",
         "mcp.server.fastmcp",
     ],
