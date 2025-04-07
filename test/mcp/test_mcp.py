@@ -6,6 +6,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import anyio
 import pytest
 from pydantic.networks import AnyUrl
 
@@ -16,7 +17,6 @@ from autogen.mcp.mcp_client import ResultSaved, create_toolkit
 from ..conftest import Credentials
 
 with optional_import_block():
-    import aiofiles
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     from mcp.types import ReadResourceResult, TextResourceContents
@@ -24,7 +24,6 @@ with optional_import_block():
 
 @skip_on_missing_imports(
     [
-        "aiofiles",
         "mcp.client.stdio",
         "mcp.server.fastmcp",
     ],
@@ -142,7 +141,7 @@ class TestMCPClient:
                 result = await echo_resource_tool(uri="echo://AG2User")
                 assert isinstance(result, ResultSaved)
 
-                async with aiofiles.open(result.file_path, mode="r") as f:
+                async with await anyio.open_file(result.file_path, "r") as f:
                     content = await f.read()
                     parsed = json.loads(content)
                     loaded_result = ReadResourceResult.model_validate(parsed)

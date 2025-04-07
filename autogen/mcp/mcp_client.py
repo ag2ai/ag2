@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
+import anyio
 from pydantic import BaseModel
 
 from ..doc_utils import export_module
@@ -15,8 +16,6 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
 with optional_import_block():
-    import aiofiles
-    import aiofiles.os
     from mcp import ClientSession
     from mcp.types import (
         CallToolResult,
@@ -98,8 +97,6 @@ Here is the correct format for the URI template:
 {mcp_resource.uriTemplate}
 """
 
-        # TODO: call_resource should check resource_template.mimeType...
-        # We need to check how to handle different mime types... If content is too large etc...
         async def call_resource(uri: Annotated[str, uri_description]) -> Union[ReadResourceResult, ResultSaved]:  # type: ignore[no-any-unimported]
             result = await session.read_resource(uri)
 
@@ -110,7 +107,7 @@ Here is the correct format for the URI template:
             filename = uri.split("://")[-1] + f"_{timestamp}"
             file_path = resource_download_folder / filename
 
-            async with aiofiles.open(file_path, mode="w") as f:
+            async with await anyio.open_file(file_path, "w") as f:
                 await f.write(result.model_dump_json(indent=4))
 
             return ResultSaved(
@@ -193,7 +190,7 @@ async def create_toolkit(
     if resource_download_folder:
         if isinstance(resource_download_folder, str):
             resource_download_folder = Path(resource_download_folder)
-        await aiofiles.os.makedirs(resource_download_folder, exist_ok=True)
+        await anyio.to_thread.run_sync(lambda: resource_download_folder.mkdir(parents=True, exist_ok=True))
 
     return await MCPClient.load_mcp_toolkit(
         session=session,
