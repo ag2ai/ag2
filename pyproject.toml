@@ -94,7 +94,7 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==5.29.3",
+    "protobuf==6.30.2",
     "chromadb==0.6.3",
     "sentence_transformers",
     "pypdf",
@@ -148,7 +148,7 @@ rag = [
 
 
 crawl4ai = [
-    "crawl4ai>=0.4.247,<0.5",
+    "crawl4ai>=0.4.247,<0.6",
 ]
 
 browser-use = [
@@ -179,7 +179,7 @@ neo4j = [
     "docx2txt==0.9",
     "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-readers-web==0.3.8",
+    "llama-index-readers-web==0.3.9",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -200,7 +200,7 @@ interop-crewai = [
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.0.31"]
+interop-pydantic-ai = ["pydantic-ai==0.0.52"]
 interop =[
     "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
@@ -253,7 +253,7 @@ test = [
     "ipykernel==6.29.5",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
-    "pytest-cov==6.0.0",
+    "pytest-cov==6.1.1",
     "pytest-asyncio==0.26.0",
     "pytest==8.3.5",
     "mock==5.2.0",
@@ -263,12 +263,12 @@ test = [
 ]
 
 docs = [
-    "mkdocs-material==9.6.10",
-    "mkdocstrings[python]==0.29.0",
+    "mkdocs-material==9.6.11",
+    "mkdocstrings[python]==0.29.1",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # currently problematic and cannot be upgraded
-    "mkdocs-git-revision-date-localized-plugin==1.3.0",
+    "mkdocs-git-revision-date-localized-plugin==1.4.5",
     "mike==2.1.3",
     "typer==0.15.2",
     "mkdocs-minify-plugin==0.8.0",
@@ -279,7 +279,7 @@ docs = [
     "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
-    "termcolor==2.5.0",
+    "termcolor==3.0.1",
     "nbclient==0.10.2",
 ]
 
@@ -289,7 +289,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.11.2",
+    "ruff==0.11.4",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -299,7 +299,7 @@ dev = [
     "pyautogen[lint,test,types,docs]",
     "pre-commit==4.2.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.11",
+    "uv==0.6.12",
 ]
 
 
