@@ -295,6 +295,22 @@
         // Update the href attribute
         editLink.setAttribute("href", newHref);
       }
+      // Handle user story urls
+      else if (href && href.includes("/docs/user-stories/")) {
+        // Split the URL by '/'
+        const parts = href.split("/");
+
+        // Replace the last part with 'index.mdx'
+        if (parts.length > 0) {
+          parts[parts.length - 1] = "index.mdx";
+        }
+
+        // Join the parts back together with '/'
+        const newHref = parts.join("/");
+
+        // Update the href attribute
+        editLink.setAttribute("href", newHref);
+      }
       // Regular case for other markdown files
       else if (href && href.endsWith(".md")) {
         // Replace .md with .mdx at the end

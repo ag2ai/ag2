@@ -89,3 +89,4 @@ notebook/agentchat_pdf_rag/parsed_elements.json filter=lfs diff=lfs merge=lfs -t
 notebook/agentchat_pdf_rag/input_files/nvidia_10k_2024.pdf filter=lfs diff=lfs merge=lfs -text
 notebook/agentchat_pdf_rag/processed_elements.json filter=lfs diff=lfs merge=lfs -text
 website/package-lock.json filter=lfs diff=lfs merge=lfs -text
+*.webp filter=lfs diff=lfs merge=lfs -text

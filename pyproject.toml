@@ -129,7 +129,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.6.1",
+    "graphrag_sdk==0.7.1",
     "falkordb>=1.0.10",
 ]
 
@@ -142,7 +142,7 @@ rag = [
     "llama-index-vector-stores-chroma==0.4.1",
     "llama-index-vector-stores-mongodb==0.6.0",
     "llama-index-embeddings-huggingface==0.5.2",
-    "llama-index-llms-langchain==0.6.0",
+    "llama-index-llms-langchain==0.6.1",
     "requests>=2.32.3,<3",
 ]
 
@@ -171,11 +171,15 @@ google-search = [
     "pyautogen[google-client]",
 ]
 
+wikipedia = [
+    "wikipedia-api>=0.8.1, <1.0"
+]
+
 neo4j = [
-    "docx2txt==0.8",
+    "docx2txt==0.9",
     "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-readers-web==0.3.7",
+    "llama-index-readers-web==0.3.8",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -185,6 +189,12 @@ twilio = [
     "twilio>=9.3.2"
 ]
 
+mcp = [
+    # mcp 1.6.0 keeps hanging in stdio_client context manager
+    # test_mcp_issue_with_stdio_client_context_manager is failing for mcp=1.6.0
+    "mcp>=1.4.0,<1.6; python_version>='3.10'"
+]
+
 interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
@@ -192,7 +202,7 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.31"]
 interop =[
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]",
+    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
 
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub"]
@@ -244,18 +254,18 @@ test = [
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
     "pytest-cov==6.0.0",
-    "pytest-asyncio==0.25.3",
+    "pytest-asyncio==0.26.0",
     "pytest==8.3.5",
     "mock==5.2.0",
     "pandas==2.2.3",
-    "fastapi==0.115.11",
+    "fastapi==0.115.12",
     "dirty-equals==0.9.0",
 ]
 
 docs = [
-    "mkdocs-material==9.6.9",
+    "mkdocs-material==9.6.10",
     "mkdocstrings[python]==0.29.0",
-    "mkdocs-literate-nav==0.6.1",
+    "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.3.0",
@@ -266,7 +276,7 @@ docs = [
     "mkdocs-glightbox==0.4.0",  # img zoom
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
-    "pdoc3==0.11.5",
+    "pdoc3==0.11.6",
     "jinja2==3.1.6",
     "pyyaml==6.0.2",
     "termcolor==2.5.0",
@@ -279,7 +289,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.9.9",
+    "ruff==0.11.2",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -287,15 +297,15 @@ lint = [
 dev = [
     "toml==0.10.2",
     "pyautogen[lint,test,types,docs]",
-    "pre-commit==4.1.0",
+    "pre-commit==4.2.0",
     "detect-secrets==1.5.0",
-    "uv==0.6.6",
+    "uv==0.6.11",
 ]
 
 
 [project.urls]
 Homepage = "https://ag2.ai/"
-Documentation = "https://docs.ag2.ai/docs/Home"
+Documentation = "https://docs.ag2.ai"
 Tracker = "https://github.com/ag2ai/ag2/issues"
 Source = "https://github.com/ag2ai/ag2"
 Discord = "https://discord.gg/pAbnFJrkgZ"
@@ -351,6 +361,7 @@ markers = [
     "graph_rag_falkor_db",
     "neo4j",
     "twilio",
+    "mcp",
     "interop",
     "browser_use",
     "crawl4ai",

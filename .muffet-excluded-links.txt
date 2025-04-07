@@ -27,6 +27,6 @@ https://github.com/ag2ai/ag2/edit/main/*
 https://www.perplexity.ai/*
 https://www.anthropic.com/
 https://docs.anthropic.com/*
-https://ag2.airt.ai/latest/docs/blog
-https://ag2.airt.ai/latest/docs/blog/category/*
-https://ag2.airt.ai/latest/docs/blog/page/*
+https://docs.ag2.ai/latest/docs/blog
+https://docs.ag2.ai/latest/docs/blog/category/*
+https://docs.ag2.ai/latest/docs/blog/page/*

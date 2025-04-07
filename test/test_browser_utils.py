@@ -18,7 +18,7 @@ import requests
 from autogen.browser_utils import SimpleTextBrowser
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
 
-BLOG_POST_URL = "https://docs.ag2.ai/docs/blog/2023-04-21-LLM-tuning-math"
+BLOG_POST_URL = "https://docs.ag2.ai/docs/blog/2023/04/21/LLM-tuning-math/"
 BLOG_POST_TITLE = "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH - AG2"
 BLOG_POST_STRING = "Large language models (LLMs) are powerful tools that can generate natural language texts for various applications, such as chatbots, summarization, translation, and more. GPT-4 is currently the state of the art LLM in the world. Is model selection irrelevant? What about inference parameters?"
 

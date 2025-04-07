@@ -201,16 +201,17 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
     Returns:
         A relative path from source to destination (e.g., "../../user-guide/basic-concepts/installing-ag2")
     """
+    sep = os.sep
     try:
         # Primary approach: Use pathlib for clean path calculation
-        rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
-        return f"./{rel_path}" if Path(source_path).stem == "index" else f"../{rel_path}"
+        rel_path = str(Path(dest_path).relative_to(Path(source_path).parent))
+        return f".{sep}{rel_path}" if Path(source_path).stem == "index" else f"..{sep}{rel_path}"
     except ValueError:
         # Fallback approach: Use os.path.relpath when paths don't share a common parent
         rel_path = os.path.relpath(dest_path, source_path)
 
         # Special case for blog directories: add deeper path traversal
-        ret_val = f"../../../{rel_path}" if "blog" in source_path else rel_path
+        ret_val = os.path.join("..", "..", "..", rel_path) if "blog" in source_path else rel_path
 
         # Special case for index files: strip leading "../"
         if Path(source_path).stem == "index":
@@ -360,6 +361,7 @@ def rename_user_story(p: Path) -> Path:
 
 
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
+    sep = os.sep
     # Keep track of MD files we need to process
     md_files_to_process = []
 
@@ -368,7 +370,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
         if file.suffix == ".mdx":
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
-            if "/user-stories/" in str(dest):
+            if f"{sep}user-stories{sep}" in str(dest):
                 dest = rename_user_story(dest)
 
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -381,7 +383,7 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for md_file in md_files_to_process:
         content = md_file.read_text()
 
-        rel_path = f"/{md_file.relative_to(output_dir.parents[0])}"
+        rel_path = f"{sep}{md_file.relative_to(output_dir.parents[0])}"
         processed_content = transform_content_for_mkdocs(content, rel_path)
 
         md_file.write_text(processed_content)
@@ -464,7 +466,7 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mkdocs_nav = format_navigation(filtered_nav)
     mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    blog_nav = "- Blog\n    - [Blog](docs/blog)"
+    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
 
     mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
@@ -1088,12 +1090,13 @@ def main(force: bool) -> None:
     if args.notebook_directory is None:
         args.notebook_directory = mkdocs_root_dir / "../../notebook"
 
-    if force and mkdocs_output_dir.exists():
+    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
+
+    if not metadata_yml_path.exists() or (force and mkdocs_output_dir.exists()):
         process_notebooks_core(args, post_process_func, target_dir_func)
 
     # Render Notebooks Gallery HTML
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
     inject_gallery_html(notebooks_md_path, metadata_yml_path)
 
     # Add Notebooks Navigation to Summary.md

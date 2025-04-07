@@ -1179,7 +1179,7 @@ async def test_a_initiate_swarm_chat() -> None:
     )
 
     assert context_vars == test_context
-    assert last_speaker is None
+    assert isinstance(last_speaker, ConversableAgent)
 
 
 def test_swarmresult_afterworkoption() -> None:

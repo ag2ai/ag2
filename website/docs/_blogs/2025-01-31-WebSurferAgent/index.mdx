@@ -1,7 +1,7 @@
 ---
 title: Riding the Web with WebSurferAgent
 authors: [rjambrecic]
-tags: [tools, tool calling, web surfing, browser use, crawl4ai, WebSurferAgent]
+tags: [Tools, AG2 Agents]
 ---
 
 ## Introduction
@@ -90,12 +90,15 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method
@@ -417,12 +420,15 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 with llm_config:
     websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
 
-websurfer.run(
+run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
+run_response.process()
 ```
 
 #### **Manual Setup:** Using [`initiate_chat`](/docs/api-reference/autogen/ConversableAgent#initiate-chat) Method

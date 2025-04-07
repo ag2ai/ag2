@@ -241,12 +241,15 @@ google_drive_toolkit = MyGoogleDriveToolkit(
 
 google_drive_toolkit.register_for_llm(assistant)
 
-assistant.run(
+response = assistant.run(
     message="List the latest 3 files and write a short summary based on the file names and meme types.",
     max_turns=4,
     tools=google_drive_toolkit.tools,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
+response.process()
 ```
 
 ### Output
