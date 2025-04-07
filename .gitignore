@@ -196,4 +196,4 @@ notebook/reasoning_tree.json
 client_secret*.json
 *token*.json
 *credentials.json
-notebook/math_server.py
+notebook/*_server.py

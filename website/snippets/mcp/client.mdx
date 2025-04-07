@@ -6,7 +6,7 @@ MCP clients are responsible for interacting with these servers, sending requests
 
 In this guide, we will:
 
-- Set up an MCP server that exposes basic mathematical tools (`add` and `multiply`).
+- Set up an MCP server that exposes basic MCP tools (`add` and `multiply`) and resources (`get_server_file`)
 - Connect the AG2 framework to this MCP server.
 - Communicate using two different transport protocols: [stdio](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#stdio) and [SSE](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#http-with-sse).
 
@@ -58,19 +58,24 @@ nest_asyncio.apply()
 
 ## Setting Up an MCP Server
 
-We will create a simple MCP server that exposes two tools: `add` and `multiply`.
+We will create a simple MCP server that exposes:
+
+- two tools: `add` and `multiply`
+The server listens for requests using either the **stdio** or **SSE** transport protocols, depending on the argument passed when starting the server.
+- one resource endpoint: `get_server_file`
+
 The server listens for requests using either the **stdio** or **SSE** transport protocols, depending on the argument passed when starting the server.
 
 For more details on creating MCP servers, visit the [MCP Python SDK documentation](https://github.com/modelcontextprotocol/python-sdk).
 
-Let's create a Python script (`math_server.py`) with the following content:
+Let's create a Python script (`mcp_server.py`) with the following content:
 
 ```python
-math_server_file_content = """# math_server.py
+mcp_server_file_content = """# mcp_server.py
 import argparse
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("Math")
+mcp = FastMCP("McpServer")
 
 
 @mcp.tool()
@@ -85,8 +90,18 @@ def multiply(a: int, b: int) -> int:
     return a * b
 
 
+files = {
+    "ag2": "AG has released 0.8.5 version on 2025-04-03",
+}
+
+@mcp.resource("server-file://{name}")
+def get_server_file(name: str) -> str:
+    \"\"\"Get a file content\"\"\"
+    return files.get(name, f"File not found: {name}")
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Math Server")
+    parser = argparse.ArgumentParser(description="MCP Server")
     parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode (stdio or sse)")
     args = parser.parse_args()
 
@@ -94,17 +109,17 @@ if __name__ == "__main__":
 """
 
 # Write content to a file
-math_server_path = Path("math_server.py")
-math_server_path.write_text(math_server_file_content)
+mcp_server_path = Path("mcp_server.py")
+mcp_server_path.write_text(mcp_server_file_content)
 ```
 
 ## Creating a Toolkit from MCP Tools
 
-To allow AG2 to interact with the MCP server, we need to establish a connection, create a toolkit from the tools exposed by the server, and then register this toolkit with an AG2 agent. The toolkit will provide the necessary functionality for AG2 to call the MCP tools, such as performing mathematical operations.
+To allow AG2 to interact with the MCP server, we need to establish a connection, create a toolkit from the tools exposed by the server, and then register this toolkit with an AG2 agent. The toolkit will provide the necessary functionality for AG2 to call the MCP tools, such as performing mathematical operations and getting resource content.
 
 **Steps to Create a Toolkit from MCP Tools**
 
-- **Wrap MCP tools into a toolkit**: The tools exposed by the MCP server (like `add` and `multiply`) are wrapped into a toolkit for easy use by AG2.
+- **Wrap MCP tools and resources into a toolkit**: The tools exposed by the MCP server (like `add` and `multiply`) and resource endpoints (like `get_server_file`) are wrapped into a toolkit for easy use by AG2.
 - **Register the toolkit with an AG2 agent**: This step allows AG2 to use the toolkit’s tools when processing requests.
 - **Start a conversation**: AG2 can now send a message to the MCP server requesting a task to be performed (e.g., adding two numbers) and receive the result.
 
@@ -118,7 +133,8 @@ async def create_toolkit_and_run(session: ClientSession) -> None:
 
     # Make a request using the MCP tool
     result = await agent.a_run(
-        message="Add 123223 and 456789",
+        message="""1. Add 123223 and 456789
+2.Get file content for 'ag2'.""",
         tools=toolkit.tools,
         max_turns=2,
         user_input=False,
@@ -139,7 +155,7 @@ Once the toolkit is created, the next step is to connect AG2 to the MCP server a
 
 Establish the connection in the client code by using the `stdio_client` requires:
 
-- **Server Parameters**: The connection is defined using the `StdioServerParameters`, where the command (`python`) runs the server (`math_server.py`) with `stdio` mode.
+- **Server Parameters**: The connection is defined using the `StdioServerParameters`, where the command (`python`) runs the server (`mcp_server.py`) with `stdio` mode.
 - **Connecting to the Server**: The `stdio_client` establishes the connection to the server, and the `ClientSession` is used to facilitate communication.
 - **Running the Task**: Once the connection is established, `create_toolkit_and_run(session)` is called to wrap the MCP tools and perform the task asynchronously.
 
@@ -148,7 +164,7 @@ Establish the connection in the client code by using the `stdio_client` requires
 server_params = StdioServerParameters(
     command="python",  # The command to run the server
     args=[
-        str(math_server_path),
+        str(mcp_server_path),
         "stdio",
     ],  # Path to server script and transport mode
 )
@@ -164,34 +180,51 @@ async with stdio_client(server_params) as (read, write), ClientSession(read, wri
 ```console
 user (to assistant):
 
-Add 123223 and 456789
+1. Add 123223 and 456789
+2.Get file content for 'ag2'.
 
 --------------------------------------------------------------------------------
 assistant (to user):
 
-***** Suggested tool call (call_kO3xnTqJyOxTYaJCdyS1VOKw): add *****
+***** Suggested tool call (call_GwCwkWY9lYmTPQUd0fQNcFZN): add *****
 Arguments:
 {"a": 123223, "b": 456789}
 ********************************************************************
+***** Suggested tool call (call_R7WGyZOgwltczXn6VENHLbWr): get_server_file *****
+Arguments:
+{"uri": "server-file://ag2"}
+********************************************************************************
 
 --------------------------------------------------------------------------------
 
 >>>>>>>> EXECUTING FUNCTION add...
-Call ID: call_kO3xnTqJyOxTYaJCdyS1VOKw
+Call ID: call_GwCwkWY9lYmTPQUd0fQNcFZN
 Input arguments: {'a': 123223, 'b': 456789}
+
+>>>>>>>> EXECUTING FUNCTION get_server_file...
+Call ID: call_R7WGyZOgwltczXn6VENHLbWr
+Input arguments: {'uri': 'server-file://ag2'}
 user (to assistant):
 
-***** Response from calling tool (call_kO3xnTqJyOxTYaJCdyS1VOKw) *****
+***** Response from calling tool (call_GwCwkWY9lYmTPQUd0fQNcFZN) *****
 ('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_R7WGyZOgwltczXn6VENHLbWr) *****
+{"meta":null,"contents":[{"uri":"server-file://ag2","mimeType":"text/plain","text":"AG has released 0.8.5 version on 2025-04-03"}]}
 **********************************************************************
 
 --------------------------------------------------------------------------------
 assistant (to user):
 
-The sum of 123223 and 456789 is 580012.
+The result of adding 123223 and 456789 is **580012**.
+
+The content of the file 'ag2' is:
+AG has released 0.8.5 version on 2025-04-03
+
 
 TERMINATE
-
 ```
 
 #### Using `sse_client` for Communication
@@ -201,7 +234,7 @@ To interact with the MCP server via `SSE`, follow these steps:
 - Open new terminal and start the server using the sse transport mode:
 
     > ```bash
-    > python math_server.py sse
+    > python mcp_server.py sse
     > ```
 - Once the server is running, rstablish the connection in the client code by using the `sse_client`:
 
@@ -221,31 +254,49 @@ async with sse_client(url="http://127.0.0.1:8000/sse") as streams, ClientSession
 ```console
 user (to assistant):
 
-Add 123223 and 456789
+1. Add 123223 and 456789
+2.Get file content for 'ag2'.
 
 --------------------------------------------------------------------------------
 assistant (to user):
 
-***** Suggested tool call (call_kO3xnTqJyOxTYaJCdyS1VOKw): add *****
+***** Suggested tool call (call_GwCwkWY9lYmTPQUd0fQNcFZN): add *****
 Arguments:
 {"a": 123223, "b": 456789}
 ********************************************************************
+***** Suggested tool call (call_R7WGyZOgwltczXn6VENHLbWr): get_server_file *****
+Arguments:
+{"uri": "server-file://ag2"}
+********************************************************************************
 
 --------------------------------------------------------------------------------
 
 >>>>>>>> EXECUTING FUNCTION add...
-Call ID: call_kO3xnTqJyOxTYaJCdyS1VOKw
+Call ID: call_GwCwkWY9lYmTPQUd0fQNcFZN
 Input arguments: {'a': 123223, 'b': 456789}
+
+>>>>>>>> EXECUTING FUNCTION get_server_file...
+Call ID: call_R7WGyZOgwltczXn6VENHLbWr
+Input arguments: {'uri': 'server-file://ag2'}
 user (to assistant):
 
-***** Response from calling tool (call_kO3xnTqJyOxTYaJCdyS1VOKw) *****
+***** Response from calling tool (call_GwCwkWY9lYmTPQUd0fQNcFZN) *****
 ('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_R7WGyZOgwltczXn6VENHLbWr) *****
+{"meta":null,"contents":[{"uri":"server-file://ag2","mimeType":"text/plain","text":"AG has released 0.8.5 version on 2025-04-03"}]}
 **********************************************************************
 
 --------------------------------------------------------------------------------
 assistant (to user):
 
-The sum of 123223 and 456789 is 580012.
+The result of adding 123223 and 456789 is **580012**.
+
+The content of the file 'ag2' is:
+AG has released 0.8.5 version on 2025-04-03
+
 
 TERMINATE
 ```
