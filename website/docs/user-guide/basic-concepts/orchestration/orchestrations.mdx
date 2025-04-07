@@ -9,11 +9,15 @@ Many hands make for light work and orchestrating workflows containing many agent
 
 2. **Sequential chat**: A sequence of chats, each between two agents, chained together by a carryover mechanism (which brings the summary of the previous chat to the context of the next chat). Useful for simple sequential workflows.
 
-3. **Group chat**: A chat with more than two agents with options on how agents are selected. See [GroupChat Overview](/docs/user-guide/advanced-concepts/groupchat/groupchat) for further details.
+3. **Group chat**: A chat with more than two agents with options on how agents are selected.
 
 4. **Nested chat**: A mechanism to package a workflow into a single agent/chat for reuse in a workflow.
 
-5. **Swarm**: A pattern based on agents with handoffs. There's a shared context and each agent has tools and the ability to transfer control to other agents. The [original swarm concept](https://github.com/openai/swarm) was created by OpenAI.
+<Warning>
+As of version 0.9, we have merged the experimental Swarm functionality into the core framework, creating a new way to run group (multi-agent) chats. The new group chat contains all of the functionality available in Swarm (and more) and is covered in point #3 above.
+
+Updating to the new group chat from your Swarm code is straightforward, see [this guide](/docs/user-guide/advanced-concepts/swarm/deprecation) on how to do it.
+</Warning>
 
 Continue on to explore these.
 

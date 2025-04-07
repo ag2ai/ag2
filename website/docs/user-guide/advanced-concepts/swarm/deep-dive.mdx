@@ -3,19 +3,18 @@ title: Swarm Deep-dive
 sidebarTitle: Deep-dive
 ---
 
-<Tip>
-Changes at version >= 0.7.4:
+<Warning>
+As of version 0.9, we have merged the experimental Swarm functionality into the core framework, creating a new way to run group (multi-agent) chats. The new group chat contains all of the functionality available in Swarm (and more).
 
-1. Deprecated: `SwarmAgent.register_hand_off` is no longer available. Instead, [`register_hand_off`](/docs/api-reference/autogen/register_hand_off) is now a standalone function.
-2. Compatibility with [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent): Now you can directly use any [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent)-based class, such as [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) in a swarm chat. We recommend switching to [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) since `SwarmAgent` might be deprecated in the future.
-3. Deprecation Warning: `ON_CONDITION` and `AFTER_WORK` will be deprecated in the future. Please use [`OnCondition`](/docs/api-reference/autogen/OnCondition) and [`AfterWork`](/docs/api-reference/autogen/AfterWork) instead.
+Updating to the new group chat from your Swarm code is straightforward, see [this guide](/docs/user-guide/advanced-concepts/swarm/deprecation) on how to do it.
 
-</Tip>
+The Swarm code has now been deprecated but will still function with some minor changes. See [this guide](/docs/user-guide/advanced-concepts/swarm/deprecation) to update your current Swarm code to work with v0.9 and up. We would advise updating your code to work with the new group chat with the Swarm code being deprecated.
+</Warning>
 
 Swarms provide controllable flows between agents that are determined at the agent level. You define handoff, post-tool, and post-work transitions from one agent to another (or to end the swarm).
 
 In this Swarm deep-dive we run through all the components of AG2's Swarm.
-You can learn about Swarm's high-level concepts in the [Basic Concepts](/docs/user-guide/basic-concepts/orchestration/swarm) section.
+You can learn about Swarm's high-level concepts in the [Basic Concepts](/docs/user-guide/advanced-concepts/swarm/introduction) section.
 
 ## Components
 
