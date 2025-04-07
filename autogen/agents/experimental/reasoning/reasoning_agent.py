@@ -418,11 +418,12 @@ class ReasoningAgent(AssistantAgent):
         llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
         self._scope = scope
 
-        reasoning_agent_msg = self._add_scope(REASONING_AGENT_MESSAGE)
+        system_msg = self.system_message if self.system_message else REASONING_AGENT_MESSAGE
+        system_msg = self._add_scope(system_msg)
 
         super().__init__(
             name=name,
-            system_message=reasoning_agent_msg,
+            system_message=system_msg,
             llm_config=llm_config,
             code_execution_config=code_execution_config,
             **kwargs,
