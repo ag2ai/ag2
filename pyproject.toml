@@ -182,7 +182,7 @@ neo4j = [
     "docx2txt==0.9",
     "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.4.6",
-    "llama-index-readers-web==0.3.8",
+    "llama-index-readers-web==0.3.9",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
