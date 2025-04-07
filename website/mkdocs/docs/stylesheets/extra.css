@@ -141,6 +141,14 @@ a.internal-link::after {
     font-size: .8rem;
 }
 
+.md-typeset h5 {
+    margin: 2em 0 0.3em 0;
+    font-weight: 400;
+    font-size: .7rem;
+    color: var(--md-primary-text-color--light);
+    text-transform: none;
+}
+
 p {
     margin-block-start: 0.3em;
     margin-block-end: 0.8em;
