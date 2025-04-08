@@ -2,19 +2,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+import tempfile
 from pathlib import Path
 
+import anyio
 import pytest
+from pydantic.networks import AnyUrl
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
-from autogen.mcp import create_toolkit
+from autogen.mcp.mcp_client import ResultSaved, create_toolkit
 
 from ..conftest import Credentials
 
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+    from mcp.types import ReadResourceResult, TextResourceContents
 
 
 @skip_on_missing_imports(
@@ -42,12 +47,12 @@ class TestMCPClient:
         print("exit stdio_client")
 
     @pytest.mark.asyncio
-    async def test_convert_tool(self, server_params: "StdioServerParameters", mock_credentials: Credentials) -> None:  # type: ignore[no-any-unimported]
+    async def test_tools_schema(self, server_params: "StdioServerParameters", mock_credentials: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
             # Initialize the connection
             await session.initialize()
             toolkit = await create_toolkit(session=session)
-            assert len(toolkit) == 2
+            assert len(toolkit) == 3
 
             agent = AssistantAgent(
                 name="agent",
@@ -87,8 +92,66 @@ class TestMCPClient:
                         },
                     },
                 },
+                {
+                    "type": "function",
+                    "function": {
+                        "description": "Echo a message as a resource",
+                        "name": "echo_resource",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "uri": {
+                                    "type": "string",
+                                    "description": "A URI template (according to RFC 6570) that can be used to construct resource URIs.\nHere is the correct format for the URI template:\necho://{message}\n",
+                                }
+                            },
+                            "required": ["uri"],
+                        },
+                    },
+                },
             ]
             assert agent.llm_config["tools"] == expected_schema  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_convert_resource(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
+        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+            # Initialize the connection
+            await session.initialize()
+            toolkit = await create_toolkit(session=session)
+            echo_resource_tool = toolkit.get_tool("echo_resource")
+            assert echo_resource_tool is not None
+            assert echo_resource_tool.name == "echo_resource"
+
+            result = await echo_resource_tool(uri="echo://AG2User")
+            assert isinstance(result, ReadResourceResult)
+            expected_result = [
+                TextResourceContents(uri=AnyUrl("echo://AG2User"), mimeType="text/plain", text="Resource echo: AG2User")
+            ]
+            assert result.contents == expected_result
+
+    @pytest.mark.asyncio
+    async def test_convert_resource_with_download_folder(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
+        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            with tempfile.TemporaryDirectory() as tmp:
+                temp_path = Path(tmp)
+                temp_path.mkdir(parents=True, exist_ok=True)
+                toolkit = await create_toolkit(session=session, resource_download_folder=temp_path)
+                echo_resource_tool = toolkit.get_tool("echo_resource")
+                result = await echo_resource_tool(uri="echo://AG2User")
+                assert isinstance(result, ResultSaved)
+
+                async with await anyio.open_file(result.file_path, "r") as f:
+                    content = await f.read()
+                    parsed = json.loads(content)
+                    loaded_result = ReadResourceResult.model_validate(parsed)
+
+                    expected_result = [
+                        TextResourceContents(
+                            uri=AnyUrl("echo://AG2User"), mimeType="text/plain", text="Resource echo: AG2User"
+                        )
+                    ]
+                    assert loaded_result.contents == expected_result
 
     @pytest.mark.asyncio
     @run_for_optional_imports("openai", "openai")
