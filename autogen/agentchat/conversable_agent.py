@@ -1590,6 +1590,7 @@ class ConversableAgent(LLMAgent):
                     response._summary = chat_result.summary
                     response._messages = chat_result.chat_history
                     response._last_speaker = self
+                    response.cost = chat_result.cost
 
         else:
 
@@ -1620,6 +1621,7 @@ class ConversableAgent(LLMAgent):
                             response._last_speaker = (
                                 recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
                             )
+                        response.cost = chat_result.cost
                     except Exception as e:
                         response.iostream.send(ErrorEvent(error=e))
 
@@ -1723,7 +1725,7 @@ class ConversableAgent(LLMAgent):
             async def initiate_chat(
                 self=self,
                 iostream: AsyncThreadIOStream = iostream,
-                response: AsyncRunResponseProtocol = response,
+                response: AsyncRunResponse = response,
             ) -> None:
                 with (
                     IOStream.set_default(iostream),
@@ -1754,13 +1756,14 @@ class ConversableAgent(LLMAgent):
                     response._summary = chat_result.summary
                     response._messages = chat_result.chat_history
                     response._last_speaker = self
+                    response.cost = chat_result.cost
 
         else:
 
             async def initiate_chat(
                 self=self,
                 iostream: AsyncThreadIOStream = iostream,
-                response: AsyncRunResponseProtocol = response,
+                response: AsyncRunResponse = response,
             ) -> None:
                 with IOStream.set_default(iostream):  # type: ignore[arg-type]
                     try:
@@ -1787,6 +1790,7 @@ class ConversableAgent(LLMAgent):
                             response._last_speaker = (
                                 recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
                             )
+                        response.cost = chat_result.cost
                     except Exception as e:
                         response.iostream.send(ErrorEvent(error=e))
 
@@ -1999,6 +2003,7 @@ class ConversableAgent(LLMAgent):
                         response._summary = chat_res.summary
                         response._messages = chat_res.chat_history
                         response._last_speaker = self if chat_res.chat_history[-1]["name"] == self.name else sender
+                        response.cost = chat_res.cost
                         finished_chats.append(chat_res)
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))
@@ -2062,6 +2067,7 @@ class ConversableAgent(LLMAgent):
                         response._summary = chat_res.summary
                         response._messages = chat_res.chat_history
                         response._last_speaker = self if chat_res.chat_history[-1]["name"] == self.name else sender
+                        response.cost = chat_res.cost
                         finished_chats.append(chat_res)
 
             except Exception as e:
