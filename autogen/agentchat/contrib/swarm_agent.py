@@ -1047,6 +1047,7 @@ def run_swarm(
                 response._messages = chat_result.chat_history
                 response._context_variables = returned_context_variables
                 response._last_speaker = last_speaker
+                response.cost = chat_result.cost  # type: ignore[assignment]
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
@@ -1199,6 +1200,7 @@ async def a_run_swarm(
                 response._messages = chat_result.chat_history
                 response._context_variables = returned_context_variables
                 response._last_speaker = last_speaker
+                response.cost = chat_result.cost  # type: ignore[assignment]
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
