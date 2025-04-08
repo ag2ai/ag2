@@ -1025,11 +1025,11 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
         path_for_link = str(relative_path).replace("\\", "/")
 
         # Format navigation entry
-        user_stories_entries.append(f"    - [{title}]({path_for_link}/{file.name})")
+        user_stories_entries.append(f"        - [{title}]({path_for_link}/{file.name})")
 
     # Read existing navigation template
     nav_content = mkdocs_nav_path.read_text()
-    user_stories_section = "- User Stories\n" + "\n".join(user_stories_entries)
+    user_stories_section = "- Community Insights\n    - User Stories\n" + "\n".join(user_stories_entries)
 
     section_to_follow_marker = "- Contributor Guide"
 
