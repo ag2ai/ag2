@@ -189,6 +189,7 @@ body.reference-page .doc-object-name {
     width: 100%;
     height: auto;
     aspect-ratio: 3.078;
+    margin-bottom: 1rem;
 }
 
 .hero-content {
@@ -215,9 +216,9 @@ body.reference-page .doc-object-name {
 }
 
 .md-typeset h2.hero-title {
-    font-size: 1.5rem;
+    font-size: 1rem;
     line-height: 1.5rem;
-    margin-top: 1rem;
+    margin: 1rem 0;
     color: #000000de;
     text-transform: inherit;
 }

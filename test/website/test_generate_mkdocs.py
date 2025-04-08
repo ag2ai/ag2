@@ -1048,7 +1048,7 @@ This should stay as 'custom'
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
-        {"group": "Home", "pages": ["docs/home"]},
+        {"group": "Home", "pages": ["docs/home/home", "docs/home/quick-start"]},
         {
             "group": "User Guide",
             "pages": [
