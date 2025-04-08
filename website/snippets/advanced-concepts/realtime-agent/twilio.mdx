@@ -13,13 +13,16 @@ Traditionally, conversational AI tasks have focused on asynchronous interactions
 ### **Key Features of RealtimeAgent**
 
 1. **[**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent)**
+
     - Acts as the central interface for handling real-time interactions.
     - Bridges voice input/output with AG2’s task-handling capabilities.
 
 2. RealtimeAgent swarm integration
+
     - Seamless integration of [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent) into Swarm
 
 3. [**`TwilioAudioAdapter`**](/docs/api-reference/autogen/agentchat/realtime/experimental/TwilioAudioAdapter#twilioaudioadapter)
+
     - Connects agents to Twilio for telephony support.
     - Simplifies the process of handling voice calls with clear API methods.
 
@@ -52,6 +55,7 @@ To illustrate the system, the diagram below provides a high-level view of how th
    At the heart of the system, the Realtime Agent leverages OpenAI’s Realtime API to understand and manage the user’s intent dynamically. It facilitates the conversation and ensures the user’s query is routed correctly within the swarm.
 
 3. **Specialized Agents in the Swarm:**
+
    - The **Triage Agent** acts as the gateway, identifying the nature of the request—such as a flight change or cancellation—and handing it off to the relevant specialized agent.
    - For example, a **Flight Change Agent** processes requests to modify a booking, while a **Flight Cancellation Agent** handles cancellations and refunds.
 
@@ -73,10 +77,10 @@ To enable Twilio to interact with your local server, you’ll need to expose it 
 
 For this guide, we’ll use **ngrok**, a popular tunneling service, to make your local server accessible. Alternatively, you can use other reverse proxy or tunneling options, such as a virtual private server (VPS).
 
-##### **Step 1: Install Ngrok**
+##### Step 1: Install Ngrok
 If you haven’t already, download and install **ngrok** from their [official website](https://ngrok.com/downloads). Follow the instructions for your operating system to set it up.
 
-##### **Step 2: Start the Tunnel**
+##### Step 2: Start the Tunnel
 Run the following command to expose your local server on port `5050` (or the port your server uses):
 
 ```bash
@@ -85,7 +89,7 @@ ngrok http 5050
 
 If you’ve configured your server to use a different port, replace `5050` with the correct port number in the command.
 
-##### **Step 3: Retrieve Your Public URL**
+##### Step 3: Retrieve Your Public URL
 After running the command, **ngrok** will display a public URL in your terminal. It will look something like this:
 
 ```plaintext
@@ -110,11 +114,14 @@ To connect Twilio with your [**`RealtimeAgent`**](/docs/api-reference/autogen/ag
    Log in to the **Twilio Console** and select your **Voice-enabled phone number**.
 
 4. **Configure the Webhook**
+
    - Navigate to the **Voice & Fax** section under your number’s settings.
    - Set the **A CALL COMES IN** webhook to your public **ngrok** URL.
    - Append `/incoming-call` to the URL. For example:
+
      - If your ngrok URL is `https://abc123.ngrok.app`, the webhook URL should be:
        `https://abc123.ngrok.app/incoming-call`
+
 ![Twilio endpoint config](/snippets/advanced-concepts/realtime-agent/img/twilio_endpoint_config.png)
 
 5. **Save Changes**
