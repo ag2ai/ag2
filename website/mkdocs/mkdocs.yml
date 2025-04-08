@@ -73,6 +73,10 @@ plugins:
   - search:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   # - meta                         # (insiders) use .meta.yml files
+  - redirects:
+      redirect_maps:
+        'docs/home/home.md': 'docs/home.md'
+        'docs/home/quick-start.md': 'docs/home.md'
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates

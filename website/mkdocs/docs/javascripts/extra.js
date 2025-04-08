@@ -233,7 +233,7 @@
   function fixHomePageImagePaths() {
     const isHomePage =
       window.location.pathname.startsWith("/ag2/") &&
-      window.location.pathname.includes("/docs/home/home/");
+      window.location.pathname.includes("/docs/home/");
 
     // Only proceed if we're on the home page
     if (!isHomePage) {

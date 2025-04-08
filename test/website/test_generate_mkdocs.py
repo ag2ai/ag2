@@ -665,9 +665,10 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
+- Community Insights
+    - User Stories
+        - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+        - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
 - Contributor Guide
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
@@ -1048,7 +1049,7 @@ This should stay as 'custom'
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
-        {"group": "Home", "pages": ["docs/home/home", "docs/home/quick-start"]},
+        {"group": "Home", "pages": ["docs/home/home"]},
         {
             "group": "User Guide",
             "pages": [
@@ -1088,9 +1089,7 @@ def navigation() -> list[NavigationGroup]:
 
 @pytest.fixture
 def expected_nav() -> str:
-    return """- [Home](index.md)
-    - [Home](docs/home/home.md)
-    - [Quick Start](docs/home/quick-start.md)
+    return """- [Home](docs/home.md)
 - User Guide
     - Basic Concepts
         - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)

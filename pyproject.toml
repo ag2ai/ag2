@@ -284,6 +284,7 @@ docs = [
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.3.7",  # includes with variables
     "mkdocs-glightbox==0.4.0",  # img zoom
+    "mkdocs-redirects==1.2.2",  # required for handling redirects natively
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
     "pdoc3==0.11.6",
