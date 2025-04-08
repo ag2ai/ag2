@@ -27,6 +27,7 @@ permissions:
 jobs:
   experiment:
     runs-on: ubuntu-latest
+    environment: openai1
     steps:
       - name: Get User Permission
         id: checkAccess
