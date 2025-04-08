@@ -1048,7 +1048,7 @@ This should stay as 'custom'
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
-        {"group": "Home", "pages": ["docs/home/home", "docs/home/quick-start"]},
+        {"group": "Home", "pages": ["docs/home/home"]},
         {
             "group": "User Guide",
             "pages": [
@@ -1088,9 +1088,7 @@ def navigation() -> list[NavigationGroup]:
 
 @pytest.fixture
 def expected_nav() -> str:
-    return """- [Home](index.md)
-    - [Home](docs/home/home.md)
-    - [Quick Start](docs/home/quick-start.md)
+    return """- [Home](docs/home.md)
 - User Guide
     - Basic Concepts
         - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)

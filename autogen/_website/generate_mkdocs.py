@@ -370,6 +370,9 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
         if file.suffix == ".mdx":
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
+            if file.name == "home.mdx":
+                dest = output_dir / "home.md"
+
             if f"{sep}user-stories{sep}" in str(dest):
                 dest = rename_user_story(dest)
 
@@ -437,7 +440,12 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Opti
                 result.append(format_page_entry(page, indent, keywords))
 
     ret_val = "\n".join(result)
-    ret_val = ret_val.replace("- Home\n", "- [Home](index.md)\n")
+
+    ret_val = ret_val.replace(
+        "- Home\n    - [Home](docs/home/home.md)\n",
+        "- [Home](docs/home.md)\n",
+    )
+    ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
     return ret_val
 
 
