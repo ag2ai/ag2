@@ -665,9 +665,10 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
+- Community Insights
+    - User Stories
+        - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+        - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
 - Contributor Guide
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
