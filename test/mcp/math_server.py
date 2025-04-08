@@ -19,5 +19,11 @@ def multiply(a: int, b: int) -> int:
     return a * b
 
 
+@mcp.resource("echo://{message}")
+def echo_resource(message: str) -> str:
+    """Echo a message as a resource"""
+    return f"Resource echo: {message}"
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
