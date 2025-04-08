@@ -198,6 +198,13 @@ mcp = [
     "mcp>=1.4.0,<1.6; python_version>='3.10'"
 ]
 
+mcp-proxy-gen = [
+    "fastapi-code-generator==0.5.2",
+    "fastapi>=0.112,<1",
+    "requests",  # do not pin it
+    "typer",
+]
+
 interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
@@ -320,6 +327,9 @@ Tracker = "https://github.com/ag2ai/ag2/issues"
 Source = "https://github.com/ag2ai/ag2"
 Discord = "https://discord.gg/pAbnFJrkgZ"
 
+[project.scripts]
+mcp_proxy = "autogen.mcp.__main__:app"
+
 [tool.hatch.version]
 path = "autogen/version.py"
 
@@ -329,7 +339,13 @@ exclude = ["/test", "/notebook"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["autogen"]
-only-include = ["autogen", "autogen/agentchat/contrib/captainagent/tools"]
+only-include = [
+    "autogen",
+    # not sure about this, probably is not needed
+    "autogen/agentchat/contrib/captainagent/tools",
+    # need for generation of MCP Servers from OpenAPI specification
+    "templates",
+]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["test", "notebook"]

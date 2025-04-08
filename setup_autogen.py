@@ -48,6 +48,7 @@ setuptools.setup(
         "neo4j": ["pyautogen[neo4j]==" + __version__],
         "twilio": ["pyautogen[twilio]==" + __version__],
         "mcp": ["pyautogen[mcp]==" + __version__],
+        "mcp-proxy-gen": ["pyautogen[mcp-proxy-gen]==" + __version__],
         "interop-crewai": ["pyautogen[interop-crewai]==" + __version__],
         "interop-langchain": ["pyautogen[interop-langchain]==" + __version__],
         "interop-pydantic-ai": ["pyautogen[interop-pydantic-ai]==" + __version__],
