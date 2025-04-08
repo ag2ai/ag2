@@ -171,7 +171,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
 
 5. **Define a Custom Realtime Function**
    The `get_weather` function is registered as a realtime callable function. When the user asks about the weather, the agent can call the function to get an accurate weather report and respond based on the provided information:
-   
+
    - Returns `"The weather is cloudy."` for `"Seattle"`.
    - Returns `"The weather is sunny."` for other locations.
 
