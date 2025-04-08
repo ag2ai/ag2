@@ -60,6 +60,11 @@ jobs:
           docker --version
           uv pip install --system -e ".[test]"
       - name: Run the experiment
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_BASE: ${{ secrets.AZURE_OPENAI_API_BASE }}
+          OAI_CONFIG_LIST: ${{ secrets.OAI_CONFIG_LIST }}
         run: |
           python -c "import autogen; print(autogen.LLMConfig.from_json(env='OAI_CONFIG_LIST'))"
 
