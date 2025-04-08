@@ -442,7 +442,7 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Opti
     ret_val = "\n".join(result)
 
     ret_val = ret_val.replace(
-        "- Home\n    - [Home](docs/home/home.md)\n    - [Quick Start](docs/home/quick-start.md)\n",
+        "- Home\n    - [Home](docs/home/home.md)\n",
         "- [Home](docs/home.md)\n",
     )
     ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
