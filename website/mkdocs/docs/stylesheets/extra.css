@@ -168,8 +168,9 @@ body.reference-page .doc-object-name {
 .md-typeset h2.hero-title {
     font-size: 1.5rem;
     line-height: 1.5rem;
-    margin: 0px;
+    margin-top: 1rem;
     color: #000000de;
+    text-transform: inherit;
 }
 
 .md-typeset h2.hero-subtitle {
