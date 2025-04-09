@@ -55,12 +55,12 @@ EventRole = Literal["assistant", "function", "tool"]
 
 class BasePrintReceivedEvent(BaseEvent, ABC):
     content: Union[str, int, float, bool]
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
-        f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
+        f(f"{colored(self.sender, 'yellow')} (to {self.recipient}):\n", flush=True)
 
 
 @wrap_event
@@ -237,25 +237,25 @@ def create_received_event_model(
 ) -> Union[FunctionResponseEvent, ToolResponseEvent, FunctionCallEvent, ToolCallEvent, TextEvent]:
     role = event.get("role")
     if role == "function":
-        return FunctionResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return FunctionResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
     if role == "tool":
-        return ToolResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return ToolResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
 
     # Role is neither function nor tool
 
     if event.get("function_call"):
         return FunctionCallEvent(
             **event,
-            sender_name=sender.name,
-            recipient_name=recipient.name,
+            sender=sender.name,
+            recipient=recipient.name,
             uuid=uuid,
         )
 
     if event.get("tool_calls"):
         return ToolCallEvent(
             **event,
-            sender_name=sender.name,
-            recipient_name=recipient.name,
+            sender=sender.name,
+            recipient=recipient.name,
             uuid=uuid,
         )
 
@@ -273,8 +273,8 @@ def create_received_event_model(
 
     return TextEvent(
         content=content,
-        sender_name=sender.name,
-        recipient_name=recipient.name,
+        sender=sender.name,
+        recipient=recipient.name,
         uuid=uuid,
     )
 
@@ -285,8 +285,8 @@ class PostCarryoverProcessingEvent(BaseEvent):
     message: str
     verbose: bool = False
 
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
     summary_method: str
     summary_args: Optional[dict[str, Any]] = None
     max_turns: Optional[int] = None
@@ -296,8 +296,8 @@ class PostCarryoverProcessingEvent(BaseEvent):
         message = chat_info.get("message")
         verbose = chat_info.get("verbose", False)
 
-        sender_name = chat_info["sender"].name
-        recipient_name = chat_info["recipient"].name
+        sender = chat_info["sender"].name
+        recipient = chat_info["recipient"].name
         summary_args = chat_info.get("summary_args")
         max_turns = chat_info.get("max_turns")
 
@@ -324,8 +324,8 @@ class PostCarryoverProcessingEvent(BaseEvent):
             summary_method=summary_method,
             summary_args=summary_args,
             max_turns=max_turns,
-            sender_name=sender_name,
-            recipient_name=recipient_name,
+            sender=sender,
+            recipient=recipient,
         )
 
     def _process_carryover(self) -> str:
@@ -548,22 +548,23 @@ class TerminationAndHumanReplyNoInputEvent(BaseEvent):
     """When the human-in-the-loop is prompted but provides no input."""
 
     no_human_input_msg: str
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         no_human_input_msg: str,
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
+        sender = sender or "No sender"
         super().__init__(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
-            sender_name=sender.name if sender else "No sender",
-            recipient_name=recipient.name,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -575,22 +576,23 @@ class TerminationAndHumanReplyNoInputEvent(BaseEvent):
 @wrap_event
 class UsingAutoReplyEvent(BaseEvent):
     human_input_mode: str
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         human_input_mode: str,
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
+        sender = sender or "No sender"
         super().__init__(
             uuid=uuid,
             human_input_mode=human_input_mode,
-            sender_name=sender.name if sender else "No sender",
-            recipient_name=recipient.name,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -627,13 +629,13 @@ class ExecuteCodeBlockEvent(BaseEvent):
     code: str
     language: str
     code_block_count: int
-    recipient_name: str
+    recipient: str
 
     def __init__(
         self, *, uuid: Optional[UUID] = None, code: str, language: str, code_block_count: int, recipient: "Agent"
     ):
         super().__init__(
-            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
+            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient.name
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -653,7 +655,7 @@ class ExecuteFunctionEvent(BaseEvent):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
-    recipient_name: str
+    recipient: str
 
     def __init__(
         self,
@@ -664,9 +666,7 @@ class ExecuteFunctionEvent(BaseEvent):
         arguments: dict[str, Any],
         recipient: "Agent",
     ):
-        super().__init__(
-            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient_name=recipient.name
-        )
+        super().__init__(uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient.name)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -686,7 +686,7 @@ class ExecutedFunctionEvent(BaseEvent):
     call_id: Optional[str] = None
     arguments: dict[str, Any]
     content: str
-    recipient_name: str
+    recipient: str
 
     def __init__(
         self,
@@ -704,7 +704,7 @@ class ExecutedFunctionEvent(BaseEvent):
             call_id=call_id,
             arguments=arguments,
             content=content,
-            recipient_name=recipient.name,
+            recipient=recipient.name,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -768,14 +768,14 @@ class SelectSpeakerInvalidInputEvent(BaseEvent):
 @wrap_event
 class ClearConversableAgentHistoryEvent(BaseEvent):
     agent_name: str
-    recipient_name: str
+    recipient: str
     no_events_preserved: int
 
     def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_events_preserved: Optional[int] = None):
         super().__init__(
             uuid=uuid,
             agent_name=agent.name,
-            recipient_name=agent.name,
+            recipient=agent.name,
             no_events_preserved=no_events_preserved,
         )
 
@@ -791,12 +791,12 @@ class ClearConversableAgentHistoryEvent(BaseEvent):
 
 @wrap_event
 class ClearConversableAgentHistoryWarningEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
         super().__init__(
             uuid=uuid,
-            recipient_name=recipient.name,
+            recipient=recipient.name,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -814,24 +814,25 @@ class ClearConversableAgentHistoryWarningEvent(BaseEvent):
 @wrap_event
 class GenerateCodeExecutionReplyEvent(BaseEvent):
     code_block_languages: list[str]
-    sender_name: Optional[str] = None
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         code_blocks: list["CodeBlock"],
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
         code_block_languages = [code_block.language for code_block in code_blocks]
+        sender = sender or "No sender"
 
         super().__init__(
             uuid=uuid,
             code_block_languages=code_block_languages,
-            sender_name=sender.name if sender else None,
-            recipient_name=recipient.name,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -858,28 +859,28 @@ class GenerateCodeExecutionReplyEvent(BaseEvent):
 
 @wrap_event
 class ConversableAgentUsageSummaryNoCostIncurredEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
-        super().__init__(uuid=uuid, recipient_name=recipient.name)
+        super().__init__(uuid=uuid, recipient=recipient.name)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"No cost incurred from agent '{self.recipient_name}'.")
+        f(f"No cost incurred from agent '{self.recipient}'.")
 
 
 @wrap_event
 class ConversableAgentUsageSummaryEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
     def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
-        super().__init__(uuid=uuid, recipient_name=recipient.name)
+        super().__init__(uuid=uuid, recipient=recipient.name)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"Agent '{self.recipient_name}':")
+        f(f"Agent '{self.recipient}':")
 
 
 @wrap_event

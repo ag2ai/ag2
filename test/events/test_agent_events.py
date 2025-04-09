@@ -82,8 +82,8 @@ class TestToolResponseEvent:
             "type": "tool_response",
             "content": {
                 "role": "tool",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "uuid": uuid,
                 "content": "Timer is done!\\n\\nStopwatch is done!",
                 "tool_responses": [
@@ -145,8 +145,8 @@ class TestFunctionResponseEvent:
                 "name": "get_random_number",
                 "role": "function",
                 "content": event["content"],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "uuid": uuid,
             },
         }
@@ -189,8 +189,8 @@ class TestFunctionCallEvent:
             "type": "function_call",
             "content": {
                 "content": "Let's play a game.",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "uuid": uuid,
                 "function_call": {"name": "get_random_number", "arguments": "{}"},
             },
@@ -258,8 +258,8 @@ class TestToolCallEvent:
                 "role": role,
                 "audio": None,
                 "function_call": None,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "uuid": uuid,
                 "tool_calls": [
                     {
@@ -355,8 +355,8 @@ class TestTextEvent:
             "content": {
                 "uuid": uuid,
                 "content": event["content"],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -395,8 +395,8 @@ class TestTextEvent:
             "content": {
                 "uuid": uuid,
                 "content": "hello there",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -428,7 +428,7 @@ class TestTextEvent:
             {"type": "text", "text": "."},
         ]
         uuid = UUID("f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b")
-        text_event = TextEvent(content=content, sender_name="sender", recipient_name="recipient", uuid=uuid)
+        text_event = TextEvent(content=content, sender="sender", recipient="recipient", uuid=uuid)
 
         result = text_event.model_dump_json()
 
@@ -436,7 +436,7 @@ class TestTextEvent:
             '{"type":"text","content":{"uuid":"f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b",'
             '"content":[{"type":"text","text":"What\'s the breed of this dog?\\n"},'
             '{"type":"image_url","image_url":{"url":"<image>"}},'
-            '{"type":"text","text":"."}],"sender_name":"sender","recipient_name":"recipient"}}'
+            '{"type":"text","text":"."}],"sender":"sender","recipient":"recipient"}}'
         )
         assert str(result) == expected, result
 
@@ -463,8 +463,8 @@ class TestPostCarryoverProcessingEvent:
                 "carryover": ["This is a test event 1", "This is a test event 2"],
                 "message": "Start chat",
                 "verbose": True,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "summary_method": "last_msg",
                 "summary_args": None,
                 "max_turns": 5,
@@ -539,8 +539,8 @@ class TestPostCarryoverProcessingEvent:
                 "carryover": carryover,
                 "message": "Start chat",
                 "verbose": True,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "summary_method": "last_msg",
                 "summary_args": None,
                 "max_turns": 5,
@@ -813,8 +813,8 @@ class TestTerminationAndHumanReplyEvent:
             "content": {
                 "uuid": uuid,
                 "no_human_input_msg": no_human_input_msg,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -873,8 +873,8 @@ class TestUsingAutoReplyEvent:
             "content": {
                 "uuid": uuid,
                 "human_input_mode": human_input_mode,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -904,7 +904,7 @@ class TestExecuteCodeBlockEvent:
                 "code": code,
                 "language": language,
                 "code_block_count": code_block_count,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -939,7 +939,7 @@ class TestExecuteFunctionEvent:
                 "func_name": func_name,
                 "call_id": call_id,
                 "arguments": arguments,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -976,7 +976,7 @@ class TestExecutedFunctionEvent:
                 "call_id": call_id,
                 "arguments": arguments,
                 "content": content,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1088,7 +1088,7 @@ class TestClearConversableAgentHistoryEvent:
             "content": {
                 "uuid": uuid,
                 "agent_name": "recipient",
-                "recipient_name": "recipient",
+                "recipient": "recipient",
                 "no_events_preserved": no_events_preserved,
             },
         }
@@ -1116,7 +1116,7 @@ class TestClearConversableAgentHistoryWarningEvent:
             "type": "clear_conversable_agent_history_warning",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1173,8 +1173,8 @@ class TestGenerateCodeExecutionReplyEvent:
             "content": {
                 "uuid": uuid,
                 "code_block_languages": [x.language for x in code_blocks],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1200,7 +1200,7 @@ class TestConversableAgentUsageSummaryNoCostIncurredEvent:
             "type": "conversable_agent_usage_summary_no_cost_incurred",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1226,7 +1226,7 @@ class TestConversableAgentUsageSummaryEvent:
             "type": "conversable_agent_usage_summary",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
