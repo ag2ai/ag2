@@ -1,0 +1,101 @@
+---
+title: Quick Start
+sidebarTitle: Quick Start
+---
+
+Get up and running with AG2 in just **3 minutes**! This guide will help you set up your environment and build your very first multi-agent workflow. In just a few steps, you'll have your first agent up and running. Let's make it happen!
+
+### Set Up Your Environment
+
+<Tip>
+We recommended using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
+</Tip>
+
+**Install AG2**
+
+AG2 requires **Python version >= 3.9, < 3.14**. Install AG2 with OpenAI integration using pip:
+
+```bash
+pip install ag2[openai]
+```
+
+The package is available under `ag2`, `pyautogen`, or `autogen` names. The default installation includes minimal dependencies, you can add extra options based on your specific requirements.
+
+<Warning>
+**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
+
+Install AG2 with your preferred model provider(s), for example:
+
+- `pip install ag2[openai]`
+- `pip install ag2[gemini]`
+- `pip install ag2[anthropic,cohere,mistral]`
+
+On Mac OS, if you get "no matches found:", add a quote to the package name, for example:
+- `pip install "ag2[openai]"`
+</Warning>
+
+### Build Your First Agent Workflow
+
+Let’s create a poetic AI agent using AG2. This example shows how to create a simple, conversational agent that responds in rhyme.
+
+Create a Python script called `first_agent.py`, and paste the following code into it:
+
+```python
+# 1. Import our agent class
+from autogen import ConversableAgent, LLMConfig
+
+# 2. Define our LLM configuration for OpenAI's GPT-4o mini
+#    uses the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+# 3. Create our LLM agent
+with llm_config:
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+    )
+
+# 4. Run the agent with a prompt
+response = my_agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=3,
+)
+
+# 5. Iterate through the chat automatically with console output
+response.process()
+
+# 6. Print the chat
+print(response.messages)
+```
+
+<Note>
+
+Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
+
+=== "macOS / Linux"
+
+    ```
+    export OPENAI_API_KEY="YOUR_API_KEY"
+    ```
+
+=== "Windows"
+
+    ```
+    setx OPENAI_API_KEY "YOUR_API_KEY"
+    ```
+
+</Note>
+
+
+### Run Your Example
+
+Now you're ready to see your agent in action!
+
+In your terminal, run:
+
+
+```bash
+python first_agent.py
+```
+
+That's it—you've built your first multi-agent system with AG2! Your poetic agent is now live and ready to charm with rhymes 🎉
