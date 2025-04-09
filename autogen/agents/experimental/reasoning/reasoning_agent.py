@@ -17,8 +17,9 @@ __all__ = ["ReasoningAgent", "ThinkNode"]
 
 EPSILON = 1e-6
 
-TREEOFTHOUGHT_MESSAGE = """
-Role: Deep Thinking AI Assistant
+REASONING_AGENT_MESSAGE = """You are a Reasoning AI Assistant. You generate high-quality responses to user questions by taking advantage of a tree-of-thought reasoning process."""
+
+TREEOFTHOUGHT_MESSAGE = """Role: Deep Thinking AI Assistant
 
 End Goal: Generate an efficient thinking trajectory of steps to follow in order to provide a high-quality response to the user. Think deep in complex questions and shallow in simple ones.
 
@@ -77,7 +78,7 @@ Option 4: <Thinking 4>
 ...
 """
 
-EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, in a way that advances the process of responding to the user's question. Keep your answers as consise as possible."
+EXECUTOR_MESSAGE = "Please provide an answer for the last step in the thinking trajectory, to advance the thinking process. Keep your answers as consise as possible. Never suggest the next step."
 
 
 @export_module("autogen.agents.experimental")
@@ -349,6 +350,7 @@ class ReasoningAgent(AssistantAgent):
         answer_approach: Literal["pool", "best"] = "pool",
         reason_config: Optional[dict[str, Any]] = None,
         code_execution_config: Union[dict[str, Any], Literal[False]] = False,
+        scope: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -376,7 +378,7 @@ class ReasoningAgent(AssistantAgent):
                 Beam Search specific:
                     beam_size (int): Number of parallel paths to maintain (default: 3)
                     answer_approach (str): How to select final answer, "pool" or "best" (default: "pool")
-                    batch_grading(bool): Whether to grade all options on each beam at once or one by one (default: False).
+                    batch_grading (bool): Whether to grade all options on each beam at once or one by one (default: False).
 
                 MCTS/LATS specific:
                     nsim (int): Number of simulations to run (default: 3)
@@ -401,6 +403,7 @@ class ReasoningAgent(AssistantAgent):
                 - timeout (Optional, int): The maximum execution time in seconds.
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
+            scope (Optional[str]): The scope of the agent, includes information on how the agent should operate. It is appended to all system prompts of the internal agents. If None, no scope is added to the prompts.
             **kwargs (Any): Additional keyword arguments passed to parent class
         """
         reason_config = reason_config or {}
@@ -413,8 +416,18 @@ class ReasoningAgent(AssistantAgent):
             kwargs["silent"] = not kwargs.pop("verbose")
 
         llm_config = LLMConfig.get_current_llm_config(llm_config)  # type: ignore[arg-type]
+        self._scope = scope
 
-        super().__init__(name=name, llm_config=llm_config, code_execution_config=code_execution_config, **kwargs)
+        system_msg = kwargs.pop("system_message", REASONING_AGENT_MESSAGE)
+        system_msg = self._add_scope(system_msg)
+
+        super().__init__(
+            name=name,
+            system_message=system_msg,
+            llm_config=llm_config,
+            code_execution_config=code_execution_config,
+            **kwargs,
+        )
         self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
         self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (
             grader_llm_config if grader_llm_config else llm_config
@@ -457,14 +470,16 @@ class ReasoningAgent(AssistantAgent):
         self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
-        tot_msg = TREEOFTHOUGHT_MESSAGE
-
         # Initialize llm agent for interim step execution
         self._executor: Optional[AssistantAgent] = None
+        # Add scope if provided
+        executor_msg = self._add_scope(EXECUTOR_MESSAGE)
         if self._interim_execution:
             self._executor = AssistantAgent(
-                name="tot_executor", system_message=EXECUTOR_MESSAGE, llm_config=self._llm_config
+                name="tot_executor", system_message=executor_msg, llm_config=self._llm_config
             )
+
+        tot_msg = self._add_scope(TREEOFTHOUGHT_MESSAGE)
 
         # Initialize user proxy agent for code execution
         self._user_proxy: Optional[UserProxyAgent] = None
@@ -494,6 +509,19 @@ class ReasoningAgent(AssistantAgent):
         self._thinker = AssistantAgent(name="tot_thinker", system_message=tot_msg, llm_config=self._llm_config)
         self._grader = AssistantAgent(name="tot_grader", llm_config=self._grader_llm_config)
         self._prompt_rewriter = AssistantAgent(name="prompt_rewriter", llm_config=self._llm_config)
+
+    def _add_scope(self, system_prompt: str) -> str:
+        """Add scope information to the system prompt.
+
+        Args:
+            system_prompt (str): The original system prompt.
+
+        Returns:
+            str: The modified system prompt with scope information.
+        """
+        if self._scope:
+            return f"Task Scope: {self._scope}\n\n{system_prompt}"
+        return system_prompt
 
     def generate_forest_response(
         self,
@@ -616,6 +644,10 @@ Please provide your rating along with a brief explanation of your assessment.
         if ground_truth:
             # override the system message
             message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
+
+        # add scope if provided
+        message = self._add_scope(message)
+
         self._grader.update_system_message(message)
 
         if self._method == "lats":
@@ -689,6 +721,10 @@ Rating: <rating>
         if ground_truth:
             # override the system message
             message += f"--- Note that the Ground Truth is ---\n{ground_truth}\n---\n"
+
+        # add scope if provided
+        message = self._add_scope(message)
+
         self._grader.update_system_message(message)
 
         # add lats context if necessary
@@ -770,15 +806,12 @@ Rating: <rating>
                 silent=self.silent,
             )
             user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
-            print(f"LAST MESSAGE: {user_proxy_last_msg}")
             user_proxy_last_msg_content: str = user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
             return user_proxy_last_msg_content
 
         # run with the LLM
-        if self.method == "lats":
-            prompt = self._lats_context + "\n\n---\n\n" + f"Answer:\n{node.trajectory}\nOutput:"
-        else:
-            prompt = f"Answer:\n{node.trajectory}\nOutput:"
+        prompt = f"{self._lats_context}\n\n---\n\n" if self._method == "lats" else ""
+        prompt += f"Trajectory:\n{node.trajectory}\nOutput:"
 
         self._executor.clear_history()
         self.send(
