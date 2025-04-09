@@ -38,6 +38,7 @@ The [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/Reasoning
 6. **Visualization Tools**: Built-in Graphviz support for analyzing reasoning paths
 7. **Logging Features**: Log and save thinking trajectories to finetune the language model
 8. **Configuration Options**: The agent is highly configurable through a single `reason_config` dictionary
+9. **Customizabilty with scope**: Define task-specific context to guide the agent’s reasoning.
 
 ## Configuration Options
 
@@ -918,4 +919,116 @@ The expected maximum value \(E[X]\) is calculated by summing the products of eac
 \[ E[X] = \frac{1071}{216} \approx 4.96 \]
 
 Final Answer: The expected maximum dice value when rolling a 6-sided die three times is approximately \(4.96\).
+```
+
+## Scope
+The effectiveness of a LLM agent on a given task can be significantly enhanced through prompt optimization. To support this for the `ReasoningAgent`, a `scope` parameter can be specified during initialization. This parameter will provide valuable context about the agent’s intended use, the reasoning process it should follow, and any constraints or pitfalls to avoid. This information is incorporated into the agent’s thought process to guide its behavior more effectively.
+
+Note: The `scope` differs from the `system_message` in that it informs the agent’s reasoning throughout the entire thinking process, whereas the `system_message` is used solely when generating the final response.
+
+```python
+scope = """You assess ethical risks of AI systems used in services.
+Begin by identifying stakeholders and their interests.
+Then, evaluate potential ethical risks (bias, transparency, impact).
+Finally, suggest mitigation strategies and ethical safeguards"""
+
+with llm_config:
+    reason_agent = ReasoningAgent(
+        name="reason_agent",
+        reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+        silent=False,
+        scope=scope,
+    )
+
+question = "What are the ethical risks of using AI in healthcare?"
+ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
+
+print(ans.summary)
+```
+
+```console
+### Step 1: Identify Stakeholders
+In the context of AI in healthcare, the main stakeholders include:
+- **Patients:** The primary beneficiaries of healthcare services.
+- **Healthcare Providers:** Includes doctors, nurses, and other medical professionals.
+- **Hospitals and Clinics:** Organizations that deliver healthcare services.
+- **Insurance Companies:** Entities that provide health insurance coverage.
+- **Healthcare Administrators:** Individuals who manage healthcare operations.
+- **Technology Developers:** Companies and individuals developing AI solutions for healthcare.
+- **Regulatory Bodies:** Government agencies and boards overseeing healthcare practices and AI technology.
+
+### Step 2: Identify Stakeholder Interests
+
+**Patients:**
+- **Privacy:** Ensuring personal health data is secure and confidential.
+- **Accuracy:** Reliable diagnostics and treatment recommendations.
+- **Autonomy:** Having informed consent and control over personal health decisions.
+- **Equity:** Fair access to healthcare regardless of socio-economic status.
+
+**Healthcare Providers:**
+- **Efficiency:** Improving operational efficiency and reducing workload.
+- **Training:** Adequate training on AI tools to ensure effective usage.
+- **Clinical Judgment:** Augmenting, not replacing, clinical decision-making.
+
+**Hospitals and Clinics:**
+- **Cost Reduction:** Lowering costs through operational efficiencies.
+- **Quality of Care:** Improving patient outcomes with advanced technology.
+- **Liability:** Managing risks associated with AI errors.
+
+**Insurance Companies:**
+- **Cost Management:** Controlling expenditures through better predictive analytics.
+- **Risk Assessment:** Improved evaluation of risk for more accurately assessing policyholders.
+- **Compliance:** Adhering to regulatory requirements for AI use.
+
+**Technology Developers:**
+- **Innovation:** Creating cutting-edge solutions to improve healthcare.
+- **Market Expansion:** Expanding the reach and adoption of AI solutions.
+- **Ethical Standards:** Ensuring their products are ethically sound.
+
+**Regulatory Bodies:**
+- **Safety:** Ensuring AI tools do not harm patients.
+- **Compliance:** Enforcing regulations around AI use.
+- **Standardization:** Implementing standards for AI technology in healthcare.
+
+### Step 3: Ethical Risks
+
+**Bias:**
+- **Data Bias:** AI models trained on biased data may produce inequitable results, disproportionately affecting marginalized groups.
+- **Algorithm Bias:** AI algorithms may inadvertently prioritize certain patient demographics over others.
+
+**Transparency:**
+- **Openness:** AI systems may lack transparency, making it difficult to understand and trust their recommendations.
+- **Explanation:** Difficulty in explaining AI-driven decisions could impact patient trust.
+
+**Impact:**
+- **Displacement:** Potential for AI to displace healthcare jobs, affecting traditional roles and employment.
+- **Accountability:** Who bears responsibility for errors made by AI systems?
+
+**Privacy:**
+- **Data Security:** Risk of unauthorized access to sensitive health data.
+- **Consent:** Ensuring patients understand and consent to AI-driven diagnostics and treatments.
+
+### Mitigation Strategies and Ethical Safeguards
+
+**Bias Mitigation:**
+- **Diverse Training Data:** Ensure diverse and inclusive data sets are used to train AI models.
+- **Algorithm Audits:** Regularly audit algorithms for biases and address identified issues.
+
+**Transparency Enhancement:**
+- **Explainable AI:** Develop AI systems that provide clear explanations for their decisions.
+- **User Education:** Train healthcare providers to understand and explain AI tools to patients.
+
+**Privacy Assurance:**
+- **Robust Security Protocols:** Implement strong security measures to protect health data.
+- **Informed Consent:** Ensure patients are fully informed about the use of AI in their care.
+
+**Impact Management:**
+- **Workforce Transition:** Prepare healthcare workers for transitions by providing training on AI integration.
+- **Clear Accountability:** Establish clear guidelines on responsibility for AI errors and outcomes.
+
+**Regulatory Compliance:**
+- **Regular Review:** Continually update regulatory standards in line with technological advancements.
+- **Stakeholder Involvement:** Involve all stakeholders in the development and review of ethical guidelines and regulations.
+
+By identifying stakeholders and their interests, evaluating potential ethical risks, and suggesting mitigation strategies, we can foster responsible and ethical use of AI in healthcare systems.
 ```
