@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, create_model
 
 from ..doc_utils import export_module
 
-__all__ = ["BaseEvent", "get_annotated_type_for_event_classes", "wrap_event"]
+__all__ = ["BaseEvent", "get_annotated_type_for_event_classes", "get_event_classes", "wrap_event"]
 
 
 @export_module("autogen.events")

@@ -41,10 +41,14 @@ from autogen.events.agent_events import (
     UsingAutoReplyEvent,
     create_received_event_model,
 )
+from autogen.events.base_event import get_event_classes
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import PIL
+
+
+EVENT_CLASSES = get_event_classes()
 
 
 @pytest.fixture(autouse=True)
@@ -93,7 +97,11 @@ class TestToolResponseEvent:
             },
         }
 
+        # Test deserialization
         assert actual.model_dump() == expected
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -150,7 +158,11 @@ class TestFunctionResponseEvent:
                 "uuid": uuid,
             },
         }
+        # Test deserialization
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -195,7 +207,11 @@ class TestFunctionCallEvent:
                 "function_call": {"name": "get_random_number", "arguments": "{}"},
             },
         }
+        # Test deserialization
         assert actual == expected, actual
+        # Test serialization
+        d = event.model_dump()
+        assert event == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         event.print(f=mock)
@@ -275,7 +291,11 @@ class TestToolCallEvent:
                 ],
             },
         }
+        # Test deserialization
         assert actual.model_dump() == expected
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -359,7 +379,11 @@ class TestTextEvent:
                 "recipient": "recipient",
             },
         }
+        # Test deserialization
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -460,17 +484,22 @@ class TestPostCarryoverProcessingEvent:
             "type": "post_carryover_processing",
             "content": {
                 "uuid": uuid,
-                "carryover": ["This is a test event 1", "This is a test event 2"],
-                "message": "Start chat",
-                "verbose": True,
-                "sender": "sender",
-                "recipient": "recipient",
-                "summary_method": "last_msg",
-                "summary_args": None,
-                "max_turns": 5,
+                "chat_info": {
+                    "carryover": ["This is a test event 1", "This is a test event 2"],
+                    "message": "Start chat",
+                    "verbose": True,
+                    "sender": "sender",
+                    "recipient": "recipient",
+                    "summary_method": "last_msg",
+                    "summary_args": None,
+                    "max_turns": 5,
+                },
             },
         }
         assert actual.model_dump() == expected, f"{actual.model_dump()} != {expected}"
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -536,14 +565,16 @@ class TestPostCarryoverProcessingEvent:
             "type": "post_carryover_processing",
             "content": {
                 "uuid": uuid,
-                "carryover": carryover,
-                "message": "Start chat",
-                "verbose": True,
-                "sender": "sender",
-                "recipient": "recipient",
-                "summary_method": "last_msg",
-                "summary_args": None,
-                "max_turns": 5,
+                "chat_info": {
+                    "carryover": carryover,
+                    "message": "Start chat",
+                    "verbose": True,
+                    "sender": "sender",
+                    "recipient": "recipient",
+                    "summary_method": "last_msg",
+                    "summary_args": None,
+                    "max_turns": 5,
+                },
             },
         }
         assert post_carryover_processing.model_dump() == expected_model_dump
@@ -584,11 +615,14 @@ class TestClearAgentsHistoryEvent:
             "type": "clear_agents_history",
             "content": {
                 "uuid": uuid,
-                "agent_name": "clear_agent" if agent else None,
+                "agent": "clear_agent" if agent else None,
                 "nr_events_to_preserve": nr_events_to_preserve,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -627,10 +661,13 @@ class TestSpeakerAttemptSuccessfulEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -673,10 +710,13 @@ class TestSpeakerAttemptFailedMultipleAgentsEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -716,10 +756,13 @@ class TestSpeakerAttemptFailedNoAgentsEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -749,10 +792,13 @@ class TestGroupChatResumeEvent:
                 "uuid": uuid,
                 "last_speaker_name": last_speaker_name,
                 "events": events,
-                "verbose": True,
+                "silent": False,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -780,11 +826,14 @@ class TestGroupChatRunChatEvent:
             "type": "group_chat_run_chat",
             "content": {
                 "uuid": uuid,
-                "speaker_name": "assistant_uno",
-                "verbose": True,
+                "speaker": "assistant_uno",
+                "silent": False,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -818,6 +867,9 @@ class TestTerminationAndHumanReplyEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -844,6 +896,9 @@ class TestTerminationEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -878,6 +933,9 @@ class TestUsingAutoReplyEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -908,6 +966,9 @@ class TestExecuteCodeBlockEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -943,6 +1004,9 @@ class TestExecuteFunctionEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -980,6 +1044,9 @@ class TestExecutedFunctionEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1007,10 +1074,13 @@ class TestSelectSpeakerEvent:
             "type": "select_speaker",
             "content": {
                 "uuid": uuid,
-                "agent_names": ["bob", "charlie"],
+                "agents": ["bob", "charlie"],
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1039,10 +1109,13 @@ class TestSelectSpeakerTryCountExceededEvent:
             "content": {
                 "uuid": uuid,
                 "try_count": try_count,
-                "agent_names": ["bob", "charlie"],
+                "agents": ["bob", "charlie"],
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1065,10 +1138,14 @@ class TestSelectSpeakerInvalidInputEvent:
             "type": "select_speaker_invalid_input",
             "content": {
                 "uuid": uuid,
-                "agent_names": ["bob", "charlie"],
+                "agents": ["bob", "charlie"],
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
         mock = MagicMock()
         actual.print(f=mock)
         # print(mock.call_args_list)
@@ -1087,12 +1164,14 @@ class TestClearConversableAgentHistoryEvent:
             "type": "clear_conversable_agent_history",
             "content": {
                 "uuid": uuid,
-                "agent_name": "recipient",
-                "recipient": "recipient",
+                "agent": "recipient",
                 "no_events_preserved": no_events_preserved,
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1120,6 +1199,9 @@ class TestClearConversableAgentHistoryWarningEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1172,12 +1254,15 @@ class TestGenerateCodeExecutionReplyEvent:
             "type": "generate_code_execution_reply",
             "content": {
                 "uuid": uuid,
-                "code_block_languages": [x.language for x in code_blocks],
+                "code_blocks": [x.language for x in code_blocks],
                 "sender": "sender",
                 "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1204,6 +1289,9 @@ class TestConversableAgentUsageSummaryNoCostIncurredEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1230,6 +1318,9 @@ class TestConversableAgentUsageSummaryEvent:
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)

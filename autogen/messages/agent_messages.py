@@ -871,7 +871,10 @@ class ClearConversableAgentHistoryWarningMessage(BaseMessage):
         )
 
 
-@deprecated_by(GenerateCodeExecutionReplyEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
+@deprecated_by(
+    GenerateCodeExecutionReplyEvent,
+    param_mapping={"sender_name": "sender", "recipient_name": "recipient", "code_block_languages": "code_blocks"},
+)
 @wrap_message
 class GenerateCodeExecutionReplyMessage(BaseMessage):
     code_block_languages: list[str]
