@@ -4,6 +4,15 @@ authors: [yiranwu, marklysze]
 tags: [Swarm]
 ---
 
+<Warning>
+As of version 0.9, we have merged the experimental Swarm functionality into the core framework, creating a new way to run group (multi-agent) chats. The new group chat contains all of the functionality available in Swarm (and more).
+
+Updating to the new group chat from your Swarm code is straightforward, see [this guide](/docs/user-guide/advanced-concepts/swarm/deprecation) on how to do it.
+
+The Swarm code has now been deprecated but will still function with some minor changes. See [this guide](/docs/user-guide/advanced-concepts/swarm/deprecation) to update your current Swarm code to work with v0.9 and up. We would advise updating your code to work with the new group chat with the Swarm code being deprecated.
+</Warning>
+
+
 <iframe width="560" height="315" src="https://www.youtube.com/embed/YQdTsD4dPeg?si=6Y-cceWyQsyYNAJY" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 AG2 now provides an implementation of the swarm orchestration from OpenAI's [Swarm](https://github.com/openai/swarm) framework, with some additional features!
@@ -341,7 +350,7 @@ Context Variables:
 
 ## For Further Reading
 
-* [Swarm Orchestration Documentation](/docs/user-guide/basic-concepts/orchestration/swarm)
+* [Swarm Orchestration Documentation](/docs/user-guide/advanced-concepts/swarm/introduction)
 * [Swarm Orchestration Notebook](/docs/use-cases/notebooks/notebooks/agentchat_swarm)
 * [(Legacy) Implement Swarm-style Orchestration with GroupChat
 ](/docs/use-cases/notebooks/notebooks/agentchat_swarm_w_groupchat_legacy)

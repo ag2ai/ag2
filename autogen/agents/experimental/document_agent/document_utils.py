@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -20,6 +23,20 @@ with optional_import_block():
 __all__ = ["handle_input", "preprocess_path"]
 
 _logger = logging.getLogger(__name__)
+
+
+class QueryType(Enum):
+    RAG_QUERY = "RAG_QUERY"
+    # COMMON_QUESTION = "COMMON_QUESTION"
+
+
+class Ingest(BaseModel):
+    path_or_url: str = Field(description="The path or URL of the documents to ingest.")
+
+
+class Query(BaseModel):
+    query_type: QueryType = Field(description="The type of query to perform for the Document Agent.")
+    query: str = Field(description="The query to perform for the Document Agent.")
 
 
 def is_url(url: str) -> bool:

@@ -2,7 +2,7 @@ name: Deploy MkDocs to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main,"0.9"]
     paths:
       - "autogen/**"
       - "website/**"
