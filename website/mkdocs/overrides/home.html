@@ -4,14 +4,142 @@
 
 {% block styles %}
 {{ super() }}
-{% endblock %}
+<style>
+  /* Reset styles to ensure no margins or padding */
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
 
-{% block tabs %}
-<!-- Main site entry button descriptions -->
+  /* Override any container styles that might add margins */
+  .md-container, .md-main, .md-main__inner, .md-content, .md-content__inner {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Hide both sidebars but keep navigation tabs */
+  .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary, .md-header-nav__button--search {
+    display: none !important;
+  }
+
+  /* Ensure header has no bottom margin/padding */
+  .md-header {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Remove the :before element spacing */
+  .article.md-content__inner:before,
+  .md-content__inner:before,
+  .md-main__inner:before,
+  [class*="inner"]:before,
+  .yoast:before,
+  .article.md-content:before,
+  .article.not-content:before,
+  .inner.md-1:before,
+  .yoast\:before {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Target specific elements from screenshot */
+  .article.not-content,
+  .inner.md-1,
+  [class*="yoast"],
+  .article.md-content,
+  .inner.md-1,
+  .yoast\:before,
+  div[class*="article"],
+  div[class*="inner"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  /* Force content to start immediately after header */
+  .md-main {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Override any CSS that might be using the :before pseudo-element */
+  *:before {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+  }
+
+  /* Make the main content take up the full width with no padding */
+  .md-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-grow: 1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Remove any padding or margin from main content */
+  .md-main__inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure footer has no top margin/padding */
+  .md-footer {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Simple styles */
+  .home-container {
+    background-color: #5d44b3;
+    padding: 2rem;
+    text-align: center;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    margin: 0;
+  }
+
+  .title {
+    color: white;
+    font-size: 3rem;
+    font-weight: bold;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-<script>
-   window.location.href = "docs/home";
-</script>
+<style>
+  /* Directly target the elements in the screenshot */
+  .article.not-content,
+  .inner.md-1,
+  [id^="article"],
+  [id^="inner"],
+  .yoast\:before {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+</style>
+<div class="home-container">
+  <h1 class="title">AG2 hi</h1>
+</div>
 {% endblock %}
