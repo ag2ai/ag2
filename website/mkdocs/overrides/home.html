@@ -104,24 +104,235 @@
 
   /* Simple styles */
   .home-container {
-    background-color: #5d44b3;
-    padding: 2rem;
+    background: linear-gradient(335deg, #5fdbfd 0%, rgba(95, 219, 253, 1) 22.562992680180177%, rgba(128, 238, 211, 1) 50.895129504504496%, rgba(244, 235, 167, 1) 75.47353603603604%, rgba(244, 235, 167, 1) 100%);
     text-align: center;
     min-height: 100vh;
     width: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: start;
     align-items: center;
     box-sizing: border-box;
     margin: 0;
+    padding: 0 0 2rem 0;
+    position: relative;
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    text-align: center;
+    height: 900px;
+    position:relative;
+    width: 100%;
+    padding-top: 7rem;
+    gap: 1rem;
   }
 
   .title {
     color: white;
-    font-size: 3rem;
+    font-size: 4rem !important;
     font-weight: bold;
   }
+
+  .tagline {
+    margin-top: 0;
+  }
+
+  .jersey {
+    font-family: "Jersey 10" !important;
+  }
+
+  h2.jersey {
+    font-size: 2.5rem !important;
+    font-weight: 400 !important;
+  }
+
+  .button {
+    background-color: #000000;
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    padding: 12px 24px;
+    cursor: pointer;
+    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.16);
+    font-family: "Jersey 10";
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.5;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .button p {
+    padding: 0;
+    margin: 0;
+  }
+
+  .shine {
+    position:absolute;
+    left: -40px;
+    top: -20px;
+    opacity: 0.6;
+    transition: 0.3s ease-in-out;
+  }
+
+  .shine:hover {
+    left: 20px;
+    opacity: 1;
+  }
+
+  .sun {
+    position:absolute;
+    left: -100px;
+    top: -68px;
+    animation: spin 40s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .skyline {
+    width: 100%; 
+    height: auto; 
+    object-fit: repeat-x;
+    position: absolute;
+    bottom: 0;
+  }
+
+  .keyfeatures {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    text-align: center;
+    position:relative;
+    width: 100%;
+    gap: 1rem;
+  }
+
+  .cardgroup {
+    box-sizing: border-box;
+    width: 100%;
+    height: min-content;
+    display: grid;
+    overflow: visible;
+    grid-template-columns: repeat(3, minmax(50px, 1fr));
+    justify-content: center;
+    grid-auto-rows: minmax(0, 1fr);
+    grid-template-rows: repeat(1, minmax(0, 1fr));
+    padding: 0px 80px 0px 80px;
+    gap: 1rem;
+  }
+
+  .card {
+    box-sizing: border-box;
+    height: min-content;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 20px;
+    overflow: visible;
+    align-content: center;
+    flex-wrap: nowrap;
+    gap: 20;
+    border-radius: 18px;
+    width:100%;
+    padding: 1rem;
+    cursor: default;
+    position:relative;
+  }
+
+  .card h4 {
+    margin: 0;
+    padding: 0;
+    font-weight: 700;
+    margin-block-start: 0 !important;
+    margin-block-end: 0 !important;
+  }
+
+  .yellow-bg {
+    background-image: url('images/yellow-bg.png')
+  }
+
+  .blue-bg {
+    background-image: url('images/blue-bg.png')
+  }
+
+  .purple-bg {
+    background-image: url('images/purple-bg.png')
+  }
+
+  .green-bg {
+    background-image: url('images/green-bg.png')
+  }
+
+  .right-border {
+    background-color:#000000;
+    width:4px;
+    height:calc(100% - 12px);
+    position:absolute;
+    right:0;
+    top:6px;
+  }
+
+  .left-border {
+    background-color:#000000;
+    width:2px;
+    height:calc(100% - 12px);
+    position:absolute;
+    left:0;
+    top:6px;
+  }
+
+  .top-border {
+    background-color:#000000;
+    width:calc(100% - 12px);
+    height:2px;
+    position:absolute;
+    top:0;
+    left: 6px;
+  }
+
+  .bottom-border {
+    background-color:#000000;
+    width:calc(100% - 12px);
+    height:4px;
+    position:absolute;
+    bottom:0;
+    left: 6px;
+  }
+
+  .pixel-corner {
+    position:absolute;
+    width: 6px;
+    height: 6px;
+  }
+
+  .tl {
+    top:2px;
+    left:2px;
+  }
+
+  .tr {
+    top:2px;
+    right:4px;
+  }
+
+  .bl {
+    bottom:4px;
+    left:2px;
+  }
+
+  .br {
+    bottom:4px;
+    right:4px;
+  }
+
 </style>
 {% endblock %}
 
@@ -140,6 +351,151 @@
   }
 </style>
 <div class="home-container">
-  <h1 class="title">AG2 hi</h1>
+  <div class="hero">
+    <h1 class="title">The Open-Source AgentOS</h1>
+    <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
+    <a href="/docs/quickstart"><div class="button">
+      <p>Quick Start</p>
+      <img src="images/button-shine.png" alt="Shine" class="shine"/>
+    </div></a>
+    <img src="images/city-horizon.png" alt="City Horizon" class="skyline">
+    <img src="images/sun.png" alt="Sun" class="sun"/>
+  </div>
+  <div class="keyfeatures">
+    <h2 class="jersey">The End-to-End Platform for Multi-Agent Automation </h2>
+    <div class="cardgroup">
+      <div class="card yellow-bg">
+        <div class="card-content">
+          <img src="images/intuitive.png"/>
+          <h4>Simple and intuitive syntax</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div> 
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card purple-bg">
+        <div class="card-content">
+          <img src="images/conversation.png"/> 
+          <h4>Built-in conversation patterns</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card blue-bg">
+        <div class="card-content">
+          <img src="images/human.png"/>
+          <h4>Seamless Human-AI collaboration</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="nextsteps">
+    <h2 class="jersey" >Next Steps</h2>
+    <div class="cardgroup">
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>Key concepts</h4>
+          <p>Conversable Agent, Group Chat, Swarm, tools and more</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>Next level concepts</h4>
+          <p>RAG, Code Execution, Complex Group Chats, and more</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>Use Cases</h4>
+          <p>Customer Service, Travel Planning, and Game Design</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>Notebook Examples</h4>
+          <p>In-depth and interactive notebooks for all things AG2</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>API Reference</h4>
+          <p>Dig into all the important details</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>How to Contribute</h4>
+          <p>Join us in making the most powerful multi-agent framework</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
