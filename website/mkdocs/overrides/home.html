@@ -171,11 +171,13 @@
     line-height: 1.5;
     position: relative;
     overflow: hidden;
+    z-index: 10;
   }
 
   .button p {
     padding: 0;
     margin: 0;
+    z-index: 10;
   }
 
   .shine {
@@ -205,7 +207,7 @@
 
   .cloud {
     position: absolute;
-
+    z-index: 2;
   }
 
   .cloud.left {
@@ -262,12 +264,25 @@
       grid-template-columns: repeat(2, 1fr);
       grid-template-rows: repeat(3, 1fr);
     }
+    
+    .keyfeatures .cardgroup {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
   
   @media (max-width: 768px) {
     .nextsteps .cardgroup {
       grid-template-columns: 1fr;
       grid-template-rows: repeat(6, 1fr);
+    }
+    
+    .keyfeatures .cardgroup {
+      grid-template-columns: 1fr;
+      padding: 0px 20px 0px 20px;
+    }
+    
+    .cardgroup {
+      padding: 0px 20px 0px 20px;
     }
   }
 
@@ -287,6 +302,7 @@
     padding: 1rem;
     position:relative;
     height: 100%;
+    min-width: 200px;
   }
 
   .card-content {
@@ -406,6 +422,13 @@
     flex-direction: row;
     gap: 1rem;
   }
+  
+  @media (max-width: 768px) {
+    .videos {
+      flex-direction: column;
+      align-items: center;  
+    }
+  }
 
   .youtube-video {
     display:flex; 
@@ -413,12 +436,14 @@
     width: 1fr;
     height: 250px;
     max-width: 500px;
+    flex-wrap: wrap;
   }
 
   .youtube-video a {
     color: #000000;
     font-family: 'Jetbrains Mono', monospace;
     font-size: 12px;
+    min-width: 120px;
   }
 
   .youtube-video a:hover {
