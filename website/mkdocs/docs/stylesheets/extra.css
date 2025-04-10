@@ -94,6 +94,13 @@ a.internal-link::after {
     content: "\00A0↪";
 }
 
+ /* Hide both sidebars but keep navigation tabs */
+@media (min-width: 1220px) {
+  .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary {
+    display: none !important;
+  }
+}
+
 .md-header, .md-tabs {
     background-color: #000;
 }
