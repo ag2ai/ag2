@@ -43,7 +43,6 @@ from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
 from ..events.agent_events import (
-    ChatCompletionEvent,
     ClearConversableAgentHistoryEvent,
     ClearConversableAgentHistoryWarningEvent,
     ConversableAgentUsageSummaryEvent,
@@ -54,6 +53,7 @@ from ..events.agent_events import (
     ExecutedFunctionEvent,
     GenerateCodeExecutionReplyEvent,
     PostCarryoverProcessingEvent,
+    RunCompletionEvent,
     TerminationAndHumanReplyNoInputEvent,
     TerminationEvent,
     UsingAutoReplyEvent,
@@ -1590,7 +1590,7 @@ class ConversableAgent(LLMAgent):
                             )
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
                                 cost=chat_result.cost,
@@ -1629,7 +1629,7 @@ class ConversableAgent(LLMAgent):
                             _last_speaker = recipient.last_speaker
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
                                 cost=chat_result.cost,
@@ -1769,7 +1769,7 @@ class ConversableAgent(LLMAgent):
                             )
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
                                 cost=chat_result.cost,
@@ -1805,7 +1805,7 @@ class ConversableAgent(LLMAgent):
                             last_speaker = recipient.last_speaker
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
                                 cost=chat_result.cost,
@@ -2023,7 +2023,7 @@ class ConversableAgent(LLMAgent):
                         chat_res = sender.initiate_chat(**chat_info)
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_res.chat_history,
                                 summary=chat_res.summary,
                                 cost=chat_res.cost,
@@ -2092,7 +2092,7 @@ class ConversableAgent(LLMAgent):
                         chat_res = await sender.a_initiate_chat(**chat_info)
 
                         IOStream.get_default().send(
-                            ChatCompletionEvent(
+                            RunCompletionEvent(
                                 history=chat_res.chat_history,
                                 summary=chat_res.summary,
                                 cost=chat_res.cost,

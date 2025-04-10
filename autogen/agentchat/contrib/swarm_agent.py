@@ -16,7 +16,7 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
-from ...events.agent_events import ChatCompletionEvent, ErrorEvent
+from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -1044,7 +1044,7 @@ def run_swarm(
                 )
 
                 IOStream.get_default().send(
-                    ChatCompletionEvent(  # type: ignore[call-arg]
+                    RunCompletionEvent(  # type: ignore[call-arg]
                         history=chat_result.chat_history,
                         summary=chat_result.summary,
                         cost=chat_result.cost,
@@ -1201,7 +1201,7 @@ async def a_run_swarm(
                 )
 
                 IOStream.get_default().send(
-                    ChatCompletionEvent(  # type: ignore[call-arg]
+                    RunCompletionEvent(  # type: ignore[call-arg]
                         history=chat_result.chat_history,
                         summary=chat_result.summary,
                         cost=chat_result.cost,

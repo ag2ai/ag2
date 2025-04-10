@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from ..agentchat.agent import LLMMessageType
-from ..events.agent_events import ChatCompletionEvent, ErrorEvent, InputRequestEvent
+from ..events.agent_events import ErrorEvent, InputRequestEvent, RunCompletionEvent
 from ..events.base_event import BaseEvent
 from .processors import (
     AsyncConsoleEventProcessor,
@@ -133,7 +133,7 @@ class RunResponse:
 
                 yield event
 
-                if isinstance(event, ChatCompletionEvent):
+                if isinstance(event, RunCompletionEvent):
                     self._messages = event.content.history  # type: ignore[attr-defined]
                     self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
                     self._summary = event.content.summary  # type: ignore[attr-defined]
@@ -216,7 +216,7 @@ class AsyncRunResponse:
 
                 yield event
 
-                if isinstance(event, ChatCompletionEvent):
+                if isinstance(event, RunCompletionEvent):
                     self._messages = event.content.history  # type: ignore[attr-defined]
                     self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
                     self._summary = event.content.summary  # type: ignore[attr-defined]

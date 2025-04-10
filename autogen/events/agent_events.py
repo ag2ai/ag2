@@ -1000,7 +1000,7 @@ class ErrorEvent(BaseEvent):
 
 
 @wrap_event
-class ChatCompletionEvent(BaseEvent):
+class RunCompletionEvent(BaseEvent):
     summary: str
     history: list[LLMMessageType]
     cost: dict[str, Any]
