@@ -16,7 +16,7 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
-from ...events.agent_events import ErrorEvent
+from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -1043,11 +1043,15 @@ def run_swarm(
                     exclude_transit_message=exclude_transit_message,
                 )
 
-                response._summary = chat_result.summary
-                response._messages = chat_result.chat_history
-                response._context_variables = returned_context_variables
-                response._last_speaker = last_speaker
-                response.cost = chat_result.cost  # type: ignore[assignment]
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=last_speaker.name,
+                        context_variables=returned_context_variables,
+                    )
+                )
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
@@ -1196,11 +1200,15 @@ async def a_run_swarm(
                     exclude_transit_message=exclude_transit_message,
                 )
 
-                response._summary = chat_result.summary
-                response._messages = chat_result.chat_history
-                response._context_variables = returned_context_variables
-                response._last_speaker = last_speaker
-                response.cost = chat_result.cost  # type: ignore[assignment]
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=last_speaker.name,
+                        context_variables=returned_context_variables,
+                    )
+                )
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 

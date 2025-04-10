@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from ..agentchat.agent import Agent, LLMMessageType
-from ..events.agent_events import ErrorEvent, InputRequestEvent, TerminationEvent
+from ..agentchat.agent import LLMMessageType
+from ..events.agent_events import ErrorEvent, InputRequestEvent, RunCompletionEvent
 from ..events.base_event import BaseEvent
 from .processors import (
     AsyncConsoleEventProcessor,
@@ -81,7 +81,7 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def context_variables(self) -> Optional[dict[str, Any]]: ...
 
     @property
-    def last_speaker(self) -> Optional[Agent]: ...
+    def last_speaker(self) -> Optional[str]: ...
 
     @property
     def cost(self) -> Optional[Cost]: ...
@@ -103,7 +103,7 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     async def context_variables(self) -> Optional[dict[str, Any]]: ...
 
     @property
-    async def last_speaker(self) -> Optional[Agent]: ...
+    async def last_speaker(self) -> Optional[str]: ...
 
     @property
     async def cost(self) -> Optional[Cost]: ...
@@ -118,7 +118,7 @@ class RunResponse:
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
         self._context_variables: Optional[dict[str, Any]] = None
-        self._last_speaker: Optional[Agent] = None
+        self._last_speaker: Optional[str] = None
         self._cost: Optional[Cost] = None
 
     def _queue_generator(self, q: queue.Queue) -> Iterable[BaseEvent]:  # type: ignore[type-arg]
@@ -133,7 +133,12 @@ class RunResponse:
 
                 yield event
 
-                if isinstance(event, TerminationEvent):
+                if isinstance(event, RunCompletionEvent):
+                    self._messages = event.content.history  # type: ignore[attr-defined]
+                    self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                    self._summary = event.content.summary  # type: ignore[attr-defined]
+                    self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                    self.cost = event.content.cost  # type: ignore[attr-defined]
                     break
 
                 if isinstance(event, ErrorEvent):
@@ -166,7 +171,7 @@ class RunResponse:
         return self._context_variables
 
     @property
-    def last_speaker(self) -> Optional[Agent]:
+    def last_speaker(self) -> Optional[str]:
         return self._last_speaker
 
     @property
@@ -192,7 +197,7 @@ class AsyncRunResponse:
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
         self._context_variables: Optional[dict[str, Any]] = None
-        self._last_speaker: Optional[Agent] = None
+        self._last_speaker: Optional[str] = None
         self._cost: Optional[Cost] = None
 
     async def _queue_generator(self, q: AsyncQueue[Any]) -> AsyncIterable[BaseEvent]:  # type: ignore[type-arg]
@@ -211,7 +216,12 @@ class AsyncRunResponse:
 
                 yield event
 
-                if isinstance(event, TerminationEvent):
+                if isinstance(event, RunCompletionEvent):
+                    self._messages = event.content.history  # type: ignore[attr-defined]
+                    self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                    self._summary = event.content.summary  # type: ignore[attr-defined]
+                    self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                    self.cost = event.content.cost  # type: ignore[attr-defined]
                     break
 
                 if isinstance(event, ErrorEvent):
@@ -244,7 +254,7 @@ class AsyncRunResponse:
         return self._context_variables
 
     @property
-    async def last_speaker(self) -> Optional[Agent]:
+    async def last_speaker(self) -> Optional[str]:
         return self._last_speaker
 
     @property

@@ -997,3 +997,12 @@ class InputResponseEvent(BaseEvent):
 @wrap_event
 class ErrorEvent(BaseEvent):
     error: Any
+
+
+@wrap_event
+class RunCompletionEvent(BaseEvent):
+    summary: str
+    history: list[LLMMessageType]
+    cost: dict[str, Any]
+    last_speaker: Optional[str]
+    context_variables: Optional[dict[str, Any]] = None

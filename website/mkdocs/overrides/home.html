@@ -21,10 +21,6 @@
     max-width: 100% !important;
   }
 
-  /* Hide both sidebars but keep navigation tabs */
-  .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary, .md-header-nav__button--search {
-    display: none !important;
-  }
 
   /* Ensure header has no bottom margin/padding */
   .md-header {
@@ -455,6 +451,10 @@
   [data-md-color-scheme=slate] .md-typeset h3.tagline,
   [data-md-color-scheme=slate] .card-content h4 {
     color: var(--md-primary-text-color--light);
+  }
+
+  .md-nav__title .md-nav__button.md-logo img {
+    margin-left: -1rem !important;
   }
 
 </style>

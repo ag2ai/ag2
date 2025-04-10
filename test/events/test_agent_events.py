@@ -27,6 +27,7 @@ from autogen.events.agent_events import (
     GroupChatResumeEvent,
     GroupChatRunChatEvent,
     PostCarryoverProcessingEvent,
+    RunCompletionEvent,
     SelectSpeakerEvent,
     SelectSpeakerInvalidInputEvent,
     SelectSpeakerTryCountExceededEvent,
@@ -1821,6 +1822,41 @@ class TestConversableAgentUsageSummaryEvent:
                 "recipient": "recipient",
             },
         }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestRunCompletionEvent:
+    def test_serialization_and_deserialization(
+        self,
+        uuid: UUID,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = RunCompletionEvent(
+            uuid=uuid,
+            summary="some summary",
+            history=[],
+            cost={"cost": 0.0},
+            last_speaker="assistant",
+            context_variables={"cotext_var_1": "value_1"},
+        )
+        assert isinstance(actual, RunCompletionEvent)
+
+        expected_model_dump = {
+            "type": "run_completion",
+            "content": {
+                "uuid": uuid,
+                "summary": "some summary",
+                "history": [],
+                "cost": {"cost": 0.0},
+                "last_speaker": "assistant",
+                "context_variables": {"cotext_var_1": "value_1"},
+            },
+        }
+
         assert actual.model_dump() == expected_model_dump
 
         # Test serialization
