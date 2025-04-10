@@ -376,6 +376,31 @@
     right:8px;
   }
 
+  .videos {
+    display:flex; 
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .youtube-video {
+    display:flex; 
+    flex-direction: column;
+    width: 1fr;
+    height: 250px;
+    max-width: 500px;
+  }
+
+  .youtube-video a {
+    color: #000000;
+    font-family: 'Jetbrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .youtube-video a:hover {
+    color:#000000;
+    text-decoration: underline;
+  }
+
 </style>
 {% endblock %}
 
@@ -550,6 +575,38 @@
         </div>
       </div>
     </a>
+    </div>
+  </div>
+  <div class="resources">
+    <h2 class="jersey" >Popular resources</h2>
+      <div class="videos">
+        <div class="youtube-video">
+          <iframe
+            class="w-full aspect-video rounded-md"
+            src="https://www.youtube.com/embed/RLwyXRVvlNk"
+            title="YouTube video player"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+          <a target="_blank" href="https://www.youtube.com/watch?v=RLwyXRVvlNk">
+            Foundation Capital Interview with Dr. Chi Wang
+          </a>
+        </div>
+        <div class="youtube-video">
+          <iframe
+            class="w-full aspect-video rounded-md"
+            src="https://www.youtube.com/embed/TBNTH-fwGPE"
+            title="YouTube video player"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+          <a target="_blank" href="https://www.youtube.com/watch?v=TBNTH-fwGPE">
+            Learn AG2 on DeepLearningAI
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
