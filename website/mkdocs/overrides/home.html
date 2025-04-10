@@ -131,14 +131,22 @@
     gap: 1rem;
   }
 
+  .hero-text {
+    gap: 0.5rem;
+    z-index: 10;
+  }
+
   .title {
     color: white;
     font-size: 4rem !important;
     font-weight: bold;
+    margin-block-start: 0;
+    margin-block-end: 0;
   }
 
   .tagline {
-    margin-top: 0;
+    margin-block-start: 0;
+    margin-block-end: 0;
   }
 
   .jersey {
@@ -193,6 +201,23 @@
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  .cloud {
+    position: absolute;
+
+  }
+
+  .cloud.left {
+    top: 300px;
+    left: -120px;
+  }
+
+  .cloud.right {
+    top: 70px;
+    right: -5px;
+    width: 148px;
+    height: 50px;
   }
 
   .skyline {
@@ -420,14 +445,18 @@
 </style>
 <div class="home-container">
   <div class="hero">
-    <h1 class="title">The Open-Source AgentOS</h1>
-    <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
+    <div class="hero-text">
+      <h1 class="title">The Open-Source AgentOS</h1>
+      <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
+    </div>
     <a href="/docs/user-guide/quick-start/"><div class="button">
       <p>Quick Start</p>
       <img src="images/button-shine.png" alt="Shine" class="shine"/>
     </div></a>
     <img src="images/city-horizon.png" alt="City Horizon" class="skyline">
     <img src="images/sun.png" alt="Sun" class="sun"/>
+    <img src="images/cloud.png" alt="Cloud" class="cloud left large"/>
+    <img src="images/cloud.png" alt="Cloud" class="cloud right small"/>
   </div>
   <div class="keyfeatures">
     <h2 class="jersey">The End-to-End Platform for Multi-Agent Automation </h2>
