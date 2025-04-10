@@ -4,14 +4,664 @@
 
 {% block styles %}
 {{ super() }}
-{% endblock %}
+<style>
+  /* Reset styles to ensure no margins or padding */
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
 
-{% block tabs %}
-<!-- Main site entry button descriptions -->
+  /* Override any container styles that might add margins */
+  .md-container, .md-main, .md-main__inner, .md-content, .md-content__inner {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Hide both sidebars but keep navigation tabs */
+  .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary, .md-header-nav__button--search {
+    display: none !important;
+  }
+
+  /* Ensure header has no bottom margin/padding */
+  .md-header {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Remove the :before element spacing */
+  .article.md-content__inner:before,
+  .md-content__inner:before,
+  .md-main__inner:before,
+  [class*="inner"]:before,
+  .yoast:before,
+  .article.md-content:before,
+  .article.not-content:before,
+  .inner.md-1:before,
+  .yoast\:before {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Target specific elements from screenshot */
+  .article.not-content,
+  .inner.md-1,
+  [class*="yoast"],
+  .article.md-content,
+  .inner.md-1,
+  .yoast\:before,
+  div[class*="article"],
+  div[class*="inner"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  /* Force content to start immediately after header */
+  .md-main {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Override any CSS that might be using the :before pseudo-element */
+  *:before {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+  }
+
+  /* Make the main content take up the full width with no padding */
+  .md-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-grow: 1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Remove any padding or margin from main content */
+  .md-main__inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure footer has no top margin/padding */
+  .md-footer {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Simple styles */
+  .home-container {
+    background: linear-gradient(335deg, #5fdbfd 0%, rgba(95, 219, 253, 1) 22.562992680180177%, rgba(128, 238, 211, 1) 50.895129504504496%, rgba(244, 235, 167, 1) 75.47353603603604%, rgba(244, 235, 167, 1) 100%);
+    text-align: center;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    align-items: center;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 0 2rem 0;
+    position: relative;
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    text-align: center;
+    height: 900px;
+    position:relative;
+    width: 100%;
+    padding-top: 7rem;
+    gap: 1rem;
+  }
+
+  .hero-text {
+    gap: 0.5rem;
+    z-index: 10;
+  }
+
+  .title {
+    color: white;
+    font-size: 4rem !important;
+    font-weight: bold;
+    margin-block-start: 0;
+    margin-block-end: 0;
+  }
+
+  .tagline {
+    margin-block-start: 0;
+    margin-block-end: 0;
+  }
+
+  .jersey {
+    font-family: "Jersey 10" !important;
+  }
+
+  h2.jersey {
+    font-size: 2.5rem !important;
+    font-weight: 400 !important;
+  }
+
+  .button {
+    background-color: #000000;
+    border: 2px solid #ffffff;
+    color: #ffffff;
+    padding: 12px 24px;
+    cursor: pointer;
+    box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.16);
+    font-family: "Jersey 10";
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.5;
+    position: relative;
+    overflow: hidden;
+    z-index: 10;
+  }
+
+  .button p {
+    padding: 0;
+    margin: 0;
+    z-index: 10;
+  }
+
+  .shine {
+    position:absolute;
+    left: -40px;
+    top: -20px;
+    opacity: 0.6;
+    transition: 0.3s ease-in-out;
+  }
+
+  .shine:hover {
+    left: 20px;
+    opacity: 1;
+  }
+
+  .sun {
+    position:absolute;
+    left: -100px;
+    top: -68px;
+    animation: spin 40s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .cloud {
+    position: absolute;
+    z-index: 2;
+  }
+
+  .cloud.left {
+    top: 300px;
+    left: -120px;
+  }
+
+  .cloud.right {
+    top: 70px;
+    right: -5px;
+    width: 148px;
+    height: 50px;
+  }
+
+  .skyline {
+    width: 100%;
+    height: auto;
+    object-fit: repeat-x;
+    position: absolute;
+    bottom: 0;
+  }
+
+  .keyfeatures {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    text-align: center;
+    position:relative;
+    width: 100%;
+    gap: 1rem;
+  }
+
+  .cardgroup {
+    box-sizing: border-box;
+    width: 100%;
+    display: grid;
+    overflow: visible;
+    grid-template-columns: repeat(3, minmax(50px, 1fr));
+    justify-content: center;
+    grid-auto-rows: 1fr;
+    padding: 0px 80px 0px 80px;
+    gap: 1rem;
+  }
+
+  .nextsteps .cardgroup {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    grid-auto-rows: unset;
+  }
+
+  @media (max-width: 1200px) {
+    .nextsteps .cardgroup {
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+    }
+
+    .keyfeatures .cardgroup {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .nextsteps .cardgroup {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(6, 1fr);
+    }
+
+    .keyfeatures .cardgroup {
+      grid-template-columns: 1fr;
+      padding: 0px 20px 0px 20px;
+    }
+
+    .cardgroup {
+      padding: 0px 20px 0px 20px;
+    }
+  }
+
+  .card {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 20px;
+    overflow: visible;
+    align-content: center;
+    flex-wrap: nowrap;
+    gap: 20;
+    border-radius: 36px;
+    width:100%;
+    padding: 1rem;
+    position:relative;
+    height: 100%;
+    min-width: 200px;
+  }
+
+  .card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .keyfeatures .card {
+    cursor: default !important;
+  }
+
+  a .card {
+    color: #000000;
+    height: 100%;
+  }
+
+  a:hover .card {
+    background-position: center;
+  }
+
+  a:hover .card h4 {
+    text-decoration: underline;
+  }
+
+  .card h4 {
+    margin: 0;
+    padding: 0;
+    font-weight: 700;
+    margin-block-start: 0 !important;
+    margin-block-end: 0 !important;
+  }
+
+  .yellow-bg {
+    background-image: url('images/yellow-bg.png')
+  }
+
+  .blue-bg {
+    background-image: url('images/blue-bg.png')
+  }
+
+  .purple-bg {
+    background-image: url('images/purple-bg.png')
+  }
+
+  .green-bg {
+    background-image: url('images/green-bg.png')
+  }
+
+  .right-border {
+    background-color:#000000;
+    width:8px;
+    height:calc(100% - 24px);
+    position:absolute;
+    right:0;
+    top:12px;
+  }
+
+  .left-border {
+    background-color:#000000;
+    width:4px;
+    height:calc(100% - 24px);
+    position:absolute;
+    left:0;
+    top:12px;
+  }
+
+  .top-border {
+    background-color:#000000;
+    width:calc(100% - 24px);
+    height:4px;
+    position:absolute;
+    top:0;
+    left: 12px;
+  }
+
+  .bottom-border {
+    background-color:#000000;
+    width:calc(100% - 24px);
+    height:8px;
+    position:absolute;
+    bottom:0;
+    left: 12px;
+  }
+
+  .pixel-corner {
+    position:absolute;
+    width: 12px;
+    height: 12px;
+  }
+
+  .tl {
+    top:4px;
+    left:4px;
+  }
+
+  .tr {
+    top:4px;
+    right:8px;
+  }
+
+  .bl {
+    bottom:8px;
+    left:4px;
+  }
+
+  .br {
+    bottom:8px;
+    right:8px;
+  }
+
+  .videos {
+    display:flex;
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  @media (max-width: 768px) {
+    .videos {
+      flex-direction: column;
+      align-items: center;
+    }
+  }
+
+  .youtube-video {
+    display:flex;
+    flex-direction: column;
+    width: 100%;
+    height: 250px;
+    max-width: 500px;
+    flex-wrap: wrap;
+  }
+
+  .youtube-video a {
+    color: #000000;
+    font-family: 'Jetbrains Mono', monospace;
+    font-size: 12px;
+    min-width: 120px;
+  }
+
+  .youtube-video a:hover {
+    color:#000000;
+    text-decoration: underline;
+  }
+
+</style>
 {% endblock %}
 
 {% block content %}
-<script>
-   window.location.href = "docs/home";
-</script>
+<style>
+  /* Directly target the elements in the screenshot */
+  .article.not-content,
+  .inner.md-1,
+  [id^="article"],
+  [id^="inner"],
+  .yoast\:before {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+</style>
+<div class="home-container">
+  <div class="hero">
+    <div class="hero-text">
+      <h1 class="title">The Open-Source AgentOS</h1>
+      <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
+    </div>
+    <a href="/docs/user-guide/quick-start/"><div class="button">
+      <p>Quick Start</p>
+      <img src="images/button-shine.png" alt="Shine" class="shine"/>
+    </div></a>
+    <img src="images/city-horizon.png" alt="City Horizon" class="skyline">
+    <img src="images/sun.png" alt="Sun" class="sun"/>
+    <img src="images/cloud.png" alt="Cloud" class="cloud left large"/>
+    <img src="images/cloud.png" alt="Cloud" class="cloud right small"/>
+  </div>
+  <div class="keyfeatures">
+    <h2 class="jersey">The End-to-End Platform for Multi-Agent Automation </h2>
+    <div class="cardgroup">
+      <div class="card yellow-bg">
+        <div class="card-content">
+          <img src="images/intuitive.png"/>
+          <h4>Simple and intuitive syntax</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card purple-bg">
+        <div class="card-content">
+          <img src="images/conversation.png"/>
+          <h4>Built-in conversation patterns</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+      <div class="card blue-bg">
+        <div class="card-content">
+          <img src="images/human.png"/>
+          <h4>Seamless Human-AI collaboration</h4>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="nextsteps">
+    <h2 class="jersey" >Next Steps</h2>
+    <div class="cardgroup">
+      <a href="/docs/user-guide/basic-concepts/llm-configuration/llm-configuration/">
+        <div class="card green-bg">
+          <div class="card-content">
+            <h4>Key concepts</h4>
+            <p>Conversable Agent, Group Chat, Swarm, tools and more</p>
+            <div class="right-border"></div>
+            <div class="left-border"></div>
+            <div class="top-border"></div>
+            <div class="bottom-border"></div>
+            <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+            <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+            <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+            <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+          </div>
+        </div>
+    </a>
+      <a href="/docs/user-guide/advanced-concepts/rag/">
+        <div class="card green-bg">
+          <div class="card-content">
+            <h4>Next level concepts</h4>
+            <p>RAG, Code Execution, Complex Group Chats, and more</p>
+            <div class="right-border"></div>
+            <div class="left-border"></div>
+            <div class="top-border"></div>
+            <div class="bottom-border"></div>
+            <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+            <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+            <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+            <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+          </div>
+        </div>
+    </a>
+      <a href="/docs/use-cases/use-cases/customer-service/">
+        <div class="card green-bg">
+          <div class="card-content">
+            <h4>Use Cases</h4>
+            <p>Customer Service, Travel Planning, and Game Design</p>
+            <div class="right-border"></div>
+            <div class="left-border"></div>
+            <div class="top-border"></div>
+            <div class="bottom-border"></div>
+            <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+            <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+            <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+            <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+          </div>
+        </div>
+    </a>
+      <a href="/docs/use-cases/notebooks/Notebooks">
+        <div class="card green-bg">
+          <div class="card-content">
+            <h4>Notebook Examples</h4>
+            <p>In-depth and interactive notebooks for all things AG2</p>
+            <div class="right-border"></div>
+            <div class="left-border"></div>
+            <div class="top-border"></div>
+            <div class="bottom-border"></div>
+            <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+            <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+            <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+            <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+          </div>
+        </div>
+      </a>
+      <a href="/docs/api-reference/autogen/AfterWork">
+        <div class="card green-bg">
+          <div class="card-content">
+            <h4>API Reference</h4>
+            <p>Dig into all the important details</p>
+            <div class="right-border"></div>
+            <div class="left-border"></div>
+            <div class="top-border"></div>
+            <div class="bottom-border"></div>
+            <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+            <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+            <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+            <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+          </div>
+        </div>
+    </a>
+    <a href="/docs/contributor-guide/contributing">
+      <div class="card green-bg">
+        <div class="card-content">
+          <h4>How to Contribute</h4>
+          <p>Join us in making the most powerful multi-agent framework</p>
+          <div class="right-border"></div>
+          <div class="left-border"></div>
+          <div class="top-border"></div>
+          <div class="bottom-border"></div>
+          <img src="images/top-left-corner.png" class="pixel-corner tl"/>
+          <img src="images/top-right-corner.png" class="pixel-corner tr"/>
+          <img src="images/bot-left-corner.png" class="pixel-corner bl"/>
+          <img src="images/bot-right-corner.png" class="pixel-corner br"/>
+        </div>
+      </div>
+    </a>
+    </div>
+  </div>
+  <div class="resources">
+    <h2 class="jersey" >Popular resources</h2>
+      <div class="videos">
+        <div class="youtube-video">
+          <iframe
+            class="w-full aspect-video rounded-md"
+            src="https://www.youtube.com/embed/RLwyXRVvlNk"
+            title="YouTube video player"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+          <a target="_blank" href="https://www.youtube.com/watch?v=RLwyXRVvlNk">
+            Foundation Capital Interview with Dr. Chi Wang
+          </a>
+        </div>
+        <div class="youtube-video">
+          <iframe
+            class="w-full aspect-video rounded-md"
+            src="https://www.youtube.com/embed/TBNTH-fwGPE"
+            title="YouTube video player"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+          <a target="_blank" href="https://www.youtube.com/watch?v=TBNTH-fwGPE">
+            Learn AG2 on DeepLearningAI
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
