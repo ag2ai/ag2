@@ -55,8 +55,7 @@
   .article.md-content,
   .inner.md-1,
   .yoast\:before,
-  div[class*="article"],
-  div[class*="inner"] {
+  div[class*="article"]{
     margin: 0 !important;
     padding: 0 !important;
     min-height: 0 !important;
@@ -133,7 +132,7 @@
 
   .hero-text {
     gap: 0.5rem;
-    z-index: 10;
+    z-index: 3;
   }
 
   .title {
@@ -171,13 +170,13 @@
     line-height: 1.5;
     position: relative;
     overflow: hidden;
-    z-index: 10;
+    z-index: 3;
   }
 
   .button p {
     padding: 0;
     margin: 0;
-    z-index: 10;
+    z-index: 3;
   }
 
   .shine {
@@ -451,6 +450,13 @@
     text-decoration: underline;
   }
 
+  [data-md-color-scheme=slate] .md-typeset h1.title,
+  [data-md-color-scheme=slate] .md-typeset h2.jersey,
+  [data-md-color-scheme=slate] .md-typeset h3.tagline,
+  [data-md-color-scheme=slate] .card-content h4 {
+    color: var(--md-primary-text-color--light);
+  }
+
 </style>
 {% endblock %}
 
@@ -474,7 +480,7 @@
       <h1 class="title">The Open-Source AgentOS</h1>
       <h3 class="tagline">Build production-ready AI agents in minutes, not months.</h3>
     </div>
-    <a href="/docs/user-guide/quick-start/"><div class="button">
+    <a href="./docs/quick-start"><div class="button">
       <p>Quick Start</p>
       <img src="images/button-shine.png" alt="Shine" class="shine"/>
     </div></a>
@@ -533,7 +539,7 @@
   <div class="nextsteps">
     <h2 class="jersey" >Next Steps</h2>
     <div class="cardgroup">
-      <a href="/docs/user-guide/basic-concepts/llm-configuration/llm-configuration/">
+      <a href="./docs/user-guide/basic-concepts/llm-configuration/llm-configuration/">
         <div class="card green-bg">
           <div class="card-content">
             <h4>Key concepts</h4>
@@ -549,7 +555,7 @@
           </div>
         </div>
     </a>
-      <a href="/docs/user-guide/advanced-concepts/rag/">
+      <a href="./docs/user-guide/advanced-concepts/rag/">
         <div class="card green-bg">
           <div class="card-content">
             <h4>Next level concepts</h4>
@@ -565,7 +571,7 @@
           </div>
         </div>
     </a>
-      <a href="/docs/use-cases/use-cases/customer-service/">
+      <a href="./docs/use-cases/use-cases/customer-service/">
         <div class="card green-bg">
           <div class="card-content">
             <h4>Use Cases</h4>
@@ -581,7 +587,7 @@
           </div>
         </div>
     </a>
-      <a href="/docs/use-cases/notebooks/Notebooks">
+      <a href="./docs/use-cases/notebooks/Notebooks">
         <div class="card green-bg">
           <div class="card-content">
             <h4>Notebook Examples</h4>
@@ -597,7 +603,7 @@
           </div>
         </div>
       </a>
-      <a href="/docs/api-reference/autogen/AfterWork">
+      <a href="./docs/api-reference/autogen/AfterWork">
         <div class="card green-bg">
           <div class="card-content">
             <h4>API Reference</h4>
@@ -613,7 +619,7 @@
           </div>
         </div>
     </a>
-    <a href="/docs/contributor-guide/contributing">
+    <a href="./docs/contributor-guide/contributing">
       <div class="card green-bg">
         <div class="card-content">
           <h4>How to Contribute</h4>

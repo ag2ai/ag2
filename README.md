@@ -61,7 +61,7 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
 
 ## Getting started
 
-For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](https://docs.ag2.ai/docs/user-guide/basic-concepts) in our documentation.
+For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/installing-ag2/) in our documentation.
 
 ### Installation
 
