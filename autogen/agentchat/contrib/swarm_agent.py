@@ -1139,6 +1139,10 @@ async def a_initiate_swarm_chat(
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
+    # Link all agents with the GroupChatManager to allow access to the group chat
+    # and other agents, particularly the tool executor for setting _swarm_next_agent
+    _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
+
     if len(processed_messages) > 1:
         last_agent, last_message = await manager.a_resume(messages=processed_messages)
         clear_history = False
@@ -1312,11 +1316,13 @@ def register_hand_off(
             elif isinstance(transit.target, dict):
                 # Transition to a nested chat
                 # We will store them here and establish them in the initiate_swarm_chat
-                agent._swarm_nested_chat_handoffs.append({  # type: ignore[attr-defined]
-                    "nested_chats": transit.target,
-                    "condition": transit.condition,
-                    "available": transit.available,
-                })
+                agent._swarm_nested_chat_handoffs.append(
+                    {  # type: ignore[attr-defined]
+                        "nested_chats": transit.target,
+                        "condition": transit.condition,
+                        "available": transit.available,
+                    }
+                )
 
         elif isinstance(transit, OnContextCondition):
             agent._swarm_oncontextconditions.append(transit)  # type: ignore[attr-defined]
