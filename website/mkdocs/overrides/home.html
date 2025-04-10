@@ -217,33 +217,60 @@
   .cardgroup {
     box-sizing: border-box;
     width: 100%;
-    height: min-content;
     display: grid;
     overflow: visible;
     grid-template-columns: repeat(3, minmax(50px, 1fr));
     justify-content: center;
-    grid-auto-rows: minmax(0, 1fr);
-    grid-template-rows: repeat(1, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
     padding: 0px 80px 0px 80px;
     gap: 1rem;
   }
 
+  .nextsteps .cardgroup {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    grid-auto-rows: unset;
+  }
+  
+  @media (max-width: 1200px) {
+    .nextsteps .cardgroup {
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .nextsteps .cardgroup {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(6, 1fr);
+    }
+  }
+
   .card {
     box-sizing: border-box;
-    height: min-content;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: flex-start;
     align-items: center;
     padding: 20px;
     overflow: visible;
     align-content: center;
     flex-wrap: nowrap;
     gap: 20;
-    border-radius: 18px;
+    border-radius: 36px;
     width:100%;
     padding: 1rem;
     position:relative;
+    height: 100%;
+  }
+
+  .card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
   }
 
   .keyfeatures .card {
@@ -252,6 +279,7 @@
 
   a .card {
     color: #000000;
+    height: 100%;
   }
 
   a:hover .card {
@@ -288,64 +316,64 @@
 
   .right-border {
     background-color:#000000;
-    width:4px;
-    height:calc(100% - 12px);
+    width:8px;
+    height:calc(100% - 24px);
     position:absolute;
     right:0;
-    top:6px;
+    top:12px;
   }
 
   .left-border {
     background-color:#000000;
-    width:2px;
-    height:calc(100% - 12px);
+    width:4px;
+    height:calc(100% - 24px);
     position:absolute;
     left:0;
-    top:6px;
+    top:12px;
   }
 
   .top-border {
     background-color:#000000;
-    width:calc(100% - 12px);
-    height:2px;
+    width:calc(100% - 24px);
+    height:4px;
     position:absolute;
     top:0;
-    left: 6px;
+    left: 12px;
   }
 
   .bottom-border {
     background-color:#000000;
-    width:calc(100% - 12px);
-    height:4px;
+    width:calc(100% - 24px);
+    height:8px;
     position:absolute;
     bottom:0;
-    left: 6px;
+    left: 12px;
   }
 
   .pixel-corner {
     position:absolute;
-    width: 6px;
-    height: 6px;
+    width: 12px;
+    height: 12px;
   }
 
   .tl {
-    top:2px;
-    left:2px;
+    top:4px;
+    left:4px;
   }
 
   .tr {
-    top:2px;
-    right:4px;
+    top:4px;
+    right:8px;
   }
 
   .bl {
-    bottom:4px;
-    left:2px;
+    bottom:8px;
+    left:4px;
   }
 
   .br {
-    bottom:4px;
-    right:4px;
+    bottom:8px;
+    right:8px;
   }
 
 </style>
