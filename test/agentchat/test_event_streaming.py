@@ -11,7 +11,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
-from autogen.io.run_response import AsyncRunResponseProtocol
+from autogen.io.run_response import AsyncRunResponseProtocol, Cost
 from autogen.llm_config import LLMConfig
 from test.conftest import Credentials
 
@@ -35,7 +35,8 @@ def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
 
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) == 2, "Messages should not be empty"
-    assert isinstance(response.last_speaker, ConversableAgent), "Last speaker should be an agent"
+    assert response.last_speaker == "helpful_agent", "Last speaker should be the agent name"
+    assert isinstance(response.cost, Cost)
 
 
 @pytest.mark.asyncio
@@ -58,7 +59,8 @@ async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
 
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) == 2, "Messages should not be empty"
-    assert isinstance(await response.last_speaker, ConversableAgent), "Last speaker should be an agent"
+    assert await response.last_speaker == "helpful_agent", "Last speaker should be an agent"
+    assert isinstance(await response.cost, Cost)
 
 
 @run_for_optional_imports("openai", "openai")
@@ -87,9 +89,10 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
         if event.type == "input_request":
             event.content.respond("exit")
 
-    assert response.last_speaker in [jack, emma], "Last speaker should be one of the agents"
+    assert response.last_speaker in ["Jack", "Emma"], "Last speaker should be one of the agents"
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) > 0, "Messages should not be empty"
+    assert isinstance(response.cost, Cost)
 
 
 @pytest.mark.asyncio
@@ -123,9 +126,10 @@ async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
         if event.type == "input_request":
             await event.content.respond("exit")
 
-    assert await response.last_speaker in [jack, emma], "Last speaker should be one of the agents"
+    assert await response.last_speaker in ["Jack", "Emma"], "Last speaker should be one of the agents"
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) > 0, "Messages should not be empty"
+    assert isinstance(await response.cost, Cost)
 
 
 @run_for_optional_imports("openai", "openai")
@@ -174,7 +178,10 @@ def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
 
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) > 0, "Messages should not be empty"
-    assert isinstance(response.last_speaker, ConversableAgent), "Last speaker should be an agent"
+    assert response.last_speaker in ["teacher_agent", "planner_agent", "reviewer_agent", "User"], (
+        "Last speaker should be one of the agents"
+    )
+    assert isinstance(response.cost, Cost)
 
 
 @pytest.mark.asyncio
@@ -224,7 +231,10 @@ async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
 
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) > 0, "Messages should not be empty"
-    assert isinstance(await response.last_speaker, ConversableAgent), "Last speaker should be one of the agents"
+    assert await response.last_speaker in ["teacher_agent", "planner_agent", "reviewer_agent", "User"], (
+        "Last speaker should be one of the agents"
+    )
+    assert isinstance(await response.cost, Cost)
 
 
 @run_for_optional_imports("openai", "openai")
@@ -278,7 +288,10 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
 
     assert response.summary is not None, "Summary should not be None"
     assert len(response.messages) > 0, "Messages should not be empty"
-    assert isinstance(response.last_speaker, ConversableAgent), "Last speaker should be an agent"
+    assert response.last_speaker in ["planner_agent", "reviewer_agent", "teacher_agent", "User"], (
+        "Last speaker should be one of the agents"
+    )
+    assert isinstance(response.cost, Cost)
 
 
 @pytest.mark.asyncio
@@ -334,7 +347,10 @@ async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
 
     assert await response.summary is not None, "Summary should not be None"
     assert len(await response.messages) > 0, "Messages should not be empty"
-    assert isinstance(await response.last_speaker, ConversableAgent), "Last speaker should be one of the agents"
+    assert await response.last_speaker in ["planner_agent", "reviewer_agent", "teacher_agent", "User"], (
+        "Last speaker should be one of the agents"
+    )
+    assert isinstance(await response.cost, Cost)
 
 
 @run_for_optional_imports("openai", "openai")
@@ -407,8 +423,11 @@ def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
 
     for response in responses:
         assert len(response.messages) > 0, "Messages should not be empty"
-        assert isinstance(response.last_speaker, ConversableAgent), "Last speaker should be an agent"
+        assert response.last_speaker in ["Financial_assistant", "Researcher", "writer", "User"], (
+            "Last speaker should be one of the agents"
+        )
         assert response.summary is not None, "Summary should not be None"
+        assert isinstance(response.cost, Cost)
 
 
 @pytest.mark.asyncio
@@ -481,5 +500,8 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
                 await event.content.respond("exit")
 
         assert len(await response.messages) > 0, "Messages should not be empty"
-        assert isinstance(await response.last_speaker, ConversableAgent), "Last speaker should be one of the agents"
+        assert await response.last_speaker in ["Financial_assistant", "Researcher", "writer", "User"], (
+            "Last speaker should be one of the agents"
+        )
         assert await response.summary is not None, "Summary should not be None"
+        assert isinstance(await response.cost, Cost)

@@ -576,7 +576,7 @@ def test_add_notebooks_nav() -> None:
         - [Game Design](docs/use-cases/use-cases/game-design.md)
         - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
     - Notebooks
-        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+        - [All Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
 - API References
 {api}
@@ -592,7 +592,7 @@ def test_add_notebooks_nav() -> None:
         - [Game Design](docs/use-cases/use-cases/game-design.md)
         - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
     - Notebooks
-        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+        - [All Notebooks](docs/use-cases/notebooks/Notebooks.md)
         - [Run a standalone AssistantAgent](docs/use-cases/notebooks/notebooks/agentchat_assistant_agent_standalone)
         - [Mitigating Prompt hacking with JSON Mode in Autogen](docs/use-cases/notebooks/notebooks/JSON_mode_example)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
@@ -648,7 +648,7 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- Contributor Guide
+- Blog
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
 """)
@@ -665,10 +665,11 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
-- Contributor Guide
+- Community Insights
+    - User Stories
+        - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+        - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
+- Blog
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
 """)
@@ -1048,7 +1049,7 @@ This should stay as 'custom'
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
-        {"group": "Home", "pages": ["docs/home/home", "docs/home/quick-start"]},
+        {"group": "Quick Start", "pages": ["docs/quick-start"]},
         {
             "group": "User Guide",
             "pages": [
@@ -1088,9 +1089,7 @@ def navigation() -> list[NavigationGroup]:
 
 @pytest.fixture
 def expected_nav() -> str:
-    return """- [Home](index.md)
-    - [Home](docs/home/home.md)
-    - [Quick Start](docs/home/quick-start.md)
+    return """- [Quick Start](docs/quick-start.md)
 - User Guide
     - Basic Concepts
         - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
@@ -1109,8 +1108,9 @@ def expected_nav() -> str:
 
 
 def test_format_navigation(navigation: list[NavigationGroup], expected_nav: str) -> None:
-    actual = format_navigation(navigation)
-    assert actual == expected_nav
+    with tempfile.TemporaryDirectory() as tmpdir:
+        actual = format_navigation(navigation, Path(tmpdir))
+        assert actual == expected_nav
 
 
 def test_add_api_ref_to_mkdocs_template() -> None:

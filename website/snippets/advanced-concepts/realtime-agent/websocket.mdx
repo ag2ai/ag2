@@ -4,13 +4,16 @@ At its core, the [**`WebSocketAudioAdapter`**](/docs/api-reference/autogen/agent
 Here’s a quick overview of its components and how they fit together:
 
 1. **WebSocket Connection**:
+
    - The adapter establishes a [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) connection between the client (browser) and the server.
    - Audio packets are streamed in real time through this connection.
 
 2. **Integration with FastAPI**:
+
    - Using Python's [FastAPI](https://fastapi.tiangolo.com/) framework, developers can easily set up endpoints for handling  [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) traffic.
 
 3. **Powered by Realtime Agents**:
+
    - The audio adapter integrates with an AI-powered [**`RealtimeAgent`**](/docs/api-reference/autogen/agentchat/realtime/experimental/RealtimeAgent), allowing the agent to process audio inputs and respond intelligently.
 
 ## **Key Features**
@@ -149,6 +152,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
 
 4. **Configure the Realtime Agent**
    The `RealtimeAgent` is the AI assistant driving the interaction. Key parameters include:
+
    - **Name**: The agent identity, here called `"Weather Bot"`.
    - **System Message**: System message for the agent.
    - **Language Model Configuration**: Defined by `realtime_llm_config` for LLM settings.
@@ -167,6 +171,7 @@ async def handle_media_stream(websocket: WebSocket) -> None:
 
 5. **Define a Custom Realtime Function**
    The `get_weather` function is registered as a realtime callable function. When the user asks about the weather, the agent can call the function to get an accurate weather report and respond based on the provided information:
+
    - Returns `"The weather is cloudy."` for `"Seattle"`.
    - Returns `"The weather is sunny."` for other locations.
 
