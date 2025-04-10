@@ -92,7 +92,7 @@ class BasePrintReceivedMessage(BaseMessage, ABC):
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
 
-@deprecated_by(FunctionResponseEvent)
+@deprecated_by(FunctionResponseEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class FunctionResponseMessage(BasePrintReceivedMessage):
     name: Optional[str] = None
@@ -126,7 +126,7 @@ class ToolResponse(BaseModel):
         f(colored("*" * len(tool_print), "green"), flush=True)
 
 
-@deprecated_by(ToolResponseEvent)
+@deprecated_by(ToolResponseEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class ToolResponseMessage(BasePrintReceivedMessage):
     role: MessageRole = "tool"
@@ -163,7 +163,7 @@ class FunctionCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-@deprecated_by(FunctionCallEvent)
+@deprecated_by(FunctionCallEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class FunctionCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
@@ -205,7 +205,7 @@ class ToolCall(BaseModel):
         f(colored("*" * len(func_print), "green"), flush=True)
 
 
-@deprecated_by(ToolCallEvent)
+@deprecated_by(ToolCallEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class ToolCallMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
@@ -228,7 +228,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
         f("\n", "-" * 80, flush=True, sep="")
 
 
-@deprecated_by(TextEvent)
+@deprecated_by(TextEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
     content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
@@ -316,7 +316,7 @@ def create_received_message_model(
     )
 
 
-@deprecated_by(PostCarryoverProcessingEvent)
+@deprecated_by(PostCarryoverProcessingEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class PostCarryoverProcessingMessage(BaseMessage):
     carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
@@ -587,7 +587,9 @@ class GroupChatRunChatMessage(BaseMessage):
         f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
 
 
-@deprecated_by(TerminationAndHumanReplyNoInputEvent)
+@deprecated_by(
+    TerminationAndHumanReplyNoInputEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"}
+)
 @wrap_message
 class TerminationAndHumanReplyNoInputMessage(BaseMessage):
     """When the human-in-the-loop is prompted but provides no input."""
@@ -617,7 +619,7 @@ class TerminationAndHumanReplyNoInputMessage(BaseMessage):
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
 
 
-@deprecated_by(UsingAutoReplyEvent)
+@deprecated_by(UsingAutoReplyEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class UsingAutoReplyMessage(BaseMessage):
     human_input_mode: str
@@ -669,7 +671,7 @@ class TerminationMessage(BaseMessage):
         f(colored(f"\n>>>>>>>> TERMINATING RUN ({str(self.uuid)}): {self.termination_reason}", "red"), flush=True)
 
 
-@deprecated_by(ExecuteCodeBlockEvent)
+@deprecated_by(ExecuteCodeBlockEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ExecuteCodeBlockMessage(BaseMessage):
     code: str
@@ -696,7 +698,7 @@ class ExecuteCodeBlockMessage(BaseMessage):
         )
 
 
-@deprecated_by(ExecuteFunctionEvent)
+@deprecated_by(ExecuteFunctionEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ExecuteFunctionMessage(BaseMessage):
     func_name: str
@@ -729,7 +731,7 @@ class ExecuteFunctionMessage(BaseMessage):
         )
 
 
-@deprecated_by(ExecutedFunctionEvent)
+@deprecated_by(ExecutedFunctionEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ExecutedFunctionMessage(BaseMessage):
     func_name: str
@@ -818,7 +820,10 @@ class SelectSpeakerInvalidInputMessage(BaseMessage):
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
 
 
-@deprecated_by(ClearConversableAgentHistoryEvent, param_mapping={"no_messages_preserved": "no_events_preserved"})
+@deprecated_by(
+    ClearConversableAgentHistoryEvent,
+    param_mapping={"no_messages_preserved": "no_events_preserved", "recipient_name": "recipient"},
+)
 @wrap_message
 class ClearConversableAgentHistoryMessage(BaseMessage):
     agent_name: str
@@ -843,7 +848,7 @@ class ClearConversableAgentHistoryMessage(BaseMessage):
             )
 
 
-@deprecated_by(ClearConversableAgentHistoryWarningEvent)
+@deprecated_by(ClearConversableAgentHistoryWarningEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ClearConversableAgentHistoryWarningMessage(BaseMessage):
     recipient_name: str
@@ -866,7 +871,10 @@ class ClearConversableAgentHistoryWarningMessage(BaseMessage):
         )
 
 
-@deprecated_by(GenerateCodeExecutionReplyEvent)
+@deprecated_by(
+    GenerateCodeExecutionReplyEvent,
+    param_mapping={"sender_name": "sender", "recipient_name": "recipient", "code_block_languages": "code_blocks"},
+)
 @wrap_message
 class GenerateCodeExecutionReplyMessage(BaseMessage):
     code_block_languages: list[str]
@@ -912,7 +920,7 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
             )
 
 
-@deprecated_by(ConversableAgentUsageSummaryNoCostIncurredEvent)
+@deprecated_by(ConversableAgentUsageSummaryNoCostIncurredEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
     recipient_name: str
@@ -926,7 +934,7 @@ class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
         f(f"No cost incurred from agent '{self.recipient_name}'.")
 
 
-@deprecated_by(ConversableAgentUsageSummaryEvent)
+@deprecated_by(ConversableAgentUsageSummaryEvent, param_mapping={"recipient_name": "recipient"})
 @wrap_message
 class ConversableAgentUsageSummaryMessage(BaseMessage):
     recipient_name: str

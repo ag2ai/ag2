@@ -41,10 +41,14 @@ from autogen.events.agent_events import (
     UsingAutoReplyEvent,
     create_received_event_model,
 )
+from autogen.events.base_event import get_event_classes
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 with optional_import_block():
     import PIL
+
+
+EVENT_CLASSES = get_event_classes()
 
 
 @pytest.fixture(autouse=True)
@@ -66,34 +70,36 @@ def recipient() -> ConversableAgent:
 
 
 class TestToolResponseEvent:
-    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-        event = {
+    event = {
+        "role": "tool",
+        "tool_responses": [
+            {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
+            {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
+        ],
+        "content": "Timer is done!\\n\\nStopwatch is done!",
+    }
+
+    expected = {
+        "type": "tool_response",
+        "content": {
             "role": "tool",
+            "sender": "sender",
+            "recipient": "recipient",
+            "content": "Timer is done!\\n\\nStopwatch is done!",
             "tool_responses": [
                 {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
                 {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
             ],
-            "content": "Timer is done!\\n\\nStopwatch is done!",
-        }
-        actual = create_received_event_model(uuid=uuid, event=event, sender=sender, recipient=recipient)
+        },
+    }
+
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        actual = create_received_event_model(uuid=uuid, event=self.event, sender=sender, recipient=recipient)
         assert isinstance(actual, ToolResponseEvent)
 
-        expected = {
-            "type": "tool_response",
-            "content": {
-                "role": "tool",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
-                "uuid": uuid,
-                "content": "Timer is done!\\n\\nStopwatch is done!",
-                "tool_responses": [
-                    {"tool_call_id": "call_rJfVpHU3MXuPRR2OAdssVqUV", "role": "tool", "content": "Timer is done!"},
-                    {"tool_call_id": "call_zFZVYovdsklFYgqxttcOHwlr", "role": "tool", "content": "Stopwatch is done!"},
-                ],
-            },
-        }
+        self.expected["content"]["uuid"] = uuid
 
-        assert actual.model_dump() == expected
+        assert actual.model_dump() == self.expected
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -124,6 +130,20 @@ class TestToolResponseEvent:
 
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        actual = create_received_event_model(uuid=uuid, event=self.event, sender=sender, recipient=recipient)
+        assert isinstance(actual, ToolResponseEvent)
+
+        # Test serialization
+        self.expected["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected
+
+        # Test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestFunctionResponseEvent:
     @pytest.mark.parametrize(
@@ -145,8 +165,8 @@ class TestFunctionResponseEvent:
                 "name": "get_random_number",
                 "role": "function",
                 "content": event["content"],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "uuid": uuid,
             },
         }
@@ -172,30 +192,61 @@ class TestFunctionResponseEvent:
 
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        event = {
+            "name": "get_random_number",
+            "role": "function",
+            "content": 76,
+        }
+        actual = create_received_event_model(uuid=uuid, event=event, sender=sender, recipient=recipient)
+        assert isinstance(actual, FunctionResponseEvent)
 
-class TestFunctionCallEvent:
-    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-        fc_event = {
-            "content": "Let's play a game.",
-            "function_call": {"name": "get_random_number", "arguments": "{}"},
+        expected = {
+            "type": "function_response",
+            "content": {
+                "name": "get_random_number",
+                "role": "function",
+                "content": event["content"],
+                "sender": "sender",
+                "recipient": "recipient",
+                "uuid": uuid,
+            },
         }
 
-        event = create_received_event_model(uuid=uuid, event=fc_event, sender=sender, recipient=recipient)
+        # Test serialization
+        assert actual.model_dump() == expected
+
+        # Test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestFunctionCallEvent:
+    fc_event = {
+        "content": "Let's play a game.",
+        "function_call": {"name": "get_random_number", "arguments": "{}"},
+    }
+
+    expected = {
+        "type": "function_call",
+        "content": {
+            "content": "Let's play a game.",
+            "sender": "sender",
+            "recipient": "recipient",
+            "function_call": {"name": "get_random_number", "arguments": "{}"},
+        },
+    }
+
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        event = create_received_event_model(uuid=uuid, event=self.fc_event, sender=sender, recipient=recipient)
 
         assert isinstance(event, FunctionCallEvent)
 
         actual = event.model_dump()
-        expected = {
-            "type": "function_call",
-            "content": {
-                "content": "Let's play a game.",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
-                "uuid": uuid,
-                "function_call": {"name": "get_random_number", "arguments": "{}"},
-            },
-        }
-        assert actual == expected, actual
+        self.expected["content"]["uuid"] = uuid
+        assert actual == self.expected, actual
 
         mock = MagicMock()
         event.print(f=mock)
@@ -218,21 +269,50 @@ class TestFunctionCallEvent:
 
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        event = create_received_event_model(uuid=uuid, event=self.fc_event, sender=sender, recipient=recipient)
+        assert isinstance(event, FunctionCallEvent)
+
+        self.expected["content"]["uuid"] = uuid
+        # Test serialization
+        assert event.model_dump() == self.expected
+
+        # Test deserialization
+        d = event.model_dump()
+        assert event == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestToolCallEvent:
-    @pytest.mark.parametrize(
-        "role",
-        ["assistant", None],
-    )
-    def test_print(
-        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[EventRole]
-    ) -> None:
-        event = {
+    event = {
+        "content": None,
+        "refusal": None,
+        "audio": None,
+        "function_call": None,
+        "tool_calls": [
+            {
+                "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
+                "function": {"arguments": '{"num_seconds": "1"}', "name": "timer"},
+                "type": "function",
+            },
+            {
+                "id": "call_zFZVYovdsklFYgqxttcOHwlr",
+                "function": {"arguments": '{"num_seconds": "2"}', "name": "stopwatch"},
+                "type": "function",
+            },
+        ],
+    }
+
+    expected = {
+        "type": "tool_call",
+        "content": {
             "content": None,
             "refusal": None,
-            "role": role,
             "audio": None,
             "function_call": None,
+            "sender": "sender",
+            "recipient": "recipient",
             "tool_calls": [
                 {
                     "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
@@ -245,37 +325,24 @@ class TestToolCallEvent:
                     "type": "function",
                 },
             ],
-        }
+        },
+    }
 
-        actual = create_received_event_model(uuid=uuid, event=event, sender=sender, recipient=recipient)
+    @pytest.mark.parametrize(
+        "role",
+        ["assistant", None],
+    )
+    def test_print(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[EventRole]
+    ) -> None:
+        self.event["role"] = role
+
+        actual = create_received_event_model(uuid=uuid, event=self.event, sender=sender, recipient=recipient)
         assert isinstance(actual, ToolCallEvent)
 
-        expected = {
-            "type": "tool_call",
-            "content": {
-                "content": None,
-                "refusal": None,
-                "role": role,
-                "audio": None,
-                "function_call": None,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
-                "uuid": uuid,
-                "tool_calls": [
-                    {
-                        "id": "call_rJfVpHU3MXuPRR2OAdssVqUV",
-                        "function": {"arguments": '{"num_seconds": "1"}', "name": "timer"},
-                        "type": "function",
-                    },
-                    {
-                        "id": "call_zFZVYovdsklFYgqxttcOHwlr",
-                        "function": {"arguments": '{"num_seconds": "2"}', "name": "stopwatch"},
-                        "type": "function",
-                    },
-                ],
-            },
-        }
-        assert actual.model_dump() == expected
+        self.expected["content"]["uuid"] = uuid
+        self.expected["content"]["role"] = role
+        assert actual.model_dump() == self.expected
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -303,6 +370,23 @@ class TestToolCallEvent:
         ]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        self.event["role"] = None
+
+        actual = create_received_event_model(uuid=uuid, event=self.event, sender=sender, recipient=recipient)
+        assert isinstance(actual, ToolCallEvent)
+
+        self.expected["content"]["uuid"] = uuid
+        self.expected["content"]["role"] = None
+        # Test serialization
+        assert actual.model_dump() == self.expected
+
+        # Test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestTextEvent:
@@ -355,8 +439,8 @@ class TestTextEvent:
             "content": {
                 "uuid": uuid,
                 "content": event["content"],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -395,8 +479,8 @@ class TestTextEvent:
             "content": {
                 "uuid": uuid,
                 "content": "hello there",
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -428,7 +512,7 @@ class TestTextEvent:
             {"type": "text", "text": "."},
         ]
         uuid = UUID("f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b")
-        text_event = TextEvent(content=content, sender_name="sender", recipient_name="recipient", uuid=uuid)
+        text_event = TextEvent(content=content, sender="sender", recipient="recipient", uuid=uuid)
 
         result = text_event.model_dump_json()
 
@@ -436,41 +520,71 @@ class TestTextEvent:
             '{"type":"text","content":{"uuid":"f1b9b3b4-0b3b-4b3b-8b3b-0b3b3b3b3b3b",'
             '"content":[{"type":"text","text":"What\'s the breed of this dog?\\n"},'
             '{"type":"image_url","image_url":{"url":"<image>"}},'
-            '{"type":"text","text":"."}],"sender_name":"sender","recipient_name":"recipient"}}'
+            '{"type":"text","text":"."}],"sender":"sender","recipient":"recipient"}}'
         )
         assert str(result) == expected, result
 
-
-class TestPostCarryoverProcessingEvent:
-    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
-        chat_info = {
-            "carryover": ["This is a test event 1", "This is a test event 2"],
-            "message": "Start chat",
-            "verbose": True,
-            "sender": sender,
-            "recipient": recipient,
-            "summary_method": "last_msg",
-            "max_turns": 5,
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        event = {
+            "content": "hello {name}",
+            "context": {"name": "there"},
         }
+        actual = create_received_event_model(uuid=uuid, event=event, sender=sender, recipient=recipient)
 
-        actual = PostCarryoverProcessingEvent(uuid=uuid, chat_info=chat_info)
-        assert isinstance(actual, PostCarryoverProcessingEvent)
-
-        expected = {
-            "type": "post_carryover_processing",
+        assert isinstance(actual, TextEvent)
+        expected_model_dump = {
+            "type": "text",
             "content": {
                 "uuid": uuid,
+                "content": event["content"],
+                "sender": "sender",
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestPostCarryoverProcessingEvent:
+    chat_info = {
+        "carryover": ["This is a test event 1", "This is a test event 2"],
+        "message": "Start chat",
+        "verbose": True,
+        "summary_method": "last_msg",
+        "max_turns": 5,
+    }
+
+    expected = {
+        "type": "post_carryover_processing",
+        "content": {
+            "chat_info": {
                 "carryover": ["This is a test event 1", "This is a test event 2"],
                 "message": "Start chat",
                 "verbose": True,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
                 "summary_method": "last_msg",
                 "summary_args": None,
                 "max_turns": 5,
             },
-        }
-        assert actual.model_dump() == expected, f"{actual.model_dump()} != {expected}"
+        },
+    }
+
+    def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+        self.chat_info["sender"] = sender
+        self.chat_info["recipient"] = recipient
+
+        self.expected["content"]["uuid"] = uuid
+
+        actual = PostCarryoverProcessingEvent(uuid=uuid, chat_info=self.chat_info)
+        assert isinstance(actual, PostCarryoverProcessingEvent)
+
+        assert actual.model_dump() == self.expected, f"{actual.model_dump()} != {self.expected}"
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -494,6 +608,22 @@ class TestPostCarryoverProcessingEvent:
         ]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        self.chat_info["sender"] = sender
+        self.chat_info["recipient"] = recipient
+
+        actual = PostCarryoverProcessingEvent(uuid=uuid, chat_info=self.chat_info)
+        assert isinstance(actual, PostCarryoverProcessingEvent)
+
+        self.expected["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
     @pytest.mark.parametrize(
         "carryover, expected",
@@ -536,14 +666,16 @@ class TestPostCarryoverProcessingEvent:
             "type": "post_carryover_processing",
             "content": {
                 "uuid": uuid,
-                "carryover": carryover,
-                "message": "Start chat",
-                "verbose": True,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
-                "summary_method": "last_msg",
-                "summary_args": None,
-                "max_turns": 5,
+                "chat_info": {
+                    "carryover": carryover,
+                    "message": "Start chat",
+                    "verbose": True,
+                    "sender": "sender",
+                    "recipient": "recipient",
+                    "summary_method": "last_msg",
+                    "summary_args": None,
+                    "max_turns": 5,
+                },
             },
         }
         assert post_carryover_processing.model_dump() == expected_model_dump
@@ -584,7 +716,7 @@ class TestClearAgentsHistoryEvent:
             "type": "clear_agents_history",
             "content": {
                 "uuid": uuid,
-                "agent_name": "clear_agent" if agent else None,
+                "agent": "clear_agent" if agent else None,
                 "nr_events_to_preserve": nr_events_to_preserve,
             },
         }
@@ -597,6 +729,28 @@ class TestClearAgentsHistoryEvent:
 
         expected_call_args_list = [call(expected)]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        agent = ConversableAgent(
+            "clear_agent", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+        )
+        nr_events_to_preserve = 5
+        actual = ClearAgentsHistoryEvent(uuid=uuid, agent=agent, nr_events_to_preserve=nr_events_to_preserve)
+        assert isinstance(actual, ClearAgentsHistoryEvent)
+
+        expected_model_dump = {
+            "type": "clear_agents_history",
+            "content": {
+                "uuid": uuid,
+                "agent": "clear_agent" if agent else None,
+                "nr_events_to_preserve": nr_events_to_preserve,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestSpeakerAttemptSuccessfulEvent:
@@ -627,7 +781,7 @@ class TestSpeakerAttemptSuccessfulEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -640,6 +794,37 @@ class TestSpeakerAttemptSuccessfulEvent:
         expected_call_args_list = [call(expected, flush=True)]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        mentions = {"agent_1": 1}
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptSuccessfulEvent(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptSuccessfulEvent)
+
+        expected_model_dump = {
+            "type": "speaker_attempt_successful",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "select_speaker_auto_verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestSpeakerAttemptFailedMultipleAgentsEvent:
@@ -673,7 +858,7 @@ class TestSpeakerAttemptFailedMultipleAgentsEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -686,6 +871,37 @@ class TestSpeakerAttemptFailedMultipleAgentsEvent:
         expected_call_args_list = [call(expected, flush=True)]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        mentions = {"agent_1": 1, "agent_2": 2}
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptFailedMultipleAgentsEvent(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptFailedMultipleAgentsEvent)
+
+        expected_model_dump = {
+            "type": "speaker_attempt_failed_multiple_agents",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "select_speaker_auto_verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestSpeakerAttemptFailedNoAgentsEvent:
@@ -716,7 +932,7 @@ class TestSpeakerAttemptFailedNoAgentsEvent:
                 "mentions": mentions,
                 "attempt": attempt,
                 "attempts_left": attempts_left,
-                "verbose": verbose,
+                "select_speaker_auto_verbose": verbose,
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -730,26 +946,59 @@ class TestSpeakerAttemptFailedNoAgentsEvent:
 
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        mentions = {}
+        attempt = 1
+        attempts_left = 2
+        verbose = True
+
+        actual = SpeakerAttemptFailedNoAgentsEvent(
+            uuid=uuid,
+            mentions=mentions,
+            attempt=attempt,
+            attempts_left=attempts_left,
+            select_speaker_auto_verbose=verbose,
+        )
+        assert isinstance(actual, SpeakerAttemptFailedNoAgentsEvent)
+
+        expected_model_dump = {
+            "type": "speaker_attempt_failed_no_agents",
+            "content": {
+                "uuid": uuid,
+                "mentions": mentions,
+                "attempt": attempt,
+                "attempts_left": attempts_left,
+                "select_speaker_auto_verbose": verbose,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # test deserialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestGroupChatResumeEvent:
-    def test_print(self, uuid: UUID) -> None:
-        last_speaker_name = "Coder"
-        events = [
-            {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
-            {"content": "Let's get coding, should I use Python?", "name": "Coder", "role": "assistant"},
-        ]
-        silent = False
+    last_speaker_name = "Coder"
+    events = [
+        {"content": "You are an expert at coding.", "role": "system", "name": "chat_manager"},
+        {"content": "Let's get coding, should I use Python?", "name": "Coder", "role": "assistant"},
+    ]
+    silent = False
 
-        actual = GroupChatResumeEvent(uuid=uuid, last_speaker_name=last_speaker_name, events=events, silent=silent)
+    def test_print(self, uuid: UUID) -> None:
+        actual = GroupChatResumeEvent(
+            uuid=uuid, last_speaker_name=self.last_speaker_name, events=self.events, silent=self.silent
+        )
         assert isinstance(actual, GroupChatResumeEvent)
 
         expected_model_dump = {
             "type": "group_chat_resume",
             "content": {
                 "uuid": uuid,
-                "last_speaker_name": last_speaker_name,
-                "events": events,
-                "verbose": True,
+                "last_speaker_name": self.last_speaker_name,
+                "events": self.events,
+                "silent": self.silent,
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -765,26 +1014,50 @@ class TestGroupChatResumeEvent:
 
         assert mock.call_args_list == expected_call_args_list
 
-
-class TestGroupChatRunChatEvent:
-    def test_print(self, uuid: UUID) -> None:
-        speaker = ConversableAgent(
-            "assistant_uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        actual = GroupChatResumeEvent(
+            uuid=uuid, last_speaker_name=self.last_speaker_name, events=self.events, silent=self.silent
         )
-        silent = False
-
-        actual = GroupChatRunChatEvent(uuid=uuid, speaker=speaker, silent=silent)
-        assert isinstance(actual, GroupChatRunChatEvent)
+        assert isinstance(actual, GroupChatResumeEvent)
 
         expected_model_dump = {
-            "type": "group_chat_run_chat",
+            "type": "group_chat_resume",
             "content": {
                 "uuid": uuid,
-                "speaker_name": "assistant_uno",
-                "verbose": True,
+                "last_speaker_name": self.last_speaker_name,
+                "events": self.events,
+                "silent": self.silent,
             },
         }
         assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestGroupChatRunChatEvent:
+    speaker = ConversableAgent(
+        "assistant_uno", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"
+    )
+    silent = False
+    expected_model_dump = {
+        "type": "group_chat_run_chat",
+        "content": {
+            "speaker": "assistant_uno",
+            "silent": False,
+        },
+    }
+
+    def test_print(self, uuid: UUID) -> None:
+        actual = GroupChatRunChatEvent(uuid=uuid, speaker=self.speaker, silent=self.silent)
+        assert isinstance(actual, GroupChatRunChatEvent)
+
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -794,6 +1067,17 @@ class TestGroupChatRunChatEvent:
         expected_call_args_list = [call("\x1b[32m\nNext speaker: assistant_uno\n\x1b[0m", flush=True)]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        actual = GroupChatRunChatEvent(uuid=uuid, speaker=self.speaker, silent=self.silent)
+        assert isinstance(actual, GroupChatRunChatEvent)
+
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestTerminationAndHumanReplyEvent:
@@ -813,8 +1097,8 @@ class TestTerminationAndHumanReplyEvent:
             "content": {
                 "uuid": uuid,
                 "no_human_input_msg": no_human_input_msg,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -824,6 +1108,34 @@ class TestTerminationAndHumanReplyEvent:
         # print(mock.call_args_list)
         expected_call_args_list = [call("\x1b[31m\n>>>>>>>> NO HUMAN INPUT RECEIVED.\x1b[0m", flush=True)]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        no_human_input_msg = "NO HUMAN INPUT RECEIVED."
+
+        actual = TerminationAndHumanReplyNoInputEvent(
+            uuid=uuid,
+            no_human_input_msg=no_human_input_msg,
+            sender=sender,
+            recipient=recipient,
+        )
+        assert isinstance(actual, TerminationAndHumanReplyNoInputEvent)
+
+        expected_model_dump = {
+            "type": "termination_and_human_reply_no_input",
+            "content": {
+                "uuid": uuid,
+                "no_human_input_msg": no_human_input_msg,
+                "sender": "sender",
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestTerminationEvent:
@@ -855,6 +1167,28 @@ class TestTerminationEvent:
         ]
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        termination_reason = "User requested to end the conversation."
+
+        actual = TerminationEvent(
+            uuid=uuid,
+            termination_reason=termination_reason,
+        )
+        assert isinstance(actual, TerminationEvent)
+
+        expected_model_dump = {
+            "type": "termination",
+            "content": {
+                "uuid": uuid,
+                "termination_reason": termination_reason,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestUsingAutoReplyEvent:
     def test_print(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
@@ -873,8 +1207,8 @@ class TestUsingAutoReplyEvent:
             "content": {
                 "uuid": uuid,
                 "human_input_mode": human_input_mode,
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -884,6 +1218,34 @@ class TestUsingAutoReplyEvent:
         # print(mock.call_args_list)
         expected_call_args_list = [call("\x1b[31m\n>>>>>>>> USING AUTO REPLY...\x1b[0m", flush=True)]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        human_input_mode = "ALWAYS"
+
+        actual = UsingAutoReplyEvent(
+            uuid=uuid,
+            human_input_mode=human_input_mode,
+            sender=sender,
+            recipient=recipient,
+        )
+        assert isinstance(actual, UsingAutoReplyEvent)
+
+        expected_model_dump = {
+            "type": "using_auto_reply",
+            "content": {
+                "uuid": uuid,
+                "human_input_mode": human_input_mode,
+                "sender": "sender",
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestExecuteCodeBlockEvent:
@@ -904,7 +1266,7 @@ class TestExecuteCodeBlockEvent:
                 "code": code,
                 "language": language,
                 "code_block_count": code_block_count,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -919,6 +1281,34 @@ class TestExecuteCodeBlockEvent:
         ]
 
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
+        code = """print("hello world")"""
+        language = "python"
+        code_block_count = 0
+
+        actual = ExecuteCodeBlockEvent(
+            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient=recipient
+        )
+        assert isinstance(actual, ExecuteCodeBlockEvent)
+
+        expected_model_dump = {
+            "type": "execute_code_block",
+            "content": {
+                "uuid": uuid,
+                "code": code,
+                "language": language,
+                "code_block_count": code_block_count,
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestExecuteFunctionEvent:
@@ -939,7 +1329,7 @@ class TestExecuteFunctionEvent:
                 "func_name": func_name,
                 "call_id": call_id,
                 "arguments": arguments,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -954,6 +1344,32 @@ class TestExecuteFunctionEvent:
             )
         ]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        func_name = "add_num"
+        call_id = "call_12345xyz"
+        arguments = {"num_to_be_added": 5}
+
+        actual = ExecuteFunctionEvent(
+            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient=recipient
+        )
+        assert isinstance(actual, ExecuteFunctionEvent)
+
+        expected_model_dump = {
+            "type": "execute_function",
+            "content": {
+                "uuid": uuid,
+                "func_name": func_name,
+                "call_id": call_id,
+                "arguments": arguments,
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestExecutedFunctionEvent:
@@ -976,7 +1392,7 @@ class TestExecutedFunctionEvent:
                 "call_id": call_id,
                 "arguments": arguments,
                 "content": content,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -992,25 +1408,53 @@ class TestExecutedFunctionEvent:
         ]
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        func_name = "add_num"
+        call_id = "call_12345xyz"
+        arguments = {"num_to_be_added": 5}
+        content = "15"
 
-class TestSelectSpeakerEvent:
-    def test_print(self, uuid: UUID) -> None:
-        agents = [
-            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ]
-
-        actual = SelectSpeakerEvent(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-        assert isinstance(actual, SelectSpeakerEvent)
+        actual = ExecutedFunctionEvent(
+            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=recipient
+        )
+        assert isinstance(actual, ExecutedFunctionEvent)
 
         expected_model_dump = {
-            "type": "select_speaker",
+            "type": "executed_function",
             "content": {
                 "uuid": uuid,
-                "agent_names": ["bob", "charlie"],
+                "func_name": func_name,
+                "call_id": call_id,
+                "arguments": arguments,
+                "content": content,
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestSelectSpeakerEvent:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+    expected_model_dump = {
+        "type": "select_speaker",
+        "content": {
+            "agents": ["bob", "charlie"],
+        },
+    }
+
+    def test_print(self, uuid: UUID) -> None:
+        actual = SelectSpeakerEvent(uuid=uuid, agents=self.agents)  # type: ignore [arg-type]
+        assert isinstance(actual, SelectSpeakerEvent)
+
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
 
         mock = MagicMock()
         actual.print(f=mock)
@@ -1022,16 +1466,26 @@ class TestSelectSpeakerEvent:
         ]
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        actual = SelectSpeakerEvent(uuid=uuid, agents=self.agents)
+        assert isinstance(actual, SelectSpeakerEvent)
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestSelectSpeakerTryCountExceededEvent:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+
     def test_print(self, uuid: UUID) -> None:
-        agents = [
-            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ]
         try_count = 3
 
-        actual = SelectSpeakerTryCountExceededEvent(uuid=uuid, try_count=try_count, agents=agents)  # type: ignore [arg-type]
+        actual = SelectSpeakerTryCountExceededEvent(uuid=uuid, try_count=try_count, agents=self.agents)  # type: ignore [arg-type]
         assert isinstance(actual, SelectSpeakerTryCountExceededEvent)
 
         expected_model_dump = {
@@ -1039,7 +1493,7 @@ class TestSelectSpeakerTryCountExceededEvent:
             "content": {
                 "uuid": uuid,
                 "try_count": try_count,
-                "agent_names": ["bob", "charlie"],
+                "agents": ["bob", "charlie"],
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1050,30 +1504,58 @@ class TestSelectSpeakerTryCountExceededEvent:
         expected_call_args_list = [call("You have tried 3 times. The next speaker will be selected automatically.")]
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        try_count = 3
 
-class TestSelectSpeakerInvalidInputEvent:
-    def test_print(self, uuid: UUID) -> None:
-        agents = [
-            ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-            ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
-        ]
-
-        actual = SelectSpeakerInvalidInputEvent(uuid=uuid, agents=agents)  # type: ignore [arg-type]
-        assert isinstance(actual, SelectSpeakerInvalidInputEvent)
-
+        actual = SelectSpeakerTryCountExceededEvent(uuid=uuid, try_count=try_count, agents=self.agents)
+        assert isinstance(actual, SelectSpeakerTryCountExceededEvent)
         expected_model_dump = {
-            "type": "select_speaker_invalid_input",
+            "type": "select_speaker_try_count_exceeded",
             "content": {
                 "uuid": uuid,
-                "agent_names": ["bob", "charlie"],
+                "try_count": try_count,
+                "agents": ["bob", "charlie"],
             },
         }
         assert actual.model_dump() == expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
+
+class TestSelectSpeakerInvalidInputEvent:
+    agents = [
+        ConversableAgent("bob", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+        ConversableAgent("charlie", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER"),
+    ]
+    expected_model_dump = {
+        "type": "select_speaker_invalid_input",
+        "content": {
+            "agents": ["bob", "charlie"],
+        },
+    }
+
+    def test_print(self, uuid: UUID) -> None:
+        actual = SelectSpeakerInvalidInputEvent(uuid=uuid, agents=self.agents)  # type: ignore [arg-type]
+        assert isinstance(actual, SelectSpeakerInvalidInputEvent)
+
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
+
         mock = MagicMock()
         actual.print(f=mock)
         # print(mock.call_args_list)
         expected_call_args_list = [call("Invalid input. Please enter a number between 1 and 2.")]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID) -> None:
+        actual = SelectSpeakerInvalidInputEvent(uuid=uuid, agents=self.agents)
+        assert isinstance(actual, SelectSpeakerInvalidInputEvent)
+        self.expected_model_dump["content"]["uuid"] = uuid
+        assert actual.model_dump() == self.expected_model_dump
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestClearConversableAgentHistoryEvent:
@@ -1087,8 +1569,7 @@ class TestClearConversableAgentHistoryEvent:
             "type": "clear_conversable_agent_history",
             "content": {
                 "uuid": uuid,
-                "agent_name": "recipient",
-                "recipient_name": "recipient",
+                "agent": "recipient",
                 "no_events_preserved": no_events_preserved,
             },
         }
@@ -1106,6 +1587,26 @@ class TestClearConversableAgentHistoryEvent:
         ]
         assert mock.call_args_list == expected_call_args_list
 
+    def test_serialization_and_deserialization(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        no_events_preserved = 5
+
+        actual = ClearConversableAgentHistoryEvent(uuid=uuid, agent=recipient, no_events_preserved=no_events_preserved)
+        assert isinstance(actual, ClearConversableAgentHistoryEvent)
+
+        expected_model_dump = {
+            "type": "clear_conversable_agent_history",
+            "content": {
+                "uuid": uuid,
+                "agent": "recipient",
+                "no_events_preserved": no_events_preserved,
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
+
 
 class TestClearConversableAgentHistoryWarningEvent:
     def test_print(self, uuid: UUID, recipient: ConversableAgent) -> None:
@@ -1116,7 +1617,7 @@ class TestClearConversableAgentHistoryWarningEvent:
             "type": "clear_conversable_agent_history_warning",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1131,6 +1632,23 @@ class TestClearConversableAgentHistoryWarningEvent:
             )
         ]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(self, uuid: UUID, recipient: ConversableAgent) -> None:
+        actual = ClearConversableAgentHistoryWarningEvent(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ClearConversableAgentHistoryWarningEvent)
+
+        expected_model_dump = {
+            "type": "clear_conversable_agent_history_warning",
+            "content": {
+                "uuid": uuid,
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestGenerateCodeExecutionReplyEvent:
@@ -1172,9 +1690,9 @@ class TestGenerateCodeExecutionReplyEvent:
             "type": "generate_code_execution_reply",
             "content": {
                 "uuid": uuid,
-                "code_block_languages": [x.language for x in code_blocks],
-                "sender_name": "sender",
-                "recipient_name": "recipient",
+                "code_blocks": [x.language for x in code_blocks],
+                "sender": "sender",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1185,6 +1703,35 @@ class TestGenerateCodeExecutionReplyEvent:
         # print(mock.call_args_list)
 
         assert mock.call_args_list == expected
+
+    def test_serialization_and_deserialization(
+        self,
+        uuid: UUID,
+        sender: ConversableAgent,
+        recipient: ConversableAgent,
+    ) -> None:
+        code_blocks = [
+            CodeBlock(code="print('hello world')", language="python"),
+            CodeBlock(code="print('goodbye world')", language="python"),
+        ]
+
+        actual = GenerateCodeExecutionReplyEvent(uuid=uuid, code_blocks=code_blocks, sender=sender, recipient=recipient)
+        assert isinstance(actual, GenerateCodeExecutionReplyEvent)
+
+        expected_model_dump = {
+            "type": "generate_code_execution_reply",
+            "content": {
+                "uuid": uuid,
+                "code_blocks": [x.language for x in code_blocks],
+                "sender": "sender",
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestConversableAgentUsageSummaryNoCostIncurredEvent:
@@ -1200,7 +1747,7 @@ class TestConversableAgentUsageSummaryNoCostIncurredEvent:
             "type": "conversable_agent_usage_summary_no_cost_incurred",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1211,6 +1758,27 @@ class TestConversableAgentUsageSummaryNoCostIncurredEvent:
         # print(mock.call_args_list)
         expected_call_args_list = [call("No cost incurred from agent 'recipient'.")]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self,
+        uuid: UUID,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = ConversableAgentUsageSummaryNoCostIncurredEvent(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ConversableAgentUsageSummaryNoCostIncurredEvent)
+
+        expected_model_dump = {
+            "type": "conversable_agent_usage_summary_no_cost_incurred",
+            "content": {
+                "uuid": uuid,
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)
 
 
 class TestConversableAgentUsageSummaryEvent:
@@ -1226,7 +1794,7 @@ class TestConversableAgentUsageSummaryEvent:
             "type": "conversable_agent_usage_summary",
             "content": {
                 "uuid": uuid,
-                "recipient_name": "recipient",
+                "recipient": "recipient",
             },
         }
         assert actual.model_dump() == expected_model_dump
@@ -1237,3 +1805,24 @@ class TestConversableAgentUsageSummaryEvent:
         # print(mock.call_args_list)
         expected_call_args_list = [call("Agent 'recipient':")]
         assert mock.call_args_list == expected_call_args_list
+
+    def test_serialization_and_deserialization(
+        self,
+        uuid: UUID,
+        recipient: ConversableAgent,
+    ) -> None:
+        actual = ConversableAgentUsageSummaryEvent(uuid=uuid, recipient=recipient)
+        assert isinstance(actual, ConversableAgentUsageSummaryEvent)
+
+        expected_model_dump = {
+            "type": "conversable_agent_usage_summary",
+            "content": {
+                "uuid": uuid,
+                "recipient": "recipient",
+            },
+        }
+        assert actual.model_dump() == expected_model_dump
+
+        # Test serialization
+        d = actual.model_dump()
+        assert actual == EVENT_CLASSES[d["type"]].model_validate(d)

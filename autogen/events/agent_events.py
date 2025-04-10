@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_serializer
 from termcolor import colored
 
 from ..agentchat.agent import LLMMessageType
@@ -55,12 +55,12 @@ EventRole = Literal["assistant", "function", "tool"]
 
 class BasePrintReceivedEvent(BaseEvent, ABC):
     content: Union[str, int, float, bool]
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
-        f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
+        f(f"{colored(self.sender, 'yellow')} (to {self.recipient}):\n", flush=True)
 
 
 @wrap_event
@@ -237,25 +237,25 @@ def create_received_event_model(
 ) -> Union[FunctionResponseEvent, ToolResponseEvent, FunctionCallEvent, ToolCallEvent, TextEvent]:
     role = event.get("role")
     if role == "function":
-        return FunctionResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return FunctionResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
     if role == "tool":
-        return ToolResponseEvent(**event, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
+        return ToolResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
 
     # Role is neither function nor tool
 
     if event.get("function_call"):
         return FunctionCallEvent(
             **event,
-            sender_name=sender.name,
-            recipient_name=recipient.name,
+            sender=sender.name,
+            recipient=recipient.name,
             uuid=uuid,
         )
 
     if event.get("tool_calls"):
         return ToolCallEvent(
             **event,
-            sender_name=sender.name,
-            recipient_name=recipient.name,
+            sender=sender.name,
+            recipient=recipient.name,
             uuid=uuid,
         )
 
@@ -273,8 +273,8 @@ def create_received_event_model(
 
     return TextEvent(
         content=content,
-        sender_name=sender.name,
-        recipient_name=recipient.name,
+        sender=sender.name,
+        recipient=recipient.name,
         uuid=uuid,
     )
 
@@ -285,8 +285,8 @@ class PostCarryoverProcessingEvent(BaseEvent):
     message: str
     verbose: bool = False
 
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
     summary_method: str
     summary_args: Optional[dict[str, Any]] = None
     max_turns: Optional[int] = None
@@ -296,8 +296,8 @@ class PostCarryoverProcessingEvent(BaseEvent):
         message = chat_info.get("message")
         verbose = chat_info.get("verbose", False)
 
-        sender_name = chat_info["sender"].name
-        recipient_name = chat_info["recipient"].name
+        sender = chat_info["sender"].name if hasattr(chat_info["sender"], "name") else chat_info["sender"]
+        recipient = chat_info["recipient"].name if hasattr(chat_info["recipient"], "name") else chat_info["recipient"]
         summary_args = chat_info.get("summary_args")
         max_turns = chat_info.get("max_turns")
 
@@ -324,9 +324,25 @@ class PostCarryoverProcessingEvent(BaseEvent):
             summary_method=summary_method,
             summary_args=summary_args,
             max_turns=max_turns,
-            sender_name=sender_name,
-            recipient_name=recipient_name,
+            sender=sender,
+            recipient=recipient,
         )
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "chat_info": {
+                "carryover": self.carryover,
+                "message": self.message,
+                "verbose": self.verbose,
+                "sender": self.sender,
+                "recipient": self.recipient,
+                "summary_method": self.summary_method,
+                "summary_args": self.summary_args,
+                "max_turns": self.max_turns,
+            },
+        }
 
     def _process_carryover(self) -> str:
         if not isinstance(self.carryover, list):
@@ -364,28 +380,30 @@ class PostCarryoverProcessingEvent(BaseEvent):
 
 @wrap_event
 class ClearAgentsHistoryEvent(BaseEvent):
-    agent_name: Optional[str] = None
+    agent: Optional[str] = None
     nr_events_to_preserve: Optional[int] = None
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
-        agent: Optional["Agent"] = None,
+        agent: Optional[Union["Agent", str]] = None,
         nr_events_to_preserve: Optional[int] = None,
     ):
         return super().__init__(
-            uuid=uuid, agent_name=agent.name if agent else None, nr_events_to_preserve=nr_events_to_preserve
+            uuid=uuid,
+            agent=agent.name if hasattr(agent, "name") else agent,
+            nr_events_to_preserve=nr_events_to_preserve,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        if self.agent_name:
+        if self.agent:
             if self.nr_events_to_preserve:
-                f(f"Clearing history for {self.agent_name} except last {self.nr_events_to_preserve} events.")
+                f(f"Clearing history for {self.agent} except last {self.nr_events_to_preserve} events.")
             else:
-                f(f"Clearing history for {self.agent_name}.")
+                f(f"Clearing history for {self.agent}.")
         else:
             if self.nr_events_to_preserve:
                 f(f"Clearing history for all agents except last {self.nr_events_to_preserve} events.")
@@ -417,6 +435,16 @@ class SpeakerAttemptSuccessfulEvent(BaseEvent):
             attempts_left=attempts_left,
             verbose=select_speaker_auto_verbose,
         )
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "mentions": self.mentions,
+            "attempt": self.attempt,
+            "attempts_left": self.attempts_left,
+            "select_speaker_auto_verbose": self.verbose,
+        }
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -455,6 +483,16 @@ class SpeakerAttemptFailedMultipleAgentsEvent(BaseEvent):
             verbose=select_speaker_auto_verbose,
         )
 
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "mentions": self.mentions,
+            "attempt": self.attempt,
+            "attempts_left": self.attempts_left,
+            "select_speaker_auto_verbose": self.verbose,
+        }
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -491,6 +529,16 @@ class SpeakerAttemptFailedNoAgentsEvent(BaseEvent):
             verbose=select_speaker_auto_verbose,
         )
 
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "mentions": self.mentions,
+            "attempt": self.attempt,
+            "attempts_left": self.attempts_left,
+            "select_speaker_auto_verbose": self.verbose,
+        }
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -519,6 +567,15 @@ class GroupChatResumeEvent(BaseEvent):
     ):
         super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, events=events, verbose=not silent)
 
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "last_speaker_name": self.last_speaker_name,
+            "events": self.events,
+            "silent": not self.verbose,
+        }
+
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
@@ -531,16 +588,20 @@ class GroupChatResumeEvent(BaseEvent):
 
 @wrap_event
 class GroupChatRunChatEvent(BaseEvent):
-    speaker_name: str
+    speaker: str
     verbose: Optional[bool] = False
 
-    def __init__(self, *, uuid: Optional[UUID] = None, speaker: "Agent", silent: Optional[bool] = False):
-        super().__init__(uuid=uuid, speaker_name=speaker.name, verbose=not silent)
+    def __init__(self, *, uuid: Optional[UUID] = None, speaker: Union["Agent", str], silent: Optional[bool] = False):
+        super().__init__(uuid=uuid, speaker=speaker.name if hasattr(speaker, "name") else speaker, verbose=not silent)
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {"uuid": self.uuid, "speaker": self.speaker, "silent": not self.verbose}
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
+        f(colored(f"\nNext speaker: {self.speaker}\n", "green"), flush=True)
 
 
 @wrap_event
@@ -548,22 +609,23 @@ class TerminationAndHumanReplyNoInputEvent(BaseEvent):
     """When the human-in-the-loop is prompted but provides no input."""
 
     no_human_input_msg: str
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         no_human_input_msg: str,
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
+        sender = sender or "No sender"
         super().__init__(
             uuid=uuid,
             no_human_input_msg=no_human_input_msg,
-            sender_name=sender.name if sender else "No sender",
-            recipient_name=recipient.name,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -575,22 +637,23 @@ class TerminationAndHumanReplyNoInputEvent(BaseEvent):
 @wrap_event
 class UsingAutoReplyEvent(BaseEvent):
     human_input_mode: str
-    sender_name: str
-    recipient_name: str
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
         human_input_mode: str,
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
+        sender = sender or "No sender"
         super().__init__(
             uuid=uuid,
             human_input_mode=human_input_mode,
-            sender_name=sender.name if sender else "No sender",
-            recipient_name=recipient.name,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -627,13 +690,23 @@ class ExecuteCodeBlockEvent(BaseEvent):
     code: str
     language: str
     code_block_count: int
-    recipient_name: str
+    recipient: str
 
     def __init__(
-        self, *, uuid: Optional[UUID] = None, code: str, language: str, code_block_count: int, recipient: "Agent"
+        self,
+        *,
+        uuid: Optional[UUID] = None,
+        code: str,
+        language: str,
+        code_block_count: int,
+        recipient: Union["Agent", str],
     ):
         super().__init__(
-            uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
+            uuid=uuid,
+            code=code,
+            language=language,
+            code_block_count=code_block_count,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -653,7 +726,7 @@ class ExecuteFunctionEvent(BaseEvent):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
-    recipient_name: str
+    recipient: str
 
     def __init__(
         self,
@@ -662,10 +735,14 @@ class ExecuteFunctionEvent(BaseEvent):
         func_name: str,
         call_id: Optional[str] = None,
         arguments: dict[str, Any],
-        recipient: "Agent",
+        recipient: Union["Agent", str],
     ):
         super().__init__(
-            uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient_name=recipient.name
+            uuid=uuid,
+            func_name=func_name,
+            call_id=call_id,
+            arguments=arguments,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -686,7 +763,7 @@ class ExecutedFunctionEvent(BaseEvent):
     call_id: Optional[str] = None
     arguments: dict[str, Any]
     content: str
-    recipient_name: str
+    recipient: str
 
     def __init__(
         self,
@@ -696,7 +773,7 @@ class ExecutedFunctionEvent(BaseEvent):
         call_id: Optional[str] = None,
         arguments: dict[str, Any],
         content: str,
-        recipient: "Agent",
+        recipient: Union["Agent", str],
     ):
         super().__init__(
             uuid=uuid,
@@ -704,7 +781,7 @@ class ExecutedFunctionEvent(BaseEvent):
             call_id=call_id,
             arguments=arguments,
             content=content,
-            recipient_name=recipient.name,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -721,29 +798,31 @@ class ExecutedFunctionEvent(BaseEvent):
 
 @wrap_event
 class SelectSpeakerEvent(BaseEvent):
-    agent_names: Optional[list[str]] = None
+    agents: Optional[list[str]] = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
-        agent_names = [agent.name for agent in agents] if agents else None
-        super().__init__(uuid=uuid, agent_names=agent_names)
+    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list[Union["Agent", str]]] = None):
+        agents = [agent.name if hasattr(agent, "name") else agent for agent in agents] if agents else None
+        super().__init__(uuid=uuid, agents=agents)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         f("Please select the next speaker from the following list:")
-        agent_names = self.agent_names or []
-        for i, agent_name in enumerate(agent_names):
-            f(f"{i + 1}: {agent_name}")
+        agents = self.agents or []
+        for i, agent in enumerate(agents):
+            f(f"{i + 1}: {agent}")
 
 
 @wrap_event
 class SelectSpeakerTryCountExceededEvent(BaseEvent):
     try_count: int
-    agent_names: Optional[list[str]] = None
+    agents: Optional[list[str]] = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, try_count: int, agents: Optional[list["Agent"]] = None):
-        agent_names = [agent.name for agent in agents] if agents else None
-        super().__init__(uuid=uuid, try_count=try_count, agent_names=agent_names)
+    def __init__(
+        self, *, uuid: Optional[UUID] = None, try_count: int, agents: Optional[list[Union["Agent", str]]] = None
+    ):
+        agents = [agent.name if hasattr(agent, "name") else agent for agent in agents] if agents else None
+        super().__init__(uuid=uuid, try_count=try_count, agents=agents)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
@@ -753,50 +832,57 @@ class SelectSpeakerTryCountExceededEvent(BaseEvent):
 
 @wrap_event
 class SelectSpeakerInvalidInputEvent(BaseEvent):
-    agent_names: Optional[list[str]] = None
+    agents: Optional[list[str]] = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
-        agent_names = [agent.name for agent in agents] if agents else None
-        super().__init__(uuid=uuid, agent_names=agent_names)
+    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list[Union["Agent", str]]] = None):
+        agents = [agent.name if hasattr(agent, "name") else agent for agent in agents] if agents else None
+        super().__init__(uuid=uuid, agents=agents)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
+        f(f"Invalid input. Please enter a number between 1 and {len(self.agents or [])}.")
 
 
 @wrap_event
 class ClearConversableAgentHistoryEvent(BaseEvent):
-    agent_name: str
-    recipient_name: str
+    agent: str
+    recipient: str
     no_events_preserved: int
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_events_preserved: Optional[int] = None):
+    def __init__(
+        self, *, uuid: Optional[UUID] = None, agent: Union["Agent", str], no_events_preserved: Optional[int] = None
+    ):
         super().__init__(
             uuid=uuid,
-            agent_name=agent.name,
-            recipient_name=agent.name,
+            agent=agent.name if hasattr(agent, "name") else agent,
+            recipient=agent.name if hasattr(agent, "name") else agent,
             no_events_preserved=no_events_preserved,
         )
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "uuid": self.uuid,
+            "agent": self.agent,
+            "no_events_preserved": self.no_events_preserved,
+        }
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         for _ in range(self.no_events_preserved):
-            f(
-                f"Preserving one more event for {self.agent_name} to not divide history between tool call and "
-                f"tool response."
-            )
+            f(f"Preserving one more event for {self.agent} to not divide history between tool call and tool response.")
 
 
 @wrap_event
 class ClearConversableAgentHistoryWarningEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: Union["Agent", str]):
         super().__init__(
             uuid=uuid,
-            recipient_name=recipient.name,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -813,35 +899,38 @@ class ClearConversableAgentHistoryWarningEvent(BaseEvent):
 
 @wrap_event
 class GenerateCodeExecutionReplyEvent(BaseEvent):
-    code_block_languages: list[str]
-    sender_name: Optional[str] = None
-    recipient_name: str
+    code_blocks: list[str]
+    sender: str
+    recipient: str
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
-        code_blocks: list["CodeBlock"],
-        sender: Optional["Agent"] = None,
-        recipient: "Agent",
+        code_blocks: list[Union["CodeBlock", str]],
+        sender: Optional[Union["Agent", str]] = None,
+        recipient: Union["Agent", str],
     ):
-        code_block_languages = [code_block.language for code_block in code_blocks]
+        code_blocks = [
+            code_block.language if hasattr(code_block, "language") else code_block for code_block in code_blocks
+        ]
+        sender = sender or "No sender"
 
         super().__init__(
             uuid=uuid,
-            code_block_languages=code_block_languages,
-            sender_name=sender.name if sender else None,
-            recipient_name=recipient.name,
+            code_blocks=code_blocks,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        num_code_blocks = len(self.code_block_languages)
+        num_code_blocks = len(self.code_blocks)
         if num_code_blocks == 1:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {self.code_block_languages[0]})...",
+                    f"\n>>>>>>>> EXECUTING CODE BLOCK (inferred language is {self.code_blocks[0]})...",
                     "red",
                 ),
                 flush=True,
@@ -849,7 +938,7 @@ class GenerateCodeExecutionReplyEvent(BaseEvent):
         else:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_block_languages])}])...",
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_blocks])}])...",
                     "red",
                 ),
                 flush=True,
@@ -858,28 +947,28 @@ class GenerateCodeExecutionReplyEvent(BaseEvent):
 
 @wrap_event
 class ConversableAgentUsageSummaryNoCostIncurredEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
-        super().__init__(uuid=uuid, recipient_name=recipient.name)
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: Union["Agent", str]):
+        super().__init__(uuid=uuid, recipient=recipient.name if hasattr(recipient, "name") else recipient)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"No cost incurred from agent '{self.recipient_name}'.")
+        f(f"No cost incurred from agent '{self.recipient}'.")
 
 
 @wrap_event
 class ConversableAgentUsageSummaryEvent(BaseEvent):
-    recipient_name: str
+    recipient: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
-        super().__init__(uuid=uuid, recipient_name=recipient.name)
+    def __init__(self, *, uuid: Optional[UUID] = None, recipient: Union["Agent", str]):
+        super().__init__(uuid=uuid, recipient=recipient.name if hasattr(recipient, "name") else recipient)
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
-        f(f"Agent '{self.recipient_name}':")
+        f(f"Agent '{self.recipient}':")
 
 
 @wrap_event
