@@ -97,6 +97,13 @@
     padding-top: 0 !important;
   }
 
+   /* On desktop, hide both sidebars but keep navigation tabs */
+  @media (min-width: 1220px) {
+    .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary {
+      display: none !important;
+    }
+  }
+
   /* Simple styles */
   .home-container {
     background: linear-gradient(335deg, #5fdbfd 0%, rgba(95, 219, 253, 1) 22.562992680180177%, rgba(128, 238, 211, 1) 50.895129504504496%, rgba(244, 235, 167, 1) 75.47353603603604%, rgba(244, 235, 167, 1) 100%);
