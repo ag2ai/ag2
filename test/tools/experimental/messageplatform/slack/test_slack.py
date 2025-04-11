@@ -488,11 +488,11 @@ class TestSlackRetrieveRepliesTool:
             },
         ]
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", message_ts="1234567890.123456")
 
         # Verify pagination handling
-        assert mock_instance.conversations_history.call_count == 2
-        assert result["total_reply_count"] == 2
+        assert mock_instance.conversations_history.call_count == 1
+        assert result["total_reply_count"] == 3
 
     @pytest.mark.asyncio
     async def test_message_reply_retrieval_with_minimum(
