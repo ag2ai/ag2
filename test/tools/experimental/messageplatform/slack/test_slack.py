@@ -461,7 +461,7 @@ class TestSlackRetrieveRepliesTool:
 
         # Verify timestamp
         mock_instance.conversations_history.assert_called_once_with(
-            channel="test-channel", limit=1000, oldest="1234567890.123456"
+            channel="test-channel", oldest="1234567890.123456", inclusive=False
         )
         assert result["parent_message_ts"] == "1234567890.123456"
 
