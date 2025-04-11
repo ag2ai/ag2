@@ -588,8 +588,7 @@ class TestSlackRetrieveRepliesTool:
         mock_instance = mock_webclient.return_value
         mock_instance.conversations_history.return_value = {"ok": False, "error": "invalid_auth"}
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", message_ts="1234567890.123456")
 
-        assert "Reply retrieval failed" in result
-        assert "message retrieval failed" in result
-        assert "invalid_auth" in result
+        assert "Channel message retrieval failed" in result
+        assert "Slack response error: invalid_auth" in result
