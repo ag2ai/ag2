@@ -566,11 +566,10 @@ class TestSlackRetrieveRepliesTool:
             message="", response={"ok": False, "error": "channel_not_found"}
         )
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel")
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", message_ts="1234567890.123456")
 
-        assert "Reply retrieval failed" in result
-        assert "message retrieval failed" in result
-        assert "channel_not_found" in result
+        assert "Channel message retrieval failed" in result
+        assert "Slack API exception: channel_not_found" in result
 
     @pytest.mark.asyncio
     async def test_general_exception(self, tool: SlackRetrieveRepliesTool, mock_webclient: MagicMock) -> None:
