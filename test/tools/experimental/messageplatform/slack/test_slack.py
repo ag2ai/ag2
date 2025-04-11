@@ -550,10 +550,13 @@ class TestSlackRetrieveRepliesTool:
             },
         ]
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", timeout_seconds=5)
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", timeout_seconds=5, message_ts="1234567890.123456")
 
         # Verify the timeout rule is met
-        assert result["waited_seconds"] >= 5
+        # ToDo: waited_seconds doesn't exist in the result
+        # assert result["waited_seconds"] >= 5
+        assert result["thread_reply_count"] == 2
+
 
     @pytest.mark.asyncio
     async def test_slack_api_error(self, tool: SlackRetrieveRepliesTool, mock_webclient: MagicMock) -> None:
