@@ -1109,7 +1109,7 @@ async def a_initiate_swarm_chat(
 
     # Link all agents with the GroupChatManager to allow access to the group chat
     # and other agents, particularly the tool executor for setting _swarm_next_agent
-    _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
+    _link_agents_to_swarm_manager(groupchat.agents, manager)
 
     if len(processed_messages) > 1:
         last_agent, last_message = await manager.a_resume(messages=processed_messages)
