@@ -391,7 +391,6 @@ class TestSlackRetrieveRepliesTool:
                 "properties": {
                     "message_ts": {
                         "type": "string",
-                        
                         "description": "Timestamp (ts) of the parent message to retrieve replies for.",
                     },
                     "min_replies": {
@@ -422,9 +421,7 @@ class TestSlackRetrieveRepliesTool:
                         "description": "Whether to include messages in the channel after the original message.",
                     },
                 },
-                "required": [
-                    "message_ts"
-                ],
+                "required": ["message_ts"],
             },
         }
 
@@ -437,15 +434,14 @@ class TestSlackRetrieveRepliesTool:
         """Test successful message reply retrieval without any filters."""
         mock_instance = mock_webclient.return_value
 
-        result = await tool.func(
-            message_ts="1234567890.123456",
-            bot_token="xoxb-test-token", channel_id="test-channel"
-        )
+        result = await tool.func(message_ts="1234567890.123456", bot_token="xoxb-test-token", channel_id="test-channel")
 
         # Verify the call and result
-        mock_instance.conversations_history.assert_called_once_with(channel="test-channel", oldest="1234567890.123456", inclusive=False)
+        mock_instance.conversations_history.assert_called_once_with(
+            channel="test-channel", oldest="1234567890.123456", inclusive=False
+        )
         assert isinstance(result, dict)
-    
+
         assert result["channel_message_count"] == 1
         assert len(result["channel_messages"]) == 1
         assert result["channel_messages"][0]["text"] == "Test message"
@@ -521,7 +517,9 @@ class TestSlackRetrieveRepliesTool:
             },
         ]
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", min_replies=5, message_ts="1234567890.123456")
+        result = await tool.func(
+            bot_token="xoxb-test-token", channel_id="test-channel", min_replies=5, message_ts="1234567890.123456"
+        )
 
         # Verify that the minimum number of replies is met
         assert result["total_reply_count"] >= 5
@@ -550,13 +548,14 @@ class TestSlackRetrieveRepliesTool:
             },
         ]
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", timeout_seconds=5, message_ts="1234567890.123456")
+        result = await tool.func(
+            bot_token="xoxb-test-token", channel_id="test-channel", timeout_seconds=5, message_ts="1234567890.123456"
+        )
 
         # Verify the timeout rule is met
         # ToDo: waited_seconds doesn't exist in the result
         # assert result["waited_seconds"] >= 5
         assert result["thread_reply_count"] == 2
-
 
     @pytest.mark.asyncio
     async def test_slack_api_error(self, tool: SlackRetrieveRepliesTool, mock_webclient: MagicMock) -> None:
