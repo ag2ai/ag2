@@ -521,7 +521,7 @@ class TestSlackRetrieveRepliesTool:
             },
         ]
 
-        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", min_replies=5)
+        result = await tool.func(bot_token="xoxb-test-token", channel_id="test-channel", min_replies=5, message_ts="1234567890.123456")
 
         # Verify that the minimum number of replies is met
         assert result["total_reply_count"] >= 5
