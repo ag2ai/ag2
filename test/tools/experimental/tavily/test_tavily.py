@@ -7,7 +7,6 @@ This module contains unit tests that verify the functionality of the Tavily AI
 search integration, including authentication, query execution, and response handling.
 """
 
-import json
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -16,7 +15,6 @@ import pytest
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.tavily import TavilySearchTool
-from autogen.tools.experimental.tavily.tavily_search import _tavily_search
 
 from ....conftest import Credentials
 
@@ -73,7 +71,11 @@ class TestTavilySearchTool:
                         "search_depth": {"type": "string", "description": "Either 'advanced' or 'basic'"},
                         "include_answer": {"type": "string", "description": "Either 'advanced' or 'basic'"},
                         "include_raw_content": {"type": "boolean", "description": "Include the raw contents"},
-                        "include_domains": {"type": "array", "items": {"type": "string"}, "description": "Specific web domains to search"},
+                        "include_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Specific web domains to search",
+                        },
                         "num_results": {"type": "integer", "description": "The number of results to return."},
                     },
                     "required": ["query", "tavily_api_key"],
@@ -113,7 +115,14 @@ class TestTavilySearchTool:
         assert result[0]["snippet"] == "This is a test snippet."
 
         mock_execute.assert_called_once_with(
-            query="Test query", tavily_api_key="valid_test_key", search_depth="basic", topic="general", include_answer="basic", include_raw_content=False, include_domains=[], num_results=5
+            query="Test query",
+            tavily_api_key="valid_test_key",
+            search_depth="basic",
+            topic="general",
+            include_answer="basic",
+            include_raw_content=False,
+            include_domains=[],
+            num_results=5,
         )
 
     @patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query")
@@ -130,7 +139,14 @@ class TestTavilySearchTool:
         assert result[0]["link"] == "https://example.com"
         assert result[0]["snippet"] == "This is a test snippet."
         mock_execute.assert_called_once_with(
-            query="Test query", tavily_api_key="test_key", search_depth="basic", topic="general", include_answer="basic", include_raw_content=False, include_domains=[], num_results=5
+            query="Test query",
+            tavily_api_key="test_key",
+            search_depth="basic",
+            topic="general",
+            include_answer="basic",
+            include_raw_content=False,
+            include_domains=[],
+            num_results=5,
         )
 
     def test_search_invalid_query(self) -> None:

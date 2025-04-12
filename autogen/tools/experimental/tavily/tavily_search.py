@@ -1,10 +1,9 @@
-import logging
 import os
 from typing import Annotated, Any, Optional, Union
 
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
 from ....import_utils import optional_import_block, require_optional_import
+from ....llm_config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
 
@@ -18,15 +17,26 @@ with optional_import_block():
     ],
     "tavily",
 )
-def _execute_tavily_query(query: str, tavily_api_key: str, search_depth: str = "basic", topic: str = "general", include_answer: str = "basic", include_raw_content: bool = False, include_domains: list[str] = [], num_results: int = 5) -> Any:
+def _execute_tavily_query(
+    query: str,
+    tavily_api_key: str,
+    search_depth: str = "basic",
+    topic: str = "general",
+    include_answer: str = "basic",
+    include_raw_content: bool = False,
+    include_domains: list[str] = [],
+    num_results: int = 5,
+) -> Any:
     tavily_client = TavilyClient(api_key=tavily_api_key)
-    return tavily_client.search(query=query,
-                                search_depth=search_depth,
-                                topic=topic,
-                                include_answer=include_answer,
-                                include_raw_content=include_raw_content,
-                                include_domains=include_domains,
-                                max_results=num_results)
+    return tavily_client.search(
+        query=query,
+        search_depth=search_depth,
+        topic=topic,
+        include_answer=include_answer,
+        include_raw_content=include_raw_content,
+        include_domains=include_domains,
+        max_results=num_results,
+    )
 
 
 def _tavily_search(
@@ -40,8 +50,14 @@ def _tavily_search(
     num_results: int = 5,
 ) -> list[dict[str, Any]]:
     res = _execute_tavily_query(
-        query=query, tavily_api_key=tavily_api_key, search_depth=search_depth, topic=topic, include_answer=include_answer,
-         include_raw_content=include_raw_content, include_domains=include_domains, num_results=num_results
+        query=query,
+        tavily_api_key=tavily_api_key,
+        search_depth=search_depth,
+        topic=topic,
+        include_answer=include_answer,
+        include_raw_content=include_raw_content,
+        include_domains=include_domains,
+        num_results=num_results,
     )
 
     return [
@@ -55,10 +71,7 @@ class TavilySearchTool(Tool):
     """TavilySearchTool is a tool that uses the Tavily Search API to perform a search."""
 
     def __init__(
-        self,
-        *,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        tavily_api_key: Optional[str] = None
+        self, *, llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None, tavily_api_key: Optional[str] = None
     ):
         """TavilySearchTool is a tool that uses the Tavily Search API to perform a search.
 
@@ -68,9 +81,7 @@ class TavilySearchTool(Tool):
         self.tavily_api_key = tavily_api_key or os.getenv("TAVILY_API_KEY")
 
         if tavily_api_key is None:
-            raise ValueError(
-                "tavily_api_key must be provided"
-            )
+            raise ValueError("tavily_api_key must be provided")
 
         def tavily_search(
             query: Annotated[str, "The search query."],
@@ -82,9 +93,7 @@ class TavilySearchTool(Tool):
             num_results: Annotated[int, "The number of results to return."] = 10,
         ) -> list[dict[str, Any]]:
             if tavily_api_key is None:
-                raise ValueError(
-                    "Please provide tavily_api_key.\n"
-                )
+                raise ValueError("Please provide tavily_api_key.\n")
             return _tavily_search(query, tavily_api_key, num_results)
 
         super().__init__(
