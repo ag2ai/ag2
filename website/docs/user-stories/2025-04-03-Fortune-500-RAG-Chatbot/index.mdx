@@ -1,0 +1,100 @@
+---
+title: Fortune 500 RAG Chatbot Scales to 50M+ Records in Under 30 Seconds
+authors:
+  - tyler_suard
+tags: [RAG, agents, AG2, Fortune 500]
+---
+
+> AG2 gave us the structured agentic framework we needed to handle thousands of queries a day without turning our codebase into unmanageable spaghetti. Combining concurrency, advanced query rewriting, and powerful search orchestration helped turn my year-and-a-half RAG project into a real success story. I also wrote a book, <a href="https://www.manning.com/books/enterprise-rag" target="_blank">Enterprise RAG: Scaling Retrieval Augmented Generation</a>, to share exactly how we did it.
+>
+> > Tyler Suard, AI Developer
+
+![banner](img/banner.png)
+
+## Overview
+
+I'm an AI developer at a century-old Fortune 500 manufacturing company with over 50,000 employees globally. Our company produces industrial goods while managing an extensive information ecosystem—including more than 50 million product records and over 100,000 pages of technical and marketing documentation in PDF format.
+
+### Key Benefit from AG2
+
+I developed a Retrieval Augmented Generation (RAG) chatbot that empowers our support representatives to answer product questions instantly, eliminating the need for manual searches. Leveraging AG2's capabilities, we implemented sophisticated orchestration for concurrency, query rewriting, and multi-database searches. This transformation dramatically reduced response times from 5 minutes to just **10–30 seconds**, significantly enhancing our customer service efficiency.
+
+<Note>
+
+**Book Announcement:**
+
+If you’d like a detailed look at everything we did to make it work at scale, I recently published <a href="https://www.manning.com/books/enterprise-rag" target="_blank">Enterprise RAG: Scaling Retrieval Augmented Generation</a>, which offers the end-to-end roadmap. It covers chunking, concurrency, AI hallucination prevention, plus the logic behind mixing text and vector search. The book is out now, so if you’re serious about enterprise RAG, it might be right up your alley.
+
+</Note>
+
+## Challenge
+
+Our company maintains a catalog of over 5 million products. When customers contact our support representatives with product inquiries, representatives must place customers on hold while they manually search through more than 100,000 pages of PDF catalogs and query multiple databases, resulting in an average response time of approximately 5 minutes per inquiry.
+
+We faced three critical challenges in our customer support operations:
+
+1. **Data Overload**: Managing over 50 million records distributed across 12 databases plus thousands of PDF pages created an overwhelming search environment. Sequential searching of these resources required approximately 5 minutes per customer inquiry.
+2. **Reliability Issues**: Our previous attempts to implement concurrent searching resulted in either system slowdowns or AI hallucinations that generated inaccurate product information.
+3. **Complex Orchestration**: Each new feature added to our system required rewriting of concurrency code. While our prototypes demonstrated functionality, scaling them to enterprise level proved exceptionally difficult.
+
+These challenges significantly impacted both our project's efficiency and the quality of our customer experience.
+
+## Solution
+
+We developed a sophisticated RAG chatbot system using AG2 that transforms how our support representatives respond to customer inquiries. Representatives can ask the chatbot questions like "What is Product XYZ?" and receive results in just 10-30 seconds. Our AI agents efficiently search through 50 million product-related records and more than 100,000 pages of PDF catalogs to deliver comprehensive, well-written answers.
+
+When a request arrives from our frontend, we first triage it to determine which group of agents should handle the question. This process identifies whether the user wants details about a specific product, is looking for general recommendations, or has submitted a query that isn't clear enough and needs clarification. We accomplish this triage step with a quick LLM call that classifies the question into one of our predefined categories.
+
+![banner](img/01.png)
+
+Once we identify which agent chain is responsible, we initialize it. For example, if the user is asking about a particular product, we simultaneously search nine different databases using specialized agents. We orchestrate this process through group chats and group chat managers, complemented by assistant agents and user proxy agents. Each agent is assigned a distinct search function for a specific data source. With our complete infrastructure of 12 databases, we can execute up to 12 group chats in parallel—each equipped with its own assistant, user proxy, search function, and group chat manager.
+
+![banner](img/02.png)
+
+After receiving the search results, a writer agent compiles the final answer based exclusively on the retrieved data. We then stream this generated response back to the frontend in real time, allowing the user to see it appear word by word. This approach enhances the user experience and eliminates the need to stare at a blank screen for too long.
+
+### Key Design Choices
+
+- **Text + Vector Search**: We combine text-based search with vector embeddings for each product record, ensuring we capture both exact matches and semantic nuances.
+- **Asynchronous Concurrency**: AG2's agentic structure made it simpler to query multiple databases simultaneously, eliminating single call bottlenecks.
+- **Query Rewriting**: A specialized AG2 agent "rewrites" or refines user queries to reduce confusion or messy text inputs that often lead to hallucinations or missed records.
+- **Zero to Low Temperature**: We keep the LLM's temperature near zero, instructing it to use only retrieved data—drastically reducing hallucinations.
+
+### Key AG2 Capabilities
+
+- **Agentic Orchestration**: We used "search agents" to look up relevant data sources concurrently and a "writer agent" to finalize answers.
+- **Prompt Rewriting**: AG2's built-in logic helped us transform messy user queries into concise ones, drastically improving retrieval accuracy.
+- **Concurrency Simplification**: AG2's framework lets us scale parallel database calls without writing loads of custom code.
+
+### Why AG2 Over Other Options
+
+- **Advanced Features**: Includes streaming function calling and asynchronous agents, as well as IOstream for streaming results to a frontend.
+- **Pluggable Architecture**: Easy to integrate our custom search endpoints for chunked text, PDF indexes, and more.
+- **Maintains Readability**: The agent-based approach is intuitive, which helped us onboard new developers quickly.
+
+### Integration
+
+We run in an Azure-based environment, but integrating AG2 was straightforward. Our ingestion pipeline (written in Python) populates a large text+vector index, while our agentic solution from AG2 triggers parallel lookups and merges the results.
+
+
+## Results/Impact
+
+We experienced a **noticeable boost** in our answer quality and team efficiency almost immediately. Shorter hold times meant less frustration for both customers and representatives, and users began trusting the AI to handle tasks that once required extensive manual effort.
+
+- **Response Time**: Cut from 5 minutes to **10–30 seconds**.
+- **User Load**: Easily handles thousands of queries daily across 12 databases.
+- **Stability**: Rarely crashes or gives nonsense answers, thanks to multi-agent concurrency and rewriting.
+- **Scalable Growth**: We can add or update product data without overhauling our entire search pipeline, thanks to flexible agentic workflows.
+
+## What's Next
+
+**Expanding Agents**: We plan to add domain-specific agents (for instance, finance or supply chain) for different chatbots.
+
+
+## Learn More—Read the Book
+
+If you want the playbook on building an enterprise-scale RAG system like ours—from taming hallucinations to structuring concurrency—my new book, <a href="https://www.manning.com/books/enterprise-rag" target="_blank">Enterprise RAG: Scaling Retrieval Augmented Generation</a>, is out now. It walks through chunking your data, leveraging text + vector search, and orchestrating concurrency with an approach similar to what we did with AG2.
+
+## Conclusion
+
+**AG2** truly enabled the concurrency and agentic workflows we needed. If anyone wants to discuss how we set up multi-database concurrency or tackled user queries at this scale, feel free to reach out—happy to share more. And if you want the whole blueprint, my <a href="https://www.manning.com/books/enterprise-rag" target="_blank">book</a> is now on sale!

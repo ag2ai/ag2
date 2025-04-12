@@ -47,7 +47,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         if llama_index_agent is None:
             raise ValueError("llama_index_agent must be provided")
 
-        if description is None or description.isspace():
+        if not description or description.strip() == "":
             raise ValueError("description must be provided")
 
         super().__init__(

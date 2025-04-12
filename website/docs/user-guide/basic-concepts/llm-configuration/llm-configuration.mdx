@@ -10,82 +10,90 @@ AG2's agents can use LLMs through OpenAI, Anthropic, Google, Amazon, Mistral AI,
 **From version 0.8**: The OpenAI package, `openai`, is not installed by default.
 
 Install AG2 with your preferred model provider(s), for example:
+
 - `pip install ag2[openai]`
 - `pip install ag2[gemini]`
 - `pip install ag2[anthropic,cohere,mistral]`
 </Warning>
 
-First, we create the LLM configuration object with the API type, model, and, if necessary, the key. There are two ways to create an LLM configuration object:
+## Creating an LLM Configuration
 
-1. By passing the `config_list` parameter with a list of dictionaries containing the API type, model, and key.
-  ```python
-  import os
-  from autogen import LLMConfig
+First, create the LLM configuration object with the API type, model, and key if necessary. There are two ways to do this:
 
-  llm_config = LLMConfig(
-    config_list = [
-      {
-        "api_type": "openai",
-        "model": "gpt-4o-mini",
-        "api_key": os.environ["OPENAI_API_KEY"]
-      },
-      {
-        "api_type": "openai",
-        "model": "gpt-4o",
-        "api_key": os.environ["OPENAI_API_KEY"]
-      }
+### Using `config_list` Parameter
+```python
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        },
+        {
+            "api_type": "openai",
+            "model": "gpt-4o",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        }
     ],
-  )
-  ```
+)
+```
 
-2. By passing the `api_type`, `model`, and `api_key` as parameters.
-  ```python
-  import os
-  from autogen import LLMConfig
+### Using Direct Parameters
+```python
+import os
+from autogen import LLMConfig
 
-  llm_config = LLMConfig(
+llm_config = LLMConfig(
     api_type="openai",
     model="gpt-4o-mini",
     api_key=os.environ["OPENAI_API_KEY"],
-  )
-  ```
+)
+```
 
 <Warning>
-It is important to never hard-code secrets into your code, therefore we read the OpenAI API key from an environment variable.
+It is important to never hard-code secrets into your code. Use environment variables instead.
 </Warning>
 
-Then, when you create your agents you can pass the LLM configuration object to the agent in two ways:
+## Integrating LLM Configuration with Agents
 
-1. By passing the `llm_config` parameter to the agent as a keyword argument.
-  ```python
-  with llm_config:
+Once the LLM configuration is created, pass it to your agents:
+
+### Passing as a Keyword Argument
+```python
+from autogen import ConversableAgent
+
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant",
+    llm_config=llm_config
+)
+```
+
+### Using a Context Manager
+```python
+from autogen import ConversableAgent
+
+with llm_config:
     my_agent = ConversableAgent(
         name="helpful_agent",
         system_message="You are a poetic AI assistant",
     )
-  ```
+```
 
-2. By using the `with` statement to create a context manager for the LLM configuration.
-  ```python
-  with llm_config:
-      my_agent = ConversableAgent(
-          name="helpful_agent",
-          system_message="You are a poetic AI assistant",
-      )
-  ```
-  This will set the LLM configuration for the agent.
+## Default LLM Provider
 
-The default LLM provider is OpenAI but if you would like to use a different provider, [see the available providers](/docs/user-guide/models/).
+The default LLM provider is OpenAI. If you'd like to use a different provider, [see the available providers](/docs/user-guide/models/).
 
 <Tip>
-AG2's LLM configuration allows you to specify many LLMs for fallback support and the ability to filter them for an agent, see the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
+AG2's LLM configuration allows specifying multiple LLMs for fallback support and filtering them per agent. See the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
 </Tip>
 
-### Environment variables
+## Setting Environment Variables
 
-The examples in these guides include an LLM configuration for OpenAI's `GPT-4o mini` model and will need the `OPENAI_API_KEY` environment variable set with your OpenAI API key.
-
-Set it in your terminal/command prompt:
+The examples require the `OPENAI_API_KEY` environment variable.
 
 <Tabs>
   <Tab title="macOS / Linux">
