@@ -21,10 +21,6 @@
     max-width: 100% !important;
   }
 
-  /* Hide both sidebars but keep navigation tabs */
-  .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary, .md-header-nav__button--search {
-    display: none !important;
-  }
 
   /* Ensure header has no bottom margin/padding */
   .md-header {
@@ -99,6 +95,13 @@
   .md-footer {
     margin-top: 0 !important;
     padding-top: 0 !important;
+  }
+
+   /* On desktop, hide both sidebars but keep navigation tabs */
+  @media (min-width: 1220px) {
+    .md-sidebar, .md-sidebar--primary, .md-sidebar--secondary {
+      display: none !important;
+    }
   }
 
   /* Simple styles */
@@ -457,6 +460,10 @@
     color: var(--md-primary-text-color--light);
   }
 
+  .md-nav__title .md-nav__button.md-logo img {
+    margin-left: -1rem !important;
+  }
+
 </style>
 {% endblock %}
 
@@ -490,7 +497,7 @@
     <img src="images/cloud.png" alt="Cloud" class="cloud right small"/>
   </div>
   <div class="keyfeatures">
-    <h2 class="jersey">The End-to-End Platform for Multi-Agent Automation </h2>
+    <h2 class="jersey">The Open-Source Operating System for Agentic AI</h2>
     <div class="cardgroup">
       <div class="card yellow-bg">
         <div class="card-content">

@@ -36,7 +36,7 @@ class FalkorGraphQueryEngine:
         """Initialize a FalkorDB knowledge graph.
         Please also refer to https://github.com/FalkorDB/GraphRAG-SDK/blob/main/graphrag_sdk/kg.py
 
-        TODO: Fix LLM API cost calculation for FalkorDB useages.
+        TODO: Fix LLM API cost calculation for FalkorDB usages.
 
         Args:
             name (str): Knowledge graph name.

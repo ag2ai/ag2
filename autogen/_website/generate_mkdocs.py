@@ -694,7 +694,7 @@ def add_front_matter_to_metadata_yml(
     # Create new entry for current notebook
     title = front_matter.get("title", "")
     link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}.md"
-    rel_link = f"../notebooks/{rendered_mdx.stem}.md"
+    rel_link = f"../notebooks/{rendered_mdx.stem}"
     description = front_matter.get("description", "")
     tags = front_matter.get("tags", []) or []
 
