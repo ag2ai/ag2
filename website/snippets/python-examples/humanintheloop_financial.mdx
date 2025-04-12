@@ -1,0 +1,62 @@
+```python
+from autogen import ConversableAgent, LLMConfig
+import random
+
+# Put your key in the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+# Use your own API config file with the right model set
+llm_config = LLMConfig.from_json(
+    path="OAI_CONFIG_LIST",
+    seed=42,
+).where(model="gemini-2.0-flash-001")
+
+finance_system_message = """
+You are a financial compliance assistant. You will be given a set of transaction descriptions.
+For each transaction:
+- If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+- Otherwise, approve it automatically.
+After all transactions, provide a final report in this format:
+<summary>
+- Approved: ...
+- Denied: ...
+- Awaiting Human Decision: ...
+</summary>
+"""
+
+# Define the finance agent with task-specific reasoning
+with llm_config:
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        system_message=finance_system_message,
+    )
+
+# Human-in-the-loop agent
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS",
+)
+
+# Simulate random transaction descriptions
+VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+def generate_transaction():
+    amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+    vendor = random.choice(VENDORS)
+    memo = random.choice(MEMOS)
+    return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+transactions = [generate_transaction() for _ in range(3)]
+
+# Start the conversation
+initial_prompt = (
+    "Please process the following transactions one at a time:\n\n" +
+    "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+)
+
+human.initiate_chat(
+    recipient=finance_bot,
+    message=initial_prompt,
+)
+```
