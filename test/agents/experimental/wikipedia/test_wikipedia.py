@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from autogen.agents.experimental import WikipediaAgent
+from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.experimental import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 from ....conftest import Credentials
 
 
+@run_for_optional_imports("wikipediaapi", "wikipedia")
 class TestWikipediaAgent:
     def test_init(self, mock_credentials: Credentials) -> None:
         """
