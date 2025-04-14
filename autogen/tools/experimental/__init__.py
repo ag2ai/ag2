@@ -19,7 +19,6 @@ from .perplexity import PerplexitySearchTool
 from .tavily import TavilySearchTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
-
 __all__ = [
     "BrowserUseTool",
     "Crawl4AITool",
