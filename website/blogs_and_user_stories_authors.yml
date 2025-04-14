@@ -221,8 +221,8 @@ authors:
     url: https://agentweb.pro
     avatar: ../img/profile.png
 
-  jason_cho:
-    name: Jason Cho
-    description: Director, Data Science at Walmart
-    url: https://www.linkedin.com/in/chojason
-    avatar: ../img/profile.png
+  ag2:
+    name: ""
+    description: ""
+    url: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
+    avatar: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
