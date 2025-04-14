@@ -94,7 +94,7 @@ class TavilySearchTool(Tool):
         ) -> list[dict[str, Any]]:
             if tavily_api_key is None:
                 raise ValueError("Please provide tavily_api_key.\n")
-            return _tavily_search(query, tavily_api_key, num_results)
+            return _tavily_search(query, tavily_api_key, str(num_results))
 
         super().__init__(
             name="tavily_search",

@@ -107,7 +107,7 @@ class TestTavilySearchTool:
         mock_execute.return_value = mock_response
 
         tool = TavilySearchTool(tavily_api_key="valid_test_key")
-        result = tool.func_or_tool("Test query", "valid_test_key")
+        result = tool.run(query="Test query", tavily_api_key="valid_test_key")
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["title"] == "Test Result"
@@ -132,7 +132,7 @@ class TestTavilySearchTool:
         """
         mock_execute.return_value = mock_response
         tool = TavilySearchTool(tavily_api_key="test_key")
-        result = tool.func_or_tool("Test query", "test_key")
+        result = tool.run(query="Test query", tavily_api_key="test_key")
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["title"] == "Test Result"
@@ -155,7 +155,7 @@ class TestTavilySearchTool:
         """
         tool = TavilySearchTool(tavily_api_key="test_key")
         with pytest.raises(TypeError) as exc_info:
-            tool.func_or_tool(query=None, tavily_api_key="test_key")
+            tool.run(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
         assert "Missing required argument" in str(exc_info.value)
 
     @run_for_optional_imports("openai", "openai")
@@ -170,5 +170,15 @@ class TestTavilySearchTool:
             llm_config=credentials_gpt_4o_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
+        with patch(
+            "autogen.tools.experimental.tavily.tavily_search._execute_tavily_query"
+        ) as mock_execute_query:
+            assistant.run(
+                message="Get me the latest news on a topic",
+                tools=assistant.tools,
+                max_turns=3,
+                user_input=False,
+            )
+            assert mock_execute_query.called
         assert isinstance(assistant.tools[0], TavilySearchTool)
         assert assistant.tools[0].name == "tavily_search"
