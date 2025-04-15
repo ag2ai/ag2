@@ -241,7 +241,7 @@ By default, node grading is performed one at a time. While this approach is ofte
 1. **Context-aware evaluation**: Within a single beam iteration, the grader can compare and contrast multiple node expansions at once.
 2. **Improved efficiency**: Combining multiple evaluations into one request per beam iteration can reduce the total number of LLM calls.
 
-To enable batch grading, set `batch_execution=True` in the `reason_config`. By default, `batch_execution` is set to `False`, meaning individual node grading is performed without batching.
+To enable batch grading, set `"batch_grading": True` in the `reason_config`. By default, `batch_grading` is set to `False`, meaning individual node grading is performed without batching.
 
 
 ```python
