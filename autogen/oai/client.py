@@ -654,8 +654,6 @@ class OpenAIClient:
         """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
-        logger.debug(f"{params=}")
-
         # Unsupported parameters
         unsupported_params = [
             "temperature",
@@ -1136,7 +1134,7 @@ class OpenAIWrapper:
             except Exception as e:
                 if openai_result.is_successful:
                     if APITimeoutError is not None and isinstance(e, APITimeoutError):
-                        logger.debug(f"config {i} timed out", exc_info=True)
+                        # logger.debug(f"config {i} timed out", exc_info=True)
                         if i == last:
                             raise TimeoutError(
                                 "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
@@ -1159,7 +1157,7 @@ class OpenAIWrapper:
                         if error_code == "content_filter":
                             # raise the error for content_filter
                             raise
-                        logger.debug(f"config {i} failed", exc_info=True)
+                        # logger.debug(f"config {i} failed", exc_info=True)
                         if i == last:
                             raise
                     else:
@@ -1188,7 +1186,7 @@ class OpenAIWrapper:
                 cerebras_InternalServerError,
                 cerebras_RateLimitError,
             ):
-                logger.debug(f"config {i} failed", exc_info=True)
+                # logger.debug(f"config {i} failed", exc_info=True)
                 if i == last:
                     raise
             else:
