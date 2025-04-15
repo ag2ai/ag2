@@ -22,12 +22,12 @@ MAX_ARTICLE_LENGTH = 10000
 
 
 class Document(BaseModel):
-    """
-    A Pydantic data model representing a Wikipedia document.
+    """Pydantic model representing a Wikipedia document.
 
     Attributes:
-        page_content (str): The textual content of the Wikipedia page (possibly truncated).
-        metadata (dict[str, str]): A dictionary containing additional metadata such as:
+        page_content (str): Textual content of the Wikipedia page
+            (possibly truncated).
+        metadata (dict[str, str]): Additional info, including:
             - source URL
             - title
             - pageid
@@ -41,22 +41,26 @@ class Document(BaseModel):
 
 
 class WikipediaClient:
-    """
-    A client for interfacing with the Wikipedia API.
+    """Client for interacting with the Wikipedia API.
 
-    This client supports basic search functionality and page retrieval for a specific
-    language edition of Wikipedia.
+    Supports searching and page retrieval on a specified language edition.
+
+    Public methods:
+        search(query: str, limit: int) -> list[dict[str, Any]]
+        get_page(title: str) -> Optional[wikipediaapi.WikipediaPage]
+
+    Attributes:
+        base_url (str): URL of the MediaWiki API endpoint.
+        headers (dict[str, str]): HTTP headers, including User-Agent.
+        wiki (wikipediaapi.Wikipedia): Low-level Wikipedia API client.
     """
 
     def __init__(self, language: str = "en", tool_name: str = "wikipedia-client") -> None:
-        """
-        Initialize the WikipediaClient.
+        """Initialize the WikipediaClient.
 
         Args:
-            language (str, optional): The language edition of Wikipedia to use (e.g., 'en', 'es').
-                Defaults to 'en'.
-            tool_name (str, optional): The name of the tool or application to include in the
-                User-Agent header. Defaults to 'wikipedia-client'.
+            language (str): ISO code of the Wikipedia edition (e.g., 'en', 'es').
+            tool_name (str): Identifier for User-Agent header.
         """
         self.base_url = f"https://{language}.wikipedia.org/w/api.php"
         self.headers = {"User-Agent": f"autogen.Agent ({tool_name})"}
@@ -67,19 +71,21 @@ class WikipediaClient:
         )
 
     def search(self, query: str, limit: int = 3) -> Any:
-        """
-        Search Wikipedia for pages matching the given query.
+        """Search Wikipedia for pages matching a query string.
 
         Args:
-            query (str): The search query string.
-            limit (int, optional): Maximum number of results to return. Defaults to 3.
+            query (str): The search keywords.
+            limit (int): Max number of results to return.
 
         Returns:
-            list: A list of dictionaries containing search results. Each dictionary includes
-                properties such as 'title', 'size', 'wordcount', and 'timestamp'.
+            list[dict[str, Any]]: Each dict has keys:
+                - 'title' (str)
+                - 'size' (int)
+                - 'wordcount' (int)
+                - 'timestamp' (str)
 
         Raises:
-            requests.HTTPError: If the API request fails.
+            requests.HTTPError: If the HTTP request to the API fails.
         """
         params = {
             "action": "query",
@@ -97,15 +103,17 @@ class WikipediaClient:
         return search_data
 
     def get_page(self, title: str) -> Optional[Any]:
-        """
-        Retrieve a Wikipedia page by its title.
+        """Retrieve a WikipediaPage object by title.
 
         Args:
-            title (str): The title of the Wikipedia page to retrieve.
+            title (str): Title of the Wikipedia page.
 
         Returns:
-            Optional[wikipediaapi.WikipediaPage]: A WikipediaPage object if the page exists;
-                otherwise, None.
+            wikipediaapi.WikipediaPage | None: The page object if it exists,
+            otherwise None.
+
+        Raises:
+            wikipediaapi.WikipediaException: On lower‑level API errors.
         """
         page = self.wiki.page(title)
         if not page.exists():
@@ -115,28 +123,29 @@ class WikipediaClient:
 
 @require_optional_import(["wikipediaapi"], "wikipedia")
 class WikipediaQueryRunTool(Tool):
-    """
-    A tool for executing Wikipedia queries and returning summarized page results.
+    """Tool for querying Wikipedia and returning summarized page results.
 
-    This tool requires the optional `wikipediaapi` package to be installed.
-    Provides controlled access to Wikipedia content with configurable result limits.
+    This tool uses the `wikipediaapi` package to perform searches
+    against a specified language edition of Wikipedia and returns
+    up to `top_k` page summaries.
+
+    Public methods:
+        query_run(query: str) -> list[str] | str
 
     Attributes:
-        language (str): Wikipedia language edition to use (e.g., 'en', 'es')
-        top_k (int): Maximum number of page summaries to return (capped at MAX_PAGE_RETRIEVE)
-        verbose (bool): Flag to enable debug logging
-        wiki_cli (WikipediaClient): Internal client for Wikipedia API interactions
+        language (str): Language code for the Wikipedia edition (e.g., 'en', 'es').
+        top_k (int): Max number of page summaries returned (≤ MAX_PAGE_RETRIEVE).
+        verbose (bool): If True, enables debug logging to stdout.
+        wiki_cli (WikipediaClient): Internal client for Wikipedia API calls.
     """
 
     def __init__(self, language: str = "en", top_k: int = 3, verbose: bool = False) -> None:
-        """
-        Initialize the Wikipedia query tool.
+        """Initialize the WikipediaQueryRunTool.
 
         Args:
-            language (str, optional): Language code for Wikipedia edition. Defaults to 'en'.
-            top_k (int, optional): Maximum number of page summaries to return. Will be capped
-                at MAX_PAGE_RETRIEVE constant. Defaults to 3.
-            verbose (bool, optional): Enable operational logging. Defaults to False.
+            language (str): ISO code of the Wikipedia edition to query.
+            top_k (int): Desired number of summaries (capped by MAX_PAGE_RETRIEVE).
+            verbose (bool): If True, print debug information during searches.
         """
         self.language = language
         self.tool_name = "wikipedia-query-run"
@@ -145,22 +154,21 @@ class WikipediaQueryRunTool(Tool):
         self.verbose = verbose
         super().__init__(
             name=self.tool_name,
-            description="Use this tool to run a query in Wikipedia. It returns the summary of the pages found.",
+            description="Run a Wikipedia query and return page summaries.",
             func_or_tool=self.query_run,
         )
 
     def query_run(self, query: str) -> Union[list[str], str]:
-        """
-        Execute a Wikipedia search and return processed page summaries.
+        """Search Wikipedia and return formatted page summaries.
+
+        Truncates `query` to MAX_QUERY_LENGTH before searching.
 
         Args:
-            query (str): Search term(s) to look up in Wikipedia. Will be truncated to
-                MAX_QUERY_LENGTH characters if too long.
+            query (str): Search term(s) to look up in Wikipedia.
 
         Returns:
-            Union[list[str], str]:
-                - List of formatted page summaries ("Page: <title>\nSummary: <content>") if successful
-                - Error message string if no results found or exception occurs
+            list[str]: Each element is "Page: <title>\nSummary: <text>".
+            str: Error message if no results are found or on exception.
 
         Note:
             Automatically handles API exceptions and returns error strings for robust operation
@@ -187,32 +195,33 @@ class WikipediaQueryRunTool(Tool):
 @require_optional_import(["wikipediaapi"], "wikipedia")
 class WikipediaPageLoadTool(Tool):
     """
-    A tool to load full Wikipedia page content along with metadata.
+    A tool to load up to N characters of Wikipedia page content along with metadata.
 
-    This tool utilizes a language-specific Wikipedia client to search for relevant articles
-    and returns a list of Document objects containing truncated page content along with rich
-    metadata such as source URL, title, page ID, timestamp, word count, and size. It is ideal
-    for agents requiring comprehensive, structured Wikipedia data for research, summarization,
-    or contextual enrichment.
+    This tool uses a language-specific Wikipedia client to search for relevant articles
+    and returns a list of Document objects containing truncated page content and metadata
+    (source URL, title, page ID, timestamp, word count, and size). Ideal for agents
+    requiring structured Wikipedia data for research, summarization, or contextual enrichment.
 
     Attributes:
-        language (str): The language code for the Wikipedia edition (default is "en" for English).
-        top_k (int): The maximum number of pages to retrieve per query (default is 3).
-        truncate (int): The maximum number of characters to include from each page's content (default is 4000).
-        verbose (bool): If True, enables verbose output for debugging purposes (default is False).
-        tool_name (str): The name of the tool, used in the User-Agent header.
-        wiki_cli (WikipediaClient): An instance of the WikipediaClient for interacting with the Wikipedia API.
+        language (str): Wikipedia language code (default: "en").
+        top_k (int): Maximum number of pages to retrieve per query (default: 3).
+        truncate (int): Maximum number of characters of content per page (default: 4000).
+        verbose (bool): If True, prints debug information (default: False).
+        tool_name (str): Identifier used in User-Agent header.
+        wiki_cli (WikipediaClient): Client for interacting with the Wikipedia API.
     """
 
     def __init__(self, language: str = "en", top_k: int = 3, truncate: int = 4000, verbose: bool = False) -> None:
         """
-        Initializes the WikipediaPageLoadTool with the specified parameters.
+        Initializes the WikipediaPageLoadTool with configurable language, result count, and content length.
 
         Args:
-            language (str): The language code for the Wikipedia edition (default is "en" for English).
-            top_k (int): The maximum number of pages to retrieve per query (default is 3).
-            truncate (int): The maximum number of characters to include from each page's content (default is 4000).
-            verbose (bool): If True, enables verbose output for debugging purposes (default is False).
+            language (str): The language code for the Wikipedia edition (default is "en").
+            top_k (int): The maximum number of pages to retrieve per query (default is 3;
+                         capped at MAX_PAGE_RETRIEVE).
+            truncate (int): The maximum number of characters to extract from each page (default is 4000;
+                            capped at MAX_ARTICLE_LENGTH).
+            verbose (bool): If True, enables verbose/debug logging (default is False).
         """
         self.language = language
         self.top_k = min(top_k, MAX_PAGE_RETRIEVE)
@@ -223,29 +232,31 @@ class WikipediaPageLoadTool(Tool):
         super().__init__(
             name=self.tool_name,
             description=(
-                "Use this tool to search query in Wikipedia. "
-                "This tool returns the content of multiple pages for a given query: set number of pages with 'limit' parameter. "
-                "This tool uses a language-specific Wikipedia client to search for relevant articles and returns a list "
-                "of Document objects containing truncated page content along with rich metadata (source URL, title, pageid, "
-                "timestamp, word count, and size). Ideal for Agents requiring comprehensive, structured Wikipedia data "
-                "for research, summarization, or contextual enrichment."
+                "Search Wikipedia for relevant pages using a language-specific client. "
+                "Returns a list of documents with truncated content and metadata including title, URL, "
+                "page ID, timestamp, word count, and page size. Configure number of results with the 'top_k' parameter "
+                "and content length with 'truncate'. Useful for research, summarization, or contextual enrichment."
             ),
             func_or_tool=self.content_search,
         )
 
     def content_search(self, query: str) -> Union[list[Document], str]:
         """
-        Executes a Wikipedia query and loads full page content with metadata.
+        Executes a Wikipedia search and returns page content plus metadata.
 
         Args:
             query (str): The search term to query Wikipedia.
 
         Returns:
-            Union[list[Document], str]: A list of Document objects containing page content and metadata if successful;
-            otherwise, a string message indicating no results were found or an error occurred.
+            Union[list[Document], str]:
+                - list[Document]: Documents with up to `truncate` characters of page text
+                  and metadata if pages are found.
+                - str: Error message if the search fails or no pages are found.
 
-        Raises:
-            Exception: If an error occurs during the Wikipedia search process.
+        Notes:
+            - Errors are caught internally and returned as strings.
+            - If no matching pages have text content, returns
+              "No good Wikipedia Search Result was found".
         """
         try:
             if self.verbose:
