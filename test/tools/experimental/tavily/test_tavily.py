@@ -1,11 +1,6 @@
-"""
-Test suite for the TavilySearchTool class.
-Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
-SPDX-License-Identifier: Apache-2.0
-
-This module contains unit tests that verify the functionality of the Tavily AI
-search integration, including authentication, query execution, and response handling.
-"""
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
 from unittest.mock import Mock, patch
