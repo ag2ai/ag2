@@ -674,3 +674,23 @@ p.hero-subtitle {
 .md-footer {
     margin-top: 3rem;
 }
+
+/* User Story Page Starts */
+.user-story-youtube-container {
+position: relative;
+width: 100%;
+padding-bottom: 56.25%; /* 16:9 aspect ratio */
+height: 0;
+overflow: hidden;
+border-radius: 8px; /* optional rounded corners */
+}
+
+.user-story-youtube-container iframe {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+border: 0;
+}
+/* User Story Page Ends */
