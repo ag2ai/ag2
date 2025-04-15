@@ -23,13 +23,13 @@
   <meta name="twitter:image" content="{{ config.extra.social_image }}" />
 
   <!-- Default favicon (for browsers not supporting media queries) -->
-  <link rel="icon" href="{{ config.site_url }}assets/img/favicon.svg" type="image/x-icon">
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon.svg" type="image/x-icon">
 
   <!-- Light mode favicon (for light theme) -->
-  <link rel="icon" href="{{ config.site_url }}assets/img/favicon-dark.svg" type="image/x-icon" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon-dark.svg" type="image/x-icon" media="(prefers-color-scheme: light)">
 
   <!-- Dark mode favicon (for dark theme) -->
-  <link rel="icon" href="{{ config.site_url }}assets/img/favicon.svg" type="image/x-icon" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon.svg" type="image/x-icon" media="(prefers-color-scheme: dark)">
 {% endblock %}
 
 {% block outdated %}
