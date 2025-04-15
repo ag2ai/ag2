@@ -315,7 +315,7 @@ def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
     # Test default cache which is no cache
     client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
     start_time = time.time()
-    no_cache_reponse = client.create(messages=[{"role": "user", "content": prompt}])
+    no_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
     duration_with_no_cache = end_time - start_time
 
@@ -337,7 +337,7 @@ def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
 
     # Test that warm cache is the same as cold cache.
     assert cold_cache_response == warm_cache_response
-    assert no_cache_reponse != warm_cache_response
+    assert no_cache_response != warm_cache_response
 
     # Test that warm cache is faster than cold cache and no cache.
     assert duration_with_warm_cache < duration_with_cold_cache
