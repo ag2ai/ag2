@@ -102,7 +102,7 @@ class TestTavilySearchTool:
         mock_execute.return_value = mock_response
 
         tool = TavilySearchTool(tavily_api_key="valid_test_key")
-        result = tool.run(query="Test query", tavily_api_key="valid_test_key")
+        result = tool(query="Test query", tavily_api_key="valid_test_key")
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["title"] == "Test Result"
@@ -127,7 +127,7 @@ class TestTavilySearchTool:
         """
         mock_execute.return_value = mock_response
         tool = TavilySearchTool(tavily_api_key="test_key")
-        result = tool.run(query="Test query", tavily_api_key="test_key")
+        result = tool(query="Test query", tavily_api_key="test_key")
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["title"] == "Test Result"
@@ -150,7 +150,7 @@ class TestTavilySearchTool:
         """
         tool = TavilySearchTool(tavily_api_key="test_key")
         with pytest.raises(TypeError) as exc_info:
-            tool.run(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
+            tool(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
         assert "Missing required argument" in str(exc_info.value)
 
     @run_for_optional_imports("openai", "openai")

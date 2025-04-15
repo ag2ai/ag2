@@ -169,10 +169,10 @@ class TavilySearchTool(Tool):
             return _tavily_search(
                 query=query,
                 tavily_api_key=tavily_api_key,
-                search_depth=search_depth,
-                include_answer=include_answer,
-                include_raw_content=include_raw_content,
-                include_domains=include_domains,
+                search_depth=search_depth or "basic",
+                include_answer=include_answer or "basic",
+                include_raw_content=include_raw_content or False,
+                include_domains=include_domains or [],
                 num_results=num_results,
             )
 
