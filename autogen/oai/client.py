@@ -654,7 +654,7 @@ class OpenAIClient:
         """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
-        print(f"{params=}")
+        logger.debug(f"{params=}")
 
         # Unsupported parameters
         unsupported_params = [
