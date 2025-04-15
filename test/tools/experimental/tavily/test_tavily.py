@@ -1,11 +1,6 @@
-"""
-Test suite for the TavilySearchTool class.
-Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
-SPDX-License-Identifier: Apache-2.0
-
-This module contains unit tests that verify the functionality of the Tavily AI
-search integration, including authentication, query execution, and response handling.
-"""
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
 from unittest.mock import Mock, patch
@@ -170,9 +165,7 @@ class TestTavilySearchTool:
             llm_config=credentials_gpt_4o_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
-        with patch(
-            "autogen.tools.experimental.tavily.tavily_search._execute_tavily_query"
-        ) as mock_execute_query:
+        with patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query") as mock_execute_query:
             assistant.run(
                 message="Get me the latest news on a topic",
                 tools=assistant.tools,
