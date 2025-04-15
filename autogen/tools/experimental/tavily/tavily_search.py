@@ -1,3 +1,6 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
 import os
 from typing import Annotated, Any, Optional, Union
 
@@ -94,7 +97,15 @@ class TavilySearchTool(Tool):
         ) -> list[dict[str, Any]]:
             if tavily_api_key is None:
                 raise ValueError("Please provide tavily_api_key.\n")
-            return _tavily_search(query, tavily_api_key, str(num_results))
+            return _tavily_search(
+                query=query,
+                tavily_api_key=tavily_api_key,
+                search_depth=search_depth,
+                include_answer=include_answer,
+                include_raw_content=include_raw_content,
+                include_domains=include_domains,
+                num_results=num_results,
+            )
 
         super().__init__(
             name="tavily_search",

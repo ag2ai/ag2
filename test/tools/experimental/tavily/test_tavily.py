@@ -170,9 +170,7 @@ class TestTavilySearchTool:
             llm_config=credentials_gpt_4o_mini.llm_config,
         )
         search_tool.register_for_llm(assistant)
-        with patch(
-            "autogen.tools.experimental.tavily.tavily_search._execute_tavily_query"
-        ) as mock_execute_query:
+        with patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query") as mock_execute_query:
             assistant.run(
                 message="Get me the latest news on a topic",
                 tools=assistant.tools,
