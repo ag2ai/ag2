@@ -4,6 +4,8 @@ Title: Sequential chat
 
 As a sequence of chats between two agents chained together by a mechanism called *carryover*, the sequential chat pattern is useful for complex tasks that can be broken down into interdependent sub-tasks.
 
+### Understanding the Sequential Chat Pattern
+
 The figure below illustrates how this pattern works.
 
 ![initiate_chats](../assets/sequential-two-agent-chat.png)
@@ -13,6 +15,8 @@ In this pattern, a pair of agents start a two-agent chat, then the summary of th
 Carryover accumulates as the conversation moves forward, so each subsequent chat starts with all the carryovers from previous chats.
 
 The figure above shows distinct recipient agents for all the chats, however, the recipient agents in the sequence are allowed to repeat.
+
+### Building a Sequential Workflow
 
 To illustrate this pattern, let's create a sequential workflow to create our lesson plan for the fourth grade class.
 
@@ -25,6 +29,8 @@ A teacher agent will engage three agents sequentially:
 import Example from "/snippets/python-examples/sequentialchat.mdx";
 
 <Example/>
+
+### Customizing Chat Behavior
 
 The sequential chat is triggered by the teacher agent's [`initiate_chats`](/docs/api-reference/autogen/ConversableAgent#initiate-chats) method, which takes a list of dictionaries where each dictionary represents a chat between the teacher and the `recipient` agent.
 

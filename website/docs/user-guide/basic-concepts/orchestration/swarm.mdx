@@ -2,9 +2,13 @@
 title: Swarm
 ---
 
+### Introduction to Swarms
+
 Swarms are a versatile pattern that provide flows between agents that are determined at the swarm or agent-level. The control of the flow is managed through various mechanisms, including hand-offs, post-tool transitions, post-work transitions, or an internal group chat manager, all of which determine the next agent (or end the swarm).
 
 The simplest swarm comprises of a group of agents and utilizes the swarm's internal manager (a [`GroupChatManager`](/docs/api-reference/autogen/GroupChatManager)) to decide, based on the conversation messages and the agent's descriptions, who should be the next agent.
+
+### Basic Swarm Implementation
 
 Here's an example.
 
