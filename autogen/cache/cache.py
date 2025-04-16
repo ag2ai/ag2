@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+from contextvars import ContextVar
 from types import TracebackType
 from typing import Any, Optional, Union
 
@@ -26,6 +27,8 @@ class Cache(AbstractCache):
         config (Dict[str, Any]): A dictionary containing cache configuration.
         cache: The cache instance created based on the provided configuration.
     """
+
+    _current_cache: ContextVar[Cache] = ContextVar("current_cache", default=None)
 
     ALLOWED_CONFIG_KEYS = [
         "cache_seed",
@@ -167,3 +170,17 @@ class Cache(AbstractCache):
         Perform any necessary cleanup, such as closing connections or releasing resources.
         """
         self.cache.close()
+
+    @classmethod
+    def get_current_cache(cls, cache: "Optional[Cache]" = None) -> "Optional[Cache]":
+        """Get the current cache instance.
+
+        Returns:
+            Cache: The current cache instance.
+        """
+        if cache is not None:
+            return cache
+        try:
+            return cls._current_cache.get()
+        except LookupError:
+            return None
