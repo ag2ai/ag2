@@ -1,0 +1,122 @@
+name: Build MkDocs
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: true
+        default: '3.10'
+        type: string
+
+jobs:
+  build-mkdocs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Build MkDocs documentation
+        run: |
+          uv venv
+          . .venv/bin/activate
+          uv pip install -e ".[docs]"
+          ./scripts/docs_build_mkdocs.sh --force
+        working-directory: .
+
+      - name: Verify the build
+        run: |
+          ls -la ./website/mkdocs/site
+        working-directory: .
+
+      - name: Get version
+        id: get-version
+        run: |
+          # Get version directly from the package
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          echo "VERSION=$VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        working-directory: .
+
+      - name: Check if RC version
+        id: check-rc
+        run: |
+          # Check if version contains "rc" or any non-standard version marker
+          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
+          echo "IS_RC=$IS_RC"
+          echo "IS_RC=$IS_RC" >> $GITHUB_OUTPUT
+          echo "is_rc=$IS_RC" >> $GITHUB_ENV
+        working-directory: .
+
+      - name: Deploy docs to GH Pages
+        if: github.ref == 'refs/heads/main'
+        run: |
+          . .venv/bin/activate
+
+          # Get version directly from the package using a more reliable method
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Check if version contains "rc"
+          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
+          echo "IS_RC=$IS_RC" >> $GITHUB_ENV
+
+          echo $VERSION
+          echo $IS_RC
+
+          if [ "$IS_RC" == "False" ]; then
+            cd website/mkdocs && mike deploy -F mkdocs.yml --update-aliases $VERSION latest
+            mike set-default --push --allow-empty -F mkdocs.yml latest
+          else
+            cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
+          fi
+    outputs:
+      is_rc: ${{ env.IS_RC }}
+
+  copy-latest-to-root:
+    needs: deploy
+    if: needs.deploy.outputs.is_rc == 'False' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 1
+
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Copy latest docs to root
+        run: |
+          # Verify the latest directory exists or fail immediately
+          if [ ! -d "latest" ]; then
+            echo "ERROR: 'latest' directory not found in gh-pages branch"
+            echo "Current directory structure:"
+            ls -la
+            exit 1
+          fi
+
+          # Copy content from latest to root (except index.html)
+          cd latest
+          cp -r $(ls -A | grep -v "index.html") ../
+          cd ..
+
+          # Commit and push changes
+          git add .
+          git commit -m "Copy latest docs to root level (except index.html)" || echo "No changes to commit"
+          git push
