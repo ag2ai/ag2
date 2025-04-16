@@ -10,7 +10,7 @@ on:
         type: string
 
 jobs:
-  build-mkdocs:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,8 +86,8 @@ jobs:
       is_rc: ${{ env.IS_RC }}
 
   copy-latest-to-root:
-    needs: deploy
-    if: needs.deploy.outputs.is_rc == 'False' && github.ref == 'refs/heads/main'
+    needs: build
+    if: needs.build.outputs.is_rc == 'False' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout gh-pages branch
