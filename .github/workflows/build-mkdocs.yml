@@ -41,31 +41,12 @@ jobs:
           ls -la ./website/mkdocs/site
         working-directory: .
 
-      - name: Get version
-        id: get-version
-        run: |
-          # Get version directly from the package
-          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
-          echo "VERSION=$VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-        working-directory: .
-
-      - name: Check if RC version
-        id: check-rc
-        run: |
-          # Check if version contains "rc" or any non-standard version marker
-          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
-          echo "IS_RC=$IS_RC"
-          echo "IS_RC=$IS_RC" >> $GITHUB_OUTPUT
-          echo "is_rc=$IS_RC" >> $GITHUB_ENV
-        working-directory: .
-
       - name: Deploy docs to GH Pages
         if: github.ref == 'refs/heads/main'
         run: |
           . .venv/bin/activate
 
-          # Get version directly from the package using a more reliable method
+          # Get version directly from the package
           VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
