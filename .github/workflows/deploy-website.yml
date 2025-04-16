@@ -8,6 +8,7 @@ on:
       - "website/**"
       - ".github/workflows/deploy-website.yml"
       - ".github/workflows/mkdocs-check-broken-links.yml"
+      - ".github/workflows/build-mkdocs.yml"
       - "scripts/broken-links-check.sh"
       - "scripts/docs_build_mkdocs.sh"
       - "scripts/docs_serve_mkdocs.sh"
