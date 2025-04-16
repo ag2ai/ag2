@@ -122,7 +122,13 @@ class Cache(AbstractCache):
         Returns:
             The cache instance for use within a context block.
         """
-        return self.cache.__enter__()
+        # Store the previous cache so we can restore it
+        self._previous_cache = self.__class__._current_cache.get(None)
+        # Set the current cache to this instance
+        self._token = self.__class__._current_cache.set(self)
+        # Call the underlying cache's __enter__ method
+        self.cache.__enter__()
+        return self
 
     def __exit__(
         self,
@@ -140,7 +146,19 @@ class Cache(AbstractCache):
             exc_value: The exception value if an exception was raised in the context.
             traceback: The traceback if an exception was raised in the context.
         """
-        return self.cache.__exit__(exc_type, exc_value, traceback)
+        # First exit the underlying cache context
+        result = self.cache.__exit__(exc_type, exc_value, traceback)
+
+        try:
+            # Then reset the context variable to previous value
+            self.__class__._current_cache.reset(self._token)
+        except RuntimeError:
+            # Token might have been reset by a nested context manager
+            # In this case, we just set it back to the previous value
+            if self._previous_cache is not None:
+                self.__class__._current_cache.set(self._previous_cache)
+
+        return result
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
         """Retrieve an item from the cache.
