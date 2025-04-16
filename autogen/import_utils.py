@@ -10,6 +10,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
+from pathlib import Path
 from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
 
 __all__ = [
@@ -40,6 +41,16 @@ class ModuleInfo:
         """
         if self.name not in sys.modules:
             return f"'{self.name}' is not installed."
+        else:
+            if hasattr(sys.modules[self.name], "__file__") and sys.modules[self.name].__file__ is not None:
+                autogen_path = (Path(__file__).parent).resolve()
+                test_path = (Path(__file__).parent.parent / "test").resolve()
+                module_path = Path(sys.modules[self.name].__file__).resolve()  # type: ignore[arg-type]
+
+                if str(autogen_path) in str(module_path) or str(test_path) in str(module_path):
+                    # The module is in the autogen or test directory
+                    # Aka similarly named module in the autogen or test directory
+                    return f"'{self.name}' is not installed."
 
         installed_version = (
             sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None

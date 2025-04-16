@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .discord import DiscordRetrieveTool, DiscordSendTool
-from .slack import SlackRetrieveTool, SlackSendTool
+from .slack import SlackRetrieveRepliesTool, SlackRetrieveTool, SlackSendTool
 from .telegram import TelegramRetrieveTool, TelegramSendTool
 
 __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
+    "SlackRetrieveRepliesTool",
     "SlackRetrieveTool",
     "SlackSendTool",
     "TelegramRetrieveTool",

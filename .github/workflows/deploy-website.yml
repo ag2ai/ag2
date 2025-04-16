@@ -62,7 +62,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
           # Check if version contains "rc"
-          IS_RC=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print("rc" in autogen.__version__ or "dev" in autogen.__version__)')
+          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
           echo "IS_RC=$IS_RC" >> $GITHUB_ENV
 
           echo $VERSION

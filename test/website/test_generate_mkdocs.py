@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from textwrap import dedent
@@ -115,7 +116,7 @@ def test_process_and_copy_files() -> None:
             mkdocs_output_dir / "user-stories" / "2023-02-11-HELLO-World" / "hello_world.md",
         ]
         assert len(actual) == len(expected)
-        assert sorted(actual) == sorted(expected)
+        assert sorted(actual) == sorted(expected), f"{sorted(actual)} != {sorted(expected)}"
 
         # Assert the content of the transformed markdown file
         expected_quick_start_content = dedent("""
@@ -575,7 +576,7 @@ def test_add_notebooks_nav() -> None:
         - [Game Design](docs/use-cases/use-cases/game-design.md)
         - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
     - Notebooks
-        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+        - [All Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
 - API References
 {api}
@@ -591,7 +592,7 @@ def test_add_notebooks_nav() -> None:
         - [Game Design](docs/use-cases/use-cases/game-design.md)
         - [Travel Planning](docs/use-cases/use-cases/travel-planning.md)
     - Notebooks
-        - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
+        - [All Notebooks](docs/use-cases/notebooks/Notebooks.md)
         - [Run a standalone AssistantAgent](docs/use-cases/notebooks/notebooks/agentchat_assistant_agent_standalone)
         - [Mitigating Prompt hacking with JSON Mode in Autogen](docs/use-cases/notebooks/notebooks/JSON_mode_example)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
@@ -647,7 +648,7 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- Contributor Guide
+- Blog
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
 """)
@@ -664,10 +665,11 @@ tags: [data automation, agents, AG2, Nexla]
     - Notebooks
         - [Notebooks](docs/use-cases/notebooks/Notebooks.md)
     - [Community Gallery](docs/use-cases/community-gallery/community-gallery.md)
-- User Stories
-    - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
-    - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
-- Contributor Guide
+- Community Insights
+    - User Stories
+        - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
+        - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
+- Blog
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)
 """)
@@ -1047,7 +1049,7 @@ This should stay as 'custom'
 @pytest.fixture
 def navigation() -> list[NavigationGroup]:
     return [
-        {"group": "Home", "pages": ["docs/home/home", "docs/home/quick-start"]},
+        {"group": "Quick Start", "pages": ["docs/quick-start"]},
         {
             "group": "User Guide",
             "pages": [
@@ -1087,9 +1089,7 @@ def navigation() -> list[NavigationGroup]:
 
 @pytest.fixture
 def expected_nav() -> str:
-    return """- [Home](index.md)
-    - [Home](docs/home/home.md)
-    - [Quick Start](docs/home/quick-start.md)
+    return """- [Quick Start](docs/quick-start.md)
 - User Guide
     - Basic Concepts
         - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
@@ -1108,8 +1108,9 @@ def expected_nav() -> str:
 
 
 def test_format_navigation(navigation: list[NavigationGroup], expected_nav: str) -> None:
-    actual = format_navigation(navigation)
-    assert actual == expected_nav
+    with tempfile.TemporaryDirectory() as tmpdir:
+        actual = format_navigation(navigation, Path(tmpdir))
+        assert actual == expected_nav
 
 
 def test_add_api_ref_to_mkdocs_template() -> None:
@@ -1188,7 +1189,7 @@ search:
     - [Contributing](docs/contributing/contributing.md)""",
                 "",
             )
-            + "\n- Blog\n    - [Blog](docs/blog)"
+            + "\n- Blog\n    - [Blog](docs/blog/index.md)"
             + "\n"
         )
 
@@ -1249,58 +1250,58 @@ def test_fix_internal_references() -> None:
 
 class TestFixInternalLinks:
     def test_absolute_to_relative(self) -> None:
-        source_path = "/docs/home/quick-start.md"
-        content = "/docs/user-guide/basic-concepts/installing-ag2"
+        source_path = os.path.join("docs", "home", "quick-start.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "installing-ag2")
 
-        expected = "../../user-guide/basic-concepts/installing-ag2"
+        expected = os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/blog/2025-02-05-Communication-Agents"
-        content = "/docs/api-reference/autogen/UserProxyAgent"
+        source_path = os.path.join("docs", "blog", "2025-02-05-Communication-Agents")
+        content = os.path.join("docs", "api-reference", "autogen", "UserProxyAgent")
 
-        expected = "../../../../../api-reference/autogen/UserProxyAgent"
+        expected = os.path.join("..", "..", "..", "..", "..", "api-reference", "autogen", "UserProxyAgent")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
-        content = "/docs/user-guide/basic-concepts/tools/interop/langchain"
+        source_path = os.path.join("docs", "user-guide", "basic-concepts", "tools", "index.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "tools", "interop", "langchain")
 
-        expected = "./interop/langchain"
+        expected = os.path.join(".", "interop", "langchain")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/basic-concepts/tools/index.md"
-        content = "/docs/user-guide/basic-concepts/tools/basics"
+        source_path = os.path.join("docs", "user-guide", "basic-concepts", "tools", "index.md")
+        content = os.path.join("docs", "user-guide", "basic-concepts", "tools", "basics")
 
-        expected = "./basics"
+        expected = os.path.join(".", "basics")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/home/home.md"
-        content = "/docs/home/quick-start"
+        source_path = os.path.join("docs", "home", "home.md")
+        content = os.path.join("docs", "home", "quick-start")
 
-        expected = "../quick-start"
+        expected = os.path.join("..", "quick-start")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/contributor-guide/how-ag2-works/hooks.md"
-        content = "/docs/contributor-guide/how-ag2-works/initiate-chat"
+        source_path = os.path.join("docs", "contributor-guide", "how-ag2-works", "hooks.md")
+        content = os.path.join("docs", "contributor-guide", "how-ag2-works", "initiate-chat")
 
-        expected = "../initiate-chat"
+        expected = os.path.join("..", "initiate-chat")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
 
-        source_path = "/docs/user-guide/reference-tools/index.md"
-        content = "/docs/api-reference/autogen/tools/experimental/GoogleSearchTool"
+        source_path = os.path.join("docs", "user-guide", "reference-tools", "index.md")
+        content = os.path.join("docs", "api-reference", "autogen", "tools", "experimental", "GoogleSearchTool")
 
-        expected = "../../api-reference/autogen/tools/experimental/GoogleSearchTool"
+        expected = os.path.join("..", "..", "api-reference", "autogen", "tools", "experimental", "GoogleSearchTool")
         actual = absolute_to_relative(source_path, content)
 
         assert actual == expected
@@ -1332,30 +1333,43 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
 [Cross-Framework LLM Tool Integration](/docs/blog/2024-12-20-Tools-interoperability)
 
 """)
-        expected = dedent("""AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
+        expected = dedent(
+            """AG2 (formerly AutoGen) is an open-source programming framework for building AI agents
 !!! tip
     Learn more about configuring LLMs for agents
-        [here](../../user-guide/basic-concepts/llm-configuration.md).
+        [here]({}).
 
 ### Where to Go Next?
 
-- [Sample Link](../slow-start.md)
-- Go through the [basic concepts](../../user-guide/basic-concepts/installing-ag2) to get started
-- Once you're ready, hit the [advanced concepts](../../user-guide/advanced-concepts/rag)
-- Explore the [API Reference](../../api-reference/autogen/overview)
+- [Sample Link]({})
+- Go through the [basic concepts]({}) to get started
+- Once you're ready, hit the [advanced concepts]({})
+- Explore the [API Reference]({})
 - Chat on [Discord](https://discord.gg/pAbnFJrkgZ)
 - Follow on [X](https://x.com/ag2oss)
 
-If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide](../../contributor-guide/contributing).
+If you like our project, please give it a [star](https://github.com/ag2ai/ag2) on GitHub. If you are interested in contributing, please read [Contributor's Guide]({}).
 
-<img alt="DeepResearchAgent workflow" src="../../../snippets/reference-agents/img/DeepResearchAgent.png">
+<img alt="DeepResearchAgent workflow" src="{}">
 
-![DeepResearchAgent workflow](../../../snippets/reference-agents/img/DeepResearchAgent.png)
+![DeepResearchAgent workflow]({})
 
-<img class="hero-logo" noZoom src="../../../assets/img/ag2.svg" alt="AG2 Logo" />
+<img class="hero-logo" noZoom src="{}" alt="AG2 Logo" />
 
-[Cross-Framework LLM Tool Integration](../../blog/2024/12/20/Tools-interoperability)
+[Cross-Framework LLM Tool Integration]({})
 
-""")
+""".format(
+                os.path.join("..", "..", "user-guide", "basic-concepts", "llm-configuration.md"),
+                os.path.join("..", "slow-start.md"),
+                os.path.join("..", "..", "user-guide", "basic-concepts", "installing-ag2"),
+                os.path.join("..", "..", "user-guide", "advanced-concepts", "rag"),
+                os.path.join("..", "..", "api-reference", "autogen", "overview"),
+                os.path.join("..", "..", "contributor-guide", "contributing"),
+                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
+                os.path.join("..", "..", "..", "snippets", "reference-agents", "img", "DeepResearchAgent.png"),
+                os.path.join("..", "..", "..", "assets", "img", "ag2.svg"),
+                os.path.join("..", "..", "blog", "2024", "12", "20", "Tools-interoperability"),
+            )
+        )
         actual = fix_internal_links(source_path, content)
         assert actual == expected

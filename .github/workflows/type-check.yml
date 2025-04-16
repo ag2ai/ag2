@@ -50,6 +50,7 @@ jobs:
           - "interop-crewai"
           - "interop-langchain"
           - "interop-pydantic-ai"
+          - "mcp"
           - "websockets"
         exclude:
           # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10

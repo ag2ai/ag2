@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
-from ....tools.experimental import SlackRetrieveTool, SlackSendTool
+from ....tools.experimental import SlackRetrieveRepliesTool, SlackRetrieveTool, SlackSendTool
 
 __all__ = ["SlackAgent"]
 
@@ -45,6 +45,7 @@ class SlackAgent(ConversableAgent):
 
         self._send_tool = SlackSendTool(bot_token=bot_token, channel_id=channel_id)
         self._retrieve_tool = SlackRetrieveTool(bot_token=bot_token, channel_id=channel_id)
+        self._retrieve_replies_tool = SlackRetrieveRepliesTool(bot_token=bot_token, channel_id=channel_id)
 
         # Add formatting instructions
         if has_writing_instructions:
@@ -69,3 +70,4 @@ class SlackAgent(ConversableAgent):
 
         self.register_for_llm()(self._send_tool)
         self.register_for_llm()(self._retrieve_tool)
+        self.register_for_llm()(self._retrieve_replies_tool)

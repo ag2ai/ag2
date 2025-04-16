@@ -34,11 +34,11 @@ Different tasks may require different models, and the `config_list` allows speci
 
 <Tabs>
   <Tab title="OpenAI">
-    - `api_type` (str, required): The model provider
-    - `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `api_type` (str, required): The model provider
+- `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json
@@ -52,12 +52,12 @@ Different tasks may require different models, and the `config_list` allows speci
     ```
   </Tab>
   <Tab title="Azure OpenAI">
-    - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `api_type`: `azure`
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `api_version` (str, optional): The version of the Azure API you wish to use.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `api_type`: `azure`
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `api_version` (str, optional): The version of the Azure API you wish to use.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json
@@ -73,10 +73,10 @@ Different tasks may require different models, and the `config_list` allows speci
     ```
   </Tab>
   <Tab title="Other OpenAI compatible">
-    - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json

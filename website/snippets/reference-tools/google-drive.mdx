@@ -34,6 +34,7 @@ from autogen.tools.experimental.google.model import GoogleFileInfo
 ## Google Authentication
 
 Configure authentication to allow AG2 to access Google Drive:
+
 - `client_secret_file`: The path to the client secret file, which you can download from the Google Cloud Console. This file contains the necessary credentials to authenticate the user with Google services.
 - `token_file`: The path to a file that will store the access token. After the first run of the script, this token will be saved and used for subsequent authentications, avoiding the need for repeated login processes.
 - `provider` ([`GoogleCredentialsLocalProvider`](/docs/api-reference/autogen/tools/experimental/google/authentication/GoogleCredentialsLocalProvider)): The provider is responsible for managing the authentication process.
@@ -66,6 +67,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 ## Register Google Drive Tools
 
 AG2 provides predefined tools for interacting with Google Drive:
+
 - `list_drive_files_and_folders`: Allows the user to list all files and folders in their Google Drive.
 - `download_file_from_drive`: Enables downloading files directly from Google Drive to a specified local folder.
 
@@ -247,6 +249,8 @@ response = assistant.run(
     tools=google_drive_toolkit.tools,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
 response.process()
 ```
 

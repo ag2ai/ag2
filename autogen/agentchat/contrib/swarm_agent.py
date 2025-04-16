@@ -16,7 +16,7 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 from pydantic import BaseModel, field_serializer
 
 from ...doc_utils import export_module
-from ...events.agent_events import ErrorEvent
+from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -1043,10 +1043,15 @@ def run_swarm(
                     exclude_transit_message=exclude_transit_message,
                 )
 
-                response._summary = chat_result.summary
-                response._messages = chat_result.chat_history
-                response._context_variables = returned_context_variables
-                response._last_speaker = last_speaker
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=last_speaker.name,
+                        context_variables=returned_context_variables,
+                    )
+                )
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
@@ -1134,6 +1139,10 @@ async def a_initiate_swarm_chat(
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
+    # Link all agents with the GroupChatManager to allow access to the group chat
+    # and other agents, particularly the tool executor for setting _swarm_next_agent
+    _link_agents_to_swarm_manager(groupchat.agents, manager)
+
     if len(processed_messages) > 1:
         last_agent, last_message = await manager.a_resume(messages=processed_messages)
         clear_history = False
@@ -1195,10 +1204,15 @@ async def a_run_swarm(
                     exclude_transit_message=exclude_transit_message,
                 )
 
-                response._summary = chat_result.summary
-                response._messages = chat_result.chat_history
-                response._context_variables = returned_context_variables
-                response._last_speaker = last_speaker
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=last_speaker.name,
+                        context_variables=returned_context_variables,
+                    )
+                )
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 

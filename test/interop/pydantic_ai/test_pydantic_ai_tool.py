@@ -6,7 +6,7 @@ import pytest
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.interop.pydantic_ai.pydantic_ai_tool import PydanticAITool as AG2PydanticAITool
+from autogen.tools import Tool
 
 with optional_import_block():
     from pydantic_ai.tools import Tool as PydanticAITool
@@ -27,10 +27,10 @@ class TestPydanticAITool:
             return f"{a} {b} {c}"
 
         tool = PydanticAITool(foobar)  # type: ignore[var-annotated]
-        ag2_tool = AG2PydanticAITool(
+        ag2_tool = Tool(
             name=tool.name,
             description=tool.description,
-            func=tool.function,
+            func_or_tool=tool.function,
             parameters_json_schema=tool._parameters_json_schema,
         )
         config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]

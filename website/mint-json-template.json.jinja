@@ -93,19 +93,18 @@
   "anchors": [],
   "navigation": [
     {
-      "group": "Home",
+      "group": "Quick Start",
       "pages": [
-        "docs/home/home",
-        "docs/home/quick-start"
+        "docs/quick-start"
       ]
     },
     {
       "group": "User Guide",
       "pages": [
+        "docs/user-guide/basic-concepts/installing-ag2",
         {
           "group": "Basic Concepts",
           "pages": [
-            "docs/user-guide/basic-concepts/installing-ag2",
             {
               "group": "LLM Configuration",
               "pages":
@@ -117,7 +116,7 @@
             "docs/user-guide/basic-concepts/conversable-agent",
             "docs/user-guide/basic-concepts/human-in-the-loop",
             {
-              "group": "Orchestrating Agents",
+              "group": "Agent Orchestration",
               "pages":
               [
                 "docs/user-guide/basic-concepts/orchestration/orchestrations",
@@ -135,6 +134,13 @@
                 "docs/user-guide/basic-concepts/tools/basics",
                 "docs/user-guide/basic-concepts/tools/controlling-use",
                 "docs/user-guide/basic-concepts/tools/tools-with-secrets",
+                {
+                  "group": "Model Context Protocol",
+                  "pages":
+                  [
+                    "docs/user-guide/basic-concepts/tools/mcp/client"
+                  ]
+                },
                 {
                   "group": "Interoperability",
                   "pages":
@@ -251,8 +257,9 @@
             "docs/user-guide/reference-agents/docagent",
             "docs/user-guide/reference-agents/docagent-performance",
             "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/deepresearchagent",
             "docs/user-guide/reference-agents/websurferagent",
-            "docs/user-guide/reference-agents/deepresearchagent"
+            "docs/user-guide/reference-agents/wikipediaagent"
           ]
         },
         {
@@ -270,6 +277,7 @@
               ]
             },
             "docs/user-guide/reference-tools/perplexity-search",
+            "docs/user-guide/reference-tools/wikipedia-search",
             "docs/user-guide/reference-tools/browser-use",
             "docs/user-guide/reference-tools/deep-research",
             {
@@ -283,25 +291,8 @@
             },
             "docs/user-guide/reference-tools/crawl4ai"
           ]
-        }
-      ]
-    },
-    {
-      "group": "Use Cases",
-      "pages": [
-        {
-          "group": "Use cases",
-          "pages": [
-            "docs/use-cases/use-cases/customer-service",
-            "docs/use-cases/use-cases/game-design",
-            "docs/use-cases/use-cases/travel-planning"
-          ]
         },
-        {
-          "group": "Notebooks",
-          "pages": ["docs/use-cases/notebooks/Notebooks"]
-        },
-        "docs/use-cases/community-gallery/community-gallery"
+        "docs/faq/FAQ"
       ]
     },
     {
@@ -334,10 +325,6 @@
       ]
     },
     {
-      "group": "FAQs",
-      "pages": ["docs/faq/FAQ"]
-    },
-    {
       "group": "Ecosystem",
       "pages": [
         "docs/ecosystem/agentops",
@@ -352,6 +339,24 @@
         "docs/ecosystem/pgvector",
         "docs/ecosystem/portkey",
         "docs/ecosystem/promptflow"
+      ]
+    },
+     {
+      "group": "Use Cases",
+      "pages": [
+        {
+          "group": "Use cases",
+          "pages": [
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/use-cases/game-design",
+            "docs/use-cases/use-cases/travel-planning"
+          ]
+        },
+        {
+          "group": "Notebooks",
+          "pages": ["docs/use-cases/notebooks/Notebooks"]
+        },
+        "docs/use-cases/community-gallery/community-gallery"
       ]
     }
   ],

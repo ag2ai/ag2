@@ -20,14 +20,17 @@ This example demonstrates using [WebRTC](https://webrtc.org/) to establish low-l
 ![Realtime agent communication over WebRTC](/snippets/advanced-concepts/realtime-agent/img/webrtc_connection_diagram.png)
 
 1. **Request an Ephemeral API Key**
+
    - The browser connects to your backend via [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) to exchange configuration details, such as the ephemeral key and model information.
    - [WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) handle signaling to bootstrap the [WebRTC](https://webrtc.org/) session.
    - The browser requests a short-lived API key from your server.
 
 2. **Generate an Ephemeral API Key**
+
    - Your backend generates an ephemeral key via the OpenAI REST API and returns it. These keys expire after one minute to enhance security.
 
 3. **Initialize the WebRTC Connection**
+
    - **Audio Streaming**: The browser captures microphone input and streams it to OpenAI while playing audio responses via an `<audio>` element.
    - **DataChannel**: A `DataChannel` is established to send and receive events (e.g., function calls).
    - **Session Handshake**: The browser creates an SDP offer, sends it to OpenAI with the ephemeral key, and sets the remote SDP answer to finalize the connection.

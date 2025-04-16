@@ -20,6 +20,7 @@ pip install ag2[openai,commsagent-telegram]
 ### Capabilities
 
 [`TelegramAgent`](/docs/api-reference/autogen/agents/experimental/TelegramAgent) can:
+
 - Construct and send a message to the configured channel/group/bot. If a message is longer than the platforms permitted message length, they will split the message into multiple messages.
 - Retrieve the latest X messages from a channel/group/bot.
 - Retrieve messages since a given date.
@@ -149,7 +150,7 @@ executor_agent.initiate_chat(
 )
 ```
 
-# Tool execution
+## Tool execution
 
 In AG2 the tool execution is typically handled by a separate agent that will follow the agent in the conversation (unless its in a swarm whereby tools are executed automatically). So, you will need to register the tools with another agent for execution.
 

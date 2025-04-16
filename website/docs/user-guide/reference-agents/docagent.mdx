@@ -1,5 +1,6 @@
 ---
 title: DocAgent
+sidebarTitle: DocAgent
 ---
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
@@ -23,6 +24,7 @@ pip install ag2[openai,rag]
 
 The document agent can perform the following tasks:
 1. Ingest documents from a local file or URL. Supported formats:
+
     - PDF
     - DOCX (DOCX, DOTX, DOCM, DOTM)
     - XLSX
@@ -95,6 +97,7 @@ DocAgent can also store the Docling Markdown in memory when digesting documents.
 When it comes time to query, DocAgent will inject the Markdown into the system message of an internal query agent and use an LLM to respond to the question.
 
 Import notes about using the in-memory query engine:
+
 - The full Markdown content, from the ingested documents, is put into the context window, so be cautious of putting too much content in as it may be too much for the LLM.
 - The Markdown is put into the start of the system message to maximize the chance of utilizing the LLM's caching ability and reduce cost. However, adding more documents in subsequent messages will change the system message and the cache will not be effective, so try to ingest all the documents before querying.
 - As it's in-memory, ingestion content will be lost when the agent is destroyed.
@@ -153,6 +156,8 @@ response = document_agent.run(
     "Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
     max_turns=1
 )
+
+# Iterate through the chat automatically with console output
 response.process()
 ```
 

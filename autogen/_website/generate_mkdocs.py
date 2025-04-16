@@ -23,6 +23,7 @@ from .utils import (
     get_git_tracked_and_untracked_files_in_directory,
     remove_marker_blocks,
     render_gallery_html,
+    separate_front_matter_and_content,
     sort_files_by_date,
 )
 
@@ -201,16 +202,17 @@ def absolute_to_relative(source_path: str, dest_path: str) -> str:
     Returns:
         A relative path from source to destination (e.g., "../../user-guide/basic-concepts/installing-ag2")
     """
+    sep = os.sep
     try:
         # Primary approach: Use pathlib for clean path calculation
-        rel_path = f"{Path(dest_path).relative_to(Path(source_path).parent)}"
-        return f"./{rel_path}" if Path(source_path).stem == "index" else f"../{rel_path}"
+        rel_path = str(Path(dest_path).relative_to(Path(source_path).parent))
+        return f".{sep}{rel_path}" if Path(source_path).stem == "index" else f"..{sep}{rel_path}"
     except ValueError:
         # Fallback approach: Use os.path.relpath when paths don't share a common parent
         rel_path = os.path.relpath(dest_path, source_path)
 
         # Special case for blog directories: add deeper path traversal
-        ret_val = f"../../../{rel_path}" if "blog" in source_path else rel_path
+        ret_val = os.path.join("..", "..", "..", rel_path) if "blog" in source_path else rel_path
 
         # Special case for index files: strip leading "../"
         if Path(source_path).stem == "index":
@@ -360,6 +362,7 @@ def rename_user_story(p: Path) -> Path:
 
 
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
+    sep = os.sep
     # Keep track of MD files we need to process
     md_files_to_process = []
 
@@ -368,7 +371,10 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
         if file.suffix == ".mdx":
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
 
-            if "/user-stories/" in str(dest):
+            if file.name == "home.mdx":
+                dest = output_dir / "home.md"
+
+            if f"{sep}user-stories{sep}" in str(dest):
                 dest = rename_user_story(dest)
 
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -381,30 +387,53 @@ def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path])
     for md_file in md_files_to_process:
         content = md_file.read_text()
 
-        rel_path = f"/{md_file.relative_to(output_dir.parents[0])}"
+        rel_path = f"{sep}{md_file.relative_to(output_dir.parents[0])}"
         processed_content = transform_content_for_mkdocs(content, rel_path)
 
         md_file.write_text(processed_content)
 
 
-def format_title(title: str, keywords: dict[str, str]) -> str:
+def format_title(file_path_str: str, keywords: dict[str, str], mkdocs_docs_dir: Path) -> str:
     """Format a page title with proper capitalization for special keywords."""
-    words = title.replace("-", " ").title().split()
-    return " ".join(keywords.get(word, word) for word in words)
+    file_path = mkdocs_docs_dir / Path(file_path_str)
+
+    # Default formatting function for filenames
+    def format_with_keywords(text: str) -> str:
+        words = text.replace("-", " ").title().split()
+        return " ".join(keywords.get(word, word) for word in words)
+
+    try:
+        front_matter_string, _ = separate_front_matter_and_content(file_path)
+        if front_matter_string:
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            sidebar_title: str = front_matter.get("sidebarTitle")
+            if sidebar_title:
+                return sidebar_title
+    except (FileNotFoundError, yaml.YAMLError):
+        pass
+
+    # Fall back to filename if file not found or no sidebarTitle
+    return format_with_keywords(Path(file_path_str).stem)
 
 
-def format_page_entry(page_path: str, indent: str, keywords: dict[str, str]) -> str:
+def format_page_entry(page_loc: str, indent: str, keywords: dict[str, str], mkdocs_docs_dir: Path) -> str:
     """Format a single page entry as either a parenthesized path or a markdown link."""
-    path = f"{page_path}.md"
-    title = format_title(Path(page_path).name, keywords)
-    return f"{indent}    - [{title}]({path})"
+    file_path_str = f"{page_loc}.md"
+    title = format_title(file_path_str, keywords, mkdocs_docs_dir)
+    return f"{indent}    - [{title}]({file_path_str})"
 
 
-def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Optional[dict[str, str]] = None) -> str:
+def format_navigation(
+    nav: list[NavigationGroup],
+    mkdocs_docs_dir: Path = mkdocs_docs_dir,
+    depth: int = 0,
+    keywords: Optional[dict[str, str]] = None,
+) -> str:
     """Recursively format navigation structure into markdown-style nested list.
 
     Args:
         nav: List of navigation items with groups and pages
+        mkdocs_docs_dir: Directory where the markdown files are located
         depth: Current indentation depth
         keywords: Dictionary of special case word capitalizations
 
@@ -429,13 +458,18 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Opti
         for page in item["pages"]:
             if isinstance(page, dict):
                 # Handle nested navigation groups
-                result.append(format_navigation([page], depth + 1, keywords))
+                result.append(format_navigation([page], mkdocs_docs_dir, depth + 1, keywords))
             else:
                 # Handle individual pages
-                result.append(format_page_entry(page, indent, keywords))
+                result.append(format_page_entry(page, indent, keywords, mkdocs_docs_dir))
 
     ret_val = "\n".join(result)
-    ret_val = ret_val.replace("- Home\n", "- [Home](index.md)\n")
+
+    ret_val = ret_val.replace(
+        "- Quick Start\n    - [Quick Start](docs/quick-start.md)\n",
+        "- [Quick Start](docs/quick-start.md)\n",
+    )
+    ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
     return ret_val
 
 
@@ -461,10 +495,11 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mintlify_nav = mintlify_json["navigation"]
     filtered_nav = [item for item in mintlify_nav if item["group"] not in nav_exclusions]
 
-    mkdocs_nav = format_navigation(filtered_nav)
+    mkdocs_docs_dir = mkdocs_root_dir / "docs"
+    mkdocs_nav = format_navigation(filtered_nav, mkdocs_docs_dir)
     mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    blog_nav = "- Blog\n    - [Blog](docs/blog)"
+    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
 
     mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
@@ -659,7 +694,7 @@ def add_front_matter_to_metadata_yml(
     # Create new entry for current notebook
     title = front_matter.get("title", "")
     link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}.md"
-    rel_link = f"../notebooks/{rendered_mdx.stem}.md"
+    rel_link = f"../notebooks/{rendered_mdx.stem}"
     description = front_matter.get("description", "")
     tags = front_matter.get("tags", []) or []
 
@@ -975,7 +1010,7 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
 
     # Find where to insert the notebook entries
     for i, line in enumerate(lines):
-        if line.strip() == "- [Notebooks](docs/use-cases/notebooks/Notebooks.md)":
+        if line.strip() == "- [All Notebooks](docs/use-cases/notebooks/Notebooks.md)":
             # Insert all notebook items after the Notebooks line
             # No need to insert extra blank lines, just the notebook entries
             for j, nav_item in enumerate(nav_list):
@@ -1015,13 +1050,13 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
         path_for_link = str(relative_path).replace("\\", "/")
 
         # Format navigation entry
-        user_stories_entries.append(f"    - [{title}]({path_for_link}/{file.name})")
+        user_stories_entries.append(f"        - [{title}]({path_for_link}/{file.name})")
 
     # Read existing navigation template
     nav_content = mkdocs_nav_path.read_text()
-    user_stories_section = "- User Stories\n" + "\n".join(user_stories_entries)
+    user_stories_section = "- Community Insights\n    - User Stories\n" + "\n".join(user_stories_entries)
 
-    section_to_follow_marker = "- Contributor Guide"
+    section_to_follow_marker = "- Blog"
 
     replacement_content = f"{user_stories_section}\n{section_to_follow_marker}"
     updated_nav_content = nav_content.replace(section_to_follow_marker, replacement_content)

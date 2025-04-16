@@ -6,11 +6,13 @@
 # SPDX-License-Identifier: MIT
 import queue
 from asyncio import Queue as AsyncQueue
-from typing import Any, AsyncIterable, Iterable, Optional, Protocol, Sequence
+from typing import Any, AsyncIterable, Dict, Iterable, Optional, Protocol, Sequence, Union
 from uuid import UUID, uuid4
 
-from ..agentchat.agent import Agent, LLMMessageType
-from ..events.agent_events import ErrorEvent, InputRequestEvent, TerminationEvent
+from pydantic import BaseModel, Field
+
+from ..agentchat.agent import LLMMessageType
+from ..events.agent_events import ErrorEvent, InputRequestEvent, RunCompletionEvent
 from ..events.base_event import BaseEvent
 from .processors import (
     AsyncConsoleEventProcessor,
@@ -31,6 +33,40 @@ class RunInfoProtocol(Protocol):
     def above_run(self) -> Optional["RunResponseProtocol"]: ...
 
 
+class Usage(BaseModel):
+    cost: float
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class CostBreakdown(BaseModel):
+    total_cost: float
+    models: Dict[str, Usage] = Field(default_factory=dict)
+
+    @classmethod
+    def from_raw(cls, data: dict[str, Any]) -> "CostBreakdown":
+        # Extract total cost
+        total_cost = data.get("total_cost", 0.0)
+
+        # Remove total_cost key to extract models
+        model_usages = {k: Usage(**v) for k, v in data.items() if k != "total_cost"}
+
+        return cls(total_cost=total_cost, models=model_usages)
+
+
+class Cost(BaseModel):
+    usage_including_cached_inference: CostBreakdown
+    usage_excluding_cached_inference: CostBreakdown
+
+    @classmethod
+    def from_raw(cls, data: dict[str, Any]) -> "Cost":
+        return cls(
+            usage_including_cached_inference=CostBreakdown.from_raw(data.get("usage_including_cached_inference", {})),
+            usage_excluding_cached_inference=CostBreakdown.from_raw(data.get("usage_excluding_cached_inference", {})),
+        )
+
+
 class RunResponseProtocol(RunInfoProtocol, Protocol):
     @property
     def events(self) -> Iterable[BaseEvent]: ...
@@ -45,7 +81,10 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def context_variables(self) -> Optional[dict[str, Any]]: ...
 
     @property
-    def last_speaker(self) -> Optional[Agent]: ...
+    def last_speaker(self) -> Optional[str]: ...
+
+    @property
+    def cost(self) -> Optional[Cost]: ...
 
     def process(self, processor: Optional[EventProcessorProtocol] = None) -> None: ...
 
@@ -64,7 +103,10 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     async def context_variables(self) -> Optional[dict[str, Any]]: ...
 
     @property
-    async def last_speaker(self) -> Optional[Agent]: ...
+    async def last_speaker(self) -> Optional[str]: ...
+
+    @property
+    async def cost(self) -> Optional[Cost]: ...
 
     async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None: ...
 
@@ -76,7 +118,8 @@ class RunResponse:
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
         self._context_variables: Optional[dict[str, Any]] = None
-        self._last_speaker: Optional[Agent] = None
+        self._last_speaker: Optional[str] = None
+        self._cost: Optional[Cost] = None
 
     def _queue_generator(self, q: queue.Queue) -> Iterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
@@ -90,7 +133,12 @@ class RunResponse:
 
                 yield event
 
-                if isinstance(event, TerminationEvent):
+                if isinstance(event, RunCompletionEvent):
+                    self._messages = event.content.history  # type: ignore[attr-defined]
+                    self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                    self._summary = event.content.summary  # type: ignore[attr-defined]
+                    self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                    self.cost = event.content.cost  # type: ignore[attr-defined]
                     break
 
                 if isinstance(event, ErrorEvent):
@@ -123,8 +171,19 @@ class RunResponse:
         return self._context_variables
 
     @property
-    def last_speaker(self) -> Optional[Agent]:
+    def last_speaker(self) -> Optional[str]:
         return self._last_speaker
+
+    @property
+    def cost(self) -> Optional[Cost]:
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: Union[Cost, dict[str, Any]]) -> None:
+        if isinstance(value, dict):
+            self._cost = Cost.from_raw(value)
+        else:
+            self._cost = value
 
     def process(self, processor: Optional[EventProcessorProtocol] = None) -> None:
         processor = processor or ConsoleEventProcessor()
@@ -138,7 +197,8 @@ class AsyncRunResponse:
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
         self._context_variables: Optional[dict[str, Any]] = None
-        self._last_speaker: Optional[Agent] = None
+        self._last_speaker: Optional[str] = None
+        self._cost: Optional[Cost] = None
 
     async def _queue_generator(self, q: AsyncQueue[Any]) -> AsyncIterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
@@ -156,7 +216,12 @@ class AsyncRunResponse:
 
                 yield event
 
-                if isinstance(event, TerminationEvent):
+                if isinstance(event, RunCompletionEvent):
+                    self._messages = event.content.history  # type: ignore[attr-defined]
+                    self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                    self._summary = event.content.summary  # type: ignore[attr-defined]
+                    self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                    self.cost = event.content.cost  # type: ignore[attr-defined]
                     break
 
                 if isinstance(event, ErrorEvent):
@@ -189,8 +254,19 @@ class AsyncRunResponse:
         return self._context_variables
 
     @property
-    async def last_speaker(self) -> Optional[Agent]:
+    async def last_speaker(self) -> Optional[str]:
         return self._last_speaker
+
+    @property
+    async def cost(self) -> Optional[Cost]:
+        return self._cost
+
+    @cost.setter
+    def cost(self, value: Union[Cost, dict[str, Any]]) -> None:
+        if isinstance(value, dict):
+            self._cost = Cost.from_raw(value)
+        else:
+            self._cost = value
 
     async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None:
         processor = processor or AsyncConsoleEventProcessor()
