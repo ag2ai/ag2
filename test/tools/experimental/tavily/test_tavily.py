@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
@@ -62,18 +63,45 @@ class TestTavilySearchTool:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "The search query."},
-                        "tavily_api_key": {"type": "string", "description": "The API key for the Tavily Search API."},
-                        "search_depth": {"type": "string", "description": "Either 'advanced' or 'basic'"},
-                        "include_answer": {"type": "string", "description": "Either 'advanced' or 'basic'"},
-                        "include_raw_content": {"type": "boolean", "description": "Include the raw contents"},
+                        "search_depth": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {"type": "null"},
+                            ],
+                            "default": "basic",
+                            "description": "Either 'advanced' or 'basic'",
+                        },
+                        "include_answer": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {"type": "null"},
+                            ],
+                            "default": "basic",
+                            "description": "Either 'advanced' or 'basic'",
+                        },
+                        "include_raw_content": {
+                            "anyOf": [
+                                {"type": "boolean"},
+                                {"type": "null"},
+                            ],
+                            "default": False,
+                            "description": "Include the raw contents",
+                        },
                         "include_domains": {
-                            "type": "array",
-                            "items": {"type": "string"},
+                            "anyOf": [
+                                {"type": "array", "items": {"type": "string"}},
+                                {"type": "null"},
+                            ],
+                            "default": [],
                             "description": "Specific web domains to search",
                         },
-                        "num_results": {"type": "integer", "description": "The number of results to return."},
+                        "num_results": {
+                            "type": "integer",
+                            "default": 5,
+                            "description": "The number of results to return.",
+                        },
                     },
-                    "required": ["query", "tavily_api_key"],
+                    "required": ["query"],
                 },
             },
             "type": "function",
@@ -146,12 +174,12 @@ class TestTavilySearchTool:
 
     def test_search_invalid_query(self) -> None:
         """
-        Test that an invalid (empty) query string raises a ValueError.
+        Test that an invalid (empty) query string raises a Pydantic ValidationError.
         """
         tool = TavilySearchTool(tavily_api_key="test_key")
-        with pytest.raises(TypeError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             tool(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
-        assert "Missing required argument" in str(exc_info.value)
+        assert "Input should be a valid string" in str(exc_info.value)
 
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
