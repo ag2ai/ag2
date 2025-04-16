@@ -7,6 +7,8 @@ sidebarTitle: Use Case Example
 If you haven't had a chance to read about or use AG2's Swarm orchestration, see the [Basic Concepts](/docs/user-guide/basic-concepts/orchestration/swarm) section on Swarm.
 </Tip>
 
+### Building a Customer Service Workflow
+
 You can build complex, yet flexible, workflows using AG2's Swarm orchestration.
 
 In this walk-through of a customer service workflow, we will utilize three of the advanced features available in a Swarm orchestration:
@@ -26,6 +28,8 @@ Key aspects of this swarm are:
 1. System messages are customized, incorporating the context of the workflow
 2. A nested chat handles the order retrieval and summarization
 3. Handoffs are conditional, only being available when they are relevant
+
+### Creating the Swarm Architecture
 
 #### Setting up
 
@@ -49,6 +53,8 @@ from autogen import (
 # Put your key in the OPENAI_API_KEY environment variable
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 ```
+
+### Implementing Advanced Swarm Features
 
 #### Context
 With all agents in a Swarm sharing a common context as well as being able to use that context in system messages and hand-off conditions, context variables are a key component to AG2's Swarm.

@@ -3,6 +3,8 @@ title: Registering Handoffs to a nested chat
 sidebarTitle: Nested chats
 ---
 
+### Understanding Nested Chats in Swarms
+
 In addition to transferring to an agent, you can also trigger a nested chat by using a handoff with [`OnCondition`](/docs/api-reference/autogen/OnCondition). This is a useful way to perform sub-tasks without that work becoming part of the broader swarm's messages and agents.
 
 Configuring the nested chat is similar to [establishing a nested chat for an agent](/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats).
@@ -23,6 +25,8 @@ nested_chats = [
  },
 ]
 ```
+
+### Configuring Carryover Context
 
 New to nested chats within swarms is the ability to **carryover some context from the swarm chat into the nested chat**. This is done by adding a carryover configuration. If you're not using carryover, then no messages from the swarm chat will be brought into the nested chat.
 
@@ -64,6 +68,8 @@ nested_chats = [
  },
 ]
 ```
+
+### Implementing Nested Chats as Handoffs
 
 Finally, we add the nested chat as a handoff in the same way as we do to an agent:
 
