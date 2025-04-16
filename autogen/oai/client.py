@@ -1052,7 +1052,7 @@ class OpenAIWrapper:
             # construct the create params
             params = self._construct_create_params(create_config, extra_kwargs)
             # get the cache_seed, filter_func and context
-            cache_seed = extra_kwargs.get("cache_seed", LEGACY_DEFAULT_CACHE_SEED)
+            cache_seed = extra_kwargs.get("cache_seed")
             cache = extra_kwargs.get("cache")
             filter_func = extra_kwargs.get("filter_func")
             context = extra_kwargs.get("context")
