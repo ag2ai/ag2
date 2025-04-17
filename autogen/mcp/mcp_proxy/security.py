@@ -27,7 +27,7 @@ class BaseSecurity(BaseModel):
     @model_validator(mode="after")  # type: ignore[misc]
     def __post_init__(
         self,
-    ) -> None:  # dataclasses uses __post_init__ instead of model_validator
+    ) -> "BaseSecurity":  # dataclasses uses __post_init__ instead of model_validator
         """Validate the in_value based on the type."""
         valid_in_values = {
             "apiKey": ["header", "query", "cookie"],
@@ -39,6 +39,7 @@ class BaseSecurity(BaseModel):
         }
         if self.in_value not in valid_in_values[self.type]:
             raise ValueError(f"Invalid in_value '{self.in_value}' for type '{self.type}'")
+        return self
 
     def accept(self, security_params: "BaseSecurityParameters") -> bool:
         return isinstance(self, security_params.get_security_class())
