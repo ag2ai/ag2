@@ -24,7 +24,7 @@ jobs:
 
   copy-latest-to-root:
     needs: build_and_deploy
-    if: needs.build_and_deploy.outputs.is_rc == 'False' && github.ref == 'refs/heads/main'
+    if: needs.build_and_deploy.outputs.is_rc == 'False'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout gh-pages branch
