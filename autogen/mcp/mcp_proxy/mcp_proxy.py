@@ -312,6 +312,7 @@ class MCPProxy:
         openapi_url: Optional[str] = None,
         client_source_path: Optional[str] = None,
         servers: Optional[list[dict[str, Any]]] = None,
+        rename_functions: bool = False,
     ) -> "MCPProxy":
         if (openapi_json is None) == (openapi_url is None):
             raise ValueError("Either openapi_json or openapi_url should be provided")
@@ -334,6 +335,7 @@ class MCPProxy:
             main_name = cls.generate_code(  # noqa F841
                 input_text=yaml_friendly,  # type: ignore [arg-type]
                 output_dir=td,
+                custom_visitors=[Path(__file__).parent / "operation_renaming.py"] if rename_functions else None,
             )
             # add td to sys.path
             try:
