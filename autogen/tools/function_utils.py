@@ -316,13 +316,29 @@ def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, An
         A function to load the parameter if it is a Pydantic model, otherwise None
 
     """
-    if get_origin(t) is Annotated:
-        return get_load_param_if_needed_function(get_args(t)[0])
+    origin = get_origin(t)
 
-    def load_base_model(v: dict[str, Any], t: type[BaseModel]) -> BaseModel:
-        return t(**v)
+    if origin is Annotated:
+        args = get_args(t)
+        if args:
+            return get_load_param_if_needed_function(args[0])
+        else:
+            # Invalid Annotated usage
+            return None
 
-    return load_base_model if isinstance(t, type) and issubclass(t, BaseModel) else None
+    # Handle generic types (list[str], dict[str,Any], Union[...], etc.) or where t is not a type at all
+    # This means it's not a BaseModel subclass
+    if origin is not None or not isinstance(t, type):
+        return None
+
+    def load_base_model(v: dict[str, Any], model_type: type[BaseModel]) -> BaseModel:
+        return model_type(**v)
+
+    # Check if it's a class and a subclass of BaseModel
+    if issubclass(t, BaseModel):
+        return load_base_model
+    else:
+        return None
 
 
 @export_module("autogen.tools")
