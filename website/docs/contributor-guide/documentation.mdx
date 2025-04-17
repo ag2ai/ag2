@@ -109,3 +109,22 @@ When switching branches or making major changes to the documentation structure, 
 When you want to add a new Jupyter notebook and have it rendered in the documentation, you need to follow specific guidelines to ensure proper integration with the website.
 
 Please refer to <a href="https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-to-get-a-notebook-displayed-on-the-website" target="_blank">this</a> guideline for more details.
+
+## Before Making a Pull Request
+
+To maintain code quality and consistency, we use pre-commit hooks that automatically run checks like linting, formatting, and other validations before each commit. It’s important to have these properly set up in your development environment before you start committing changes.
+
+If you skip this setup, your pull request’s CI checks may fail, and you'll need to fix issues and update your PR later — so it's highly recommended to get everything configured upfront.
+
+<Note>
+For more information on setting up the development environment, refer to this [page](/docs/contributor-guide/setup-development-environment/).
+</Note>
+
+### Setting up Pre-commit Hooks
+
+From the project root, run the following command to install the development dependencies and set up the pre-commit hooks:
+
+```console
+pip install -e ".[dev]" && pre-commit install
+```
+This ensures that every time you run git commit, a **series of checks will automatically be executed**.
