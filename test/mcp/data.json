@@ -1,0 +1,80 @@
+{
+   "openapi":"3.1.0",
+   "info":{
+      "title":"Infobip OpenAPI Specification",
+      "description":"OpenAPI Specification that contains all public endpoints and webhooks.",
+      "contact":{
+         "name":"Infobip support",
+         "email":"support@infobip.com"
+      },
+      "version":"2.0.650",
+      "x-generatedAt":"2025-04-08T07:30:15.493328656Z"
+   },
+   "paths":{
+      "/whatsapp/1/templates":{
+         "get":{
+            "summary":"Get account WhatsApp templates",
+            "description":"Retrieve all templates associated with your account based on the provided filter criteria.",
+            "externalDocs":{
+               "description":"Learn more about the WhatsApp channel and use cases",
+               "url":"https://www.infobip.com/docs/whatsapp"
+            },
+            "operationId":"get-account-whatsapp-templates",
+            "parameters":[
+               {
+                  "name":"status",
+                  "in":"query",
+                  "description":"List of template statuses, separated by commas.",
+                  "required":false,
+                  "style":"form",
+                  "explode":true,
+                  "schema":{
+                     "type":"array",
+                     "items":{
+                        "type":"string",
+                        "enum":[
+                           "APPROVED"
+                        ]
+                     },
+                     "uniqueItems":true
+                  }
+               }
+            ],
+            "responses":{
+               "200":{
+                  "description":"List of all filtered templates",
+                  "content":{
+                     "application/json":{
+                        "schema":{
+                           "type":"string",
+                           "default":"templateId,ASC"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   },
+   "components":{
+      "schemas":{
+         "FlowDataResponse":{
+            "type":"object",
+            "description":"List of found flows.",
+            "properties":{
+               "status":{
+                  "type":"string",
+                  "description":"Status of the flow.",
+                  "enum":[
+                     "DRAFT"
+                  ],
+                  "example":"DRAFT"
+               }
+            },
+            "required":[
+               "status"
+            ]
+         }
+      }
+   }
+}
