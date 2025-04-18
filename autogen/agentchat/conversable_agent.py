@@ -28,7 +28,7 @@ from typing import (
     Union,
 )
 
-from ..cache.cache import AbstractCache
+from ..cache.cache import AbstractCache, Cache
 from ..code_utils import (
     PYTHON_VARIANTS,
     UNKNOWN,
@@ -1491,6 +1491,7 @@ class ConversableAgent(LLMAgent):
         """
         iostream = IOStream.get_default()
 
+        cache = Cache.get_current_cache(cache)
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
