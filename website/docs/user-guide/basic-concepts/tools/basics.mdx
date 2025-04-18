@@ -1,7 +1,9 @@
 ---
-title: Tools
+title: Overview
 sidebarTitle: Overview
 ---
+
+### Understanding Tool Usage in AG2
 
 Agents significantly enhance their capabilities by leveraging tools, which provide access to external data, APIs, and additional functionality.
 
@@ -13,6 +15,8 @@ In **AG2**, tool usage happens in two stages:
 Typically, you'll create two agents. One to determine the appropriate tool and another to carry out the execution.
 
 <Note>In a conversation, the executor agent must always follow the agent that suggests a tool.</Note>
+
+### Example: Implementing a Date Tool
 
 import Example from "/snippets/python-examples/toolregister.mdx";
 
@@ -63,6 +67,8 @@ import Example from "/snippets/python-examples/toolregister.mdx";
 
     --------------------------------------------------------------------------------
     ```
+
+### Alternative Registration Methods
 
 Alternatively, you can use decorators [`register_for_execution`](/docs/api-reference/autogen/ConversableAgent#register-for-execution) and [`register_for_llm`](/docs/api-reference/autogen/ConversableAgent#register-for-llm) to register a tool. So, instead of using [`register_function`](/docs/api-reference/autogen/register_function), you can register them with the function definition.
 ```python

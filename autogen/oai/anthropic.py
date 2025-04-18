@@ -96,6 +96,7 @@ with optional_import_block():
 
 
 ANTHROPIC_PRICING_1k = {
+    "claude-3-7-sonnet-20250219": (0.003, 0.015),
     "claude-3-5-sonnet-20241022": (0.003, 0.015),
     "claude-3-5-haiku-20241022": (0.0008, 0.004),
     "claude-3-5-sonnet-20240620": (0.003, 0.015),
@@ -111,13 +112,16 @@ ANTHROPIC_PRICING_1k = {
 @register_llm_config
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
+    timeout: Optional[int] = Field(default=None, ge=1)
     temperature: float = Field(default=1.0, ge=0.0, le=1.0)
     top_k: Optional[int] = Field(default=None, ge=1)
     top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     stop_sequences: Optional[list[str]] = None
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=1)
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[dict] = None
+    thinking: Optional[dict] = None
 
     gcp_project_id: Optional[str] = None
     gcp_region: Optional[str] = None
@@ -210,10 +214,13 @@ class AnthropicClient:
             params, "temperature", (float, int), False, 1.0, (0.0, 1.0), None
         )
         anthropic_params["max_tokens"] = validate_parameter(params, "max_tokens", int, False, 4096, (1, None), None)
+        anthropic_params["timeout"] = validate_parameter(params, "timeout", int, True, None, (1, None), None)
         anthropic_params["top_k"] = validate_parameter(params, "top_k", int, True, None, (1, None), None)
         anthropic_params["top_p"] = validate_parameter(params, "top_p", (float, int), True, None, (0.0, 1.0), None)
         anthropic_params["stop_sequences"] = validate_parameter(params, "stop_sequences", list, True, None, None, None)
         anthropic_params["stream"] = validate_parameter(params, "stream", bool, False, False, None, None)
+        if "thinking" in params:
+            anthropic_params["thinking"] = params["thinking"]
 
         if anthropic_params["stream"]:
             warnings.warn(

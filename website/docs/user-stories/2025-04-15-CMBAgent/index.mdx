@@ -1,0 +1,92 @@
+---
+title: "Born at Cambridge, Powered by AG2: Building the Self-Driving Cosmological Lab with CMBAgent"
+authors:
+  - boris_bolliet
+  - inigo_zubeldia
+  - james_fergusson
+  - francisco_villaescusa
+tags: [Research, AG2]
+---
+
+> AG2 is providing the key tools required to move towards automated AI-driven Cosmology and Astrophysics research. As cosmologists, and more generally as researchers, our workflows involve working with complex software tools, large complex datasets, while also keeping up with advances in our fields. Using AG2 we have implemented  <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>, a multi-agent system that automates some of the key tasks involved in research workflows. Our fully open-source research-ready work, based on a Planning and Control strategy, has been successfully applied not only to cosmology tasks but also to data analysis tasks in economics, banking and education.
+>
+> > Boris Bolliet, Agentic AI Lead - Infosys-Cambridge AI Centre
+
+![banner](img/banner.png)
+
+## Overview
+
+Our AG2 application is called <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>. It’s a multi-agent system for science with foundation models backends (e.g., Large Language Models; LLMs).  It is built with the goal of having an AI system for Autonomous Scientific Discovery, with a focus on our research in Cosmology, which is the domain of origin of our team.
+
+In Cosmology, our goal is to process data from telescopes to learn about the fundamental properties of the universe. This is an example of an “inverse problem” known as parameter inference, where we are given the data and, based on assumptions on how the universe works (expansion of space, formation of galaxies), we extract the most likely values of our model parameters. For instance, from observations of the cosmic microwave background, and assuming Einstein’s theory of General Relativity, we can measure the age of the universe.
+
+The AG2 framework has allowed <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> to automate the workflow needed to solve the cosmological parameter inference problem.
+
+## Challenge
+
+Measuring the fundamental properties of the universe based on telescope data requires running computationally expensive simulations and comparing their output with observations. The software packages required to run the simulations and confront them with measurements are research-level libraries that take PhD students several years to learn. Furthermore, cosmological analyses must be informed by the latest results in our field, for instance to know whether a new model should be considered.
+
+To automate these research challenges we are designing AI agents that can act as expert users on the libraries of interest and that can inform the analysis at hand with results from the scientific literature. Also, to achieve full automation the agents must be capable of running experiments (e.g., data analysis pipelines) and simulations, as well as generating and selecting hypotheses.
+
+
+## Solution: AG2 Integration
+
+The very first version of <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> allowed us to exactly reproduce a cutting-edge cosmological data analysis in about 100 times less time and without writing the data analysis pipeline ourselves. The entire codebase was written by  <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>. However, our initial version had a human-in-the-loop at all stages, i.e., human feedback was provided after every LLM-agent output. This was presented in <a href="https://arxiv.org/abs/2412.00431" target="_blank">Laverick et al (2024)</a>.
+
+<div class="user-story-youtube-container">
+  <iframe
+    class="w-full aspect-video rounded-md"
+    src="https://www.youtube.com/embed/XE0Eu-tMpgs?si=DtKykQLw8spf1D6I"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen
+  ></iframe>
+</div>
+
+We quickly realized that most of human feedback could in fact be easily substituted by adding more agents to the system, such as reviewer agents that critique the outputs and iterate, as well as adding more robustness with structured output and context awareness. With such improvements, the <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>  version released in march 2025 has no human-in-the-loop and implements a powerful Planning and Control strategy, inspired by robotics.
+
+In this strategy, a plan is first designed through a conversation between a planner agent and a plan reviewer agent. Once the user-specified number of rounds of reviews is exhausted, the plan is sent for execution to a control agent. During the Control phase, the control agent assigns the plan sub-tasks to the relevant agents for execution until all steps are successfully completed.
+
+
+![banner](img/flow-chart.png)
+
+A demonstration video which shows <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> successfully solving a PhD-level cosmology question is available on our <a href="https://www.youtube.com/@cmbagent" target="_blank">YouTube channel</a>.
+
+Our project is leveraging a wide range of AG2 capabilities to solve some of the challenges of cosmology research.
+
+- **Multi-LLM calls**: we utilize different LLM for different tasks. Current examples include gpt-4o-mini for simple straightforward tasks, claude-3.7 for reviewing or critique tasks, o3-mini-high for reasoning,  gpt-4o for planning, o3-min or gemini-2.5-pro-exp for coding.
+- **Swarm orchestration**: to handle agent transitions we implemented <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> using swarm orchestration, where transitions are done based on conditions on a set of context variables that evolve and define the state of each agent.
+- **Tool calls** allow us to operate on data, either by executing code locally or storing relevant information into context. With AG2 we are able to control these tool or function calls strictly.
+- **Structured Output** is a key feature that we found to dramatically increase the robustness of <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>. For instance, during the planning stage of the workflow, the plan has a very specific structure with steps corresponding to sub-tasks, the agent in charge and the corresponding instructions. These are then injected into the agent’s context using swarm capabilities.
+- **Retrieval Augmented Generation agents**: The GPTAssitantAgent in AG2 is a simple and powerful interface to OpenAI assistant with vector stores containing research software packages, documentations, tutorials and scientific papers of interest. Upon initialization, <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> creates a vector embedding of  software package documentation or cosmology papers that is pushed on the OpenAI platform.
+
+
+## What's Next
+
+<a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> is only the start of our research programme and we consider it as a prototype for future systems that will be able to carry out scientific research with super-human capabilities. Our next areas of development include evaluation and the development of an end-to-end research framework.
+
+- **Evaluation with  <a href="https://inspect.aisi.org.uk/" target="_blank">Inspect.AI</a>**: we are collaborating with Lorenzo Pacchiardi and Irene Testini at the <a href="https://www.lcfi.ac.uk/" target="_blank">Leverhulme Centre for the Future of Intelligence</a> to develop an evaluation framework consisting of extensive benchmarks for cosmology research in order to assess quantitatively and systematically how AI agents perform as they evolve. With such a framework, we will be able to make quantifiable positive steps in the development of our AI agents and, even more importantly, to trust them fully. To illustrate how such a benchmark can be developed, we released CosmoPaperQA (developed by Adrian Dimitrov) on the <a href="https://huggingface.co/ASTROANTS" target="_blank">ASTROANTS</a> HuggingFace space, inspired by the work of <a href="https://www.futurehouse.org/" target="_blank">FutureHouse.</a>
+- **End-to-end cosmology research with** <a href="https://github.com/AstroPilot-AI" target="_blank">ASTROPILOT</a>. We have integrated  <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> within ASTROPILOT. The ASTROPILOT project implements not only the analysis, but also research idea generation and paper writing. The starting point is simply the dataset and a description of the data. The rest is done by ASTROPILOT completely automatically.
+
+Cosmology research shares many commonalities with other fields that are data intensive. We believe that the systems we are developing will become successfully applicable to other fields.
+
+
+## Conclusion
+
+We think that in the not-so-distant future most fields in fundamental research will operate with self-driving laboratories. In Cosmology, as in many other fields, this will look like teams of AI scientists collaborating to extract useful information from state-of-the-art datasets from telescopes or large cosmological simulations, while also identifying and guiding their own research directions. Human cosmologists will act as managers and their main challenge will likely be the evaluation of the self-driving labs results. Multi-agent frameworks such as AG2 will contribute to realise this paradigm shift in scientific research.
+
+Our research is funded by the <a href="https://science.ai.cam.ac.uk/" target="_blank">Cambridge University Accelerate Programme for Scientific Discovery</a> and the Infosys-Cambridge AI Centre.
+
+## References
+
+- **<a href="https://arxiv.org/abs/2412.00431" target="_blank">Multi-Agent System for Cosmological Parameter Analysis</a>**
+
+- **<a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT GitHub Repository</a>**
+
+- **<a href="https://www.youtube.com/@cmbagent" target="_blank">CMBAGENT YouTube Channel</a>**
+
+- **<a href="https://huggingface.co/ASTROANTS" target="_blank">ASTROANTS on Hugging Face</a>**
+
+- **<a href="https://github.com/AstroPilot-AI" target="_blank">AstroPilot-AI GitHub Organization</a>**

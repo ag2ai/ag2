@@ -226,3 +226,27 @@ authors:
     description: ""
     url: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
     avatar: https://raw.githubusercontent.com/ag2ai/ag2/refs/heads/main/website/logo/ag2.svg
+
+  boris_bolliet:
+    name: Boris Bolliet
+    description: Agentic AI Lead, Infosys-Cambridge AI Centre
+    url: ""
+    avatar: ../img/boris_profile.png
+
+  inigo_zubeldia:
+    name: Inigo Zubeldia
+    description: Senior Researcher, Infosys-Cambridge AI Centre
+    url: ""
+    avatar: ../img/inigo_profile.png
+
+  james_fergusson:
+    name: James Fergusson
+    description: Director, Infosys-Cambridge AI Centre
+    url: ""
+    avatar: ../img/james_profile.png
+
+  francisco_villaescusa:
+    name: Francisco Villaescusa-Navarro
+    description: Research Scientist, Simons Foundation
+    url: ""
+    avatar: ../img/francisco_profile.png

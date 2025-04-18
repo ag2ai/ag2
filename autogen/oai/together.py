@@ -60,6 +60,7 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
     min_p: Optional[float] = Field(default=None, ge=0, le=1)
     safety_model: Optional[str] = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Union[str, dict[str, Union[str, dict[str, str]]]]] = (
         None  # dict is the tool to call: {"type": "function", "function": {"name": "my_function"}}
     )
