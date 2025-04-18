@@ -8,7 +8,7 @@ from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....tools import Tool
-from ....tools.experimental import BrowserUseTool, Crawl4AITool
+from ....tools.experimental import BrowserUseTool, Crawl4AITool, PerplexitySearchTool, TavilySearchTool
 
 __all__ = ["WebSurferAgent"]
 
@@ -22,7 +22,7 @@ class WebSurferAgent(ConversableAgent):
         *,
         llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         web_tool_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        web_tool: Literal["browser_use", "crawl4ai"] = "browser_use",
+        web_tool: Literal["browser_use", "crawl4ai", "perplexity", "tavily"] = "browser_use",
         web_tool_kwargs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
@@ -30,7 +30,7 @@ class WebSurferAgent(ConversableAgent):
 
         Args:
             llm_config: The LLM configuration.
-            web_tool_llm_config: The LLM configuration for the web tool. I not provided, the llm_config will be used.
+            web_tool_llm_config: The LLM configuration for the web tool. If not provided, the llm_config will be used.
             web_tool: The web tool to use. Defaults to "browser_use".
             web_tool_kwargs: The keyword arguments for the web tool. Defaults to None.
             **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
@@ -42,6 +42,10 @@ class WebSurferAgent(ConversableAgent):
             self.tool: Tool = BrowserUseTool(llm_config=web_tool_llm_config, **web_tool_kwargs)  # type: ignore[arg-type]
         elif web_tool == "crawl4ai":
             self.tool = Crawl4AITool(llm_config=web_tool_llm_config, **web_tool_kwargs)
+        elif web_tool == "perplexity":
+            self.tool = PerplexitySearchTool(**web_tool_kwargs)
+        elif web_tool == "tavily":
+            self.tool = TavilySearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 

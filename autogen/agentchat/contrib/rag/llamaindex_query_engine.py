@@ -154,7 +154,7 @@ class LlamaIndexQueryEngine:
         """
         Load documents from a directory and/or a sequence of file paths.
 
-        Default to uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
+        Default to uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats](https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types).
 
         Args:
             input_dir (Optional[Union[Path, str]]): The directory containing documents to be loaded.

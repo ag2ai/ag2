@@ -172,6 +172,7 @@ def test_load_config(anthropic_client):
         "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
+        "timeout": None,
         "top_p": 0.8,
         "max_tokens": 100,
         "stop_sequences": None,

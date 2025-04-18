@@ -1,0 +1,91 @@
+---
+title: WikipediaAgent
+sidebarTitle: WikipediaAgent
+---
+
+If you need an agent to perform Wikipedia searches and retrieve relevant information, [`WikipediaAgent`](/docs/api-reference/autogen/agents/experimental/WikipediaAgent) can help you.
+
+## Installation
+
+Install AG2 with the LLM model provider and Wikipedia platform extra:
+
+```bash
+pip install ag2[openai,wikipedia]
+```
+
+If you have been using `autogen` or `pyautogen`, you can upgrade using:
+
+```bash
+pip install -U "autogen[wikipedia,openai]"
+```
+
+or
+
+```bash
+pip install -U "pyautogen[wikipedia,openai]"
+```
+
+as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+
+## Capabilities
+
+[`WikipediaAgent`](/docs/api-reference/autogen/agents/experimental/WikipediaAgent) can:
+
+- Perform searches on Wikipedia using natural language queries.
+- Retrieve summaries and relevant information from Wikipedia articles.
+- Integrate Wikipedia search results into conversations or workflows.
+
+It utilizes the `WikipediaQueryRunTool` to execute searches and fetch information directly from Wikipedia.
+
+## Built-In Tools
+
+The [`WikipediaAgent`](/docs/api-reference/autogen/agents/experimental/WikipediaAgent) has the following in-built tool:
+
+- [`WikipediaQueryRunTool`](/docs/api-reference/autogen/tools/experimental/wikipedia/wikipedia/WikipediaQueryRunTool/#autogen.tools.experimental.wikipedia.wikipedia.WikipediaQueryRunTool)
+  Enables the agent to perform Wikipedia searches and retrieve relevant summaries.
+
+- [`WikipediaPageLoadTool`](/docs/api-reference/autogen/tools/experimental/wikipedia/wikipedia/WikipediaPageLoadTool/#autogen.tools.experimental.wikipedia.wikipedia.WikipediaPageLoadTool)
+  Retrieves the full content of a specified Wikipedia page for more in-depth responses.
+
+
+## Platform Configuration
+
+No special configuration is required to use `WikipediaAgent`. It operates using the Wikipedia API, which is publicly accessible. Ensure that your environment has internet access to allow the agent to fetch data from Wikipedia.
+
+## Code Example
+
+Here's a simple example using the [`WikipediaAgent`](/docs/api-reference/autogen/agents/experimental/WikipediaAgent) to search for information about Australia:
+
+```python
+from autogen import LLMConfig
+from autogen.agentchat import UserProxyAgent
+from autogen.agents.experimental import WikipediaAgent
+
+# Configure the LLM
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+# Initialize the WikipediaAgent
+wiki_agent = WikipediaAgent(name="wiki-agent", llm_config=llm_config)
+
+# Initialize the UserProxyAgent
+user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER", code_execution_config=False)
+
+# Register WikipediaAgent's tools with the UserProxyAgent
+for tool in wiki_agent.tools:
+    tool.register_for_execution(user_proxy)
+
+# Start the conversation
+response = user_proxy.initiate_chat(
+    recipient=wiki_agent,
+    message="What's the population of Australia?",
+    max_turns=2,
+)
+```
+
+This setup allows the `UserProxyAgent` to delegate the query to the `WikipediaAgent`, which then performs the search and returns the information.
+
+## Tool Execution
+
+In AG2, tool execution is typically handled by a separate agent that follows the main agent in the conversation. In this example, the `UserProxyAgent` is responsible for executing the tools registered by the `WikipediaAgent`. This separation ensures a clear distinction between decision-making (handled by `WikipediaAgent`) and action execution (handled by `UserProxyAgent`).
+
+For more details on integrating Wikipedia search tools into your agents, refer to the [Wikipedia Search Tools Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/tools_wikipedia_search.ipynb).

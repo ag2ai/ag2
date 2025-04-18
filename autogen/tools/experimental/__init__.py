@@ -16,6 +16,7 @@ from .messageplatform import (
     TelegramSendTool,
 )
 from .perplexity import PerplexitySearchTool
+from .tavily import TavilySearchTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "SlackRetrieveRepliesTool",
     "SlackRetrieveTool",
     "SlackSendTool",
+    "TavilySearchTool",
     "TelegramRetrieveTool",
     "TelegramSendTool",
     "WikipediaPageLoadTool",

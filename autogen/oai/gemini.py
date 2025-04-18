@@ -873,10 +873,17 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     model_name = model_name.lower()
     up_to_128k = input_tokens <= 128000
+    up_to_200k = input_tokens <= 200000
 
     if use_vertexai:
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
+
+        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+            if up_to_200k:
+                return total_cost_mil(1.25, 10)
+            else:
+                return total_cost_mil(2.5, 15)
 
         if "gemini-2.0-flash-lite" in model_name:
             return total_cost_mil(0.075, 0.3)
@@ -908,6 +915,13 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     else:
         # Non-Vertex AI pricing
+
+        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
+            if up_to_200k:
+                return total_cost_mil(1.25, 10)
+            else:
+                return total_cost_mil(2.5, 15)
 
         if "gemini-2.0-flash-lite" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
