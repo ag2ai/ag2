@@ -64,10 +64,17 @@ def _get_file_extension(mime_type: str) -> Optional[str]:
     ],
     "google-api",
 )
-def download_file(service: Any, file_id: str, file_name: str, mime_type: str, download_folder: Path) -> str:
-    """Download or export file based on its MIME type."""
+def download_file(
+    service: Any,
+    file_id: str,
+    file_name: str,
+    mime_type: str,
+    download_folder: Path,
+    subfolder_path: Optional[str] = None,
+) -> str:
+    """Download or export file based on its MIME type, optionally saving to a subfolder."""
     file_extension = _get_file_extension(mime_type)
-    if file_extension and (not file_name.endswith(file_extension)):
+    if file_extension and (not file_name.lower().endswith(file_extension.lower())):
         file_name = f"{file_name}.{file_extension}"
 
     # Define export formats for Google Docs, Sheets, and Slides
@@ -84,15 +91,34 @@ def download_file(service: Any, file_id: str, file_name: str, mime_type: str, do
         # Download normal files (videos, images, etc.)
         request = service.files().get_media(fileId=file_id)
 
+    # Determine the final destination directory
+    destination_dir = download_folder
+    if subfolder_path:
+        destination_dir = download_folder / subfolder_path
+        # Ensure the subfolder exists, create it if necessary
+        destination_dir.mkdir(parents=True, exist_ok=True)
+
+    # Construct the full path for the file
+    file_path = destination_dir / file_name
+
     # Save file
-    with io.BytesIO() as buffer:
-        downloader = MediaIoBaseDownload(buffer, request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
+    try:
+        with io.BytesIO() as buffer:
+            downloader = MediaIoBaseDownload(buffer, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
 
-        file_path = download_folder / file_name
-        with open(file_path, "wb") as f:
-            f.write(buffer.getvalue())
+            buffer.seek(0)
 
-    return f"✅ Downloaded: {file_name}"
+            with open(file_path, "wb") as f:
+                f.write(buffer.getvalue())
+
+        # Print out the relative path of the downloaded file
+        relative_path = Path(subfolder_path) / file_name if subfolder_path else Path(file_name)
+        return f"✅ Downloaded: {relative_path}"
+
+    except Exception as e:
+        # Error message if unable to download
+        relative_path = Path(subfolder_path) / file_name if subfolder_path else Path(file_name)
+        return f"❌ FAILED to download {relative_path}: {e}"
