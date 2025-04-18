@@ -60,6 +60,10 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
         @tool(description="download a file from Google Drive")
         def download_file_from_drive(
             file_info: Annotated[GoogleFileInfo, "The file info to download."],
+            subfolder_path: Annotated[
+                Optional[str],
+                "The subfolder path to save the file in. If not provided, saves in the main download folder.",
+            ] = None,
         ) -> str:
             return download_file(
                 service=self.service,
@@ -67,6 +71,7 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
                 file_name=file_info.name,
                 mime_type=file_info.mime_type,
                 download_folder=download_folder,
+                subfolder_path=subfolder_path,
             )
 
         if exclude is None:
