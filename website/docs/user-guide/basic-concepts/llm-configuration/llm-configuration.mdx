@@ -13,10 +13,10 @@ Configuring an LLM is crucial for your AG2 agents - it's what gives them their t
 
 Your agents deserve options! AG2 plays nicely with an impressive lineup of brain providers:
 
-- **APIs**: OpenAI, Anthropic, Google (Gemini), Amazon (Bedrock), Mistral AI, Cerebras, Together AI, and Groq
+- **Cloud Models**: OpenAI, Anthropic, Google (Gemini), Amazon (Bedrock), Mistral AI, Cerebras, Together AI, and Groq
 - **Local Models**: Ollama, LiteLLM, and LM Studio
 
-So whether you want to tap into cloud-based intelligence or keep things running on your local machine, AG2 has got you covered.
+So whether you want to tap into cloud-based intelligence or keep things running on your local machine, AG2 has got you covered. You can find more information about the supported models in the [AG2 Models documentation](/docs/user-guide/models/amazon-bedrock).
 
 !!! note
     **Starting with version 0.8**, AG2 takes a "bring your own LLM" approach - provider packages aren't included by default, so you'll need to install your favorites explicitly, for example:
@@ -36,7 +36,7 @@ Here are the different ways to create an LLM configuration in AG2:
 
 The simplest approach is to directly specify the model provider, model name, and authentication:
 
-```python
+```python hl_lines="4-8"
 import os
 from autogen import LLMConfig
 
@@ -51,7 +51,7 @@ llm_config = LLMConfig(
 
 For more advanced scenarios, especially when you want to set up fallback models, use the `config_list` parameter.
 
-```python
+```python hl_lines="4-17"
 import os
 from autogen import LLMConfig
 
@@ -96,7 +96,7 @@ Once you've created your LLM configuration, there are two ways to apply it to yo
 
 ### Method 1: Passing as a Keyword Argument
 
-```python
+```python hl_lines="6"
 from autogen import ConversableAgent
 
 my_agent = ConversableAgent(
@@ -110,7 +110,7 @@ my_agent = ConversableAgent(
 
 The context manager approach applies the LLM configuration to all agents created within its scope:
 
-```python
+```python hl_lines="3-12"
 from autogen import ConversableAgent
 
 with llm_config:

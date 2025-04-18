@@ -93,55 +93,74 @@ Understanding how to properly end conversations between agents is crucial for bu
 
 In a typical AG2 application, these components work together in the following sequence:
 
-1. Start by creating the right **LLM Configuration** for your needs
-2. Create one or more **ConversableAgents** powered by this configuration
-3. Connect them using **Agent Orchestration** patterns
-4. Optionally, add **Human in the Loop** oversight to enhance decision-making
-5. Optionally, extend their functionality with **Tools**
-6. Optionally, define **Structured Outputs** for clean, reusable data
-7. Implement appropriate methods for **Ending Conversations**
+1. **Configuration Setup**: Begin by setting up your configurations
+
+    - Configure the **LLM Configuration** to define the intelligence powering your agents
+    - Optionally define **Structured Outputs** for consistent response formats
+
+
+2. **Workflow Design**: Design your agent workflow
+
+    - **Create ConversableAgents** with specific roles and capabilities
+    - **Set up Agent Orchestration** patterns to connect your agents
+    - Implement **Ending Conversations** methods to control conversation flow
+    - Optionally add **Human in the Loop** for oversight at critical points
+    - Optionally extend with **Tools** for additional capabilities
+    - **Finalize the Workflow** design combining all components
+
+
+3. **Execution**: Run Workflow to execute your solution
 
 The workflow is illustrated below:
 
 ``` mermaid
 flowchart TD
-    classDef agent fill:#f9f9ff,stroke:#333,stroke-width:2px
-    classDef config fill:#e6f7ff,stroke:#333,stroke-width:1px
-    classDef patterns fill:#f0f7ff,stroke:#333,stroke-width:1px
-    classDef extensions fill:#fff7e6,stroke:#333,stroke-width:1px
-    classDef optional fill:#f0e6ff,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
-
-    B[LLM Configuration] --> A[ConversableAgent]
-    A -.-> C[Human in the Loop]
-    A --> D[Agent Orchestration]
-    A -.-> E[Tools]
-    B -.-> F[Structured Outputs]
-    A -.-> G[Ending Conversations]
-
-    subgraph Agent
-        A
+    %% Configuration Section
+    subgraph config_grp["1.Configuration Setup"]
+        LLM["LLM Configuration"]
+        Outputs["Structured Outputs (optional)"]
     end
 
-    subgraph Configuration
-        B
-        F
+    %% Workflow Design Section
+    subgraph workflow_grp["2.Workflow Design"]
+        Agent["Conversable Agents"]
+        Orchestration["Agent Orchestration"]
+        EndConv["Ending Conversations"]
+        Finalize["Finalize Workflow"]
+        Human["Human in the Loop (optional)"]
+        Tools["Tools (optional)"]
+
+        LLM --> Agent
+        Outputs -.-> LLM
+
+        Agent --> Orchestration
+        Agent --> EndConv
+        Agent --> Finalize
+        Agent -.-> Human
+        Agent -.-> Tools
     end
 
-    subgraph Patterns
-        D
-        C
-        G
+    %% Execution Section
+    subgraph execution_grp["3.Execution"]
+        Run["Run Workflow"]
     end
 
-    subgraph Extensions
-        E
-    end
+    %% Flow Connections
+    Finalize --> Run
 
-    class A agent
-    class B config
-    class C,E,F,G optional
-    class D patterns
-    class E extensions
+    %% Applying styles directly with style statements
+    style LLM fill:#E8F4F8,stroke:#6497B1,stroke-width:1.5px,color:#005B96
+    style Outputs fill:#E8F4F8,stroke:#6497B1,stroke-width:1.5px,color:#005B96,stroke-dasharray:5 5
+
+    style Agent fill:#E3EFE3,stroke:#79A37E,stroke-width:1.5px,color:#3B7A57
+    style Orchestration fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
+    style EndConv fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
+    style Finalize fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
+
+    style Human fill:#F5F5DC,stroke:#A79B8E,stroke-width:1px,color:#8D7966,stroke-dasharray:5 5
+    style Tools fill:#F5F5DC,stroke:#A79B8E,stroke-width:1px,color:#8D7966,stroke-dasharray:5 5
+
+    style Run fill:#E6E6FA,stroke:#7D7D89,stroke-width:1.5px,color:#4A4A57
 ```
 
 Together, these core concepts allow you to build powerful, flexible AI systems — from simple agents to collaborative, multi-agent workflows — with or without human supervision.
