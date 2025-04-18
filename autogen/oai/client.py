@@ -243,6 +243,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     top_p: Optional[float] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    extra_body: Optional[dict[str, Any]] = (
+        None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
+    )
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
