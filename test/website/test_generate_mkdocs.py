@@ -22,9 +22,9 @@ from autogen._website.generate_mkdocs import (
     fix_internal_references,
     fix_snippet_imports,
     format_navigation,
+    generate_community_insights_nav,
     generate_mkdocs_navigation,
     generate_url_slug,
-    generate_user_stories_nav,
     process_and_copy_files,
     process_blog_contents,
     process_blog_files,
@@ -608,6 +608,7 @@ def test_generate_user_stories_nav() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create User Stories directory
         user_stories_dir = Path(tmpdir) / "docs" / "user-stories"
+        community_talks_dir = Path(tmpdir) / "docs" / "community-talks"
 
         file_1 = user_stories_dir / "2025-03-11-NOVA" / "nova.md"
         file_1.parent.mkdir(parents=True, exist_ok=True)
@@ -625,6 +626,19 @@ tags: [data automation, agents, AG2, Nexla]
         file_2 = user_stories_dir / "2025-02-11-NOVA" / "nova.md"
         file_2.parent.mkdir(parents=True, exist_ok=True)
         file_2.write_text("""---
+title: Some other text
+authors:
+  - sonichi
+  - qingyunwu
+tags: [data automation, agents, AG2, Nexla]
+---
+
+> AG2 has been instrumental in helping Nexla build NOVA,
+""")
+
+        file_3 = community_talks_dir / "2025-02-11-NOVA" / "nova.md"
+        file_3.parent.mkdir(parents=True, exist_ok=True)
+        file_3.write_text("""---
 title: Some other text
 authors:
   - sonichi
@@ -654,7 +668,7 @@ tags: [data automation, agents, AG2, Nexla]
 """)
         )
 
-        generate_user_stories_nav(Path(tmpdir), mkdocs_nav_path)
+        generate_community_insights_nav(Path(tmpdir), mkdocs_nav_path)
 
         expected = dedent("""
 - Use Cases
@@ -669,6 +683,8 @@ tags: [data automation, agents, AG2, Nexla]
     - User Stories
         - [Unlocking the Power of Agentic Workflows at Nexla with AG2](docs/user-stories/2025-03-11-NOVA/nova.md)
         - [Some other text](docs/user-stories/2025-02-11-NOVA/nova.md)
+    - Community Talks
+        - [Some other text](docs/community-talks/2025-02-11-NOVA/nova.md)
 - Blog
     - [Contributing](docs/contributor-guide/contributing.md)
     - [Setup Development Environment](docs/contributor-guide/setup-development-environment.md)

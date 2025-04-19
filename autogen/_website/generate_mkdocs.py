@@ -1022,14 +1022,22 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
         file.writelines(lines)
 
 
-def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) -> None:
-    user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
+def _generate_navigation_entries(dir_path: Path, mkdocs_output_dir: Path) -> list[str]:
+    """Generate navigation entries for user stories and community talks.
+
+    Args:
+        dir_path (Path): Path to the directory containing user stories or community talks.
+        mkdocs_output_dir (Path): Path to the MkDocs output directory.
+
+    Returns:
+        str: Formatted navigation entries.
+    """
 
     # Read all user story files and sort them by date (newest first)
-    files = sorted(user_stories_dir.glob("**/*.md"), key=sort_files_by_date, reverse=True)
+    files = sorted(dir_path.glob("**/*.md"), key=sort_files_by_date, reverse=True)
 
     # Prepare user stories navigation entries
-    user_stories_entries = []
+    entries = []
     for file in files:
         # Extract the title from the frontmatter using a simpler split approach
         content = file.read_text()
@@ -1050,15 +1058,28 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
         path_for_link = str(relative_path).replace("\\", "/")
 
         # Format navigation entry
-        user_stories_entries.append(f"        - [{title}]({path_for_link}/{file.name})")
+        entries.append(f"        - [{title}]({path_for_link}/{file.name})")
+
+    return entries
+
+
+def generate_community_insights_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) -> None:
+    user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
+    community_talks_dir = mkdocs_output_dir / "docs" / "community-talks"
+
+    user_stories_entries = _generate_navigation_entries(user_stories_dir, mkdocs_output_dir)
+    community_talks_entries = _generate_navigation_entries(community_talks_dir, mkdocs_output_dir)
+
+    user_stories_nav = "    - User Stories\n" + "\n".join(user_stories_entries)
+    community_talks_nav = "    - Community Talks\n" + "\n".join(community_talks_entries)
+    community_insights_nav = "- Community Insights\n" + user_stories_nav + "\n" + community_talks_nav
 
     # Read existing navigation template
     nav_content = mkdocs_nav_path.read_text()
-    user_stories_section = "- Community Insights\n    - User Stories\n" + "\n".join(user_stories_entries)
 
     section_to_follow_marker = "- Blog"
 
-    replacement_content = f"{user_stories_section}\n{section_to_follow_marker}"
+    replacement_content = f"{community_insights_nav}\n{section_to_follow_marker}"
     updated_nav_content = nav_content.replace(section_to_follow_marker, replacement_content)
 
     # Write updated navigation to file
@@ -1143,7 +1164,7 @@ def main(force: bool) -> None:
 
     # Generate Navigation for User Stories
     docs_dir = mkdocs_root_dir / "docs"
-    generate_user_stories_nav(docs_dir, mkdocs_nav_path)
+    generate_community_insights_nav(docs_dir, mkdocs_nav_path)
 
     # Add Authors info to User Stories
     add_authors_info_to_user_stories(website_dir)
