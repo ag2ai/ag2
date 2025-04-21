@@ -194,12 +194,13 @@ class TestTavilySearchTool:
         )
         search_tool.register_for_llm(assistant)
         with patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query") as mock_execute_query:
-            assistant.run(
-                message="Get me the latest news on a topic",
+            response = assistant.run(
+                message="Get me the latest news on hurricanes",
                 tools=assistant.tools,
-                max_turns=3,
+                max_turns=2,
                 user_input=False,
             )
+            response.process()
             assert mock_execute_query.called
         assert isinstance(assistant.tools[0], TavilySearchTool)
         assert assistant.tools[0].name == "tavily_search"
