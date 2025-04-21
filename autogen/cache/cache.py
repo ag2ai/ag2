@@ -127,8 +127,7 @@ class Cache(AbstractCache):
         # Set the current cache to this instance
         self._token = self.__class__._current_cache.set(self)
         # Call the underlying cache's __enter__ method
-        self.cache.__enter__()
-        return self
+        return self.cache.__enter__()
 
     def __exit__(
         self,
