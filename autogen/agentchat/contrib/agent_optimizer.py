@@ -102,7 +102,7 @@ Below are the principles that you need to follow for taking these four actions.
 1. The added function should be general enough to be used in future tasks. For instance, if you encounter a problem that this function can solve, or one step of it, you can use the generated function directly instead of starting from scratch
 2. The added new function should solve a higher-level question that encompasses the original query and extend the code's functionality to make it more versatile and widely applicable.
 3. Replace specific strings or variable names with general variables to enhance the tool's applicability to various queries. All names used inside the function should be passed in as arguments.
-Below is an example of a function that potentially deserves to be adde in solving MATH problems, which can be used to solve a higher-level question:
+Below is an example of a function that potentially deserves to be added in solving MATH problems, which can be used to solve a higher-level question:
 {{
     \"name\": \"evaluate_expression\",
     \"description\": \"Evaluate arithmetic or mathematical expressions provided as strings.\",
@@ -375,7 +375,7 @@ class AgentOptimizer:
     def _construct_intermediate_prompt(self):
         """Construct intermediate prompts."""
         if len(self._failure_functions_performance) != 0:
-            failure_experience_prompt = "We also provide more examples for different functions and their corresponding performance (0-100).\n The following function signatures are arranged in are arranged in ascending order based on their performance, where higher performance indicate better quality."
+            failure_experience_prompt = "We also provide more examples for different functions and their corresponding performance (0-100).\n The following function signatures are arranged in ascending order based on their performance, where higher performance indicate better quality."
             failure_experience_prompt += "\n"
             for item in self._failure_functions_performance:
                 failure_experience_prompt += "Function: \n" + str(item["functions"]) + "\n"
