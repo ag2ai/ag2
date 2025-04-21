@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 import autogen
 from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
+from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
@@ -1926,6 +1927,62 @@ def test_validate_llm_config(
 ):
     actual = ConversableAgent._validate_llm_config(llm_config)
     assert actual == expected, f"{actual} != {expected}"
+
+
+@run_for_optional_imports("openai", "openai")
+def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
+    message = "Hello, make a joke about AI."
+
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        max_consecutive_auto_reply=10,
+        llm_config=credentials_gpt_4o_mini.llm_config,
+    )
+
+    user_proxy = autogen.UserProxyAgent(name="user", human_input_mode="ALWAYS", code_execution_config=False)
+
+    # Use MagicMock to create a mock get_human_input function
+    user_proxy.get_human_input = MagicMock(return_value="Not funny. Try again.")
+
+    # Test without cache
+    start_time = time.time()
+    res = user_proxy.initiate_chat(assistant, clear_history=True, max_turns=3, message=message, cache=None)
+    end_time = time.time()
+    duration_without_cache = end_time - start_time
+    assert len(res.chat_history) <= 6
+    assert user_proxy.client_cache is None
+
+    # Test with cache context
+    with Cache.disk(cache_seed=39, cache_path_root=".cache"):
+        # Test with cold cache
+        start_time = time.time()
+        # initiate_chat should use the cache context automatically
+        res = user_proxy.initiate_chat(
+            assistant,
+            clear_history=True,
+            max_turns=3,
+            message=message,
+        )
+        end_time = time.time()
+        duration_with_cold_cache = end_time - start_time
+        assert len(res.chat_history) <= 6
+
+        # Test with warm cache
+        start_time = time.time()
+        # initiate_chat should use the cache context automatically
+        res = user_proxy.initiate_chat(
+            assistant,
+            clear_history=True,
+            max_turns=3,
+            message=message,
+        )
+        end_time = time.time()
+        duration_with_warm_cache = end_time - start_time
+        assert len(res.chat_history) <= 6
+
+    # Test that warm cache is faster than cold cache and no cache.
+    assert duration_with_warm_cache < duration_with_cold_cache
+    assert duration_with_warm_cache < duration_without_cache
 
 
 if __name__ == "__main__":
