@@ -1,0 +1,404 @@
+---
+title: "Agent Orchestration: Swarm Pattern"
+sidebarTitle: "Agent Orchestration: Swarm Pattern"
+---
+
+In our financial compliance example, we've successfully implemented a human-in-the-loop agent that processes transactions and flags suspicious ones for human approval. This works well for basic compliance checking, but what if we need to provide detailed summary reports after all transactions are processed?
+
+We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The finance bot would become bloated with multiple responsibilities, making it harder to maintain and extend.
+
+## The Need for Specialized Agents
+
+As our financial compliance system evolves, we might need to:
+
+- Generate formatted summary reports of all transactions
+- Perform risk analysis on transaction patterns
+- Create visualizations of financial data
+- Send notifications to relevant stakeholders
+
+Each of these tasks requires different specialized knowledge and skills. This is where AG2's orchestration patterns come in - they allow us to coordinate multiple specialized agents to work together seamlessly.
+
+## Introducing the Swarm Pattern
+
+AG2 offers several orchestration patterns, and for our evolving financial compliance system, the swarm pattern is particularly powerful. It allows specialized agents to collaborate with dynamic handoffs to achieve complex workflows.
+
+**An Analogy for Swarm Pattern:**
+
+Think of the swarm pattern like a hospital emergency room:
+
+- The patient first sees whichever specialist is most appropriate (initial agent)
+- Each specialist (specialized agent) handles a specific aspect of patient care
+- After completing their work, specialists can explicitly transfer the patient to another specialist based on what they found (agent handoffs)
+- If a specialist doesn't specify who should see the patient next, the hospital coordinator (swarm manager) reviews the patient's chart and decides which specialist would be most appropriate
+- The patient record follows them through the entire process (shared context)
+- The entire system works together to ensure the patient receives the right care at the right time
+
+This pattern leverages specialized skills while maintaining a cohesive workflow across multiple participants, with both direct handoffs and intelligent coordination when needed.
+
+## From Concept to Implementation
+
+Implementing a swarm in AG2 is straightforward using the [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat) method:
+
+```python hl_lines="12-18"
+from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+
+# Create your specialized agents
+with llm_config:
+    agent_1 = ConversableAgent(name="agent_1", system_message="...")
+    agent_2 = ConversableAgent(name="agent_2", system_message="...")
+
+# Create human agent if needed
+human = ConversableAgent(name="human", human_input_mode="ALWAYS")
+
+# Initialize the swarm
+result, _, _ = initiate_swarm_chat(
+    initial_agent=agent_1,              # Agent that starts the workflow
+    agents=[agent_1, agent_2, human],   # All agents in the swarm
+    messages="Initial request",         # Starting message
+    swarm_manager_args={"llm_config": llm_config},  # Config for swarm management
+    after_work=AfterWorkOption.SWARM_MANAGER        # What happens after agent completes work
+)
+```
+
+**The AfterWork Concept:**
+
+At the heart of the swarm pattern is the concept of "AfterWork" - what should happen after an agent completes its task. This is what makes swarms powerful and flexible:
+
+- Each agent performs its specialized task, then control needs to pass somewhere
+- The AfterWork mechanism determines where control goes next: to another agent, back to a manager, to a human, or simply end
+- This creates dynamic, intelligent workflows that can adapt based on the results of each step
+
+## Enhancing Our Financial Compliance System with Swarm
+
+Now that we understand the swarm pattern, let's see how it solves our challenge of adding specialized summary reporting to our financial compliance system.
+
+### The Challenge
+
+In our Human in the Loop example, we built a `finance_bot` that could process transactions and get human approval for suspicious ones. However, we now need professional, formatted summary reports of all the transactions.
+
+### Our Swarm Solution
+
+Here's how we'll enhance our system:
+
+- Keep the `finance_bot` focused on transaction processing and human approval
+- Create a new `summary_bot` specialized in generating formatted transaction reports
+- Use the swarm pattern to automatically transition from `finance_bot` to `summary_bot` when all transactions are processed
+- Maintain human oversight for suspicious transaction approval and to terminate the conversation
+
+### Implementation: Creating the Necessary Agents
+
+Let's create our specialized agents for the financial compliance swarm:
+
+```python hl_lines="29-39 47-50"
+from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+
+import os
+import random
+
+# Note: Make sure to set your API key in your environment first
+
+# Configure the LLM
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.environ.get("OPENAI_API_KEY"),
+    temperature=0.2,
+    cache_seed=42
+)
+
+# Define the system message for our finance bot
+finance_system_message = """
+You are a financial compliance assistant. You will be given a set of transaction descriptions.
+For each transaction:
+- If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+- Otherwise, approve it automatically.
+Provide the full set of transactions to approve at one time.
+If the human gives a general approval, it applies to all transactions requiring approval.
+When all transactions are processed, summarize the results and say "You can type exit to finish".
+"""
+
+# Define the system message for the summary agent
+summary_system_message = """
+You are a financial summary assistant. You will be given a set of transaction details and their approval status.
+Your task is to summarize the results of the transactions processed by the finance bot.
+Generate a markdown table with the following columns:
+- Vendor
+- Memo
+- Amount
+- Status (Approved/Rejected)
+The summary should include the total number of transactions, the number of approved transactions, and the number of rejected transactions.
+The summary should be concise and clear.
+"""
+
+# Create the finance agent with LLM intelligence
+with llm_config:
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        system_message=finance_system_message,
+    )
+    summary_bot = ConversableAgent(
+        name="summary_bot",
+        system_message=summary_system_message,
+    )
+
+# Create the human agent for oversight
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS",  # Always ask for human input
+)
+```
+
+### Initiating the Swarm
+
+Now let's set up our swarm chat with these specialized agents:
+
+```python hl_lines="21-27"
+# Generate sample transactions - this creates different transactions each time you run
+VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+def generate_transaction():
+    amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+    vendor = random.choice(VENDORS)
+    memo = random.choice(MEMOS)
+    return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+# Generate 3 random transactions
+transactions = [generate_transaction() for _ in range(3)]
+
+# Format the initial message
+initial_prompt = (
+    "Please process the following transactions one at a time:\n\n" +
+    "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+)
+
+# Initialize the swarm chat
+result, _, _ = initiate_swarm_chat(
+    initial_agent=finance_bot,                       # Start with the finance bot
+    agents=[finance_bot, summary_bot, human],        # All agents in the swarm
+    messages=initial_prompt,                         # Initial request with transactions
+    swarm_manager_args={"llm_config": llm_config},   # Config for swarm manager
+    after_work=AfterWorkOption.SWARM_MANAGER         # Use swarm manager for transitions
+)
+```
+
+### Understanding the Swarm Workflow
+
+When we run this enhanced financial compliance system, here's what happens:
+
+```mermaid
+flowchart TD
+    User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
+    SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
+    Finance --> |"Processes normal transactions"| Finance
+    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
+    Human --> |"Approves/rejects transactions"| Finance
+
+    Finance --> |"Completes work without specifying next agent"| SwarmManager[Swarm Manager]
+    SwarmManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
+
+    Summary --> |"Generates report"| Human
+    Human --> |"Reviews & exits"| End([End])
+
+    style SwarmOrch fill:#fff0f5,stroke:#ff69b4
+    style Finance fill:#e3f2fd,stroke:#1976d2
+    style Human fill:#f3e5f5,stroke:#7b1fa2
+    style Summary fill:#e8f5e9,stroke:#4caf50
+    style SwarmManager fill:#ffebee,stroke:#f44336
+```
+
+- **Initial Processing**: The `finance_bot` analyzes each transaction
+
+    - Regular transactions are automatically approved
+    - Suspicious transactions are flagged for human review
+
+
+- **Human Review**: The human agent reviews flagged transactions
+
+    - The human can approve or reject each transaction
+    - This provides the crucial oversight required for compliance
+
+
+- **Handoff to Summary Agent**: After all transactions are processed, the swarm manager transitions control to the `summary_bot`
+
+    - This transition happens automatically based on conversation context
+    - The `summary_bot` has access to the full conversation history
+
+
+- **Report Generation**: The `summary_bot` creates a report summarizing all transactions in a markdown table
+
+- **Final Review**: The human agent reviews the summary and terminates the conversation
+
+### Complete Code Example
+
+Here's the complete, ready-to-run code for our enhanced financial compliance system using the swarm pattern:
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+
+    import os
+    import random
+
+    # Note: Make sure to set your API key in your environment first
+
+    # Configure the LLM
+    llm_config = LLMConfig(
+        api_type="openai",
+        model="gpt-4o-mini",
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        temperature=0.2,
+        cache_seed=42
+    )
+
+    # Define the system message for our finance bot
+    finance_system_message = """
+    You are a financial compliance assistant. You will be given a set of transaction descriptions.
+    For each transaction:
+    - If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+    - Otherwise, approve it automatically.
+    Provide the full set of transactions to approve at one time.
+    If the human gives a general approval, it applies to all transactions requiring approval.
+    When all transactions are processed, summarize the results and say "You can type exit to finish".
+    """
+
+    # Define the system message for the summary agent
+    summary_system_message = """
+    You are a financial summary assistant. You will be given a set of transaction details and their approval status.
+    Your task is to summarize the results of the transactions processed by the finance bot.
+    Generate a markdown table with the following columns:
+    - Vendor
+    - Memo
+    - Amount
+    - Status (Approved/Rejected)
+    The summary should include the total number of transactions, the number of approved transactions, and the number of rejected transactions.
+    The summary should be concise and clear.
+    """
+
+    # Create the finance agent with LLM intelligence
+    with llm_config:
+        finance_bot = ConversableAgent(
+            name="finance_bot",
+            system_message=finance_system_message,
+        )
+        summary_bot = ConversableAgent(
+            name="summary_bot",
+            system_message=summary_system_message,
+        )
+
+    # Create the human agent for oversight
+    human = ConversableAgent(
+        name="human",
+        human_input_mode="ALWAYS",  # Always ask for human input
+    )
+
+    # Generate sample transactions - this creates different transactions each time you run
+    VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+    MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+    def generate_transaction():
+        amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+        vendor = random.choice(VENDORS)
+        memo = random.choice(MEMOS)
+        return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+    # Generate 3 random transactions
+    transactions = [generate_transaction() for _ in range(3)]
+
+    # Format the initial message
+    initial_prompt = (
+        "Please process the following transactions one at a time:\n\n" +
+        "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+    )
+
+    result, _, _ = initiate_swarm_chat(
+        initial_agent=finance_bot,
+        agents=[finance_bot, summary_bot, human],
+        messages=initial_prompt,
+        swarm_manager_args={"llm_config": llm_config},
+        after_work=AfterWorkOption.SWARM_MANAGER
+    )
+    ```
+
+### How to Run This Example
+
+- Save the code above to a file (e.g., `financial_compliance_swarm.py`)
+- Set your OpenAI API key in your environment variable
+- Make sure you have AG2 installed: pip install ag2[openai]
+- Run the script: python `financial_compliance_swarm.py`
+
+### Example Output
+
+When you run this code, you'll see a workflow similar to this:
+
+```console
+_User (to chat_manager):
+
+Please process the following transactions one at a time:
+
+1. Transaction: $9999 to Staples. Memo: Routine payment.
+2. Transaction: $4000 to CyberSins Ltd. Memo: Reimbursement.
+3. Transaction: $23000 to CyberSins Ltd. Memo: NDA services.
+
+--------------------------------------------------------------------------------
+
+Next speaker: finance_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to chat_manager):
+
+Let's process the transactions:
+
+1. Transaction: $9999 to Staples. Memo: Routine payment.
+   - This transaction is below the $10,000 threshold. **Approved.**
+
+2. Transaction: $4000 to CyberSins Ltd. Memo: Reimbursement.
+   - This transaction is below the $10,000 threshold. **Approved.**
+
+3. Transaction: $23000 to CyberSins Ltd. Memo: NDA services.
+   - This transaction exceeds the $10,000 threshold. **Requires approval.**
+
+Please provide your approval for the third transaction. If you approve it, I will process all transactions together.
+
+--------------------------------------------------------------------------------
+
+Next speaker: human
+
+Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approve
+human (to chat_manager):
+
+approve
+
+--------------------------------------------------------------------------------
+
+Next speaker: summary_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+summary_bot (to chat_manager):
+
+Here is the summary of the processed transactions:
+
+| Vendor          | Memo               | Amount  | Status   |
+|-----------------|--------------------|---------|----------|
+| Staples         | Routine payment     | $9999   | Approved  |
+| CyberSins Ltd.  | Reimbursement       | $4000   | Approved  |
+| CyberSins Ltd.  | NDA services        | $23000  | Approved  |
+
+### Summary:
+- Total Transactions: 3
+- Approved Transactions: 3
+- Rejected Transactions: 0
+
+--------------------------------------------------------------------------------
+
+Next speaker: _User
+
+Replying as _User. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+>>>>>>>> TERMINATING RUN (0f26a88c-3cf9-42cb-a700-5f0315969ada): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (f5d7317e-a0fe-46e4-ad61-2b4953352cc1): No reply generated
+```
