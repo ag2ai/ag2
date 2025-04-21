@@ -423,11 +423,16 @@ class ConversableAgent(LLMAgent):
         elif not hasattr(func, "_name"):
             func._name = func.__name__
 
-        if description:
-            func._description = description
+        if hasattr(func, "_description") and func._description and not description:
+            # If the function already has a description, use it
+            description = func._description
         else:
-            # Use function's docstring, strip whitespace, fall back to empty string
-            func._description = (func.__doc__ or "").strip()
+            if description:
+                func._description = description
+            else:
+                # Use function's docstring, strip whitespace, fall back to empty string
+                description = (func.__doc__ or "").strip()
+                func._description = description
 
         # Register the function
         self.register_for_llm(name=name, description=description, silent_override=True)(func)

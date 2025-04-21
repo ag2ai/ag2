@@ -12,6 +12,7 @@ In this notebook, we demonstrate how to use Anthropic Claude model for AgentChat
 - Function/tool calling
 - Structured Outputs ([Notebook example](/docs/use-cases/notebooks/notebooks/agentchat_structured_outputs))
 - Token usage and cost correctly as per Anthropic's API costs (as of December 2024)
+- [Extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?q=extended_thinking#pricing-and-token-usage-for-extended-thinking)
 
 ## Requirements
 To use Anthropic Claude with AG2, first you need to install the `ag2[anthropic]` package.
@@ -46,12 +47,20 @@ Example:
 [
     {
         "model": "claude-3-5-sonnet-20240620",
-        "api_key": "your Anthropic API Key goes here",
+        "api_key": "your api key",
         "api_type": "anthropic",
     },
     {
+        "model": "claude-3-7-sonnet-20250219",
+        "api_key": "your api key",
+        "api_type": "anthropic",
+        "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
+        "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
+        "thinking": {"type": "enabled", "budget_tokens": 2048},
+    }
+    {
         "model": "claude-3-sonnet-20240229",
-        "api_key": "your Anthropic API Key goes here",
+        "api_key": "your api key",
         "api_type": "anthropic",
         "temperature": 0.5,
         "top_p": 0.2, # Note: It is recommended to set temperature or top_p but not both.
@@ -814,4 +823,44 @@ The continued progress and competition in the field, exemplified by this announc
 As always, it will be crucial to balance the pursuit of technological advancement with careful consideration of the ethical, social, and economic implications of these powerful new AI systems.
 
 --------------------------------------------------------------------------------
+```
+
+## Thinking mode
+
+You can utilize Anthropic's thinking mode by setting it in the configuration.
+
+```
+from autogen import ConversableAgent
+
+# Here we configure the thinking mode and the token budget for thinking
+llm_config = {
+    "config_list": [
+        {
+            "model": "claude-3-7-sonnet-20250219",
+            "api_type": "anthropic",
+            "max_tokens": 8192, # override the default value of 4096, max tokens must be greater than thinking budget
+            "timeout": 600, # for larger thinking budgets, increase the timeout OR enable streaming
+            "thinking": {"type": "enabled", "budget_tokens": 2048},
+        }
+    ],
+    # Note: don't pass in temperature or top_p to avoid exceptions in thinking mode
+}
+
+agent = ConversableAgent(
+    name="test",
+    llm_config=llm_config,
+)
+
+# Create the run
+response = agent.run(
+    message="Please provide a comparison of JS and TS",
+    user_input=False,
+    max_turns=1,
+)
+
+# Process the run
+response.process()
+
+# Print out the final response (thinking tokens are not shown)
+print(response.summary)
 ```
