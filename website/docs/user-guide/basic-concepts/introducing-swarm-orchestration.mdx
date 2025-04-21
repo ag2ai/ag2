@@ -402,3 +402,266 @@ Replying as _User. Provide feedback to chat_manager. Press enter to skip and use
 
 >>>>>>>> TERMINATING RUN (f5d7317e-a0fe-46e4-ad61-2b4953352cc1): No reply generated
 ```
+
+## Automatic Termination in Swarm Chats
+
+In the example above, our workflow always ends with human review and manual termination.
+
+However, in production systems, we often want processes to terminate automatically once they complete their tasks.
+AG2's swarm pattern allows automatic termination through a termination condition.
+
+Let's enhance our financial compliance system to automatically end after generating the summary report.
+
+### Creating a Termination Condition
+
+First, we'll modify our summary bot's system message to include a special marker at the end of its output:
+
+```python hl_lines="12-13"
+summary_system_message = """
+You are a financial summary assistant. You will be given a set of transaction details and their approval status.
+Your task is to summarize the results of the transactions processed by the finance bot.
+Generate a markdown table with the following columns:
+- Vendor
+- Memo
+- Amount
+- Status (Approved/Rejected)
+The summary should include the total number of transactions, the number of approved transactions, and the number of rejected transactions.
+The summary should be concise and clear.
+
+Once you've generated the summary, append the following marker:
+==== SUMMARY GENERATED ====
+"""
+```
+
+Next, we'll define a termination function that checks for this marker:
+
+```python
+def is_termination_msg(x: dict[str, Any]) -> bool:
+    content = x.get("content", "")
+    return (content is not None) and "==== SUMMARY GENERATED ====" in content
+```
+
+Finally, we'll pass this termination function to the swarm manager:
+
+```python hl_lines="7"
+result, _, _ = initiate_swarm_chat(
+    initial_agent=finance_bot,
+    agents=[finance_bot, summary_bot, human],
+    messages=initial_prompt,
+    swarm_manager_args={
+        "llm_config": llm_config,
+        "is_termination_msg": is_termination_msg,  # Add termination condition
+    },
+    after_work=AfterWorkOption.SWARM_MANAGER
+)
+```
+
+### Updated Flow with Automatic Termination
+
+With these changes, our workflow becomes more streamlined:
+
+```mermaid
+flowchart TD
+    User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
+    SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
+    Finance --> |"Processes normal transactions"| Finance
+    Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
+    Human --> |"Approves/rejects transactions"| Finance
+
+    Finance --> |"Completes work without specifying next agent"| SwarmManager[Swarm Manager]
+    SwarmManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
+
+    Summary --> |"Generates report with termination marker"| End([End])
+
+    style SwarmOrch fill:#fff0f5,stroke:#ff69b4
+    style Finance fill:#e3f2fd,stroke:#1976d2
+    style Human fill:#f3e5f5,stroke:#7b1fa2
+    style Summary fill:#e8f5e9,stroke:#4caf50
+    style SwarmManager fill:#ffebee,stroke:#f44336
+```
+
+Now the human agent only participates when needed for transaction approval, and the workflow automatically terminates after the summary report is generated.
+
+### Complete Code Example with Automatic Termination
+
+Here's the updated code that incorporates automatic termination:
+
+???+ info "Complete Code Example with Automatic Termination"
+
+    ```python
+    from typing import Any
+    from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+
+    import os
+    import random
+
+    # Note: Make sure to set your API key in your environment first
+
+    # Configure the LLM
+    llm_config = LLMConfig(
+        api_type="openai",
+        model="gpt-4o-mini",
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        temperature=0.2,
+        cache_seed=42
+    )
+
+    # Define the system message for our finance bot
+    finance_system_message = """
+    You are a financial compliance assistant. You will be given a set of transaction descriptions.
+    For each transaction:
+    - If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+    - Otherwise, approve it automatically.
+    Provide the full set of transactions to approve at one time.
+    If the human gives a general approval, it applies to all transactions requiring approval.
+    When all transactions are processed, summarize the results and say "You can type exit to finish".
+    """
+
+    # Define the system message for the summary agent
+    summary_system_message = """
+    You are a financial summary assistant. You will be given a set of transaction details and their approval status.
+    Your task is to summarize the results of the transactions processed by the finance bot.
+    Generate a markdown table with the following columns:
+    - Vendor
+    - Memo
+    - Amount
+    - Status (Approved/Rejected)
+    The summary should include the total number of transactions, the number of approved transactions, and the number of rejected transactions.
+    The summary should be concise and clear.
+
+    Once you generated the summary append the below in the summary:
+    ==== SUMMARY GENERATED ====
+    """
+
+    # Create the finance agent with LLM intelligence
+    with llm_config:
+        finance_bot = ConversableAgent(
+            name="finance_bot",
+            system_message=finance_system_message,
+        )
+        summary_bot = ConversableAgent(
+            name="summary_bot",
+            system_message=summary_system_message,
+        )
+
+
+    def is_termination_msg(x: dict[str, Any]) -> bool:
+        content = x.get("content", "")
+        return (content is not None) and "==== SUMMARY GENERATED ====" in content
+
+    # Create the human agent for oversight
+    human = ConversableAgent(
+        name="human",
+        human_input_mode="ALWAYS",  # Always ask for human input
+    )
+
+    # Generate sample transactions - this creates different transactions each time you run
+    VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+    MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+    def generate_transaction():
+        amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+        vendor = random.choice(VENDORS)
+        memo = random.choice(MEMOS)
+        return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+    # Generate 3 random transactions
+    transactions = [generate_transaction() for _ in range(3)]
+
+    # Format the initial message
+    initial_prompt = (
+        "Please process the following transactions one at a time:\n\n" +
+        "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+    )
+
+    result, _, _ = initiate_swarm_chat(
+        initial_agent=finance_bot,
+        agents=[finance_bot, summary_bot, human],
+        messages=initial_prompt,
+        swarm_manager_args={
+            "llm_config": llm_config,
+            "is_termination_msg": is_termination_msg,
+        },
+        after_work=AfterWorkOption.SWARM_MANAGER
+    )
+    ```
+
+### Example Output with Automatic Termination
+
+With automatic termination, the output will look similar to before, but the workflow terminates automatically after the summary is generated:
+
+```console
+_User (to chat_manager):
+
+Please process the following transactions one at a time:
+
+1. Transaction: $12000 to CyberSins Ltd. Memo: Urgent request.
+2. Transaction: $4000 to Initech. Memo: NDA services.
+3. Transaction: $4000 to Staples. Memo: Reimbursement.
+
+--------------------------------------------------------------------------------
+
+Next speaker: finance_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to chat_manager):
+
+Let's process the transactions:
+
+1. Transaction: $12000 to CyberSins Ltd. Memo: Urgent request.
+   - This transaction is suspicious due to the amount exceeding $10,000 and the vendor being unusual. I need your approval for this transaction.
+
+2. Transaction: $4000 to Initech. Memo: NDA services.
+   - This transaction is not suspicious. It will be approved automatically.
+
+3. Transaction: $4000 to Staples. Memo: Reimbursement.
+   - This transaction is not suspicious. It will be approved automatically.
+
+Please provide your approval for the first transaction. If you approve it, I will process all transactions accordingly.
+
+--------------------------------------------------------------------------------
+
+Next speaker: human
+
+Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approve
+human (to chat_manager):
+
+approve
+
+--------------------------------------------------------------------------------
+
+Next speaker: summary_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+summary_bot (to chat_manager):
+
+Here is the summary of the processed transactions:
+
+| Vendor          | Memo                | Amount | Status   |
+|-----------------|---------------------|--------|----------|
+| CyberSins Ltd.  | Urgent request      | $12000 | Approved  |
+| Initech         | NDA services        | $4000  | Approved  |
+| Staples         | Reimbursement       | $4000  | Approved  |
+
+**Total Transactions:** 3
+**Approved Transactions:** 3
+**Rejected Transactions:** 0
+
+==== SUMMARY GENERATED ====
+
+You are trained on data up to October 2023.
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (40375f5a-5a9a-4928-8e33-edffeaa58ea1): Termination message condition on the GroupChatManager 'chat_manager' met
+```
+
+Notice that the conversation automatically ends after the summary is generated, without requiring the human to type "exit".
+
+## Next Steps: Extending the System
+
+Our financial compliance system demonstrates the power of the swarm pattern, but we've only scratched the surface. In our next section, we'll explore how to enhance our system with specialized tools.
+
+One common requirement in financial systems is detecting duplicate payments and avoiding them. Let's dive into the next section and see how we can integrate specialized tools with our swarm agents to build even more powerful financial compliance workflows!
