@@ -144,7 +144,7 @@ rag = [
     "llama-index>=0.12,<1",
     "llama-index-vector-stores-chroma==0.4.1",
     "llama-index-vector-stores-mongodb==0.6.0",
-    "llama-index-embeddings-huggingface==0.5.2",
+    "llama-index-embeddings-huggingface==0.5.3",
     "llama-index-llms-langchain==0.6.1",
     "requests>=2.32.3,<3",
 ]
@@ -273,7 +273,7 @@ test = [
 ]
 
 docs = [
-    "mkdocs-material==9.6.11",
+    "mkdocs-material==9.6.12",
     "mkdocstrings[python]==0.29.1",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
@@ -300,7 +300,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.11.5",
+    "ruff==0.11.6",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
