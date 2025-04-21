@@ -407,8 +407,7 @@ Replying as _User. Provide feedback to chat_manager. Press enter to skip and use
 
 In the example above, our workflow always ends with human review and manual termination.
 
-However, in production systems, we often want processes to terminate automatically once they complete their tasks.
-AG2's swarm pattern allows automatic termination through a termination condition.
+However, in production systems, it would be more efficient to automatically terminate the workflow once all tasks are completed and seek for human input only for suspicious transactions. With AG2, we can easily achieve this by using a termination condition.
 
 Let's enhance our financial compliance system to automatically end after generating the summary report.
 
@@ -440,6 +439,8 @@ def is_termination_msg(x: dict[str, Any]) -> bool:
     content = x.get("content", "")
     return (content is not None) and "==== SUMMARY GENERATED ====" in content
 ```
+
+The above function checks if the content of the message contains our termination marker. If it does, it returns `True`, indicating that the conversation should end.
 
 Finally, we'll pass this termination function to the swarm manager:
 
