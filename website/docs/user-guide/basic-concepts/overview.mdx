@@ -78,17 +78,6 @@ Structured Outputs ensure agents return well-defined, consistent, and validated 
 [Learn more about Structured Outputs →](../llm-configuration/structured-outputs)
 
 
-### Ending Conversations
-Understanding how to properly end conversations between agents is crucial for building efficient workflows. AG2 provides multiple ways to terminate conversations:
-
-- Setting maximum turns or rounds
-- Defining termination conditions in messages
-- Limiting automatic replies
-- Human intervention with 'exit' command
-- Using custom reply functions
-
-[Learn more about Ending Conversations →](../llm-configuration/structured-outputs)
-
 ## How These Concepts Work Together
 
 In a typical AG2 application, these components work together in the following sequence:
@@ -125,7 +114,6 @@ flowchart TD
     subgraph workflow_grp["2.Workflow Design"]
         Agent["Conversable Agents"]
         Orchestration["Agent Orchestration"]
-        EndConv["Ending Conversations"]
         Finalize["Finalize Workflow"]
         Human["Human in the Loop (optional)"]
         Tools["Tools (optional)"]
@@ -134,7 +122,6 @@ flowchart TD
         Outputs -.-> LLM
 
         Agent --> Orchestration
-        Agent --> EndConv
         Agent --> Finalize
         Agent -.-> Human
         Agent -.-> Tools
@@ -154,7 +141,6 @@ flowchart TD
 
     style Agent fill:#E3EFE3,stroke:#79A37E,stroke-width:1.5px,color:#3B7A57
     style Orchestration fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
-    style EndConv fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
     style Finalize fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
 
     style Human fill:#F5F5DC,stroke:#A79B8E,stroke-width:1px,color:#8D7966,stroke-dasharray:5 5

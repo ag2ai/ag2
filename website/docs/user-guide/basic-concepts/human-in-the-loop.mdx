@@ -113,9 +113,9 @@ In our financial compliance system, the workflow follows this pattern:
 ```mermaid
 flowchart TD
     Start([Start]) --> Finance[Finance_bot]
-    Finance -- "1.Please approve these" --> Human[Human Agent]
-    Human -- "2.Approved" --> Finance
-    Finance -- "3.All approved" --> Human
+    Finance -- "Request approval for suspicious transactions" --> Human[Human Agent]
+    Human -- "Approve/Reject" --> Finance
+    Finance -- "All transactions processed" --> Human
     Human -- "Exit" --> End([End])
 ```
 
