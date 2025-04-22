@@ -34,10 +34,9 @@ The [`ConversableAgent`](../../../api-reference/autogen/ConversableAgent) is the
 
 ### Human in the Loop (HITL)
 
-Human in the Loop (HITL) brings human oversight into your agent workflows, allowing agents to request input at crucial decision points. This capability:
+Human in the Loop (HITL) brings human oversight into your agent workflows, allowing agents to act as humans to request input for crucial decision points. This capability:
 
-- Enables agents to seek approval before taking critical actions
-- Presents options for human selection
+- Enables human approval before proceeding in a workflow
 - Integrates feedback into the decision-making process
 - Balances automation with human judgment
 
@@ -45,13 +44,12 @@ Human in the Loop (HITL) brings human oversight into your agent workflows, allow
 
 ### Agent Orchestration
 
-Agent Orchestration defines patterns for connecting multiple agents, allowing them to work together in various configurations:
+Agent Orchestration defines patterns for coordinating multiple agents, allowing them to work together in various configurations:
 
 - Two-agent conversations
 - Sequential conversations that chain multiple dialogues
-- Group collaborations with multiple specialized agents
-- Reusable nested workflows
-- Specialized swarms of agents
+- Group collaborations with many agents
+- Nested workflows
 
 This orchestration enables you to build rich, collaborative, multi-agent applications. [Learn more about Agent Orchestration →](../orchestration/orchestrations)
 
@@ -62,7 +60,6 @@ The tools extend an agent’s capabilities beyond text conversations, enabling t
 - Connect with external APIs and services
 - Perform calculations and data processing
 - Access and work with files, databases, or other systems
-- Execute code in various programming languages
 
 [Learn more about Tools →](../tools/basics)
 
@@ -92,7 +89,7 @@ In a typical AG2 application, these components work together in the following se
 
     - **Create ConversableAgents** with specific roles and capabilities
     - **Set up Agent Orchestration** patterns to connect your agents
-    - Implement **Ending Conversations** methods to control conversation flow
+    - Configure **Conversation Ending** options
     - Optionally add **Human in the Loop** for oversight at critical points
     - Optionally extend with **Tools** for additional capabilities
     - **Finalize the Workflow** design combining all components
@@ -160,6 +157,6 @@ Throughout the following sections, we'll use a financial compliance assistant ex
 - Flags suspicious transactions for human review
 - Provides summary reports of transaction status
 
-Each section will build upon this example, showing how that specific concept applies to building our financial compliance system.
+Each section will build upon the previous example, showing how that specific concept applies to building our financial compliance system.
 
 **Next up**: Dive deeper into each of these components, starting with [LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration/llm-configuration) — the foundation for all AG2 agents.
