@@ -5,7 +5,7 @@ sidebarTitle: "Agent Orchestration: Coordinating Multiple Agents"
 
 In our financial compliance example, we've successfully implemented a human-in-the-loop agent that processes transactions and flags suspicious ones for human approval. This works well for basic compliance checking, but what if we need to provide detailed summary reports after all transactions are processed?
 
-We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The finance bot would become bloated with multiple responsibilities, making it harder to maintain and extend.
+We could expand the system message of our `finance_bot` to include this functionality, but this approach isn't scalable as requirements grow more complex. The `finance_bot` would have multiple responsibilities, making it harder to maintain and extend.
 
 ## The Need for Specialized Agents
 
@@ -26,10 +26,10 @@ AG2 offers several orchestration patterns, and for our evolving financial compli
 
 Continuing our hospital treatment system analogy from the HITL. Think of the swarm pattern like a hospital emergency in the hospital:
 
-- The patient first sees whichever specialist is most appropriate (initial agent)
+- The patient first sees whichever specialist is most appropriate (a triage agent)
 - Each specialist (specialized agent) handles a specific aspect of patient care
 - After completing their work, specialists can explicitly transfer the patient to another specialist based on what they found (agent handoffs)
-- If a specialist doesn't specify who should see the patient next, the hospital coordinator (swarm manager) reviews the patient's chart and decides which specialist would be most appropriate
+- If a specialist doesn't specify who should see the patient next, we can revert to the hospital coordinator (swarm manager) who can review the patient's chart and decide which specialist would be most appropriate
 - The patient record follows them through the entire process (shared context)
 - The entire system works together to ensure the patient receives the right care at the right time
 
@@ -55,18 +55,21 @@ result, _, _ = initiate_swarm_chat(
     initial_agent=agent_1,              # Agent that starts the workflow
     agents=[agent_1, agent_2, human],   # All agents in the swarm
     messages="Initial request",         # Starting message
-    swarm_manager_args={"llm_config": llm_config},  # Config for swarm management
-    after_work=AfterWorkOption.SWARM_MANAGER        # What happens after agent completes work
+    swarm_manager_args={"llm_config": llm_config},  # Config for swarm manager
+    after_work=AfterWorkOption.SWARM_MANAGER        # Revert to swarm manager after an agent finishes
 )
 ```
 
 **The AfterWork Concept:**
 
-At the heart of the swarm pattern is the concept of "AfterWork" - what should happen after an agent completes its task. This is what makes swarms powerful and flexible:
+A core component to the swarm pattern is the concept of "AfterWork" - what happens after an agent completes its task. This is what makes swarms powerful and flexible:
 
 - Each agent performs its specialized task, then control needs to pass somewhere
 - The AfterWork mechanism determines where control goes next: to another agent, back to a manager, to a human, or simply end
 - This creates dynamic, intelligent workflows that can adapt based on the results of each step
+
+
+
 
 ## Enhancing Our Financial Compliance System with Swarm
 
@@ -103,7 +106,6 @@ llm_config = LLMConfig(
     model="gpt-4o-mini",
     api_key=os.environ.get("OPENAI_API_KEY"),
     temperature=0.2,
-    cache_seed=42
 )
 
 # Define the system message for our finance bot
@@ -175,7 +177,8 @@ initial_prompt = (
 # Initialize the swarm chat
 result, _, _ = initiate_swarm_chat(
     initial_agent=finance_bot,                       # Start with the finance bot
-    agents=[finance_bot, summary_bot, human],        # All agents in the swarm
+    agents=[finance_bot, summary_bot],               # All agents in the swarm
+    user_agent=human,                                # Provide our human in the loop agent to the swarm
     messages=initial_prompt,                         # Initial request with transactions
     swarm_manager_args={"llm_config": llm_config},   # Config for swarm manager
     after_work=AfterWorkOption.SWARM_MANAGER         # Use swarm manager for transitions
@@ -190,7 +193,6 @@ When we run this enhanced financial compliance system, here's what happens:
 flowchart TD
     User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
     SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Processes normal transactions"| Finance
     Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
     Human --> |"Approves/rejects transactions"| Finance
 
@@ -314,7 +316,8 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 
     result, _, _ = initiate_swarm_chat(
         initial_agent=finance_bot,
-        agents=[finance_bot, summary_bot, human],
+        agents=[finance_bot, summary_bot],
+        user_agent=human,
         messages=initial_prompt,
         swarm_manager_args={"llm_config": llm_config},
         after_work=AfterWorkOption.SWARM_MANAGER
@@ -333,13 +336,13 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 When you run this code, you'll see a workflow similar to this:
 
 ```console
-_User (to chat_manager):
+human (to chat_manager):
 
 Please process the following transactions one at a time:
 
-1. Transaction: $9999 to Staples. Memo: Routine payment.
-2. Transaction: $4000 to CyberSins Ltd. Memo: Reimbursement.
-3. Transaction: $23000 to CyberSins Ltd. Memo: NDA services.
+1. Transaction: $23000 to Globex. Memo: NDA services.
+2. Transaction: $23000 to Initech. Memo: NDA services.
+3. Transaction: $12000 to Acme Corp. Memo: Reimbursement.
 
 --------------------------------------------------------------------------------
 
@@ -349,18 +352,16 @@ Next speaker: finance_bot
 >>>>>>>> USING AUTO REPLY...
 finance_bot (to chat_manager):
 
-Let's process the transactions:
+1. Transaction: $23000 to Globex. Memo: NDA services.  
+   - This transaction is suspicious due to the amount exceeding $10,000. Approval required.
 
-1. Transaction: $9999 to Staples. Memo: Routine payment.
-   - This transaction is below the $10,000 threshold. **Approved.**
+2. Transaction: $23000 to Initech. Memo: NDA services.  
+   - This transaction is also suspicious due to the amount exceeding $10,000. Approval required.
 
-2. Transaction: $4000 to CyberSins Ltd. Memo: Reimbursement.
-   - This transaction is below the $10,000 threshold. **Approved.**
+3. Transaction: $12000 to Acme Corp. Memo: Reimbursement.  
+   - This transaction is suspicious due to the amount exceeding $10,000. Approval required.
 
-3. Transaction: $23000 to CyberSins Ltd. Memo: NDA services.
-   - This transaction exceeds the $10,000 threshold. **Requires approval.**
-
-Please provide your approval for the third transaction. If you approve it, I will process all transactions together.
+Please provide your approval for the transactions that require it.
 
 --------------------------------------------------------------------------------
 
@@ -373,6 +374,22 @@ approve
 
 --------------------------------------------------------------------------------
 
+Next speaker: finance_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to chat_manager):
+
+All transactions have been approved. Here’s the summary:
+
+1. Approved: $23000 to Globex. Memo: NDA services.
+2. Approved: $23000 to Initech. Memo: NDA services.
+3. Approved: $12000 to Acme Corp. Memo: Reimbursement.
+
+You can type exit to finish.
+
+--------------------------------------------------------------------------------
+
 Next speaker: summary_bot
 
 
@@ -381,26 +398,27 @@ summary_bot (to chat_manager):
 
 Here is the summary of the processed transactions:
 
-| Vendor          | Memo               | Amount  | Status   |
-|-----------------|--------------------|---------|----------|
-| Staples         | Routine payment     | $9999   | Approved  |
-| CyberSins Ltd.  | Reimbursement       | $4000   | Approved  |
-| CyberSins Ltd.  | NDA services        | $23000  | Approved  |
+| Vendor     | Memo            | Amount  | Status   |
+|------------|-----------------|---------|----------|
+| Globex     | NDA services     | $23000  | Approved  |
+| Initech    | NDA services     | $23000  | Approved  |
+| Acme Corp  | Reimbursement    | $12000  | Approved  |
 
-### Summary:
-- Total Transactions: 3
-- Approved Transactions: 3
-- Rejected Transactions: 0
+**Total Transactions:** 3  
+**Approved Transactions:** 3  
+**Rejected Transactions:** 0  
+
+If you need further assistance, feel free to ask!
 
 --------------------------------------------------------------------------------
 
-Next speaker: _User
+Next speaker: human
 
-Replying as _User. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
 
->>>>>>>> TERMINATING RUN (0f26a88c-3cf9-42cb-a700-5f0315969ada): User requested to end the conversation
+>>>>>>>> TERMINATING RUN (446792f6-13af-4c60-b4d8-179c87d4f92b): User requested to end the conversation
 
->>>>>>>> TERMINATING RUN (f5d7317e-a0fe-46e4-ad61-2b4953352cc1): No reply generated
+>>>>>>>> TERMINATING RUN (881689aa-0db9-4c56-afc8-d5ba26ac34a7): No reply generated
 ```
 
 ## Automatic Termination in Swarm Chats
@@ -435,8 +453,8 @@ Once you've generated the summary, append the following marker:
 Next, we'll define a termination function that checks for this marker:
 
 ```python
-def is_termination_msg(x: dict[str, Any]) -> bool:
-    content = x.get("content", "")
+def is_termination_msg(msg: dict[str, Any]) -> bool:
+    content = msg.get("content", "")
     return (content is not None) and "==== SUMMARY GENERATED ====" in content
 ```
 
@@ -465,7 +483,6 @@ With these changes, our workflow becomes more streamlined:
 flowchart TD
     User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
     SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
-    Finance --> |"Processes normal transactions"| Finance
     Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
     Human --> |"Approves/rejects transactions"| Finance
 
@@ -504,7 +521,6 @@ Here's the updated code that incorporates automatic termination:
         model="gpt-4o-mini",
         api_key=os.environ.get("OPENAI_API_KEY"),
         temperature=0.2,
-        cache_seed=42
     )
 
     # Define the system message for our finance bot
@@ -577,7 +593,8 @@ Here's the updated code that incorporates automatic termination:
 
     result, _, _ = initiate_swarm_chat(
         initial_agent=finance_bot,
-        agents=[finance_bot, summary_bot, human],
+        agents=[finance_bot, summary_bot],
+        user_agent=human,
         messages=initial_prompt,
         swarm_manager_args={
             "llm_config": llm_config,
