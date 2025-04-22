@@ -3619,7 +3619,8 @@ class ConversableAgent(LLMAgent):
             tool = self._create_tool_if_needed(func_or_tool, name, description)
 
             self._register_for_llm(tool, api_style, silent_override=silent_override)
-            self._tools.append(tool)
+            if tool not in self._tools:
+                self._tools.append(tool)
 
             return tool
 
