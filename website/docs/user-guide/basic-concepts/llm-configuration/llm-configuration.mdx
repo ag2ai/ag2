@@ -12,7 +12,7 @@ Configuring an LLM is crucial for your AG2 agents - it's what gives them their t
 
 ## Supported LLM Providers
 
-Your agents deserve options! AG2 plays nicely with an impressive lineup of brain providers:
+Your agents deserve options! AG2 plays nicely with an impressive lineup of model providers:
 
 - **Cloud Models**: OpenAI, Anthropic, Google (Gemini), Amazon (Bedrock), Mistral AI, Cerebras, Together AI, and Groq
 - **Local Models**: Ollama, LiteLLM, and LM Studio
@@ -143,9 +143,9 @@ llm_config = LLMConfig(
 )
 ```
 
-### Code walkthrough:
+**Code walkthrough**:
 
-- We're using OpenAI's GPT-4o-mini model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
+- We're using OpenAI's `GPT-4o-mini` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
 - We've set temperature to 0.2 because when it comes to financial compliance, creativity is NOT what we want (sorry, creative accountants!)
 - We're keeping our API key in an environment variable because security first, folks!
 
