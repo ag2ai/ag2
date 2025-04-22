@@ -106,7 +106,7 @@ def check_duplicate_payment(
     amount: Annotated[float, "The transaction amount"],
     memo: Annotated[str, "The transaction memo"]
 ) -> dict[str, Any]:
-    """Check if this transaction matches another in the past 7 days"""
+    """Check if a transaction appears to be a duplicate of a recent payment"""
     previous_transactions = get_previous_transactions()
 
     today = datetime.now()
@@ -137,8 +137,9 @@ In this code:
 - We created a mock database function to simulate retrieving past transactions
 - We defined a duplicate detection function that compares a new transaction against past ones
 - The function uses [`Annotated`](https://docs.python.org/3/library/typing.html#typing.Annotated) to provide clear parameter descriptions, which helps the agent understand how to use the tool
+- The function's docstring will be used to describe the tool to the LLM
 - The function checks if the transaction is a duplicate **based on vendor, amount, memo and transaction is within 7 days**
-- It returns a structured result indicating whether the transaction is a duplicate and why
+- It returns a dictionary indicating whether the transaction is a duplicate and why
 
 ### Updating Our Agents for Tool Usage
 
@@ -194,6 +195,7 @@ with llm_config:
     finance_bot = ConversableAgent(
         name="finance_bot",
         system_message=finance_system_message,
+        functions=[check_duplicate_payment],
     )
     summary_bot = ConversableAgent(
         name="summary_bot",
@@ -205,39 +207,12 @@ human = ConversableAgent(
     name="human",
     human_input_mode="ALWAYS",  # Always ask for human input
 )
-
-# Register the duplicate check function
-register_function(
-    check_duplicate_payment,
-    caller=finance_bot,
-    executor=human,
-    description="Check if a transaction appears to be a duplicate of a recent payment"
-)
 ```
 
 With this registration:
 
 - The `finance_bot` can now suggest using the `check_duplicate_payment` tool when appropriate
-- The `human_agent` will execute the tool (for simplicity, we use the `human_agent` as the executor here. But in a real system, you might create a dedicated executor agent)
-- The tool description helps the `finance_bot` understand when to use it
-
-In addition to the `register_function` approach we used above, AG2 offers other ways to register tools:
-
-**Using Decorators**
-
-You can also use decorators to register functions:
-
-```python
-# Using decorators for function registration
-@finance_bot.register_for_llm(description="Check if a transaction appears to be a duplicate of a recent payment")
-@human.register_for_execution()
-def check_duplicate_payment(
-    vendor: Annotated[str, "The vendor name"],
-    amount: Annotated[float, "The transaction amount"],
-    memo: Annotated[str, "The transaction memo"]
-) -> dict[str, Any]:
-    # Function implementation...
-```
+- We will continue using a swarm and an internal tool executor will execute all tool recommendations automatically
 
 ### Generating Test Data with Duplicates
 
@@ -266,7 +241,8 @@ Now let's run our enhanced financial compliance system with duplicate detection:
 ```python
 result, _, _ = initiate_swarm_chat(
     initial_agent=finance_bot,
-    agents=[finance_bot, summary_bot, human],
+    agents=[finance_bot, summary_bot],
+    user_agent=human,
     messages=initial_prompt,
     swarm_manager_args={
         "llm_config": llm_config,
@@ -332,7 +308,6 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         model="gpt-4o-mini",
         api_key=os.environ.get("OPENAI_API_KEY"),
         temperature=0.2,
-        cache_seed=42
     )
 
     # Mock database of previous transactions
@@ -349,7 +324,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         amount: Annotated[float, "The transaction amount"],
         memo: Annotated[str, "The transaction memo"]
     ) -> dict[str, Any]:
-        """Check if this transaction matches another in the past 7 days"""
+        """Check if a transaction appears to be a duplicate of a recent payment"""
         previous_transactions = get_previous_transactions()
 
         today = datetime.now()
@@ -415,6 +390,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         finance_bot = ConversableAgent(
             name="finance_bot",
             system_message=finance_system_message,
+            functions=[check_duplicate_payment],
         )
         summary_bot = ConversableAgent(
             name="summary_bot",
@@ -427,16 +403,8 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         human_input_mode="ALWAYS",  # Always ask for human input
     )
 
-    # Register the duplicate check function
-    register_function(
-        check_duplicate_payment,
-        caller=finance_bot,
-        executor=human,
-        description="Check if a transaction appears to be a duplicate of a recent payment"
-    )
-
-    def is_termination_msg(x: dict[str, Any]) -> bool:
-        content = x.get("content", "")
+    def is_termination_msg(msg: dict[str, Any]) -> bool:
+        content = msg.get("content", "")
         return (content is not None) and "==== SUMMARY GENERATED ====" in content
 
     # Generate sample transactions - this creates different transactions each time you run
@@ -459,7 +427,8 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 
     result, _, _ = initiate_swarm_chat(
         initial_agent=finance_bot,
-        agents=[finance_bot, summary_bot, human],
+        agents=[finance_bot, summary_bot],
+        user_agent=human,
         messages=initial_prompt,
         swarm_manager_args={
             "llm_config": llm_config,
@@ -472,8 +441,8 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 ### How to Run This Example
 
 - Save the code above to a file (e.g., `financial_compliance.py`)
-- Set your OpenAI API key in your environment variable
-- Make sure you have AG2 installed: pip install ag2[openai]
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
 - Run the script: python `financial_compliance.py`
 
 ### Example Output
@@ -481,7 +450,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 When you run this code, you'll see a workflow similar to this:
 
 ```console
-_User (to chat_manager):
+human (to chat_manager):
 
 Please process the following transactions one at a time, checking for duplicates:
 
@@ -642,7 +611,7 @@ You are trained on data up to October 2023.
 When implementing tools in your AG2 systems, consider these best practices:
 
 - **Descriptive Parameter Annotations**: Use Annotated types with clear, concise descriptions for each parameter. This helps the LLM understand exactly what information it needs to provide when calling the tool.
-- **Meaningful Function Descriptions**: Provide detailed descriptions when registering tools that clearly explain the tool's purpose, when to use it, and what it returns. This guides the LLM in selecting the right tool for the right situation.
+- **Meaningful Function Descriptions**: Provide detailed function docstrings when registering tools that clearly explain the tool's purpose. This guides the LLM in selecting the right tool for the right situation.
 - **Intuitive Parameter Names**: Use predictable, consistent, and self-explanatory parameter names that align with how the LLM might think about the data. Avoid abbreviations or technical jargon in parameter names.
 - **Explicit Guidance in System Messages**: Include clear instructions in your agent's system message about when and how to use specific tools. For example: "First check if the transaction is a duplicate using the `check_duplicate_payment` tool before evaluating it."
 
@@ -650,6 +619,7 @@ When implementing tools in your AG2 systems, consider these best practices:
 ## Next Steps: Structured Outputs
 
 Currently, our summary agent tries to follow instructions but has flexibility in how it structures its response. For integration with other systems, we need more control over the output format.
+
 This is where structured outputs come in. In the next section, we'll enhance our financial compliance system to:
 
 - Define exact schemas for transaction reports using Pydantic models
