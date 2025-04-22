@@ -115,16 +115,13 @@ from typing import Annotated, Any, List, Tuple
 from pydantic import BaseModel, Field
 from autogen import (
     ConversableAgent,
-    register_hand_off,
-    OnContextCondition,
-    AfterWork,
-    AfterWorkOption,
-    initiate_swarm_chat,
-    ContextExpression,
-    SwarmResult,
     UpdateSystemMessage,
-    ChatResult
+    ChatResult,
+    LLMConfig
 )
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group import ContextVariables, ReplyResult, AgentNameTarget, AgentTarget, OnContextCondition, ExpressionContextCondition, StayTarget, TerminateTarget, ContextExpression
 
 # === STRUCTURED DATA MODELS ===
 
@@ -218,12 +215,12 @@ The following error(s) occurred while processing your request:
 def initiate_tasks(
     research_tasks: list[ResearchTask],
     writing_tasks: list[WritingTask],
-    context_variables: dict[str, Any],
-) -> SwarmResult:
+    context_variables: ContextVariables,
+) -> ReplyResult:
     """Initialize the task processing based on triage assessment."""
     if "TaskInitiated" in context_variables:
-        return SwarmResult(
-            values="Task already initiated",
+        return ReplyResult(
+            message="Task already initiated",
             context_variables=context_variables
         )
 
@@ -264,34 +261,34 @@ def initiate_tasks(
     context_variables["WritingTasksCompleted"] = []
     context_variables["TaskInitiated"] = True
 
-    return SwarmResult(
-        values="Initialized tasks for processing",
+    return ReplyResult(
+        message="Initialized tasks for processing",
         context_variables=context_variables,
-        agent=TASK_MANAGER_NAME,
+        target=AgentNameTarget(TASK_MANAGER_NAME),
     )
 
 def complete_research_task(
     index: Annotated[int, "Research task index"],
     topic: Annotated[str, "Research topic"],
     findings: Annotated[str, "Research findings"],
-    context_variables: dict[str, Any],
-) -> SwarmResult:
+    context_variables: ContextVariables,
+) -> ReplyResult:
     """Complete a research task with findings."""
     try:
         current_index = context_variables["CurrentResearchTaskIndex"]
 
         if index != current_index:
-            return SwarmResult(
-                values=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
+            return ReplyResult(
+                message=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
                 context_variables=context_variables,
-                agent=TASK_MANAGER_NAME,
+                target=AgentNameTarget(TASK_MANAGER_NAME),
             )
 
         if current_index == -1:
-            return SwarmResult(
-                values="No current research task to complete.",
+            return ReplyResult(
+                message="No current research task to complete.",
                 context_variables=context_variables,
-                agent=TASK_MANAGER_NAME,
+                target=AgentNameTarget(TASK_MANAGER_NAME),
             )
 
         current_task = context_variables["ResearchTasks"][current_index]
@@ -313,39 +310,39 @@ def complete_research_task(
             # Move to the next task
             context_variables["CurrentResearchTaskIndex"] = current_index + 1
 
-        return SwarmResult(
-            values=f"Research task completed: {topic}",
+        return ReplyResult(
+            message=f"Research task completed: {topic}",
             context_variables=context_variables,
         )
     except Exception as e:
-        return SwarmResult(
-            values=f"Error occurred with research task #{index}: {str(e)}",
+        return ReplyResult(
+            message=f"Error occurred with research task #{index}: {str(e)}",
             context_variables=context_variables,
-            agent=ERROR_AGENT_NAME,
+            target=AgentTarget(ERROR_AGENT_NAME),
         )
 
 def complete_writing_task(
     index: Annotated[int, "Writing task index"],
     topic: Annotated[str, "Writing topic"],
     findings: Annotated[str, "Writing findings"],
-    context_variables: dict[str, Any],
-) -> SwarmResult:
+    context_variables: ContextVariables,
+) -> ReplyResult:
     """Complete a writing task with content."""
     try:
         current_index = context_variables["CurrentWritingTaskIndex"]
 
         if index != current_index:
-            return SwarmResult(
-                values=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
+            return ReplyResult(
+                message=f"The index provided, {index}, does not match the current writing task index, {current_index}.",
                 context_variables=context_variables,
-                agent=TASK_MANAGER_NAME,
+                target=AgentNameTarget(TASK_MANAGER_NAME),
             )
 
         if current_index == -1:
-            return SwarmResult(
-                values="No current writing task to complete.",
+            return ReplyResult(
+                message="No current writing task to complete.",
                 context_variables=context_variables,
-                agent=TASK_MANAGER_NAME,
+                target=AgentNameTarget(TASK_MANAGER_NAME),
             )
 
         current_task = context_variables["WritingTasks"][current_index]
@@ -367,20 +364,20 @@ def complete_writing_task(
             # Move to the next task
             context_variables["CurrentWritingTaskIndex"] = current_index + 1
 
-        return SwarmResult(
-            values=f"Writing task completed: {topic}",
+        return ReplyResult(
+            message=f"Writing task completed: {topic}",
             context_variables=context_variables,
         )
     except Exception as e:
-        return SwarmResult(
-            values=f"Error occurred with writing task #{index}: {str(e)}",
+        return ReplyResult(
+            message=f"Error occurred with writing task #{index}: {str(e)}",
             context_variables=context_variables,
-            agent=ERROR_AGENT_NAME,
+            target=AgentNameTarget(ERROR_AGENT_NAME),
         )
 
-# Create the agents for the swarm
-def create_research_writing_swarm(llm_config_base: dict[str, Any]):
-    """Create and configure all agents for the research-writing swarm."""
+# Create the agents for the group chat
+def create_research_writing_group_chat(llm_config_base: dict[str, Any]):
+    """Create and configure all agents for the research-writing group chat."""
 
     # Triage agent
     structured_config = deepcopy(llm_config_base)
@@ -399,8 +396,8 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
         ),
     )
 
-    llm_config_with_tools = deepcopy(llm_config_base)
-    llm_config_with_tools["config_list"][0]["parallel_tool_calls"] = False
+    llm_config_with_tools = LLMConfig(model="gpt-4.1-mini", api_type="openai", parallel_tool_calls=False)
+
 
     # Task Manager agent
     task_manager_agent = ConversableAgent(
@@ -413,8 +410,8 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     # Define the system message generation for the research agent, getting the next research task
     def create_research_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         """Create the research agent prompt with the current research task."""
-        current_research_index = agent.get_context("CurrentResearchTaskIndex", -1)
-        research_tasks = agent.get_context("ResearchTasks")
+        current_research_index = agent.context_variables.get("CurrentResearchTaskIndex", -1)
+        research_tasks = agent.context_variables.get("ResearchTasks")
 
         if current_research_index >= 0:
 
@@ -441,8 +438,8 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     # Define the system message generation for the writing agent, getting the next writing task
     def create_writing_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         """Create the writing agent prompt with the current writing task."""
-        current_writing_index = agent.get_context("CurrentWritingTaskIndex", -1)
-        writing_tasks = agent.get_context("WritingTasks")
+        current_writing_index = agent.context_variables.get("CurrentWritingTaskIndex", -1)
+        writing_tasks = agent.context_variables.get("WritingTasks")
 
         if current_writing_index >= 0:
 
@@ -470,8 +467,8 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     # Summary agent
     def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         """Create the summary agent prompt with task completion results."""
-        research_tasks = agent.get_context("ResearchTasksCompleted")
-        writing_tasks = agent.get_context("WritingTasksCompleted")
+        research_tasks = agent.context_variables.get("ResearchTasksCompleted")
+        writing_tasks = agent.context_variables.get("WritingTasksCompleted")
 
         system_message = (
             "You are a task summary specialist. Provide a summary of all completed tasks.\n\n"
@@ -520,73 +517,52 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     # Set up handoffs between agents
 
     # Triage agent always hands off to the Task Manager
-    register_hand_off(
-        agent=triage_agent,
-        hand_to=[
-            AfterWork(task_manager_agent),
-        ],
-    )
+    triage_agent.handoffs.set_after_work(AgentTarget(task_manager_agent))
 
     # Task Manager routes to Research and Writing agents if they have tasks
     # then to the Summary agent if the tasks are done
-    register_hand_off(
-        agent=task_manager_agent,
-        hand_to=[
+    task_manager_agent.handoffs.add_context_conditions(
+        [
             OnContextCondition(
-                research_agent,
-                condition=ContextExpression("${CurrentResearchTaskIndex} >= 0"),
+                target=AgentTarget(research_agent),
+                condition=ExpressionContextCondition(ContextExpression("${CurrentResearchTaskIndex} >= 0")),
             ),
             OnContextCondition(
-                writing_agent,
-                condition=ContextExpression("${CurrentWritingTaskIndex} >= 0"),
+                target=AgentTarget(writing_agent),
+                condition=ExpressionContextCondition(ContextExpression("${CurrentWritingTaskIndex} >= 0")),
             ),
             OnContextCondition(
-                summary_agent,
-                condition=ContextExpression("${ResearchTasksDone} and ${WritingTasksDone}"),
+                target=AgentTarget(summary_agent),
+                condition=ExpressionContextCondition(ContextExpression("${ResearchTasksDone} and ${WritingTasksDone}")),
             ),
-            AfterWork(AfterWorkOption.STAY),
-        ],
+        ]
     )
+
+    task_manager_agent.handoffs.set_after_work(StayTarget())
 
     # Research agent hands back to the Task Manager if they have no more tasks
-    register_hand_off(
-        agent=research_agent,
-        hand_to=[
-            OnContextCondition(
-                task_manager_agent,
-                condition=ContextExpression("${CurrentResearchTaskIndex} == -1"),
-            ),
-            AfterWork(task_manager_agent),
-        ],
+    research_agent.handoffs.add_context_condition(
+        OnContextCondition(
+            target=AgentTarget(task_manager_agent),
+            condition=ExpressionContextCondition(ContextExpression("${CurrentResearchTaskIndex} == -1")),
+        ),
     )
+    research_agent.handoffs.set_after_work(AgentTarget(task_manager_agent))
 
     # Writing agent hands back to the Task Manager if they have no more tasks
-    register_hand_off(
-        agent=writing_agent,
-        hand_to=[
-            OnContextCondition(
-                task_manager_agent,
-                condition=ContextExpression("${CurrentWritingTaskIndex} == -1"),
-            ),
-            AfterWork(task_manager_agent),
-        ],
+    writing_agent.handoffs.add_context_condition(
+        OnContextCondition(
+            target=AgentTarget(task_manager_agent),
+            condition=ExpressionContextCondition(ContextExpression("${CurrentWritingTaskIndex} == -1")),
+        ),
     )
+    writing_agent.handoffs.set_after_work(AgentTarget(task_manager_agent))
 
     # The Summary Agent will summarize and then terminate
-    register_hand_off(
-        agent=summary_agent,
-        hand_to=[
-            AfterWork(AfterWorkOption.TERMINATE),
-        ],
-    )
+    summary_agent.handoffs.set_after_work(TerminateTarget())
 
     # If an error occurs, hand off to the Error Agent
-    register_hand_off(
-        agent=error_agent,
-        hand_to=[
-            AfterWork(AfterWorkOption.TERMINATE),
-        ],
-    )
+    error_agent.handoffs.set_after_work(TerminateTarget())
 
     # Return all the agents
     return {
@@ -599,34 +575,39 @@ def create_research_writing_swarm(llm_config_base: dict[str, Any]):
     }
 
 # Function to run the swarm
-def run_research_writing_swarm(user_request: str) -> Tuple[ChatResult, dict[str, Any]]:
-    """Run the research and writing swarm for a given user request."""
+def run_research_writing(user_request: str) -> Tuple[ChatResult, dict[str, Any]]:
+    """Run the research and writing group chat for a given user request."""
 
     llm_config_base = {
-        "config_list": [{"model": "gpt-4o-mini", "api_type": "openai"}],
+        "config_list": [{"model": "gpt-4.1-mini", "api_type": "openai"}],
     }
 
     # Create the swarm agents
-    agents = create_research_writing_swarm(llm_config_base)
+    agents = create_research_writing_group_chat(llm_config_base)
 
     # Set up initial context variables
-    context_variables = {
+    context_variables = ContextVariables({
         "CurrentResearchTaskIndex": -1,
         "CurrentWritingTaskIndex": -1,
         "ResearchTasksDone": False,
         "WritingTasksDone": False,
-    }
+    })
 
     # Get all agents as a list for the swarm
     swarm_agents = list(agents.values())
 
-    # Run the swarm
-    chat_result, final_context, _ = initiate_swarm_chat(
+    agent_pattern = DefaultPattern(
         initial_agent=agents["triage_agent"],
         agents=swarm_agents,
-        messages=user_request,
         context_variables=context_variables,
-        after_work=AfterWorkOption.TERMINATE,
+        group_after_work=TerminateTarget()
+    )
+
+    # Run the swarm
+    chat_result, final_context, _ = initiate_group_chat(
+        pattern=agent_pattern,
+        messages=user_request,
+        max_rounds=100,
     )
 
     # Return the results
@@ -638,7 +619,7 @@ if __name__ == "__main__":
     request = "I need to write about climate change solutions. Can you help me research solar panels and wind farms and then write two articles a blog and a longer form article summarizing the state of these two technologies."
 
     # Run the swarm
-    result, final_context = run_research_writing_swarm(request)
+    result, final_context = run_research_writing(request)
 
     # Display the Research
     print("\n===== RESEARCH =====\n")
@@ -662,9 +643,8 @@ if __name__ == "__main__":
     # Display the conversation flow
     print("\n===== SPEAKER ORDER =====\n")
     for message in result.chat_history:
-        if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+        if "name" in message and message["name"] != "_Group_Tool_Executor":
             print(f"{message['name']}")
-
 ```
 
 ## Output
@@ -682,34 +662,7 @@ Next speaker: triage_agent
 >>>>>>>> USING AUTO REPLY...
 triage_agent (to chat_manager):
 
-{
-  "research_tasks": [
-    {
-      "topic": "Solar Panels",
-      "details": "Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.",
-      "priority": "high"
-    },
-    {
-      "topic": "Wind Farms",
-      "details": "Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.",
-      "priority": "high"
-    }
-  ],
-  "writing_tasks": [
-    {
-      "topic": "Climate Change Solutions: Solar Panels",
-      "type": "blog",
-      "details": "Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.",
-      "priority": "medium"
-    },
-    {
-      "topic": "Climate Change Solutions: Wind Farms",
-      "type": "article",
-      "details": "Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.",
-      "priority": "medium"
-    }
-  ]
-}
+{"research_tasks":[{"topic":"Solar Panels","details":"Research current technologies, benefits, challenges, and recent advancements related to solar panels as a climate change solution.","priority":"high"},{"topic":"Wind Farms","details":"Research current technologies, benefits, challenges, and recent advancements related to wind farms as a climate change solution.","priority":"high"}],"writing_tasks":[{"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Blog Article","type":"article","details":"Write a blog article summarizing the state of solar panels and wind farms as climate change solutions, highlighting key benefits and recent developments.","priority":"medium"},{"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article","type":"article","details":"Write a comprehensive article summarizing in-depth research on solar panels and wind farms, covering technologies, benefits, challenges, and future outlook.","priority":"high"}]}
 
 --------------------------------------------------------------------------------
 
@@ -719,22 +672,22 @@ Next speaker: TaskManagerAgent
 >>>>>>>> USING AUTO REPLY...
 TaskManagerAgent (to chat_manager):
 
-***** Suggested tool call (call_YRrjwMzLzZc3VRzP5TOHY05q): initiate_tasks *****
+***** Suggested tool call (call_VHxLSJShQENq4ZJUOtE0Nk9t): initiate_tasks *****
 Arguments:
-{"research_tasks":[{"topic":"Solar Panels","details":"Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.","priority":"high"},{"topic":"Wind Farms","details":"Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.","priority":"high"}],"writing_tasks":[{"topic":"Climate Change Solutions: Solar Panels","type":"blog","details":"Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.","priority":"medium"},{"topic":"Climate Change Solutions: Wind Farms","type":"article","details":"Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.","priority":"medium"}]}
+{"research_tasks":[{"topic":"Solar Panels","details":"Research current technologies, benefits, challenges, and recent advancements related to solar panels as a climate change solution.","priority":"high"},{"topic":"Wind Farms","details":"Research current technologies, benefits, challenges, and recent advancements related to wind farms as a climate change solution.","priority":"high"}],"writing_tasks":[{"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Blog Article","type":"article","details":"Write a blog article summarizing the state of solar panels and wind farms as climate change solutions, highlighting key benefits and recent developments.","priority":"medium"},{"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article","type":"article","details":"Write a comprehensive article summarizing in-depth research on solar panels and wind farms, covering technologies, benefits, challenges, and future outlook.","priority":"high"}]}
 *******************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION initiate_tasks...
-Call ID: call_YRrjwMzLzZc3VRzP5TOHY05q
-Input arguments: {'research_tasks': [{'topic': 'Solar Panels', 'details': 'Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.', 'priority': 'high'}, {'topic': 'Wind Farms', 'details': 'Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.', 'priority': 'high'}], 'writing_tasks': [{'topic': 'Climate Change Solutions: Solar Panels', 'type': 'blog', 'details': 'Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.', 'priority': 'medium'}, {'topic': 'Climate Change Solutions: Wind Farms', 'type': 'article', 'details': 'Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.', 'priority': 'medium'}]}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_VHxLSJShQENq4ZJUOtE0Nk9t
+Input arguments: {'research_tasks': [{'topic': 'Solar Panels', 'details': 'Research current technologies, benefits, challenges, and recent advancements related to solar panels as a climate change solution.', 'priority': 'high'}, {'topic': 'Wind Farms', 'details': 'Research current technologies, benefits, challenges, and recent advancements related to wind farms as a climate change solution.', 'priority': 'high'}], 'writing_tasks': [{'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Blog Article', 'type': 'article', 'details': 'Write a blog article summarizing the state of solar panels and wind farms as climate change solutions, highlighting key benefits and recent developments.', 'priority': 'medium'}, {'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article', 'type': 'article', 'details': 'Write a comprehensive article summarizing in-depth research on solar panels and wind farms, covering technologies, benefits, challenges, and future outlook.', 'priority': 'high'}]}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_YRrjwMzLzZc3VRzP5TOHY05q) *****
+***** Response from calling tool (call_VHxLSJShQENq4ZJUOtE0Nk9t) *****
 Initialized tasks for processing
 **********************************************************************
 
@@ -754,22 +707,22 @@ Next speaker: ResearchAgent
 >>>>>>>> USING AUTO REPLY...
 ResearchAgent (to chat_manager):
 
-***** Suggested tool call (call_6xlRRLj1UOL284e2a0SxRTMD): complete_research_task *****
+***** Suggested tool call (call_2l0nchoObp2hRobukCdKUdtI): complete_research_task *****
 Arguments:
-{"index":0,"topic":"Solar Panels","findings":"Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict."}
+{"index":0,"topic":"Solar Panels","findings":"Current Technologies: Modern solar panels primarily use photovoltaic (PV) technology to convert sunlight directly into electricity. Types include monocrystalline, polycrystalline, thin-film, and bifacial panels. Emerging technologies involve perovskite solar cells, tandem cells combining silicon and perovskite, and building-integrated photovoltaics (BIPV).\n\nBenefits: Solar panels provide clean, renewable energy, significantly reducing greenhouse gas emissions. They reduce dependency on fossil fuels, have low operational costs after installation, and can be deployed at various scales from residential rooftops to large solar farms.\n\nChallenges: Intermittency due to weather and day-night cycles, high upfront costs, land use concerns for large installations, efficiency limits, and recycling or disposal of end-of-life panels.\n\nRecent Advancements: Advances in perovskite technology promise higher efficiencies and lower costs. Bifacial panels increase energy capture by using reflected light. Improved energy storage integration with solar systems enhances reliability. Innovations in manufacturing, such as thinner and more flexible materials, are expanding installation possibilities and reducing material use."}
 ***************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_research_task...
-Call ID: call_6xlRRLj1UOL284e2a0SxRTMD
-Input arguments: {'index': 0, 'topic': 'Solar Panels', 'findings': 'Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_2l0nchoObp2hRobukCdKUdtI
+Input arguments: {'index': 0, 'topic': 'Solar Panels', 'findings': 'Current Technologies: Modern solar panels primarily use photovoltaic (PV) technology to convert sunlight directly into electricity. Types include monocrystalline, polycrystalline, thin-film, and bifacial panels. Emerging technologies involve perovskite solar cells, tandem cells combining silicon and perovskite, and building-integrated photovoltaics (BIPV).\n\nBenefits: Solar panels provide clean, renewable energy, significantly reducing greenhouse gas emissions. They reduce dependency on fossil fuels, have low operational costs after installation, and can be deployed at various scales from residential rooftops to large solar farms.\n\nChallenges: Intermittency due to weather and day-night cycles, high upfront costs, land use concerns for large installations, efficiency limits, and recycling or disposal of end-of-life panels.\n\nRecent Advancements: Advances in perovskite technology promise higher efficiencies and lower costs. Bifacial panels increase energy capture by using reflected light. Improved energy storage integration with solar systems enhances reliability. Innovations in manufacturing, such as thinner and more flexible materials, are expanding installation possibilities and reducing material use.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_6xlRRLj1UOL284e2a0SxRTMD) *****
+***** Response from calling tool (call_2l0nchoObp2hRobukCdKUdtI) *****
 Research task completed: Solar Panels
 **********************************************************************
 
@@ -781,22 +734,22 @@ Next speaker: ResearchAgent
 >>>>>>>> USING AUTO REPLY...
 ResearchAgent (to chat_manager):
 
-***** Suggested tool call (call_Gfk1oFddR5epfyhw7K5puCU6): complete_research_task *****
+***** Suggested tool call (call_hAHXq9ZJMKi1eKbxhRFfoGPs): complete_research_task *****
 Arguments:
-{"index":1,"topic":"Wind Farms","findings":"Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets."}
+{"index":1,"topic":"Wind Farms","findings":"Current Technologies: Wind farms deploy large-scale wind turbines that convert kinetic wind energy into electricity. Turbines use horizontal-axis systems predominantly, with sizes growing to multi-megawatt capacities and offshore developments increasing. Technology improvements include larger rotors, taller towers, and optimized blade design using aerodynamic modeling.\n\nBenefits: Wind farms provide a significant source of clean, renewable energy with near-zero emissions during operation. They reduce fossil fuel reliance and have relatively low operational expenses. Offshore wind farms tap stronger and more consistent winds, producing higher capacity factors.\n\nChallenges: Intermittency and variability of wind, visual and noise concerns, impact on wildlife (e.g., birds and bats), land use conflicts, and the need for grid infrastructure upgrades to handle variable input.\n\nRecent Advancements: Floating offshore wind turbines enable deployment in deeper waters previously inaccessible. Digitalization and AI optimize turbine performance and predictive maintenance. Larger offshore turbines exceeding 10 MW capacity improve economics and energy output. Hybrid projects combining wind with storage or other renewables enhance grid stability."}
 ***************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_research_task...
-Call ID: call_Gfk1oFddR5epfyhw7K5puCU6
-Input arguments: {'index': 1, 'topic': 'Wind Farms', 'findings': 'Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_hAHXq9ZJMKi1eKbxhRFfoGPs
+Input arguments: {'index': 1, 'topic': 'Wind Farms', 'findings': 'Current Technologies: Wind farms deploy large-scale wind turbines that convert kinetic wind energy into electricity. Turbines use horizontal-axis systems predominantly, with sizes growing to multi-megawatt capacities and offshore developments increasing. Technology improvements include larger rotors, taller towers, and optimized blade design using aerodynamic modeling.\n\nBenefits: Wind farms provide a significant source of clean, renewable energy with near-zero emissions during operation. They reduce fossil fuel reliance and have relatively low operational expenses. Offshore wind farms tap stronger and more consistent winds, producing higher capacity factors.\n\nChallenges: Intermittency and variability of wind, visual and noise concerns, impact on wildlife (e.g., birds and bats), land use conflicts, and the need for grid infrastructure upgrades to handle variable input.\n\nRecent Advancements: Floating offshore wind turbines enable deployment in deeper waters previously inaccessible. Digitalization and AI optimize turbine performance and predictive maintenance. Larger offshore turbines exceeding 10 MW capacity improve economics and energy output. Hybrid projects combining wind with storage or other renewables enhance grid stability.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_Gfk1oFddR5epfyhw7K5puCU6) *****
+***** Response from calling tool (call_hAHXq9ZJMKi1eKbxhRFfoGPs) *****
 Research task completed: Wind Farms
 **********************************************************************
 
@@ -824,23 +777,58 @@ Next speaker: WritingAgent
 >>>>>>>> USING AUTO REPLY...
 WritingAgent (to chat_manager):
 
-***** Suggested tool call (call_mm1LhoiY9hmPrW9xErXVa50o): complete_writing_task *****
+***** Suggested tool call (call_6AVpE85nYDS2Vbc8IxsLZzTg): complete_writing_task *****
 Arguments:
-{"index":0,"topic":"Climate Change Solutions: Solar Panels","findings":"Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future."}
+{"index":1,"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article","findings":"Introduction\n\nClimate change represents one of the most pressing global challenges of our time, necessitating urgent adoption of clean and renewable energy solutions. Among the leading technologies combating the effects of climate change are solar panels and wind farms. These renewable energy sources offer sustainable alternatives to fossil fuel-based power generation, reducing greenhouse gas emissions and mitigating global warming.\n\nSolar Panels: Technologies, Benefits, Challenges, and Future Outlook\n\nSolar panels utilize photovoltaic (PV) technology to convert sunlight directly into electricity. The main types of solar panels include monocrystalline, polycrystalline, thin-film, and bifacial panels. Emerging advances such as perovskite solar cells and tandem cells combining silicon and perovskite materials promise higher efficiencies and reduced costs. Additionally, building-integrated photovoltaics (BIPV) seamlessly integrate solar panels into building materials for dual functionality.\n\nThe benefits of solar panels are numerous: they generate clean and renewable energy, reduce reliance on fossil fuels, lower greenhouse gas emissions, and offer scalability from household rooftops to vast solar farms. After the initial installation costs, solar panels require minimal operational expenses.\n\nHowever, challenges persist, including the intermittent nature of solar energy due to weather variability and night cycles, efficiency limits, the high upfront costs for installation, land use concerns for large-scale farms, and issues surrounding recycling and disposal of used panels.\n\nRecent advancements have enhanced the viability of solar energy. Technological innovations in perovskite materials have improved efficiency and cost-effectiveness. Bifacial panels increase energy yield by capturing reflected sunlight. Integration with energy storage systems improves reliability. Furthermore, new manufacturing techniques that produce thinner, more flexible panels open pathways for diverse applications and decreased resource use.\n\nWind Farms: Technologies, Benefits, Challenges, and Future Outlook\n\nWind farms harness kinetic energy from wind through large turbines, predominantly horizontal-axis designs with blades optimized through aerodynamic modeling. Increasingly, turbines have grown to multi-megawatt capacities, especially in offshore wind farms where stronger, more consistent winds prevail.\n\nWind energy presents significant benefits such as abundant clean power generation with negligible emissions during operation. Offshore wind developments further enhance capacity factors and energy reliability, lowering fossil fuel dependence. Operational expenses are relatively low once turbines are installed.\n\nDespite its advantages, wind energy faces challenges including intermittency and variability, environmental concerns related to noise and visual impacts, effects on wildlife such as birds and bats, land use competition, and the necessity to upgrade grid infrastructure to accommodate fluctuating input.\n\nRecent advancements include development of floating offshore turbines enabling deployment in deep waters previously inaccessible. The application of digitalization and artificial intelligence optimizes turbine performance and predictive maintenance. Larger turbines, exceeding 10 MW capacity, improve economies of scale, while hybrid renewable projects integrating wind with energy storage or solar diversify and stabilize energy supply.\n\nFuture Outlook\n\nLooking forward, the integration of solar and wind energy systems with advanced energy storage, grid modernization, and smart management technologies will be crucial to fully realize their potential in climate change mitigation. Continued research and investment in improving efficiency, reducing costs, addressing environmental concerns, and expanding accessibility will accelerate the transition to a sustainable energy future.\n\nConclusion\n\nSolar panels and wind farms represent cornerstone solutions in the global effort to combat climate change. Their evolving technologies, diverse benefits, and the proactive addressing of challenges forecast a promising path forward toward a cleaner, more sustainable planet."}
 **************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_writing_task...
-Call ID: call_mm1LhoiY9hmPrW9xErXVa50o
-Input arguments: {'index': 0, 'topic': 'Climate Change Solutions: Solar Panels', 'findings': 'Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_6AVpE85nYDS2Vbc8IxsLZzTg
+Input arguments: {'index': 1, 'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article', 'findings': 'Introduction\n\nClimate change represents one of the most pressing global challenges of our time, necessitating urgent adoption of clean and renewable energy solutions. Among the leading technologies combating the effects of climate change are solar panels and wind farms. These renewable energy sources offer sustainable alternatives to fossil fuel-based power generation, reducing greenhouse gas emissions and mitigating global warming.\n\nSolar Panels: Technologies, Benefits, Challenges, and Future Outlook\n\nSolar panels utilize photovoltaic (PV) technology to convert sunlight directly into electricity. The main types of solar panels include monocrystalline, polycrystalline, thin-film, and bifacial panels. Emerging advances such as perovskite solar cells and tandem cells combining silicon and perovskite materials promise higher efficiencies and reduced costs. Additionally, building-integrated photovoltaics (BIPV) seamlessly integrate solar panels into building materials for dual functionality.\n\nThe benefits of solar panels are numerous: they generate clean and renewable energy, reduce reliance on fossil fuels, lower greenhouse gas emissions, and offer scalability from household rooftops to vast solar farms. After the initial installation costs, solar panels require minimal operational expenses.\n\nHowever, challenges persist, including the intermittent nature of solar energy due to weather variability and night cycles, efficiency limits, the high upfront costs for installation, land use concerns for large-scale farms, and issues surrounding recycling and disposal of used panels.\n\nRecent advancements have enhanced the viability of solar energy. Technological innovations in perovskite materials have improved efficiency and cost-effectiveness. Bifacial panels increase energy yield by capturing reflected sunlight. Integration with energy storage systems improves reliability. Furthermore, new manufacturing techniques that produce thinner, more flexible panels open pathways for diverse applications and decreased resource use.\n\nWind Farms: Technologies, Benefits, Challenges, and Future Outlook\n\nWind farms harness kinetic energy from wind through large turbines, predominantly horizontal-axis designs with blades optimized through aerodynamic modeling. Increasingly, turbines have grown to multi-megawatt capacities, especially in offshore wind farms where stronger, more consistent winds prevail.\n\nWind energy presents significant benefits such as abundant clean power generation with negligible emissions during operation. Offshore wind developments further enhance capacity factors and energy reliability, lowering fossil fuel dependence. Operational expenses are relatively low once turbines are installed.\n\nDespite its advantages, wind energy faces challenges including intermittency and variability, environmental concerns related to noise and visual impacts, effects on wildlife such as birds and bats, land use competition, and the necessity to upgrade grid infrastructure to accommodate fluctuating input.\n\nRecent advancements include development of floating offshore turbines enabling deployment in deep waters previously inaccessible. The application of digitalization and artificial intelligence optimizes turbine performance and predictive maintenance. Larger turbines, exceeding 10 MW capacity, improve economies of scale, while hybrid renewable projects integrating wind with energy storage or solar diversify and stabilize energy supply.\n\nFuture Outlook\n\nLooking forward, the integration of solar and wind energy systems with advanced energy storage, grid modernization, and smart management technologies will be crucial to fully realize their potential in climate change mitigation. Continued research and investment in improving efficiency, reducing costs, addressing environmental concerns, and expanding accessibility will accelerate the transition to a sustainable energy future.\n\nConclusion\n\nSolar panels and wind farms represent cornerstone solutions in the global effort to combat climate change. Their evolving technologies, diverse benefits, and the proactive addressing of challenges forecast a promising path forward toward a cleaner, more sustainable planet.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_mm1LhoiY9hmPrW9xErXVa50o) *****
-Writing task completed: Climate Change Solutions: Solar Panels
+***** Response from calling tool (call_6AVpE85nYDS2Vbc8IxsLZzTg) *****
+The index provided, 1, does not match the current writing task index, 0.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+TaskManagerAgent (to chat_manager):
+
+[Handing off to WritingAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: WritingAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+WritingAgent (to chat_manager):
+
+***** Suggested tool call (call_yBHmKH2Mxg4ET6uWsz6Uqfii): complete_writing_task *****
+Arguments:
+{"index":0,"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article","findings":"Introduction\n\nClimate change is one of the most urgent global challenges today, driving a critical need for sustainable and renewable energy solutions. Among the most effective technologies addressing this challenge are solar panels and wind farms. These renewable energy sources reduce dependence on fossil fuels, cut greenhouse gas emissions, and help transition the world toward a cleaner energy future.\n\nSolar Panels: Technologies, Benefits, Challenges, and Future Outlook\n\nSolar panels primarily use photovoltaic (PV) technology to convert sunlight into electricity. Various types are widely used: monocrystalline for high efficiency, polycrystalline for cost-effectiveness, thin-film for flexibility, and bifacial panels that capture light from both sides. Innovations like perovskite solar cells and tandem cells—combining silicon and perovskite—are advancing the field by enhancing efficiency and lowering costs. Building-integrated photovoltaics (BIPV) are emerging as aesthetically pleasing, space-saving solutions where solar cells are integrated into building materials.\n\nThe benefits of solar energy include clean, renewable electricity generation that sharply reduces carbon emissions, scalable deployment from rooftops to utility-scale farms, and low operational costs after initial investment. However, challenges remain: solar output is intermittent, dependent on weather and daylight; upfront costs can be high; large solar farms require significant land; and end-of-life panel recycling and disposal present environmental concerns.\n\nRecent advancements address many of these challenges. Perovskite technology promises higher efficiency and affordability. Bifacial panels increase energy capture by using reflected sunlight from the environment. The integration of solar with energy storage systems helps mitigate intermittency, increasing reliability. Manufacturing innovations producing thinner, lighter, and flexible panels broaden application possibilities while reducing resource consumption.\n\nWind Farms: Technologies, Benefits, Challenges, and Future Outlook\n\nWind farms convert the kinetic energy of wind into electricity through large turbines, predominantly horizontal-axis types. Turbine sizes have grown substantially, with offshore wind farms harnessing powerful, more consistent winds. Advances in blade design, taller towers, and multi-megawatt turbines enhance energy yields and efficiency.\n\nWind energy provides significant environmental and economic benefits. It produces clean electricity with near-zero emissions, reduces reliance on fossil fuels, and benefits from relatively low operational costs. Offshore wind farms, in particular, achieve higher capacity factors due to steady winds.\n\nHowever, wind farms face challenges such as the variability of wind, land use and aesthetic impacts, noise concerns, potential harm to wildlife like birds and bats, and demands for upgraded grid infrastructure to manage intermittent energy input.\n\nRecent technological progress includes the development of floating offshore turbines, allowing installation in deep waters previously inaccessible. Digitalization and artificial intelligence applications optimize turbine performance and maintenance scheduling. Larger turbines exceeding 10 MW capacity improve economics of scale. Additionally, hybrid systems combining wind power with energy storage or complementing renewables boost grid stability.\n\nFuture Outlook\n\nThe future of these technologies lies in their integration with energy storage, smart grids, and improved materials and designs. Investment in research, infrastructure, and policy support will be essential to overcome remaining hurdles and enhance deployment worldwide. As efficiencies improve and costs continue to decline, solar panels and wind farms will play an increasingly vital role in combating climate change.\n\nConclusion\n\nSolar panels and wind farms stand as pivotal climate change solutions, offering scalable, renewable alternatives to fossil fuels. Continued innovation and expansion of these technologies promise a cleaner, more sustainable energy landscape critical for global climate stability."}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_writing_task...
+Call ID: call_yBHmKH2Mxg4ET6uWsz6Uqfii
+Input arguments: {'index': 0, 'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article', 'findings': 'Introduction\n\nClimate change is one of the most urgent global challenges today, driving a critical need for sustainable and renewable energy solutions. Among the most effective technologies addressing this challenge are solar panels and wind farms. These renewable energy sources reduce dependence on fossil fuels, cut greenhouse gas emissions, and help transition the world toward a cleaner energy future.\n\nSolar Panels: Technologies, Benefits, Challenges, and Future Outlook\n\nSolar panels primarily use photovoltaic (PV) technology to convert sunlight into electricity. Various types are widely used: monocrystalline for high efficiency, polycrystalline for cost-effectiveness, thin-film for flexibility, and bifacial panels that capture light from both sides. Innovations like perovskite solar cells and tandem cells—combining silicon and perovskite—are advancing the field by enhancing efficiency and lowering costs. Building-integrated photovoltaics (BIPV) are emerging as aesthetically pleasing, space-saving solutions where solar cells are integrated into building materials.\n\nThe benefits of solar energy include clean, renewable electricity generation that sharply reduces carbon emissions, scalable deployment from rooftops to utility-scale farms, and low operational costs after initial investment. However, challenges remain: solar output is intermittent, dependent on weather and daylight; upfront costs can be high; large solar farms require significant land; and end-of-life panel recycling and disposal present environmental concerns.\n\nRecent advancements address many of these challenges. Perovskite technology promises higher efficiency and affordability. Bifacial panels increase energy capture by using reflected sunlight from the environment. The integration of solar with energy storage systems helps mitigate intermittency, increasing reliability. Manufacturing innovations producing thinner, lighter, and flexible panels broaden application possibilities while reducing resource consumption.\n\nWind Farms: Technologies, Benefits, Challenges, and Future Outlook\n\nWind farms convert the kinetic energy of wind into electricity through large turbines, predominantly horizontal-axis types. Turbine sizes have grown substantially, with offshore wind farms harnessing powerful, more consistent winds. Advances in blade design, taller towers, and multi-megawatt turbines enhance energy yields and efficiency.\n\nWind energy provides significant environmental and economic benefits. It produces clean electricity with near-zero emissions, reduces reliance on fossil fuels, and benefits from relatively low operational costs. Offshore wind farms, in particular, achieve higher capacity factors due to steady winds.\n\nHowever, wind farms face challenges such as the variability of wind, land use and aesthetic impacts, noise concerns, potential harm to wildlife like birds and bats, and demands for upgraded grid infrastructure to manage intermittent energy input.\n\nRecent technological progress includes the development of floating offshore turbines, allowing installation in deep waters previously inaccessible. Digitalization and artificial intelligence applications optimize turbine performance and maintenance scheduling. Larger turbines exceeding 10 MW capacity improve economics of scale. Additionally, hybrid systems combining wind power with energy storage or complementing renewables boost grid stability.\n\nFuture Outlook\n\nThe future of these technologies lies in their integration with energy storage, smart grids, and improved materials and designs. Investment in research, infrastructure, and policy support will be essential to overcome remaining hurdles and enhance deployment worldwide. As efficiencies improve and costs continue to decline, solar panels and wind farms will play an increasingly vital role in combating climate change.\n\nConclusion\n\nSolar panels and wind farms stand as pivotal climate change solutions, offering scalable, renewable alternatives to fossil fuels. Continued innovation and expansion of these technologies promise a cleaner, more sustainable energy landscape critical for global climate stability.'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_yBHmKH2Mxg4ET6uWsz6Uqfii) *****
+Writing task completed: Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -851,23 +839,58 @@ Next speaker: WritingAgent
 >>>>>>>> USING AUTO REPLY...
 WritingAgent (to chat_manager):
 
-***** Suggested tool call (call_j7Vyv4mzl2Pa0XHKWvidhvCc): complete_writing_task *****
+***** Suggested tool call (call_J0kSPzajwPfk7YipQ6Wxjrny): complete_writing_task *****
 Arguments:
-{"index":1,"topic":"Climate Change Solutions: Wind Farms","findings":"Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change."}
+{"index":0,"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Blog Article","findings":"Climate change requires urgent action, and renewable energy sources like solar panels and wind farms are leading the charge in providing sustainable solutions. \n\nSolar panels use photovoltaic technology to convert sunlight into electricity. They come in various types such as monocrystalline, polycrystalline, thin-film, and bifacial panels. Innovations like perovskite solar cells and building-integrated photovoltaics are improving efficiency and reducing costs. Solar energy helps reduce greenhouse gas emissions, lowers dependence on fossil fuels, and offers scalable solutions from rooftops to large solar farms. Challenges include weather-dependent output and high upfront costs, but recent advances in technology and energy storage are addressing these issues.\n\nWind farms utilize large turbines to convert wind energy into electricity. Modern turbines are getting larger and more efficient, especially with offshore developments tapping into stronger, steadier winds. Wind energy produces no emissions during operation and offers low operating costs. Challenges include wind variability, visual and noise concerns, and impacts on wildlife. Advances like floating offshore turbines, AI-driven maintenance, and hybrid systems with storage are making wind energy more reliable and economical.\n\nTogether, solar panels and wind farms form key pillars in the global transition to clean energy. Their continued technological progress and deployment expansion are vital for reducing carbon emissions and combating climate change effectively."}
 **************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_writing_task...
-Call ID: call_j7Vyv4mzl2Pa0XHKWvidhvCc
-Input arguments: {'index': 1, 'topic': 'Climate Change Solutions: Wind Farms', 'findings': 'Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_J0kSPzajwPfk7YipQ6Wxjrny
+Input arguments: {'index': 0, 'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Blog Article', 'findings': 'Climate change requires urgent action, and renewable energy sources like solar panels and wind farms are leading the charge in providing sustainable solutions. \n\nSolar panels use photovoltaic technology to convert sunlight into electricity. They come in various types such as monocrystalline, polycrystalline, thin-film, and bifacial panels. Innovations like perovskite solar cells and building-integrated photovoltaics are improving efficiency and reducing costs. Solar energy helps reduce greenhouse gas emissions, lowers dependence on fossil fuels, and offers scalable solutions from rooftops to large solar farms. Challenges include weather-dependent output and high upfront costs, but recent advances in technology and energy storage are addressing these issues.\n\nWind farms utilize large turbines to convert wind energy into electricity. Modern turbines are getting larger and more efficient, especially with offshore developments tapping into stronger, steadier winds. Wind energy produces no emissions during operation and offers low operating costs. Challenges include wind variability, visual and noise concerns, and impacts on wildlife. Advances like floating offshore turbines, AI-driven maintenance, and hybrid systems with storage are making wind energy more reliable and economical.\n\nTogether, solar panels and wind farms form key pillars in the global transition to clean energy. Their continued technological progress and deployment expansion are vital for reducing carbon emissions and combating climate change effectively.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_j7Vyv4mzl2Pa0XHKWvidhvCc) *****
-Writing task completed: Climate Change Solutions: Wind Farms
+***** Response from calling tool (call_J0kSPzajwPfk7YipQ6Wxjrny) *****
+The index provided, 0, does not match the current writing task index, 1.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: TaskManagerAgent
+
+TaskManagerAgent (to chat_manager):
+
+[Handing off to WritingAgent]
+
+--------------------------------------------------------------------------------
+
+Next speaker: WritingAgent
+
+
+>>>>>>>> USING AUTO REPLY...
+WritingAgent (to chat_manager):
+
+***** Suggested tool call (call_CTSCll4CWA1L9qbFT6l3mkKf): complete_writing_task *****
+Arguments:
+{"index":1,"topic":"Climate Change Solutions: Solar Panels and Wind Farms - Blog Article","findings":"Climate change demands immediate solutions, and solar panels alongside wind farms have emerged as two of the most promising technologies in the renewable energy sector. These methods harness the power of the sun and wind to generate clean electricity, significantly reducing greenhouse gas emissions and dependency on fossil fuels.\n\nSolar panels utilize photovoltaic technology to convert sunlight directly into electricity. Different types like monocrystalline, polycrystalline, thin-film, and bifacial panels provide options for varying efficiency and cost needs. Innovations such as perovskite solar cells and building-integrated photovoltaics are enhancing efficiency and integration capabilities. While solar energy is sustainable and scalable from residential to utility levels, challenges remain around intermittency and initial costs. Recent advancements, including better energy storage systems and bifacial designs, are improving overall efficiency and reliability.\n\nWind farms capture kinetic energy from wind using large turbines, which have grown in capacity and sophistication over the years. Offshore wind farms, in particular, tap into stronger and more consistent winds, boosting energy production. These farms offer clean energy with minimal environmental impact during operation, though challenges such as wildlife protection and noise considerations need addressing. Recent progress like floating offshore turbines and AI-driven maintenance systems is increasing performance and cost-effectiveness.\n\nTogether, solar panels and wind farms provide scalable, renewable energy solutions essential for combating climate change. Ongoing technological advancements and broader adoption promise a cleaner, sustainable energy future."}
+**************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION complete_writing_task...
+Call ID: call_CTSCll4CWA1L9qbFT6l3mkKf
+Input arguments: {'index': 1, 'topic': 'Climate Change Solutions: Solar Panels and Wind Farms - Blog Article', 'findings': 'Climate change demands immediate solutions, and solar panels alongside wind farms have emerged as two of the most promising technologies in the renewable energy sector. These methods harness the power of the sun and wind to generate clean electricity, significantly reducing greenhouse gas emissions and dependency on fossil fuels.\n\nSolar panels utilize photovoltaic technology to convert sunlight directly into electricity. Different types like monocrystalline, polycrystalline, thin-film, and bifacial panels provide options for varying efficiency and cost needs. Innovations such as perovskite solar cells and building-integrated photovoltaics are enhancing efficiency and integration capabilities. While solar energy is sustainable and scalable from residential to utility levels, challenges remain around intermittency and initial costs. Recent advancements, including better energy storage systems and bifacial designs, are improving overall efficiency and reliability.\n\nWind farms capture kinetic energy from wind using large turbines, which have grown in capacity and sophistication over the years. Offshore wind farms, in particular, tap into stronger and more consistent winds, boosting energy production. These farms offer clean energy with minimal environmental impact during operation, though challenges such as wildlife protection and noise considerations need addressing. Recent progress like floating offshore turbines and AI-driven maintenance systems is increasing performance and cost-effectiveness.\n\nTogether, solar panels and wind farms provide scalable, renewable energy solutions essential for combating climate change. Ongoing technological advancements and broader adoption promise a cleaner, sustainable energy future.'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_CTSCll4CWA1L9qbFT6l3mkKf) *****
+Writing task completed: Climate Change Solutions: Solar Panels and Wind Farms - Blog Article
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -894,67 +917,107 @@ Next speaker: SummaryAgent
 >>>>>>>> USING AUTO REPLY...
 SummaryAgent (to chat_manager):
 
-**Completed Tasks Summary:**
+Summary of Completed Tasks:
 
-**Research Tasks:**
-1. **Solar Panels**
-   - Findings: Recent advancements in solar technology include increased efficiency rates with perovskite materials and bifacial panels. Global solar capacity exceeded 1,000 GW as of 2023, with countries like China, the US, and India as leaders in installation. Benefits include reduced greenhouse gas emissions and energy independence, while challenges consist of high initial costs, land use conflicts, and recycling issues.
+Research Tasks:
+1. Solar Panels: Researched current photovoltaic technologies including monocrystalline, polycrystalline, thin-film, bifacial, and emerging perovskite solar cells. Identified benefits such as clean, scalable renewable energy with low operating costs, and challenges like intermittency, upfront costs, land use, and recycling concerns. Covered recent advancements in perovskite technology, bifacial panels, energy storage integration, and manufacturing improvements.
+2. Wind Farms: Investigated large-scale wind turbine technologies, focusing on horizontal-axis turbines with increasing sizes and offshore development. Highlighted benefits of clean, low-emission electricity and relatively low operations costs, along with challenges including intermittency, environmental impact, noise, and grid infrastructure needs. Noted advancements such as floating offshore turbines, AI-optimized maintenance, larger turbines, and hybrid renewable integrations.
 
-2. **Wind Farms**
-   - Findings: Significant advancements in wind farm technology include larger, more efficient turbines like the GE Haliade-X producing up to 14 MW. Onshore/offshore top capacity locations are identified in the Texas Gulf Coast and Europe (UK, Germany). Wind farms significantly reduce carbon emissions, but they present environmental challenges like habitat disruption and noise pollution, necessitating careful management.
+Writing Tasks:
+1. Longer Form Article: Produced a comprehensive article covering the technologies, benefits, challenges, recent advancements, and future outlook for solar panels and wind farms as key climate change solutions. The article emphasized technological innovations, environmental benefits, and the integration of these renewables for a sustainable energy future.
+2. Blog Article: Created a concise blog post summarizing the role of solar panels and wind farms in combating climate change. The blog highlighted the clean energy potential, types and innovations of each technology, challenges faced, and recent improvements enhancing reliability and cost-effectiveness.
 
-**Writing Tasks:**
-1. **Blog on Solar Panels**
-   - Content: Solar panels offer substantial benefits in reducing greenhouse gas emissions and fostering energy independence, featuring advancements in technology and installation rates while addressing existing challenges. Case studies highlight global efforts in overcoming these challenges.
-
-2. **Article on Wind Farms**
-   - Content: Wind farms are pivotal for sustainable energy, with advancements in turbine efficiency contributing significantly to carbon reduction. The article discusses geographical advantages and environmental considerations, emphasizing the importance of wind farms in achieving renewable energy goals.
+Both the research and writing tasks were completed with a focus on providing detailed, up-to-date information and actionable insights on solar and wind energy technologies as critical components in mitigating climate change.
 
 --------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (73476d77-e5e1-4d87-95e8-dd87fdd65a30): No next speaker selected
 
 ===== RESEARCH =====
 
 0. Topic: Solar Panels
-Details: Gather information on the latest advancements in solar panel technology, current installation rates, benefits, and challenges faced in different regions.
-Research: Recent advancements in solar panel technology include increased efficiency rates, with new photovoltaic materials such as perovskite offering potential efficiency up to 30%. Bifacial solar panels, which capture light from both sides, are also gaining traction. Current installation rates have shown a rapid increase; as of 2023, global solar capacity exceeded 1,000 GW, with countries like China, the US, and India leading installations. The benefits of solar panels include reducing greenhouse gas emissions, low operating costs, and energy independence. However, challenges remain, including high initial costs, land use conflicts, and the recycling of old panels, especially in regions where land and resources are limited or regulations are strict.
+Details: Research current technologies, benefits, challenges, and recent advancements related to solar panels as a climate change solution.
+Research: Current Technologies: Modern solar panels primarily use photovoltaic (PV) technology to convert sunlight directly into electricity. Types include monocrystalline, polycrystalline, thin-film, and bifacial panels. Emerging technologies involve perovskite solar cells, tandem cells combining silicon and perovskite, and building-integrated photovoltaics (BIPV).
+
+Benefits: Solar panels provide clean, renewable energy, significantly reducing greenhouse gas emissions. They reduce dependency on fossil fuels, have low operational costs after installation, and can be deployed at various scales from residential rooftops to large solar farms.
+
+Challenges: Intermittency due to weather and day-night cycles, high upfront costs, land use concerns for large installations, efficiency limits, and recycling or disposal of end-of-life panels.
+
+Recent Advancements: Advances in perovskite technology promise higher efficiencies and lower costs. Bifacial panels increase energy capture by using reflected light. Improved energy storage integration with solar systems enhances reliability. Innovations in manufacturing, such as thinner and more flexible materials, are expanding installation possibilities and reducing material use.
 
 
 1. Topic: Wind Farms
-Details: Research the current status of wind farm technology, including the efficiency of different turbine types, geographical locations with the highest capacity, and the environmental impacts.
-Research: Wind farm technology has made significant progress with the introduction of larger and more efficient turbine models, such as the GE Haliade-X which produces up to 14 MW. Turbines typically achieve efficiencies between 40%-50%. Geographically, regions with the highest wind capacity include the Texas Gulf Coast, the Midwest in the US (notably Iowa), and onshore and offshore sites in Europe, particularly in the UK and Germany. Environmental impacts of wind farms include reduced carbon emissions and habitat disruption during installation, although many studies indicate that wildlife adaptation is possible. Noise pollution and aesthetic concerns are additional factors requiring consideration, yet overall, wind farms contribute significantly to global renewable energy targets.
+Details: Research current technologies, benefits, challenges, and recent advancements related to wind farms as a climate change solution.
+Research: Current Technologies: Wind farms deploy large-scale wind turbines that convert kinetic wind energy into electricity. Turbines use horizontal-axis systems predominantly, with sizes growing to multi-megawatt capacities and offshore developments increasing. Technology improvements include larger rotors, taller towers, and optimized blade design using aerodynamic modeling.
+
+Benefits: Wind farms provide a significant source of clean, renewable energy with near-zero emissions during operation. They reduce fossil fuel reliance and have relatively low operational expenses. Offshore wind farms tap stronger and more consistent winds, producing higher capacity factors.
+
+Challenges: Intermittency and variability of wind, visual and noise concerns, impact on wildlife (e.g., birds and bats), land use conflicts, and the need for grid infrastructure upgrades to handle variable input.
+
+Recent Advancements: Floating offshore wind turbines enable deployment in deeper waters previously inaccessible. Digitalization and AI optimize turbine performance and predictive maintenance. Larger offshore turbines exceeding 10 MW capacity improve economics and energy output. Hybrid projects combining wind with storage or other renewables enhance grid stability.
 
 
 
 ===== WRITING =====
 
-0. Topic: Climate Change Solutions: Solar Panels
-Type: blog
-Details: Write a blog post summarizing the benefits and challenges of solar panel technology in combating climate change. Include recent advancements and case studies.
-Content: Solar panels rank among the most promising solutions in the fight against climate change. Their benefits include significant reductions in greenhouse gas emissions, energy independence, and affordability in long-term energy costs. Recent advancements highlight innovations in solar technology, with high-efficiency perovskite panels pushing performance boundaries, while bifacial solar panels capture sunlight from both sides, improving energy generation. Installation rates have surged, with global capacity surpassing 1,000 GW in 2023, largely driven by countries like China, the US, and India. However, challenges remain. High initial investment, the need for expansive land use, and the environmental impact of solar panel waste pose significant hurdles. A growing number of case studies illustrate how solar initiatives around the world are overcoming these challenges, ultimately showcasing how solar panels can play a vital role in building a sustainable future.
-
-
-1. Topic: Climate Change Solutions: Wind Farms
+1. Topic: Climate Change Solutions: Solar Panels and Wind Farms - Longer Form Article
 Type: article
-Details: Create a longer-form article that provides an in-depth summary of the current state of wind farm technology, discussing various types of turbines, their efficiency, and their impact on reducing carbon emissions.
-Content: Wind farms have emerged as a crucial component in the global pursuit of sustainable energy solutions. The evolution of wind farm technology has led to the development of larger and more efficient turbines, exemplified by models like the GE Haliade-X, capable of producing up to 14 MW of energy. The efficiency of turbines typically ranges between 40% to 50%, significantly contributing to electricity production without carbon emissions. Geographically, the highest wind capacities are found in the Texas Gulf Coast and the Midwest in the US, alongside strong presences in the UK and Germany. While wind farms foster reduction in carbon emissions and promote renewable energy targets, they do pose environmental considerations such as habitat disruption during installation, noise pollution, and aesthetic impact. Yet, comprehensive studies suggest adaptive measures for wildlife and environmental integration are feasible. By investing in wind technology, communities worldwide can accelerate their transition toward cleaner energy, making wind farms a linchpin in the fight against climate change.
+Details: Write a comprehensive article summarizing in-depth research on solar panels and wind farms, covering technologies, benefits, challenges, and future outlook.
+Content: Introduction
+
+Climate change is one of the most urgent global challenges today, driving a critical need for sustainable and renewable energy solutions. Among the most effective technologies addressing this challenge are solar panels and wind farms. These renewable energy sources reduce dependence on fossil fuels, cut greenhouse gas emissions, and help transition the world toward a cleaner energy future.
+
+Solar Panels: Technologies, Benefits, Challenges, and Future Outlook
+
+Solar panels primarily use photovoltaic (PV) technology to convert sunlight into electricity. Various types are widely used: monocrystalline for high efficiency, polycrystalline for cost-effectiveness, thin-film for flexibility, and bifacial panels that capture light from both sides. Innovations like perovskite solar cells and tandem cells—combining silicon and perovskite—are advancing the field by enhancing efficiency and lowering costs. Building-integrated photovoltaics (BIPV) are emerging as aesthetically pleasing, space-saving solutions where solar cells are integrated into building materials.
+
+The benefits of solar energy include clean, renewable electricity generation that sharply reduces carbon emissions, scalable deployment from rooftops to utility-scale farms, and low operational costs after initial investment. However, challenges remain: solar output is intermittent, dependent on weather and daylight; upfront costs can be high; large solar farms require significant land; and end-of-life panel recycling and disposal present environmental concerns.
+
+Recent advancements address many of these challenges. Perovskite technology promises higher efficiency and affordability. Bifacial panels increase energy capture by using reflected sunlight from the environment. The integration of solar with energy storage systems helps mitigate intermittency, increasing reliability. Manufacturing innovations producing thinner, lighter, and flexible panels broaden application possibilities while reducing resource consumption.
+
+Wind Farms: Technologies, Benefits, Challenges, and Future Outlook
+
+Wind farms convert the kinetic energy of wind into electricity through large turbines, predominantly horizontal-axis types. Turbine sizes have grown substantially, with offshore wind farms harnessing powerful, more consistent winds. Advances in blade design, taller towers, and multi-megawatt turbines enhance energy yields and efficiency.
+
+Wind energy provides significant environmental and economic benefits. It produces clean electricity with near-zero emissions, reduces reliance on fossil fuels, and benefits from relatively low operational costs. Offshore wind farms, in particular, achieve higher capacity factors due to steady winds.
+
+However, wind farms face challenges such as the variability of wind, land use and aesthetic impacts, noise concerns, potential harm to wildlife like birds and bats, and demands for upgraded grid infrastructure to manage intermittent energy input.
+
+Recent technological progress includes the development of floating offshore turbines, allowing installation in deep waters previously inaccessible. Digitalization and artificial intelligence applications optimize turbine performance and maintenance scheduling. Larger turbines exceeding 10 MW capacity improve economics of scale. Additionally, hybrid systems combining wind power with energy storage or complementing renewables boost grid stability.
+
+Future Outlook
+
+The future of these technologies lies in their integration with energy storage, smart grids, and improved materials and designs. Investment in research, infrastructure, and policy support will be essential to overcome remaining hurdles and enhance deployment worldwide. As efficiencies improve and costs continue to decline, solar panels and wind farms will play an increasingly vital role in combating climate change.
+
+Conclusion
+
+Solar panels and wind farms stand as pivotal climate change solutions, offering scalable, renewable alternatives to fossil fuels. Continued innovation and expansion of these technologies promise a cleaner, more sustainable energy landscape critical for global climate stability.
+
+
+0. Topic: Climate Change Solutions: Solar Panels and Wind Farms - Blog Article
+Type: article
+Details: Write a blog article summarizing the state of solar panels and wind farms as climate change solutions, highlighting key benefits and recent developments.
+Content: Climate change demands immediate solutions, and solar panels alongside wind farms have emerged as two of the most promising technologies in the renewable energy sector. These methods harness the power of the sun and wind to generate clean electricity, significantly reducing greenhouse gas emissions and dependency on fossil fuels.
+
+Solar panels utilize photovoltaic technology to convert sunlight directly into electricity. Different types like monocrystalline, polycrystalline, thin-film, and bifacial panels provide options for varying efficiency and cost needs. Innovations such as perovskite solar cells and building-integrated photovoltaics are enhancing efficiency and integration capabilities. While solar energy is sustainable and scalable from residential to utility levels, challenges remain around intermittency and initial costs. Recent advancements, including better energy storage systems and bifacial designs, are improving overall efficiency and reliability.
+
+Wind farms capture kinetic energy from wind using large turbines, which have grown in capacity and sophistication over the years. Offshore wind farms, in particular, tap into stronger and more consistent winds, boosting energy production. These farms offer clean energy with minimal environmental impact during operation, though challenges such as wildlife protection and noise considerations need addressing. Recent progress like floating offshore turbines and AI-driven maintenance systems is increasing performance and cost-effectiveness.
+
+Together, solar panels and wind farms provide scalable, renewable energy solutions essential for combating climate change. Ongoing technological advancements and broader adoption promise a cleaner, sustainable energy future.
 
 
 ===== SUMMARY =====
-**Completed Tasks Summary:**
+Summary of Completed Tasks:
 
-**Research Tasks:**
-1. **Solar Panels**
-   - Findings: Recent advancements in solar technology include increased efficiency rates with perovskite materials and bifacial panels. Global solar capacity exceeded 1,000 GW as of 2023, with countries like China, the US, and India as leaders in installation. Benefits include reduced greenhouse gas emissions and energy independence, while challenges consist of high initial costs, land use conflicts, and recycling issues.
+Research Tasks:
+1. Solar Panels: Researched current photovoltaic technologies including monocrystalline, polycrystalline, thin-film, bifacial, and emerging perovskite solar cells. Identified benefits such as clean, scalable renewable energy with low operating costs, and challenges like intermittency, upfront costs, land use, and recycling concerns. Covered recent advancements in perovskite technology, bifacial panels, energy storage integration, and manufacturing improvements.
+2. Wind Farms: Investigated large-scale wind turbine technologies, focusing on horizontal-axis turbines with increasing sizes and offshore development. Highlighted benefits of clean, low-emission electricity and relatively low operations costs, along with challenges including intermittency, environmental impact, noise, and grid infrastructure needs. Noted advancements such as floating offshore turbines, AI-optimized maintenance, larger turbines, and hybrid renewable integrations.
 
-2. **Wind Farms**
-   - Findings: Significant advancements in wind farm technology include larger, more efficient turbines like the GE Haliade-X producing up to 14 MW. Onshore/offshore top capacity locations are identified in the Texas Gulf Coast and Europe (UK, Germany). Wind farms significantly reduce carbon emissions, but they present environmental challenges like habitat disruption and noise pollution, necessitating careful management.
+Writing Tasks:
+1. Longer Form Article: Produced a comprehensive article covering the technologies, benefits, challenges, recent advancements, and future outlook for solar panels and wind farms as key climate change solutions. The article emphasized technological innovations, environmental benefits, and the integration of these renewables for a sustainable energy future.
+2. Blog Article: Created a concise blog post summarizing the role of solar panels and wind farms in combating climate change. The blog highlighted the clean energy potential, types and innovations of each technology, challenges faced, and recent improvements enhancing reliability and cost-effectiveness.
 
-**Writing Tasks:**
-1. **Blog on Solar Panels**
-   - Content: Solar panels offer substantial benefits in reducing greenhouse gas emissions and fostering energy independence, featuring advancements in technology and installation rates while addressing existing challenges. Case studies highlight global efforts in overcoming these challenges.
-
-2. **Article on Wind Farms**
-   - Content: Wind farms are pivotal for sustainable energy, with advancements in turbine efficiency contributing significantly to carbon reduction. The article discusses geographical advantages and environmental considerations, emphasizing the importance of wind farms in achieving renewable energy goals.
+Both the research and writing tasks were completed with a focus on providing detailed, up-to-date information and actionable insights on solar and wind energy technologies as critical components in mitigating climate change.
 
 ===== SPEAKER ORDER =====
 
@@ -966,6 +1029,10 @@ ResearchAgent
 ResearchAgent
 TaskManagerAgent
 WritingAgent
+TaskManagerAgent
+WritingAgent
+WritingAgent
+TaskManagerAgent
 WritingAgent
 WritingAgent
 TaskManagerAgent
