@@ -28,7 +28,7 @@ Human in the Loop is particularly valuable when:
 
 ## Implementing HITL in AG2
 
-Creating a Human in the Loop workflow in AG2 is straightforward using ConversableAgent with the `human_input_mode` parameter:
+Creating a Human in the Loop workflow in AG2 is straightforward using `ConversableAgent` whereby the agent is the human in the loop, controlled through the `human_input_mode` parameter:
 
 ```python hl_lines="6 13"
 from autogen import ConversableAgent
@@ -49,7 +49,7 @@ ai_agent = ConversableAgent(
 
 The `human_input_mode` parameter has three possible values:
 
-- `ALWAYS`: The agent always asks for human input before responding
+- `ALWAYS`: The agent uses the human input as its response
 - `TERMINATE`: The agent asks for input only when terminating a conversation
 - `NEVER`: The agent never asks for human input
 
@@ -57,11 +57,23 @@ The `human_input_mode` parameter has three possible values:
 
 ## Financial Compliance Example
 
-Let's build a financial compliance system that automatically reviews transactions but flags suspicious ones for human review. This example builds upon our basic ConversableAgent from the previous section with two critical improvements:
+Let's build a financial compliance system that automatically reviews transactions but flags suspicious ones for human review. This example builds upon our basic `ConversableAgent` from the previous section with two critical improvements:
 
 - **Sophisticated Instructions**: Instead of just answering questions about suspicious transactions, our finance bot now actively identifies and processes them according to specific criteria.
 - **Human Input Mode**: Setting `human_input_mode="ALWAYS"` creates a checkpoint where a human must provide input before the workflow can continue - essential for regulatory compliance.
 
+The workflow follows this pattern:
+
+```mermaid
+flowchart TD
+    Start([Start]) --> Finance[Finance_bot]
+    Finance -- "Request approval for suspicious transactions" --> Human[Human Agent]
+    Human -- "Approve/Reject" --> Finance
+    Finance -- "All transactions processed" --> Human
+    Human -- "Exit" --> End([End])
+```
+
+### Establishing finance and human agents
 
 ```python hl_lines="17-25 37"
 from autogen import ConversableAgent, LLMConfig
@@ -76,7 +88,6 @@ llm_config = LLMConfig(
     model="gpt-4o-mini",
     api_key=os.environ.get("OPENAI_API_KEY"),
     temperature=0.2,
-    cache_seed=42
 )
 
 # Define the system message for our finance bot
@@ -105,19 +116,6 @@ human = ConversableAgent(
 ```
 
 Without human-in-the-loop, the financial bot might incorrectly approve suspicious transactions. With HITL, we create a crucial safety mechanism where human judgment intervenes precisely when needed.
-
-### Financial HITL Flow
-
-In our financial compliance system, the workflow follows this pattern:
-
-```mermaid
-flowchart TD
-    Start([Start]) --> Finance[Finance_bot]
-    Finance -- "Request approval for suspicious transactions" --> Human[Human Agent]
-    Human -- "Approve/Reject" --> Finance
-    Finance -- "All transactions processed" --> Human
-    Human -- "Exit" --> End([End])
-```
 
 ### Starting the Conversation
 
@@ -188,7 +186,6 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
         model="gpt-4o-mini",
         api_key=os.environ.get("OPENAI_API_KEY"),
         temperature=0.2,
-        cache_seed=42
     )
 
     # Define the system message for our finance bot
@@ -247,8 +244,8 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
 ### How to Run This Example
 
 - Save the code above to a file (e.g., `financial_compliance.py`)
-- Set your OpenAI API key in your environment variable
-- Make sure you have AG2 installed: pip install ag2[openai]
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
 - Run the script: `python financial_compliance.py`
 
 
@@ -256,7 +253,7 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
 
 When you run this code, you'll see the finance bot analyze each transaction.
 
-For suspicious transactions, you'll be prompted to provide input - either type **approve**, **deny**, or provide reasoning.
+For suspicious transactions, you'll be prompted to provide input - type either **approve**, **deny**, or provide reasoning.
 
 For normal transactions, the finance bot will automatically approve them. At the end, you'll see a summary report of all the transactions processed.
 
