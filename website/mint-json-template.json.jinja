@@ -105,25 +105,64 @@
         {
           "group": "Basic Concepts",
           "pages": [
-            {
-              "group": "LLM Configuration",
-              "pages":
-              [
-                "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
-                "docs/user-guide/basic-concepts/llm-configuration/structured-outputs"
-              ]
-            },
+            "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
             "docs/user-guide/basic-concepts/conversable-agent",
             "docs/user-guide/basic-concepts/human-in-the-loop",
+            "docs/user-guide/basic-concepts/introducing-swarm-orchestration",
+            "docs/user-guide/basic-concepts/introducing-tools",
+            "docs/user-guide/basic-concepts/structured-outputs"
+          ]
+        },
+        {
+          "group": "Advanced Concepts",
+          "pages": [
+            "docs/user-guide/advanced-concepts/llm-configuration-deep-dive",
             {
-              "group": "Agent Orchestration",
+              "group": "Agent Orchestration Deep dive",
               "pages":
               [
                 "docs/user-guide/basic-concepts/orchestration/orchestrations",
+                "docs/user-guide/advanced-concepts/two-agent-chat",
                 "docs/user-guide/basic-concepts/orchestration/sequential-chat",
                 "docs/user-guide/basic-concepts/orchestration/nested-chat",
-                "docs/user-guide/basic-concepts/orchestration/swarm",
-                "docs/user-guide/basic-concepts/orchestration/ending-a-chat"
+                {
+                  "group": "GroupChat",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/groupchat/groupchat",
+                    "docs/user-guide/advanced-concepts/groupchat/tools",
+                    "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
+                    "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
+                  ]
+                },
+                {
+                  "group": "Swarm",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/swarm/overview",
+                    "docs/user-guide/advanced-concepts/swarm/deep-dive",
+                    "docs/user-guide/advanced-concepts/swarm/nested-chat",
+                    "docs/user-guide/advanced-concepts/swarm/concept-code",
+                    "docs/user-guide/advanced-concepts/swarm/use-case"
+                  ]
+                },
+                "docs/user-guide/basic-concepts/orchestration/ending-a-chat",
+                {
+                  "group": "Pattern Cookbook - Real World Examples",
+                  "pages":
+                    [
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/overview",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/escalation",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/feedback_loop",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/hierarchical",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/organic",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/pipeline",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/redundant",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/star",
+                      "docs/user-guide/advanced-concepts/pattern-cookbook/triage_with_tasks"
+                    ]
+                  }
               ]
             },
             {
@@ -151,32 +190,6 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "group": "Advanced Concepts",
-          "pages": [
-            "docs/user-guide/advanced-concepts/rag",
-            {
-              "group": "GroupChat",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/groupchat/groupchat",
-                "docs/user-guide/advanced-concepts/groupchat/tools",
-                "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
-                "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
-              ]
-            },
-            {
-              "group": "Swarm",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/swarm/deep-dive",
-                "docs/user-guide/advanced-concepts/swarm/nested-chat",
-                "docs/user-guide/advanced-concepts/swarm/concept-code",
-                "docs/user-guide/advanced-concepts/swarm/use-case"
-              ]
             },
             {
               "group": "RealtimeAgent",
@@ -188,26 +201,8 @@
                 "docs/user-guide/advanced-concepts/realtime-agent/twilio"
               ]
             },
-            "docs/user-guide/advanced-concepts/code-execution",
-            "docs/user-guide/advanced-concepts/conversation-patterns-deep-dive",
-            "docs/user-guide/advanced-concepts/llm-configuration-deep-dive",
-            {
-              "group": "Pattern Cookbook",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/pattern-cookbook/overview",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/escalation",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/feedback_loop",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/hierarchical",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/organic",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/pipeline",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/redundant",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/star",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/triage_with_tasks"
-
-              ]
-            }
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/advanced-concepts/code-execution"
           ]
         },
         {

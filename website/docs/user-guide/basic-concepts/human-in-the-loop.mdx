@@ -1,128 +1,309 @@
 ---
-title: Human in the loop
+title: "Human in the Loop: Adding Human Oversight"
+sidebarTitle: "Human in the Loop: Adding Human Oversight"
 ---
 
-## What is Human In The Loop (HITL) - An Analogy
+Human in the Loop (HITL) is a powerful pattern that enables your AG2 agents to collaborate with humans during their workflow. Instead of making all decisions independently, agents can check with human operators at critical decision points, combining AI efficiency with human judgment.
 
-Think of Human In the Loop (HITL) like a cooking assistant in your kitchen.
+## An Analogy for HITL
 
-The assistant can chop veggies, measure ingredients, and follow a recipe fast, but it checks with you before tossing everything into the pot.
+Think of Human in the Loop like a hospital treatment system:
 
-Why? Because:
+- Doctors (AI agents) examine patients, run tests, and prepare treatment plans
+- For serious or unusual conditions, they consult with senior specialists (humans) before proceeding
+- The specialist provides final approval for critical treatments or unusual cases
+- The doctor then handles all the details once approval is given
+- This partnership combines the doctor's efficiency with the specialist's judgment for important decisions
 
-- Some dishes need your taste test to get the flavor just right
-- A mistake could ruin the meal
-- You might want tweaks based on who's eating
+This approach ensures routine cases are handled quickly while critical decisions receive proper oversight.
 
-*This setup lets the assistant do the heavy lifting while you make the big calls.*
+## When to Use HITL
 
-## A More Formal Definition of HITL
+Human in the Loop is particularly valuable when:
 
-Human in the Loop (HITL) is a workflow pattern that enables Agents to collaborate with humans to complete tasks.
+- Decisions require nuanced judgment (e.g., financial compliance, legal matters)
+- Errors could have significant consequences (e.g., financial transactions, safety-critical systems)
+- The process benefits from subjective input (e.g., content approval, design choices)
+- Regulatory requirements mandate human oversight (e.g., financial services, healthcare)
 
-It allows for human intervention at critical points in the process, ensuring that the final output meets the desired quality and accuracy standards.
+## Implementing HITL in AG2
 
-Usually, the human provides authority, approval or feedback - whereas the agent does the heavy lifting.
+Creating a Human in the Loop workflow in AG2 is straightforward using `ConversableAgent` whereby the agent is the human in the loop, controlled through the `human_input_mode` parameter:
 
-## HITL Flow Diagram
+```python hl_lines="6 13"
+from autogen import ConversableAgent
 
-```mermaid
-graph TD
-    A[Agent Starts Task] --> B{Analysis or Processing}
-    B --> C{Needs Human Input?}
-    C -->|Yes| D[Prompt Human]
-    D --> E[Human Provides Input]
-    E --> F[Agent Updates Task]
-    C -->|No| F
-    F --> G{Task Complete?}
-    G -->|No| B
-    G -->|Yes| H[Deliver Output]
+# Create a human agent that will always prompt for input
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS",  # Always ask for human input
+)
+
+# Create an AI agent that never asks for human input directly
+ai_agent = ConversableAgent(
+    name="ai_assistant",
+    system_message="You are a helpful AI assistant",
+    human_input_mode="NEVER",  # Never ask for human input directly
+)
 ```
 
-## When to Use HITL - A Few High Level Examples
+The `human_input_mode` parameter has three possible values:
 
-- Tasks require nuanced judgment (e.g., legal compliance, creative content).
-- Errors could have significant consequences (e.g., medical diagnostics, financial audits).
-- The system needs to adapt to subjective or context-specific requirements (e.g., personalized lesson planning)
-
-## Example #1: Lesson Planning Assistant
-
-In the previous [ConversableAgent](/docs/user-guide/basic-concepts/conversable-agent) example we demonstrated that you were able to chat with an agent.
-
-As you build your own workflows, you can decide if and how to use your *human in the loop* agents. As demonstrated previously, and in the following example, to do so, simply use the `ConversableAgent` and set the `human_input_mode` to `ALWAYS`.
-
-Let's start to build a more useful scenario, a classroom lesson planner, and create our human agent.
-
-You'll also see in this example that you can use the `system_message` property to give detailed instructions to agents.
-
-In this example we demonstrate a simulation of a _financial compliance assistant_ that:
-
--   Automatically reviews randomly generated transactions.
--   Flags suspicious ones for **human review** (interactive).
--   Produces a summary report at the end indicating:
-    -   Auto-approved transactions
-    -   Transactions denied or left pending for the human
-
-<Note>
-
-You must set the environment variable `OPENAI_API_KEY` or define credentials in your `OAI_CONFIG_LIST`.
-**If missing**, you'll encounter authentication errors or your agent won't be able to connect to the LLM backend.
-
-</Note>
+- `ALWAYS`: The agent uses the human input as its response
+- `TERMINATE`: The agent asks for input only when terminating a conversation
+- `NEVER`: The agent never asks for human input
 
 
-import Example from "/snippets/python-examples/humanintheloop.mdx";
 
-<Example/>
+## Financial Compliance Example
 
-#### See it in Action:
+Let's build a financial compliance system that automatically reviews transactions but flags suspicious ones for human review. This example builds upon our basic `ConversableAgent` from the previous section with two critical improvements:
 
-<script src="https://asciinema.org/a/jpJ44gZCcxyQXO26cP81ToCo6.js" id="asciicast-jpJ44gZCcxyQXO26cP81ToCo6" async="true"></script>
+- **Sophisticated Instructions**: Instead of just answering questions about suspicious transactions, our finance bot now actively identifies and processes them according to specific criteria.
+- **Human Input Mode**: Setting `human_input_mode="ALWAYS"` creates a checkpoint where a human must provide input before the workflow can continue - essential for regulatory compliance.
 
-1. Create our human-in-the-loop agent by setting its `human_input_mode`, and no `llm_config` is required.
+The workflow follows this pattern:
 
-2. Our `the_human` agent starts a conversation by sending a message to `lesson_planner`. An agent's `initiate_chat` method is used to start a conversation between two agents.
+```mermaid
+flowchart TD
+    Start([Start]) --> Finance[Finance_bot]
+    Finance -- "Request approval for suspicious transactions" --> Human[Human Agent]
+    Human -- "Approve/Reject" --> Finance
+    Finance -- "All transactions processed" --> Human
+    Human -- "Exit" --> End([End])
+```
 
-This creates a conversation between you and the lesson planner agent.
+### Establishing finance and human agents
+
+```python hl_lines="17-25 37"
+from autogen import ConversableAgent, LLMConfig
+import os
+import random
+
+# Note: Make sure to set your API key in your environment first
+
+# Configure the LLM
+llm_config = LLMConfig(
+    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.environ.get("OPENAI_API_KEY"),
+    temperature=0.2,
+)
+
+# Define the system message for our finance bot
+finance_system_message = """
+You are a financial compliance assistant. You will be given a set of transaction descriptions.
+For each transaction:
+- If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+- Otherwise, approve it automatically.
+Provide the full set of transactions to approve at one time.
+If the human gives a general approval, it applies to all transactions requiring approval.
+When all transactions are processed, summarize the results and say "You can type exit to finish".
+"""
+
+# Create the finance agent with LLM intelligence
+with llm_config:
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        system_message=finance_system_message,
+    )
+
+# Create the human agent for oversight
+human = ConversableAgent(
+    name="human",
+    human_input_mode="ALWAYS",  # Always ask for human input
+)
+```
+
+Without human-in-the-loop, the financial bot might incorrectly approve suspicious transactions. With HITL, we create a crucial safety mechanism where human judgment intervenes precisely when needed.
+
+### Starting the Conversation
+
+Now let's generate some sample transactions and start the conversation between our agents:
+
+```python
+# Generate sample transactions - this creates different transactions each time you run
+VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+def generate_transaction():
+    amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+    vendor = random.choice(VENDORS)
+    memo = random.choice(MEMOS)
+    return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+# Generate 3 random transactions
+transactions = [generate_transaction() for _ in range(3)]
+
+# Format the initial message
+initial_prompt = (
+    "Please process the following transactions one at a time:\n\n" +
+    "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+)
+
+# Start the conversation from the human agent
+response = human.run(
+    recipient=finance_bot,
+    message=initial_prompt,
+)
+
+# Display the response
+response.process()
+```
+
+### What Happens During Execution
+
+When this code runs:
+
+- The finance bot receives the list of transactions.
+- It analyzes each transaction to determine if it's suspicious:
+
+    - Amounts over $10,000 are flagged as suspicious
+    - Vague memos (like "Confidential") might trigger review
+
+- Regular transactions (small amounts, familiar vendors) are automatically approved.
+- All suspicious transactions are collected and presented to the human for approval at once.
+- When the human responds with approval, the finance bot processes all flagged transactions.
+- The finance bot provides a summary of all transactions and indicates the user can type "exit" to finish.
+- The human types "exit" to end the conversation.
+
+### Complete Code Example
+
+Here's the complete, ready-to-run code for our financial compliance Human in the Loop example. You can copy and paste this into a Python file and run it to see the interaction in action:
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    import os
+    import random
+
+    # Note: Make sure to set your API key in your environment first
+
+    # Configure the LLM
+    llm_config = LLMConfig(
+        api_type="openai",
+        model="gpt-4o-mini",
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        temperature=0.2,
+    )
+
+    # Define the system message for our finance bot
+    finance_system_message = """
+    You are a financial compliance assistant. You will be given a set of transaction descriptions.
+    For each transaction:
+    - If it seems suspicious (e.g., amount > $10,000, vendor is unusual, memo is vague), ask the human agent for approval.
+    - Otherwise, approve it automatically.
+    Provide the full set of transactions to approve at one time.
+    If the human gives a general approval, it applies to all transactions requiring approval.
+    When all transactions are processed, summarize the results and say "You can type exit to finish".
+    """
+
+    # Create the finance agent with LLM intelligence
+    with llm_config:
+        finance_bot = ConversableAgent(
+            name="finance_bot",
+            system_message=finance_system_message,
+        )
+
+    # Create the human agent for oversight
+    human = ConversableAgent(
+        name="human",
+        human_input_mode="ALWAYS",  # Always ask for human input
+    )
+
+    # Generate sample transactions - this creates different transactions each time you run
+    VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
+    MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
+
+    def generate_transaction():
+        amount = random.choice([500, 1500, 9999, 12000, 23000, 4000])
+        vendor = random.choice(VENDORS)
+        memo = random.choice(MEMOS)
+        return f"Transaction: ${amount} to {vendor}. Memo: {memo}."
+
+    # Generate 3 random transactions
+    transactions = [generate_transaction() for _ in range(3)]
+
+    # Format the initial message
+    initial_prompt = (
+        "Please process the following transactions one at a time:\n\n" +
+        "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
+    )
+
+    # Start the conversation from the human agent
+    response = human.run(
+        recipient=finance_bot,
+        message=initial_prompt,
+    )
+
+    # Display the response
+    response.process()
+    ```
+
+### How to Run This Example
+
+- Save the code above to a file (e.g., `financial_compliance.py`)
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
+- Run the script: `python financial_compliance.py`
 
 
-## Example #2: Financial Fraud Detector
+#### Example Output
 
-In this example, we will create a financial fraud detection agent that uses a human in the loop to verify potential fraud cases.
-The agent will analyze transactions and flag any suspicious ones for human review. The human will then decide whether to approve or reject the flagged transactions.
+When you run this code, you'll see the finance bot analyze each transaction.
 
-At the end, the agent will summarize the results of the review.
+For suspicious transactions, you'll be prompted to provide input - type either **approve**, **deny**, or provide reasoning.
 
-import ExampleHITLFinance from "/snippets/python-examples/humanintheloop_financial.mdx";
+For normal transactions, the finance bot will automatically approve them. At the end, you'll see a summary report of all the transactions processed.
 
-<ExampleHITLFinance/>
+```console
+human (to finance_bot):
 
-#### See it in Action:
+Please process the following transactions one at a time:
 
-<script src="https://asciinema.org/a/qxYX2MAm4ckeWXpZ8tnIDBWyN.js" id="asciicast-qxYX2MAm4ckeWXpZ8tnIDBWyN" async="true"></script>
+1. Transaction: $1500 to Unicorn LLC. Memo: Quarterly supplies.
+2. Transaction: $12000 to Acme Corp. Memo: Reimbursement.
+3. Transaction: $4000 to CyberSins Ltd. Memo: Routine payment.
 
+--------------------------------------------------------------------------------
 
-## Quick Recap of HITL Technical Details
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to human):
 
+Here are the transactions to process:
 
-[ConversableAgent](/docs/user-guide/basic-concepts/conversable-agent):
+1. Transaction: $1500 to Unicorn LLC. Memo: Quarterly supplies. - **Approved automatically.**
+2. Transaction: $12000 to Acme Corp. Memo: Reimbursement. - **Requires approval.**
+3. Transaction: $4000 to CyberSins Ltd. Memo: Routine payment. - **Approved automatically.**
 
-Represents either a bot or a human participant in the conversation.
+Please provide approval for the transaction requiring it.
 
-The system_message guides the AI agent’s role or reasoning style.
+--------------------------------------------------------------------------------
+Replying as human. Provide feedback to finance_bot. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approve
+human (to finance_bot):
 
-[LLMConfig](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive/):
+approve
 
-Encapsulates model and API settings.
+--------------------------------------------------------------------------------
 
-Uses a JSON config (e.g., `OAI_CONFIG_LIST`) to load the model and credentials.
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to human):
 
-`human_input_mode="ALWAYS"`:
+All transactions have been processed:
 
-Ensures the human agent (simulated via terminal) must respond when prompted by the system.
+1. Transaction: $1500 to Unicorn LLC. Memo: Quarterly supplies. - Approved.
+2. Transaction: $12000 to Acme Corp. Memo: Reimbursement. - Approved.
+3. Transaction: $4000 to CyberSins Ltd. Memo: Routine payment. - Approved.
 
-Ensures manual intervention in ambiguous or flagged cases.
+You can type exit to finish.
 
-`initiate_chat(...)`:
+--------------------------------------------------------------------------------
+Replying as human. Provide feedback to finance_bot. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
 
-Starts the conversation from one agent (in this case, human) by sending a message to another (finance_bot).
+>>>>>>>> TERMINATING RUN (e7d81dde-89ff-4cfc-bfd5-26285f5100d0): User requested to end the conversation
+```
+
+## Next Steps
+
+Now that you understand how to implement Human in the Loop workflows, let's explore how to connect multiple agents together! Head over to Agent Orchestration to learn how to build more complex multi-agent systems that can handle sophisticated tasks through collaboration.

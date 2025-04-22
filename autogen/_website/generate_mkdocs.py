@@ -469,6 +469,10 @@ def format_navigation(
         "- Quick Start\n    - [Quick Start](docs/quick-start.md)\n",
         "- [Quick Start](docs/quick-start.md)\n",
     )
+    ret_val = ret_val.replace(
+        "- Basic Concepts\n",
+        "- [Basic Concepts](docs/user-guide/basic-concepts/overview.md)\n",
+    )
     ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
     return ret_val
 

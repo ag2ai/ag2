@@ -1107,7 +1107,7 @@ def navigation() -> list[NavigationGroup]:
 def expected_nav() -> str:
     return """- [Quick Start](docs/quick-start.md)
 - User Guide
-    - Basic Concepts
+    - [Basic Concepts](docs/user-guide/basic-concepts/overview.md)
         - [Installing AG2](docs/user-guide/basic-concepts/installing-ag2.md)
         - LLM Configuration
             - [LLM Configuration](docs/user-guide/basic-concepts/llm-configuration/llm-configuration.md)
