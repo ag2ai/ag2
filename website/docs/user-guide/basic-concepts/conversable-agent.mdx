@@ -10,11 +10,11 @@ The [`ConversableAgent`](/docs/api-reference/autogen/ConversableAgent) is the fu
 - Follow instructions defined in its system message
 - Execute tools and functions when needed
 
-Every agent in your AG2 system is either a ConversableAgent or built upon one, making it the most important class to understand.
+Every agent in your AG2 system is either a `ConversableAgent` or built upon one, making it the most important class to understand.
 
 ## Creating a ConversableAgent
 
-Once you've set up your LLM configuration, creating a ConversableAgent is straightforward:
+Once you've set up your LLM configuration, creating a `ConversableAgent` is straightforward:
 
 ```python hl_lines="7-11"
 from autogen import ConversableAgent, LLMConfig
@@ -30,9 +30,9 @@ my_agent = ConversableAgent(
 )
 ```
 
-### Key Parameters
+**Key Parameters**
 
-When creating a ConversableAgent, there are several important parameters to consider:
+When creating a `ConversableAgent`, there are several important parameters to consider:
 
 - `name`: A unique identifier for your agent
 - `system_message`: Instructions that define the agent's role, personality, and behavior
@@ -40,7 +40,7 @@ When creating a ConversableAgent, there are several important parameters to cons
 
 ## Interacting with a ConversableAgent
 
-The simplest way to interact with a ConversableAgent is to use the [`run()`](/docs/api-reference/autogen/ConversableAgent#run) and `process()` methods. Here's a basic example:
+The simplest way to interact with a `ConversableAgent` is to use the [`run()`](/docs/api-reference/autogen/ConversableAgent#run) and `process()` methods. Here's a basic example:
 
 ```python hl_lines="2-6 9"
 # Establish the workflow
@@ -60,7 +60,7 @@ import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
 
 ## Financial Compliance Example
 
-Let's create a simple financial agent using ConversableAgent:
+Let's create a simple financial agent using `ConversableAgent`:
 
 ```python
 from autogen import ConversableAgent, LLMConfig
@@ -97,11 +97,11 @@ In this simple example:
 - We're asking it a straightforward question about suspicious transactions
 - We're limiting the conversation to just one turn by setting `max_turns=1`. This is one of the many ways to end a conversation. You can find more options in the [Ending a chat](/docs/user-guide/basic-concepts/orchestration/ending-a-chat).
 
-### How to Run This Example
+## How to Run This Example
 
 - Save the code above to a file (e.g., `financial_compliance.py`)
-- Set your OpenAI API key in your environment variable
-- Make sure you have AG2 installed: pip install ag2[openai]
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
 - Run the script: `python financial_compliance.py`
 
 #### Example Output
@@ -149,17 +149,7 @@ Financial institutions often use automated systems to monitor transactions for t
 
 This is just the beginning of what you can do with `ConversableAgent`. In subsequent sections, we'll expand this example to handle more complex financial tasks and interactions.
 
-<Tip>
-
-Looking for real-world usage of `ConversableAgent`?
-Check out these notebook examples:
-
-- [Sequential Chats](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchats_sequential_chats/?h=conversable)
-- [Image Generation Capability](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_image_generation_capability/?h=conversable)
-
-</Tip>
-
 ## Next Steps
 Now that you understand the basics of `ConversableAgent`, it's time to add some human oversight!
 
-For financial compliance systems, human review of flagged transactions adds an essential layer of security and compliance. In the next section, you'll see how to build upon our simple example to create a more robust financial assistant with human oversight.
+For financial compliance systems, a human review of flagged transactions adds an essential layer of security and compliance. In the next section, you'll see how to build upon our simple example to create a more robust financial assistant with human oversight.
