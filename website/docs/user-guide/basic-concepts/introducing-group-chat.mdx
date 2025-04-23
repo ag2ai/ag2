@@ -95,7 +95,7 @@ Here's how we'll enhance our system:
 
 - Keep the `finance_bot` focused on transaction processing and human approval
 - Create a new `summary_bot` specialized in generating formatted transaction reports
-- Use the group chat pattern to automatically transition from `finance_bot` to `summary_bot` when all transactions are processed
+- Use the group chat with `AutoPattern` pattern to automatically transition from `finance_bot` to `summary_bot` when all transactions are processed
 - Maintain human oversight for suspicious transaction approval and to terminate the conversation
 
 ### Implementation: Creating the Necessary Agents
@@ -347,10 +347,10 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 
 ### How to Run This Example
 
-- Save the code above to a file (e.g., `financial_compliance_group_chat.py`)
-- Set your OpenAI API key in your environment variable
-- Make sure you have AG2 installed: pip install ag2[openai]
-- Run the script: python `financial_compliance_group_chat.py`
+- Save the code above to a file (e.g., `financial_compliance.py`)
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
+- Run the script: python `financial_compliance.py`
 
 ### Example Output
 
