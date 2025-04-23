@@ -18,18 +18,18 @@ As our financial compliance system evolves, we might need to:
 
 Each of these tasks requires different specialized knowledge and skills. This is where AG2's orchestration patterns come in - they allow us to coordinate multiple specialized agents to work together seamlessly.
 
-## Introducing the Swarm Pattern
+## Introducing the Group Chat Pattern
 
-AG2 offers several orchestration patterns, and for our evolving financial compliance system, the swarm pattern is particularly powerful. It allows specialized agents to collaborate with dynamic handoffs to achieve complex workflows.
+AG2 offers several orchestration patterns, and for our evolving financial compliance system, the Group Chat pattern is particularly powerful. It allows specialized agents to collaborate with dynamic handoffs to achieve complex workflows.
 
-**An Analogy for Swarm Pattern:**
+**An Analogy for Group Chat Pattern**:
 
-Continuing our hospital treatment system analogy from the HITL. Think of the swarm pattern like a hospital emergency in the hospital:
+Continuing our hospital treatment system analogy from the HITL. Think of the Group Chat pattern like a hospital emergency in the hospital:
 
 - The patient first sees whichever specialist is most appropriate (a triage agent)
 - Each specialist (specialized agent) handles a specific aspect of patient care
 - After completing their work, specialists can explicitly transfer the patient to another specialist based on what they found (agent handoffs)
-- If a specialist doesn't specify who should see the patient next, we can revert to the hospital coordinator (swarm manager) who can review the patient's chart and decide which specialist would be most appropriate
+- If a specialist doesn't specify who should see the patient next, we can revert to the hospital coordinator (Group chat manager) who can review the patient's chart and decide which specialist would be most appropriate
 - The patient record follows them through the entire process (shared context)
 - The entire system works together to ensure the patient receives the right care at the right time
 
@@ -37,10 +37,26 @@ This pattern leverages specialized skills while maintaining a cohesive workflow 
 
 ## From Concept to Implementation
 
-Implementing a swarm in AG2 is straightforward using the [`initiate_swarm_chat`](/docs/api-reference/autogen/initiate_swarm_chat) method:
+Implementing a group chat in AG2 is a simple two-step process:
 
-```python hl_lines="12-18"
-from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+- First, **create a pattern** that defines how agents will interact
+- Then, **initialize the group chat** using the pattern
+
+The pattern defines the orchestration logic - which agents are involved, who speaks first, and how to transition between agents. AG2 provides several pre-defined patterns to choose from:
+
+- **AutoPattern**: Automatically selects the next speaker based on conversation context
+- **RoundRobinPattern**: Agents speak in a defined sequence
+- **RandomPattern**: Randomly selects the next speaker
+- **ManualPattern**: Allows human selection of the next speaker
+
+The easiest pattern to get started with is the **AutoPattern**, where a group manager agent automatically selects agents to speak by evaluating the messages in the chat and the descriptions of the agents. This creates a natural workflow where the most appropriate agent responds based on the conversation context.
+
+Here's how you implement a basic group chat:
+
+```python hl_lines="14-19 22-25"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 
 # Create your specialized agents
 with llm_config:
@@ -50,50 +66,46 @@ with llm_config:
 # Create human agent if needed
 human = ConversableAgent(name="human", human_input_mode="ALWAYS")
 
-# Initialize the swarm
-result, _, _ = initiate_swarm_chat(
+# Set up the pattern for orchestration
+pattern = AutoPattern(
     initial_agent=agent_1,              # Agent that starts the workflow
-    agents=[agent_1, agent_2, human],   # All agents in the swarm
+    agents=[agent_1, agent_2],          # All agents in the group chat
+    user_agent=human,                   # Human agent for interaction
+    group_manager_args={"llm_config": llm_config}  # Config for group manager
+)
+
+# Initialize the group chat
+result, context_variables, last_agent = initiate_group_chat(
+    pattern=pattern,
     messages="Initial request",         # Starting message
-    swarm_manager_args={"llm_config": llm_config},  # Config for swarm manager
-    after_work=AfterWorkOption.SWARM_MANAGER        # Revert to swarm manager after an agent finishes
 )
 ```
 
-**The AfterWork Concept:**
+## Enhancing Our Financial Compliance System with Group Chat
 
-A core component to the swarm pattern is the concept of "AfterWork" - what happens after an agent completes its task. This is what makes swarms powerful and flexible:
-
-- Each agent performs its specialized task, then control needs to pass somewhere
-- The AfterWork mechanism determines where control goes next: to another agent, back to a manager, to a human, or simply end
-- This creates dynamic, intelligent workflows that can adapt based on the results of each step
-
-
-
-
-## Enhancing Our Financial Compliance System with Swarm
-
-Now that we understand the swarm pattern, let's see how it solves our challenge of adding specialized summary reporting to our financial compliance system.
+Now that we understand the group chat pattern, let's see how it solves our challenge of adding specialized summary reporting to our financial compliance system.
 
 ### The Challenge
 
 In our Human in the Loop example, we built a `finance_bot` that could process transactions and get human approval for suspicious ones. However, we now need professional, formatted summary reports of all the transactions.
 
-### Our Swarm Solution
+### Our Group Chat Solution
 
 Here's how we'll enhance our system:
 
 - Keep the `finance_bot` focused on transaction processing and human approval
 - Create a new `summary_bot` specialized in generating formatted transaction reports
-- Use the swarm pattern to automatically transition from `finance_bot` to `summary_bot` when all transactions are processed
+- Use the group chat with `AutoPattern` pattern to automatically transition from `finance_bot` to `summary_bot` when all transactions are processed
 - Maintain human oversight for suspicious transaction approval and to terminate the conversation
 
 ### Implementation: Creating the Necessary Agents
 
-Let's create our specialized agents for the financial compliance swarm:
+Let's create a new specialized agent for generating summary reports. We'll also keep our existing `finance_bot` for transaction processing and a human agent for oversight.
 
-```python hl_lines="29-39 47-50"
-from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+```python hl_lines="30-40 48-51"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 
 import os
 import random
@@ -150,11 +162,11 @@ human = ConversableAgent(
 )
 ```
 
-### Initiating the Swarm
+### Initiating the Group Chat
 
-Now let's set up our swarm chat with these specialized agents:
+Now let's set up our group chat with these specialized agents. We will be using the `AutoPattern` to manage the conversation flow.
 
-```python hl_lines="21-27"
+```python hl_lines="21-26 29-32"
 # Generate sample transactions - this creates different transactions each time you run
 VENDORS = ["Staples", "Acme Corp", "CyberSins Ltd", "Initech", "Globex", "Unicorn LLC"]
 MEMOS = ["Quarterly supplies", "Confidential", "NDA services", "Routine payment", "Urgent request", "Reimbursement"]
@@ -174,39 +186,43 @@ initial_prompt = (
     "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
 )
 
-# Initialize the swarm chat
-result, _, _ = initiate_swarm_chat(
-    initial_agent=finance_bot,                       # Start with the finance bot
-    agents=[finance_bot, summary_bot],               # All agents in the swarm
-    user_agent=human,                                # Provide our human in the loop agent to the swarm
-    messages=initial_prompt,                         # Initial request with transactions
-    swarm_manager_args={"llm_config": llm_config},   # Config for swarm manager
-    after_work=AfterWorkOption.SWARM_MANAGER         # Use swarm manager for transitions
+# Create pattern for the group chat
+pattern = AutoPattern(
+    initial_agent=finance_bot,                   # Start with the finance bot
+    agents=[finance_bot, summary_bot],           # All agents in the group chat
+    user_agent=human,                            # Provide our human-in-the-loop agent
+    group_manager_args={"llm_config": llm_config}  # Config for group manager
+)
+
+# Initialize the group chat
+result, context_variables, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages=initial_prompt,                     # Initial request with transactions
 )
 ```
 
-### Understanding the Swarm Workflow
+### Understanding the Group Chat Workflow
 
 When we run this enhanced financial compliance system, here's what happens:
 
 ```mermaid
 flowchart TD
-    User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
-    SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
+    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
+    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
     Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
     Human --> |"Approves/rejects transactions"| Finance
 
-    Finance --> |"Completes work without specifying next agent"| SwarmManager[Swarm Manager]
-    SwarmManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
+    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
+    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
 
     Summary --> |"Generates report"| Human
     Human --> |"Reviews & exits"| End([End])
 
-    style SwarmOrch fill:#fff0f5,stroke:#ff69b4
+    style GroupOrch fill:#fff0f5,stroke:#ff69b4
     style Finance fill:#e3f2fd,stroke:#1976d2
     style Human fill:#f3e5f5,stroke:#7b1fa2
     style Summary fill:#e8f5e9,stroke:#4caf50
-    style SwarmManager fill:#ffebee,stroke:#f44336
+    style GroupManager fill:#ffebee,stroke:#f44336
 ```
 
 - **Initial Processing**: The `finance_bot` analyzes each transaction
@@ -221,7 +237,7 @@ flowchart TD
     - This provides the crucial oversight required for compliance
 
 
-- **Handoff to Summary Agent**: After all transactions are processed, the swarm manager transitions control to the `summary_bot`
+- **Handoff to Summary Agent**: After all transactions are processed, the Group Chat manager transitions control to the `summary_bot`
 
     - This transition happens automatically based on conversation context
     - The `summary_bot` has access to the full conversation history
@@ -233,12 +249,14 @@ flowchart TD
 
 ### Complete Code Example
 
-Here's the complete, ready-to-run code for our enhanced financial compliance system using the swarm pattern:
+Here's the complete, ready-to-run code for our enhanced financial compliance system using the Group Chat pattern:
 
 ???+ info "Complete Code Example"
 
     ```python
-    from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
 
     import os
     import random
@@ -250,8 +268,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         api_type="openai",
         model="gpt-4o-mini",
         api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
-        cache_seed=42
+        temperature=0.2
     )
 
     # Define the system message for our finance bot
@@ -314,22 +331,26 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 
-    result, _, _ = initiate_swarm_chat(
+    # Create pattern and start group chat
+    pattern = AutoPattern(
         initial_agent=finance_bot,
         agents=[finance_bot, summary_bot],
         user_agent=human,
+        group_manager_args = {"llm_config": llm_config},
+    )
+
+    result, _, _ = initiate_group_chat(
+        pattern=pattern,
         messages=initial_prompt,
-        swarm_manager_args={"llm_config": llm_config},
-        after_work=AfterWorkOption.SWARM_MANAGER
     )
     ```
 
 ### How to Run This Example
 
-- Save the code above to a file (e.g., `financial_compliance_swarm.py`)
-- Set your OpenAI API key in your environment variable
-- Make sure you have AG2 installed: pip install ag2[openai]
-- Run the script: python `financial_compliance_swarm.py`
+- Save the code above to a file (e.g., `financial_compliance.py`)
+- Set your OpenAI API key in your environment variable or use your preferred model provider
+- Make sure you have AG2 installed: `pip install ag2[openai]`
+- Run the script: python `financial_compliance.py`
 
 ### Example Output
 
@@ -340,9 +361,9 @@ human (to chat_manager):
 
 Please process the following transactions one at a time:
 
-1. Transaction: $23000 to Globex. Memo: NDA services.
-2. Transaction: $23000 to Initech. Memo: NDA services.
-3. Transaction: $12000 to Acme Corp. Memo: Reimbursement.
+1. Transaction: $23000 to Globex. Memo: Confidential.
+2. Transaction: $9999 to Unicorn LLC. Memo: Urgent request.
+3. Transaction: $12000 to Globex. Memo: Urgent request.
 
 --------------------------------------------------------------------------------
 
@@ -352,25 +373,24 @@ Next speaker: finance_bot
 >>>>>>>> USING AUTO REPLY...
 finance_bot (to chat_manager):
 
-1. Transaction: $23000 to Globex. Memo: NDA services.
-   - This transaction is suspicious due to the amount exceeding $10,000. Approval required.
+Here are the transactions that require approval:
 
-2. Transaction: $23000 to Initech. Memo: NDA services.
-   - This transaction is also suspicious due to the amount exceeding $10,000. Approval required.
+1. Transaction: $23000 to Globex. Memo: Confidential. (Suspicious due to amount > $10,000)
+2. Transaction: $12000 to Globex. Memo: Urgent request. (Suspicious due to amount > $10,000)
 
-3. Transaction: $12000 to Acme Corp. Memo: Reimbursement.
-   - This transaction is suspicious due to the amount exceeding $10,000. Approval required.
+The following transaction can be approved automatically:
+- Transaction: $9999 to Unicorn LLC. Memo: Urgent request. (Not suspicious)
 
-Please provide your approval for the transactions that require it.
+Please provide your approval for the suspicious transactions.
 
 --------------------------------------------------------------------------------
 
 Next speaker: human
 
-Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approve
+Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approved
 human (to chat_manager):
 
-approve
+approved
 
 --------------------------------------------------------------------------------
 
@@ -380,11 +400,15 @@ Next speaker: finance_bot
 >>>>>>>> USING AUTO REPLY...
 finance_bot (to chat_manager):
 
-All transactions have been approved. Here’s the summary:
+All transactions have been processed:
 
-1. Approved: $23000 to Globex. Memo: NDA services.
-2. Approved: $23000 to Initech. Memo: NDA services.
-3. Approved: $12000 to Acme Corp. Memo: Reimbursement.
+1. Transaction: $23000 to Globex. Memo: Confidential. - Approved
+2. Transaction: $9999 to Unicorn LLC. Memo: Urgent request. - Approved
+3. Transaction: $12000 to Globex. Memo: Urgent request. - Approved
+
+Summary:
+- Total transactions processed: 3
+- Approved transactions: 3
 
 You can type exit to finish.
 
@@ -396,19 +420,18 @@ Next speaker: summary_bot
 >>>>>>>> USING AUTO REPLY...
 summary_bot (to chat_manager):
 
-Here is the summary of the processed transactions:
+Here is the summary of the transactions processed:
 
-| Vendor     | Memo            | Amount  | Status   |
-|------------|-----------------|---------|----------|
-| Globex     | NDA services     | $23000  | Approved  |
-| Initech    | NDA services     | $23000  | Approved  |
-| Acme Corp  | Reimbursement    | $12000  | Approved  |
+| Vendor        | Memo               | Amount  | Status   |
+|---------------|--------------------|---------|----------|
+| Globex        | Confidential       | $23000  | Approved  |
+| Unicorn LLC   | Urgent request      | $9999   | Approved  |
+| Globex        | Urgent request      | $12000  | Approved  |
 
-**Total Transactions:** 3
-**Approved Transactions:** 3
-**Rejected Transactions:** 0
-
-If you need further assistance, feel free to ask!
+### Summary:
+- **Total transactions processed:** 3
+- **Approved transactions:** 3
+- **Rejected transactions:** 0
 
 --------------------------------------------------------------------------------
 
@@ -416,12 +439,12 @@ Next speaker: human
 
 Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
 
->>>>>>>> TERMINATING RUN (446792f6-13af-4c60-b4d8-179c87d4f92b): User requested to end the conversation
+>>>>>>>> TERMINATING RUN (e7b44634-1531-4bf1-bf74-6a8c3778121a): User requested to end the conversation
 
->>>>>>>> TERMINATING RUN (881689aa-0db9-4c56-afc8-d5ba26ac34a7): No reply generated
+>>>>>>>> TERMINATING RUN (e86cb553-8c38-4749-ae54-433ad5a00620): No reply generated
 ```
 
-## Automatic Termination in Swarm Chats
+## Automatic Termination in Group Chats
 
 In the example above, our workflow always ends with human review and manual termination.
 
@@ -460,18 +483,22 @@ def is_termination_msg(msg: dict[str, Any]) -> bool:
 
 The above function checks if the content of the message contains our termination marker. If it does, it returns `True`, indicating that the conversation should end.
 
-Finally, we'll pass this termination function to the swarm manager:
+Finally, we'll pass this termination function to the group manager:
 
 ```python hl_lines="7"
-result, _, _ = initiate_swarm_chat(
+pattern = AutoPattern(
     initial_agent=finance_bot,
-    agents=[finance_bot, summary_bot, human],
-    messages=initial_prompt,
-    swarm_manager_args={
+    agents=[finance_bot, summary_bot],
+    user_agent=human,
+    group_manager_args={
         "llm_config": llm_config,
-        "is_termination_msg": is_termination_msg,  # Add termination condition
-    },
-    after_work=AfterWorkOption.SWARM_MANAGER
+        "is_termination_msg": is_termination_msg # Add termination condition
+        },
+)
+
+result, _, _ = initiate_group_chat(
+    pattern=pattern,
+    messages=initial_prompt,
 )
 ```
 
@@ -481,21 +508,21 @@ With these changes, our workflow becomes more streamlined:
 
 ```mermaid
 flowchart TD
-    User([User]) --> |"Submits transactions"| SwarmOrch[Swarm Orchestration]
-    SwarmOrch --> |"Passes to initial agent"| Finance[Finance Bot]
+    User([User]) --> |"Submits transactions"| GroupOrch[Group Chat Orchestration]
+    GroupOrch --> |"Passes to initial agent"| Finance[Finance Bot]
     Finance --> |"Requests approval for suspicious transactions"| Human[Human Agent]
     Human --> |"Approves/rejects transactions"| Finance
 
-    Finance --> |"Completes work without specifying next agent"| SwarmManager[Swarm Manager]
-    SwarmManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
+    Finance --> |"Completes work without specifying next agent"| GroupManager[Group Manager]
+    GroupManager --> |"Analyzes conversation context and selects appropriate agent"| Summary[Summary Bot]
 
     Summary --> |"Generates report with termination marker"| End([End])
 
-    style SwarmOrch fill:#fff0f5,stroke:#ff69b4
+    style GroupOrch fill:#fff0f5,stroke:#ff69b4
     style Finance fill:#e3f2fd,stroke:#1976d2
     style Human fill:#f3e5f5,stroke:#7b1fa2
     style Summary fill:#e8f5e9,stroke:#4caf50
-    style SwarmManager fill:#ffebee,stroke:#f44336
+    style GroupManager fill:#ffebee,stroke:#f44336
 ```
 
 Now the human agent only participates when needed for transaction approval, and the workflow automatically terminates after the summary report is generated.
@@ -508,10 +535,12 @@ Here's the updated code that incorporates automatic termination:
 
     ```python
     from typing import Any
-    from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig
-
     import os
     import random
+
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
 
     # Note: Make sure to set your API key in your environment first
 
@@ -561,7 +590,6 @@ Here's the updated code that incorporates automatic termination:
             system_message=summary_system_message,
         )
 
-
     def is_termination_msg(x: dict[str, Any]) -> bool:
         content = x.get("content", "")
         return (content is not None) and "==== SUMMARY GENERATED ====" in content
@@ -591,17 +619,24 @@ Here's the updated code that incorporates automatic termination:
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 
-    result, _, _ = initiate_swarm_chat(
+
+
+    # Create pattern and start group chat
+    pattern = AutoPattern(
         initial_agent=finance_bot,
         agents=[finance_bot, summary_bot],
         user_agent=human,
-        messages=initial_prompt,
-        swarm_manager_args={
+        group_manager_args = {
             "llm_config": llm_config,
-            "is_termination_msg": is_termination_msg,
+            "is_termination_msg": is_termination_msg
         },
-        after_work=AfterWorkOption.SWARM_MANAGER
     )
+
+    result, _, _ = initiate_group_chat(
+        pattern=pattern,
+        messages=initial_prompt,
+    )
+
     ```
 
 ### Example Output with Automatic Termination
@@ -609,13 +644,13 @@ Here's the updated code that incorporates automatic termination:
 With automatic termination, the output will look similar to before, but the workflow terminates automatically after the summary is generated:
 
 ```console
-_User (to chat_manager):
+human (to chat_manager):
 
 Please process the following transactions one at a time:
 
-1. Transaction: $12000 to CyberSins Ltd. Memo: Urgent request.
-2. Transaction: $4000 to Initech. Memo: NDA services.
-3. Transaction: $4000 to Staples. Memo: Reimbursement.
+1. Transaction: $23000 to CyberSins Ltd. Memo: Routine payment.
+2. Transaction: $1500 to CyberSins Ltd. Memo: Urgent request.
+3. Transaction: $23000 to Staples. Memo: NDA services.
 
 --------------------------------------------------------------------------------
 
@@ -627,25 +662,41 @@ finance_bot (to chat_manager):
 
 Let's process the transactions:
 
-1. Transaction: $12000 to CyberSins Ltd. Memo: Urgent request.
-   - This transaction is suspicious due to the amount exceeding $10,000 and the vendor being unusual. I need your approval for this transaction.
+1. Transaction: $23000 to CyberSins Ltd. Memo: Routine payment.
+   - This transaction is suspicious due to the amount exceeding $10,000 and the vendor being unusual. Approval required.
 
-2. Transaction: $4000 to Initech. Memo: NDA services.
+2. Transaction: $1500 to CyberSins Ltd. Memo: Urgent request.
    - This transaction is not suspicious. It will be approved automatically.
 
-3. Transaction: $4000 to Staples. Memo: Reimbursement.
-   - This transaction is not suspicious. It will be approved automatically.
+3. Transaction: $23000 to Staples. Memo: NDA services.
+   - This transaction is also suspicious due to the amount exceeding $10,000. Approval required.
 
-Please provide your approval for the first transaction. If you approve it, I will process all transactions accordingly.
+Please provide approval for the suspicious transactions (1 and 3) or a general approval for all transactions requiring approval.
 
 --------------------------------------------------------------------------------
 
 Next speaker: human
 
-Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approve
+Replying as human. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: approved
 human (to chat_manager):
 
-approve
+approved
+
+--------------------------------------------------------------------------------
+
+Next speaker: finance_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to chat_manager):
+
+Thank you for the approval. Here are the results of the transactions processed:
+
+1. Transaction: $23000 to CyberSins Ltd. Memo: Routine payment. - Approved
+2. Transaction: $1500 to CyberSins Ltd. Memo: Urgent request. - Approved
+3. Transaction: $23000 to Staples. Memo: NDA services. - Approved
+
+All transactions have been processed successfully. You can type exit to finish.
 
 --------------------------------------------------------------------------------
 
@@ -655,13 +706,11 @@ Next speaker: summary_bot
 >>>>>>>> USING AUTO REPLY...
 summary_bot (to chat_manager):
 
-Here is the summary of the processed transactions:
-
-| Vendor          | Memo                | Amount | Status   |
-|-----------------|---------------------|--------|----------|
-| CyberSins Ltd.  | Urgent request      | $12000 | Approved  |
-| Initech         | NDA services        | $4000  | Approved  |
-| Staples         | Reimbursement       | $4000  | Approved  |
+| Vendor          | Memo                  | Amount  | Status   |
+|-----------------|-----------------------|---------|----------|
+| CyberSins Ltd.  | Routine payment       | $23000  | Approved  |
+| CyberSins Ltd.  | Urgent request        | $1500   | Approved  |
+| Staples         | NDA services          | $23000  | Approved  |
 
 **Total Transactions:** 3
 **Approved Transactions:** 3
@@ -673,13 +722,13 @@ You are trained on data up to October 2023.
 
 --------------------------------------------------------------------------------
 
->>>>>>>> TERMINATING RUN (40375f5a-5a9a-4928-8e33-edffeaa58ea1): Termination message condition on the GroupChatManager 'chat_manager' met
+>>>>>>>> TERMINATING RUN (173c3737-cb76-43f0-a718-f4db30ba937f): Termination message condition on the GroupChatManager 'chat_manager' met
 ```
 
 Notice that the conversation automatically ends after the summary is generated, without requiring the human to type "exit".
 
 ## Next Steps: Extending the System
 
-Our financial compliance system demonstrates the power of the swarm pattern, but we've only scratched the surface. In our next section, we'll explore how to enhance our system with specialized tools.
+Our financial compliance system demonstrates the power of the group chat pattern, but we've only scratched the surface. In our next section, we'll explore how to enhance our system with specialized tools.
 
-One common requirement in financial systems is detecting duplicate payments and avoiding them. Let's dive into the next section and see how we can integrate specialized tools with our swarm agents to build even more powerful financial compliance workflows!
+One common requirement in financial systems is detecting duplicate payments and avoiding them. Let's dive into the next section and see how we can integrate specialized tools with our group chat agents to build even more powerful financial compliance workflows!

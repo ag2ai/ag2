@@ -10,12 +10,14 @@ In this page, we will cover the difference between the swarm functionality and t
 
 <Warning>
 There isn't a set date or version for the deprecated swarm code to be removed from the code base. We will endeavour to provide sufficient notice but advise you to change your code to the new group chat when possible.
+
+You can find the documentation for the swarm in the `0.8.7` version of the documentation [here](https://docs.ag2.ai/0.8.7/docs/user-guide/advanced-concepts/swarm/overview).
 </Warning>
 
-# How to keep running your Swarm code in v0.9 and up
+## How to keep running your Swarm code in v0.9 and up
 Here are the changes you'll need to make to your code to run your Swarm code in v0.9. You will be up and running with your existing code by making these two simple changes.
 
-## Imports
+### Imports
 The following functions are no longer available for importing directly from the `autogen` module (and shouldn't be used for the new group chat):
 
 - `AFTER_WORK`
@@ -52,7 +54,7 @@ from autogen.agentchat.group import (
 
 ```
 
-## Context Variables
+### Context Variables
 Prior to version 0.9, the context variables associated with a swarm (and the `ConversableAgent`s in the swarm) were a dictionary (type: `dict[str, Any]`). This has now been put into a dedicated class called `ContextVariables`. When interacting with your context variables, this still appears as a dictionary.
 
 The changes you will need to make are to (1) change the import location and (2) change your type references from `dict[str, Any]` to `ContextVariables`.
@@ -90,10 +92,10 @@ def my_function(location: str, context_variables: ContextVariables) -> SwarmResu
     return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
 ```
 
-# Migrate from Swarm code to the new Group Chat
+## Migrate from Swarm code to the new Group Chat
 In this section we will cover the migration of existing Swarm code to the new Group Chat.
 
-## Changing imports
+### Changing imports
 Ensure you don't have any imports from `autogen.agentchat.contrib.swarm_agent` as there are a few classes that have the same name.
 
 The new group chat classes can be imported from `autogen.agentchat.group` (primary), as well as `autogen.agentchat.group.patterns` and `autogen.agentchat.group.targets`.
@@ -136,7 +138,7 @@ from autogen.agentchat.group.patterns (
 )
 ```
 
-## Context variables
+### Context variables
 Context variables are no longer a `dict[str, Any]` type, they use a new class called `ContextVariables`. You can continue to interact with context variables like it is a dictionary.
 
 The changes you will need to make are to (1) change the import location and (2) change your type references from `dict[str, Any]` to `ContextVariables`.
@@ -174,7 +176,7 @@ def my_function(location: str, context_variables: ContextVariables) -> SwarmResu
     return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
 ```
 
-## Replace SwarmResult with ReplyResult
+### Replace SwarmResult with ReplyResult
 Functions attached to your agents should now return a `ReplyResult` instead of a `SwarmResult`.
 
 A new concept introduced here is a `Transition Target`, which is what AG2 will transition to next. In a swarm you could transition to an agent by passing in the agent or the name of the agent, alternatively you could transition to an `AfterWorkOption` such as to terminate or revert to the user. In the new group chat all the possible transitions are `Targets`, such as `AgentTarget`, `AgentNameTarget`, and `TerminateTarget`.
@@ -206,7 +208,7 @@ def check_order_id(order_id: str, context_variables: ContextVariables) -> ReplyR
     )
 ```
 
-## Handoffs
+### Handoffs
 Handoffs are largely the same with the new group chat, except that they are handled directly on the agent (as opposed to using `register_hand_off`).
 
 Handoffs have been split into LLM conditions (`OnCondition`), context variable based conditions (`OnContextCondition`), and the after work. You will generally be setting these separately.
@@ -288,7 +290,7 @@ order_triage_agent.handoffs.set_after_work(after_work=RevertToUserTarget())
 ```
 
 
-## Initiating the chat
+### Initiating the chat
 Another new concept arrives when we look to initiate the chat. With the new group chat we have introduced the concept of an orchestration Pattern and these are used to setup the base transitions for the agents.
 
 So to initiate a chat you will choose and configure a pattern and then pass that into a new initiate chat function called `initiate_group_chat`.
