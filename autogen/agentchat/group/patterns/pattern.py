@@ -149,7 +149,7 @@ class Pattern(ABC):
         )
 
         # Create the group manager
-        manager = create_group_manager(groupchat, self.group_manager_args, self.agents)
+        manager = create_group_manager(groupchat, self.group_manager_args, self.agents, self.group_after_work)
 
         # Point all agent's context variables to this function's context_variables
         setup_context_variables(tool_executor, self.agents, manager, self.context_variables)

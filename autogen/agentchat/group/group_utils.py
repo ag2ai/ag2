@@ -491,14 +491,18 @@ def create_group_transition(
 
 
 def create_group_manager(
-    groupchat: GroupChat, group_manager_args: Optional[dict[str, Any]], agents: list["ConversableAgent"]
+    groupchat: GroupChat,
+    group_manager_args: Optional[dict[str, Any]],
+    agents: list["ConversableAgent"],
+    group_after_work: TransitionTarget,
 ) -> GroupChatManager:
     """Create a GroupChatManager for the group chat utilising any arguments passed in and ensure an LLM Config exists if needed
 
     Args:
         groupchat (GroupChat): The groupchat.
         group_manager_args (dict[str, Any]): Group manager arguments to create the GroupChatManager.
-        agents (list["ConversableAgent"]): List of agents in the group.
+        agents (list["ConversableAgent"]): List of agents in the group to check handoffs and after work.
+        group_after_work (TransitionTarget): Group-level after work to check.
 
     Returns:
         GroupChatManager: GroupChatManager instance.
@@ -510,15 +514,29 @@ def create_group_manager(
 
     # Ensure that our manager has an LLM Config if we have any GroupManagerTarget targets used
     if manager.llm_config is False:
-        for agent in agents:
-            if (
-                len(agent.handoffs.get_context_conditions_by_target_type(GroupManagerTarget)) > 0
-                or len(agent.handoffs.get_llm_conditions_by_target_type(GroupManagerTarget)) > 0
-                or (agent.handoffs.after_work is not None and isinstance(agent.handoffs.after_work, GroupManagerTarget))
-            ):
-                raise ValueError(
-                    "The group manager doesn't have an LLM Config and it is required for any targets using GroupManagerTarget. Use the group_manager_args to specify the LLM Config for the group manager."
-                )
+        has_group_manager_target = False
+
+        if isinstance(group_after_work, GroupManagerTarget):
+            # Check group after work
+            has_group_manager_target = True
+        else:
+            # Check agent hand-offs and after work
+            for agent in agents:
+                if (
+                    len(agent.handoffs.get_context_conditions_by_target_type(GroupManagerTarget)) > 0
+                    or len(agent.handoffs.get_llm_conditions_by_target_type(GroupManagerTarget)) > 0
+                    or (
+                        agent.handoffs.after_work is not None
+                        and isinstance(agent.handoffs.after_work, GroupManagerTarget)
+                    )
+                ):
+                    has_group_manager_target = True
+                    break
+
+        if has_group_manager_target:
+            raise ValueError(
+                "The group manager doesn't have an LLM Config and it is required for any targets or after works using a GroupManagerTarget. Use the 'llm_config' in the group_manager_args parameter to specify the LLM Config for the group manager."
+            )
 
     return manager
 
