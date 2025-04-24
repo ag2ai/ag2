@@ -24,7 +24,7 @@ The core component of tools is the [`ReplyResult`](/docs/api-reference/autogen/a
 
 This simple but powerful structure allows tools to both communicate results and influence the conversation flow.
 
-## Implementing Basic Tools in Group Chat
+## Implementing Basic Tools in a Group Chat
 
 ### Creating a Simple Tool
 
@@ -65,14 +65,14 @@ with llm_config:
     )
 ```
 
-By adding the `classify_query` function to the triage agent, we've given it a specific tool to use for routing queries instead of relying solely on its LLM capabilities. The function returns a `ReplyResult` that specifies which agent should receive control next.
+By adding the `classify_query` function to the triage agent, we've given it a specific tool to use for routing queries instead of relying solely on its LLM capabilities. The function returns a `ReplyResult` that provides the Group Manager with an indication of the type of query for it decide the appropriate next speaker.
 
 ### Enhancing Tools with Type Annotations
 
-We can improve our tool using type annotations to make it more self-documenting and provide better guidance to the LLM:
+We can improve our tool using type annotations and the docstring to make it more self-documenting and provide better guidance to the LLM:
 
 
-```python hl_lines="5-6"
+```python hl_lines="5-6 8-11"
 from typing import Annotated
 from autogen.agentchat.group import ReplyResult, AgentNameTarget
 
@@ -144,22 +144,9 @@ def classify_query(
 
 Now let's bring it all together by extending our original example to use the tool-enhanced triage agent in a complete multi-agent workflow. In this example, the triage agent will solely rely on the `classify_query` tool to classify the user query and route it to either the technical support agent or the general support agent.
 
-<Note>
-If you run the example in a non-docker environment, you will see the below error in your console. It is recommended to run the example in a docker environment. It that's not possible, you can set the environment variable `AUTOGEN_USE_DOCKER` to `0/False/no` or set the `use_docker` parameter in the `code_execution_config` to `False`.
-
-```bash
-RuntimeError: Code execution is set to be run in docker (default behaviour) but docker is not running.
-The options available are:
-- Make sure docker is running (advised approach for code execution)
-- Set "use_docker": False in code_execution_config
-- Set AUTOGEN_USE_DOCKER to "0/False/no" in your environment variables
-```
-
-</Note>
-
 ```python
 from typing import Annotated
-from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget
@@ -208,7 +195,10 @@ with llm_config:
     )
 
 # User agent
-user = UserProxyAgent(name="user", human_input_mode="ALWAYS")
+user = ConversableAgent(
+    name="user",
+    human_input_mode="ALWAYS"
+)
 
 # Set up the conversation pattern
 pattern = AutoPattern(
@@ -312,6 +302,7 @@ Replying as user. Provide feedback to chat_manager. Press enter to skip and use 
 ## What's Next?
 
 Now that you understand how agents can perform actions using tools and direct conversation flow, the next step is to explore **Context Variables**. Context variables provide a shared memory for your agents, allowing them to maintain state across the conversation and make decisions based on that state.
+
 In the Context Variables section, you'll learn how to:
 
 - Create and initialize context variables
@@ -319,4 +310,4 @@ In the Context Variables section, you'll learn how to:
 - Pass information between agents
 - Use context variables with tools to create more powerful workflows
 
-Understanding context variables will then provide the foundation for mastering Handoffs and Transitions, which gives you complete control over the flow of conversation between agents.
+Understanding context variables will provide the foundation for mastering Handoffs and Transitions, which give you precise control over the flow of conversation between agents.
