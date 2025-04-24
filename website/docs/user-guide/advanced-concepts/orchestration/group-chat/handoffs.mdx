@@ -10,19 +10,18 @@ Handoffs define the paths a conversation can take through your multi-agent syste
 
 ### Why Handoffs Matter
 
-In any multi-agent system, you need to carefully control which agent speaks when. Handoffs provide this control by:
+In any multi-agent system, you need to carefully control which agent speaks when.
+
+Handoffs provide this control by:
 
 - Directing the conversation to the most appropriate agent for each situation
 - Creating predictable workflows with clear transitions
 - Enabling complex decision trees based on conversation state
 - Allowing dynamic adaptation to user inputs
-- Maintaining conversation coherence across multiple specialists
 
 ### The Hospital Triage Analogy
 
-Extending our hospital emergency room analogy:
-
-When a patient enters the ER, they first see a triage nurse who assesses their condition. The triage nurse then makes a critical decision:
+Extending our hospital emergency room analogy, when a patient enters the ER, they first see a triage nurse who assesses their condition. The triage nurse then makes a critical decision:
 
 - For cardiac symptoms, transfer immediately to the cardiologist
 - For respiratory issues, send to the pulmonologist
@@ -35,11 +34,11 @@ Each medical professional follows specific "handoff protocols" that determine:
 - Who they should transfer to
 - What information must be included in the handoff
 
-These protocols ensure the patient receives the right care at the right time. In AG2, handoffs serve exactly the same purpose for your conversational agents.
+These protocols ensure the patient receives the right care at the right time. In AG2, handoffs serve the same purpose for your conversational agents.
 
 ## Core Handoff Concepts
 
-Each agent in AG2 has a handoffs attribute that manages all possible transitions from that agent. The **handoffs attribute is an instance of the [`Handoffs`](/docs/api-reference/autogen/agentchat/group/handoffs/Handoffs/) class**, which provides methods for defining when and where control should pass:
+Each agent in AG2 has a `handoffs` attribute that manages transitions from that agent. The **handoffs attribute is an instance of the [`Handoffs`](/docs/api-reference/autogen/agentchat/group/handoffs/Handoffs/) class**, which provides methods for defining when and where control should pass:
 
 ```python
 # Access an agent's handoffs
@@ -54,6 +53,8 @@ When defining a handoff, you specify a transition target - the destination where
 - [`AgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AgentTarget): Transfer control to a specific agent instance
 - [`AskUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/AskUserTarget): Ask the user to select the next speaker
 - [`NestedChatTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/NestedChatTarget): Target that represents a nested chat configuration
+- [`GroupManagerTarget`](/docs/api-reference/autogen/agentchat/group/targets/group_manager_target/GroupManagerTarget): Transfer control to the group manager who will select the next speaker
+- [`GroupChatTarget`](/docs/api-reference/autogen/agentchat/group/targets/group_chat_target/GroupChatTarget): Transfer control to another group chat (essentially a nested group chat)
 - [`RandomAgentTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/RandomAgentTarget): Randomly select from a list of agents
 - [`RevertToUserTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/RevertToUserTarget): Return control to the user agent
 - [`StayTarget`](/docs/api-reference/autogen/agentchat/group/targets/transition_target/StayTarget): Keep control with the current agent
@@ -95,7 +96,7 @@ AG2 offers four main ways to define handoffs:
 
 - **LLM-based conditions**: Transitions based on the language model's analysis of messages
 - **Context-based conditions**: Transitions based on values in context variables
-- **After-work behavior**: Default transition when no condition is met
+- **After-work behavior**: Default transition when no LLM or context conditions are met and no tools are called
 - **Explicit handoffs from tools**: Direct transitions specified by tool return values
 
 Let's explore each type in our triage example.
