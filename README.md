@@ -22,7 +22,7 @@
 <p align="center">
   <a href="https://docs.ag2.ai/">📚 Documentation</a> |
   <a href="https://github.com/ag2ai/build-with-ag2">💡 Examples</a> |
-  <a href="https://docs.ag2.ai/docs/contributor-guide/contributing">🤝 Contributing</a> |
+  <a href="https://docs.ag2.ai/latest/docs/contributor-guide/contributing">🤝 Contributing</a> |
   <a href="#related-papers">📝 Cite paper</a> |
   <a href="https://discord.gg/pAbnFJrkgZ">💬 Join Discord</a>
 </p>
@@ -349,11 +349,11 @@ print(chat_result.chat_history[-1]["content"])
 
 AG2 supports more advanced concepts to help you build your AI agent workflows. You can find more information in the documentation.
 
-- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/structured-outputs)
+- [Structured Output](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/structured-outputs)
 - [Ending a conversation](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/orchestration/ending-a-chat/)
 - [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/docs/user-guide/advanced-concepts/rag)
-- [Code Execution](https://docs.ag2.ai/docs/user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](https://docs.ag2.ai/docs/user-guide/basic-concepts/tools/tools-with-secrets)
+- [Code Execution](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/code-execution)
+- [Tools with Secrets](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/introducing-tools/tools-with-secrets)
 
 ## Announcements
 

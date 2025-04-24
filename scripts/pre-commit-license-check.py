@@ -173,7 +173,9 @@ def main() -> None:
             if missing_elements:
                 failed = True
                 print(f"\nIncomplete or missing license header in: {py_file}")
-                print("\nSee https://docs.ag2.ai/docs/contributor-guide/contributing/#license-headers for guidance.")
+                print(
+                    "\nSee https://docs.ag2.ai/latest/docs/contributor-guide/contributing/#license-headers for guidance."
+                )
 
         sys.exit(1 if failed else 0)
     except Exception as e:
