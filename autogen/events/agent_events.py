@@ -10,6 +10,8 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator, model_serializer
 from termcolor import colored
 
+from autogen.agentchat.group import ContextVariables
+
 from ..agentchat.agent import LLMMessageType
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
@@ -1005,4 +1007,4 @@ class RunCompletionEvent(BaseEvent):
     history: list[LLMMessageType]
     cost: dict[str, Any]
     last_speaker: Optional[str]
-    context_variables: Optional[dict[str, Any]] = None
+    context_variables: Optional[ContextVariables] = None

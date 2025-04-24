@@ -12,9 +12,6 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.handoffs import Handoffs
-from autogen.agentchat.group.multi_agent_chat import (
-    a_initiate_group_chat,
-)
 from autogen.agentchat.group.patterns.pattern import Pattern
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
@@ -131,12 +128,4 @@ def pattern() -> MagicMock:
     return pattern
 
 
-# TODO TESTS FOR INITIATE_GROUP_CHAT
-
-
-# Test async function placeholder
-@pytest.mark.asyncio
-async def test_a_initiate_group_chat(pattern: MagicMock) -> None:
-    """Test that the async function raises NotImplementedError."""
-    with pytest.raises(NotImplementedError):
-        await a_initiate_group_chat(pattern, "Hello", 20)
+# TODO TESTS FOR INITIATE_GROUP_CHAT AND A_INITIATE_GROUP_CHAT
