@@ -16,7 +16,7 @@ Context Variables are a structured way to store and share information between ag
 
 ### The Hospital ER Analogy
 
-Let's return to our hospital emergency room analogy to understand context variables:
+Let's return to our hospital emergency room analogy to understand context variables.
 
 Imagine a patient chart that follows them throughout their entire hospital visit. When a patient arrives at the ER:
 
@@ -90,7 +90,7 @@ context.update({"last_login": "2023-05-01", "premium": True})  # Update multiple
 ```
 ### Dictionary-like Interface
 
-The ContextVariables class implements a dictionary-like interface, allowing you to use familiar syntax:
+The [`ContextVariables`](/docs/api-reference/autogen/agentchat/group/context_variables/ContextVariables) class implements a dictionary-like interface, allowing you to use a familiar syntax:
 
 ```python
 # Dictionary-like operations
@@ -107,9 +107,9 @@ for key, value in context:
 
 ### Persistence Across Agent Transitions
 
-One of the most powerful features of context variables is their persistence across agent transitions. When control passes from one agent to another, the context variables go with it, maintaining the shared state:
+One of the most powerful features of context variables is their persistence across agent transitions. When control passes from one agent to another, the context variables go with it, maintaining the shared state.
 
-In the below example, the `route_to_tech_support` function updates the context variables with the current issue and passes them to the tech support agent for further processing. The tech support agent can then access the updated context variables to make informed decisions.
+In the below example, the `route_to_tech_support` function updates the context variables with the current issue and passes the control to the tech support agent who can then access the updated context variables to make informed decisions.
 
 ```python
 def route_to_tech_support(issue: str, context_variables: ContextVariables) -> ReplyResult:
@@ -123,7 +123,7 @@ def route_to_tech_support(issue: str, context_variables: ContextVariables) -> Re
     return ReplyResult(
         message="Routing to technical support...",
         target=AgentTarget(tech_agent),
-        context_variables=context_variables  # Pass the updated context
+        context_variables=context_variables  # Update the shared context
     )
 ```
 
@@ -183,11 +183,11 @@ def classify_and_log_query(
 
     # Update context with classification
     if is_technical:
-        target = AgentNameTarget("tech_agent")
+        target_agent = AgentNameTarget("tech_agent")
         context_variables["query_type"] = "technical"
         message = "This appears to be a technical issue. Routing to technical support..."
     else:
-        target = AgentNameTarget("general_agent")
+        target_agent = AgentNameTarget("general_agent")
         context_variables["query_type"] = "general"
         message = "This appears to be a general question. Routing to general support..."
 
@@ -196,7 +196,7 @@ def classify_and_log_query(
 
     return ReplyResult(
         message=message,
-        target=target,
+        target=target_agent,
         context_variables=context_variables
     )
 
