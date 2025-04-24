@@ -44,6 +44,7 @@ Implementing a group chat in AG2 is a simple two-step process:
 
 The pattern defines the orchestration logic - which agents are involved, who speaks first, and how to transition between agents. AG2 provides several pre-defined patterns to choose from:
 
+- **DefaultPattern**: A minimal pattern for simple agent interactions where the handoffs and transitions needs to be explicitly defined
 - **AutoPattern**: Automatically selects the next speaker based on conversation context
 - **RoundRobinPattern**: Agents speak in a defined sequence
 - **RandomPattern**: Randomly selects the next speaker
