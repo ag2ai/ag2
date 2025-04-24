@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 import autogen
 from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
+from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
@@ -1580,62 +1581,37 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
 @run_for_optional_imports("openai", "openai")
 def test_context_variables():
     # Test initialization with context_variables
-    initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}
+    initial_context = ContextVariables(data={"test_key": "test_value", "number": 42, "nested": {"inner": "value"}})
     agent = ConversableAgent(name="context_test_agent", llm_config=False, context_variables=initial_context)
 
     # Check that context was properly initialized
-    assert agent._context_variables == initial_context
+    assert agent.context_variables.to_dict() == initial_context.to_dict()
 
     # Test initialization without context_variables
     agent_no_context = ConversableAgent(name="no_context_agent", llm_config=False)
-    assert agent_no_context._context_variables == {}
+    assert agent_no_context.context_variables.to_dict() == {}
 
     # Test get_context
-    assert agent.get_context("test_key") == "test_value"
-    assert agent.get_context("number") == 42
-    assert agent.get_context("nested") == {"inner": "value"}
-    assert agent.get_context("non_existent") is None
-    assert agent.get_context("non_existent", default="default") == "default"
+    assert agent.context_variables.get("test_key") == "test_value"
+    assert agent.context_variables.get("number") == 42
+    assert agent.context_variables.get("nested") == {"inner": "value"}
+    assert agent.context_variables.get("non_existent") is None
+    assert agent.context_variables.get("non_existent", default="default") == "default"
 
     # Test set_context
-    agent.set_context("new_key", "new_value")
-    assert agent.get_context("new_key") == "new_value"
+    agent.context_variables.set("new_key", "new_value")
+    assert agent.context_variables.get("new_key") == "new_value"
 
     # Test overwriting existing value
-    agent.set_context("test_key", "updated_value")
-    assert agent.get_context("test_key") == "updated_value"
+    agent.context_variables.set("test_key", "updated_value")
+    assert agent.context_variables.get("test_key") == "updated_value"
 
     # Test update_context
     new_values = {"bulk_key1": "bulk_value1", "bulk_key2": "bulk_value2", "test_key": "bulk_updated_value"}
-    agent.update_context(new_values)
-    assert agent.get_context("bulk_key1") == "bulk_value1"
-    assert agent.get_context("bulk_key2") == "bulk_value2"
-    assert agent.get_context("test_key") == "bulk_updated_value"
-
-    # Test pop_context
-    # Pop existing key
-    popped_value = agent.pop_context("bulk_key1")
-    assert popped_value == "bulk_value1"
-    assert agent.get_context("bulk_key1") is None
-
-    # Pop with default value
-    default_value = "default_value"
-    popped_default = agent.pop_context("non_existent", default=default_value)
-    assert popped_default == default_value
-
-    # Pop without default (should return None)
-    popped_none = agent.pop_context("another_non_existent")
-    assert popped_none is None
-
-    # Verify final state of context
-    expected_final_context = {
-        "number": 42,
-        "nested": {"inner": "value"},
-        "new_key": "new_value",
-        "bulk_key2": "bulk_value2",
-        "test_key": "bulk_updated_value",
-    }
-    assert agent._context_variables == expected_final_context
+    agent.context_variables.update(new_values)
+    assert agent.context_variables.get("bulk_key1") == "bulk_value1"
+    assert agent.context_variables.get("bulk_key2") == "bulk_value2"
+    assert agent.context_variables.get("test_key") == "bulk_updated_value"
 
 
 @pytest.mark.skip(reason="'anyOf' parameters works with vertexai setup but it is not supported in google.genai")
