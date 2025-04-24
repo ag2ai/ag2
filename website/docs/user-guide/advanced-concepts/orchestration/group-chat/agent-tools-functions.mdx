@@ -1,0 +1,313 @@
+---
+Title: Tools and Functions
+sidebarTitle: Tools and Functions
+---
+
+Tools provide specialized capabilities to your agents, allowing them to perform actions and make decisions within the Group Chat environment. Similar to how real-world professionals use tools to accomplish specific tasks, AG2 agents use tools to extend their functionality beyond simple conversation.
+
+## Why Tools Matter in a Group Chat
+
+In a multi-agent conversation, tools serve several critical purposes:
+
+- **Specialized Actions** - Agents can perform domain-specific tasks like data processing, calculations, or accessing external systems
+- **Structured Data Exchange** - Tools provide a consistent way for agents to exchange structured information
+- **Workflow Control** - Tools help direct the conversation flow, and can determine which agent speaks next
+- **Enhanced Capabilities** - Tools extend what agents can do, making them more powerful and useful
+
+## ReplyResult: The Key to Tool Operations
+
+The core component of tools is the [`ReplyResult`](/docs/api-reference/autogen/agentchat/group/reply_result/ReplyResult) object, which represents the outcome of a tool's operation and has three key properties:
+
+- **message**: The text response to be shown in the conversation
+- **target**: (Optional) Where control should go next
+- **context_variables**: (Optional) Updated shared state (we'll explore this in the next section)
+
+This simple but powerful structure allows tools to both communicate results and influence the conversation flow.
+
+## Implementing Basic Tools in a Group Chat
+
+### Creating a Simple Tool
+
+Let's take the triage example from the previous section and add a tool to it. In the original example, the triage agent used its LLM capabilities to decide where to route queries, but we can make this more explicit using a tool:
+
+```python hl_lines="13-15 17-19 31"
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat.group import ReplyResult, AgentNameTarget
+
+# Define a query classification tool
+def classify_query(query: str) -> ReplyResult:
+    """Classify a user query as technical or general."""
+
+    # Simple keyword-based classification
+    technical_keywords = ["error", "bug", "broken", "crash", "not working", "shutting down"]
+
+    # Check if any technical keywords are in the query
+    if any(keyword in query.lower() for keyword in technical_keywords):
+        return ReplyResult(
+            message="This appears to be a technical issue."
+        )
+    else:
+        return ReplyResult(
+            message="This appears to be a general question.",
+        )
+
+# Create the triage agent with the tool
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+with llm_config:
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question.
+        Use the classify_query tool to categorize queries and route them appropriately.
+        Do not provide suggestions or answers, only route the query.""",
+        functions=[classify_query]  # Register the function with the agent
+    )
+```
+
+By adding the `classify_query` function to the triage agent, we've given it a specific tool to use for routing queries instead of relying solely on its LLM capabilities. The function returns a `ReplyResult` that provides the Group Manager with an indication of the type of query for it decide the appropriate next speaker.
+
+### Enhancing Tools with Type Annotations
+
+We can improve our tool using type annotations and the docstring to make it more self-documenting and provide better guidance to the LLM:
+
+
+```python hl_lines="5-6 8-11"
+from typing import Annotated
+from autogen.agentchat.group import ReplyResult, AgentNameTarget
+
+def classify_query(
+    query: Annotated[str, "The user query to classify"],
+) -> ReplyResult:
+    """
+    Classify a user query as technical or general.
+
+    Technical queries involve hardware problems, software errors, system crashes, etc.
+    General queries involve information requests, conceptual questions, etc.
+    """
+    # Simple keyword-based classification
+    technical_keywords = ["error", "bug", "broken", "crash", "not working", "shutting down"]
+
+    # Check if any technical keywords are in the query
+    if any(keyword in query.lower() for keyword in technical_keywords):
+        return ReplyResult(
+            message="This appears to be a technical issue."
+        )
+    else:
+        return ReplyResult(
+            message="This appears to be a general question.",
+        )
+```
+
+The annotations and expanded docstring provide rich information about the function's purpose and parameters, helping the LLM understand when and how to use the tool correctly.
+
+### Directing Conversation Flow with Tools
+
+One of the most powerful aspects of tools is their ability to direct the conversation flow by specifying which agent should speak next. This creates purposeful, directed conversations rather than unpredictable exchanges.
+
+### Using the Target Parameter
+
+The `target` parameter in `ReplyResult` allows a tool to specify which agent should receive control next.
+
+Let's update our `classify_query` function to route the conversation to the appropriate agent based on the classification result:
+
+```python hl_lines="20 25"
+from typing import Annotated
+from autogen.agentchat.group import ReplyResult, AgentNameTarget
+
+def classify_query(
+    query: Annotated[str, "The user query to classify"],
+) -> ReplyResult:
+    """
+    Classify a user query as technical or general.
+
+    Technical queries involve hardware problems, software errors, system crashes, etc.
+    General queries involve information requests, conceptual questions, etc.
+    """
+    # Simple keyword-based classification
+    technical_keywords = ["error", "bug", "broken", "crash", "not working", "shutting down"]
+
+    # Check if any technical keywords are in the query
+    if any(keyword in query.lower() for keyword in technical_keywords):
+        return ReplyResult(
+            message="This appears to be a technical issue.",
+            target=AgentNameTarget("technical_support_agent")  # Route to technical support
+        )
+    else:
+        return ReplyResult(
+            message="This appears to be a general question.",
+            target=AgentNameTarget("general_support_agent")  # Route to general support
+        )
+```
+
+## Example
+
+Now let's bring it all together by extending our original example to use the tool-enhanced triage agent in a complete multi-agent workflow. In this example, the triage agent will solely rely on the `classify_query` tool to classify the user query and route it to either the technical support agent or the general support agent.
+
+```python
+from typing import Annotated
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.agentchat.group import ReplyResult, AgentNameTarget
+
+# Define the query classification tool
+def classify_query(
+    query: Annotated[str, "The user query to classify"]
+) -> ReplyResult:
+    """Classify a user query as technical or general."""
+    technical_keywords = ["error", "bug", "broken", "crash", "not working", "shutting down"]
+
+    if any(keyword in query.lower() for keyword in technical_keywords):
+        return ReplyResult(
+            message="This appears to be a technical issue. Routing to technical support...",
+            target=AgentNameTarget("tech_agent")
+        )
+    else:
+        return ReplyResult(
+            message="This appears to be a general question. Routing to general support...",
+            target=AgentNameTarget("general_agent")
+        )
+
+# Create the agents
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+with llm_config:
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question.
+        Use the classify_query tool to categorize queries and route them appropriately.
+        Do not provide suggestions or answers, only route the query.""",
+        functions=[classify_query]
+    )
+
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues. After analyzing the problem, use the provide_technical_solution
+        tool to format your response consistently."""
+    )
+
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions."
+    )
+
+# User agent
+user = ConversableAgent(
+    name="user",
+    human_input_mode="ALWAYS"
+)
+
+# Set up the conversation pattern
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config}
+)
+
+# Run the chat
+result, context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages="My laptop keeps shutting down randomly. Can you help?",
+    max_rounds=10
+)
+```
+
+## Example Output
+
+When you run the above code, you should see output similar to the following:
+
+```console
+user (to chat_manager):
+
+My laptop keeps shutting down randomly. Can you help?
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+***** Suggested tool call (call_v2PfcRUpjBZbUE6U8C5Hbiqi): classify_query *****
+Arguments:
+{"query":"My laptop keeps shutting down randomly. Can you help?"}
+*******************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION classify_query...
+Call ID: call_v2PfcRUpjBZbUE6U8C5Hbiqi
+Input arguments: {'query': 'My laptop keeps shutting down randomly. Can you help?'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_v2PfcRUpjBZbUE6U8C5Hbiqi) *****
+This appears to be a technical issue. Routing to technical support...
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: tech_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+tech_agent (to chat_manager):
+
+It sounds like your laptop is experiencing unexpected shutdowns, which could be caused by a variety of issues. Here’s a systematic approach to troubleshoot and potentially resolve the problem:
+
+1. **Check Power Supply**:
+   - Ensure that your laptop is plugged in properly and that the charging port is not damaged.
+   - Test with a different power adapter if available.
+
+2. **Overheating**:
+   - Check if the laptop is getting too hot. Dust accumulation in the cooling vents can cause overheating.
+   - Clean the vents and ensure the laptop is on a hard, flat surface to allow ventilation.
+
+3. **Hardware Issues**:
+   - Run hardware diagnostics. Most laptops come with built-in diagnostics accessible during boot (look for prompts on the startup screen).
+   - Check for failing RAM by running a memory diagnostic tool (like Windows Memory Diagnostic or MemTest86).
+
+4. **Software Conflicts**:
+   - Ensure your operating system and all drivers are up to date. Sometimes outdated drivers can cause stability issues.
+   - Boot the laptop in safe mode to see if the problem persists. If it doesn’t, a software conflict may be at play.
+
+5. **Malware Scan**:
+   - Run a complete scan for malware and viruses, as malicious software can cause instability.
+
+6. **Event Viewer** (Windows):
+   - Check the Event Viewer for any error logs before shutdown. You can access it by searching for "Event Viewer" and checking under Windows Logs > System.
+
+If after trying these troubleshooting steps the issue persists, it may be time to consult a professional technician to investigate further. You might have a hardware failure that needs specialized attention.
+
+Please let me know if you need more detailed assistance on any of the steps mentioned above!
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+>>>>>>>> TERMINATING RUN (1ca36d8b-b68e-4fe7-8962-b1aee15e57db): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (aeeada5f-7f16-4afd-9751-72b292da3dd7): No reply generated
+```
+
+## What's Next?
+
+Now that you understand how agents can perform actions using tools and direct conversation flow, the next step is to explore **Context Variables**. Context variables provide a shared memory for your agents, allowing them to maintain state across the conversation and make decisions based on that state.
+
+In the Context Variables section, you'll learn how to:
+
+- Create and initialize context variables
+- Read from and write to the shared context
+- Pass information between agents
+- Use context variables with tools to create more powerful workflows
+
+Understanding context variables will provide the foundation for mastering Handoffs and Transitions, which give you precise control over the flow of conversation between agents.

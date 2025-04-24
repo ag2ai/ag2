@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
 import anyio
 from asyncer import asyncify, create_task_group, syncify
 
+from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
-from ... import AfterWorkOption, Agent, ChatResult, ConversableAgent, LLMAgent, initiate_swarm_chat
+from ... import Agent, ChatResult, ConversableAgent, LLMAgent
 from ...utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:

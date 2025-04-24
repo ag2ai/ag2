@@ -47,7 +47,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
 
       - name: Deploy docs to GH Pages
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
         run: |
           . .venv/bin/activate
 

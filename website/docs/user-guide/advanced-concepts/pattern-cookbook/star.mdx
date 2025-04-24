@@ -118,27 +118,23 @@ In this code example we use OpenAI's GPT-4o mini with structured outputs.
 import json
 from typing import Annotated
 from autogen import (
-    AfterWork,
-    AfterWorkOption,
     ConversableAgent,
-    OnCondition,
-    OnContextCondition,
     ContextExpression,
-    SwarmResult,
     UserProxyAgent,
-    initiate_swarm_chat,
-    register_hand_off,
     LLMConfig,
 )
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group import ReplyResult, ContextVariables, AgentTarget, OnContextCondition, OnCondition, RevertToUserTarget, ContextExpression, ExpressionContextCondition, StringAvailableCondition, StringLLMCondition, ExpressionAvailableCondition
 
 # Example task: Create a virtual city guide that can answer questions about weather, events,
 # transportation, and dining in various cities
 
 # Setup LLM configuration
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False, cache_seed=None)
+llm_config = LLMConfig(api_type="openai", model="gpt-4.1-mini", parallel_tool_calls=False, cache_seed=None)
 
-# Shared context for all agents in the swarm
-shared_context = {
+# Shared context for all agents in the group chat
+shared_context = ContextVariables({
     # Query state
     "query_analyzed": False,
     "query_completed": False,
@@ -161,7 +157,7 @@ shared_context = {
     "traffic_info": "",
     "food_info": "",
     "final_response": ""
-}
+})
 
 # User agent for interaction
 user = UserProxyAgent(
@@ -173,48 +169,48 @@ user = UserProxyAgent(
 # SPECIALIST FUNCTIONS
 # ========================
 
-def provide_weather_info(weather_content: str, context_variables: dict) -> SwarmResult:
+def provide_weather_info(weather_content: str, context_variables: ContextVariables) -> ReplyResult:
     """Submit weather information for the specified city and date range"""
     context_variables["weather_info"] = weather_content
     context_variables["weather_info_completed"] = True
 
-    return SwarmResult(
-        values="Weather information provided and stored.",
+    return ReplyResult(
+        message="Weather information provided and stored.",
         context_variables=context_variables,
-        agent=coordinator_agent  # Always return to the coordinator
+        target=AgentTarget(coordinator_agent)  # Always return to the coordinator
     )
 
-def provide_events_info(events_content: str, context_variables: dict) -> SwarmResult:
+def provide_events_info(events_content: str, context_variables: ContextVariables) -> ReplyResult:
     """Submit events information for the specified city and date range"""
     context_variables["events_info"] = events_content
     context_variables["events_info_completed"] = True
 
-    return SwarmResult(
-        values="Events information provided and stored.",
+    return ReplyResult(
+        message="Events information provided and stored.",
         context_variables=context_variables,
-        agent=coordinator_agent  # Always return to the coordinator
+        target=AgentTarget(coordinator_agent)  # Always return to the coordinator
     )
 
-def provide_traffic_info(traffic_content: str, context_variables: dict) -> SwarmResult:
+def provide_traffic_info(traffic_content: str, context_variables: ContextVariables) -> ReplyResult:
     """Submit traffic/transportation information for the specified city"""
     context_variables["traffic_info"] = traffic_content
     context_variables["traffic_info_completed"] = True
 
-    return SwarmResult(
-        values="Traffic/transportation information provided and stored.",
+    return ReplyResult(
+        message="Traffic/transportation information provided and stored.",
         context_variables=context_variables,
-        agent=coordinator_agent  # Always return to the coordinator
+        target=AgentTarget(coordinator_agent)  # Always return to the coordinator
     )
 
-def provide_food_info(food_content: str, context_variables: dict) -> SwarmResult:
+def provide_food_info(food_content: str, context_variables: ContextVariables) -> ReplyResult:
     """Submit dining recommendations for the specified city"""
     context_variables["food_info"] = food_content
     context_variables["food_info_completed"] = True
 
-    return SwarmResult(
-        values="Dining recommendations provided and stored.",
+    return ReplyResult(
+        message="Dining recommendations provided and stored.",
         context_variables=context_variables,
-        agent=coordinator_agent  # Always return to the coordinator
+        target=AgentTarget(coordinator_agent)  # Always return to the coordinator
     )
 
 # ========================
@@ -291,15 +287,15 @@ with llm_config:
 # ========================
 
 
-def compile_final_response(response_content: str, context_variables: dict) -> SwarmResult:
+def compile_final_response(response_content: str, context_variables: ContextVariables) -> ReplyResult:
     """Compile the final comprehensive response from all specialist inputs"""
     context_variables["final_response"] = response_content
     context_variables["query_completed"] = True
 
-    return SwarmResult(
-        values="Final response compiled successfully.",
+    return ReplyResult(
+        message="Final response compiled successfully.",
         context_variables=context_variables,
-        agent=user  # Return to user with final response
+        target=AgentTarget(user)  # Return to user with final response
     )
 
 # ========================
@@ -341,8 +337,8 @@ def analyze_query(
         needs_events_info: Annotated[bool, "Provide events information?"],
         needs_traffic_info: Annotated[bool, "Provide traffic information?"],
         needs_food_info: Annotated[bool, "Provide food/eating information?"],
-        context_variables: dict
-    ) -> SwarmResult:
+        context_variables: ContextVariables
+    ) -> ReplyResult:
     """Analyze the user query and determine which specialists are needed"""
     context_variables["city"] = city
     context_variables["date_range"] = date_range
@@ -354,8 +350,8 @@ def analyze_query(
     context_variables["traffic_info_needed"] = needs_traffic_info
     context_variables["food_info_needed"] = needs_food_info
 
-    return SwarmResult(
-        values=f"Query analyzed. Will gather information about {city} for {date_range}.",
+    return ReplyResult(
+        message=f"Query analyzed. Will gather information about {city} for {date_range}.",
         context_variables=context_variables
     )
 
@@ -364,73 +360,49 @@ def analyze_query(
 # ========================
 
 # Coordinator Agent handoffs to specialists
-register_hand_off(
-    agent=coordinator_agent,
-    hand_to=[
+coordinator_agent.handoffs.add_many(
+    [
         # Conditional handoffs to specialists based on what information is needed
         OnContextCondition( # Example of Context Variable-based transfer, this happens automatically without LLM
-            target=weather_specialist,
-            condition=ContextExpression("${weather_info_needed} == True and ${weather_info_completed} == False"),
-            available="query_analyzed"
+            target=AgentTarget(weather_specialist),
+            condition=ExpressionContextCondition(ContextExpression("${weather_info_needed} == True and ${weather_info_completed} == False")),
+            available=StringAvailableCondition("query_analyzed")
         ),
         OnCondition( # Uses an LLM to determine if this transfer should happen
-            target=events_specialist,
-            condition="Delegate to the events specialist for local events and activities information.",
-            available=ContextExpression("${query_analyzed} == True and ${events_info_needed} == True and ${events_info_completed} == False")
+            target=AgentTarget(events_specialist),
+            condition=StringLLMCondition("Delegate to the events specialist for local events and activities information."),
+            available=ExpressionAvailableCondition(ContextExpression("${query_analyzed} == True and ${events_info_needed} == True and ${events_info_completed} == False")),
         ),
         OnCondition(
-            target=traffic_specialist,
-            condition="Delegate to the traffic specialist for transportation and traffic information.",
-            available=ContextExpression("${query_analyzed} == True and ${traffic_info_needed} == True and ${traffic_info_completed} == False")
+            target=AgentTarget(traffic_specialist),
+            condition=StringLLMCondition("Delegate to the traffic specialist for transportation and traffic information."),
+            available=ExpressionAvailableCondition(ContextExpression("${query_analyzed} == True and ${traffic_info_needed} == True and ${traffic_info_completed} == False")),
         ),
         OnCondition(
-            target=food_specialist,
-            condition="Delegate to the food specialist for dining recommendations.",
-            available=ContextExpression("${query_analyzed} == True and ${food_info_needed} == True and ${food_info_completed} == False")
+            target=AgentTarget(food_specialist),
+            condition=StringLLMCondition("Delegate to the food specialist for dining recommendations."),
+            available=ExpressionAvailableCondition(ContextExpression("${query_analyzed} == True and ${food_info_needed} == True and ${food_info_completed} == False")),
         ),
-        # Return to user when complete
-        AfterWork(AfterWorkOption.REVERT_TO_USER)
     ]
 )
+# Revert to user when finished
+coordinator_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Each specialist always returns to the coordinator
-register_hand_off(
-    agent=weather_specialist,
-    hand_to=[
-        AfterWork(agent=coordinator_agent)
-    ]
-)
-
-register_hand_off(
-    agent=events_specialist,
-    hand_to=[
-        AfterWork(agent=coordinator_agent)
-    ]
-)
-
-register_hand_off(
-    agent=traffic_specialist,
-    hand_to=[
-        AfterWork(agent=coordinator_agent)
-    ]
-)
-
-register_hand_off(
-    agent=food_specialist,
-    hand_to=[
-        AfterWork(agent=coordinator_agent)
-    ]
-)
+weather_specialist.handoffs.set_after_work(AgentTarget(coordinator_agent))
+events_specialist.handoffs.set_after_work(AgentTarget(coordinator_agent))
+traffic_specialist.handoffs.set_after_work(AgentTarget(coordinator_agent))
+food_specialist.handoffs.set_after_work(AgentTarget(coordinator_agent))
 
 # ========================
-# INITIATE THE SWARM
+# INITIATE THE GROUP CHAT
 # ========================
 
-def run_star_pattern_swarm():
-    """Run the star pattern swarm to provide city information"""
-    print("Initiating Star Pattern Swarm for City Guide...")
+def run_star_pattern():
+    """Run the star pattern to provide city information"""
+    print("Initiating Star Pattern for City Guide...")
 
-    chat_result, final_context, last_agent = initiate_swarm_chat(
+    agent_pattern = DefaultPattern(
         initial_agent=coordinator_agent,
         agents=[
             # Coordinator (hub)
@@ -438,9 +410,13 @@ def run_star_pattern_swarm():
             # Specialists (spokes)
             weather_specialist, events_specialist, traffic_specialist, food_specialist
         ],
-        messages="What should I do in Seattle this weekend? I'm visiting from Friday 7th March 2025 to Sunday 9th March 2025. I want to know the weather, events, transportation options, and good places to eat.",
         context_variables=shared_context,
         user_agent=user,
+    )
+
+    chat_result, final_context, last_agent = initiate_group_chat(
+        pattern=agent_pattern,
+        messages="What should I do in Seattle this weekend? I'm visiting from Friday 7th March 2025 to Sunday 9th March 2025. I want to know the weather, events, transportation options, and good places to eat.",
         max_rounds=100,
     )
 
@@ -450,21 +426,22 @@ def run_star_pattern_swarm():
         print("\n===== FINAL RESPONSE =====\n")
         print(final_context["final_response"])
         print("\n\n===== FINAL CONTEXT VARIABLES =====\n")
-        print(json.dumps(final_context, indent=2))
+        print(json.dumps(final_context.to_dict(), indent=2))
         print("\n\n===== SPEAKER ORDER =====\n")
         for message in chat_result.chat_history:
-            if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+            if "name" in message and message["name"] != "_Group_Tool_Executor":
                 print(f"{message['name']}")
     else:
         print("City guide response did not complete successfully.")
 
 if __name__ == "__main__":
-    run_star_pattern_swarm()
+    run_star_pattern()
 ```
 
 ## Output
 
 ```console
+Initiating Star Pattern for City Guide...
 user (to chat_manager):
 
 What should I do in Seattle this weekend? I'm visiting from Friday 7th March 2025 to Sunday 9th March 2025. I want to know the weather, events, transportation options, and good places to eat.
@@ -477,23 +454,23 @@ Next speaker: coordinator_agent
 >>>>>>>> USING AUTO REPLY...
 coordinator_agent (to chat_manager):
 
-***** Suggested tool call (call_BCFizrGLaMiZzIKu46qdNp5X): analyze_query *****
+***** Suggested tool call (call_lOKIQoHHPVXdBOm83IZPZdQe): analyze_query *****
 Arguments:
-{"city":"Seattle","date_range":"March 7, 2025 to March 9, 2025","needs_weather_info":true,"needs_events_info":true,"needs_traffic_info":true,"needs_food_info":true}
+{"city":"Seattle","date_range":"Friday 7th March 2025 to Sunday 9th March 2025","needs_weather_info":true,"needs_events_info":true,"needs_traffic_info":true,"needs_food_info":true}
 ******************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION analyze_query...
-Call ID: call_BCFizrGLaMiZzIKu46qdNp5X
-Input arguments: {'city': 'Seattle', 'date_range': 'March 7, 2025 to March 9, 2025', 'needs_weather_info': True, 'needs_events_info': True, 'needs_traffic_info': True, 'needs_food_info': True}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_lOKIQoHHPVXdBOm83IZPZdQe
+Input arguments: {'city': 'Seattle', 'date_range': 'Friday 7th March 2025 to Sunday 9th March 2025', 'needs_weather_info': True, 'needs_events_info': True, 'needs_traffic_info': True, 'needs_food_info': True}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_BCFizrGLaMiZzIKu46qdNp5X) *****
-Query analyzed. Will gather information about Seattle for March 7, 2025 to March 9, 2025.
+***** Response from calling tool (call_lOKIQoHHPVXdBOm83IZPZdQe) *****
+Query analyzed. Will gather information about Seattle for Friday 7th March 2025 to Sunday 9th March 2025.
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -512,22 +489,22 @@ Next speaker: weather_specialist
 >>>>>>>> USING AUTO REPLY...
 weather_specialist (to chat_manager):
 
-***** Suggested tool call (call_QkADznRLzxAuYisnzi824ie9): provide_weather_info *****
+***** Suggested tool call (call_PbFRJTCt7U8Jf2urY0xq1zpn): provide_weather_info *****
 Arguments:
-{"weather_content":"Seattle, March 7-9, 2025:\n1. Temperature Ranges: \n   - Friday (March 7): High 50°F (10°C), Low 42°F (6°C)\n   - Saturday (March 8): High 48°F (9°C), Low 41°F (5°C)\n   - Sunday (March 9): High 52°F (11°C), Low 43°F (6°C)\n2. Precipitation Forecasts: \n   - Friday: Light rain, 0.1 inches expected.\n   - Saturday: Moderate rain, 0.25 inches expected.\n   - Sunday: Showers likely, 0.2 inches expected.\n3. Notable Weather Conditions: \n   - Friday: Cloudy with occasional light rain.\n   - Saturday: Overcast with persistent rain.\n   - Sunday: Overcast with scattered showers.\n4. Recommendations: \n   - Dress in layers and wear a waterproof jacket. Consider waterproof shoes due to expected rain. An umbrella is advisable for all days."}
+{"weather_content":"Please provide the detailed weather forecast for Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, including temperature ranges (high/low), precipitation forecasts, notable weather conditions (sunny, rainy, windy, etc.), and recommendations for appropriate clothing or preparation."}
 *************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_weather_info...
-Call ID: call_QkADznRLzxAuYisnzi824ie9
-Input arguments: {'weather_content': 'Seattle, March 7-9, 2025:\n1. Temperature Ranges: \n   - Friday (March 7): High 50°F (10°C), Low 42°F (6°C)\n   - Saturday (March 8): High 48°F (9°C), Low 41°F (5°C)\n   - Sunday (March 9): High 52°F (11°C), Low 43°F (6°C)\n2. Precipitation Forecasts: \n   - Friday: Light rain, 0.1 inches expected.\n   - Saturday: Moderate rain, 0.25 inches expected.\n   - Sunday: Showers likely, 0.2 inches expected.\n3. Notable Weather Conditions: \n   - Friday: Cloudy with occasional light rain.\n   - Saturday: Overcast with persistent rain.\n   - Sunday: Overcast with scattered showers.\n4. Recommendations: \n   - Dress in layers and wear a waterproof jacket. Consider waterproof shoes due to expected rain. An umbrella is advisable for all days.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_PbFRJTCt7U8Jf2urY0xq1zpn
+Input arguments: {'weather_content': 'Please provide the detailed weather forecast for Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, including temperature ranges (high/low), precipitation forecasts, notable weather conditions (sunny, rainy, windy, etc.), and recommendations for appropriate clothing or preparation.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_QkADznRLzxAuYisnzi824ie9) *****
+***** Response from calling tool (call_PbFRJTCt7U8Jf2urY0xq1zpn) *****
 Weather information provided and stored.
 **********************************************************************
 
@@ -535,33 +512,27 @@ Weather information provided and stored.
 
 Next speaker: coordinator_agent
 
-/app/ag2/autogen/agentchat/conversable_agent.py:3002: UserWarning: Function 'transfer_coordinator_agent_to_events_specialist' is being overridden.
-  warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
-/app/ag2/autogen/agentchat/conversable_agent.py:3002: UserWarning: Function 'transfer_coordinator_agent_to_traffic_specialist' is being overridden.
-  warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
-/app/ag2/autogen/agentchat/conversable_agent.py:3002: UserWarning: Function 'transfer_coordinator_agent_to_food_specialist' is being overridden.
-  warnings.warn(f"Function '{tool_sig['function']['name']}' is being overridden.", UserWarning)
 
 >>>>>>>> USING AUTO REPLY...
 coordinator_agent (to chat_manager):
 
-***** Suggested tool call (call_qUFxfLaH9thn3Tob92cgDWCt): transfer_coordinator_agent_to_events_specialist *****
+***** Suggested tool call (call_Vmf7N9brWRgVYDXPcRbxltfp): transfer_to_events_specialist_1 *****
 Arguments:
 {}
-****************************************************************************************************************
+************************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
->>>>>>>> EXECUTING FUNCTION transfer_coordinator_agent_to_events_specialist...
-Call ID: call_qUFxfLaH9thn3Tob92cgDWCt
+>>>>>>>> EXECUTING FUNCTION transfer_to_events_specialist_1...
+Call ID: call_Vmf7N9brWRgVYDXPcRbxltfp
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_qUFxfLaH9thn3Tob92cgDWCt) *****
-Swarm agent --> events_specialist
+***** Response from calling tool (call_Vmf7N9brWRgVYDXPcRbxltfp) *****
+Transfer to events_specialist
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -572,22 +543,22 @@ Next speaker: events_specialist
 >>>>>>>> USING AUTO REPLY...
 events_specialist (to chat_manager):
 
-***** Suggested tool call (call_pOQURHVEJhXkNu4OJlxJBXdp): provide_events_info *****
+***** Suggested tool call (call_LTgc3sZVoQLIbqWagoVtMtpO): provide_events_info *****
 Arguments:
-{"events_content":"Events in Seattle from March 7-9, 2025:\n1. Major Events:\n   - Seattle International Film Festival (SIFF): Running from March 6 to March 9, this annual festival features a variety of independent films from around the world, with screenings at several locations.\n   - Seattle Sounders FC vs. Vancouver Whitecaps FC: A Major League Soccer match on March 8 at Lumen Field.\n\n2. Popular Attractions and Landmarks:\n   - Pike Place Market: Enjoy fresh seafood, artisanal products, and the famous gum wall.\n   - Space Needle: Iconic observation tower with stunning views of the city and surrounding mountains.\n   - Chihuly Garden and Glass: A beautiful exhibition featuring the work of glass artist Dale Chihuly.\n\n3. Cultural Activities:\n   - Seattle Art Museum: Offers a range of exhibits, including contemporary and Native American art.\n   - Museum of Pop Culture (MoPOP): Explore exhibitions related to music, science fiction, and pop culture.\n   - The Paramount Theatre: Check for performances or shows happening this weekend.\n\n4. Outdoor Recreation Opportunities:\n   - Discovery Park: A large park with trails, beaches, and stunning views of Puget Sound and the Olympic Mountains.\n   - Alki Beach: A lovely area for walking or biking along the waterfront. Potential for catching sunset views.\n   - Hiking: If the weather permits, explore trails in nearby parks like Rattlesnake Ledge or Mount Si."}
+{"events_content":"For Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, here are some highlights:\n\n1. Major Events:\n- Seattle International Film Festival: Special weekend screenings featuring international films.\n- Concert at The Showbox: Live performance by a popular indie band on Friday night.\n- Seattle Sounders FC soccer game: Home match at Lumen Field on Saturday afternoon.\n\n2. Popular Attractions:\n- Space Needle: Iconic landmark with panoramic city views.\n- Pike Place Market: Famous historic market with fresh seafood, crafts, and street performances.\n- Museum of Pop Culture (MoPOP): Exhibits on music, sci-fi, and pop culture artifacts.\n\n3. Cultural Activities:\n- Seattle Art Museum: Featuring contemporary and traditional art exhibits.\n- Paramount Theatre: Broadway show performances during the weekend.\n\n4. Outdoor Recreation:\n- Discovery Park: Large urban park with hiking trails and beach access.\n- Green Lake Park: Popular spot for walking, jogging, and paddle boating.\n\nTransportation Options:\n- King County Metro buses: Comprehensive coverage of the city.\n- Link Light Rail: Connects downtown to the airport and neighborhoods.\n- Ride-shares and bike rentals widely available.\n\nDining Recommendations:\n- The Pink Door: Italian cuisine with a cozy ambiance near Pike Place Market.\n- Canlis: Fine dining with panoramic views, perfect for a special dinner.\n- Dick's Drive-In: Classic Seattle fast-food for a quick, tasty meal.\n\nLet me know if you need more specific recommendations or details."}
 ************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_events_info...
-Call ID: call_pOQURHVEJhXkNu4OJlxJBXdp
-Input arguments: {'events_content': 'Events in Seattle from March 7-9, 2025:\n1. Major Events:\n   - Seattle International Film Festival (SIFF): Running from March 6 to March 9, this annual festival features a variety of independent films from around the world, with screenings at several locations.\n   - Seattle Sounders FC vs. Vancouver Whitecaps FC: A Major League Soccer match on March 8 at Lumen Field.\n\n2. Popular Attractions and Landmarks:\n   - Pike Place Market: Enjoy fresh seafood, artisanal products, and the famous gum wall.\n   - Space Needle: Iconic observation tower with stunning views of the city and surrounding mountains.\n   - Chihuly Garden and Glass: A beautiful exhibition featuring the work of glass artist Dale Chihuly.\n\n3. Cultural Activities:\n   - Seattle Art Museum: Offers a range of exhibits, including contemporary and Native American art.\n   - Museum of Pop Culture (MoPOP): Explore exhibitions related to music, science fiction, and pop culture.\n   - The Paramount Theatre: Check for performances or shows happening this weekend.\n\n4. Outdoor Recreation Opportunities:\n   - Discovery Park: A large park with trails, beaches, and stunning views of Puget Sound and the Olympic Mountains.\n   - Alki Beach: A lovely area for walking or biking along the waterfront. Potential for catching sunset views.\n   - Hiking: If the weather permits, explore trails in nearby parks like Rattlesnake Ledge or Mount Si.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_LTgc3sZVoQLIbqWagoVtMtpO
+Input arguments: {'events_content': "For Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, here are some highlights:\n\n1. Major Events:\n- Seattle International Film Festival: Special weekend screenings featuring international films.\n- Concert at The Showbox: Live performance by a popular indie band on Friday night.\n- Seattle Sounders FC soccer game: Home match at Lumen Field on Saturday afternoon.\n\n2. Popular Attractions:\n- Space Needle: Iconic landmark with panoramic city views.\n- Pike Place Market: Famous historic market with fresh seafood, crafts, and street performances.\n- Museum of Pop Culture (MoPOP): Exhibits on music, sci-fi, and pop culture artifacts.\n\n3. Cultural Activities:\n- Seattle Art Museum: Featuring contemporary and traditional art exhibits.\n- Paramount Theatre: Broadway show performances during the weekend.\n\n4. Outdoor Recreation:\n- Discovery Park: Large urban park with hiking trails and beach access.\n- Green Lake Park: Popular spot for walking, jogging, and paddle boating.\n\nTransportation Options:\n- King County Metro buses: Comprehensive coverage of the city.\n- Link Light Rail: Connects downtown to the airport and neighborhoods.\n- Ride-shares and bike rentals widely available.\n\nDining Recommendations:\n- The Pink Door: Italian cuisine with a cozy ambiance near Pike Place Market.\n- Canlis: Fine dining with panoramic views, perfect for a special dinner.\n- Dick's Drive-In: Classic Seattle fast-food for a quick, tasty meal.\n\nLet me know if you need more specific recommendations or details."}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_pOQURHVEJhXkNu4OJlxJBXdp) *****
+***** Response from calling tool (call_LTgc3sZVoQLIbqWagoVtMtpO) *****
 Events information provided and stored.
 **********************************************************************
 
@@ -599,23 +570,23 @@ Next speaker: coordinator_agent
 >>>>>>>> USING AUTO REPLY...
 coordinator_agent (to chat_manager):
 
-***** Suggested tool call (call_RpF1biLTWObWg5pZ5IATlcvb): transfer_coordinator_agent_to_traffic_specialist *****
+***** Suggested tool call (call_csmdSQ66Mf0h7PHNWxocTUKz): transfer_to_traffic_specialist_2 *****
 Arguments:
 {}
-*****************************************************************************************************************
+*************************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
->>>>>>>> EXECUTING FUNCTION transfer_coordinator_agent_to_traffic_specialist...
-Call ID: call_RpF1biLTWObWg5pZ5IATlcvb
+>>>>>>>> EXECUTING FUNCTION transfer_to_traffic_specialist_2...
+Call ID: call_csmdSQ66Mf0h7PHNWxocTUKz
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_RpF1biLTWObWg5pZ5IATlcvb) *****
-Swarm agent --> traffic_specialist
+***** Response from calling tool (call_csmdSQ66Mf0h7PHNWxocTUKz) *****
+Transfer to traffic_specialist
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -626,22 +597,22 @@ Next speaker: traffic_specialist
 >>>>>>>> USING AUTO REPLY...
 traffic_specialist (to chat_manager):
 
-***** Suggested tool call (call_eORP5UukseSlhDhOQ4kiaH6S): provide_traffic_info *****
+***** Suggested tool call (call_062BVS8IzM8yjkd2ZCmNyTYQ): provide_traffic_info *****
 Arguments:
-{"traffic_content":"Transportation Tips for Seattle (March 7-9, 2025):\n1. Best Ways to Get Around:\n   - **Public Transit**: Utilize King County Metro buses and the light rail, which are efficient and cover major areas. The light rail connects Seattle-Tacoma International Airport to downtown Seattle.\n   - **Rental Options**: Consider renting a bike through Lime or Spin for short distances. Car rentals are available, but parking and traffic can be challenging. Rideshare options like Uber and Lyft are widely used.\n   - **Walking**: Seattle has many walkable neighborhoods, particularly downtown. Be prepared for hilly terrains.\n\n2. Traffic Patterns and Areas to Avoid:\n   - Expect increased traffic around major event venues like Lumen Field and the Seattle Center (Space Needle and MoPOP). \n   - Avoid I-5 during rush hours (approximately 7-9 AM and 4-6 PM) for smoother travels within the city. \n   - Stay away from streets near Pike Place and Capitol Hill during peak times due to heavy crowds.\n\n3. Parking Recommendations:\n   - Parking in downtown Seattle can be expensive and hard to find. Look for garages (such as the Seattle Center Armory Garage) or consider street parking on weekends when rates may be lower. \n   - Utilize apps like ParkMobile to pay for street parking conveniently.\n\n4. Tips for Efficient Transportation Between Popular Areas:\n   - From Pike Place Market to Seattle Center, consider taking the light rail or a rideshare to avoid the hassle of parking.\n   - If heading to the movie screenings at SIFF, check the specific venue as many will be close to public transit stops.\n   - For dining, check the proximity to your sights, as many restaurants are concentrated in the downtown area."}
+{"traffic_content":"Transportation and traffic information for Seattle (7th to 9th March 2025):\n\n1. Best Ways to Get Around:\n- Public Transit: The Link Light Rail is efficient for traveling between the airport, downtown, and neighborhoods. King County Metro buses cover most areas. Consider purchasing an ORCA card for convenience.\n- Rentals: Bike and scooter rentals are popular for short distances, especially near downtown, the waterfront, and parks.\n- Walking: Central areas like downtown, Pike Place Market, and the Seattle Waterfront are very walkable.\n\n2. Traffic Patterns and Areas to Avoid:\n- Expect heavier traffic on I-5, especially during Friday evening rush and Sunday late afternoon as people return.\n- Avoid driving through the downtown core during peak hours (7-9 AM and 4-6 PM).\n- Construction or event-related road closures may occur near Lumen Field on Saturday due to the soccer match.\n\n3. Parking Recommendations:\n- Use paid parking garages near major attractions; street parking is limited and often metered.\n- Consider Park-and-Ride options outside downtown and use public transit to enter the city.\n- Some hotels offer parking but check in advance.\n\n4. Tips for Efficient Transportation:\n- Use Link Light Rail to reach downtown from the airport or neighborhoods like Capitol Hill and the University District.\n- Plan around the soccer game at Lumen Field; arrive early or use transit to avoid congestion.\n- For Pike Place Market, walk or use short ride-share trips as parking is scarce.\n\nLet me know if you want detailed advice on any specific routes or times."}
 *************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_traffic_info...
-Call ID: call_eORP5UukseSlhDhOQ4kiaH6S
-Input arguments: {'traffic_content': 'Transportation Tips for Seattle (March 7-9, 2025):\n1. Best Ways to Get Around:\n   - **Public Transit**: Utilize King County Metro buses and the light rail, which are efficient and cover major areas. The light rail connects Seattle-Tacoma International Airport to downtown Seattle.\n   - **Rental Options**: Consider renting a bike through Lime or Spin for short distances. Car rentals are available, but parking and traffic can be challenging. Rideshare options like Uber and Lyft are widely used.\n   - **Walking**: Seattle has many walkable neighborhoods, particularly downtown. Be prepared for hilly terrains.\n\n2. Traffic Patterns and Areas to Avoid:\n   - Expect increased traffic around major event venues like Lumen Field and the Seattle Center (Space Needle and MoPOP). \n   - Avoid I-5 during rush hours (approximately 7-9 AM and 4-6 PM) for smoother travels within the city. \n   - Stay away from streets near Pike Place and Capitol Hill during peak times due to heavy crowds.\n\n3. Parking Recommendations:\n   - Parking in downtown Seattle can be expensive and hard to find. Look for garages (such as the Seattle Center Armory Garage) or consider street parking on weekends when rates may be lower. \n   - Utilize apps like ParkMobile to pay for street parking conveniently.\n\n4. Tips for Efficient Transportation Between Popular Areas:\n   - From Pike Place Market to Seattle Center, consider taking the light rail or a rideshare to avoid the hassle of parking.\n   - If heading to the movie screenings at SIFF, check the specific venue as many will be close to public transit stops.\n   - For dining, check the proximity to your sights, as many restaurants are concentrated in the downtown area.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_062BVS8IzM8yjkd2ZCmNyTYQ
+Input arguments: {'traffic_content': 'Transportation and traffic information for Seattle (7th to 9th March 2025):\n\n1. Best Ways to Get Around:\n- Public Transit: The Link Light Rail is efficient for traveling between the airport, downtown, and neighborhoods. King County Metro buses cover most areas. Consider purchasing an ORCA card for convenience.\n- Rentals: Bike and scooter rentals are popular for short distances, especially near downtown, the waterfront, and parks.\n- Walking: Central areas like downtown, Pike Place Market, and the Seattle Waterfront are very walkable.\n\n2. Traffic Patterns and Areas to Avoid:\n- Expect heavier traffic on I-5, especially during Friday evening rush and Sunday late afternoon as people return.\n- Avoid driving through the downtown core during peak hours (7-9 AM and 4-6 PM).\n- Construction or event-related road closures may occur near Lumen Field on Saturday due to the soccer match.\n\n3. Parking Recommendations:\n- Use paid parking garages near major attractions; street parking is limited and often metered.\n- Consider Park-and-Ride options outside downtown and use public transit to enter the city.\n- Some hotels offer parking but check in advance.\n\n4. Tips for Efficient Transportation:\n- Use Link Light Rail to reach downtown from the airport or neighborhoods like Capitol Hill and the University District.\n- Plan around the soccer game at Lumen Field; arrive early or use transit to avoid congestion.\n- For Pike Place Market, walk or use short ride-share trips as parking is scarce.\n\nLet me know if you want detailed advice on any specific routes or times.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_eORP5UukseSlhDhOQ4kiaH6S) *****
+***** Response from calling tool (call_062BVS8IzM8yjkd2ZCmNyTYQ) *****
 Traffic/transportation information provided and stored.
 **********************************************************************
 
@@ -653,23 +624,23 @@ Next speaker: coordinator_agent
 >>>>>>>> USING AUTO REPLY...
 coordinator_agent (to chat_manager):
 
-***** Suggested tool call (call_HyEiqEUhl835lodcZMhvlmRv): transfer_coordinator_agent_to_food_specialist *****
+***** Suggested tool call (call_By8WE8OZLmPDn2ma81ObumEt): transfer_to_food_specialist_3 *****
 Arguments:
 {}
-**************************************************************************************************************
+**********************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
->>>>>>>> EXECUTING FUNCTION transfer_coordinator_agent_to_food_specialist...
-Call ID: call_HyEiqEUhl835lodcZMhvlmRv
+>>>>>>>> EXECUTING FUNCTION transfer_to_food_specialist_3...
+Call ID: call_By8WE8OZLmPDn2ma81ObumEt
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_HyEiqEUhl835lodcZMhvlmRv) *****
-Swarm agent --> food_specialist
+***** Response from calling tool (call_By8WE8OZLmPDn2ma81ObumEt) *****
+Transfer to food_specialist
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -680,22 +651,22 @@ Next speaker: food_specialist
 >>>>>>>> USING AUTO REPLY...
 food_specialist (to chat_manager):
 
-***** Suggested tool call (call_1LulzE1uNEaf0T7dIXgRM28G): provide_food_info *****
+***** Suggested tool call (call_7hs3Q5NxJL16WXbqyoQnJRBD): provide_food_info *****
 Arguments:
-{"food_content":"Seattle Dining Recommendations:\n1. Notable Restaurants:\n   - **Fine Dining:** \n      - Canlis: An iconic fine-dining restaurant offering Pacific Northwest cuisine with stunning views of Lake Union.\n   - **Mid-Range:** \n      - The Pink Door: An eclectic Italian restaurant located near Pike Place Market, known for its live music and unique ambiance.\n   - **Affordable Eats:** \n      - Paseo: Famous for their Caribbean sandwiches, especially the \"Cuban\" sandwich that locals rave about.\n\n2. Local Specialties and Must-Try Dishes:\n   - **Seafood:** Try the clam chowder or fresh oysters from local seafood spots.\n   - **Coffee:** Enjoy a cup from one of Seattle's many coffee shops (Starbucks originated here, but try local roasters like Victrola Coffee).\n   - **Pacific Northwest Cuisine:** Dishes featuring local ingredients such as salmon, Dungeness crab, and fresh vegetables.\n\n3. Food Districts or Areas with Good Dining Options:\n   - **Pike Place Market:** A food lover's paradise with numerous restaurants, fishmongers, and artisanal food vendors.\n   - **Capitol Hill:** Known for diverse dining options, from trendy cafes to vegan restaurants.\n   - **Ballard:** Offers a blend of established eateries and new, hip dining options, including breweries.\n\n4. Famous Food Markets or Unique Food Experiences:\n   - **Pike Place Market:** Best known for the fish market where fishmongers toss seafood. Explore the local produce and crafts as well.\n   - **Ballard Farmers Market:** Held every Sunday, showcasing local farmers and vendors.\n   - **Food Tours:** Consider a guided food tour to explore the city's culinary highlights. Options include Seattle food tours focused on specific cuisines or neighborhoods."}
+{"food_content":"Notable restaurants across different price ranges in Seattle:\n- Budget: Dick's Drive-In (classic Seattle fast-food, burgers and fries), Paseo Caribbean Food (famous for their Caribbean sandwiches)\n- Mid-range: The Pink Door (Italian cuisine near Pike Place Market with cozy ambiance), Tilikum Place Café (Dutch and European-inspired brunch and dinner)\n- High-end: Canlis (fine dining with panoramic views, American Northwest cuisine), Altura (locally sourced seasonal tasting menus)\n\nLocal specialties and must-try dishes:\n- Pacific Northwest salmon (grilled or smoked)\n- Geoduck clam (a unique and local seafood delicacy)\n- Dungeness crab\n- Seattle-style hot dogs (often with cream cheese and grilled onions)\n- Coffee (Seattle is home to Starbucks and numerous artisanal coffee shops)\n\nFood districts or areas with good dining options:\n- Pike Place Market: iconic food market with fresh seafood, local produce, and casual eateries\n- Capitol Hill: vibrant neighborhood with diverse restaurants, cafes, and nightlife\n- Ballard: known for seafood restaurants and Scandinavian influence\n\nFamous food markets or unique food experiences:\n- Pike Place Market: a must-visit for fresh seafood, artisan foods, and the famous fish-throwing vendors\n- Seattle Underground Food Tour: explore historic areas with tastings from local eateries\n- International District: offers authentic Asian cuisines including Chinese, Japanese, Vietnamese, and Thai\n\nSeattle's food scene is special for its emphasis on fresh, local seafood and innovative Pacific Northwest flavors combined with a thriving coffee culture. It offers diverse options from casual dining to elegant experiences."}
 **********************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_food_info...
-Call ID: call_1LulzE1uNEaf0T7dIXgRM28G
-Input arguments: {'food_content': 'Seattle Dining Recommendations:\n1. Notable Restaurants:\n   - **Fine Dining:** \n      - Canlis: An iconic fine-dining restaurant offering Pacific Northwest cuisine with stunning views of Lake Union.\n   - **Mid-Range:** \n      - The Pink Door: An eclectic Italian restaurant located near Pike Place Market, known for its live music and unique ambiance.\n   - **Affordable Eats:** \n      - Paseo: Famous for their Caribbean sandwiches, especially the "Cuban" sandwich that locals rave about.\n\n2. Local Specialties and Must-Try Dishes:\n   - **Seafood:** Try the clam chowder or fresh oysters from local seafood spots.\n   - **Coffee:** Enjoy a cup from one of Seattle\'s many coffee shops (Starbucks originated here, but try local roasters like Victrola Coffee).\n   - **Pacific Northwest Cuisine:** Dishes featuring local ingredients such as salmon, Dungeness crab, and fresh vegetables.\n\n3. Food Districts or Areas with Good Dining Options:\n   - **Pike Place Market:** A food lover\'s paradise with numerous restaurants, fishmongers, and artisanal food vendors.\n   - **Capitol Hill:** Known for diverse dining options, from trendy cafes to vegan restaurants.\n   - **Ballard:** Offers a blend of established eateries and new, hip dining options, including breweries.\n\n4. Famous Food Markets or Unique Food Experiences:\n   - **Pike Place Market:** Best known for the fish market where fishmongers toss seafood. Explore the local produce and crafts as well.\n   - **Ballard Farmers Market:** Held every Sunday, showcasing local farmers and vendors.\n   - **Food Tours:** Consider a guided food tour to explore the city\'s culinary highlights. Options include Seattle food tours focused on specific cuisines or neighborhoods.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_7hs3Q5NxJL16WXbqyoQnJRBD
+Input arguments: {'food_content': "Notable restaurants across different price ranges in Seattle:\n- Budget: Dick's Drive-In (classic Seattle fast-food, burgers and fries), Paseo Caribbean Food (famous for their Caribbean sandwiches)\n- Mid-range: The Pink Door (Italian cuisine near Pike Place Market with cozy ambiance), Tilikum Place Café (Dutch and European-inspired brunch and dinner)\n- High-end: Canlis (fine dining with panoramic views, American Northwest cuisine), Altura (locally sourced seasonal tasting menus)\n\nLocal specialties and must-try dishes:\n- Pacific Northwest salmon (grilled or smoked)\n- Geoduck clam (a unique and local seafood delicacy)\n- Dungeness crab\n- Seattle-style hot dogs (often with cream cheese and grilled onions)\n- Coffee (Seattle is home to Starbucks and numerous artisanal coffee shops)\n\nFood districts or areas with good dining options:\n- Pike Place Market: iconic food market with fresh seafood, local produce, and casual eateries\n- Capitol Hill: vibrant neighborhood with diverse restaurants, cafes, and nightlife\n- Ballard: known for seafood restaurants and Scandinavian influence\n\nFamous food markets or unique food experiences:\n- Pike Place Market: a must-visit for fresh seafood, artisan foods, and the famous fish-throwing vendors\n- Seattle Underground Food Tour: explore historic areas with tastings from local eateries\n- International District: offers authentic Asian cuisines including Chinese, Japanese, Vietnamese, and Thai\n\nSeattle's food scene is special for its emphasis on fresh, local seafood and innovative Pacific Northwest flavors combined with a thriving coffee culture. It offers diverse options from casual dining to elegant experiences."}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_1LulzE1uNEaf0T7dIXgRM28G) *****
+***** Response from calling tool (call_7hs3Q5NxJL16WXbqyoQnJRBD) *****
 Dining recommendations provided and stored.
 **********************************************************************
 
@@ -707,22 +678,22 @@ Next speaker: coordinator_agent
 >>>>>>>> USING AUTO REPLY...
 coordinator_agent (to chat_manager):
 
-***** Suggested tool call (call_j9yZbAwdHrXgg2AhIHrpHZFY): compile_final_response *****
+***** Suggested tool call (call_7MDQ7w9J6PtIzFYuT3fhmVto): compile_final_response *****
 Arguments:
-{"response_content":"**Seattle Weekend Guide (March 7-9, 2025)**\n\n---\n\n### **Weather Forecast**\n- **Friday (March 7):** High 50°F (10°C), Low 42°F (6°C) - Light rain expected.\n- **Saturday (March 8):** High 48°F (9°C), Low 41°F (5°C) - Moderate rain expected.\n- **Sunday (March 9):** High 52°F (11°C), Low 43°F (6°C) - Showers likely.\n- **Recommendations:** Dress in layers and wear a waterproof jacket. Consider waterproof shoes and bring an umbrella to stay dry.\n\n---\n\n### **Local Events**\n1. **Seattle International Film Festival (SIFF):** Running from March 6 to March 9, featuring a variety of independent films across multiple venues.\n2. **Seattle Sounders FC vs. Vancouver Whitecaps FC:** Major League Soccer match on March 8 at Lumen Field.\n3. **Attractions:** \n   - Pike Place Market, Space Needle, Chihuly Garden and Glass, Seattle Art Museum, Museum of Pop Culture (MoPOP).\n4. **Outdoor Activities:** \n   - Discovery Park and Alki Beach are great for a nature escape, weather permitting.\n\n---\n\n### **Transportation Tips**\n- **Getting Around:** Use King County Metro buses, light rail, rental bikes, or rideshares (Uber, Lyft). \n- **Traffic:** Expect congestion around major events; avoid I-5 during rush hours for smoother travel. \n- **Parking:** Look for garages or use ParkMobile for on-street parking. Public transit is a hassle-free option!\n\n---\n\n### **Dining Recommendations**\n1. **Restaurants:**\n   - **Fine Dining:** Canlis (Pacific Northwest cuisine with views).\n   - **Mid-Range:** The Pink Door (Eclectic Italian with live music).\n   - **Affordable:** Paseo (Famous Caribbean sandwiches).\n2. **Local Specialties:** Don’t miss the seafood, local coffee, and Pacific Northwest dishes.\n3. **Dining Areas:** Explore Pike Place Market, Capitol Hill, and Ballard for a vibrant dining scene.\n\n---"}
+{"response_content":"Here is your comprehensive guide for your visit to Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025:\n\n---\n\n🌤️ Weather Forecast:\n- Expect cool early March weather in Seattle with temperatures ranging from lows around 40°F (4°C) to highs near 55°F (13°C).\n- Possible light rain showers typical for the season, so bring waterproof clothing and an umbrella.\n- Windy conditions may also occur, especially near the waterfront.\n\n🎉 Events and Attractions:\n- Seattle International Film Festival: Weekend screenings featuring international films.\n- Concert at The Showbox on Friday night featuring a popular indie band.\n- Seattle Sounders FC home soccer match at Lumen Field on Saturday afternoon.\n- Must-visit spots include the Space Needle, Pike Place Market, Museum of Pop Culture (MoPOP), Seattle Art Museum, and Paramount Theatre.\n- For outdoor activities, consider Discovery Park and Green Lake Park for walking, hiking, and boating.\n\n🚗 Transportation and Traffic Tips:\n- Use Link Light Rail for efficient travel between the airport, downtown, and neighborhoods.\n- King County Metro buses are reliable and have extensive coverage.\n- Bike and scooter rentals are great options for short distances.\n- Avoid driving through downtown during peak hours (7-9 AM, 4-6 PM).\n- Expect heavier traffic on I-5 Friday evening and Sunday afternoon.\n- For the soccer game at Lumen Field on Saturday, consider transit or arrive early to avoid congestion.\n- Parking is limited downtown; utilize paid garages or Park-and-Ride facilities.\n\n🍽️ Dining Recommendations:\n- Budget: Dick's Drive-In (classic Seattle fast-food), Paseo Caribbean Food (famous Caribbean sandwiches).\n- Mid-range: The Pink Door (Italian near Pike Place Market), Tilikum Place Café (Dutch/European brunch and dinner).\n- High-end: Canlis (fine dining with views), Altura (seasonal tasting menus).\n- Local delicacies to try: Pacific Northwest salmon, geoduck clam, Dungeness crab, Seattle-style hot dogs with cream cheese, and excellent coffee.\n- Food hubs: Pike Place Market, Capitol Hill neighborhood, Ballard area.\n- Unique food experiences include the Seattle Underground Food Tour and exploring the International District for Asian cuisines.\n\nEnjoy your trip! Let me know if you'd like help with any specific reservations or additional tips."}
 ***************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION compile_final_response...
-Call ID: call_j9yZbAwdHrXgg2AhIHrpHZFY
-Input arguments: {'response_content': '**Seattle Weekend Guide (March 7-9, 2025)**\n\n---\n\n### **Weather Forecast**\n- **Friday (March 7):** High 50°F (10°C), Low 42°F (6°C) - Light rain expected.\n- **Saturday (March 8):** High 48°F (9°C), Low 41°F (5°C) - Moderate rain expected.\n- **Sunday (March 9):** High 52°F (11°C), Low 43°F (6°C) - Showers likely.\n- **Recommendations:** Dress in layers and wear a waterproof jacket. Consider waterproof shoes and bring an umbrella to stay dry.\n\n---\n\n### **Local Events**\n1. **Seattle International Film Festival (SIFF):** Running from March 6 to March 9, featuring a variety of independent films across multiple venues.\n2. **Seattle Sounders FC vs. Vancouver Whitecaps FC:** Major League Soccer match on March 8 at Lumen Field.\n3. **Attractions:** \n   - Pike Place Market, Space Needle, Chihuly Garden and Glass, Seattle Art Museum, Museum of Pop Culture (MoPOP).\n4. **Outdoor Activities:** \n   - Discovery Park and Alki Beach are great for a nature escape, weather permitting.\n\n---\n\n### **Transportation Tips**\n- **Getting Around:** Use King County Metro buses, light rail, rental bikes, or rideshares (Uber, Lyft). \n- **Traffic:** Expect congestion around major events; avoid I-5 during rush hours for smoother travel. \n- **Parking:** Look for garages or use ParkMobile for on-street parking. Public transit is a hassle-free option!\n\n---\n\n### **Dining Recommendations**\n1. **Restaurants:**\n   - **Fine Dining:** Canlis (Pacific Northwest cuisine with views).\n   - **Mid-Range:** The Pink Door (Eclectic Italian with live music).\n   - **Affordable:** Paseo (Famous Caribbean sandwiches).\n2. **Local Specialties:** Don’t miss the seafood, local coffee, and Pacific Northwest dishes.\n3. **Dining Areas:** Explore Pike Place Market, Capitol Hill, and Ballard for a vibrant dining scene.\n\n---'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_7MDQ7w9J6PtIzFYuT3fhmVto
+Input arguments: {'response_content': "Here is your comprehensive guide for your visit to Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025:\n\n---\n\n🌤️ Weather Forecast:\n- Expect cool early March weather in Seattle with temperatures ranging from lows around 40°F (4°C) to highs near 55°F (13°C).\n- Possible light rain showers typical for the season, so bring waterproof clothing and an umbrella.\n- Windy conditions may also occur, especially near the waterfront.\n\n🎉 Events and Attractions:\n- Seattle International Film Festival: Weekend screenings featuring international films.\n- Concert at The Showbox on Friday night featuring a popular indie band.\n- Seattle Sounders FC home soccer match at Lumen Field on Saturday afternoon.\n- Must-visit spots include the Space Needle, Pike Place Market, Museum of Pop Culture (MoPOP), Seattle Art Museum, and Paramount Theatre.\n- For outdoor activities, consider Discovery Park and Green Lake Park for walking, hiking, and boating.\n\n🚗 Transportation and Traffic Tips:\n- Use Link Light Rail for efficient travel between the airport, downtown, and neighborhoods.\n- King County Metro buses are reliable and have extensive coverage.\n- Bike and scooter rentals are great options for short distances.\n- Avoid driving through downtown during peak hours (7-9 AM, 4-6 PM).\n- Expect heavier traffic on I-5 Friday evening and Sunday afternoon.\n- For the soccer game at Lumen Field on Saturday, consider transit or arrive early to avoid congestion.\n- Parking is limited downtown; utilize paid garages or Park-and-Ride facilities.\n\n🍽️ Dining Recommendations:\n- Budget: Dick's Drive-In (classic Seattle fast-food), Paseo Caribbean Food (famous Caribbean sandwiches).\n- Mid-range: The Pink Door (Italian near Pike Place Market), Tilikum Place Café (Dutch/European brunch and dinner).\n- High-end: Canlis (fine dining with views), Altura (seasonal tasting menus).\n- Local delicacies to try: Pacific Northwest salmon, geoduck clam, Dungeness crab, Seattle-style hot dogs with cream cheese, and excellent coffee.\n- Food hubs: Pike Place Market, Capitol Hill neighborhood, Ballard area.\n- Unique food experiences include the Seattle Underground Food Tour and exploring the International District for Asian cuisines.\n\nEnjoy your trip! Let me know if you'd like help with any specific reservations or additional tips."}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_j9yZbAwdHrXgg2AhIHrpHZFY) *****
+***** Response from calling tool (call_7MDQ7w9J6PtIzFYuT3fhmVto) *****
 Final response compiled successfully.
 **********************************************************************
 
@@ -731,48 +702,48 @@ Final response compiled successfully.
 Next speaker: user
 
 Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+>>>>>>>> TERMINATING RUN (8cbea58a-be67-441a-9a5d-e6a979f22b88): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (77451cfd-b2eb-4a9a-a1c8-1db4c861aa4d): No reply generated
 City guide response completed successfully!
 
 ===== FINAL RESPONSE =====
 
-**Seattle Weekend Guide (March 7-9, 2025)**
+Here is your comprehensive guide for your visit to Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025:
 
 ---
 
-### **Weather Forecast**
-- **Friday (March 7):** High 50°F (10°C), Low 42°F (6°C) - Light rain expected.
-- **Saturday (March 8):** High 48°F (9°C), Low 41°F (5°C) - Moderate rain expected.
-- **Sunday (March 9):** High 52°F (11°C), Low 43°F (6°C) - Showers likely.
-- **Recommendations:** Dress in layers and wear a waterproof jacket. Consider waterproof shoes and bring an umbrella to stay dry.
+🌤️ Weather Forecast:
+- Expect cool early March weather in Seattle with temperatures ranging from lows around 40°F (4°C) to highs near 55°F (13°C).
+- Possible light rain showers typical for the season, so bring waterproof clothing and an umbrella.
+- Windy conditions may also occur, especially near the waterfront.
 
----
+🎉 Events and Attractions:
+- Seattle International Film Festival: Weekend screenings featuring international films.
+- Concert at The Showbox on Friday night featuring a popular indie band.
+- Seattle Sounders FC home soccer match at Lumen Field on Saturday afternoon.
+- Must-visit spots include the Space Needle, Pike Place Market, Museum of Pop Culture (MoPOP), Seattle Art Museum, and Paramount Theatre.
+- For outdoor activities, consider Discovery Park and Green Lake Park for walking, hiking, and boating.
 
-### **Local Events**
-1. **Seattle International Film Festival (SIFF):** Running from March 6 to March 9, featuring a variety of independent films across multiple venues.
-2. **Seattle Sounders FC vs. Vancouver Whitecaps FC:** Major League Soccer match on March 8 at Lumen Field.
-3. **Attractions:**
-   - Pike Place Market, Space Needle, Chihuly Garden and Glass, Seattle Art Museum, Museum of Pop Culture (MoPOP).
-4. **Outdoor Activities:**
-   - Discovery Park and Alki Beach are great for a nature escape, weather permitting.
+🚗 Transportation and Traffic Tips:
+- Use Link Light Rail for efficient travel between the airport, downtown, and neighborhoods.
+- King County Metro buses are reliable and have extensive coverage.
+- Bike and scooter rentals are great options for short distances.
+- Avoid driving through downtown during peak hours (7-9 AM, 4-6 PM).
+- Expect heavier traffic on I-5 Friday evening and Sunday afternoon.
+- For the soccer game at Lumen Field on Saturday, consider transit or arrive early to avoid congestion.
+- Parking is limited downtown; utilize paid garages or Park-and-Ride facilities.
 
----
+🍽️ Dining Recommendations:
+- Budget: Dick's Drive-In (classic Seattle fast-food), Paseo Caribbean Food (famous Caribbean sandwiches).
+- Mid-range: The Pink Door (Italian near Pike Place Market), Tilikum Place Café (Dutch/European brunch and dinner).
+- High-end: Canlis (fine dining with views), Altura (seasonal tasting menus).
+- Local delicacies to try: Pacific Northwest salmon, geoduck clam, Dungeness crab, Seattle-style hot dogs with cream cheese, and excellent coffee.
+- Food hubs: Pike Place Market, Capitol Hill neighborhood, Ballard area.
+- Unique food experiences include the Seattle Underground Food Tour and exploring the International District for Asian cuisines.
 
-### **Transportation Tips**
-- **Getting Around:** Use King County Metro buses, light rail, rental bikes, or rideshares (Uber, Lyft).
-- **Traffic:** Expect congestion around major events; avoid I-5 during rush hours for smoother travel.
-- **Parking:** Look for garages or use ParkMobile for on-street parking. Public transit is a hassle-free option!
-
----
-
-### **Dining Recommendations**
-1. **Restaurants:**
-   - **Fine Dining:** Canlis (Pacific Northwest cuisine with views).
-   - **Mid-Range:** The Pink Door (Eclectic Italian with live music).
-   - **Affordable:** Paseo (Famous Caribbean sandwiches).
-2. **Local Specialties:** Don’t miss the seafood, local coffee, and Pacific Northwest dishes.
-3. **Dining Areas:** Explore Pike Place Market, Capitol Hill, and Ballard for a vibrant dining scene.
-
----
+Enjoy your trip! Let me know if you'd like help with any specific reservations or additional tips.
 
 
 ===== FINAL CONTEXT VARIABLES =====
@@ -789,12 +760,12 @@ City guide response completed successfully!
   "food_info_needed": true,
   "food_info_completed": true,
   "city": "Seattle",
-  "date_range": "March 7, 2025 to March 9, 2025",
-  "weather_info": "Seattle, March 7-9, 2025:\n1. Temperature Ranges: \n   - Friday (March 7): High 50\u00b0F (10\u00b0C), Low 42\u00b0F (6\u00b0C)\n   - Saturday (March 8): High 48\u00b0F (9\u00b0C), Low 41\u00b0F (5\u00b0C)\n   - Sunday (March 9): High 52\u00b0F (11\u00b0C), Low 43\u00b0F (6\u00b0C)\n2. Precipitation Forecasts: \n   - Friday: Light rain, 0.1 inches expected.\n   - Saturday: Moderate rain, 0.25 inches expected.\n   - Sunday: Showers likely, 0.2 inches expected.\n3. Notable Weather Conditions: \n   - Friday: Cloudy with occasional light rain.\n   - Saturday: Overcast with persistent rain.\n   - Sunday: Overcast with scattered showers.\n4. Recommendations: \n   - Dress in layers and wear a waterproof jacket. Consider waterproof shoes due to expected rain. An umbrella is advisable for all days.",
-  "events_info": "Events in Seattle from March 7-9, 2025:\n1. Major Events:\n   - Seattle International Film Festival (SIFF): Running from March 6 to March 9, this annual festival features a variety of independent films from around the world, with screenings at several locations.\n   - Seattle Sounders FC vs. Vancouver Whitecaps FC: A Major League Soccer match on March 8 at Lumen Field.\n\n2. Popular Attractions and Landmarks:\n   - Pike Place Market: Enjoy fresh seafood, artisanal products, and the famous gum wall.\n   - Space Needle: Iconic observation tower with stunning views of the city and surrounding mountains.\n   - Chihuly Garden and Glass: A beautiful exhibition featuring the work of glass artist Dale Chihuly.\n\n3. Cultural Activities:\n   - Seattle Art Museum: Offers a range of exhibits, including contemporary and Native American art.\n   - Museum of Pop Culture (MoPOP): Explore exhibitions related to music, science fiction, and pop culture.\n   - The Paramount Theatre: Check for performances or shows happening this weekend.\n\n4. Outdoor Recreation Opportunities:\n   - Discovery Park: A large park with trails, beaches, and stunning views of Puget Sound and the Olympic Mountains.\n   - Alki Beach: A lovely area for walking or biking along the waterfront. Potential for catching sunset views.\n   - Hiking: If the weather permits, explore trails in nearby parks like Rattlesnake Ledge or Mount Si.",
-  "traffic_info": "Transportation Tips for Seattle (March 7-9, 2025):\n1. Best Ways to Get Around:\n   - **Public Transit**: Utilize King County Metro buses and the light rail, which are efficient and cover major areas. The light rail connects Seattle-Tacoma International Airport to downtown Seattle.\n   - **Rental Options**: Consider renting a bike through Lime or Spin for short distances. Car rentals are available, but parking and traffic can be challenging. Rideshare options like Uber and Lyft are widely used.\n   - **Walking**: Seattle has many walkable neighborhoods, particularly downtown. Be prepared for hilly terrains.\n\n2. Traffic Patterns and Areas to Avoid:\n   - Expect increased traffic around major event venues like Lumen Field and the Seattle Center (Space Needle and MoPOP). \n   - Avoid I-5 during rush hours (approximately 7-9 AM and 4-6 PM) for smoother travels within the city. \n   - Stay away from streets near Pike Place and Capitol Hill during peak times due to heavy crowds.\n\n3. Parking Recommendations:\n   - Parking in downtown Seattle can be expensive and hard to find. Look for garages (such as the Seattle Center Armory Garage) or consider street parking on weekends when rates may be lower. \n   - Utilize apps like ParkMobile to pay for street parking conveniently.\n\n4. Tips for Efficient Transportation Between Popular Areas:\n   - From Pike Place Market to Seattle Center, consider taking the light rail or a rideshare to avoid the hassle of parking.\n   - If heading to the movie screenings at SIFF, check the specific venue as many will be close to public transit stops.\n   - For dining, check the proximity to your sights, as many restaurants are concentrated in the downtown area.",
-  "food_info": "Seattle Dining Recommendations:\n1. Notable Restaurants:\n   - **Fine Dining:** \n      - Canlis: An iconic fine-dining restaurant offering Pacific Northwest cuisine with stunning views of Lake Union.\n   - **Mid-Range:** \n      - The Pink Door: An eclectic Italian restaurant located near Pike Place Market, known for its live music and unique ambiance.\n   - **Affordable Eats:** \n      - Paseo: Famous for their Caribbean sandwiches, especially the \"Cuban\" sandwich that locals rave about.\n\n2. Local Specialties and Must-Try Dishes:\n   - **Seafood:** Try the clam chowder or fresh oysters from local seafood spots.\n   - **Coffee:** Enjoy a cup from one of Seattle's many coffee shops (Starbucks originated here, but try local roasters like Victrola Coffee).\n   - **Pacific Northwest Cuisine:** Dishes featuring local ingredients such as salmon, Dungeness crab, and fresh vegetables.\n\n3. Food Districts or Areas with Good Dining Options:\n   - **Pike Place Market:** A food lover's paradise with numerous restaurants, fishmongers, and artisanal food vendors.\n   - **Capitol Hill:** Known for diverse dining options, from trendy cafes to vegan restaurants.\n   - **Ballard:** Offers a blend of established eateries and new, hip dining options, including breweries.\n\n4. Famous Food Markets or Unique Food Experiences:\n   - **Pike Place Market:** Best known for the fish market where fishmongers toss seafood. Explore the local produce and crafts as well.\n   - **Ballard Farmers Market:** Held every Sunday, showcasing local farmers and vendors.\n   - **Food Tours:** Consider a guided food tour to explore the city's culinary highlights. Options include Seattle food tours focused on specific cuisines or neighborhoods.",
-  "final_response": "**Seattle Weekend Guide (March 7-9, 2025)**\n\n---\n\n### **Weather Forecast**\n- **Friday (March 7):** High 50\u00b0F (10\u00b0C), Low 42\u00b0F (6\u00b0C) - Light rain expected.\n- **Saturday (March 8):** High 48\u00b0F (9\u00b0C), Low 41\u00b0F (5\u00b0C) - Moderate rain expected.\n- **Sunday (March 9):** High 52\u00b0F (11\u00b0C), Low 43\u00b0F (6\u00b0C) - Showers likely.\n- **Recommendations:** Dress in layers and wear a waterproof jacket. Consider waterproof shoes and bring an umbrella to stay dry.\n\n---\n\n### **Local Events**\n1. **Seattle International Film Festival (SIFF):** Running from March 6 to March 9, featuring a variety of independent films across multiple venues.\n2. **Seattle Sounders FC vs. Vancouver Whitecaps FC:** Major League Soccer match on March 8 at Lumen Field.\n3. **Attractions:** \n   - Pike Place Market, Space Needle, Chihuly Garden and Glass, Seattle Art Museum, Museum of Pop Culture (MoPOP).\n4. **Outdoor Activities:** \n   - Discovery Park and Alki Beach are great for a nature escape, weather permitting.\n\n---\n\n### **Transportation Tips**\n- **Getting Around:** Use King County Metro buses, light rail, rental bikes, or rideshares (Uber, Lyft). \n- **Traffic:** Expect congestion around major events; avoid I-5 during rush hours for smoother travel. \n- **Parking:** Look for garages or use ParkMobile for on-street parking. Public transit is a hassle-free option!\n\n---\n\n### **Dining Recommendations**\n1. **Restaurants:**\n   - **Fine Dining:** Canlis (Pacific Northwest cuisine with views).\n   - **Mid-Range:** The Pink Door (Eclectic Italian with live music).\n   - **Affordable:** Paseo (Famous Caribbean sandwiches).\n2. **Local Specialties:** Don\u2019t miss the seafood, local coffee, and Pacific Northwest dishes.\n3. **Dining Areas:** Explore Pike Place Market, Capitol Hill, and Ballard for a vibrant dining scene.\n\n---"
+  "date_range": "Friday 7th March 2025 to Sunday 9th March 2025",
+  "weather_info": "Please provide the detailed weather forecast for Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, including temperature ranges (high/low), precipitation forecasts, notable weather conditions (sunny, rainy, windy, etc.), and recommendations for appropriate clothing or preparation.",
+  "events_info": "For Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025, here are some highlights:\n\n1. Major Events:\n- Seattle International Film Festival: Special weekend screenings featuring international films.\n- Concert at The Showbox: Live performance by a popular indie band on Friday night.\n- Seattle Sounders FC soccer game: Home match at Lumen Field on Saturday afternoon.\n\n2. Popular Attractions:\n- Space Needle: Iconic landmark with panoramic city views.\n- Pike Place Market: Famous historic market with fresh seafood, crafts, and street performances.\n- Museum of Pop Culture (MoPOP): Exhibits on music, sci-fi, and pop culture artifacts.\n\n3. Cultural Activities:\n- Seattle Art Museum: Featuring contemporary and traditional art exhibits.\n- Paramount Theatre: Broadway show performances during the weekend.\n\n4. Outdoor Recreation:\n- Discovery Park: Large urban park with hiking trails and beach access.\n- Green Lake Park: Popular spot for walking, jogging, and paddle boating.\n\nTransportation Options:\n- King County Metro buses: Comprehensive coverage of the city.\n- Link Light Rail: Connects downtown to the airport and neighborhoods.\n- Ride-shares and bike rentals widely available.\n\nDining Recommendations:\n- The Pink Door: Italian cuisine with a cozy ambiance near Pike Place Market.\n- Canlis: Fine dining with panoramic views, perfect for a special dinner.\n- Dick's Drive-In: Classic Seattle fast-food for a quick, tasty meal.\n\nLet me know if you need more specific recommendations or details.",
+  "traffic_info": "Transportation and traffic information for Seattle (7th to 9th March 2025):\n\n1. Best Ways to Get Around:\n- Public Transit: The Link Light Rail is efficient for traveling between the airport, downtown, and neighborhoods. King County Metro buses cover most areas. Consider purchasing an ORCA card for convenience.\n- Rentals: Bike and scooter rentals are popular for short distances, especially near downtown, the waterfront, and parks.\n- Walking: Central areas like downtown, Pike Place Market, and the Seattle Waterfront are very walkable.\n\n2. Traffic Patterns and Areas to Avoid:\n- Expect heavier traffic on I-5, especially during Friday evening rush and Sunday late afternoon as people return.\n- Avoid driving through the downtown core during peak hours (7-9 AM and 4-6 PM).\n- Construction or event-related road closures may occur near Lumen Field on Saturday due to the soccer match.\n\n3. Parking Recommendations:\n- Use paid parking garages near major attractions; street parking is limited and often metered.\n- Consider Park-and-Ride options outside downtown and use public transit to enter the city.\n- Some hotels offer parking but check in advance.\n\n4. Tips for Efficient Transportation:\n- Use Link Light Rail to reach downtown from the airport or neighborhoods like Capitol Hill and the University District.\n- Plan around the soccer game at Lumen Field; arrive early or use transit to avoid congestion.\n- For Pike Place Market, walk or use short ride-share trips as parking is scarce.\n\nLet me know if you want detailed advice on any specific routes or times.",
+  "food_info": "Notable restaurants across different price ranges in Seattle:\n- Budget: Dick's Drive-In (classic Seattle fast-food, burgers and fries), Paseo Caribbean Food (famous for their Caribbean sandwiches)\n- Mid-range: The Pink Door (Italian cuisine near Pike Place Market with cozy ambiance), Tilikum Place Cafe (Dutch and European-inspired brunch and dinner)\n- High-end: Canlis (fine dining with panoramic views, American Northwest cuisine), Altura (locally sourced seasonal tasting menus)\n\nLocal specialties and must-try dishes:\n- Pacific Northwest salmon (grilled or smoked)\n- Geoduck clam (a unique and local seafood delicacy)\n- Dungeness crab\n- Seattle-style hot dogs (often with cream cheese and grilled onions)\n- Coffee (Seattle is home to Starbucks and numerous artisanal coffee shops)\n\nFood districts or areas with good dining options:\n- Pike Place Market: iconic food market with fresh seafood, local produce, and casual eateries\n- Capitol Hill: vibrant neighborhood with diverse restaurants, cafes, and nightlife\n- Ballard: known for seafood restaurants and Scandinavian influence\n\nFamous food markets or unique food experiences:\n- Pike Place Market: a must-visit for fresh seafood, artisan foods, and the famous fish-throwing vendors\n- Seattle Underground Food Tour: explore historic areas with tastings from local eateries\n- International District: offers authentic Asian cuisines including Chinese, Japanese, Vietnamese, and Thai\n\nSeattle's food scene is special for its emphasis on fresh, local seafood and innovative Pacific Northwest flavors combined with a thriving coffee culture. It offers diverse options from casual dining to elegant experiences.",
+  "final_response": "Here is your comprehensive guide for your visit to Seattle from Friday, 7th March 2025 to Sunday, 9th March 2025:\n\n---\n\n\ud83c\udf24\ufe0f Weather Forecast:\n- Expect cool early March weather in Seattle with temperatures ranging from lows around 40\u00b0F (4\u00b0C) to highs near 55\u00b0F (13\u00b0C).\n- Possible light rain showers typical for the season, so bring waterproof clothing and an umbrella.\n- Windy conditions may also occur, especially near the waterfront.\n\n\ud83c\udf89 Events and Attractions:\n- Seattle International Film Festival: Weekend screenings featuring international films.\n- Concert at The Showbox on Friday night featuring a popular indie band.\n- Seattle Sounders FC home soccer match at Lumen Field on Saturday afternoon.\n- Must-visit spots include the Space Needle, Pike Place Market, Museum of Pop Culture (MoPOP), Seattle Art Museum, and Paramount Theatre.\n- For outdoor activities, consider Discovery Park and Green Lake Park for walking, hiking, and boating.\n\n\ud83d\ude97 Transportation and Traffic Tips:\n- Use Link Light Rail for efficient travel between the airport, downtown, and neighborhoods.\n- King County Metro buses are reliable and have extensive coverage.\n- Bike and scooter rentals are great options for short distances.\n- Avoid driving through downtown during peak hours (7-9 AM, 4-6 PM).\n- Expect heavier traffic on I-5 Friday evening and Sunday afternoon.\n- For the soccer game at Lumen Field on Saturday, consider transit or arrive early to avoid congestion.\n- Parking is limited downtown; utilize paid garages or Park-and-Ride facilities.\n\n\ud83c\udf7d\ufe0f Dining Recommendations:\n- Budget: Dick's Drive-In (classic Seattle fast-food), Paseo Caribbean Food (famous Caribbean sandwiches).\n- Mid-range: The Pink Door (Italian near Pike Place Market), Tilikum Place Cafe (Dutch/European brunch and dinner).\n- High-end: Canlis (fine dining with views), Altura (seasonal tasting menus).\n- Local delicacies to try: Pacific Northwest salmon, geoduck clam, Dungeness crab, Seattle-style hot dogs with cream cheese, and excellent coffee.\n- Food hubs: Pike Place Market, Capitol Hill neighborhood, Ballard area.\n- Unique food experiences include the Seattle Underground Food Tour and exploring the International District for Asian cuisines.\n\nEnjoy your trip! Let me know if you'd like help with any specific reservations or additional tips."
 }
 
 

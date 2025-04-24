@@ -9,7 +9,7 @@ There are a number of ways a chat can end:
 3. An agent automatically replies a maximum number of times
 4. A human replies with 'exit' when prompted
 5. In a group chat, there's no next agent
-6. In a swarm, transitioning to AfterWorkOption.TERMINATE
+6. In a group chat, transitioning to a TerminateTarget
 7. Custom reply functions
 
 ### 1. Maximum turns
@@ -116,10 +116,10 @@ If the next agent in a GroupChat can't be determined the chat will end.
 
 If you are customizing the speaker selection method with a Callable, return `None` to end the chat.
 
-### 6. Swarm, transitioning to end the chat
-In a swarm, if you transition to `AfterWorkOption.TERMINATE` it will end the swarm. The default swarm-level AfterWork option is `AfterWorkOption.TERMINATE` and this will apply to any agent in the swarm that doesn't have an AfterWork hand-off specified.
+### 6. Group Chat, transitioning to end the chat
+In a group chat, if you transition to `TerminateTarget` it will end the chat. The `DefaultPattern` pattern's group-level after work is `TerminateTarget` and this will apply to any agent in the group chat that doesn't have an after work handoff specified.
 
-Additionally, if you transition to `AfterWorkOption.REVERT_TO_USER` but have not specified a `user_agent` in `initiate_swarm_chat` then it will end the swarm.
+Additionally, if you transition to `RevertToUserTarget` but have not specified a `user_agent` in `initiate_group_chat` then it will end the chat.
 
 ### 7. Reply functions
 AG2 provides the ability to create custom reply functions for an agent using `register_reply`.
