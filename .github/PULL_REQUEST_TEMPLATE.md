@@ -1,4 +1,4 @@
-<!-- Thank you for your contribution! Please review https://docs.ag2.ai/docs/contributor-guide/contributing before opening a pull request. -->
+<!-- Thank you for your contribution! Please review https://docs.ag2.ai/latest/docs/contributor-guide/contributing before opening a pull request. -->
 
 <!-- Please add a reviewer to the assignee section when you create a PR. If you don't have the access to it, we will shortly find a reviewer and assign them to your PR. -->
 

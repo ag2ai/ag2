@@ -68,6 +68,3 @@ jobs:
           else
             cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
           fi
-    outputs:
-      is_rc: ${{ env.IS_RC }}
-      version: ${{ env.VERSION }}
