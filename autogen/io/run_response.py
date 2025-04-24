@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from ..agentchat.agent import LLMMessageType
+from ..agentchat.group.context_variables import ContextVariables
 from ..events.agent_events import ErrorEvent, InputRequestEvent, RunCompletionEvent
 from ..events.base_event import BaseEvent
 from .processors import (
@@ -78,7 +79,7 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def summary(self) -> Optional[str]: ...
 
     @property
-    def context_variables(self) -> Optional[dict[str, Any]]: ...
+    def context_variables(self) -> Optional[ContextVariables]: ...
 
     @property
     def last_speaker(self) -> Optional[str]: ...
@@ -100,7 +101,7 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     async def summary(self) -> Optional[str]: ...
 
     @property
-    async def context_variables(self) -> Optional[dict[str, Any]]: ...
+    async def context_variables(self) -> Optional[ContextVariables]: ...
 
     @property
     async def last_speaker(self) -> Optional[str]: ...
@@ -117,7 +118,7 @@ class RunResponse:
         self._summary: Optional[str] = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
-        self._context_variables: Optional[dict[str, Any]] = None
+        self._context_variables: Optional[ContextVariables] = None
         self._last_speaker: Optional[str] = None
         self._cost: Optional[Cost] = None
 
@@ -167,7 +168,7 @@ class RunResponse:
         return self._uuid
 
     @property
-    def context_variables(self) -> Optional[dict[str, Any]]:
+    def context_variables(self) -> Optional[ContextVariables]:
         return self._context_variables
 
     @property
@@ -196,7 +197,7 @@ class AsyncRunResponse:
         self._summary: Optional[str] = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
-        self._context_variables: Optional[dict[str, Any]] = None
+        self._context_variables: Optional[ContextVariables] = None
         self._last_speaker: Optional[str] = None
         self._cost: Optional[Cost] = None
 
@@ -250,7 +251,7 @@ class AsyncRunResponse:
         return self._uuid
 
     @property
-    async def context_variables(self) -> Optional[dict[str, Any]]:
+    async def context_variables(self) -> Optional[ContextVariables]:
         return self._context_variables
 
     @property

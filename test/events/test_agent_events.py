@@ -10,6 +10,7 @@ import pytest
 import termcolor.termcolor
 
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.agentchat.group import ContextVariables
 from autogen.coding.base import CodeBlock
 from autogen.events.agent_events import (
     ClearAgentsHistoryEvent,
@@ -1841,7 +1842,7 @@ class TestRunCompletionEvent:
             history=[],
             cost={"cost": 0.0},
             last_speaker="assistant",
-            context_variables={"cotext_var_1": "value_1"},
+            context_variables=ContextVariables(data={"context_var_1": "value_1"}),
         )
         assert isinstance(actual, RunCompletionEvent)
 
@@ -1853,7 +1854,7 @@ class TestRunCompletionEvent:
                 "history": [],
                 "cost": {"cost": 0.0},
                 "last_speaker": "assistant",
-                "context_variables": {"cotext_var_1": "value_1"},
+                "context_variables": {"data": {"context_var_1": "value_1"}},
             },
         }
 

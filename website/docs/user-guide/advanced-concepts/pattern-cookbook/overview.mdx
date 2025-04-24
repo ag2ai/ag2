@@ -5,9 +5,10 @@ sidebarTitle: Overview
 
 Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
 
-The pattern implementations use AG2's swarm orchestration, read more about it [here](/docs/user-guide/basic-concepts/orchestration/swarm).
+The pattern implementations use AG2's swarm orchestration, read more about it [here](/docs/user-guide/advanced-concepts/swarm/introduction).
 
 Each pattern includes:
+
 - Description of the structure and information flow
 - Visualization example of agent interactions
 - Code example showing how to implement the pattern with AG2's swarm orchestration
@@ -20,6 +21,7 @@ Each pattern includes:
 A dynamic workflow where tasks are intelligently distributed to specialized agents based on content analysis rather than predetermined paths.
 
 **Business Use Cases:**
+
 - Customer support systems that route queries to appropriate department specialists
 - Multi-domain virtual assistants that connect users with specialized services
 - Knowledge management systems that direct questions to domain experts
@@ -31,6 +33,7 @@ A dynamic workflow where tasks are intelligently distributed to specialized agen
 A resource-efficient approach where simpler, less resource-intensive agents handle tasks first, with more capable (but potentially more expensive) agents only engaged when necessary.
 
 **Business Use Cases:**
+
 - Tiered customer support (chatbot → human agent → specialist)
 - Computational tasks with varying complexity requirements
 - Content moderation (automated → human review)
@@ -42,6 +45,7 @@ A resource-efficient approach where simpler, less resource-intensive agents hand
 A workflow where content progresses through repeated cycles of evaluation and improvement, enabling continuous refinement through deliberate iterations.
 
 **Business Use Cases:**
+
 - Document writing and editing processes
 - Iterative design and creative tasks
 - Learning systems that improve over time
@@ -54,6 +58,7 @@ A workflow where content progresses through repeated cycles of evaluation and im
 A tree-structured organization where "manager" agents at higher levels delegate tasks to "specialist" agents at lower levels, then aggregate and refine their outputs.
 
 **Business Use Cases:**
+
 - Complex research reports requiring both oversight and specialized deep dives
 - Product development workflows coordinating multiple specialized teams
 - Multi-faceted analysis that benefits from both generalists and specialists
@@ -65,6 +70,7 @@ A tree-structured organization where "manager" agents at higher levels delegate 
 A flexible pattern that relies on agent descriptions and conversation context to naturally determine the most appropriate specialist for each stage of a conversation, without requiring explicit routing rules.
 
 **Business Use Cases:**
+
 - Collaborative creative projects where expertise needs shift organically throughout the process
 - Educational assistants that adapt to changing student questions across different subjects
 - Consultative services where problem diagnosis may require different specialists at unpredictable points
@@ -75,6 +81,7 @@ A flexible pattern that relies on agent descriptions and conversation context to
 A pattern that organizes agents into a linear sequence where each agent performs their specific action before passing onto the next agent in the chain.
 
 **Business Use Cases:**
+
 - E-commerce order processing workflows (validation → inventory → payment → fulfillment)
 - Content creation pipelines (research → draft → edit → polish)
 - Data processing workflows (collect → clean → analyze → visualize)
@@ -86,6 +93,7 @@ A pattern that organizes agents into a linear sequence where each agent performs
 A pattern that employs multiple agents to attempt the same task using different approaches, with results compared to select the best outcome or combine strengths.
 
 **Business Use Cases:**
+
 - Critical systems where errors must be minimized
 - Creative tasks benefiting from multiple distinct perspectives
 - Complex problem solving with unclear optimal approaches
@@ -97,6 +105,7 @@ A pattern that employs multiple agents to attempt the same task using different 
 A pattern that centralizes coordination through a single agent while leveraging specialized expertise through satellite agents.
 
 **Business Use Cases:**
+
 - Customer support systems with specialized agents for different query types
 - Research projects requiring diverse domain expertise
 - City or travel guides that need to coordinate information from multiple domains
@@ -178,4 +187,4 @@ To implement these patterns in your own applications:
 3. Use AG2's Swarm framework to implement the chosen pattern
 4. Customize the agents and their capabilities for your specific needs
 
-For more information on using the Swarm framework itself, refer to the [Swarm documentation](/docs/user-guide/basic-concepts/orchestration/swarm).
+For more information on using the Swarm framework itself, refer to the [Swarm documentation](/docs/user-guide/advanced-concepts/swarm/introduction).
