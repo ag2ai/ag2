@@ -5,13 +5,13 @@ sidebarTitle: Tools and Functions
 
 Tools provide specialized capabilities to your agents, allowing them to perform actions and make decisions within the Group Chat environment. Similar to how real-world professionals use tools to accomplish specific tasks, AG2 agents use tools to extend their functionality beyond simple conversation.
 
-## Why Tools Matter in Group Chat
+## Why Tools Matter in a Group Chat
 
 In a multi-agent conversation, tools serve several critical purposes:
 
 - **Specialized Actions** - Agents can perform domain-specific tasks like data processing, calculations, or accessing external systems
 - **Structured Data Exchange** - Tools provide a consistent way for agents to exchange structured information
-- **Workflow Control** - Tools help direct the conversation flow, and can determining which agent speaks next
+- **Workflow Control** - Tools help direct the conversation flow, and can determine which agent speaks next
 - **Enhanced Capabilities** - Tools extend what agents can do, making them more powerful and useful
 
 ## ReplyResult: The Key to Tool Operations
@@ -20,7 +20,7 @@ The core component of tools is the [`ReplyResult`](/docs/api-reference/autogen/a
 
 - **message**: The text response to be shown in the conversation
 - **target**: (Optional) Where control should go next
-- **context_variables**: Updated shared state (we'll explore this in the next section)
+- **context_variables**: (Optional) Updated shared state (we'll explore this in the next section)
 
 This simple but powerful structure allows tools to both communicate results and influence the conversation flow.
 
