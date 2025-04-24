@@ -111,26 +111,23 @@ We are using the `AutoPattern` in this example, where the next speaker is automa
 
 ```mermaid
 flowchart TD
-    User([User]) --> |"Reports an issue"| GroupOrch[Group Chat Orchestration]
-    GroupOrch --> |"Passes to initial agent"| Triage[Triage Agent]
-    Triage --> |"Determines it's a technical issue"| Tech[Tech Agent]
-    Tech --> |"Handles technical issue"| Triage
+    User([User]) --> GroupManager[Group Manager]
 
-    Triage --> |"Determines it's a general issue"| General[General Agent]
-    General --> |"Provides general help"| Triage
+    GroupManager -->  Triage[Triage Agent]
+    Triage -->  GroupManager
 
-    Triage --> |"Doesn't specify next agent"| GroupManager[Group Manager]
-    GroupManager ...->  Tech
-    GroupManager ...->  Human
-    GroupManager ...->  General
+    GroupManager -->  Tech[Tech Agent]
+    Tech -->  GroupManager
 
-    style GroupOrch fill:#fff0f5,stroke:#ff69b4
+    GroupManager -->  General[General Agent]
+    General -->  GroupManager
+
+    GroupManager -->  User
+
+    style GroupManager fill:#ffebee,stroke:#f44336
     style Triage fill:#e1f5fe,stroke:#0288d1
     style Tech fill:#f1f8e9,stroke:#689f38
     style General fill:#fce4ec,stroke:#d81b60
-    style GroupManager fill:#ffebee,stroke:#f44336
-    style Human fill:#e1f5fe,stroke:#0288d1
-
 ```
 
 ### Complete Code Example
