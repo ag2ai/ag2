@@ -7,7 +7,7 @@ tags: [AG2 Agents]
 <iframe width="560" height="315" src="https://www.youtube.com/embed/laGZmQUolBY?si=oU9FSfWPGCTbJ1Y_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 **TL;DR**
-- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#nested-chats) conversation pattern in AG2.
+- We introduce CaptainAgent, an agent equipped with the capability to adaptively assemble a team of agents through retrieval-selection-generation process to handle complex tasks via the [`nested chat`](https://docs.ag2.ai/0.9/docs/user-guide/advanced-concepts/orchestration/orchestrations) conversation pattern in AG2.
 - CaptainAgent supports all types of `ConversableAgents` implemented in AG2.
 
 \<!-- more -->
@@ -101,7 +101,7 @@ result = user_proxy.initiate_chat(captain_agent, message=query)
 # Further Reading
 For a detailed description of how to configure the CaptainAgent, please refer to
 - [document](/docs/user-guide/reference-agents/captainagent).
-- [Notebook example](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_captainagent)
+- [Notebook example](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_captainagent)
 
 Please also refer to our [paper](https://arxiv.org/pdf/2405.19425) for more details about CaptainAgent and the proposed new team-building paradigm: adaptive build.
 

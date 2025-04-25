@@ -72,20 +72,20 @@ The framework categorizes responses based on their sensitivity and highlights po
 
 #### Agentic Design Patterns
 
-The **Prompt Leakage Probing Framework** leverages key agentic design patterns from the [AG2 library](https://docs.ag2.ai/docs/tutorial), providing a robust and modular structure for its functionality. Below are the patterns and components used, along with relevant links for further exploration:
+The **Prompt Leakage Probing Framework** leverages key agentic design patterns from the [AG2 library](https://docs.ag2.ai/0.8.7/docs/user-guide/basic-concepts/installing-ag2), providing a robust and modular structure for its functionality. Below are the patterns and components used, along with relevant links for further exploration:
 
 1. **Group Chat Pattern**
-   - The chat between agents in this project is modeled on the [Group Chat Pattern](https://docs.ag2.ai/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive#group-chat), where multiple agents collaboratively interact to perform tasks.
+   - The chat between agents in this project is modeled on the [Group Chat Pattern](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/groupchat/groupchat), where multiple agents collaboratively interact to perform tasks.
    - This structure allows for seamless coordination between agents like the prompt generator, classifier, and user proxy agent.
-   - The chat has a [custom speaker selection](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
+   - The chat has a [custom speaker selection](https://docs.ag2.ai/0.8.7/docs/use-cases/notebooks/notebooks/agentchat_groupchat_customized) method implemented so that it guarantees the prompt->response->classification chat flow.
 
 2. **ConversableAgents**
-   - The system includes two [ConversableAgents](https://docs.ag2.ai/docs/api-reference/autogen/ConversableAgent#conversableagent):
+   - The system includes two [ConversableAgents](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent):
      - [`PromptGeneratorAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_black_box/prompt_leakage_black_box.py#L7): Responsible for creating adversarial prompts aimed at probing LLMs.
      - [`PromptLeakageClassifierAgent`](https://github.com/airtai/prompt-leakage-probing/blob/efe9c286236e92c4f6366daa60da2282add3ca95/prompt_leakage_probing/workflow/agents/prompt_leakage_classifier/prompt_leakage_classifier.py#L7): Evaluates the model's responses to identify prompt leakage.
 
 3. **UserProxyAgent**
-   - A [UserProxyAgent](https://docs.ag2.ai/reference/autogen/UserProxyAgent#userproxyagent) acts as the intermediary for executing external functions, such as:
+   - A [UserProxyAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/UserProxyAgent/) acts as the intermediary for executing external functions, such as:
      - Communicating with the tested chatbot.
      - Logging prompt leakage attempts and their classifications.
 
@@ -191,4 +191,4 @@ The **Prompt Leakage Probing Framework** provides a tool to help test LLM agents
 
 For more details about **Prompt Leakage Probing**, please explore our [codebase](https://github.com/airtai/prompt-leakage-probing).
 
-Additionally, check out [AutoDefense](https://docs.ag2.ai/blog/2024-03-11-AutoDefense), which aligns with future directions for this work. One proposed idea is to use the testing system to compare the performance of unprotected LLMs versus LLMs fortified with AutoDefense protection. The testing system can serve as an evaluator for different defense strategies, with the expectation that AutoDefense provides enhanced safety.
+Additionally, check out [AutoDefense](https://docs.ag2.ai/latest/docs/blog/2024/03/11/AutoDefense), which aligns with future directions for this work. One proposed idea is to use the testing system to compare the performance of unprotected LLMs versus LLMs fortified with AutoDefense protection. The testing system can serve as an evaluator for different defense strategies, with the expectation that AutoDefense provides enhanced safety.
