@@ -71,6 +71,7 @@ with optional_import_block():
     from google.auth.credentials import Credentials
     from google.genai.types import (
         Content,
+        FinishReason,
         FunctionCall,
         FunctionDeclaration,
         FunctionResponse,
@@ -318,13 +319,21 @@ class GeminiClient:
         ans = ""
         random_id = random.randint(0, 10000)
         prev_function_calls = []
+        error_finish_reason = None
 
         if isinstance(response, GenerateContentResponse):
             if len(response.candidates) != 1:
                 raise ValueError(
                     f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
                 )
-            parts = response.candidates[0].content.parts
+
+            # Look at https://cloud.google.com/vertex-ai/generative-ai/docs/reference/python/latest/vertexai.generative_models.FinishReason
+            if response.candidates[0].finish_reason and response.candidates[0].finish_reason == FinishReason.RECITATION:
+                recitation_part = Part(text="Unsuccessful Finish Reason: RECITATION")
+                parts = [recitation_part]
+                error_finish_reason = "content_filter"  # As per available finish_reason in Choice
+            else:
+                parts = response.candidates[0].content.parts
         elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
             # google.generativeai also raises an error len(candidates) != 1:
             if len(response.candidates) != 1:
@@ -381,11 +390,21 @@ class GeminiClient:
             role="assistant", content=ans, function_call=None, tool_calls=autogen_tool_calls
         )
         choices = [
-            Choice(finish_reason="tool_calls" if autogen_tool_calls is not None else "stop", index=0, message=message)
+            Choice(
+                finish_reason="tool_calls"
+                if autogen_tool_calls is not None
+                else error_finish_reason
+                if error_finish_reason
+                else "stop",
+                index=0,
+                message=message,
+            )
         ]
 
         prompt_tokens = response.usage_metadata.prompt_token_count
-        completion_tokens = response.usage_metadata.candidates_token_count
+        completion_tokens = (
+            response.usage_metadata.candidates_token_count if response.usage_metadata.candidates_token_count else 0
+        )
 
         response_oai = ChatCompletion(
             id=str(random.randint(0, 1000)),
@@ -885,7 +904,10 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
             else:
                 return total_cost_mil(2.5, 15)
 
-        if "gemini-2.0-flash-lite" in model_name:
+        elif "gemini-2.5-flash-preview-04-17" in model_name:
+            return total_cost_mil(0.15, 0.6)  # NON-THINKING OUTPUT PRICE, $3 FOR THINKING!
+
+        elif "gemini-2.0-flash-lite" in model_name:
             return total_cost_mil(0.075, 0.3)
 
         elif "gemini-2.0-flash" in model_name:
@@ -923,7 +945,11 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
             else:
                 return total_cost_mil(2.5, 15)
 
-        if "gemini-2.0-flash-lite" in model_name:
+        elif "gemini-2.5-flash-preview-04-17" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
+            return total_cost_mil(0.15, 0.6)
+
+        elif "gemini-2.0-flash-lite" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
             return total_cost_mil(0.075, 0.3)
 
