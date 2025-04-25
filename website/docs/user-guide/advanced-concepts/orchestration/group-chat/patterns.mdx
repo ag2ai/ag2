@@ -1,0 +1,464 @@
+---
+Title: "Orchestration Patterns"
+sidebarTitle: "Orchestration Patterns"
+---
+
+Patterns are the foundation of group chat orchestration - they define how agents take turns speaking and collaborating. Each pattern offers a different approach to determining which agent speaks next, giving you control over the conversation flow.
+
+## Pattern Types
+
+AG2 offers five orchestration patterns to structure agent interactions:
+
+| **Pattern**       | **Description**                                             | **Best For**                                                |
+|-------------------|-------------------------------------------------------------|-------------------------------------------------------------|
+| DefaultPattern    | Relies solely on explicitly defined agent handoffs          | Fine-grained control over workflow transitions              |
+| AutoPattern       | Uses LLM to select next speaker based on message content    | Dynamic conversations where next speaker depends on context |
+| RoundRobinPattern | Agents speak in a predetermined sequential order            | Workflows where each agent should contribute in turn        |
+| RandomPattern     | Randomly selects the next agent (excluding current speaker) | Generating diverse perspectives or brainstorming            |
+| ManualPattern     | Prompts the user to select the next speaker                 | Educational scenarios or debugging complex workflows        |
+
+Let's explore each pattern using our triage example, where three specialized agents collaborate to provide technical support:
+
+## DefaultPattern: Explicit Handoff Control
+
+The `DefaultPattern` gives you complete control over the conversation flow through explicitly defined handoffs. With this pattern, you must define precisely where control should transfer next, or the conversation will terminate after the initial agent response.
+
+### Key Characteristics
+
+- Requires explicit definition of all agent transitions
+- No automatic selection of the next speaker
+- Conversation terminates if no valid handoff is defined
+- Provides maximum control over the conversation flow
+
+### Configuration Example
+
+With DefaultPattern, we need to explicitly define the handoffs between agents:
+
+```python hl_lines="10-22"
+# Configure the pattern
+pattern = DefaultPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config}
+)
+
+# Define explicit handoffs for each agent
+triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            target=AgentTarget(tech_agent),
+            condition=StringLLMCondition(prompt="When the user query is related to technical issues."),
+        ),
+        OnCondition(
+            target=AgentTarget(agent=general_agent),
+            condition=StringLLMCondition(prompt="When the user query is related to general questions."),
+        )
+    ]
+)
+tech_agent.handoffs.set_after_work(RevertToUserTarget())
+general_agent.handoffs.set_after_work(RevertToUserTarget())
+```
+
+In this example, the `triage_agent` explicitly defines the handoffs to either the `tech_agent` or `general_agent` based on the user query. And after the `tech_agent` and `general_agent` respond, they revert control back to the user. This pattern is ideal for scenarios where you need precise control over the conversation flow and want to ensure that each agent only speaks when necessary.
+
+### Complete Code Example
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import DefaultPattern
+    from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+
+    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query."""
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues."""
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent",
+            system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = DefaultPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config}
+    )
+
+    # Define explicit handoffs for each agent
+    triage_agent.handoffs.add_llm_conditions([
+            OnCondition(
+                target=AgentTarget(tech_agent),
+                condition=StringLLMCondition(prompt="When the user query is related to technical issues."),
+            ),
+            OnCondition(
+                target=AgentTarget(agent=general_agent),
+                condition=StringLLMCondition(prompt="When the user query is related to general questions."),
+            )
+        ]
+    )
+
+    tech_agent.handoffs.set_after_work(RevertToUserTarget())
+    general_agent.handoffs.set_after_work(RevertToUserTarget())
+
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10
+    )
+    ```
+
+
+### When to Use DefaultPattern
+
+DefaultPattern is ideal for:
+
+- Workflows with well-defined, predictable transitions
+- Compliance scenarios requiring specific approval chains
+- Sequential processes where each step must follow a predetermined path
+- Debugging complex multi-agent interactions
+
+## AutoPattern: LLM-Powered Speaker Selection
+
+The AutoPattern uses an LLM to intelligently select the next speaker based on the conversation context, creating a more dynamic and adaptive conversation flow.
+
+### Key Characteristics
+
+- Automatically selects the next speaker using an LLM
+- Analyzes conversation context to determine the most appropriate agent
+- Agents can still use explicit handoffs when needed
+- Creates natural, adaptive conversations
+
+### Configuration Example
+
+Setting up the AutoPattern is simpler since it doesn't require explicit handoffs:
+
+```python
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config}
+)
+```
+
+In this pattern, the next speaker is determined by the LLM based on the conversation context. This allows for a more fluid and natural conversation flow, as agents can respond based on the current state of the discussion.
+
+### Complete Code Example
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query."""
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues."""
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent",
+            system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config}
+    )
+
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10
+    )
+    ```
+
+### When to Use AutoPattern
+
+AutoPattern is ideal for:
+
+- Customer service bots that need to route inquiries appropriately
+- Complex workflows where the next step depends on the content of messages
+- Creating natural conversations with dynamic speaker transitions
+- Scenarios where predefined handoff rules would be too complex
+
+
+## RoundRobinPattern: Sequential Speaker Rotation
+
+The RoundRobinPattern creates a predictable rotation where agents speak in the exact order they're listed in the pattern configuration.
+
+### Key Characteristics
+
+- Agents speak in a fixed, sequential order
+- Order is determined by the list of agents provided to the pattern
+- Predictable and deterministic behavior
+
+### Configuration Example
+
+Setting up the RoundRobinPattern focuses on the order of agents:
+
+```python
+pattern = RoundRobinPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user
+)
+```
+
+### Complete Code Example
+
+In the example below, the agent order is set to `triage_agent`, `general_agent`, and `tech_agent`. This means the `triage_agent` will always speak first, followed by the `general_agent`, and then the `tech_agent`.
+
+Even though the `triage_agent`'s system message explicitly instructs it to route technical queries to the `tech_agent`, the control flow still follows the defined order. As a result, the `tech_agent` hands off to the `general_agent`, who then decides when to pass the query back to the `tech_agent` for technical responses.
+
+<Note>
+If the order is explicitly coded like in the `DefaultPattern` example, that will take precedence over the `RoundRobinPattern`. For example, you can specify the below handoffs in code and it will override the order of the `RoundRobinPattern`:
+
+```python
+triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            target=AgentTarget(tech_agent),
+            condition=StringLLMCondition(prompt="When the user query is related to technical issues."),
+        ),
+        OnCondition(
+            target=AgentTarget(agent=general_agent),
+            condition=StringLLMCondition(prompt="When the user query is related to general questions."),
+        )
+    ]
+)
+
+tech_agent.handoffs.set_after_work(RevertToUserTarget())
+general_agent.handoffs.set_after_work(RevertToUserTarget())
+```
+</Note>
+
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+    from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+
+    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query."""
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues."""
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent",
+            system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = RoundRobinPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, tech_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config}
+    )
+
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10
+    )
+    ```
+
+## RandomPattern: Non-deterministic Speaker Selection
+
+The RandomPattern adds an element of unpredictability by randomly selecting the next speaker, which can be useful for generating diverse perspectives.
+
+### Key Characteristics
+
+- Randomly selects the next speaker (excluding the current speaker)
+- Creates unpredictable, non-deterministic conversations
+- Can generate diverse perspectives on a topic
+
+### Configuration Example
+
+Setting up the RandomPattern:
+
+```python
+pattern = RandomPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user
+)
+```
+
+### Complete Code Example
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RandomPattern
+    from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+
+    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query."""
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues."""
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent",
+            system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = RandomPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config}
+    )
+
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10
+    )
+    ```
+
+## ManualPattern: Human-Directed Speaker Selection
+
+The ManualPattern puts you in control by always reverting to the user agent after each agent speaks, allowing you to manually direct the conversation flow.
+
+### Key Characteristics
+
+- Always reverts to the user agent after an agent speaks
+- User selects the next agent to speak
+- Provides maximum human oversight
+- Useful for debugging or educational purposes
+
+### Configuration Example
+
+Setting up the ManualPattern:
+
+```python
+pattern = ManualPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user
+)
+```
+
+### Complete Code Example
+
+???+ info "Complete Code Example"
+
+    ```python
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import ManualPattern
+    from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+
+    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query."""
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues."""
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent",
+            system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = ManualPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config}
+    )
+
+    result, context, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10
+    )
+    ```
+### When to Use ManualPattern
+
+ManualPattern is ideal for:
+
+- Educational demonstrations of multi-agent systems
+- Debugging complex agent interactions
+- Training scenarios where human guidance is beneficial
+- Applications requiring maximum human oversight

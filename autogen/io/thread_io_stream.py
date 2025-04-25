@@ -4,7 +4,9 @@
 
 import queue
 from asyncio import Queue as AsyncQueue
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from autogen.io.base import AsyncIOStreamProtocol, IOStreamProtocol
 
 from ..events.agent_events import InputRequestEvent
 from ..events.print_event import PrintEvent
@@ -50,3 +52,12 @@ class AsyncThreadIOStream:
     @property
     def input_stream(self) -> AsyncQueue[Any]:
         return self._input_stream
+
+
+if TYPE_CHECKING:
+
+    def check_type_1(x: ThreadIOStream) -> IOStreamProtocol:
+        return x
+
+    def check_type_2(x: AsyncThreadIOStream) -> AsyncIOStreamProtocol:
+        return x
