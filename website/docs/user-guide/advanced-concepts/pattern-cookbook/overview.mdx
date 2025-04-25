@@ -5,7 +5,7 @@ sidebarTitle: Overview
 
 Orchestration patterns are standardized approaches for organizing and coordinating AI agents to work together effectively on complex tasks. These patterns provide structured ways to design agent interactions, information flows, and responsibilities.
 
-The pattern implementations use AG2's swarm orchestration, read more about it [here](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation).
+The pattern implementations use AG2's  group chat orchestration, read more about it [here](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction).
 
 Each pattern includes:
 
@@ -132,48 +132,42 @@ This pattern is used within our [`DocAgent`](/docs/user-guide/reference-agents/d
 
 It is possible, and even expected, that some agents may fail to complete their response successfully and that may disrupt the workflow. This could be due an exception being raised in a tool call or function.
 
-If you are able to catch those exceptions, you can transfer to an `error agent` in your swarm using either [`SwarmResult`](/docs/api-reference/autogen/SwarmResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) to transfer to the error agent.
+If you are able to catch those exceptions, you can transfer to an `error agent` in your group chat using either [`ReplyResult`](/docs/api-reference/autogen/agentchat/group/reply_result/ReplyResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/agenchat/group/OnContextCondition) to transfer to the error agent.
 
 ```python
+from autogen.agentchat.group import AgentTarget, ContextExpression, OnContextCondition, ReplyResult
+
 # Transfer to the error_agent if the context variable "errored" is set to True
-register_hand_off(
-    agent=my_agent,
-    hand_to=[
-        OnContextCondition(
-            target=error_agent,
-            condition=ContextExpression("${errored}"),
-        )
-    ]
+my_agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(error_agent),
+        condition=ExpressionContextCondition(expression=ContextExpression("${errored}")),
+    )
 )
 
 # Transfer to the error_agent when a tool fails
-def my_tool_function(my_parameter: str, context_variables: dict[str, Any]) -> SwarmResult:
+def my_tool_function(my_parameter: str, context_variables: ContextVariables) -> ReplyResult:
     try:
         ...
     except Exception as e:
-        # Option 1: set context variable that will be handled in a hand-off associated
+        # Option 1: set context variable that will be handled in a handoff associated
         # with this agent (see above)
         context_variables["errored"] = True
-        return SwarmResult(
-            context_variables=context_variables,
-            values=f"An exception was raised: {e}"
+        return ReplyResult(
+            message=f"An exception was raised: {e}",
+            context_variables=context_variables
         )
 
-        # Option 2: include the target error_agent in the returned SwarmResult
-        # to transfer directly without the need for a hand-off
-        return SwarmResult(
-            agent=error_agent,
-            context_variables=context_variables,
-            values=f"An exception was raised: {e}"
+        # Option 2: include the target error_agent in the returned ReplyResult
+        # to transfer directly without the need for a handoff
+        return ReplyResult(
+            target=AgentTarget(error_agent),
+            message=f"An exception was raised: {e}",
+            context_variables=context_variables
         )
 
-# Error agent can return to the user (or some other agent) automatically when it is transition to
-register_hand_off(
-    agent=error_agent,
-    hand_to=[
-        AfterWork(AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+# Error agent can return to the user (or some other agent) automatically when it transitions
+error_agent.handoffs.set_after_work(RevertToUserTarget())
 ```
 
 For a concrete example of error handling, see the [implementation of DocAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agents/experimental/document_agent/document_agent.py).
@@ -184,7 +178,7 @@ To implement these patterns in your own applications:
 
 1. Review the pattern documentation to identify which pattern(s) best suit your use case
 2. Examine the example code for implementation details
-3. Use AG2's Swarm framework to implement the chosen pattern
+3. Use AG2's  Group Chat framework to implement the chosen pattern
 4. Customize the agents and their capabilities for your specific needs
 
-For more information on using the Swarm framework itself, refer to the [Swarm documentation](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation).
+For more information on using the Group Chat framework itself, refer to the [Group Chat documentation](/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction).

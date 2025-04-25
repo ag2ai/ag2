@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from ...conversable_agent import ConversableAgent
     from ...groupchat import GroupChat
 
+__all__ = ["GroupManagerTarget"]
+
 
 def prepare_groupchat_auto_speaker(
     groupchat: "GroupChat",
@@ -107,7 +109,6 @@ class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
         )  # Restore agentlist so it can be substituted by the internal group chat auto speaker selection
 
 
-@export_module("autogen.agentchat.group")
 class GroupManagerTarget(TransitionTarget):
     """Target that represents an agent by name."""
 
