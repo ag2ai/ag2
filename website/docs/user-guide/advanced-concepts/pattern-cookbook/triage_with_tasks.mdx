@@ -1,5 +1,6 @@
 ---
 title: Triage with Tasks
+sidebarTitle: Triage with Tasks
 ---
 
 The Triage with Tasks Pattern is a workflow orchestration approach that breaks down complex user requests into structured task sequences with specialized agents handling specific task types in a sequential order.
@@ -40,7 +41,7 @@ The Triage with Tasks Pattern creates a structured information pipeline where ta
 
 ### Implementation
 
-Our implementation using AG2's Swarm demonstrates the Triage with Tasks Pattern with a structured system that breaks user requests into research and writing tasks, ensuring research is completed before dependent writing begins, while maintaining comprehensive task tracking.
+Our implementation using AG2's Group Chat demonstrates the Triage with Tasks Pattern with a structured system that breaks user requests into research and writing tasks, ensuring research is completed before dependent writing begins, while maintaining comprehensive task tracking.
 
 * **Structured Data Models**: Pydantic models (ResearchTask, WritingTask) define the explicit schema for different task types, ensuring consistent tracking and processing.
 
@@ -48,7 +49,7 @@ Our implementation using AG2's Swarm demonstrates the Triage with Tasks Pattern 
 
 * **Dynamic System Messages**: Agent prompts update based on context, ensuring each agent always has current information about its assigned task.
 
-* **Conditional Hand-offs**: [`OnContextCondition`](/docs/api-reference/autogen/OnContextCondition) transitions efficiently route tasks based on current state, ensuring research is completed before writing begins, and providing a comprehensive summary when all tasks are finished.
+* **Conditional Hand-offs**: [`OnContextCondition`](/docs/api-reference/autogen/agenchat/group/OnContextCondition) transitions efficiently route tasks based on current state, ensuring research is completed before writing begins, and providing a comprehensive summary when all tasks are finished.
 
 ## Agent Flow
 
@@ -60,7 +61,7 @@ sequenceDiagram
     participant Research as ResearchAgent
     participant Writing as WritingAgent
     participant Summary as SummaryAgent
-    participant Tool as SwarmToolExecutor
+    participant Tool as GroupToolExecutor
 
     User->>Triage: Request climate change research and writing
 
@@ -318,7 +319,7 @@ def complete_research_task(
         return ReplyResult(
             message=f"Error occurred with research task #{index}: {str(e)}",
             context_variables=context_variables,
-            target=AgentTarget(ERROR_AGENT_NAME),
+            target=AgentNameTarget(ERROR_AGENT_NAME),
         )
 
 def complete_writing_task(
@@ -574,15 +575,15 @@ def create_research_writing_group_chat(llm_config_base: dict[str, Any]):
         "error_agent": error_agent
     }
 
-# Function to run the swarm
-def run_research_writing(user_request: str) -> Tuple[ChatResult, dict[str, Any]]:
+# Function to run the group chat
+def run_research_writing(user_request: str) -> Tuple[ChatResult, ContextVariables]:
     """Run the research and writing group chat for a given user request."""
 
     llm_config_base = {
         "config_list": [{"model": "gpt-4.1-mini", "api_type": "openai"}],
     }
 
-    # Create the swarm agents
+    # Create the agents
     agents = create_research_writing_group_chat(llm_config_base)
 
     # Set up initial context variables
@@ -593,17 +594,17 @@ def run_research_writing(user_request: str) -> Tuple[ChatResult, dict[str, Any]]
         "WritingTasksDone": False,
     })
 
-    # Get all agents as a list for the swarm
-    swarm_agents = list(agents.values())
+    # Get all agents as a list
+    all_agents = list(agents.values())
 
     agent_pattern = DefaultPattern(
         initial_agent=agents["triage_agent"],
-        agents=swarm_agents,
+        agents=all_agents,
         context_variables=context_variables,
         group_after_work=TerminateTarget()
     )
 
-    # Run the swarm
+    # Run the group chat
     chat_result, final_context, _ = initiate_group_chat(
         pattern=agent_pattern,
         messages=user_request,
@@ -618,7 +619,7 @@ if __name__ == "__main__":
     # Sample request
     request = "I need to write about climate change solutions. Can you help me research solar panels and wind farms and then write two articles a blog and a longer form article summarizing the state of these two technologies."
 
-    # Run the swarm
+    # Run the group chat
     result, final_context = run_research_writing(request)
 
     # Display the Research

@@ -6,7 +6,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from ...doc_utils import export_module
 from .available_condition import AvailableCondition
 from .context_condition import ContextCondition
 from .targets.transition_target import TransitionTarget
@@ -16,7 +15,6 @@ __all__ = [
 ]
 
 
-@export_module("autogen")
 class OnContextCondition(BaseModel):  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats using context variables and the ContextExpression class.
 
