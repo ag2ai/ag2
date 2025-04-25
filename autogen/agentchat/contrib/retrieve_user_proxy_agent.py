@@ -30,6 +30,8 @@ from ..contrib.vectordb.utils import (
     get_logger,
 )
 
+__all__ = ["RetrieveUserProxyAgent"]
+
 with optional_import_block():
     import chromadb
     from IPython import get_ipython

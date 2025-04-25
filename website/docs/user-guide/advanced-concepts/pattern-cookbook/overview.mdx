@@ -132,7 +132,7 @@ This pattern is used within our [`DocAgent`](/docs/user-guide/reference-agents/d
 
 It is possible, and even expected, that some agents may fail to complete their response successfully and that may disrupt the workflow. This could be due an exception being raised in a tool call or function.
 
-If you are able to catch those exceptions, you can transfer to an `error agent` in your group chat using either [`ReplyResult`](/docs/api-reference/autogen/agentchat/group/reply_result/ReplyResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/agenchat/group/OnContextCondition) to transfer to the error agent.
+If you are able to catch those exceptions, you can transfer to an `error agent` in your group chat using either [`ReplyResult`](/docs/api-reference/autogen/agentchat/group/reply_result/ReplyResult) or setting a context variable (e.g. `my_agent.set_context("errored", True)`) and using an [`OnContextCondition`](/docs/api-reference/autogen/agentchat/group/on_context_condition/OnContextCondition/#autogen.agentchat.group.on_context_condition.OnContextCondition) to transfer to the error agent.
 
 ```python
 from autogen.agentchat.group import AgentTarget, ContextExpression, OnContextCondition, ReplyResult

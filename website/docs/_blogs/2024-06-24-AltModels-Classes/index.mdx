@@ -57,8 +57,8 @@ Here are some tips when working with these client classes:
 - **Right model** - choose one that's suited to your task, whether it's coding, function calling, knowledge, or creative writing.
 - **Agent names** - these cloud providers do not use the `name` field on a message, so be sure to use your agent's name in their `system_message` and `description` fields, as well as instructing the LLM to 'act as' them. This is particularly important for "auto" speaker selection in group chats as we need to guide the LLM to choose the next agent based on a name, so tweak `select_speaker_message_template`, `select_speaker_prompt_template`, and `select_speaker_auto_multiple_template` with more guidance.
 - **Context length** - as your conversation gets longer, models need to support larger context lengths, be mindful of what the model supports and consider using [Transform Messages](/docs/use-cases/notebooks/notebooks/agentchat_transform_messages) to manage context size.
-- **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's [API Reference](/docs/api-reference/autogen/oai/gemini/GeminiClient) or [documentation](/docs/user-guide/models/google-gemini) for details.
-- **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent), [GroupChat](https://docs.ag2.ai/docs/reference/agentchat/groupchat), [UserProxyAgent](https://docs.ag2.ai/docs/api-reference/autogen/UserProxyAgent), and [AssistantAgent](https://docs.ag2.ai/docs/api-reference/autogen/AssistantAgent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://www.llama.com/docs/how-to-guides/prompting/).
+- **Provider parameters** - providers have parameters you can set such as temperature, maximum tokens, top-k, top-p, and safety. See each client class in AutoGen's API Reference or [documentation](/docs/user-guide/models/google-gemini) for details.
+- **Prompts** - prompt engineering is critical in guiding smaller LLMs to do what you need. [ConversableAgent](https://docs.ag2.ai/docs/reference/agentchat/conversable_agent), [GroupChat](https://docs.ag2.ai/docs/reference/agentchat/groupchat), [UserProxyAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/UserProxyAgent), and [AssistantAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/AssistantAgent) all have customizable prompt attributes that you can tailor. Here are some prompting tips from [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)([+Library](https://docs.anthropic.com/en/prompt-library/library)), [Mistral AI](https://docs.mistral.ai/guides/prompting_capabilities/), [Together.AI](https://docs.together.ai/docs/examples), and [Meta](https://www.llama.com/docs/how-to-guides/prompting/).
 - **Help!** - reach out on the AutoGen [Discord](https://discord.gg/pAbnFJrkgZ) or [log an issue](https://github.com/ag2ai/ag2/issues) if you need help with or can help improve these client classes.
 
 Now it's time to try them out.
@@ -144,7 +144,7 @@ user_proxy.intiate_chat(assistant, message="Write python code to print Hello Wor
 
 ```
 
-**NOTE: To integrate this setup into GroupChat, follow the [tutorial](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_groupchat) with the same config as above.**
+**NOTE: To integrate this setup into GroupChat, follow the [tutorial](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_groupchat) with the same config as above.**
 
 
 ## Function Calls
@@ -379,4 +379,4 @@ So we can see how Anthropic's Sonnet is able to suggest multiple tools in a sing
 
 ## More tips and tricks
 
-For an interesting chess game between Anthropic's Sonnet and Mistral's Mixtral, we've put together a sample notebook that highlights some of the tips and tricks for working with non-OpenAI LLMs. [See the notebook here](https://docs.ag2.ai/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess_altmodels).
+For an interesting chess game between Anthropic's Sonnet and Mistral's Mixtral, we've put together a sample notebook that highlights some of the tips and tricks for working with non-OpenAI LLMs. [See the notebook here](https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_nested_chats_chess_altmodels).
