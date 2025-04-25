@@ -57,6 +57,8 @@ from autogen.agentchat.group import (
 ### Context Variables
 Prior to version 0.9, the context variables associated with a swarm (and the `ConversableAgent`s in the swarm) were a dictionary (type: `dict[str, Any]`). This has now been put into a dedicated class called `ContextVariables`. When interacting with your context variables, this still appears as a dictionary.
 
+To use the context variables on an agent instance, access them via the agent's `context_variable` attribute, e.g. `triage_agent.context_variables.get("my_key")`.
+
 The changes you will need to make are to (1) change the import location and (2) change your type references from `dict[str, Any]` to `ContextVariables`.
 ```
 # Import the class
@@ -311,7 +313,7 @@ chat_history = initiate_group_chat(
 
 # NEW
 # Create the pattern
-agent_pattern = Pattern(
+agent_pattern = DefaultPattern(
   agents=[order_triage_agent, authentication_agent, order_mgmt_agent],
   initial_agent=order_triage_agent,
   context_variables=workflow_context,
