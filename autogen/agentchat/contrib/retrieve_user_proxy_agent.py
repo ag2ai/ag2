@@ -220,7 +220,7 @@ class RetrieveUserProxyAgent(UserProxyAgent):
                 - `distance_threshold` (Optional, float) - the threshold for the distance score, only
                     distance smaller than it will be returned. Will be ignored if < 0. Default is -1.
 
-            `**kwargs` (dict): other kwargs in [UserProxyAgent](/docs/api-reference/autogen/UserProxyAgent#userproxyagent).
+            `**kwargs` (dict): other kwargs in [UserProxyAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/UserProxyAgent).
 
         Example:
         Example of overriding retrieve_docs - If you have set up a customized vector db, and it's
