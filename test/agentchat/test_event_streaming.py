@@ -8,6 +8,8 @@ import pytest
 
 from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, a_run_swarm, run_swarm
 from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.agentchat.group.multi_agent_chat import a_run_group_chat, run_group_chat
+from autogen.agentchat.group.patterns.auto import AutoPattern
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
@@ -505,3 +507,98 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
         )
         assert await response.summary is not None, "Summary should not be None"
         assert isinstance(await response.cost, Cost)
+
+
+@run_for_optional_imports("openai", "openai")
+def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
+    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query.""",
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues.""",
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent", system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    response = run_group_chat(
+        pattern=pattern, messages="My laptop keeps shutting down randomly. Can you help?", max_rounds=15
+    )
+
+    for event in response.events:
+        print(event)
+        if event.type == "input_request":
+            event.content.respond("exit")
+
+    assert response.summary is not None, "Summary should not be None"
+    assert len(response.messages) > 0, "Messages should not be empty"
+    assert response.last_speaker in ["tech_agent", "general_agent", "triage_agent"]
+    assert isinstance(response.cost, Cost)
+
+
+@pytest.mark.asyncio
+@run_for_optional_imports("openai", "openai")
+async def test_run_group_chat_async(credentials_gpt_4o_mini: Credentials):
+    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+
+    with llm_config:
+        triage_agent = ConversableAgent(
+            name="triage_agent",
+            system_message="""You are a triage agent. For each user query,
+            identify whether it is a technical issue or a general question. Route
+            technical issues to the tech agent and general questions to the general agent.
+            Do not provide suggestions or answers, only route the query.""",
+        )
+
+        tech_agent = ConversableAgent(
+            name="tech_agent",
+            system_message="""You solve technical problems like software bugs
+            and hardware issues.""",
+        )
+
+        general_agent = ConversableAgent(
+            name="general_agent", system_message="You handle general, non-technical support questions."
+        )
+
+    user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, tech_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    response = await a_run_group_chat(
+        pattern=pattern, messages="My laptop keeps shutting down randomly. Can you help?", max_rounds=15
+    )
+
+    async for event in response.events:
+        print(event)
+        if event.type == "input_request":
+            await event.content.respond("exit")
+
+    assert await response.summary is not None, "Summary should not be None"
+    assert len(await response.messages) > 0, "Messages should not be empty"
+    assert await response.last_speaker in ["tech_agent", "general_agent", "triage_agent"]
+    assert isinstance(await response.cost, Cost)
