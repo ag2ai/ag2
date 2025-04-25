@@ -997,7 +997,7 @@ def run_swarm(
         iostream: ThreadIOStream = iostream,
         response: RunResponse = response,
     ) -> None:
-        with IOStream.set_default(iostream):  # type: ignore[arg-type]
+        with IOStream.set_default(iostream):
             try:
                 chat_result, returned_context_variables, last_speaker = initiate_swarm_chat(
                     initial_agent=initial_agent,
@@ -1158,7 +1158,7 @@ async def a_run_swarm(
         iostream: AsyncThreadIOStream = iostream,
         response: AsyncRunResponse = response,
     ) -> None:
-        with IOStream.set_default(iostream):  # type: ignore[arg-type]
+        with IOStream.set_default(iostream):
             try:
                 chat_result, returned_context_variables, last_speaker = await a_initiate_swarm_chat(
                     initial_agent=initial_agent,

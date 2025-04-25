@@ -2,9 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import threading
 from typing import TYPE_CHECKING, Any, Union
 
 from ...doc_utils import export_module
+from ...events.agent_events import ErrorEvent, RunCompletionEvent
+from ...io.base import IOStream
+from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..chat import ChatResult
 from .context_variables import ContextVariables
 from .group_utils import cleanup_temp_user_messages
@@ -15,7 +21,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "a_initiate_group_chat",
+    "a_run_group_chat",
     "initiate_group_chat",
+    "run_group_chat",
 ]
 
 
@@ -141,3 +149,87 @@ async def a_initiate_group_chat(
     cleanup_temp_user_messages(chat_result)
 
     return chat_result, context_variables, manager.last_speaker
+
+
+@export_module("autogen.agentchat")
+def run_group_chat(
+    pattern: "Pattern",
+    messages: Union[list[dict[str, Any]], str],
+    max_rounds: int = 20,
+) -> RunResponseProtocol:
+    iostream = ThreadIOStream()
+    response = RunResponse(iostream)
+
+    def _initiate_group_chat(
+        pattern: "Pattern" = pattern,
+        messages: Union[list[dict[str, Any]], str] = messages,
+        max_rounds: int = max_rounds,
+        iostream: ThreadIOStream = iostream,
+        response: RunResponse = response,
+    ) -> None:
+        with IOStream.set_default(iostream):
+            try:
+                chat_result, context_vars, agent = initiate_group_chat(
+                    pattern=pattern,
+                    messages=messages,
+                    max_rounds=max_rounds,
+                )
+
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=agent.name,
+                        context_variables=context_vars,
+                    )
+                )
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+
+    threading.Thread(
+        target=_initiate_group_chat,
+    ).start()
+
+    return response
+
+
+@export_module("autogen.agentchat")
+async def a_run_group_chat(
+    pattern: "Pattern",
+    messages: Union[list[dict[str, Any]], str],
+    max_rounds: int = 20,
+) -> AsyncRunResponseProtocol:
+    iostream = AsyncThreadIOStream()
+    response = AsyncRunResponse(iostream)
+
+    async def _initiate_group_chat(
+        pattern: "Pattern" = pattern,
+        messages: Union[list[dict[str, Any]], str] = messages,
+        max_rounds: int = max_rounds,
+        iostream: AsyncThreadIOStream = iostream,
+        response: AsyncRunResponse = response,
+    ) -> None:
+        with IOStream.set_default(iostream):
+            try:
+                chat_result, context_vars, agent = await a_initiate_group_chat(
+                    pattern=pattern,
+                    messages=messages,
+                    max_rounds=max_rounds,
+                )
+
+                IOStream.get_default().send(
+                    RunCompletionEvent(  # type: ignore[call-arg]
+                        history=chat_result.chat_history,
+                        summary=chat_result.summary,
+                        cost=chat_result.cost,
+                        last_speaker=agent.name,
+                        context_variables=context_vars,
+                    )
+                )
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+
+    asyncio.create_task(_initiate_group_chat())
+
+    return response
