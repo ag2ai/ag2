@@ -518,8 +518,8 @@ class OpenAIClient:
         # Wrap _create_or_parse with exception handling
         create_or_parse = OpenAIClient._handle_openai_bad_request_error(create_or_parse)
 
-        # needs to be updated when the o3 is released to generalize
-        is_o1 = "model" in params and params["model"].startswith("o1")
+        # HACK: needs to be updated when the o3 is released to generalize
+        is_o1 = "model" in params and "o1-" in params["model"]
 
         is_mistral = "model" in params and "mistral" in params["model"]
         if is_mistral:
@@ -677,8 +677,8 @@ class OpenAIClient:
         if "max_tokens" in params:
             params["max_completion_tokens"] = params.pop("max_tokens")
 
-        # TODO - When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
-        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+        # HACK: When o1-mini and o1-preview point to newer models (e.g. 2024-12-...), remove them from this list but leave the 2024-09-12 dated versions
+        system_not_allowed = "o1-" in model_name
 
         if "messages" in params and system_not_allowed:
             # o1-mini (2024-09-12) and o1-preview (2024-09-12) don't support role='system' messages, only 'user' and 'assistant'
