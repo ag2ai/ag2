@@ -155,47 +155,17 @@ def log_customer_interaction(
 
 ## Getting Started with the New Group Chat
 
-Let's explore a practical example of how the new Group Chat pattern can transform customer service workflows. We'll implement an e-commerce customer support system where different departments work together seamlessly to assist customers.
+Let's explore a practical example of how the new Group Chat pattern can transform travel planning workflows. We'll implement a personalized travel itinerary system where specialized agents collaborate to assist users based on their membership status.
 
 ### The Use Case
 
-In this scenario, we want to create a customer support system that:
+In this scenario, we want to create a travel planning system that:
 
-1. Greets customers and identifies their issue type
-2. Routes queries to the appropriate department (shipping, product, or billing)
-3. Maintains customer context throughout the conversation
-4. Provides personalized assistance based on purchase history
-
-### The Workflow
-
-Here's how our multi-department customer service system will function when using the AutoPattern:
-
-```mermaid
-flowchart TD
-    Customer([Customer]) --> GroupManager[Group Manager]
-
-    GroupManager -->  CustomerService[Customer Service]
-    CustomerService -->  GroupManager
-
-    GroupManager -->  Shipping[Shipping Support]
-    Shipping -->  GroupManager
-
-    GroupManager -->  Product[Product Support]
-    Product -->  GroupManager
-
-    GroupManager -->  Billing[Billing Support]
-    Billing -->  GroupManager
-
-    GroupManager -->  Customer
-
-    style GroupManager fill:#ffebee,stroke:#f44336
-    style CustomerService fill:#e1f5fe,stroke:#0288d1
-    style Shipping fill:#e8f5e9,stroke:#4caf50
-    style Product fill:#fff8e1,stroke:#ffa000
-    style Billing fill:#f3e5f5,stroke:#7b1fa2
-```
-
-When using the [AutoPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#autopattern-llm-powered-speaker-selection), the Group Manager orchestrates all interactions. It receives the customer's query, selects the appropriate agent to respond, and then decides where to route the conversation next based on the context. All communication flows through the Group Manager, which intelligently determines which specialized department should handle each part of the conversation.
+- Verifies user membership and collects travel information
+- Routes users to different advisors based on membership status
+- Provides personalized itineraries using customer preferences
+- Facilitates collaboration between advisors and destination specialists
+- Tracks itinerary status from proposal to approval
 
 ### Implementing the workflow with the new GroupChat
 
@@ -205,108 +175,270 @@ Now, let's implement this system:
 from typing import Annotated
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
-from autogen.agentchat.group.patterns import AutoPattern
-from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables, RevertToUserTarget
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group import (
+    ReplyResult,
+    AgentTarget,
+    AgentNameTarget,
+    ContextVariables,
+    RevertToUserTarget,
+    OnCondition,
+    StringLLMCondition,
+    TerminateTarget
+)
 
-# Initialize context with customer information
-customer_context = ContextVariables(data={
-    "customer_name": "Jordan Smith",
-    "account_status": "active",
-    "purchase_history": ["wireless headphones", "smartphone case"]
-})
+# Mock user database
+MEMBER_DATABASE = {
+    "P12345": {
+        "name": "Alex Johnson",
+        "membership": "premium",
+        "preferences": [
+            "5-star hotels",
+            "fine dining",
+            "private tours",
+            "exclusive experiences",
+        ],
+    },
+    "P67890": {
+        "name": "Taylor Williams",
+        "membership": "premium",
+        "preferences": [
+            "boutique hotels",
+            "local cuisine",
+            "cultural experiences",
+            "adventure activities",
+        ],
+    },
+    "S12345": {
+        "name": "Jordan Smith",
+        "membership": "standard",
+        "preferences": ["budget-friendly", "popular attractions"],
+    },
+    "S67890": {
+        "name": "Casey Brown",
+        "membership": "standard",
+        "preferences": ["family-friendly", "group tours"],
+    },
+}
 
-# Define a function for shipping support to respond with customer context
-def provide_shipping_response(
-    response: Annotated[str, "The shipping response to provide"],
-    context_variables: ContextVariables
+# Initialize context variables
+travel_context = ContextVariables(
+    data={
+        "user_info_collected": False,
+        "membership_status": None,
+        "name": None,
+        "member_id": None,
+        "destination": None,
+        "travel_days": None,
+        "preferences": [],
+    }
+)
+
+
+# Concierge function to collect user information
+def collect_user_info(
+    member_id: Annotated[str, "User's membership ID"],
+    destination: Annotated[str, "User's travel destination"],
+    travel_days: Annotated[int, "Number of travel days"],
+    context_variables: ContextVariables,
 ) -> ReplyResult:
-    """Provide a personalized shipping response using customer context."""
+    """Collect and verify user information against the database."""
 
-    # Access customer information from context
-    customer_name = context_variables.get("customer_name", "valued customer")
-    purchase_history = context_variables.get("purchase_history", [])
+    # Check if all required information is provided, else ask for it
+    if not member_id:
+        return ReplyResult(
+            message="Please provide your membership ID.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
+    if not destination:
+        return ReplyResult(
+            message="Please provide your travel destination.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
+    if not travel_days:
+        return ReplyResult(
+            message="Please provide the number of travel days.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
 
-    # Check if the current query is about a product in purchase history
-    current_query = context_variables.get("current_query", "")
-    relevant_purchases = [item for item in purchase_history if item.lower() in current_query.lower()]
+    # Check if member exists in database
+    if member_id in MEMBER_DATABASE:
+        user_data = MEMBER_DATABASE[member_id]
 
-    # Create a personalized greeting
-    personalized_greeting = f"Hello {customer_name}! "
+        # Store user information in context
+        context_variables["name"] = user_data["name"]
+        context_variables["member_id"] = member_id
+        context_variables["destination"] = destination
+        context_variables["travel_days"] = travel_days
+        context_variables["membership_status"] = user_data["membership"]
+        context_variables["preferences"] = user_data["preferences"]
+        context_variables["user_info_collected"] = True
 
-    # Add context about their purchase if relevant
-    if relevant_purchases:
-        purchased_item = relevant_purchases[0]
-        personalized_greeting += f"I see you've purchased {purchased_item} from us. "
+        if user_data["membership"] == "premium":
+            message = f"Welcome back, {user_data['name']}! I see you're a premium member with preferences for {', '.join(user_data['preferences'])}. I'll connect you with our Premium Travel Advisor for your {travel_days}-day trip to {destination}."
+            target = AgentNameTarget("premium_advisor")
+        else:
+            message = f"Hello {user_data['name']}. I'll connect you with our Standard Travel Advisor to help plan your {travel_days}-day trip to {destination}."
+            target = AgentNameTarget("standard_advisor")
+    else:
+        message = f"I couldn't find your member ID in our system. Please check your ID and try again, or register as a new member."
+        target = RevertToUserTarget()
 
-    # Combine the personalized greeting with the actual response
-    full_response = personalized_greeting + response
-
-    # Return control to the user after providing support
     return ReplyResult(
-        message=full_response,
-        target=RevertToUserTarget(),
-        context_variables=context_variables
+        message=message, target=target, context_variables=context_variables
     )
+
+
+# Function for destination specialist to provide information
+def provide_destination_info(
+    destination_info: Annotated[str, "Detailed information about the destination"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Provide destination information and return to the requesting agent."""
+
+    context_variables["destination_info"] = destination_info
+    target_agent_name  = "premium_advisor" if context_variables["membership_status"] == "premium" else "standard_advisor"
+
+    return ReplyResult(
+        message=destination_info,
+        target=AgentNameTarget(target_agent_name),
+        context_variables=context_variables,
+    )
+
+# Function to track itinerary status, when proposed set the status to "proposed" and when approved by the user set it to "approved"
+def track_itenary_status(
+    detailed_itenary_info: Annotated[str, "Detailed itinerary information"],
+    itinerary_status: Annotated[str, "Status of the itinerary (proposed/approved)"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Track the status of the itinerary and return to the user for feedback."""
+
+    context_variables["itinerary_status"] = itinerary_status
+
+    if itinerary_status == "approved":
+        message = "Thank you. Enjoy your trip!"
+        target = TerminateTarget()
+    else:
+        message = detailed_itenary_info
+        target = RevertToUserTarget()
+
+    return ReplyResult(
+        message=message, target=target, context_variables=context_variables
+    )
+
 
 # Configure LLM
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
-# Create specialized agents
+# Create agents
 with llm_config:
-    customer_service = ConversableAgent(
-        name="customer_service",
-        system_message="You're the initial contact for all customer inquiries. Direct shipping questions to shipping_support, product questions to product_support, and billing issues to billing_support."
+    concierge = ConversableAgent(
+        name="concierge",
+        system_message="""You are a travel concierge who verifies membership and collects travel information.
+        Ask for the user for the below information without fail if not already provided. You can ask only one question at a time:
+            - users's member ID,
+            - destination they wish to travel,
+            - number of travel days
+        Do not proceed unless you have all the above information.
+        Use the collect_user_info function to verify their membership and route them appropriately.""",
+        functions=[collect_user_info],
     )
 
-    shipping_support = ConversableAgent(
-        name="shipping_support",
-        system_message="""You handle all shipping-related queries, including delivery times, tracking, and shipping methods.
-        Always use the provide_shipping_response tool to respond, which will add personalized greetings based including customer name. So you don't need to greet the customer.""",
-        functions=[provide_shipping_response]
+    premium_advisor = ConversableAgent(
+        name="premium_advisor",
+        system_message="""You are a premium travel advisor who creates luxury itineraries.
+        Check the user's preferences in the context variables and customize their itinerary accordingly.
+        When you need specific destination information, consult the destination specialist.
+
+        For premium members, ALWAYS include:
+        - Their preferred accommodation type (usually 5-star or boutique hotels)
+        - Their dining preferences (often fine dining or local cuisine)
+        - Exclusive experiences not available to standard members
+        - Private transportation options
+
+        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        If the user approves or accepts the itinerary, set the status to "approved".
+        """,
+        functions=[track_itenary_status],
     )
 
-    product_support = ConversableAgent(
-        name="product_support",
-        system_message="You provide detailed information about products, specifications, compatibility, and usage instructions."
+    standard_advisor = ConversableAgent(
+        name="standard_advisor",
+        system_message="""You are a standard travel advisor who creates basic itineraries.
+        Check the user's preferences in the context variables.
+        When you need specific destination information, consult the destination specialist.
+
+        For standard members, include:
+        - Affordable accommodation options
+        - Popular restaurants at various price points
+        - Standard tourist attractions
+        - Public transportation or group tour options
+
+        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        If the user approves or accepts the itinerary, set the status to "approved".
+        """,
+        functions=[track_itenary_status],
     )
 
-    billing_support = ConversableAgent(
-        name="billing_support",
-        system_message="You handle payment issues, refunds, subscription questions, and billing disputes."
+    destination_specialist = ConversableAgent(
+        name="destination_specialist",
+        system_message="""You are a destination specialist with detailed knowledge about travel locations.
+        When asked by an advisor, provide comprehensive information about the requested destination.
+        Include details about attractions, local customs, best times to visit, and insider tips.
+        Use the provide_destination_info function to respond.""",
+        functions=[provide_destination_info],
     )
 
 # Create user agent
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
-# TEMP Create handoffs and after works
-customer_service.handoffs.add_llm_conditions(
-[
-    # One for each of the support agents
-    # The available property for the billing agent should have an expression filter available condition = ${account_status} == "active"
-]
-)
-customer_service.handoffs.set_after_work(RevertToUserTarget()) # TEMP
+# Set the after work for the concierge
+concierge.handoffs.set_after_work(RevertToUserTarget())
 
-# For billing support need to be an existing customer
-billing_support.handoffs.add_context_condition(
-# where account_status is active as the available condition and condition as well ${account_status} == "active"
+# Define handoffs using LLM-based conditions for advisors to consult specialist
+premium_advisor.handoffs.add_llm_conditions(
+    [
+        OnCondition(
+            target=AgentTarget(destination_specialist),
+            condition=StringLLMCondition(
+                prompt="Consult the destination specialist if you need specific information about the destination. Add a note to the destination specialist to return to the 'premium_advisor' after gathering the information."
+            ),
+        ),
+    ]
 )
 
-shipping_support.handoffs.set_after_work(AgentTarget(customer_service))
+standard_advisor.handoffs.add_llm_conditions(
+    [
+        OnCondition(
+            target=AgentTarget(destination_specialist),
+            condition=StringLLMCondition(
+                prompt="Consult the destination specialist if you need specific information about the destination. Add a note to the destination specialist to return to the 'standard_advisor' after gathering the information."
+            ),
+        )
+    ]
+)
+
+# After providing the itinerary, return to users for feedback
+premium_advisor.handoffs.set_after_work(RevertToUserTarget())
+standard_advisor.handoffs.set_after_work(RevertToUserTarget())
+
+# After providing information, destination specialist returns to the requesting advisor
+destination_specialist.handoffs.set_after_work(RevertToUserTarget())
 
 # Create pattern for orchestration
 pattern = DefaultPattern(
-    initial_agent=customer_service,
-    agents=[customer_service, shipping_support, product_support, billing_support],
+    initial_agent=concierge,
+    agents=[concierge, premium_advisor, standard_advisor, destination_specialist],
     user_agent=user,
-    context_variables=customer_context,
+    context_variables=travel_context,
 )
 
 # Start the group chat
 result, final_context, last_agent = initiate_group_chat(
-    pattern=pattern,
-    messages="I ordered wireless headphones last week but haven't received any shipping confirmation yet. Can you help?",
-    max_rounds=10
+    pattern=pattern, messages="Hello, I'd like to plan a vacation.", max_rounds=30
 )
 ```
 
@@ -366,54 +498,253 @@ When you run the above code, you should see output similar to this:
 ```console
 user (to chat_manager):
 
-I ordered wireless headphones last week but haven't received any shipping confirmation yet. Can you help?
+Hello, I'd like to plan a vacation.
 
 --------------------------------------------------------------------------------
 
-Next speaker: customer_service
+Next speaker: concierge
 
 
 >>>>>>>> USING AUTO REPLY...
-customer_service (to chat_manager):
+concierge (to chat_manager):
 
-Please reach out to our shipping support team for assistance with your shipping confirmation. They will be able to provide you with the information you need.
+Great! I can help you with that. First, could you please provide me with your member ID?
 
 --------------------------------------------------------------------------------
 
-Next speaker: shipping_support
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: P12345
+user (to chat_manager):
+
+P12345
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
 
 
 >>>>>>>> USING AUTO REPLY...
-shipping_support (to chat_manager):
+concierge (to chat_manager):
 
-***** Suggested tool call (call_LTqrXWsFZM60g72gzxOpLEJ6): provide_shipping_response *****
+Thank you for providing your member ID. Next, could you please tell me which destination you wish to travel to?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: USA
+user (to chat_manager):
+
+USA
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+Thanks! Lastly, can you let me know the number of travel days you are planning for your trip?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: 5 days
+user (to chat_manager):
+
+5 days
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+***** Suggested tool call (call_oxoIKEc6rRgPDiDbnA2rbKqU): collect_user_info *****
 Arguments:
-{"response":"It appears that you have not yet received a shipping confirmation for your wireless headphones. I recommend checking your email, including your spam or junk folders, as shipping confirmations can sometimes be misdirected. If you still don't see it, please provide me with your order details, and I can assist you further."}
-******************************************************************************************
+{"member_id":"P12345","destination":"USA","travel_days":5}
+**********************************************************************************
 
 --------------------------------------------------------------------------------
 
 Next speaker: _Group_Tool_Executor
 
 
->>>>>>>> EXECUTING FUNCTION provide_shipping_response...
-Call ID: call_LTqrXWsFZM60g72gzxOpLEJ6
-Input arguments: {'response': "It appears that you have not yet received a shipping confirmation for your wireless headphones. I recommend checking your email, including your spam or junk folders, as shipping confirmations can sometimes be misdirected. If you still don't see it, please provide me with your order details, and I can assist you further."}
+>>>>>>>> EXECUTING FUNCTION collect_user_info...
+Call ID: call_oxoIKEc6rRgPDiDbnA2rbKqU
+Input arguments: {'member_id': 'P12345', 'destination': 'USA', 'travel_days': 5}
 _Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_LTqrXWsFZM60g72gzxOpLEJ6) *****
-Hello Jordan Smith! It appears that you have not yet received a shipping confirmation for your wireless headphones. I recommend checking your email, including your spam or junk folders, as shipping confirmations can sometimes be misdirected. If you still don't see it, please provide me with your order details, and I can assist you further.
+***** Response from calling tool (call_oxoIKEc6rRgPDiDbnA2rbKqU) *****
+Welcome back, Alex Johnson! I see you're a premium member with preferences for 5-star hotels, fine dining, private tours, exclusive experiences. I'll connect you with our Premium Travel Advisor for your 5-day trip to USA.
 **********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+***** Suggested tool call (call_A4nhtqzsJ0aMRzJtD6YSTMKn): transfer_to_destination_specialist_1 *****
+Arguments:
+{}
+*****************************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION transfer_to_destination_specialist_1...
+Call ID: call_A4nhtqzsJ0aMRzJtD6YSTMKn
+Input arguments: {}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_A4nhtqzsJ0aMRzJtD6YSTMKn) *****
+Transfer to destination_specialist
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: destination_specialist
+
+
+>>>>>>>> USING AUTO REPLY...
+destination_specialist (to chat_manager):
+
+***** Suggested tool call (call_tooMKnfd5r4yZVo3VDYsBzrI): provide_destination_info *****
+Arguments:
+{"destination_info": "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION provide_destination_info...
+Call ID: call_tooMKnfd5r4yZVo3VDYsBzrI
+Input arguments: {'destination_info': "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_tooMKnfd5r4yZVo3VDYsBzrI) *****
+The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights:
+
+### Attractions:
+1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.
+2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.
+3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.
+4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.
+5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.
+
+### Local Customs:
+- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.
+- **Greetings:** A firm handshake is common when meeting someone.
+- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.
+
+### Best Times to Visit:
+- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.
+- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.
+
+### Insider Tips:
+- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.
+- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.
+- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.
+- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+Here's a luxurious 5-day itinerary for your trip to the USA, tailored to your preferences as a premium member:
+
+### Day 1: Arrival in New York City
+- **Accommodation:** Check-in at The St. Regis New York (5-star hotel with exquisite service)
+- **Dining:** Dine at Le Bernardin, a Michelin-starred restaurant offering fine French seafood.
+- **Exclusive Experience:** Private helicopter tour over Manhattan to marvel at the skyline.
+
+### Day 2: New York City Exploration
+- **Morning:** Private guided tour of the Metropolitan Museum of Art.
+- **Lunch:** Enjoy a meal at Eleven Madison Park, renowned for its modern cuisine.
+- **Afternoon:** Stroll through Central Park and visit iconic landmarks.
+- **Evening:** Attend a Broadway show with premium seating.
+
+### Day 3: Transfer to Los Angeles
+- **Transportation:** Private jet charter to Los Angeles.
+- **Accommodation:** Check-in at The Beverly Hills Hotel (iconic luxury hotel).
+- **Dining:** Dinner at Spago Beverly Hills, celebrated for its fine dining experience.
+- **Exclusive Experience:** VIP access to a Hollywood studio tour.
+
+### Day 4: Los Angeles & Santa Monica
+- **Morning:** Private guided tour of Hollywood, including Walk of Fame and Griffith Observatory.
+- **Lunch:** Beachfront dining at The Lobster in Santa Monica.
+- **Afternoon:** Relax on the Santa Monica beach or shop at exclusive boutiques.
+- **Evening:** Enjoy sunset at Nobu Malibu, known for its exquisite seafood and stunning ocean views.
+
+### Day 5: Departure
+- **Morning:** Leisure time or spa treatment at your hotel.
+- **Lunch:** Lunch at a local favorite, providing a taste of authentic LA cuisine.
+- **Transportation:** Private transfer to the airport for your departure.
+
+### Summary
+- **Private transportation throughout**
+- **5-star accommodations**
+- **Fine dining experiences**
+- **Exclusive tours and activities**
+
+Please review this itinerary and let me know if you would like to make any changes or if you're ready to approve it!
 
 --------------------------------------------------------------------------------
 
 Next speaker: user
 
-Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Awesome, Love the itenary. Thanks
+user (to chat_manager):
 
->>>>>>>> TERMINATING RUN (7f492d62-e29f-43e2-a6a4-c93288d5848f): User requested to end the conversation
+Awesome, Love the itenary. Thanks
 
->>>>>>>> TERMINATING RUN (da384b96-1ca2-492f-a035-80c8b9b84c4a): No reply generated
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+***** Suggested tool call (call_yTVpZopIZ7KLP5AU4GpuPELz): track_itenary_status *****
+Arguments:
+{"detailed_itenary_info":"5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.","itinerary_status":"approved"}
+*************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION track_itenary_status...
+Call ID: call_yTVpZopIZ7KLP5AU4GpuPELz
+Input arguments: {'detailed_itenary_info': '5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.', 'itinerary_status': 'approved'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_yTVpZopIZ7KLP5AU4GpuPELz) *****
+Thank you. Enjoy your trip!
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (74a472bf-ee68-4794-a49a-628c899a807e): No next speaker selected
 ```
 
 ## Migrating from Swarm to the New Group Chat
