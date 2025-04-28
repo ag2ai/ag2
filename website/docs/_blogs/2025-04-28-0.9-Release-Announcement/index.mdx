@@ -56,6 +56,7 @@ customer_service.handoffs.add_llm_conditions([
     OnCondition(
         target=AgentTarget(billing_specialist),
         condition=StringLLMCondition(prompt="When the query is about billing or payments."),
+        available=AvailableContextExpression(expression=ContextExpression("${account_status} == 'active'")) # PLEASE CHECK
     )
 ])
 ```
@@ -277,13 +278,28 @@ with llm_config:
 # Create user agent
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
+# TEMP Create handoffs and after works
+customer_service.handoffs.add_llm_conditions(
+[
+    # One for each of the support agents
+    # The available property for the billing agent should have an expression filter available condition = ${account_status} == "active"
+]
+)
+customer_service.handoffs.set_after_work(RevertToUserTarget()) # TEMP
+
+# For billing support need to be an existing customer
+billing_support.handoffs.add_context_condition(
+# where account_status is active as the available condition and condition as well ${account_status} == "active"
+)
+
+shipping_support.handoffs.set_after_work(AgentTarget(customer_service))
+
 # Create pattern for orchestration
-pattern = AutoPattern(
+pattern = DefaultPattern(
     initial_agent=customer_service,
     agents=[customer_service, shipping_support, product_support, billing_support],
     user_agent=user,
     context_variables=customer_context,
-    group_manager_args={"llm_config": llm_config}
 )
 
 # Start the group chat
