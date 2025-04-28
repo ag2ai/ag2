@@ -300,7 +300,7 @@ This example demonstrates a critical aspect of the new Group Chat pattern: **usi
 
     1. Context variables are not directly accessible to the LLM
     2. To read or update context variables, agents must use tool functions
-    3. Tool functions receive the context variables as a parameter (via dependency injection) and can return updated context in the ReplyResult
+    3. Tool functions receive the context variables as a parameter (via dependency injection) and are updated in the ReplyResult
 
 In this example, the `customer_service` agent analysis the query and route to the `shipping_support` agent, which inturn uses the `provide_shipping_response` tool to access customer information for personalized responses.
 
@@ -417,19 +417,11 @@ For detailed migration instructions and examples, please refer to our [Migration
 
 ## Towards Scalable Agent Orchestration
 
-This unified framework represents the first step toward more scalable agent orchestration. While we have not yet fully achieved scalability, this new architecture lays the necessary foundation with its modular design and consistent interfaces. The new Group Chat pattern provides a path forward for better support for distributed systems and persistence.
-
-## Other Improvements in v0.9
-
-Beyond the new Group Chat pattern, v0.9 includes several other enhancements:
-
-- **Google Drive Toolkit Improvements**: Added the ability to download to a specific subfolder
-- **Documentation Updates**: Comprehensive updates to reflect the new architecture
-- **Bug Fixes**: Various fixes and improvements throughout the codebase
+This unified architecture represents the first step toward more scalable agent orchestration by building upon a serializable framework of classes. Additionally, base classes for Targets and Patterns have been designed to allow you to create your own targets and patterns.
 
 ## Get Started Today!
 
-The new Group Chat pattern is available now in AG2 v0.9. We encourage all users to explore it, especially those currently using Swarm functionality.
+The new Group Chat pattern is available now in AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a> and we encourage all users to explore it and build their own multi-agent applications.
 
 To learn more, check out our documentation:
 
