@@ -127,12 +127,12 @@ context = ContextVariables(data={
 
 # Update context in a tool function
 def log_customer_interaction(
-    issue_type: str, 
+    issue_type: str,
     resolution: str,
     context_variables: ContextVariables
 ) -> ReplyResult:
     """Log a customer interaction in the context."""
-    
+
     # Add this interaction to history
     support_history = context_variables.get("support_history", [])
     support_history.append({
@@ -140,10 +140,10 @@ def log_customer_interaction(
         "issue_type": issue_type,
         "resolution": resolution
     })
-    
+
     context_variables["support_history"] = support_history
     context_variables["last_issue_type"] = issue_type
-    
+
     return ReplyResult(
         message="Interaction logged successfully",
         context_variables=context_variables
@@ -218,26 +218,26 @@ def provide_shipping_response(
     context_variables: ContextVariables
 ) -> ReplyResult:
     """Provide a personalized shipping response using customer context."""
-    
+
     # Access customer information from context
     customer_name = context_variables.get("customer_name", "valued customer")
     purchase_history = context_variables.get("purchase_history", [])
-    
+
     # Check if the current query is about a product in purchase history
     current_query = context_variables.get("current_query", "")
     relevant_purchases = [item for item in purchase_history if item.lower() in current_query.lower()]
-    
+
     # Create a personalized greeting
     personalized_greeting = f"Hello {customer_name}! "
-    
+
     # Add context about their purchase if relevant
     if relevant_purchases:
         purchased_item = relevant_purchases[0]
         personalized_greeting += f"I see you've purchased {purchased_item} from us. "
-    
+
     # Combine the personalized greeting with the actual response
     full_response = personalized_greeting + response
-    
+
     # Return control to the user after providing support
     return ReplyResult(
         message=full_response,
@@ -254,19 +254,19 @@ with llm_config:
         name="customer_service",
         system_message="You're the initial contact for all customer inquiries. Direct shipping questions to shipping_support, product questions to product_support, and billing issues to billing_support."
     )
-    
+
     shipping_support = ConversableAgent(
         name="shipping_support",
         system_message="""You handle all shipping-related queries, including delivery times, tracking, and shipping methods.
         Always use the provide_shipping_response tool to respond, which will add personalized greetings based including customer name. So you don't need to greet the customer.""",
         functions=[provide_shipping_response]
     )
-    
+
     product_support = ConversableAgent(
         name="product_support",
         system_message="You provide detailed information about products, specifications, compatibility, and usage instructions."
     )
-    
+
     billing_support = ConversableAgent(
         name="billing_support",
         system_message="You handle payment issues, refunds, subscription questions, and billing disputes."
@@ -292,7 +292,7 @@ result, final_context, last_agent = initiate_group_chat(
 )
 ```
 
-This example demonstrates a critical aspect of the new Group Chat pattern: **using tool functions to work with context variables**. 
+This example demonstrates a critical aspect of the new Group Chat pattern: **using tool functions to work with context variables**.
 
 !!! note
 
@@ -338,7 +338,7 @@ To run this example yourself:
             - Install the appropriate AG2 extra (e.g., `pip install ag2[anthropic]` for Claude models)
             - Update the `LLMConfig` to use your preferred provider and model
             - Set the appropriate environment variables for authentication with your chosen provider
-        
+
         You can find the supported model provides [here](/docs/user-guide/models/amazon-bedrock)
 
 ### Example Output
@@ -369,7 +369,7 @@ Next speaker: shipping_support
 shipping_support (to chat_manager):
 
 ***** Suggested tool call (call_LTqrXWsFZM60g72gzxOpLEJ6): provide_shipping_response *****
-Arguments: 
+Arguments:
 {"response":"It appears that you have not yet received a shipping confirmation for your wireless headphones. I recommend checking your email, including your spam or junk folders, as shipping confirmations can sometimes be misdirected. If you still don't see it, please provide me with your order details, and I can assist you further."}
 ******************************************************************************************
 
