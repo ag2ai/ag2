@@ -7,29 +7,28 @@ tags: [release, AG2]
 # AG2 v0.9 Release: Introducing the New Group Chat
 
 ## TL;DR
-- AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a> unifies the previous Group Chat and Swarm into a single, powerful Group Chat
+- AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a> unifies the previous Group Chat and Swarm into a single, powerful, new Group Chat
 - This unification provides improved flexibility, control, and better foundations for scalability
 - Features include pre-built orchestration patterns, enhanced workflow control, and robust context variables
+- Includes all capabilities of the previous Group Chat and Swarm
 - Swarm is now deprecated but still available. We recommend migrating to the new Group Chat pattern
 
 \<!-- more -->
 
 ---
 
-We're thrilled to announce the release of AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, featuring a significant enhancement to multi-agent orchestration. This release brings together our widely used Group Chat and Swarm patterns into a unified, more powerful Group Chat pattern that combines the best aspects of both approaches.
+We're thrilled to announce the release of AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, featuring a significant enhancement to multi-agent orchestration. This release brings together our widely used Group Chat and Swarm pattern into a unified, more powerful Group Chat that combines the best aspects of both approaches.
 
 ## A New Era for Multi-Agent Orchestration
 
-AG2 has always provided multiple ways to coordinate agents, from simple two-agent conversations to more complex multi-agent orchestration. Our two most popular patterns for advanced coordination have been Group Chat and Swarm. While powerful individually, users often found themselves wanting features from both worlds.
-
-With <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, we've completely reimagined agent orchestration by merging these approaches into a single, unified Group Chat architecture designed to be **extensible**, **controllable**, and **scalable**.
+AG2 has always provided multiple ways to coordinate agents, from simple two-agent conversations to more complex multi-agent orchestration. With <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, we've completely reimagined agent orchestration by merging these approaches into a single, unified Group Chat architecture designed to be **extensible**, **controllable**, and **scalable**.
 
 ## Why We Made This Change
 
 Before diving into the details, let's understand why this unification matters:
 
-- **Simplified API** - One coherent way to orchestrate multi-agent workflows instead of two competing approaches
-- **Enhanced Flexibility** - Get the best of both worlds: structured handoffs from Swarm and dynamic interactions from Group Chat
+- **Simplified API** - One coherent way to orchestrate multi-agent workflows
+- **Enhanced Flexibility** - Structured handoffs from Swarm with more diverse hand off targets
 - **Improved State Management** - More robust context sharing and state tracking across agents
 - **Future-proof Design** - A foundation that can grow with evolving multi-agent orchestration needs
 
@@ -61,7 +60,7 @@ customer_service.handoffs.add_llm_conditions([
 ])
 ```
 
-- **[Context-based conditions](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#context-based-conditions)**: Use shared variables to make transition decisions
+- **[Context-based conditions](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#context-based-conditions)**: Use shared context variables to make transition decisions
 
 ```python
 # Define context-based handoffs
@@ -102,7 +101,10 @@ The new Group Chat pattern introduces powerful "[Transition Targets](/docs/user-
 - **TerminateTarget**: End the conversation entirely
 - **StayTarget**: Keep control with the current agent
 - **RandomAgentTarget**: Randomly select from a list of possible agents
+- **AskUserTarget**: You decide who the next agent is
 - **NestedChatTarget**: Transfer to a nested conversation
+- **GroupChatTarget**: Transfer to a new group chat (nested group chats!)
+- **GroupManagerTarget**: Transfer to the group chat manager who will select the next speaker
 
 This flexible targeting system enables complex workflows where control might need to move between different levels of conversation or to specialized processes.
 
