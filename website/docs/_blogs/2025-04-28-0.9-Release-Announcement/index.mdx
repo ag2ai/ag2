@@ -17,7 +17,7 @@ tags: [release, AG2]
 
 ---
 
-We're thrilled to announce the release of AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, featuring a significant enhancement to multi-agent orchestration. This release brings together our widely used Group Chat and Swarm pattern into a unified, more powerful Group Chat that combines the best aspects of both approaches.
+We're excited to announce the release of AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, featuring a significant enhancement to multi-agent orchestration. This release brings together our widely used Group Chat and Swarm pattern into a unified, more powerful Group Chat that combines the best aspects of both approaches.
 
 ## A New Era for Multi-Agent Orchestration
 
@@ -42,7 +42,7 @@ The new Group Chat implements several orchestration patterns to suit different u
 - **[RoundRobinPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#roundrobinpattern-sequential-speaker-rotation)**: Creates a sequential rotation where agents speak in a predefined order
 - **[RandomPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#randompattern-non-deterministic-speaker-selection)**: Randomly selects the next agent to speak (excluding the current speaker)
 - **[ManualPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#manualpattern-human-directed-speaker-selection)**: Puts humans in control by allowing manual selection of the next speaker
-- **[DefaultPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#defaultpattern-explicit-handoff-control)**: Provides complete control through explicitly defined handoffs
+- **[DefaultPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#defaultpattern-explicit-handoff-control)**: Provides complete control of transitions
 
 ### Dynamic Workflow Control with Handoffs
 
@@ -149,6 +149,7 @@ def log_customer_interaction(
 
     return ReplyResult(
         message="Interaction logged successfully",
+        # Passing it into ReplyResult updates the shared context
         context_variables=context_variables
     )
 ```
@@ -231,9 +232,9 @@ travel_context = ContextVariables(
         "destination": None,
         "travel_days": None,
         "preferences": [],
+        "final_itinerary": None,
     }
 )
-
 
 # Concierge function to collect user information
 def collect_user_info(
@@ -291,7 +292,6 @@ def collect_user_info(
         message=message, target=target, context_variables=context_variables
     )
 
-
 # Function for destination specialist to provide information
 def provide_destination_info(
     destination_info: Annotated[str, "Detailed information about the destination"],
@@ -308,9 +308,23 @@ def provide_destination_info(
         context_variables=context_variables,
     )
 
+# Get more destination information
+def get_more_destination_info(
+    more_info_request: Annotated[str, "What additional information is needed"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Get more information from the destination agent."""
+
+    message = f"Could you please provide more destination details based on the member's request: {more_info_request}?"
+    return ReplyResult(
+        message=message,
+        target=AgentTarget(destination_specialist),
+        context_variables=context_variables,
+    )
+
 # Function to track itinerary status, when proposed set the status to "proposed" and when approved by the user set it to "approved"
-def track_itenary_status(
-    detailed_itenary_info: Annotated[str, "Detailed itinerary information"],
+def track_itinerary_status(
+    detailed_itinerary_info: Annotated[str, "Full itinerary in markdown format"],
     itinerary_status: Annotated[str, "Status of the itinerary (proposed/approved)"],
     context_variables: ContextVariables,
 ) -> ReplyResult:
@@ -319,19 +333,19 @@ def track_itenary_status(
     context_variables["itinerary_status"] = itinerary_status
 
     if itinerary_status == "approved":
+        context_variables["final_itinerary"] = detailed_itinerary_info
         message = "Thank you. Enjoy your trip!"
         target = TerminateTarget()
     else:
-        message = detailed_itenary_info
+        message = detailed_itinerary_info
         target = RevertToUserTarget()
 
     return ReplyResult(
         message=message, target=target, context_variables=context_variables
     )
 
-
 # Configure LLM
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False)
 
 # Create agents
 with llm_config:
@@ -359,10 +373,11 @@ with llm_config:
         - Exclusive experiences not available to standard members
         - Private transportation options
 
-        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        Propose the itinerary to the user and track the status using the track_itinerary_status function.
+        If the user requires more information about a destination, use the get_more_destination_info function.
         If the user approves or accepts the itinerary, set the status to "approved".
         """,
-        functions=[track_itenary_status],
+        functions=[track_itinerary_status, get_more_destination_info],
     )
 
     standard_advisor = ConversableAgent(
@@ -377,10 +392,11 @@ with llm_config:
         - Standard tourist attractions
         - Public transportation or group tour options
 
-        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        Propose the itinerary to the user and track the status using the track_itinerary_status function.
+        If the user requires more information about a destination, use the get_more_destination_info function.
         If the user approves or accepts the itinerary, set the status to "approved".
         """,
-        functions=[track_itenary_status],
+        functions=[track_itinerary_status, get_more_destination_info],
     )
 
     destination_specialist = ConversableAgent(
@@ -398,7 +414,8 @@ user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 # Set the after work for the concierge
 concierge.handoffs.set_after_work(RevertToUserTarget())
 
-# Define handoffs using LLM-based conditions for advisors to consult specialist
+# Define handoffs using LLM-based conditions for advisors to consult
+# the destination specialist for destination info
 premium_advisor.handoffs.add_llm_conditions(
     [
         OnCondition(
@@ -421,14 +438,17 @@ standard_advisor.handoffs.add_llm_conditions(
     ]
 )
 
-# After providing the itinerary, return to users for feedback
+# After providing the itinerary, return to the user for feedback
 premium_advisor.handoffs.set_after_work(RevertToUserTarget())
 standard_advisor.handoffs.set_after_work(RevertToUserTarget())
 
-# After providing information, destination specialist returns to the requesting advisor
+# After providing information, destination specialist returns to the
+# requesting advisor via the provide_destination_info tool call
+# If they don't call the tool, get more info from the user
 destination_specialist.handoffs.set_after_work(RevertToUserTarget())
 
 # Create pattern for orchestration
+# Use the DefaultPattern as we want to be in full control of the flow
 pattern = DefaultPattern(
     initial_agent=concierge,
     agents=[concierge, premium_advisor, standard_advisor, destination_specialist],
@@ -438,19 +458,15 @@ pattern = DefaultPattern(
 
 # Start the group chat
 result, final_context, last_agent = initiate_group_chat(
-    pattern=pattern, messages="Hello, I'd like to plan a vacation.", max_rounds=30
+    pattern=pattern,
+    messages="Hello, I'd like to plan a vacation.",
+    max_rounds=30
 )
+
+# Print out the approved itinerary
+if final_context["itinerary_status"] == "approved":
+    print(f"Approved Itinerary:\n{final_context['final_itinerary']}")
 ```
-
-This example demonstrates a critical aspect of the new Group Chat pattern: **using tool functions to work with context variables**.
-
-!!! note
-
-    1. Context variables are not directly accessible to the LLM
-    2. To read or update context variables, agents must use tool functions
-    3. Tool functions receive the context variables as a parameter (via dependency injection) and are updated in the ReplyResult
-
-In this example, the `customer_service` agent analysis the query and route to the `shipping_support` agent, which inturn uses the `provide_shipping_response` tool to access customer information for personalized responses.
 
 ### Running This Example
 
@@ -508,7 +524,7 @@ Next speaker: concierge
 >>>>>>>> USING AUTO REPLY...
 concierge (to chat_manager):
 
-Great! I can help you with that. First, could you please provide me with your member ID?
+I'd be happy to help you with your vacation planning! To get started, could you please provide me with your membership ID?
 
 --------------------------------------------------------------------------------
 
@@ -527,7 +543,7 @@ Next speaker: concierge
 >>>>>>>> USING AUTO REPLY...
 concierge (to chat_manager):
 
-Thank you for providing your member ID. Next, could you please tell me which destination you wish to travel to?
+Thank you! Now, could you tell me the destination you wish to travel to?
 
 --------------------------------------------------------------------------------
 
@@ -546,7 +562,24 @@ Next speaker: concierge
 >>>>>>>> USING AUTO REPLY...
 concierge (to chat_manager):
 
-Thanks! Lastly, can you let me know the number of travel days you are planning for your trip?
+***** Suggested tool call (call_jprdd0HCW5VJl2NSgeQQMP9u): collect_user_info *****
+Arguments:
+{"member_id":"P12345","destination":"USA","travel_days":0}
+**********************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION collect_user_info...
+Call ID: call_jprdd0HCW5VJl2NSgeQQMP9u
+Input arguments: {'member_id': 'P12345', 'destination': 'USA', 'travel_days': 0}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_jprdd0HCW5VJl2NSgeQQMP9u) *****
+Please provide the number of travel days.
+**********************************************************************
 
 --------------------------------------------------------------------------------
 
@@ -565,7 +598,7 @@ Next speaker: concierge
 >>>>>>>> USING AUTO REPLY...
 concierge (to chat_manager):
 
-***** Suggested tool call (call_oxoIKEc6rRgPDiDbnA2rbKqU): collect_user_info *****
+***** Suggested tool call (call_u7TQ8novsbmiR2mbtOMGmDQQ): collect_user_info *****
 Arguments:
 {"member_id":"P12345","destination":"USA","travel_days":5}
 **********************************************************************************
@@ -576,11 +609,11 @@ Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION collect_user_info...
-Call ID: call_oxoIKEc6rRgPDiDbnA2rbKqU
+Call ID: call_u7TQ8novsbmiR2mbtOMGmDQQ
 Input arguments: {'member_id': 'P12345', 'destination': 'USA', 'travel_days': 5}
 _Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_oxoIKEc6rRgPDiDbnA2rbKqU) *****
+***** Response from calling tool (call_u7TQ8novsbmiR2mbtOMGmDQQ) *****
 Welcome back, Alex Johnson! I see you're a premium member with preferences for 5-star hotels, fine dining, private tours, exclusive experiences. I'll connect you with our Premium Travel Advisor for your 5-day trip to USA.
 **********************************************************************
 
@@ -592,7 +625,7 @@ Next speaker: premium_advisor
 >>>>>>>> USING AUTO REPLY...
 premium_advisor (to chat_manager):
 
-***** Suggested tool call (call_A4nhtqzsJ0aMRzJtD6YSTMKn): transfer_to_destination_specialist_1 *****
+***** Suggested tool call (call_ZkcX0JgsFbvBRFCevkjY4AB3): transfer_to_destination_specialist_1 *****
 Arguments:
 {}
 *****************************************************************************************************
@@ -603,11 +636,11 @@ Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION transfer_to_destination_specialist_1...
-Call ID: call_A4nhtqzsJ0aMRzJtD6YSTMKn
+Call ID: call_ZkcX0JgsFbvBRFCevkjY4AB3
 Input arguments: {}
 _Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_A4nhtqzsJ0aMRzJtD6YSTMKn) *****
+***** Response from calling tool (call_ZkcX0JgsFbvBRFCevkjY4AB3) *****
 Transfer to destination_specialist
 **********************************************************************
 
@@ -619,9 +652,9 @@ Next speaker: destination_specialist
 >>>>>>>> USING AUTO REPLY...
 destination_specialist (to chat_manager):
 
-***** Suggested tool call (call_tooMKnfd5r4yZVo3VDYsBzrI): provide_destination_info *****
+***** Suggested tool call (call_ENoYGGEThIAzSf3qNE9ORyg3): provide_destination_info *****
 Arguments:
-{"destination_info": "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+{"destination_info":"**Destination:** USA  \n\n**Overview:** The United States is a vast country with diverse landscapes, cultures, and attractions to explore. A five-day trip can be tailored depending on your interests, whether you want to soak up sun in California, explore the history in Washington D.C., or immerse yourself in the bustling city life of New York City.\n\n**Attractions & Highlights:**  \n1. **New York City:**  \n   - Visit the Statue of Liberty, Central Park, and Times Square.  \n   - Explore world-class museums like the Metropolitan Museum of Art and the Museum of Modern Art.  \n   - Experience Broadway shows and fine dining in restaurants like Eleven Madison Park.  \n\n2. **Los Angeles:**  \n   - Discover iconic attractions like Hollywood, Venice Beach, and Santa Monica Pier.  \n   - Tour the Universal Studios and indulge in la-la-land luxuries with fine dining at restaurants like Spago.  \n\n3. **Washington D.C.:**  \n   - Visit the National Mall to see monuments and museums, including the Smithsonian.  \n   - Experience the vibrant culture in neighborhoods like Georgetown or Dupont Circle with upscale dining options.  \n\n4. **Las Vegas:**  \n   - Known for its entertainment, casinos, and nightlife.  \n   - Enjoy a show, fine dining in Michelin-starred restaurants like Joël Robuchon, and take a helicopter tour of the Grand Canyon.  \n\n5. **Miami:**  \n   - Enjoy the stunning beaches, art deco architecture, and vibrant nightlife in South Beach.  \n   - Indulge in Cuban cuisine and explore the local culture in Little Havana.  \n\n**Local Customs:**  \n- America is known for its tipping culture; typically, a tip of 15-20% in restaurants is expected.  \n- Be aware of regional differences in customs and behaviors; for example, people from the South may be more hospitable, while city dwellers may have a faster pace of life.  \n- Dress codes can vary significantly; casual attire is common, but upscale venues may require smart casual or formal attire.  \n\n**Best Times to Visit:**  \n- Spring (March to May) and Fall (September to November) are generally the best times to visit most cities to avoid extreme weather.  \n- Summer is peak tourist season in many areas, especially for beach destinations.\n\n**Insider Tips:**  \n- If traveling to New York City, consider a CityPASS for discounts on major attractions.  \n- For Los Angeles, rent a car to explore beyond the city and see places like Malibu or Santa Barbara.  \n- In Washington D.C., use the Metro system for easy access to major sites without worrying about parking.  \n- Always check for events or festivals happening in cities you are visiting as they can enhance your experience.  \n\nWith your preferences for exclusive experiences, I recommend looking into private tours, gourmet culinary experiences, and high-end accommodations when planning your itinerary in the United States."}
 *****************************************************************************************
 
 --------------------------------------------------------------------------------
@@ -630,34 +663,53 @@ Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_destination_info...
-Call ID: call_tooMKnfd5r4yZVo3VDYsBzrI
-Input arguments: {'destination_info': "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+Call ID: call_ENoYGGEThIAzSf3qNE9ORyg3
+Input arguments: {'destination_info': '**Destination:** USA  \n\n**Overview:** The United States is a vast country with diverse landscapes, cultures, and attractions to explore. A five-day trip can be tailored depending on your interests, whether you want to soak up sun in California, explore the history in Washington D.C., or immerse yourself in the bustling city life of New York City.\n\n**Attractions & Highlights:**  \n1. **New York City:**  \n   - Visit the Statue of Liberty, Central Park, and Times Square.  \n   - Explore world-class museums like the Metropolitan Museum of Art and the Museum of Modern Art.  \n   - Experience Broadway shows and fine dining in restaurants like Eleven Madison Park.  \n\n2. **Los Angeles:**  \n   - Discover iconic attractions like Hollywood, Venice Beach, and Santa Monica Pier.  \n   - Tour the Universal Studios and indulge in la-la-land luxuries with fine dining at restaurants like Spago.  \n\n3. **Washington D.C.:**  \n   - Visit the National Mall to see monuments and museums, including the Smithsonian.  \n   - Experience the vibrant culture in neighborhoods like Georgetown or Dupont Circle with upscale dining options.  \n\n4. **Las Vegas:**  \n   - Known for its entertainment, casinos, and nightlife.  \n   - Enjoy a show, fine dining in Michelin-starred restaurants like Joël Robuchon, and take a helicopter tour of the Grand Canyon.  \n\n5. **Miami:**  \n   - Enjoy the stunning beaches, art deco architecture, and vibrant nightlife in South Beach.  \n   - Indulge in Cuban cuisine and explore the local culture in Little Havana.  \n\n**Local Customs:**  \n- America is known for its tipping culture; typically, a tip of 15-20% in restaurants is expected.  \n- Be aware of regional differences in customs and behaviors; for example, people from the South may be more hospitable, while city dwellers may have a faster pace of life.  \n- Dress codes can vary significantly; casual attire is common, but upscale venues may require smart casual or formal attire.  \n\n**Best Times to Visit:**  \n- Spring (March to May) and Fall (September to November) are generally the best times to visit most cities to avoid extreme weather.  \n- Summer is peak tourist season in many areas, especially for beach destinations.\n\n**Insider Tips:**  \n- If traveling to New York City, consider a CityPASS for discounts on major attractions.  \n- For Los Angeles, rent a car to explore beyond the city and see places like Malibu or Santa Barbara.  \n- In Washington D.C., use the Metro system for easy access to major sites without worrying about parking.  \n- Always check for events or festivals happening in cities you are visiting as they can enhance your experience.  \n\nWith your preferences for exclusive experiences, I recommend looking into private tours, gourmet culinary experiences, and high-end accommodations when planning your itinerary in the United States.'}
 _Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_tooMKnfd5r4yZVo3VDYsBzrI) *****
-The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights:
+***** Response from calling tool (call_ENoYGGEThIAzSf3qNE9ORyg3) *****
+**Destination:** USA
 
-### Attractions:
-1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.
-2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.
-3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.
-4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.
-5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.
+**Overview:** The United States is a vast country with diverse landscapes, cultures, and attractions to explore. A five-day trip can be tailored depending on your interests, whether you want to soak up sun in California, explore the history in Washington D.C., or immerse yourself in the bustling city life of New York City.
 
-### Local Customs:
-- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.
-- **Greetings:** A firm handshake is common when meeting someone.
-- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.
+**Attractions & Highlights:**
+1. **New York City:**
+   - Visit the Statue of Liberty, Central Park, and Times Square.
+   - Explore world-class museums like the Metropolitan Museum of Art and the Museum of Modern Art.
+   - Experience Broadway shows and fine dining in restaurants like Eleven Madison Park.
 
-### Best Times to Visit:
-- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.
-- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.
+2. **Los Angeles:**
+   - Discover iconic attractions like Hollywood, Venice Beach, and Santa Monica Pier.
+   - Tour the Universal Studios and indulge in la-la-land luxuries with fine dining at restaurants like Spago.
 
-### Insider Tips:
-- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.
-- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.
-- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.
-- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water.
+3. **Washington D.C.:**
+   - Visit the National Mall to see monuments and museums, including the Smithsonian.
+   - Experience the vibrant culture in neighborhoods like Georgetown or Dupont Circle with upscale dining options.
+
+4. **Las Vegas:**
+   - Known for its entertainment, casinos, and nightlife.
+   - Enjoy a show, fine dining in Michelin-starred restaurants like Joël Robuchon, and take a helicopter tour of the Grand Canyon.
+
+5. **Miami:**
+   - Enjoy the stunning beaches, art deco architecture, and vibrant nightlife in South Beach.
+   - Indulge in Cuban cuisine and explore the local culture in Little Havana.
+
+**Local Customs:**
+- America is known for its tipping culture; typically, a tip of 15-20% in restaurants is expected.
+- Be aware of regional differences in customs and behaviors; for example, people from the South may be more hospitable, while city dwellers may have a faster pace of life.
+- Dress codes can vary significantly; casual attire is common, but upscale venues may require smart casual or formal attire.
+
+**Best Times to Visit:**
+- Spring (March to May) and Fall (September to November) are generally the best times to visit most cities to avoid extreme weather.
+- Summer is peak tourist season in many areas, especially for beach destinations.
+
+**Insider Tips:**
+- If traveling to New York City, consider a CityPASS for discounts on major attractions.
+- For Los Angeles, rent a car to explore beyond the city and see places like Malibu or Santa Barbara.
+- In Washington D.C., use the Metro system for easy access to major sites without worrying about parking.
+- Always check for events or festivals happening in cities you are visiting as they can enhance your experience.
+
+With your preferences for exclusive experiences, I recommend looking into private tours, gourmet culinary experiences, and high-end accommodations when planning your itinerary in the United States.
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -668,52 +720,62 @@ Next speaker: premium_advisor
 >>>>>>>> USING AUTO REPLY...
 premium_advisor (to chat_manager):
 
-Here's a luxurious 5-day itinerary for your trip to the USA, tailored to your preferences as a premium member:
+Based on your preferences and the information gathered, I'm excited to propose an exclusive 5-day luxury itinerary for your trip to the USA.
 
-### Day 1: Arrival in New York City
-- **Accommodation:** Check-in at The St. Regis New York (5-star hotel with exquisite service)
-- **Dining:** Dine at Le Bernardin, a Michelin-starred restaurant offering fine French seafood.
-- **Exclusive Experience:** Private helicopter tour over Manhattan to marvel at the skyline.
+### **Proposed Itinerary for Your 5-Day Luxury Trip to the USA**
 
-### Day 2: New York City Exploration
-- **Morning:** Private guided tour of the Metropolitan Museum of Art.
-- **Lunch:** Enjoy a meal at Eleven Madison Park, renowned for its modern cuisine.
-- **Afternoon:** Stroll through Central Park and visit iconic landmarks.
-- **Evening:** Attend a Broadway show with premium seating.
+---
 
-### Day 3: Transfer to Los Angeles
-- **Transportation:** Private jet charter to Los Angeles.
-- **Accommodation:** Check-in at The Beverly Hills Hotel (iconic luxury hotel).
-- **Dining:** Dinner at Spago Beverly Hills, celebrated for its fine dining experience.
-- **Exclusive Experience:** VIP access to a Hollywood studio tour.
+**Day 1: Arrival in New York City**
+- **Accommodation**: Check-in at The St. Regis New York (5-star hotel).
+- **Dinner**: Experience fine dining at **Eleven Madison Park** known for its exquisite tasting menu.
+- **Exclusive Experience**: Private evening helicopter tour of Manhattan, offering breathtaking views of the skyline.
 
-### Day 4: Los Angeles & Santa Monica
-- **Morning:** Private guided tour of Hollywood, including Walk of Fame and Griffith Observatory.
-- **Lunch:** Beachfront dining at The Lobster in Santa Monica.
-- **Afternoon:** Relax on the Santa Monica beach or shop at exclusive boutiques.
-- **Evening:** Enjoy sunset at Nobu Malibu, known for its exquisite seafood and stunning ocean views.
+---
 
-### Day 5: Departure
-- **Morning:** Leisure time or spa treatment at your hotel.
-- **Lunch:** Lunch at a local favorite, providing a taste of authentic LA cuisine.
-- **Transportation:** Private transfer to the airport for your departure.
+**Day 2: Exploring New York City**
+- **Morning**: Private guided tour of **The Metropolitan Museum of Art**.
+- **Lunch**: Dine at **The Modern**, a Michelin-starred restaurant at the Museum of Modern Art.
+- **Afternoon**: Enjoy a private shopping experience in **Fifth Avenue** with a personal stylist.
+- **Evening**: Attend a Broadway show with VIP backstage access.
 
-### Summary
-- **Private transportation throughout**
-- **5-star accommodations**
-- **Fine dining experiences**
-- **Exclusive tours and activities**
+---
 
-Please review this itinerary and let me know if you would like to make any changes or if you're ready to approve it!
+**Day 3: Flight to Los Angeles**
+- **Accommodation**: Check-in at The Beverly Hills Hotel (5-star hotel).
+- **Lunch**: Fine dining at **Spago**, a legend in the culinary world.
+- **Afternoon**: Private tour of **Hollywood and Beverly Hills**, including iconic spots like the Hollywood Walk of Fame and celebrity homes.
+- **Evening**: Dinner at **Nobu Los Angeles**, catering to your love for exquisite cuisine.
+
+---
+
+**Day 4: Adventure in Los Angeles**
+- **Morning**: Enjoy a private guided tour of **Universal Studios Hollywood**.
+- **Lunch**: Casual yet upscale dining in **CityWalk**.
+- **Afternoon**: Relax at the hotel spa, enjoying exclusive treatments designed for rejuvenation.
+- **Evening**: Private sunset yacht dinner along the coast of Santa Monica.
+
+---
+
+**Day 5: Departure**
+- **Morning**: Leisure time for last-minute shopping or a stroll at the **Santa Monica Pier**.
+- **Lunch**: Eat at **Casa Oaxaca**, enjoying authentic Oaxacan cuisine before you head back.
+- **Afternoon**: Private transfer to the airport for your departure.
+
+---
+
+This itinerary includes your preferred accommodation, fine dining experiences, private transportation, and exclusive activities designed for a premium experience.
+
+Would you like to proceed with this itinerary or have any adjustments in mind?
 
 --------------------------------------------------------------------------------
 
 Next speaker: user
 
-Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Awesome, Love the itenary. Thanks
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: What is there to do in Washington?
 user (to chat_manager):
 
-Awesome, Love the itenary. Thanks
+What is there to do in Washington?
 
 --------------------------------------------------------------------------------
 
@@ -723,28 +785,284 @@ Next speaker: premium_advisor
 >>>>>>>> USING AUTO REPLY...
 premium_advisor (to chat_manager):
 
-***** Suggested tool call (call_yTVpZopIZ7KLP5AU4GpuPELz): track_itenary_status *****
+***** Suggested tool call (call_Gn7ZQQfGlU1eRhbvypGeMhy3): get_more_destination_info *****
 Arguments:
-{"detailed_itenary_info":"5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.","itinerary_status":"approved"}
-*************************************************************************************
+{"more_info_request":"What activities and attractions are available in Washington D.C. for a premium traveler? Include fine dining, private tours, and exclusive experiences."}
+******************************************************************************************
 
 --------------------------------------------------------------------------------
 
 Next speaker: _Group_Tool_Executor
 
 
->>>>>>>> EXECUTING FUNCTION track_itenary_status...
-Call ID: call_yTVpZopIZ7KLP5AU4GpuPELz
-Input arguments: {'detailed_itenary_info': '5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.', 'itinerary_status': 'approved'}
+>>>>>>>> EXECUTING FUNCTION get_more_destination_info...
+Call ID: call_Gn7ZQQfGlU1eRhbvypGeMhy3
+Input arguments: {'more_info_request': 'What activities and attractions are available in Washington D.C. for a premium traveler? Include fine dining, private tours, and exclusive experiences.'}
 _Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_yTVpZopIZ7KLP5AU4GpuPELz) *****
+***** Response from calling tool (call_Gn7ZQQfGlU1eRhbvypGeMhy3) *****
+Could you please provide more destination details based on the member's request: What activities and attractions are available in Washington D.C. for a premium traveler? Include fine dining, private tours, and exclusive experiences.?
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: destination_specialist
+
+
+>>>>>>>> USING AUTO REPLY...
+destination_specialist (to chat_manager):
+
+***** Suggested tool call (call_ZdhHTPxnDVv6THnvmHKISjkh): provide_destination_info *****
+Arguments:
+{"destination_info":"**Destination:** Washington D.C.  \n\n**Overview:** The capital of the United States is steeped in history, with significant monuments, museums, and vibrant neighborhoods all waiting to be explored. As a premium traveler, Washington D.C. offers luxury experiences, fine dining, and exclusive access to iconic sites.\n\n**Attractions & Highlights:**  \n1. **National Mall:**  \n   - Home to famous monuments and memorials such as the Lincoln Memorial, Washington Monument, and the U.S. Capitol.  \n   - Consider a private guided tour to avoid the crowds and gain insider knowledge about the history behind these landmarks.\n\n2. **Smithsonian Museums:**  \n   - Visit the National Museum of American History, National Air and Space Museum, and the National Gallery of Art.  \n   - Opt for private after-hours tours for a more intimate experience, often available through special arrangements.\n\n3. **U.S. Capitol Building:**  \n   - Schedule a private tour of the Capitol to learn about the legislative process and explore its stunning architecture.\n\n4. **Georgetown:**  \n   - This historic neighborhood is known for its boutique shops, waterfront, and dining options.  \n   - Enjoy a guided food tour that explores the area's culinary history and allows you to taste gourmet offerings from local eateries.\n\n5. **The Kennedy Center for the Performing Arts:**  \n   - Catch a performance in the stunning venue, home to ballet, opera, and theater.  \n   - Consider a VIP experience with backstage access or a pre-show dinner.\n\n**Fine Dining Options:**  \n- **The Inn at Little Washington**: A three Michelin-star restaurant located outside the city, known for its refined American cuisine. Reservations are a must.\n- **The Capital Grille**: Renowned for its dry-aged steaks and extensive wine list, perfect for a sophisticated evening out.\n- **Plume**: Located in The Jefferson hotel, this Michelin-starred restaurant features a seasonal menu inspired by French cuisine.\n\n**Exclusive Experiences:**  \n- **Private Carriage Rides in Georgetown**: Enjoy a romantic evening riding through historic streets.\n- **Personal Shopping Experience**: Hire a personal shopper to explore high-end boutiques and designer stores in Georgetown or the West End.  \n- **Private Art Viewing**: Arrange for private viewings at local galleries featuring contemporary art from renowned artists.\n- **Advocacy and Political Tours**: Gain a deeper understanding of the American political landscape through bespoke tours led by political insiders.\n\n**Insider Tips:**  \n- Book reservations for popular restaurants and experiences well in advance to secure your preferred times.\n- Wear comfortable shoes, as you may want to explore the extensive mall area by foot.\n- Consider visiting during the spring (cherry blossom season) or fall (for beautiful foliage) for a picturesque experience.\n\nWashington D.C. offers an exciting blend of history, culture, and gourmet dining that can be tailored to create unforgettable premium experiences."}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION provide_destination_info...
+Call ID: call_ZdhHTPxnDVv6THnvmHKISjkh
+Input arguments: {'destination_info': "**Destination:** Washington D.C.  \n\n**Overview:** The capital of the United States is steeped in history, with significant monuments, museums, and vibrant neighborhoods all waiting to be explored. As a premium traveler, Washington D.C. offers luxury experiences, fine dining, and exclusive access to iconic sites.\n\n**Attractions & Highlights:**  \n1. **National Mall:**  \n   - Home to famous monuments and memorials such as the Lincoln Memorial, Washington Monument, and the U.S. Capitol.  \n   - Consider a private guided tour to avoid the crowds and gain insider knowledge about the history behind these landmarks.\n\n2. **Smithsonian Museums:**  \n   - Visit the National Museum of American History, National Air and Space Museum, and the National Gallery of Art.  \n   - Opt for private after-hours tours for a more intimate experience, often available through special arrangements.\n\n3. **U.S. Capitol Building:**  \n   - Schedule a private tour of the Capitol to learn about the legislative process and explore its stunning architecture.\n\n4. **Georgetown:**  \n   - This historic neighborhood is known for its boutique shops, waterfront, and dining options.  \n   - Enjoy a guided food tour that explores the area's culinary history and allows you to taste gourmet offerings from local eateries.\n\n5. **The Kennedy Center for the Performing Arts:**  \n   - Catch a performance in the stunning venue, home to ballet, opera, and theater.  \n   - Consider a VIP experience with backstage access or a pre-show dinner.\n\n**Fine Dining Options:**  \n- **The Inn at Little Washington**: A three Michelin-star restaurant located outside the city, known for its refined American cuisine. Reservations are a must.\n- **The Capital Grille**: Renowned for its dry-aged steaks and extensive wine list, perfect for a sophisticated evening out.\n- **Plume**: Located in The Jefferson hotel, this Michelin-starred restaurant features a seasonal menu inspired by French cuisine.\n\n**Exclusive Experiences:**  \n- **Private Carriage Rides in Georgetown**: Enjoy a romantic evening riding through historic streets.\n- **Personal Shopping Experience**: Hire a personal shopper to explore high-end boutiques and designer stores in Georgetown or the West End.  \n- **Private Art Viewing**: Arrange for private viewings at local galleries featuring contemporary art from renowned artists.\n- **Advocacy and Political Tours**: Gain a deeper understanding of the American political landscape through bespoke tours led by political insiders.\n\n**Insider Tips:**  \n- Book reservations for popular restaurants and experiences well in advance to secure your preferred times.\n- Wear comfortable shoes, as you may want to explore the extensive mall area by foot.\n- Consider visiting during the spring (cherry blossom season) or fall (for beautiful foliage) for a picturesque experience.\n\nWashington D.C. offers an exciting blend of history, culture, and gourmet dining that can be tailored to create unforgettable premium experiences."}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_ZdhHTPxnDVv6THnvmHKISjkh) *****
+**Destination:** Washington D.C.
+
+**Overview:** The capital of the United States is steeped in history, with significant monuments, museums, and vibrant neighborhoods all waiting to be explored. As a premium traveler, Washington D.C. offers luxury experiences, fine dining, and exclusive access to iconic sites.
+
+**Attractions & Highlights:**
+1. **National Mall:**
+   - Home to famous monuments and memorials such as the Lincoln Memorial, Washington Monument, and the U.S. Capitol.
+   - Consider a private guided tour to avoid the crowds and gain insider knowledge about the history behind these landmarks.
+
+2. **Smithsonian Museums:**
+   - Visit the National Museum of American History, National Air and Space Museum, and the National Gallery of Art.
+   - Opt for private after-hours tours for a more intimate experience, often available through special arrangements.
+
+3. **U.S. Capitol Building:**
+   - Schedule a private tour of the Capitol to learn about the legislative process and explore its stunning architecture.
+
+4. **Georgetown:**
+   - This historic neighborhood is known for its boutique shops, waterfront, and dining options.
+   - Enjoy a guided food tour that explores the area's culinary history and allows you to taste gourmet offerings from local eateries.
+
+5. **The Kennedy Center for the Performing Arts:**
+   - Catch a performance in the stunning venue, home to ballet, opera, and theater.
+   - Consider a VIP experience with backstage access or a pre-show dinner.
+
+**Fine Dining Options:**
+- **The Inn at Little Washington**: A three Michelin-star restaurant located outside the city, known for its refined American cuisine. Reservations are a must.
+- **The Capital Grille**: Renowned for its dry-aged steaks and extensive wine list, perfect for a sophisticated evening out.
+- **Plume**: Located in The Jefferson hotel, this Michelin-starred restaurant features a seasonal menu inspired by French cuisine.
+
+**Exclusive Experiences:**
+- **Private Carriage Rides in Georgetown**: Enjoy a romantic evening riding through historic streets.
+- **Personal Shopping Experience**: Hire a personal shopper to explore high-end boutiques and designer stores in Georgetown or the West End.
+- **Private Art Viewing**: Arrange for private viewings at local galleries featuring contemporary art from renowned artists.
+- **Advocacy and Political Tours**: Gain a deeper understanding of the American political landscape through bespoke tours led by political insiders.
+
+**Insider Tips:**
+- Book reservations for popular restaurants and experiences well in advance to secure your preferred times.
+- Wear comfortable shoes, as you may want to explore the extensive mall area by foot.
+- Consider visiting during the spring (cherry blossom season) or fall (for beautiful foliage) for a picturesque experience.
+
+Washington D.C. offers an exciting blend of history, culture, and gourmet dining that can be tailored to create unforgettable premium experiences.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+In Washington D.C., there are numerous activities and attractions that cater to premium travelers. Here's an overview of some of the highlights:
+
+### **Attractions & Highlights:**
+1. **National Mall:**
+   - A significant area with iconic monuments like the Lincoln Memorial, Washington Monument, and the U.S. Capitol.
+   - You can arrange for a private guided tour to enhance your experience.
+
+2. **Smithsonian Museums:**
+   - Explore the National Museum of American History, National Air and Space Museum, and the National Gallery of Art.
+   - Consider private after-hours tours for an intimate experience.
+
+3. **U.S. Capitol Building:**
+   - Schedule a private tour to learn about U.S. legislative processes and explore the stunning architecture.
+
+4. **Georgetown:**
+   - Known for boutique shopping and dining. Enjoy a private food tour that lets you taste gourmet dishes while learning about the area's culinary history.
+
+5. **The Kennedy Center:**
+   - Attend performances like ballet, opera, and theater. Look into VIP experiences which may include backstage access or pre-show dinners.
+
+### **Fine Dining Options:**
+- **The Inn at Little Washington:** A three Michelin-star restaurant known for exquisite American cuisine. Reservations are essential.
+- **The Capital Grille:** Famous for its dry-aged steaks and extensive wine list, perfect for a sophisticated dinner.
+- **Plume:** Located in The Jefferson hotel, this Michelin-starred restaurant offers a seasonal menu inspired by French cuisine.
+
+### **Exclusive Experiences:**
+- **Private Carriage Rides in Georgetown:** Enjoy a romantic ride through this historic neighborhood.
+- **Personal Shopping Experience:** Hire a personal shopper for an upscale retail adventure.
+- **Private Art Viewing:** Arrange exclusive viewings at local art galleries featuring contemporary works.
+- **Political Tours:** Gain insights into the political landscape with bespoke tours led by insiders.
+
+### **Insider Tips:**
+- Make dining and activity reservations well in advance.
+- Wear comfortable shoes to fully explore the National Mall.
+- Consider visiting during the cherry blossom season in spring or the colorful fall foliage.
+
+Washington D.C. is a treasure trove of historical and cultural experiences complemented by luxury dining, making it an excellent choice for your travels. Would you like to incorporate any of these activities into your itinerary, or do you have any specific interests?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Can you incorporate Washington into the trip?
+user (to chat_manager):
+
+Can you incorporate Washington into the trip?
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+Absolutely! Let's incorporate a 2-day stay in Washington D.C. into your luxury itinerary. Here’s how the revised itinerary will look:
+
+### **Revised Itinerary for Your 5-Day Luxury Trip to the USA**
+
+---
+
+**Day 1: Arrival in New York City**
+- **Accommodation**: Check-in at The St. Regis New York (5-star hotel).
+- **Dinner**: Experience fine dining at **Eleven Madison Park** known for its exquisite tasting menu.
+- **Exclusive Experience**: Private evening helicopter tour of Manhattan, offering breathtaking views of the skyline.
+
+---
+
+**Day 2: Exploring New York City**
+- **Morning**: Private guided tour of **The Metropolitan Museum of Art**.
+- **Lunch**: Dine at **The Modern**, a Michelin-starred restaurant at the Museum of Modern Art.
+- **Afternoon**: Enjoy a private shopping experience in **Fifth Avenue** with a personal stylist.
+- **Evening**: Attend a Broadway show with VIP backstage access.
+
+---
+
+**Day 3: Travel to Washington D.C.**
+- **Morning**: Private transfer to the airport for your flight to Washington D.C.
+- **Accommodation**: Check-in at The Jefferson, Washington D.C. (5-star hotel).
+- **Lunch**: Enjoy a meal at **Plume**, a Michelin-starred restaurant within your hotel.
+- **Afternoon**: Explore the **National Mall** with a private guided tour to see the Lincoln Memorial and Washington Monument.
+- **Evening**: Dine at **The Inn at Little Washington** — a three Michelin-star experience, requiring advance booking.
+
+---
+
+**Day 4: Discovering More of Washington D.C.**
+- **Morning**: Private tour of the **U.S. Capitol Building** focusing on its stunning architecture and legislative process.
+- **Lunch**: Enjoy a casual yet sophisticated meal at **The Capital Grille** known for its upscale steak and seafood options.
+- **Afternoon**: Visit the **Smithsonian Museums** with a scheduled after-hours private tour of the National Gallery of Art.
+- **Evening**: Experience a show at **The Kennedy Center**, and opt for a pre-show dinner with VIP access.
+
+---
+
+**Day 5: Departure from Washington D.C.**
+- **Morning**: Leisure time in Georgetown, perhaps a private carriage ride or guided food tour.
+- **Lunch**: Casual lunch at a local eatery in Georgetown before heading back.
+- **Afternoon**: Private transfer to the airport for your departure.
+
+---
+
+This updated itinerary includes your request to incorporate Washington D.C. with luxurious experiences and exclusive activities, ensuring an unforgettable trip. Would you like to make any further adjustments or proceed with this itinerary?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Awesome, love the itinerary. Thanks
+user (to chat_manager):
+
+Awesome, love the itinerary. Thanks
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+***** Suggested tool call (call_2amK2dzg9ihHPHLXZ9j3SOxp): track_itinerary_status *****
+Arguments:
+{"detailed_itinerary_info":"### Revised Itinerary for Your 5-Day Luxury Trip to the USA\n\n---\n\n**Day 1: Arrival in New York City**  \n- **Accommodation**: Check-in at The St. Regis New York (5-star hotel).  \n- **Dinner**: Experience fine dining at **Eleven Madison Park** known for its exquisite tasting menu.  \n- **Exclusive Experience**: Private evening helicopter tour of Manhattan, offering breathtaking views of the skyline.\n\n---\n\n**Day 2: Exploring New York City**  \n- **Morning**: Private guided tour of **The Metropolitan Museum of Art**.  \n- **Lunch**: Dine at **The Modern**, a Michelin-starred restaurant at the Museum of Modern Art.  \n- **Afternoon**: Enjoy a private shopping experience in **Fifth Avenue** with a personal stylist.  \n- **Evening**: Attend a Broadway show with VIP backstage access.  \n\n---\n\n**Day 3: Travel to Washington D.C.**  \n- **Morning**: Private transfer to the airport for your flight to Washington D.C.  \n- **Accommodation**: Check-in at The Jefferson, Washington D.C. (5-star hotel).  \n- **Lunch**: Enjoy a meal at **Plume**, a Michelin-starred restaurant within your hotel.  \n- **Afternoon**: Explore the **National Mall** with a private guided tour to see the Lincoln Memorial and Washington Monument.  \n- **Evening**: Dine at **The Inn at Little Washington** — a three Michelin-star experience, requiring advance booking.\n\n---\n\n**Day 4: Discovering More of Washington D.C.**  \n- **Morning**: Private tour of the **U.S. Capitol Building** focusing on its stunning architecture and legislative process.  \n- **Lunch**: Enjoy a casual yet sophisticated meal at **The Capital Grille** known for its upscale steak and seafood options.  \n- **Afternoon**: Visit the **Smithsonian Museums** with a scheduled after-hours private tour of the National Gallery of Art.  \n- **Evening**: Experience a show at **The Kennedy Center**, and opt for a pre-show dinner with VIP access.\n\n---\n\n**Day 5: Departure from Washington D.C.**  \n- **Morning**: Leisure time in Georgetown, perhaps a private carriage ride or guided food tour.  \n- **Lunch**: Casual lunch at a local eatery in Georgetown before heading back.  \n- **Afternoon**: Private transfer to the airport for your departure.\n\n---","itinerary_status":"approved"}
+***************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION track_itinerary_status...
+Call ID: call_2amK2dzg9ihHPHLXZ9j3SOxp
+Input arguments: {'detailed_itinerary_info': '### Revised Itinerary for Your 5-Day Luxury Trip to the USA\n\n---\n\n**Day 1: Arrival in New York City**  \n- **Accommodation**: Check-in at The St. Regis New York (5-star hotel).  \n- **Dinner**: Experience fine dining at **Eleven Madison Park** known for its exquisite tasting menu.  \n- **Exclusive Experience**: Private evening helicopter tour of Manhattan, offering breathtaking views of the skyline.\n\n---\n\n**Day 2: Exploring New York City**  \n- **Morning**: Private guided tour of **The Metropolitan Museum of Art**.  \n- **Lunch**: Dine at **The Modern**, a Michelin-starred restaurant at the Museum of Modern Art.  \n- **Afternoon**: Enjoy a private shopping experience in **Fifth Avenue** with a personal stylist.  \n- **Evening**: Attend a Broadway show with VIP backstage access.  \n\n---\n\n**Day 3: Travel to Washington D.C.**  \n- **Morning**: Private transfer to the airport for your flight to Washington D.C.  \n- **Accommodation**: Check-in at The Jefferson, Washington D.C. (5-star hotel).  \n- **Lunch**: Enjoy a meal at **Plume**, a Michelin-starred restaurant within your hotel.  \n- **Afternoon**: Explore the **National Mall** with a private guided tour to see the Lincoln Memorial and Washington Monument.  \n- **Evening**: Dine at **The Inn at Little Washington** — a three Michelin-star experience, requiring advance booking.\n\n---\n\n**Day 4: Discovering More of Washington D.C.**  \n- **Morning**: Private tour of the **U.S. Capitol Building** focusing on its stunning architecture and legislative process.  \n- **Lunch**: Enjoy a casual yet sophisticated meal at **The Capital Grille** known for its upscale steak and seafood options.  \n- **Afternoon**: Visit the **Smithsonian Museums** with a scheduled after-hours private tour of the National Gallery of Art.  \n- **Evening**: Experience a show at **The Kennedy Center**, and opt for a pre-show dinner with VIP access.\n\n---\n\n**Day 5: Departure from Washington D.C.**  \n- **Morning**: Leisure time in Georgetown, perhaps a private carriage ride or guided food tour.  \n- **Lunch**: Casual lunch at a local eatery in Georgetown before heading back.  \n- **Afternoon**: Private transfer to the airport for your departure.\n\n---', 'itinerary_status': 'approved'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_2amK2dzg9ihHPHLXZ9j3SOxp) *****
 Thank you. Enjoy your trip!
 **********************************************************************
 
 --------------------------------------------------------------------------------
 
->>>>>>>> TERMINATING RUN (74a472bf-ee68-4794-a49a-628c899a807e): No next speaker selected
+>>>>>>>> TERMINATING RUN (eb9f76ee-a6aa-40d5-b69d-563cd166aceb): No next speaker selected
+Approved Itinerary:
+### Revised Itinerary for Your 5-Day Luxury Trip to the USA
+
+---
+
+**Day 1: Arrival in New York City**
+- **Accommodation**: Check-in at The St. Regis New York (5-star hotel).
+- **Dinner**: Experience fine dining at **Eleven Madison Park** known for its exquisite tasting menu.
+- **Exclusive Experience**: Private evening helicopter tour of Manhattan, offering breathtaking views of the skyline.
+
+---
+
+**Day 2: Exploring New York City**
+- **Morning**: Private guided tour of **The Metropolitan Museum of Art**.
+- **Lunch**: Dine at **The Modern**, a Michelin-starred restaurant at the Museum of Modern Art.
+- **Afternoon**: Enjoy a private shopping experience in **Fifth Avenue** with a personal stylist.
+- **Evening**: Attend a Broadway show with VIP backstage access.
+
+---
+
+**Day 3: Travel to Washington D.C.**
+- **Morning**: Private transfer to the airport for your flight to Washington D.C.
+- **Accommodation**: Check-in at The Jefferson, Washington D.C. (5-star hotel).
+- **Lunch**: Enjoy a meal at **Plume**, a Michelin-starred restaurant within your hotel.
+- **Afternoon**: Explore the **National Mall** with a private guided tour to see the Lincoln Memorial and Washington Monument.
+- **Evening**: Dine at **The Inn at Little Washington** — a three Michelin-star experience, requiring advance booking.
+
+---
+
+**Day 4: Discovering More of Washington D.C.**
+- **Morning**: Private tour of the **U.S. Capitol Building** focusing on its stunning architecture and legislative process.
+- **Lunch**: Enjoy a casual yet sophisticated meal at **The Capital Grille** known for its upscale steak and seafood options.
+- **Afternoon**: Visit the **Smithsonian Museums** with a scheduled after-hours private tour of the National Gallery of Art.
+- **Evening**: Experience a show at **The Kennedy Center**, and opt for a pre-show dinner with VIP access.
+
+---
+
+**Day 5: Departure from Washington D.C.**
+- **Morning**: Leisure time in Georgetown, perhaps a private carriage ride or guided food tour.
+- **Lunch**: Casual lunch at a local eatery in Georgetown before heading back.
+- **Afternoon**: Private transfer to the airport for your departure.
+
+---
 ```
 
 ## Migrating from Swarm to the New Group Chat
