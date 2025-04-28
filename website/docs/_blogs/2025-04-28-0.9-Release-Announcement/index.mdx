@@ -1,0 +1,778 @@
+---
+title: "AG2 v0.9 Release: Introducing the New Group Chat Pattern"
+authors: [harish, marklysze]
+tags: [release, AG2]
+---
+
+# AG2 v0.9 Release: Introducing the New Group Chat
+
+## TL;DR
+- AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a> unifies the previous Group Chat and Swarm into a single, powerful, new Group Chat
+- This unification provides improved flexibility, control, and better foundations for scalability
+- Features include pre-built orchestration patterns, enhanced workflow control, and robust context variables
+- Includes all capabilities of the previous Group Chat and Swarm
+- Swarm is now deprecated but still available. We recommend migrating to the new Group Chat pattern
+
+\<!-- more -->
+
+---
+
+We're thrilled to announce the release of AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, featuring a significant enhancement to multi-agent orchestration. This release brings together our widely used Group Chat and Swarm pattern into a unified, more powerful Group Chat that combines the best aspects of both approaches.
+
+## A New Era for Multi-Agent Orchestration
+
+AG2 has always provided multiple ways to coordinate agents, from simple two-agent conversations to more complex multi-agent orchestration. With <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, we've completely reimagined agent orchestration by merging these approaches into a single, unified Group Chat architecture designed to be **extensible**, **controllable**, and **scalable**.
+
+## Why We Made This Change
+
+Before diving into the details, let's understand why this unification matters:
+
+- **Simplified API** - One coherent way to orchestrate multi-agent workflows
+- **Enhanced Flexibility** - Structured handoffs from Swarm with more diverse hand off targets
+- **Improved State Management** - More robust context sharing and state tracking across agents
+- **Future-proof Design** - A foundation that can grow with evolving multi-agent orchestration needs
+
+## Key Features of the New Group Chat
+
+### Pre-built Patterns for Different Needs
+
+The new Group Chat implements several orchestration patterns to suit different use cases:
+
+- **[AutoPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#autopattern-llm-powered-speaker-selection)**: Uses an LLM to intelligently select the next speaker based on conversation context
+- **[RoundRobinPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#roundrobinpattern-sequential-speaker-rotation)**: Creates a sequential rotation where agents speak in a predefined order
+- **[RandomPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#randompattern-non-deterministic-speaker-selection)**: Randomly selects the next agent to speak (excluding the current speaker)
+- **[ManualPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#manualpattern-human-directed-speaker-selection)**: Puts humans in control by allowing manual selection of the next speaker
+- **[DefaultPattern](/docs/user-guide/advanced-concepts/orchestration/group-chat/patterns/#defaultpattern-explicit-handoff-control)**: Provides complete control through explicitly defined handoffs
+
+### Dynamic Workflow Control with Handoffs
+
+The handoff system has been enhanced to provide powerful control over agent transitions:
+
+- **[LLM-based conditions](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#llm-based-conditions)**: Use the LLM to determine when to transfer control based on message content
+
+```python
+# Define LLM-based handoffs
+customer_service.handoffs.add_llm_conditions([
+    OnCondition(
+        target=AgentTarget(billing_specialist),
+        condition=StringLLMCondition(prompt="When the query is about billing or payments."),
+        available=AvailableContextExpression(expression=ContextExpression("${account_status} == 'active'")) # PLEASE CHECK
+    )
+])
+```
+
+- **[Context-based conditions](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#context-based-conditions)**: Use shared context variables to make transition decisions
+
+```python
+# Define context-based handoffs
+# This will route to the escalation agent when the issue priority is high
+support_agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(agent=escalation_agent),
+        condition=ExpressionContextCondition(
+            expression=ContextExpression("${issue_priority} == 'high'")
+        )
+    )
+)
+
+# This will route to a supervisor when retry count exceeds 3
+support_agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(agent=supervisor_agent),
+        condition=ExpressionContextCondition(
+            expression=ContextExpression("${retry_count} > 3")
+        )
+    )
+)
+```
+
+- **[After-work behavior](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#after-work-behavior)**: Define default behavior for when an agent completes its work
+
+```python
+# Define what happens after an agent completes its work
+billing_specialist.handoffs.set_after_work(RevertToUserTarget())
+```
+
+### Enhanced Transition Targets
+
+The new Group Chat pattern introduces powerful "[Transition Targets](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#transition-targets)" - which define where control should go after an agent completes its work. This system goes beyond simply transferring to another agent:
+
+- **AgentTarget/AgentNameTarget**: Transfer to a specific agent directly or by name
+- **RevertToUserTarget**: Return control to the human user
+- **TerminateTarget**: End the conversation entirely
+- **StayTarget**: Keep control with the current agent
+- **RandomAgentTarget**: Randomly select from a list of possible agents
+- **AskUserTarget**: You decide who the next agent is
+- **NestedChatTarget**: Transfer to a nested conversation
+- **GroupChatTarget**: Transfer to a new group chat (nested group chats!)
+- **GroupManagerTarget**: Transfer to the group chat manager who will select the next speaker
+
+This flexible targeting system enables complex workflows where control might need to move between different levels of conversation or to specialized processes.
+
+### Shared Context Management
+
+The new `ContextVariables` class provides a structured way to share and maintain state across agents. This shared memory enables agents to:
+
+- Maintain consistent information throughout a conversation
+- Make decisions based on the current state
+- Pass structured data between agents
+- Control workflow based on context values
+
+Here's how you can create and use context variables:
+
+```python
+# Initialize context variables
+context = ContextVariables(data={
+    "customer_id": "C12345",
+    "subscription_tier": "premium",
+    "support_history": []
+})
+
+# Update context in a tool function
+def log_customer_interaction(
+    issue_type: str,
+    resolution: str,
+    context_variables: ContextVariables
+) -> ReplyResult:
+    """Log a customer interaction in the context."""
+
+    # Add this interaction to history
+    support_history = context_variables.get("support_history", [])
+    support_history.append({
+        "timestamp": datetime.now().isoformat(),
+        "issue_type": issue_type,
+        "resolution": resolution
+    })
+
+    context_variables["support_history"] = support_history
+    context_variables["last_issue_type"] = issue_type
+
+    return ReplyResult(
+        message="Interaction logged successfully",
+        context_variables=context_variables
+    )
+```
+
+## Getting Started with the New Group Chat
+
+Let's explore a practical example of how the new Group Chat pattern can transform travel planning workflows. We'll implement a personalized travel itinerary system where specialized agents collaborate to assist users based on their membership status.
+
+### The Use Case
+
+In this scenario, we want to create a travel planning system that:
+
+- Verifies user membership and collects travel information
+- Routes users to different advisors based on membership status
+- Provides personalized itineraries using customer preferences
+- Facilitates collaboration between advisors and destination specialists
+- Tracks itinerary status from proposal to approval
+
+### Implementing the workflow with the new GroupChat
+
+Now, let's implement this system:
+
+```python
+from typing import Annotated
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group import (
+    ReplyResult,
+    AgentTarget,
+    AgentNameTarget,
+    ContextVariables,
+    RevertToUserTarget,
+    OnCondition,
+    StringLLMCondition,
+    TerminateTarget
+)
+
+# Mock user database
+MEMBER_DATABASE = {
+    "P12345": {
+        "name": "Alex Johnson",
+        "membership": "premium",
+        "preferences": [
+            "5-star hotels",
+            "fine dining",
+            "private tours",
+            "exclusive experiences",
+        ],
+    },
+    "P67890": {
+        "name": "Taylor Williams",
+        "membership": "premium",
+        "preferences": [
+            "boutique hotels",
+            "local cuisine",
+            "cultural experiences",
+            "adventure activities",
+        ],
+    },
+    "S12345": {
+        "name": "Jordan Smith",
+        "membership": "standard",
+        "preferences": ["budget-friendly", "popular attractions"],
+    },
+    "S67890": {
+        "name": "Casey Brown",
+        "membership": "standard",
+        "preferences": ["family-friendly", "group tours"],
+    },
+}
+
+# Initialize context variables
+travel_context = ContextVariables(
+    data={
+        "user_info_collected": False,
+        "membership_status": None,
+        "name": None,
+        "member_id": None,
+        "destination": None,
+        "travel_days": None,
+        "preferences": [],
+    }
+)
+
+
+# Concierge function to collect user information
+def collect_user_info(
+    member_id: Annotated[str, "User's membership ID"],
+    destination: Annotated[str, "User's travel destination"],
+    travel_days: Annotated[int, "Number of travel days"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Collect and verify user information against the database."""
+
+    # Check if all required information is provided, else ask for it
+    if not member_id:
+        return ReplyResult(
+            message="Please provide your membership ID.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
+    if not destination:
+        return ReplyResult(
+            message="Please provide your travel destination.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
+    if not travel_days:
+        return ReplyResult(
+            message="Please provide the number of travel days.",
+            target=RevertToUserTarget(),
+            context_variables=context_variables,
+        )
+
+    # Check if member exists in database
+    if member_id in MEMBER_DATABASE:
+        user_data = MEMBER_DATABASE[member_id]
+
+        # Store user information in context
+        context_variables["name"] = user_data["name"]
+        context_variables["member_id"] = member_id
+        context_variables["destination"] = destination
+        context_variables["travel_days"] = travel_days
+        context_variables["membership_status"] = user_data["membership"]
+        context_variables["preferences"] = user_data["preferences"]
+        context_variables["user_info_collected"] = True
+
+        if user_data["membership"] == "premium":
+            message = f"Welcome back, {user_data['name']}! I see you're a premium member with preferences for {', '.join(user_data['preferences'])}. I'll connect you with our Premium Travel Advisor for your {travel_days}-day trip to {destination}."
+            target = AgentNameTarget("premium_advisor")
+        else:
+            message = f"Hello {user_data['name']}. I'll connect you with our Standard Travel Advisor to help plan your {travel_days}-day trip to {destination}."
+            target = AgentNameTarget("standard_advisor")
+    else:
+        message = f"I couldn't find your member ID in our system. Please check your ID and try again, or register as a new member."
+        target = RevertToUserTarget()
+
+    return ReplyResult(
+        message=message, target=target, context_variables=context_variables
+    )
+
+
+# Function for destination specialist to provide information
+def provide_destination_info(
+    destination_info: Annotated[str, "Detailed information about the destination"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Provide destination information and return to the requesting agent."""
+
+    context_variables["destination_info"] = destination_info
+    target_agent_name  = "premium_advisor" if context_variables["membership_status"] == "premium" else "standard_advisor"
+
+    return ReplyResult(
+        message=destination_info,
+        target=AgentNameTarget(target_agent_name),
+        context_variables=context_variables,
+    )
+
+# Function to track itinerary status, when proposed set the status to "proposed" and when approved by the user set it to "approved"
+def track_itenary_status(
+    detailed_itenary_info: Annotated[str, "Detailed itinerary information"],
+    itinerary_status: Annotated[str, "Status of the itinerary (proposed/approved)"],
+    context_variables: ContextVariables,
+) -> ReplyResult:
+    """Track the status of the itinerary and return to the user for feedback."""
+
+    context_variables["itinerary_status"] = itinerary_status
+
+    if itinerary_status == "approved":
+        message = "Thank you. Enjoy your trip!"
+        target = TerminateTarget()
+    else:
+        message = detailed_itenary_info
+        target = RevertToUserTarget()
+
+    return ReplyResult(
+        message=message, target=target, context_variables=context_variables
+    )
+
+
+# Configure LLM
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+# Create agents
+with llm_config:
+    concierge = ConversableAgent(
+        name="concierge",
+        system_message="""You are a travel concierge who verifies membership and collects travel information.
+        Ask for the user for the below information without fail if not already provided. You can ask only one question at a time:
+            - users's member ID,
+            - destination they wish to travel,
+            - number of travel days
+        Do not proceed unless you have all the above information.
+        Use the collect_user_info function to verify their membership and route them appropriately.""",
+        functions=[collect_user_info],
+    )
+
+    premium_advisor = ConversableAgent(
+        name="premium_advisor",
+        system_message="""You are a premium travel advisor who creates luxury itineraries.
+        Check the user's preferences in the context variables and customize their itinerary accordingly.
+        When you need specific destination information, consult the destination specialist.
+
+        For premium members, ALWAYS include:
+        - Their preferred accommodation type (usually 5-star or boutique hotels)
+        - Their dining preferences (often fine dining or local cuisine)
+        - Exclusive experiences not available to standard members
+        - Private transportation options
+
+        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        If the user approves or accepts the itinerary, set the status to "approved".
+        """,
+        functions=[track_itenary_status],
+    )
+
+    standard_advisor = ConversableAgent(
+        name="standard_advisor",
+        system_message="""You are a standard travel advisor who creates basic itineraries.
+        Check the user's preferences in the context variables.
+        When you need specific destination information, consult the destination specialist.
+
+        For standard members, include:
+        - Affordable accommodation options
+        - Popular restaurants at various price points
+        - Standard tourist attractions
+        - Public transportation or group tour options
+
+        Propose the itinerary to the user and track the status using the track_itenary_status function.
+        If the user approves or accepts the itinerary, set the status to "approved".
+        """,
+        functions=[track_itenary_status],
+    )
+
+    destination_specialist = ConversableAgent(
+        name="destination_specialist",
+        system_message="""You are a destination specialist with detailed knowledge about travel locations.
+        When asked by an advisor, provide comprehensive information about the requested destination.
+        Include details about attractions, local customs, best times to visit, and insider tips.
+        Use the provide_destination_info function to respond.""",
+        functions=[provide_destination_info],
+    )
+
+# Create user agent
+user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+# Set the after work for the concierge
+concierge.handoffs.set_after_work(RevertToUserTarget())
+
+# Define handoffs using LLM-based conditions for advisors to consult specialist
+premium_advisor.handoffs.add_llm_conditions(
+    [
+        OnCondition(
+            target=AgentTarget(destination_specialist),
+            condition=StringLLMCondition(
+                prompt="Consult the destination specialist if you need specific information about the destination. Add a note to the destination specialist to return to the 'premium_advisor' after gathering the information."
+            ),
+        ),
+    ]
+)
+
+standard_advisor.handoffs.add_llm_conditions(
+    [
+        OnCondition(
+            target=AgentTarget(destination_specialist),
+            condition=StringLLMCondition(
+                prompt="Consult the destination specialist if you need specific information about the destination. Add a note to the destination specialist to return to the 'standard_advisor' after gathering the information."
+            ),
+        )
+    ]
+)
+
+# After providing the itinerary, return to users for feedback
+premium_advisor.handoffs.set_after_work(RevertToUserTarget())
+standard_advisor.handoffs.set_after_work(RevertToUserTarget())
+
+# After providing information, destination specialist returns to the requesting advisor
+destination_specialist.handoffs.set_after_work(RevertToUserTarget())
+
+# Create pattern for orchestration
+pattern = DefaultPattern(
+    initial_agent=concierge,
+    agents=[concierge, premium_advisor, standard_advisor, destination_specialist],
+    user_agent=user,
+    context_variables=travel_context,
+)
+
+# Start the group chat
+result, final_context, last_agent = initiate_group_chat(
+    pattern=pattern, messages="Hello, I'd like to plan a vacation.", max_rounds=30
+)
+```
+
+This example demonstrates a critical aspect of the new Group Chat pattern: **using tool functions to work with context variables**.
+
+!!! note
+
+    1. Context variables are not directly accessible to the LLM
+    2. To read or update context variables, agents must use tool functions
+    3. Tool functions receive the context variables as a parameter (via dependency injection) and are updated in the ReplyResult
+
+In this example, the `customer_service` agent analysis the query and route to the `shipping_support` agent, which inturn uses the `provide_shipping_response` tool to access customer information for personalized responses.
+
+### Running This Example
+
+To run this example yourself:
+
+1. **Save the code** to a file (e.g., `customer_service_demo.py`)
+
+2. **Set up your OpenAI API key** - This example uses the `gpt-4o-mini` model from OpenAI:
+
+    === "macOS / Linux"
+
+        ```bash
+        export OPENAI_API_KEY=<your_api_key_here>
+        ```
+
+    === "Windows"
+
+        ```bash
+        set OPENAI_API_KEY=<your_api_key_here>
+        ```
+
+3. **Install the required packages**:
+   ```bash
+   pip install ag2[openai]
+   ```
+
+4. **Run the script**:
+   ```bash
+   python customer_service_demo.py
+   ```
+
+    !!! note
+        This example uses OpenAI's `gpt-4o-mini` model. If you want to use a different provider, ensure you:
+
+            - Install the appropriate AG2 extra (e.g., `pip install ag2[anthropic]` for Claude models)
+            - Update the `LLMConfig` to use your preferred provider and model
+            - Set the appropriate environment variables for authentication with your chosen provider
+
+        You can find the supported model provides [here](/docs/user-guide/models/amazon-bedrock)
+
+### Example Output
+
+When you run the above code, you should see output similar to this:
+
+```console
+user (to chat_manager):
+
+Hello, I'd like to plan a vacation.
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+Great! I can help you with that. First, could you please provide me with your member ID?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: P12345
+user (to chat_manager):
+
+P12345
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+Thank you for providing your member ID. Next, could you please tell me which destination you wish to travel to?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: USA
+user (to chat_manager):
+
+USA
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+Thanks! Lastly, can you let me know the number of travel days you are planning for your trip?
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: 5 days
+user (to chat_manager):
+
+5 days
+
+--------------------------------------------------------------------------------
+
+Next speaker: concierge
+
+
+>>>>>>>> USING AUTO REPLY...
+concierge (to chat_manager):
+
+***** Suggested tool call (call_oxoIKEc6rRgPDiDbnA2rbKqU): collect_user_info *****
+Arguments:
+{"member_id":"P12345","destination":"USA","travel_days":5}
+**********************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION collect_user_info...
+Call ID: call_oxoIKEc6rRgPDiDbnA2rbKqU
+Input arguments: {'member_id': 'P12345', 'destination': 'USA', 'travel_days': 5}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_oxoIKEc6rRgPDiDbnA2rbKqU) *****
+Welcome back, Alex Johnson! I see you're a premium member with preferences for 5-star hotels, fine dining, private tours, exclusive experiences. I'll connect you with our Premium Travel Advisor for your 5-day trip to USA.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+***** Suggested tool call (call_A4nhtqzsJ0aMRzJtD6YSTMKn): transfer_to_destination_specialist_1 *****
+Arguments:
+{}
+*****************************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION transfer_to_destination_specialist_1...
+Call ID: call_A4nhtqzsJ0aMRzJtD6YSTMKn
+Input arguments: {}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_A4nhtqzsJ0aMRzJtD6YSTMKn) *****
+Transfer to destination_specialist
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: destination_specialist
+
+
+>>>>>>>> USING AUTO REPLY...
+destination_specialist (to chat_manager):
+
+***** Suggested tool call (call_tooMKnfd5r4yZVo3VDYsBzrI): provide_destination_info *****
+Arguments:
+{"destination_info": "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+*****************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION provide_destination_info...
+Call ID: call_tooMKnfd5r4yZVo3VDYsBzrI
+Input arguments: {'destination_info': "The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights: \n\n### Attractions:\n1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.\n2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.\n3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.\n4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.\n5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.\n\n### Local Customs:\n- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.\n- **Greetings:** A firm handshake is common when meeting someone.\n- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.\n\n### Best Times to Visit:\n- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.\n- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.\n\n### Insider Tips:\n- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.\n- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.\n- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.\n- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water."}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_tooMKnfd5r4yZVo3VDYsBzrI) *****
+The USA is a vast and diverse country, offering a rich variety of experiences across its numerous states and cities. Here are some highlights:
+
+### Attractions:
+1. **New York City:** Visit iconic sites like the Statue of Liberty, Central Park, and Times Square. Don't miss the Metropolitan Museum of Art.
+2. **Los Angeles:** Explore Hollywood, enjoy the beaches of Santa Monica, and visit Griffith Observatory for stunning views of the city.
+3. **Grand Canyon:** A breathtaking natural wonder, perfect for hiking, photography, and scenic viewpoints.
+4. **New Orleans:** Known for its vibrant music scene, French Quarter, and delicious Cajun and Creole cuisine.
+5. **Chicago:** Famous for its architecture, Millennium Park, and the Art Institute of Chicago.
+
+### Local Customs:
+- **Tipping:** It's customary to tip service workers, generally 15-20% in restaurants.
+- **Greetings:** A firm handshake is common when meeting someone.
+- **Punctuality:** Being on time can be seen as a sign of respect, especially for business meetings.
+
+### Best Times to Visit:
+- **Spring (March to May):** Mild weather, blooming flowers, and fewer tourists in many areas.
+- **Fall (September to November):** Pleasant weather, stunning fall foliage, and various festivals.
+
+### Insider Tips:
+- **Book in Advance:** Whether it's hotels or attractions, booking ahead can save you money and ensure availability.
+- **Explore Locally:** Don't just stick to tourist hotspots; explore local neighborhoods for authentic experiences.
+- **Use Public Transport:** In major cities, public transport can be a convenient and economical way to get around.
+- **Stay Hydrated:** Especially if visiting places like the Grand Canyon during summer, drink plenty of water.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+Here's a luxurious 5-day itinerary for your trip to the USA, tailored to your preferences as a premium member:
+
+### Day 1: Arrival in New York City
+- **Accommodation:** Check-in at The St. Regis New York (5-star hotel with exquisite service)
+- **Dining:** Dine at Le Bernardin, a Michelin-starred restaurant offering fine French seafood.
+- **Exclusive Experience:** Private helicopter tour over Manhattan to marvel at the skyline.
+
+### Day 2: New York City Exploration
+- **Morning:** Private guided tour of the Metropolitan Museum of Art.
+- **Lunch:** Enjoy a meal at Eleven Madison Park, renowned for its modern cuisine.
+- **Afternoon:** Stroll through Central Park and visit iconic landmarks.
+- **Evening:** Attend a Broadway show with premium seating.
+
+### Day 3: Transfer to Los Angeles
+- **Transportation:** Private jet charter to Los Angeles.
+- **Accommodation:** Check-in at The Beverly Hills Hotel (iconic luxury hotel).
+- **Dining:** Dinner at Spago Beverly Hills, celebrated for its fine dining experience.
+- **Exclusive Experience:** VIP access to a Hollywood studio tour.
+
+### Day 4: Los Angeles & Santa Monica
+- **Morning:** Private guided tour of Hollywood, including Walk of Fame and Griffith Observatory.
+- **Lunch:** Beachfront dining at The Lobster in Santa Monica.
+- **Afternoon:** Relax on the Santa Monica beach or shop at exclusive boutiques.
+- **Evening:** Enjoy sunset at Nobu Malibu, known for its exquisite seafood and stunning ocean views.
+
+### Day 5: Departure
+- **Morning:** Leisure time or spa treatment at your hotel.
+- **Lunch:** Lunch at a local favorite, providing a taste of authentic LA cuisine.
+- **Transportation:** Private transfer to the airport for your departure.
+
+### Summary
+- **Private transportation throughout**
+- **5-star accommodations**
+- **Fine dining experiences**
+- **Exclusive tours and activities**
+
+Please review this itinerary and let me know if you would like to make any changes or if you're ready to approve it!
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Awesome, Love the itenary. Thanks
+user (to chat_manager):
+
+Awesome, Love the itenary. Thanks
+
+--------------------------------------------------------------------------------
+
+Next speaker: premium_advisor
+
+
+>>>>>>>> USING AUTO REPLY...
+premium_advisor (to chat_manager):
+
+***** Suggested tool call (call_yTVpZopIZ7KLP5AU4GpuPELz): track_itenary_status *****
+Arguments:
+{"detailed_itenary_info":"5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.","itinerary_status":"approved"}
+*************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION track_itenary_status...
+Call ID: call_yTVpZopIZ7KLP5AU4GpuPELz
+Input arguments: {'detailed_itenary_info': '5-day luxury itinerary for the USA:\n\n### Day 1: Arrival in New York City\n- **Accommodation:** The St. Regis New York (5-star hotel)\n- **Dining:** Le Bernardin (Michelin-starred French seafood)\n- **Exclusive Experience:** Private helicopter tour over Manhattan.\n\n### Day 2: New York City Exploration\n- **Morning:** Private guided tour of the Metropolitan Museum of Art.\n- **Lunch:** Eleven Madison Park (modern cuisine)\n- **Afternoon:** Stroll through Central Park.\n- **Evening:** Attend a Broadway show with premium seating.\n\n### Day 3: Transfer to Los Angeles\n- **Transportation:** Private jet charter to Los Angeles.\n- **Accommodation:** The Beverly Hills Hotel (luxury hotel)\n- **Dining:** Spago Beverly Hills (fine dining)\n- **Exclusive Experience:** VIP access to a Hollywood studio tour.\n\n### Day 4: Los Angeles & Santa Monica\n- **Morning:** Private guided tour of Hollywood.\n- **Lunch:** The Lobster (beachfront dining)\n- **Afternoon:** Relax on the beach or shop at exclusive boutiques.\n- **Evening:** Sunset at Nobu Malibu (seafood and ocean views).\n\n### Day 5: Departure\n- **Morning:** Leisure time or spa treatment.\n- **Lunch:** Local favorite for authentic LA cuisine.\n- **Transportation:** Private transfer to the airport.', 'itinerary_status': 'approved'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_yTVpZopIZ7KLP5AU4GpuPELz) *****
+Thank you. Enjoy your trip!
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> TERMINATING RUN (74a472bf-ee68-4794-a49a-628c899a807e): No next speaker selected
+```
+
+## Migrating from Swarm to the New Group Chat
+
+If you're currently using Swarm, we strongly recommend migrating to the new Group Chat pattern. While Swarm functionality is still available in <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a>, it's now deprecated and will be removed in a future release.
+
+At a high level, the migration process involves:
+
+1. **Updating imports** to use the new group chat modules instead of swarm modules
+2. **Converting context variables** from dictionary-based to the new `ContextVariables` class
+3. **Replacing SwarmResult with ReplyResult** in your agent functions
+4. **Updating handoff definitions** to use the new agent-based handoff system
+5. **Using patterns** to configure and initiate group chats
+
+For detailed migration instructions and examples, please refer to our [Migration Guide](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation).
+
+
+## Towards Scalable Agent Orchestration
+
+This unified architecture represents the first step toward more scalable agent orchestration by building upon a serializable framework of classes. Additionally, base classes for Targets and Patterns have been designed to allow you to create your own targets and patterns.
+
+## Get Started Today!
+
+The new Group Chat pattern is available now in AG2 <a href="https://pypi.org/project/ag2/0.9/" target="_blank">`v0.9`</a> and we encourage all users to explore it and build their own multi-agent applications.
+
+To learn more, check out our documentation:
+
+- [Group Chat Overview](/docs/user-guide/advanced-concepts/orchestration/orchestrations)
+- [Swarm Migration Guide](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation)
+
+We're excited to see what you build with this powerful new framework!
