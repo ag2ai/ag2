@@ -38,7 +38,7 @@ class TestGeminiTypes:
             TEST = "TEST"
             TEST_2 = "TEST_2"
 
-        class TestEnum(CaseInSensitiveEnum):
+        class TestEnum(CaseInSensitiveEnum):  # type: ignore[misc, no-any-unimported]
             """Test enum."""
 
             TEST = "TEST"
