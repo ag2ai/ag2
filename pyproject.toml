@@ -197,6 +197,9 @@ mcp = [
 
 interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
+    # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
+    # TODO: Remove the below line once the problem is fixed
+    "litellm<=1.67.1",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
