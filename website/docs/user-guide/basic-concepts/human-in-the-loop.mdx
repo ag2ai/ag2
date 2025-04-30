@@ -64,14 +64,7 @@ Let's build a financial compliance system that automatically reviews transaction
 
 The workflow follows this pattern:
 
-```mermaid
-flowchart TD
-    Start([Start]) --> Finance[Finance_bot]
-    Finance -- "Request approval for suspicious transactions" --> Human[Human Agent]
-    Human -- "Approve/Reject" --> Finance
-    Finance -- "All transactions processed" --> Human
-    Human -- "Exit" --> End([End])
-```
+![human_in_the_loop_example](../assets/human-in-the-loop-example.png)
 
 ### Establishing finance and human agents
 
