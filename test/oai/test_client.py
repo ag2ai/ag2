@@ -448,12 +448,14 @@ def test_azure_llm_config_entry() -> None:
         model="gpt-4o-mini",
         api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         base_url="https://api.openai.com/v1",
+        user='{"user": "dummy user"}',
     )
     expected = {
         "api_type": "azure",
         "model": "gpt-4o-mini",
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "base_url": "https://api.openai.com/v1",
+        "user": '{"user": "dummy user"}',
         "tags": [],
     }
     actual = azure_llm_config.model_dump()

@@ -243,6 +243,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     top_p: Optional[float] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    user: Optional[str] = None
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
@@ -257,6 +258,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    user: Optional[str] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
