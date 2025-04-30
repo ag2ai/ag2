@@ -256,3 +256,9 @@ authors:
     description: Software Engineer at AG2.ai
     url: https://github.com/harishmohanraj
     avatar: https://github.com/harishmohanraj.png
+
+  leandro_duarte:
+    name: Leandro Duarte
+    description: Product Owner at Cegid
+    url: ""
+    avatar: ../img/profile.png
