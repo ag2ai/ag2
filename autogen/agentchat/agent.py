@@ -157,7 +157,7 @@ class LLMAgent(Agent, Protocol):
 
 
 if TYPE_CHECKING:
-    # mypy will fail if Conversible agent does not implement Agent protocol
+    # mypy will fail if Convertible agent does not implement Agent protocol
     from .conversable_agent import ConversableAgent
 
     def _check_protocol_implementation(agent: ConversableAgent) -> Agent:
