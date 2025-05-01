@@ -181,6 +181,28 @@ class TestLLMConfig:
                 {
                     "config_list": [
                         {
+                            "model": "o3",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "max_completion_tokens": 1024,
+                            "reasoning_effort": "low",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="o3",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            max_completion_tokens=1024,
+                            reasoning_effort="low",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
                             "model": "gpt-4o-mini",
                             "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                             "api_type": "openai",
@@ -219,6 +241,31 @@ class TestLLMConfig:
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                             base_url="https://api.openai.com",
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "o3",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "azure",
+                            "base_url": "https://api.openai.com",
+                            "max_completion_tokens": 1024,
+                            "reasoning_effort": "low",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        AzureOpenAILLMConfigEntry(
+                            model="o3",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            base_url="https://api.openai.com",
+                            max_completion_tokens=1024,
+                            reasoning_effort="low",
                         )
                     ],
                 ),
