@@ -3607,6 +3607,26 @@ class ConversableAgent(LLMAgent):
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be set.
+        """
+        for tool in tools:
+            self._register_for_llm(tool, api_style="tool", silent_override=True)
+            if tool not in self._tools:
+                self._tools.append(tool)
+
+    def unset_ui_tools(self, tools: list[Tool]) -> None:
+        """Unset the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be unset.
+        """
+        for tool in tools:
+            self.remove_tool_for_llm(tool)
+
     def register_for_execution(
         self,
         name: Optional[str] = None,
