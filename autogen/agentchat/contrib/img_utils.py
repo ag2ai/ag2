@@ -66,6 +66,7 @@ def get_pil_image(image_file: Union[str, "Image.Image"]) -> "Image.Image":
         response = requests.get(image_file)
         content = BytesIO(response.content)
         image = Image.open(content)
+    # Match base64-encoded image URIs for supported formats: jpg, jpeg, png, gif, bmp, webp
     elif re.match(r"data:image/(?:jpg|jpeg|png|gif|bmp|webp);base64,", image_file):
         # A URI. Remove the prefix and decode the base64 string.
         base64_data = re.sub(r"data:image/(?:jpg|jpeg|png|gif|bmp|webp);base64,", "", image_file)
