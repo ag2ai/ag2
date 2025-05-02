@@ -29,7 +29,7 @@ repos:
     - id: end-of-file-fixer
     - id: no-commit-to-branch
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.5.0
+    rev: 0.8.1
     hooks:
       - id: nbstripout
   - repo: local
@@ -54,7 +54,7 @@ repos:
         require_serial: true
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
+    rev: v2.4.1
     hooks:
       - id: codespell
         additional_dependencies:
