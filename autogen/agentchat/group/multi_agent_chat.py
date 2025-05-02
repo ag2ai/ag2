@@ -158,7 +158,8 @@ def run_group_chat(
     max_rounds: int = 20,
 ) -> RunResponseProtocol:
     iostream = ThreadIOStream()
-    response = RunResponse(iostream)
+    # todo: add agents
+    response = RunResponse(iostream, agents=[])
 
     def _initiate_group_chat(
         pattern: "Pattern" = pattern,
@@ -201,7 +202,8 @@ async def a_run_group_chat(
     max_rounds: int = 20,
 ) -> AsyncRunResponseProtocol:
     iostream = AsyncThreadIOStream()
-    response = AsyncRunResponse(iostream)
+    # todo: add agents
+    response = AsyncRunResponse(iostream, agents=[])
 
     async def _initiate_group_chat(
         pattern: "Pattern" = pattern,

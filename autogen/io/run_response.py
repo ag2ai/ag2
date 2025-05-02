@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+
 import queue
 from asyncio import Queue as AsyncQueue
 from typing import Any, AsyncIterable, Dict, Iterable, Optional, Protocol, Sequence, Union
@@ -11,7 +12,9 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from ..agentchat.agent import LLMMessageType
+from autogen.tools.tool import Tool
+
+from ..agentchat.agent import Agent, LLMMessageType
 from ..agentchat.group.context_variables import ContextVariables
 from ..events.agent_events import ErrorEvent, InputRequestEvent, RunCompletionEvent
 from ..events.base_event import BaseEvent
@@ -89,6 +92,8 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
 
     def process(self, processor: Optional[EventProcessorProtocol] = None) -> None: ...
 
+    def set_ui_tools(self, tools: list[Tool]) -> None: ...
+
 
 class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     @property
@@ -111,10 +116,13 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
 
     async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None: ...
 
+    def set_ui_tools(self, tools: list[Tool]) -> None: ...
+
 
 class RunResponse:
-    def __init__(self, iostream: ThreadIOStream):
+    def __init__(self, iostream: ThreadIOStream, agents: list[Agent]):
         self.iostream = iostream
+        self.agents = agents
         self._summary: Optional[str] = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -190,10 +198,16 @@ class RunResponse:
         processor = processor or ConsoleEventProcessor()
         processor.process(self)
 
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agents."""
+        for agent in self.agents:
+            agent.set_ui_tools(tools)
+
 
 class AsyncRunResponse:
-    def __init__(self, iostream: AsyncThreadIOStream):
+    def __init__(self, iostream: AsyncThreadIOStream, agents: list[Agent]):
         self.iostream = iostream
+        self.agents = agents
         self._summary: Optional[str] = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -272,3 +286,8 @@ class AsyncRunResponse:
     async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None:
         processor = processor or AsyncConsoleEventProcessor()
         await processor.process(self)
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agents."""
+        for agent in self.agents:
+            agent.set_ui_tools(tools)

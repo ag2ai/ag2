@@ -268,6 +268,9 @@ class ConversableAgent(LLMAgent):
         # Initialize standalone client cache object.
         self.client_cache = None
 
+        # To track UI tools
+        self._ui_tools: list[Tool] = []
+
         self.human_input_mode = human_input_mode
         self._max_consecutive_auto_reply = (
             max_consecutive_auto_reply if max_consecutive_auto_reply is not None else self.MAX_CONSECUTIVE_AUTO_REPLY
@@ -1510,7 +1513,8 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> RunResponseProtocol:
         iostream = ThreadIOStream()
-        response = RunResponse(iostream)
+        agents = [self, recipient] if recipient else [self]
+        response = RunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1689,7 +1693,8 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
         iostream = AsyncThreadIOStream()
-        response = AsyncRunResponse(iostream)
+        agents = [self, recipient] if recipient else [self]
+        response = AsyncRunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1945,7 +1950,8 @@ class ConversableAgent(LLMAgent):
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
         iostreams = [ThreadIOStream() for _ in range(len(chat_queue))]
-        responses = [RunResponse(iostream) for iostream in iostreams]
+        # todo: add agents
+        responses = [RunResponse(iostream, agents=[]) for iostream in iostreams]
 
         def _initiate_chats(
             iostreams: list[ThreadIOStream] = iostreams,
@@ -2014,7 +2020,8 @@ class ConversableAgent(LLMAgent):
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
         iostreams = [AsyncThreadIOStream() for _ in range(len(chat_queue))]
-        responses = [AsyncRunResponse(iostream) for iostream in iostreams]
+        # todo: add agents
+        responses = [AsyncRunResponse(iostream, agents=[]) for iostream in iostreams]
 
         async def _a_initiate_chats(
             iostreams: list[AsyncThreadIOStream] = iostreams,
@@ -3602,6 +3609,53 @@ class ConversableAgent(LLMAgent):
             self.update_tool_signature(tool.tool_schema, is_remove=is_remove, silent_override=silent_override)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be set.
+        """
+        # Unset the previous UI tools
+        self._unset_previous_ui_tools()
+
+        # Set the new UI tools
+        for tool in tools:
+            # Register the tool for LLM
+            self._register_for_llm(tool, api_style="tool", silent_override=True)
+            if tool not in self._tools:
+                self._tools.append(tool)
+
+            # Register for execution
+            self.register_for_execution(serialize=False, silent_override=True)(tool)
+
+        # Set the current UI tools
+        self._ui_tools = tools
+
+    def unset_ui_tools(self, tools: list[Tool]) -> None:
+        """Unset the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be unset.
+        """
+        for tool in tools:
+            self.remove_tool_for_llm(tool)
+
+    def _unset_previous_ui_tools(self) -> None:
+        """Unset the previous UI tools for the agent.
+
+        This is used to remove UI tools that were previously registered for LLM.
+        """
+        self.unset_ui_tools(self._ui_tools)
+        for tool in self._ui_tools:
+            if tool in self._tools:
+                self._tools.remove(tool)
+
+            # Unregister the function from the function map
+            if tool.name in self._function_map:
+                del self._function_map[tool.name]
+
+        self._ui_tools = []
 
     def register_for_execution(
         self,

@@ -4,11 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 from ..doc_utils import export_module
 
 __all__ = ["Agent", "LLMAgent", "LLMMessageType"]
+
+Tool = TypeVar("Tool")
 
 LLMMessageType = dict[str, Any]
 
@@ -135,6 +137,22 @@ class Agent(Protocol):
 
         Returns:
             str or dict or None: the generated reply. If None, no reply is generated.
+        """
+        ...
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agent.
+
+        Args:
+            tools: a list of UI tools to set.
+        """
+        ...
+
+    def unset_ui_tools(self, tools: list[Tool]) -> None:
+        """Unset the UI tools for the agent.
+
+        Args:
+            tools: a list of UI tools to set.
         """
         ...
 

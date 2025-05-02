@@ -8,7 +8,13 @@ from .... import ConversableAgent
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....tools import Tool
-from ....tools.experimental import BrowserUseTool, Crawl4AITool, PerplexitySearchTool, TavilySearchTool
+from ....tools.experimental import (
+    BrowserUseTool,
+    Crawl4AITool,
+    DuckDuckGoSearchTool,
+    PerplexitySearchTool,
+    TavilySearchTool,
+)
 
 __all__ = ["WebSurferAgent"]
 
@@ -22,7 +28,7 @@ class WebSurferAgent(ConversableAgent):
         *,
         llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         web_tool_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        web_tool: Literal["browser_use", "crawl4ai", "perplexity", "tavily"] = "browser_use",
+        web_tool: Literal["browser_use", "crawl4ai", "duckduckgo", "perplexity", "tavily"] = "browser_use",
         web_tool_kwargs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
@@ -46,6 +52,8 @@ class WebSurferAgent(ConversableAgent):
             self.tool = PerplexitySearchTool(**web_tool_kwargs)
         elif web_tool == "tavily":
             self.tool = TavilySearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
+        elif web_tool == "duckduckgo":
+            self.tool = DuckDuckGoSearchTool(**web_tool_kwargs)
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 
