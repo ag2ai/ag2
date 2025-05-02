@@ -5,6 +5,7 @@
 from .browser_use import BrowserUseTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
+from .duckduckgo import DuckDuckGoSearchTool
 from .google_search import GoogleSearchTool, YoutubeSearchTool
 from .messageplatform import (
     DiscordRetrieveTool,
