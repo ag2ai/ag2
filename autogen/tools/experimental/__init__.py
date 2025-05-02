@@ -25,6 +25,7 @@ __all__ = [
     "DeepResearchTool",
     "DiscordRetrieveTool",
     "DiscordSendTool",
+    "DuckDuckGoSearchTool",
     "GoogleSearchTool",
     "PerplexitySearchTool",
     "SlackRetrieveRepliesTool",
