@@ -1968,14 +1968,15 @@ def test_set_ui_tools(mock_credentials: Credentials):
     def sample_tool_func(my_prop: str) -> str:
         return my_prop * 2
 
-    mock_tool = Tool(name="test_ui_tool", description="A test UI tool", func_or_tool=sample_tool_func)
+    for i in range(3):
+        mock_tool = Tool(name=f"test_ui_tool_{i}", description="A test UI tool", func_or_tool=sample_tool_func)
+        agent.set_ui_tools([mock_tool])
 
-    agent.set_ui_tools([mock_tool])
-
-    # Verify tool was added to llm_config
-    assert len(agent.llm_config.get("tools", [])) == 1
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
-    assert mock_tool.name in tool_schemas
+        # Verify tool was added to llm_config
+        assert len(agent.llm_config.get("tools", [])) == 1
+        tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+        assert mock_tool.name in tool_schemas
+        assert f"test_ui_tool_{i - 1}" not in tool_schemas
 
 
 def test_unset_ui_tools(mock_credentials: Credentials):

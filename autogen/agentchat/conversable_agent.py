@@ -268,6 +268,9 @@ class ConversableAgent(LLMAgent):
         # Initialize standalone client cache object.
         self.client_cache = None
 
+        # To track UI tools
+        self._ui_tools: list[Tool] = []
+
         self.human_input_mode = human_input_mode
         self._max_consecutive_auto_reply = (
             max_consecutive_auto_reply if max_consecutive_auto_reply is not None else self.MAX_CONSECUTIVE_AUTO_REPLY
@@ -3613,10 +3616,21 @@ class ConversableAgent(LLMAgent):
         Args:
             tools: a list of tools to be set.
         """
+        # Unset the previous UI tools
+        self._unset_previous_ui_tools()
+
+        # Set the new UI tools
         for tool in tools:
+            # Register the tool for LLM
             self._register_for_llm(tool, api_style="tool", silent_override=True)
             if tool not in self._tools:
                 self._tools.append(tool)
+
+            # Register for execution
+            self.register_for_execution(serialize=False, silent_override=True)(tool)
+
+        # Set the current UI tools
+        self._ui_tools = tools
 
     def unset_ui_tools(self, tools: list[Tool]) -> None:
         """Unset the UI tools for the agent.
@@ -3626,6 +3640,17 @@ class ConversableAgent(LLMAgent):
         """
         for tool in tools:
             self.remove_tool_for_llm(tool)
+
+    def _unset_previous_ui_tools(self) -> None:
+        """Unset the previous UI tools for the agent.
+
+        This is used to remove UI tools that were previously registered for LLM.
+        """
+        self.unset_ui_tools(self._ui_tools)
+        for tool in self._ui_tools:
+            if tool in self._tools:
+                self._tools.remove(tool)
+        self._ui_tools = []
 
     def register_for_execution(
         self,
