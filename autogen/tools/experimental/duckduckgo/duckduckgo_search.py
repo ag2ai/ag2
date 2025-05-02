@@ -76,10 +76,9 @@ class DuckDuckGoSearchTool(Tool):
 
     This tool allows agents to leverage the DuckDuckGo search engine for information retrieval.
     DuckDuckGo does not require an API key, making it easy to use.
-
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initializes the DuckDuckGoSearchTool.
         """

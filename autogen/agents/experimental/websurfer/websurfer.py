@@ -53,7 +53,7 @@ class WebSurferAgent(ConversableAgent):
         elif web_tool == "tavily":
             self.tool = TavilySearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
         elif web_tool == "duckduckgo":
-            self.tool = DuckDuckGoSearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
+            self.tool = DuckDuckGoSearchTool(**web_tool_kwargs)
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 
