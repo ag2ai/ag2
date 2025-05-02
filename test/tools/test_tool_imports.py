@@ -11,6 +11,7 @@ class TestToolImports:
             Crawl4AITool,
             DiscordRetrieveTool,
             DiscordSendTool,
+            DuckDuckGoSearchTool,
             PerplexitySearchTool,
             SlackRetrieveRepliesTool,
             SlackRetrieveTool,
@@ -26,6 +27,7 @@ class TestToolImports:
         assert isinstance(Crawl4AITool, type)
         assert isinstance(DiscordRetrieveTool, type)
         assert isinstance(DiscordSendTool, type)
+        assert isinstance(DuckDuckGoSearchTool, type)
         assert isinstance(PerplexitySearchTool, type)
         assert isinstance(SlackRetrieveRepliesTool, type)
         assert isinstance(SlackRetrieveTool, type)

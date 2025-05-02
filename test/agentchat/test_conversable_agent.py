@@ -1961,6 +1961,48 @@ def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
     assert duration_with_warm_cache < duration_without_cache
 
 
+def test_set_ui_tools(mock_credentials: Credentials):
+    """Test setting UI tools."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    for i in range(3):
+        mock_tool = Tool(name=f"test_ui_tool_{i}", description="A test UI tool", func_or_tool=sample_tool_func)
+        agent.set_ui_tools([mock_tool])
+
+        # Verify tool was added to llm_config
+        assert len(agent.llm_config.get("tools", [])) == 1
+        tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+        assert mock_tool.name in tool_schemas
+        assert f"test_ui_tool_{i - 1}" not in tool_schemas
+
+        # Verify tool was registered for execution
+        expected_function_map = {mock_tool.name: mock_tool.func}
+        assert get_origin(agent.function_map) == expected_function_map
+
+
+def test_unset_ui_tools(mock_credentials: Credentials):
+    """Test unsetting UI tools."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def sample_tool_func(my_prop: str) -> str:
+        return my_prop * 2
+
+    mock_tool = Tool(name="test_ui_tool", description="A test UI tool", func_or_tool=sample_tool_func)
+
+    # Set the tool first
+    agent.set_ui_tools([mock_tool])
+    assert len(agent.llm_config.get("tools", [])) == 1
+
+    # Unset the tool
+    agent.unset_ui_tools([mock_tool])
+
+    # Verify tool was removed from llm_config
+    assert len(agent.llm_config.get("tools", [])) == 0
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()

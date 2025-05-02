@@ -991,7 +991,7 @@ def run_swarm(
     exclude_transit_message: bool = True,
 ) -> RunResponseProtocol:
     iostream = ThreadIOStream()
-    response = RunResponse(iostream)
+    response = RunResponse(iostream, agents)  # type: ignore[arg-type]
 
     def stream_run(
         iostream: ThreadIOStream = iostream,
@@ -1152,7 +1152,7 @@ async def a_run_swarm(
     exclude_transit_message: bool = True,
 ) -> AsyncRunResponseProtocol:
     iostream = AsyncThreadIOStream()
-    response = AsyncRunResponse(iostream)
+    response = AsyncRunResponse(iostream, agents)  # type: ignore[arg-type]
 
     async def stream_run(
         iostream: AsyncThreadIOStream = iostream,

@@ -97,54 +97,9 @@ In a typical AG2 application, these components work together in the following se
 
 3. **Execution**: Run Workflow to execute your solution
 
-The workflow is illustrated below:
+The following diagram illustrates the workflow of a **group chat**
 
-``` mermaid
-flowchart TD
-    %% Configuration Section
-    subgraph config_grp["1.Configuration Setup"]
-        LLM["LLM Configuration"]
-        Outputs["Structured Outputs (optional)"]
-    end
-
-    %% Workflow Design Section
-    subgraph workflow_grp["2.Workflow Design"]
-        Agent["Conversable Agents"]
-        Orchestration["Agent Orchestration"]
-        Finalize["Finalize Workflow"]
-        Human["Human in the Loop (optional)"]
-        Tools["Tools (optional)"]
-
-        LLM --> Agent
-        Outputs -.-> LLM
-
-        Agent --> Orchestration
-        Agent --> Finalize
-        Agent -.-> Human
-        Agent -.-> Tools
-    end
-
-    %% Execution Section
-    subgraph execution_grp["3.Execution"]
-        Run["Run Workflow"]
-    end
-
-    %% Flow Connections
-    Finalize --> Run
-
-    %% Applying styles directly with style statements
-    style LLM fill:#E8F4F8,stroke:#6497B1,stroke-width:1.5px,color:#005B96
-    style Outputs fill:#E8F4F8,stroke:#6497B1,stroke-width:1.5px,color:#005B96,stroke-dasharray:5 5
-
-    style Agent fill:#E3EFE3,stroke:#79A37E,stroke-width:1.5px,color:#3B7A57
-    style Orchestration fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
-    style Finalize fill:#F0EAF7,stroke:#9C89B8,stroke-width:1.5px,color:#7B6B8D
-
-    style Human fill:#F5F5DC,stroke:#A79B8E,stroke-width:1px,color:#8D7966,stroke-dasharray:5 5
-    style Tools fill:#F5F5DC,stroke:#A79B8E,stroke-width:1px,color:#8D7966,stroke-dasharray:5 5
-
-    style Run fill:#E6E6FA,stroke:#7D7D89,stroke-width:1.5px,color:#4A4A57
-```
+![workflow_overview](../assets/overview-workflow.png)
 
 Together, these core concepts allow you to build powerful, flexible AI systems — from simple agents to collaborative, multi-agent workflows — with or without human supervision.
 

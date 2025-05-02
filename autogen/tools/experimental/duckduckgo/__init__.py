@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .duckduckgo_search import DuckDuckGoSearchTool
 
-__version__ = "0.9.1a1"
+__all__ = ["DuckDuckGoSearchTool"]
