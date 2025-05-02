@@ -1510,7 +1510,8 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> RunResponseProtocol:
         iostream = ThreadIOStream()
-        response = RunResponse(iostream)
+        agents = [self, recipient] if recipient else [self]
+        response = RunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1689,7 +1690,8 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
         iostream = AsyncThreadIOStream()
-        response = AsyncRunResponse(iostream)
+        agents = [self, recipient] if recipient else [self]
+        response = AsyncRunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1945,7 +1947,8 @@ class ConversableAgent(LLMAgent):
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
         iostreams = [ThreadIOStream() for _ in range(len(chat_queue))]
-        responses = [RunResponse(iostream) for iostream in iostreams]
+        # todo: add agents
+        responses = [RunResponse(iostream, agents=[]) for iostream in iostreams]
 
         def _initiate_chats(
             iostreams: list[ThreadIOStream] = iostreams,
@@ -2014,7 +2017,8 @@ class ConversableAgent(LLMAgent):
         Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
         """
         iostreams = [AsyncThreadIOStream() for _ in range(len(chat_queue))]
-        responses = [AsyncRunResponse(iostream) for iostream in iostreams]
+        # todo: add agents
+        responses = [AsyncRunResponse(iostream, agents=[]) for iostream in iostreams]
 
         async def _a_initiate_chats(
             iostreams: list[AsyncThreadIOStream] = iostreams,
