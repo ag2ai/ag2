@@ -128,10 +128,16 @@ class TestDuckDuckGoSearchTool:
         )
         search_tool.register_for_llm(assistant)
         # Mock the underlying query execution function
-        with patch("autogen.tools.experimental.duckduckgo.duckduckgo_search._execute_duckduckgo_query") as mock_execute_query:
+        with patch(
+            "autogen.tools.experimental.duckduckgo.duckduckgo_search._execute_duckduckgo_query"
+        ) as mock_execute_query:
             # Provide a mock return value for the search
             mock_execute_query.return_value = [
-                {"title": "Hurricane News", "href": "https://example.com/hurricane", "body": "Latest hurricane updates."}
+                {
+                    "title": "Hurricane News",
+                    "href": "https://example.com/hurricane",
+                    "body": "Latest hurricane updates.",
+                }
             ]
             response = assistant.run(
                 message="Get me the latest news on hurricanes",
@@ -139,7 +145,7 @@ class TestDuckDuckGoSearchTool:
                 max_turns=2,
                 user_input=False,
             )
-            response.process() # Process the response to ensure tool calls are handled
-            assert mock_execute_query.called # Check if the mocked function was called
+            response.process()  # Process the response to ensure tool calls are handled
+            assert mock_execute_query.called  # Check if the mocked function was called
         assert isinstance(assistant.tools[0], DuckDuckGoSearchTool)
         assert assistant.tools[0].name == "duckduckgo_search"

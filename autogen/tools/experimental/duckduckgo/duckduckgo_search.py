@@ -1,14 +1,11 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-import os
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
-from ....llm_config import LLMConfig
-from ... import Depends, Tool
-from ...dependency_injection import on
+from ... import Tool
 
 with optional_import_block():
     from duckduckgo_search import DDGS
@@ -68,8 +65,7 @@ def _duckduckgo_search(
     )
 
     return [
-        {"title": item.get("title", ""), "link": item.get("href", ""), "snippet": item.get("body", "")}
-        for item in res
+        {"title": item.get("title", ""), "link": item.get("href", ""), "snippet": item.get("body", "")} for item in res
     ]
 
 
