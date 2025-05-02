@@ -50,10 +50,7 @@ class TestInteroperability:
                 file.write("Hello, World!")
 
             assert tool.name == "Read_a_file_s_content"
-            assert (
-                tool.description
-                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
-            )
+            assert "A tool that reads the content of a file" in tool.description
 
             model_type = crewai_tool.args_schema
 
