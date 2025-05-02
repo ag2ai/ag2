@@ -251,7 +251,8 @@ def extract_img_paths(paragraph: str) -> list:
     Returns:
         list: A list of extracted image paths.
     """
-    # Regular expression to match image URLs and file paths
+    # Regular expression to match image URLs and file paths.
+    # This regex detects URLs and file paths with common image extensions, including support for the webp format.
     img_path_pattern = re.compile(
         r"\b(?:http[s]?://\S+\.(?:jpg|jpeg|png|gif|bmp|webp)|\S+\.(?:jpg|jpeg|png|gif|bmp|webp))\b", re.IGNORECASE
     )
