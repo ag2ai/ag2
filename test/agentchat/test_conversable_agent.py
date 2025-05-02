@@ -1978,6 +1978,10 @@ def test_set_ui_tools(mock_credentials: Credentials):
         assert mock_tool.name in tool_schemas
         assert f"test_ui_tool_{i - 1}" not in tool_schemas
 
+        # Verify tool was registered for execution
+        expected_function_map = {mock_tool.name: mock_tool.func}
+        assert get_origin(agent.function_map) == expected_function_map
+
 
 def test_unset_ui_tools(mock_credentials: Credentials):
     """Test unsetting UI tools."""

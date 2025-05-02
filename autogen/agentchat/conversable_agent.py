@@ -3650,6 +3650,11 @@ class ConversableAgent(LLMAgent):
         for tool in self._ui_tools:
             if tool in self._tools:
                 self._tools.remove(tool)
+
+            # Unregister the function from the function map
+            if tool.name in self._function_map:
+                del self._function_map[tool.name]
+
         self._ui_tools = []
 
     def register_for_execution(
