@@ -61,7 +61,7 @@ class TestCrewAIInteroperability:
             assert tool.name == "Read_a_file_s_content"
             assert (
                 tool.description
-                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. Optionally, provide 'start_line' to start reading from a specific line and 'line_count' to limit the number of lines read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
+                == "A tool that reads the content of a file. To use this tool, provide a 'file_path' parameter with the path to the file you want to read. (IMPORTANT: When using arguments, put them all in an `args` dictionary)"
             )
 
             args = model_type(file_path=file_path)
