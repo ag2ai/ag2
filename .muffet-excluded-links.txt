@@ -30,3 +30,4 @@ https://docs.anthropic.com/*
 https://docs.ag2.ai/latest/docs/blog
 https://docs.ag2.ai/latest/docs/blog/category/*
 https://docs.ag2.ai/latest/docs/blog/page/*
+https://scholar.google.com/citations?view_op=view_citation&hl=en&user=IiSNwnAAAAAJ&citation_for_view=IiSNwnAAAAAJ:zCpYd49hD24C

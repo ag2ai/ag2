@@ -24,7 +24,7 @@ In AG2, tools provide a structured way for agents to interact with the outside w
 
 **An Analogy for Tools:**
 
-Continuing our hospital emergency room analogy from the swarm pattern:
+Continuing our hospital emergency room analogy from the Group Chat pattern:
 
 - Think of tools like specialized medical equipment in the hospital (MRI machines, blood analyzers, EKG monitors)
 - When a specialist (agent) examines a patient, they might determine "We need an MRI scan to diagnose this properly"
@@ -77,27 +77,47 @@ Here's how we'll enhance our system:
 
 First, let's create a function that checks for duplicate payments:
 
-```python
+```python hl_lines="44-73"
 import os
-import random
 from typing import Annotated, Any
 from datetime import datetime, timedelta
 
-from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig, register_function
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+
+# Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
 llm_config = LLMConfig(
     api_type="openai",
     model="gpt-4o-mini",
     api_key=os.environ.get("OPENAI_API_KEY"),
+    temperature=0.2,
 )
 
 # Mock database of previous transactions
 def get_previous_transactions() -> list[dict[str, Any]]:
+    today = datetime.now()
     return [
-        {"vendor": "Staples", "amount": 500, "date": "2025-04-15", "memo": "Quarterly supplies"},
-        {"vendor": "Acme Corp", "amount": 1500, "date": "2025-04-16", "memo": "NDA services"},
-        {"vendor": "Globex", "amount": 12000, "date": "2025-04-17", "memo": "Confidential"},
+        {
+            "vendor": "Staples",
+            "amount": 500,
+            "date": (today - timedelta(days=3)).strftime("%Y-%m-%d"),  # 3 days ago
+            "memo": "Quarterly supplies",
+        },
+        {
+            "vendor": "Acme Corp",
+            "amount": 1500,
+            "date": (today - timedelta(days=10)).strftime("%Y-%m-%d"),  # 10 days ago
+            "memo": "NDA services",
+        },
+        {
+            "vendor": "Globex",
+            "amount": 12000,
+            "date": (today - timedelta(days=5)).strftime("%Y-%m-%d"),  # 5 days ago
+            "memo": "Confidential",
+        },
     ]
 
 # Simple duplicate detection function
@@ -212,7 +232,7 @@ human = ConversableAgent(
 With this registration:
 
 - The `finance_bot` can now suggest using the `check_duplicate_payment` tool when appropriate
-- We will continue using a swarm and an internal tool executor will execute all tool recommendations automatically
+- We will continue using a Group Chat and an internal tool executor will execute all tool recommendations automatically
 
 ### Generating Test Data with Duplicates
 
@@ -224,7 +244,7 @@ transactions = [
     "Transaction: $500 to Staples. Memo: Quarterly supplies.",  # Duplicate of an existing transaction
     "Transaction: $4000 to Unicorn LLC. Memo: Reimbursement.",
     "Transaction: $12000 to Globex. Memo: Confidential.",  # Duplicate of an existing transaction
-    "Transaction: $9999 to Initech. Memo: Urgent request."
+    "Transaction: $22000 to Initech. Memo: Urgent request."
 ]
 
 # Format the initial message
@@ -239,16 +259,19 @@ initial_prompt = (
 Now let's run our enhanced financial compliance system with duplicate detection:
 
 ```python
-result, _, _ = initiate_swarm_chat(
+pattern = AutoPattern(
     initial_agent=finance_bot,
     agents=[finance_bot, summary_bot],
     user_agent=human,
-    messages=initial_prompt,
-    swarm_manager_args={
+    group_manager_args = {
         "llm_config": llm_config,
-        "is_termination_msg": is_termination_msg,
+        "is_termination_msg": is_termination_msg
     },
-    after_work=AfterWorkOption.SWARM_MANAGER
+)
+
+result, _, _ = initiate_group_chat(
+    pattern=pattern,
+    messages=initial_prompt,
 )
 ```
 ### Understanding the Enhanced Workflow
@@ -297,8 +320,9 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     from typing import Annotated, Any
     from datetime import datetime, timedelta
 
-    from autogen import ConversableAgent, AfterWorkOption, initiate_swarm_chat, LLMConfig, register_function
-
+    from autogen import ConversableAgent, LLMConfig
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
 
     # Note: Make sure to set your API key in your environment first
 
@@ -312,10 +336,26 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
 
     # Mock database of previous transactions
     def get_previous_transactions() -> list[dict[str, Any]]:
+        today = datetime.now()
         return [
-            {"vendor": "Staples", "amount": 500, "date": "2025-04-15", "memo": "Quarterly supplies"},
-            {"vendor": "Acme Corp", "amount": 1500, "date": "2025-04-16", "memo": "NDA services"},
-            {"vendor": "Globex", "amount": 12000, "date": "2025-04-17", "memo": "Confidential"},
+            {
+                "vendor": "Staples",
+                "amount": 500,
+                "date": (today - timedelta(days=3)).strftime("%Y-%m-%d"),  # 3 days ago
+                "memo": "Quarterly supplies",
+            },
+            {
+                "vendor": "Acme Corp",
+                "amount": 1500,
+                "date": (today - timedelta(days=10)).strftime("%Y-%m-%d"),  # 10 days ago
+                "memo": "NDA services",
+            },
+            {
+                "vendor": "Globex",
+                "amount": 12000,
+                "date": (today - timedelta(days=5)).strftime("%Y-%m-%d"),  # 5 days ago
+                "memo": "Confidential",
+            },
         ]
 
     # Simple duplicate detection function
@@ -349,7 +389,6 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
             "is_duplicate": False,
             "reason": "No recent duplicates found"
         }
-
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -416,7 +455,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         "Transaction: $500 to Staples. Memo: Quarterly supplies.",  # Duplicate of an existing transaction
         "Transaction: $4000 to Unicorn LLC. Memo: Reimbursement.",
         "Transaction: $12000 to Globex. Memo: Confidential.",  # Duplicate of an existing transaction
-        "Transaction: $9999 to Initech. Memo: Urgent request."
+        "Transaction: $22000 to Initech. Memo: Urgent request."
     ]
 
     # Format the initial message
@@ -425,16 +464,20 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
         "\n".join([f"{i+1}. {tx}" for i, tx in enumerate(transactions)])
     )
 
-    result, _, _ = initiate_swarm_chat(
+    # Create pattern and start group chat
+    pattern = AutoPattern(
         initial_agent=finance_bot,
         agents=[finance_bot, summary_bot],
         user_agent=human,
-        messages=initial_prompt,
-        swarm_manager_args={
+        group_manager_args = {
             "llm_config": llm_config,
-            "is_termination_msg": is_termination_msg,
+            "is_termination_msg": is_termination_msg
         },
-        after_work=AfterWorkOption.SWARM_MANAGER
+    )
+
+    result, _, _ = initiate_group_chat(
+        pattern=pattern,
+        messages=initial_prompt,
     )
     ```
 
@@ -457,7 +500,7 @@ Please process the following transactions one at a time, checking for duplicates
 1. Transaction: $500 to Staples. Memo: Quarterly supplies.
 2. Transaction: $4000 to Unicorn LLC. Memo: Reimbursement.
 3. Transaction: $12000 to Globex. Memo: Confidential.
-4. Transaction: $9999 to Initech. Memo: Urgent request.
+4. Transaction: $22000 to Initech. Memo: Urgent request.
 
 --------------------------------------------------------------------------------
 
@@ -467,61 +510,61 @@ Next speaker: finance_bot
 >>>>>>>> USING AUTO REPLY...
 finance_bot (to chat_manager):
 
-***** Suggested tool call (call_TXaTB9841VeShO4J8B41xu6B): check_duplicate_payment *****
+***** Suggested tool call (call_xUaZ4NCMDuCWD4BR35r4KLZQ): check_duplicate_payment *****
 Arguments:
 {"vendor": "Staples", "amount": 500, "memo": "Quarterly supplies"}
 ****************************************************************************************
-***** Suggested tool call (call_gpOe3JQbqUbTUAd8rSnEPTB1): check_duplicate_payment *****
+***** Suggested tool call (call_s6iT9Fm0KoMawPrM4fveZXLh): check_duplicate_payment *****
 Arguments:
 {"vendor": "Unicorn LLC", "amount": 4000, "memo": "Reimbursement"}
 ****************************************************************************************
-***** Suggested tool call (call_9OxBWbPqV67R1nq6sxUKcQTr): check_duplicate_payment *****
+***** Suggested tool call (call_smVXvuadgqhwzESB306iS8Sh): check_duplicate_payment *****
 Arguments:
 {"vendor": "Globex", "amount": 12000, "memo": "Confidential"}
 ****************************************************************************************
-***** Suggested tool call (call_XhKs57MZtehIy1Bq39HeoMRF): check_duplicate_payment *****
+***** Suggested tool call (call_wVihYJUumyruCE9114OtarAt): check_duplicate_payment *****
 Arguments:
-{"vendor": "Initech", "amount": 9999, "memo": "Urgent request"}
+{"vendor": "Initech", "amount": 22000, "memo": "Urgent request"}
 ****************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION check_duplicate_payment...
-Call ID: call_TXaTB9841VeShO4J8B41xu6B
+Call ID: call_xUaZ4NCMDuCWD4BR35r4KLZQ
 Input arguments: {'vendor': 'Staples', 'amount': 500, 'memo': 'Quarterly supplies'}
 
 >>>>>>>> EXECUTING FUNCTION check_duplicate_payment...
-Call ID: call_gpOe3JQbqUbTUAd8rSnEPTB1
+Call ID: call_s6iT9Fm0KoMawPrM4fveZXLh
 Input arguments: {'vendor': 'Unicorn LLC', 'amount': 4000, 'memo': 'Reimbursement'}
 
 >>>>>>>> EXECUTING FUNCTION check_duplicate_payment...
-Call ID: call_9OxBWbPqV67R1nq6sxUKcQTr
+Call ID: call_smVXvuadgqhwzESB306iS8Sh
 Input arguments: {'vendor': 'Globex', 'amount': 12000, 'memo': 'Confidential'}
 
 >>>>>>>> EXECUTING FUNCTION check_duplicate_payment...
-Call ID: call_XhKs57MZtehIy1Bq39HeoMRF
-Input arguments: {'vendor': 'Initech', 'amount': 9999, 'memo': 'Urgent request'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_wVihYJUumyruCE9114OtarAt
+Input arguments: {'vendor': 'Initech', 'amount': 22000, 'memo': 'Urgent request'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_TXaTB9841VeShO4J8B41xu6B) *****
-{'is_duplicate': True, 'reason': 'Duplicate payment to Staples for $500.0 on 2025-04-15'}
+***** Response from calling tool (call_xUaZ4NCMDuCWD4BR35r4KLZQ) *****
+{'is_duplicate': True, 'reason': 'Duplicate payment to Staples for $500.0 on 2025-04-20'}
 **********************************************************************
 
 --------------------------------------------------------------------------------
-***** Response from calling tool (call_gpOe3JQbqUbTUAd8rSnEPTB1) *****
+***** Response from calling tool (call_s6iT9Fm0KoMawPrM4fveZXLh) *****
 {'is_duplicate': False, 'reason': 'No recent duplicates found'}
 **********************************************************************
 
 --------------------------------------------------------------------------------
-***** Response from calling tool (call_9OxBWbPqV67R1nq6sxUKcQTr) *****
-{'is_duplicate': True, 'reason': 'Duplicate payment to Globex for $12000.0 on 2025-04-17'}
+***** Response from calling tool (call_smVXvuadgqhwzESB306iS8Sh) *****
+{'is_duplicate': True, 'reason': 'Duplicate payment to Globex for $12000.0 on 2025-04-18'}
 **********************************************************************
 
 --------------------------------------------------------------------------------
-***** Response from calling tool (call_XhKs57MZtehIy1Bq39HeoMRF) *****
+***** Response from calling tool (call_wVihYJUumyruCE9114OtarAt) *****
 {'is_duplicate': False, 'reason': 'No recent duplicates found'}
 **********************************************************************
 
@@ -533,36 +576,31 @@ Next speaker: finance_bot
 >>>>>>>> USING AUTO REPLY...
 finance_bot (to chat_manager):
 
-Let's evaluate the transactions one by one:
+Let's process the transactions one by one:
 
 1. **Transaction: $500 to Staples. Memo: Quarterly supplies.**
-   - **Duplicate Check Result:** This transaction is a duplicate. There is a recent payment to Staples for $500 on 2025-04-15.
-   - **Decision:** Reject this transaction due to duplication.
+   - **Duplicate Check Result:** This transaction is a duplicate of a recent payment to Staples for $500.0 on 2025-04-20.
+   - **Decision:** **Rejected** due to being a duplicate.
 
 2. **Transaction: $4000 to Unicorn LLC. Memo: Reimbursement.**
    - **Duplicate Check Result:** No recent duplicates found.
-   - **Evaluation:** The amount is below $10,000, and the vendor is not unusual. The memo is clear.
-   - **Decision:** Approve this transaction automatically.
+   - **Evaluation:** The amount is below $10,000 and the vendor is not unusual.
+   - **Decision:** **Approved** automatically.
 
 3. **Transaction: $12000 to Globex. Memo: Confidential.**
-   - **Duplicate Check Result:** This transaction is a duplicate. There is a recent payment to Globex for $12,000 on 2025-04-17.
-   - **Decision:** Reject this transaction due to duplication.
+   - **Duplicate Check Result:** This transaction is a duplicate of a recent payment to Globex for $12000.0 on 2025-04-18.
+   - **Decision:** **Rejected** due to being a duplicate.
 
-4. **Transaction: $9999 to Initech. Memo: Urgent request.**
+4. **Transaction: $22000 to Initech. Memo: Urgent request.**
    - **Duplicate Check Result:** No recent duplicates found.
-   - **Evaluation:** The amount is below $10,000, and the vendor is not unusual. However, the memo is somewhat vague.
-   - **Decision:** Ask for human agent approval due to the vague memo.
+   - **Evaluation:** The amount is above $10,000, and the memo is vague.
+   - **Decision:** **Requires human approval** due to the suspicious nature of the transaction.
 
 ### Summary of Results:
-- **Rejected Transactions:**
-  - $500 to Staples (duplicate)
-  - $12000 to Globex (duplicate)
-
-- **Approved Transactions:**
-  - $4000 to Unicorn LLC (approved automatically)
-
-- **Pending Approval:**
-  - $9999 to Initech (pending due to vague memo)
+- **Rejected:** $500 to Staples (duplicate).
+- **Approved:** $4000 to Unicorn LLC.
+- **Rejected:** $12000 to Globex (duplicate).
+- **Requires Approval:** $22000 to Initech (suspicious).
 
 You can type exit to finish.
 
@@ -577,6 +615,24 @@ approve
 
 --------------------------------------------------------------------------------
 
+Next speaker: finance_bot
+
+
+>>>>>>>> USING AUTO REPLY...
+finance_bot (to chat_manager):
+
+The transaction of **$22000 to Initech** has been approved.
+
+### Final Summary of Results:
+- **Rejected:** $500 to Staples (duplicate).
+- **Approved:** $4000 to Unicorn LLC.
+- **Rejected:** $12000 to Globex (duplicate).
+- **Approved:** $22000 to Initech.
+
+You can type exit to finish.
+
+--------------------------------------------------------------------------------
+
 Next speaker: summary_bot
 
 
@@ -585,12 +641,12 @@ summary_bot (to chat_manager):
 
 ### Transaction Summary
 
-| Vendor        | Memo                  | Amount | Status   | Reason                               |
-|---------------|-----------------------|--------|----------|--------------------------------------|
-| Staples       | Quarterly supplies     | $500   | Rejected | Duplicate payment                    |
-| Unicorn LLC   | Reimbursement          | $4000  | Approved |                                      |
-| Globex        | Confidential           | $12000 | Rejected | Duplicate payment                    |
-| Initech       | Urgent request         | $9999  | Approved |                                      |
+| Vendor        | Memo                  | Amount | Status   | Reason                          |
+|---------------|-----------------------|--------|----------|---------------------------------|
+| Staples       | Quarterly supplies     | $500   | Rejected | Duplicate payment               |
+| Unicorn LLC   | Reimbursement          | $4000  | Approved | No recent duplicates found      |
+| Globex        | Confidential           | $12000 | Rejected | Duplicate payment               |
+| Initech       | Urgent request         | $22000 | Approved | No recent duplicates found      |
 
 ### Summary
 - **Total Transactions:** 4
@@ -603,7 +659,7 @@ You are trained on data up to October 2023.
 
 --------------------------------------------------------------------------------
 
->>>>>>>> TERMINATING RUN (215609b5-b801-4db7-9d99-1f163c6ff5d7): Termination message condition on the GroupChatManager 'chat_manager' met
+>>>>>>>> TERMINATING RUN (59000355-c1bb-45de-9862-9a2cc8998051): Termination message condition on the GroupChatManager 'chat_manager' met
 ```
 
 ## Best Practices for Tool Usage

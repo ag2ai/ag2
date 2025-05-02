@@ -1,0 +1,420 @@
+---
+Title: "Context Variables"
+sidebarTitle: "Context Variables"
+---
+
+Context Variables provide shared memory for your agents, allowing them to maintain state across a conversation and make decisions based on that shared information. If tools are the specialized capabilities agents can use, context variables are their collective knowledge base.
+
+## Introduction to Context Variables
+
+Context Variables are a structured way to store and share information between agents in a group chat. They act as a persistent memory that:
+
+- Maintains state throughout the entire conversation
+- Is accessible to all agents in the group
+- Can be read and updated by any agent or tool
+- Stores data in a key-value format
+
+### The Hospital ER Analogy
+
+Let's return to our hospital emergency room analogy to understand context variables.
+
+Imagine a patient chart that follows them throughout their entire hospital visit. When a patient arrives at the ER:
+
+- The triage nurse records their symptoms, vital signs, and medical history
+- When the patient moves to a specialist, the chart goes with them
+- The specialist adds their observations and test results
+- If another specialist needs to see the patient, they have access to all previous notes
+- At discharge, the chart contains the complete history of the visit
+
+In this analogy:
+
+- The patient chart is the context variables
+- Each medical professional is an agent
+- Adding notes to the chart is updating context variables
+- Reading previous entries is accessing context variables
+- The entire medical team shares one source of truth about the patient
+
+### The ContextVariables Class
+
+Context variables in AG2 are implemented through the [`ContextVariables`](/docs/api-reference/autogen/agentchat/group/context_variables/ContextVariables) class, which provides a dictionary-like interface to store and retrieve values:
+
+```python
+from autogen.agentchat.group import ContextVariables
+
+# Create context variables
+context = ContextVariables(data={
+    "user_name": "Alex",
+    "issue_count": 0,
+    "previous_issues": []
+})
+```
+
+## Core Functionality
+
+### Creating and Initializing Context Variables
+
+You can create context variables when setting up your group chat pattern:
+
+```python hl_lines="5-9 16"
+from autogen.agentchat.group import ContextVariables
+from autogen.agentchat.group.patterns import AutoPattern
+
+# Initialize context variables with initial data
+context = ContextVariables(data={
+    "user_name": "Alex",
+    "issue_count": 0,
+    "previous_issues": []
+})
+
+# Create pattern with the context variables
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    context_variables=context,  # Pass context variables to the pattern
+    group_manager_args={"llm_config": llm_config}
+)
+```
+### Reading and Writing Context Values
+
+The [`ContextVariables`](/docs/api-reference/autogen/agentchat/group/context_variables/ContextVariables) class provides several methods for reading and writing values:
+
+```python
+# Reading values
+user_name = context.get("user_name")  # Returns "Alex"
+non_existent = context.get("non_existent", "default")  # Returns "default"
+
+# Writing values
+context.set("issue_count", 1)  # Sets issue_count to 1
+context.update({"last_login": "2023-05-01", "premium": True})  # Update multiple values
+```
+### Dictionary-like Interface
+
+The [`ContextVariables`](/docs/api-reference/autogen/agentchat/group/context_variables/ContextVariables) class implements a dictionary-like interface, allowing you to use a familiar syntax:
+
+```python
+# Dictionary-like operations
+user_name = context["user_name"]  # Get a value
+context["issue_count"] = 2  # Set a value
+del context["temporary_value"]  # Delete a value
+if "premium" in context:  # Check if a key exists
+    print("Premium user")
+
+# Iterate over keys and values
+for key, value in context:
+    print(f"{key}: {value}")
+```
+
+### Persistence Across Agent Transitions
+
+One of the most powerful features of context variables is their persistence across agent transitions. When control passes from one agent to another, the context variables go with it, maintaining the shared state.
+
+In the below example, the `route_to_tech_support` function updates the context variables with the current issue and passes the control to the tech support agent who can then access the updated context variables to make informed decisions.
+
+```python
+def route_to_tech_support(issue: str, context_variables: ContextVariables) -> ReplyResult:
+    """Route an issue to technical support."""
+    # Update the context with the current issue
+    context_variables["current_issue"] = issue
+    context_variables["issue_count"] += 1
+    context_variables["previous_issues"].append(issue)
+
+    # Return control to the tech agent with the updated context
+    return ReplyResult(
+        message="Routing to technical support...",
+        target=AgentTarget(tech_agent),
+        context_variables=context_variables  # Update the shared context
+    )
+```
+
+## Extending the Triage Example
+
+Let's extend our triage example to demonstrate how context variables enhance the customer support experience by maintaining information about the user and their issues.
+
+Here's how we can enhance our triage system with context variables:
+
+- Create initial context variables with session information
+- Track and store each user query in the context
+- Record solutions provided by technical support
+- Intentionally print the context variables before and after processing in the functions for debugging
+
+
+```python
+from typing import Annotated
+from datetime import datetime
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
+
+# Initialize context variables
+support_context = ContextVariables(data={
+    "session_start": datetime.now().isoformat(),
+    "query_history": [],
+    "solutions_provided": [],
+    "query_count": 0,
+    "solution_count": 0
+})
+
+# Define tools that use context variables
+def classify_and_log_query(
+    query: Annotated[str, "The user query to classify"],
+    context_variables: ContextVariables
+) -> ReplyResult:
+    """Classify a user query as technical or general and log it in the context."""
+
+    # Printing the context variables
+    print(f"{context_variables.to_dict()=}")
+
+    # Record this query in history
+    query_history = context_variables.get("query_history", [])
+    query_record = {
+        "timestamp": datetime.now().isoformat(),
+        "query": query
+    }
+    query_history.append(query_record)
+    context_variables["query_history"] = query_history
+    context_variables["last_query"] = query
+    context_variables["query_count"] = len(query_history)
+
+    # Basic classification logic
+    technical_keywords = ["error", "bug", "broken", "crash", "not working", "shutting down"]
+    is_technical = any(keyword in query.lower() for keyword in technical_keywords)
+
+    # Update context with classification
+    if is_technical:
+        target_agent = AgentNameTarget("tech_agent")
+        context_variables["query_type"] = "technical"
+        message = "This appears to be a technical issue. Routing to technical support..."
+    else:
+        target_agent = AgentNameTarget("general_agent")
+        context_variables["query_type"] = "general"
+        message = "This appears to be a general question. Routing to general support..."
+
+    # Printing the context variables
+    print(f"{context_variables.to_dict()=}")
+
+    return ReplyResult(
+        message=message,
+        target=target_agent,
+        context_variables=context_variables
+    )
+
+def provide_technical_solution(
+    solution: Annotated[str, "Technical solution to provide"],
+    context_variables: ContextVariables
+) -> ReplyResult:
+    """Provide a technical solution and record it in the context."""
+
+    # Printing the context variables
+    print(f"{context_variables.to_dict()=}")
+
+    # Record the solution
+    last_query = context_variables.get("last_query", "your issue")
+    solutions_provided = context_variables.get("solutions_provided", [])
+
+    solution_record = {
+        "timestamp": datetime.now().isoformat(),
+        "query": last_query,
+        "solution": solution
+    }
+    solutions_provided.append(solution_record)
+
+    # Update context
+    context_variables["solutions_provided"] = solutions_provided
+    context_variables["last_solution"] = solution
+    context_variables["solution_count"] = len(solutions_provided)
+
+    # Printing the context variables
+    print(f"{context_variables.to_dict()=}")
+
+    return ReplyResult(
+        message=solution,
+        context_variables=context_variables
+    )
+
+# Create the agents
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+with llm_config:
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question.
+        Use the classify_and_log_query tool to categorize and log queries.""",
+        functions=[classify_and_log_query]
+    )
+
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues. After analyzing the problem, use the provide_technical_solution
+        tool to format your response consistently and log it for future reference.
+
+        Check context variables for any user history before responding.""",
+        functions=[provide_technical_solution]
+    )
+
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="""You handle general, non-technical support questions.
+        Check context variables for user history before responding to provide
+        a personalized experience."""
+    )
+
+# User agent
+user = ConversableAgent(name="user", human_input_mode="ALWAYS")
+
+# Set up the conversation pattern with context variables
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    context_variables=support_context,  # Pass our initialized context
+    group_manager_args={"llm_config": llm_config}
+)
+
+# Run the chat
+result, final_context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages="My laptop keeps shutting down randomly. Can you help?",
+    max_rounds=10
+)
+```
+
+## Example Output
+
+When you run this code, you'll see a workflow similar to this:
+
+!!! tip
+    Search for the string **context_variables.to_dict()=** in the example output to check the values of the context variables.
+
+
+```console
+user (to chat_manager):
+
+My laptop keeps shutting down randomly. Can you help?
+
+--------------------------------------------------------------------------------
+
+Next speaker: triage_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+triage_agent (to chat_manager):
+
+***** Suggested tool call (call_rm3y9ld6FaHCZxrbg8vK0bFK): classify_and_log_query *****
+Arguments:
+{"query":"My laptop keeps shutting down randomly. Can you help?"}
+***************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION classify_and_log_query...
+Call ID: call_rm3y9ld6FaHCZxrbg8vK0bFK
+Input arguments: {'query': 'My laptop keeps shutting down randomly. Can you help?'}
+context_variables.to_dict()={'session_start': '2025-04-24T06:13:27.375733', 'query_history': [], 'solutions_provided': [], 'query_count': 0, 'solution_count': 0}
+context_variables.to_dict()={'session_start': '2025-04-24T06:13:27.375733', 'query_history': [{'timestamp': '2025-04-24T06:13:32.265286', 'query': 'My laptop keeps shutting down randomly. Can you help?'}], 'solutions_provided': [], 'query_count': 1, 'solution_count': 0, 'last_query': 'My laptop keeps shutting down randomly. Can you help?', 'query_type': 'technical'}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_rm3y9ld6FaHCZxrbg8vK0bFK) *****
+This appears to be a technical issue. Routing to technical support...
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: tech_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+tech_agent (to chat_manager):
+
+***** Suggested tool call (call_FtIJ8KDaJpMxr4FRu93K8Vep): provide_technical_solution *****
+Arguments:
+{"solution":"If your laptop keeps shutting down randomly, it could be due to several reasons. Here are some steps to troubleshoot the issue:\n\n1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.\n\n2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.\n\n3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.\n\n4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.\n\n5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns. \n\n6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.\n\n7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.\n\nIf none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis."}
+*******************************************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: _Group_Tool_Executor
+
+
+>>>>>>>> EXECUTING FUNCTION provide_technical_solution...
+Call ID: call_FtIJ8KDaJpMxr4FRu93K8Vep
+Input arguments: {'solution': "If your laptop keeps shutting down randomly, it could be due to several reasons. Here are some steps to troubleshoot the issue:\n\n1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.\n\n2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.\n\n3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.\n\n4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.\n\n5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns. \n\n6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.\n\n7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.\n\nIf none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis."}
+context_variables.to_dict()={'session_start': '2025-04-24T06:13:27.375733', 'query_history': [{'timestamp': '2025-04-24T06:13:32.265286', 'query': 'My laptop keeps shutting down randomly. Can you help?'}], 'solutions_provided': [], 'query_count': 1, 'solution_count': 0, 'last_query': 'My laptop keeps shutting down randomly. Can you help?', 'query_type': 'technical'}
+context_variables.to_dict()={'session_start': '2025-04-24T06:13:27.375733', 'query_history': [{'timestamp': '2025-04-24T06:13:32.265286', 'query': 'My laptop keeps shutting down randomly. Can you help?'}], 'solutions_provided': [{'timestamp': '2025-04-24T06:13:39.729104', 'query': 'My laptop keeps shutting down randomly. Can you help?', 'solution': "If your laptop keeps shutting down randomly, it could be due to several reasons. Here are some steps to troubleshoot the issue:\n\n1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.\n\n2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.\n\n3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.\n\n4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.\n\n5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns. \n\n6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.\n\n7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.\n\nIf none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis."}], 'query_count': 1, 'solution_count': 1, 'last_query': 'My laptop keeps shutting down randomly. Can you help?', 'query_type': 'technical', 'last_solution': "If your laptop keeps shutting down randomly, it could be due to several reasons. Here are some steps to troubleshoot the issue:\n\n1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.\n\n2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.\n\n3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.\n\n4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.\n\n5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns. \n\n6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.\n\n7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.\n\nIf none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis."}
+_Group_Tool_Executor (to chat_manager):
+
+***** Response from calling tool (call_FtIJ8KDaJpMxr4FRu93K8Vep) *****
+If your laptop keeps shutting down randomly, it could be due to several reasons. Here are some steps to troubleshoot the issue:
+
+1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.
+
+2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.
+
+3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.
+
+4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.
+
+5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns.
+
+6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.
+
+7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.
+
+If none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis.
+**********************************************************************
+
+--------------------------------------------------------------------------------
+
+Next speaker: tech_agent
+
+
+>>>>>>>> USING AUTO REPLY...
+tech_agent (to chat_manager):
+
+I've provided a detailed troubleshooting guide for your laptop's random shutdown issue. Here are the steps you can take:
+
+1. **Check for Overheating**: Ensure that your laptop is not overheating. Clean the air vents and make sure the laptop is on a hard surface to allow proper ventilation.
+
+2. **Inspect the Battery**: If the laptop is battery-operated, check the battery health. A failing battery can cause abrupt shutdowns. If possible, try running the laptop on AC power without the battery.
+
+3. **Update Drivers**: Ensure that all drivers, especially graphics and chipset drivers, are up to date. You can check the manufacturer's website for the latest updates.
+
+4. **Run a Malware Scan**: Sometimes, malware can cause system instability. Run a full scan using your antivirus software to eliminate this possibility.
+
+5. **Check Event Viewer**: Look at the Windows Event Viewer logs to see if there are any critical errors or warnings at the times of the shutdowns.
+
+6. **Run Hardware Diagnostics**: Many laptops come with built-in hardware diagnostics tools. Run these tests to check for failing components.
+
+7. **Reset BIOS/UEFI settings**: Sometimes incorrect settings in BIOS/UEFI can cause issues. Reset to default settings and see if the problem persists.
+
+If none of the above steps resolve the issue, it might be a hardware failure, and I recommend contacting a professional technician for further diagnosis.
+
+--------------------------------------------------------------------------------
+
+Next speaker: user
+
+Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+>>>>>>>> TERMINATING RUN (0c4282a0-6a3b-49fa-b8e7-b962273a777a): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (38356a45-e550-4e8f-9d3e-d7b07461b646): No reply generated
+```
+
+## Next Steps
+
+Now that you understand Context Variables, the next section will explore Handoffs and Transitions - the mechanisms that control how agents pass control to each other in a group chat.
+
+In the Handoffs and Transitions section, you'll learn:
+
+- How to define explicit handoff conditions between agents
+- How to use context variables to drive dynamic transitions
+- How to implement complex workflows with conditional branching
+- How to combine tools, context variables, and handoffs for sophisticated agent orchestration
+
+The concepts you've learned about tools and context variables will be essential as we explore how to control the flow of conversation in complex multi-agent systems.

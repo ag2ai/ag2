@@ -1,0 +1,43 @@
+---
+Title: Sequential chat
+---
+
+As a sequence of chats between two agents chained together by a mechanism called *carryover*, the sequential chat pattern is useful for complex tasks that can be broken down into interdependent sub-tasks.
+
+### Understanding the Sequential Chat Pattern
+
+The figure below illustrates how this pattern works.
+
+![initiate_chats](../assets/sequential-two-agent-chat.png)
+
+In this pattern, a pair of agents start a two-agent chat, then the summary of the conversation becomes a *carryover* for the next two-agent chat. The next chat passes the carryover to the `carryover` parameter of the context to generate its initial message.
+
+Carryover accumulates as the conversation moves forward, so each subsequent chat starts with all the carryovers from previous chats.
+
+The figure above shows distinct recipient agents for all the chats, however, the recipient agents in the sequence are allowed to repeat.
+
+### Building a Sequential Workflow
+
+To illustrate this pattern, let's create a sequential workflow to create our lesson plan for the fourth grade class.
+
+A teacher agent will engage three agents sequentially:
+
+1. A curriculum designer will select a topic given the subject from the teacher
+2. A lesson planner will design the lesson with two iterations given feedback from the teacher
+3. A formatter will format the lesson
+
+import Example from "/snippets/python-examples/sequentialchat.mdx";
+
+<Example/>
+
+### Customizing Chat Behavior
+
+The sequential chat is triggered by the teacher agent's [`initiate_chats`](/docs/api-reference/autogen/ConversableAgent#initiate-chats) method, which takes a list of dictionaries where each dictionary represents a chat between the teacher and the `recipient` agent.
+
+The maximum number of turns in each chat can be controlled with the `max_turns` key. Each chat can also terminate before the `max_turns`, see the [Ending a Chat](/docs/user-guide/advanced-concepts/orchestration/ending-a-chat/) topic for further information.
+
+The result of the [`initiate_chats`](/docs/api-reference/autogen/ConversableAgent#initiate-chats) method returns a list of [`ChatResult`](/docs/api-reference/autogen/ChatResult) objects, one for each chat in the sequence.
+
+### Different senders
+
+In the above example, the teacher agent was the sender in each chat, however you can use the high-level [`initiate_chats`](/docs/api-reference/autogen/initiate_chats) function to start a sequence of two-agent chats with different sender agents. See this [notebook](/docs/use-cases/notebooks/notebooks/agentchats_sequential_chats#example-1%3A-solve-tasks-with-a-series-of-chats) for an example.

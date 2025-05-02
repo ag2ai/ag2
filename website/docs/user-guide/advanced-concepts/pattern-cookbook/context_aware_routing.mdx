@@ -1,5 +1,6 @@
 ---
 title: Context-Aware Routing
+sidebarTitle: Context-Aware Routing
 ---
 
 The Context-Aware Routing Pattern creates a dynamic workflow where tasks are intelligently distributed to specialized agents based on content analysis rather than predetermined paths. Unlike static patterns with fixed routes, this approach analyzes each request in real-time to determine the most appropriate specialist, ensuring queries are handled by agents with the most relevant expertise while maintaining conversation continuity even as topics shift across domains.
@@ -34,7 +35,7 @@ In the Context-Aware Routing Pattern, information flows through a central router
 
 ### Implementation
 
-Our implementation using AG2's Swarm demonstrates the Context-Aware Routing Pattern with a router agent that analyzes queries and directs them to specialized domain experts. The system maintains rich contextual information about domain history, request patterns, and confidence levels, enabling intelligent routing decisions that improve as the conversation evolves.
+Our implementation using AG2's Group Chat demonstrates the Context-Aware Routing Pattern with a router agent that analyzes queries and directs them to specialized domain experts. The system maintains rich contextual information about domain history, request patterns, and confidence levels, enabling intelligent routing decisions that improve as the conversation evolves.
 
 * **Content Analysis Tools**: The router agent uses sophisticated analysis functions to determine query domains and calculate confidence scores.
 
@@ -107,28 +108,26 @@ We also set the LLM parameter `parallel_tool_calls` to False so that our agents 
 </Tip>
 
 ```python
-from typing import Any, Annotated
-from autogen import (
-    ConversableAgent,
-    UserProxyAgent,
-    register_hand_off,
-    OnContextCondition,
-    AfterWork,
-    AfterWorkOption,
-    initiate_swarm_chat,
-    ContextExpression,
-    SwarmResult,
-    LLMConfig,
-)
-
 # Context-Aware Routing pattern for dynamic task assignment
 # Routes queries to the most appropriate specialist based on query content analysis
 
+from typing import Annotated
+from autogen import (
+    ConversableAgent,
+    UserProxyAgent,
+    LLMConfig,
+)
+
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group.targets.transition_target import AgentTarget, AgentNameTarget, RevertToUserTarget
+from autogen.agentchat.group import ReplyResult, ContextVariables, ExpressionContextCondition, ExpressionAvailableCondition, ContextExpression, OnContextCondition
+
 # Setup LLM configuration
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai", cache_seed=None, parallel_tool_calls=False)
+llm_config = LLMConfig(model="gpt-4.1-mini", api_type="openai", cache_seed=1, parallel_tool_calls=False)
 
 # Shared context for tracking the conversation and routing decisions
-shared_context = {
+shared_context = ContextVariables(data={
     # Routing state
     "routing_started": False,
     "current_domain": None,
@@ -153,14 +152,14 @@ shared_context = {
     # Error state (not handled but could be used to route to an error agent)
     "has_error": False,
     "error_message": "",
-}
+})
 
 # Functions for the context-aware routing pattern
 
 def analyze_request(
     request: Annotated[str, "The user request text to analyze"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Analyze a user request to determine routing based on content
     Updates context variables with routing information
@@ -184,16 +183,16 @@ def analyze_request(
     # Reset current_domain to be determined by the router
     context_variables["current_domain"] = None
 
-    return SwarmResult(
-        values=f"Request analyzed. Will determine the best specialist to handle: '{request}'",
+    return ReplyResult(
+        message=f"Request analyzed. Will determine the best specialist to handle: '{request}'",
         context_variables=context_variables
     )
 
 def route_to_tech_specialist(
     confidence: Annotated[int, "Confidence level for tech domain (1-10)"],
     reasoning: Annotated[str, "Reasoning for routing to tech specialist"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Route the current request to the technology specialist
     """
@@ -201,16 +200,17 @@ def route_to_tech_specialist(
     context_variables["domain_confidence"]["technology"] = confidence
     context_variables["tech_invocations"] += 1
 
-    return SwarmResult(
-        values=f"Routing to tech specialist with confidence {confidence}/10. Reasoning: {reasoning}",
+    return ReplyResult(
+        target=AgentTarget(agent=tech_specialist),
+        message=f"Routing to tech specialist with confidence {confidence}/10. Reasoning: {reasoning}",
         context_variables=context_variables
     )
 
 def route_to_finance_specialist(
     confidence: Annotated[int, "Confidence level for finance domain (1-10)"],
     reasoning: Annotated[str, "Reasoning for routing to finance specialist"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Route the current request to the finance specialist
     """
@@ -218,16 +218,18 @@ def route_to_finance_specialist(
     context_variables["domain_confidence"]["finance"] = confidence
     context_variables["finance_invocations"] += 1
 
-    return SwarmResult(
-        values=f"Routing to finance specialist with confidence {confidence}/10. Reasoning: {reasoning}",
+    return ReplyResult(
+        #target=AgentTarget(finance_specialist),
+        target=AgentNameTarget(agent_name="finance_specialist"),
+        message=f"Routing to finance specialist with confidence {confidence}/10. Reasoning: {reasoning}",
         context_variables=context_variables
     )
 
 def route_to_healthcare_specialist(
     confidence: Annotated[int, "Confidence level for healthcare domain (1-10)"],
     reasoning: Annotated[str, "Reasoning for routing to healthcare specialist"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Route the current request to the healthcare specialist
     """
@@ -235,16 +237,17 @@ def route_to_healthcare_specialist(
     context_variables["domain_confidence"]["healthcare"] = confidence
     context_variables["healthcare_invocations"] += 1
 
-    return SwarmResult(
-        values=f"Routing to healthcare specialist with confidence {confidence}/10. Reasoning: {reasoning}",
+    return ReplyResult(
+        target=AgentTarget(agent=healthcare_specialist),
+        message=f"Routing to healthcare specialist with confidence {confidence}/10. Reasoning: {reasoning}",
         context_variables=context_variables
     )
 
 def route_to_general_specialist(
     confidence: Annotated[int, "Confidence level for general domain (1-10)"],
     reasoning: Annotated[str, "Reasoning for routing to general knowledge specialist"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Route the current request to the general knowledge specialist
     """
@@ -252,8 +255,9 @@ def route_to_general_specialist(
     context_variables["domain_confidence"]["general"] = confidence
     context_variables["general_invocations"] += 1
 
-    return SwarmResult(
-        values=f"Routing to general knowledge specialist with confidence {confidence}/10. Reasoning: {reasoning}",
+    return ReplyResult(
+        target=AgentTarget(agent=general_specialist),
+        message=f"Routing to general knowledge specialist with confidence {confidence}/10. Reasoning: {reasoning}",
         context_variables=context_variables
     )
 
@@ -261,8 +265,8 @@ def route_to_general_specialist(
 
 def provide_tech_response(
     response: Annotated[str, "The specialist's response to the request"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Submit a response from the technology specialist
     """
@@ -274,15 +278,15 @@ def provide_tech_response(
     })
     context_variables["question_answered"] = True
 
-    return SwarmResult(
-        values="Technology specialist response provided.",
+    return ReplyResult(
+        message="Technology specialist response provided.",
         context_variables=context_variables
     )
 
 def provide_finance_response(
     response: Annotated[str, "The specialist's response to the request"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Submit a response from the finance specialist
     """
@@ -294,15 +298,15 @@ def provide_finance_response(
     })
     context_variables["question_answered"] = True
 
-    return SwarmResult(
-        values="Finance specialist response provided.",
+    return ReplyResult(
+        message="Finance specialist response provided.",
         context_variables=context_variables
     )
 
 def provide_healthcare_response(
     response: Annotated[str, "The specialist's response to the request"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Submit a response from the healthcare specialist
     """
@@ -314,15 +318,15 @@ def provide_healthcare_response(
     })
     context_variables["question_answered"] = True
 
-    return SwarmResult(
-        values="Healthcare specialist response provided.",
+    return ReplyResult(
+        message="Healthcare specialist response provided.",
         context_variables=context_variables
     )
 
 def provide_general_response(
     response: Annotated[str, "The specialist's response to the request"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Submit a response from the general knowledge specialist
     """
@@ -334,23 +338,23 @@ def provide_general_response(
     })
     context_variables["question_answered"] = True
 
-    return SwarmResult(
-        values="General knowledge specialist response provided.",
+    return ReplyResult(
+        message="General knowledge specialist response provided.",
         context_variables=context_variables
     )
 
 # Function for follow-up clarification if needed
 def request_clarification(
     clarification_question: Annotated[str, "Question to ask user for clarification"],
-    context_variables: dict[str, Any]
-) -> SwarmResult:
+    context_variables: ContextVariables
+) -> ReplyResult:
     """
     Request clarification from the user when the query is ambiguous
     """
-    return SwarmResult(
-        values=f"Further clarification is required to determine the correct domain: {clarification_question}",
+    return ReplyResult(
+        message=f"Further clarification is required to determine the correct domain: {clarification_question}",
         context_variables=context_variables,
-        agent=AfterWorkOption.REVERT_TO_USER
+        target=RevertToUserTarget()
     )
 
 with llm_config:
@@ -475,66 +479,39 @@ user = UserProxyAgent(
 
 # Register handoffs for the context-aware routing pattern
 # Router agent to specialists based on domain
-register_hand_off(
-    agent=router_agent,
-    hand_to=[
-        # Route to tech specialist when domain is technology
-        OnContextCondition(
-            target=tech_specialist,
-            condition=ContextExpression("${current_domain} == 'technology'"),
-            available=ContextExpression("!${question_answered}")
-        ),
-        # Route to finance specialist when domain is finance
-        OnContextCondition(
-            target=finance_specialist,
-            condition=ContextExpression("${current_domain} == 'finance'"),
-            available=ContextExpression("!${question_answered}")
-        ),
-        # Route to healthcare specialist when domain is healthcare
-        OnContextCondition(
-            target=healthcare_specialist,
-            condition=ContextExpression("${current_domain} == 'healthcare'"),
-            available=ContextExpression("!${question_answered}")
-        ),
-        # Route to general specialist when domain is general
-        OnContextCondition(
-            target=general_specialist,
-            condition=ContextExpression("${current_domain} == 'general'"),
-            available=ContextExpression("!${question_answered}")
-        ),
-        # Default to user if no routing occurs
-        AfterWork(AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+router_agent.register_handoffs(conditions=[
+    # Route to tech specialist when domain is technology
+    OnContextCondition(
+        target=AgentTarget(agent=tech_specialist),
+        condition=ExpressionContextCondition(expression=ContextExpression(expression="${current_domain} == 'technology'")),
+        available=ExpressionAvailableCondition(expression=ContextExpression(expression="!${question_answered}"))
+    ),
+    # Route to finance specialist when domain is finance
+    OnContextCondition(
+        target=AgentTarget(agent=finance_specialist),
+        condition=ExpressionContextCondition(expression=ContextExpression(expression="${current_domain} == 'finance'")),
+        available=ExpressionAvailableCondition(expression=ContextExpression(expression="!${question_answered}"))
+    ),
+    # Route to healthcare specialist when domain is healthcare
+    OnContextCondition(
+        target=AgentTarget(agent=healthcare_specialist),
+        condition=ExpressionContextCondition(expression=ContextExpression(expression="${current_domain} == 'healthcare'")),
+        available=ExpressionAvailableCondition(expression=ContextExpression(expression="!${question_answered}"))
+    ),
+    # Route to general specialist when domain is general
+    OnContextCondition(
+        target=AgentTarget(agent=general_specialist),
+        condition=ExpressionContextCondition(expression=ContextExpression(expression="${current_domain} == 'general'")),
+        available=ExpressionAvailableCondition(expression=ContextExpression(expression="!${question_answered}"))
+    ),
+])
+router_agent.handoffs.set_after_work(target=RevertToUserTarget())
 
 # Specialists always return to router for next query
-register_hand_off(
-    agent=tech_specialist,
-    hand_to=[
-        AfterWork(router_agent)
-    ]
-)
-
-register_hand_off(
-    agent=finance_specialist,
-    hand_to=[
-        AfterWork(router_agent)
-    ]
-)
-
-register_hand_off(
-    agent=healthcare_specialist,
-    hand_to=[
-        AfterWork(router_agent)
-    ]
-)
-
-register_hand_off(
-    agent=general_specialist,
-    hand_to=[
-        AfterWork(router_agent)
-    ]
-)
+tech_specialist.handoffs.set_after_work(target=AgentTarget(agent=router_agent))
+finance_specialist.handoffs.set_after_work(target=AgentTarget(agent=router_agent))
+healthcare_specialist.handoffs.set_after_work(target=AgentTarget(agent=router_agent))
+general_specialist.handoffs.set_after_work(target=AgentTarget(agent=router_agent))
 
 # Run the context-aware routing pattern
 def run_context_aware_routing():
@@ -548,18 +525,22 @@ def run_context_aware_routing():
     sample_finance_request = "Can you explain how blockchain technology works and its potential applications in finance?"
     sample_ambiguous_request = "Can you tell me about benefits? I'm trying to understand all my options and make the right decision."
 
-    chat_result, final_context, last_agent = initiate_swarm_chat(
-        initial_agent=router_agent,
-        agents=[
+    agent_pattern = DefaultPattern(
+    agents=[
             router_agent,
             tech_specialist,
             finance_specialist,
             healthcare_specialist,
             general_specialist
         ],
+    initial_agent=router_agent,
+    context_variables=shared_context,
+    user_agent=user,
+    )
+
+    chat_result, final_context, last_agent = initiate_group_chat(
+        pattern=agent_pattern,
         messages=f"I have a question: {sample_ambiguous_request}",
-        context_variables=shared_context,
-        user_agent=user,
         max_rounds=100,
     )
 
@@ -590,7 +571,7 @@ def run_context_aware_routing():
     # Display the conversation flow
     print("\n===== SPEAKER ORDER =====\n")
     for message in chat_result.chat_history:
-        if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+        if "name" in message and message["name"] != "_Group_Tool_Executor":
             print(f"{message['name']}")
 
 if __name__ == "__main__":
@@ -600,6 +581,7 @@ if __name__ == "__main__":
 ## Output
 
 ```console
+Initiating Context-Aware Routing Pattern...
 user (to chat_manager):
 
 I have a question: Can you tell me about benefits? I'm trying to understand all my options and make the right decision.
@@ -612,22 +594,22 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_ZLnzYavANDeotNnFeJ3jN4tC): analyze_request *****
+***** Suggested tool call (call_82DKgmrSzAS8HTUcv0X0JxyR): analyze_request *****
 Arguments:
 {"request":"Can you tell me about benefits? I'm trying to understand all my options and make the right decision."}
 ********************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION analyze_request...
-Call ID: call_ZLnzYavANDeotNnFeJ3jN4tC
+Call ID: call_82DKgmrSzAS8HTUcv0X0JxyR
 Input arguments: {'request': "Can you tell me about benefits? I'm trying to understand all my options and make the right decision."}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_ZLnzYavANDeotNnFeJ3jN4tC) *****
+***** Response from calling tool (call_82DKgmrSzAS8HTUcv0X0JxyR) *****
 Request analyzed. Will determine the best specialist to handle: 'Can you tell me about benefits? I'm trying to understand all my options and make the right decision.'
 **********************************************************************
 
@@ -639,23 +621,23 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_DZPByFRPAyisJHFKVN8GckCg): request_clarification *****
+***** Suggested tool call (call_fz0sQOJY0qqzR6C1tmwCaRvv): request_clarification *****
 Arguments:
-{"clarification_question":"Could you please specify whether you're asking about employee benefits, financial benefits, health benefits, or something else?"}
+{"clarification_question":"Could you please specify which type of benefits you are referring to? For example, employee benefits, health insurance benefits, financial benefits, or something else?"}
 **************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION request_clarification...
-Call ID: call_DZPByFRPAyisJHFKVN8GckCg
-Input arguments: {'clarification_question': "Could you please specify whether you're asking about employee benefits, financial benefits, health benefits, or something else?"}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_fz0sQOJY0qqzR6C1tmwCaRvv
+Input arguments: {'clarification_question': 'Could you please specify which type of benefits you are referring to? For example, employee benefits, health insurance benefits, financial benefits, or something else?'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_DZPByFRPAyisJHFKVN8GckCg) *****
-Further clarification is required to determine the correct domain: Could you please specify whether you're asking about employee benefits, financial benefits, health benefits, or something else?
+***** Response from calling tool (call_fz0sQOJY0qqzR6C1tmwCaRvv) *****
+Further clarification is required to determine the correct domain: Could you please specify which type of benefits you are referring to? For example, employee benefits, health insurance benefits, financial benefits, or something else?
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -675,23 +657,23 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_5NBJvtxdTguYwe3nQs144h58): analyze_request *****
+***** Suggested tool call (call_OY6x9dzK0VlUo4x1jp6Vzf8o): analyze_request *****
 Arguments:
-{"request":"Sorry, I meant the benefits of being an Australian Citizen."}
+{"request":"the benefits of being an Australian Citizen"}
 ********************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION analyze_request...
-Call ID: call_5NBJvtxdTguYwe3nQs144h58
-Input arguments: {'request': 'Sorry, I meant the benefits of being an Australian Citizen.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_OY6x9dzK0VlUo4x1jp6Vzf8o
+Input arguments: {'request': 'the benefits of being an Australian Citizen'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_5NBJvtxdTguYwe3nQs144h58) *****
-Request analyzed. Will determine the best specialist to handle: 'Sorry, I meant the benefits of being an Australian Citizen.'
+***** Response from calling tool (call_OY6x9dzK0VlUo4x1jp6Vzf8o) *****
+Request analyzed. Will determine the best specialist to handle: 'the benefits of being an Australian Citizen'
 **********************************************************************
 
 --------------------------------------------------------------------------------
@@ -702,32 +684,24 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_bjUJ7y0m0bdgYlxsynXzootZ): route_to_general_specialist *****
+***** Suggested tool call (call_P84aB8vkdKuYWkgpr9OaCVd2): route_to_general_specialist *****
 Arguments:
-{"confidence":8,"reasoning":"The query pertains to the general knowledge about citizenship benefits in Australia, which doesn't strictly fit into one of the specialized categories like finance, technology, or healthcare."}
+{"confidence":9,"reasoning":"The query about the benefits of being an Australian Citizen is best suited for the General Knowledge Specialist, as it involves information related to citizenship benefits which cover legal, social, and civic aspects that are not strictly within technology, finance, or healthcare domains."}
 ********************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION route_to_general_specialist...
-Call ID: call_bjUJ7y0m0bdgYlxsynXzootZ
-Input arguments: {'confidence': 8, 'reasoning': "The query pertains to the general knowledge about citizenship benefits in Australia, which doesn't strictly fit into one of the specialized categories like finance, technology, or healthcare."}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_P84aB8vkdKuYWkgpr9OaCVd2
+Input arguments: {'confidence': 9, 'reasoning': 'The query about the benefits of being an Australian Citizen is best suited for the General Knowledge Specialist, as it involves information related to citizenship benefits which cover legal, social, and civic aspects that are not strictly within technology, finance, or healthcare domains.'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_bjUJ7y0m0bdgYlxsynXzootZ) *****
-Routing to general knowledge specialist with confidence 8/10. Reasoning: The query pertains to the general knowledge about citizenship benefits in Australia, which doesn't strictly fit into one of the specialized categories like finance, technology, or healthcare.
+***** Response from calling tool (call_P84aB8vkdKuYWkgpr9OaCVd2) *****
+Routing to general knowledge specialist with confidence 9/10. Reasoning: The query about the benefits of being an Australian Citizen is best suited for the General Knowledge Specialist, as it involves information related to citizenship benefits which cover legal, social, and civic aspects that are not strictly within technology, finance, or healthcare domains.
 **********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: router_agent
-
-router_agent (to chat_manager):
-
-[Handing off to general_specialist]
 
 --------------------------------------------------------------------------------
 
@@ -737,22 +711,22 @@ Next speaker: general_specialist
 >>>>>>>> USING AUTO REPLY...
 general_specialist (to chat_manager):
 
-***** Suggested tool call (call_g3mBBGkUA9k5ypepqAhgTI3f): provide_general_response *****
+***** Suggested tool call (call_Fe06cKLYo7GP55IigeIDx70I): provide_general_response *****
 Arguments:
-{"response":"Being an Australian citizen comes with a range of benefits that cover social, political, and economic aspects. Here are some key advantages:\n\n1. **Rights and Freedoms**: Australian citizens enjoy specific rights under the law, including the right to vote in federal, state, and local elections. They also have the right to stand for election and hold public office.\n\n2. **Access to Services**: Citizens have access to various government services and programs, such as healthcare through Medicare, which provides free or subsidized medical services. Citizens benefit from educational resources, including government-funded universities and training programs.\n\n3. **Social Security and Welfare**: Australian citizens are eligible for various social security benefits, such as unemployment benefits, family payments, pensions for retirees, and disability support, further promoting financial security and wellbeing.\n\n4. **Consular Protection**: Australian citizens can receive consular support from Australian embassies and consulates while traveling or living abroad, providing assistance in emergencies, legal situations, or if they encounter issues with local authorities.\n\n5. **Freedom of Travel**: Being an Australian citizen allows for easier entry into many countries without requiring a visa and access to Australian passports, which are considered strong for international travel.\n\n6. **Participation in Democracy**: Citizens can actively participate in shaping the country's future, including influencing legislation, policies, and community development. This engagement extends to local councils and community services.\n\n7. **Pathway to Non-Citizen Family**: Citizens can sponsor family members for resident visas, providing a pathway for family reunification.\n\n8. **Civic Responsibility and Identity**: Citizenship fosters a sense of belonging and civic responsibility, allowing individuals to contribute to their community and society.\n\nIn summary, becoming an Australian citizen opens the door to a wide array of benefits that enhance quality of life and provide individuals with the rights and tools to fully participate in Australian society."}
+{"response":"Being an Australian citizen comes with a variety of benefits and rights that can enhance your personal, social, and legal standing in Australia. Here are some key benefits of Australian citizenship:\n\n1. **Right to Vote and Stand for Office**: Citizens have the democratic right to vote in federal and state elections and referendums, and they can stand for election to parliament.\n\n2. **Access to Passport and Consular Assistance**: Australian citizens can apply for an Australian passport, which is highly respected globally and allows visa-free or visa-on-arrival travel to many countries. Citizens can also receive consular assistance from Australian embassies while overseas.\n\n3. **Unrestricted Work and Live Rights**: Citizenship grants the right to live and work anywhere in Australia without restrictions.\n\n4. **Eligibility for Government Jobs**: Some government positions and security-related jobs require Australian citizenship.\n\n5. **Social Security and Government Benefits**: Citizens are eligible for various government payments and benefits, including healthcare through Medicare, social security payments, and pensions.\n\n6. **Access to Education**: Citizens can access certain education benefits like subsidized university fees and student loans (e.g., HECS-HELP).\n\n7. **Protection under Australian Law**: Citizens receive full protection under Australian law and the Australian Constitution.\n\n8. **Ability to Pass Citizenship to Children**: Children born overseas to Australian citizens may automatically acquire citizenship.\n\n9. **Freedom from Deportation**: Unlike permanent residents, Australian citizens cannot be deported from Australia.\n\n10. **Sense of Belonging and National Identity**: Citizenship often provides a stronger sense of belonging and identity within Australia.\n\nIf you have specific aspects you want to explore further or need information about the citizenship application process, feel free to ask!"}
 *****************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_general_response...
-Call ID: call_g3mBBGkUA9k5ypepqAhgTI3f
-Input arguments: {'response': "Being an Australian citizen comes with a range of benefits that cover social, political, and economic aspects. Here are some key advantages:\n\n1. **Rights and Freedoms**: Australian citizens enjoy specific rights under the law, including the right to vote in federal, state, and local elections. They also have the right to stand for election and hold public office.\n\n2. **Access to Services**: Citizens have access to various government services and programs, such as healthcare through Medicare, which provides free or subsidized medical services. Citizens benefit from educational resources, including government-funded universities and training programs.\n\n3. **Social Security and Welfare**: Australian citizens are eligible for various social security benefits, such as unemployment benefits, family payments, pensions for retirees, and disability support, further promoting financial security and wellbeing.\n\n4. **Consular Protection**: Australian citizens can receive consular support from Australian embassies and consulates while traveling or living abroad, providing assistance in emergencies, legal situations, or if they encounter issues with local authorities.\n\n5. **Freedom of Travel**: Being an Australian citizen allows for easier entry into many countries without requiring a visa and access to Australian passports, which are considered strong for international travel.\n\n6. **Participation in Democracy**: Citizens can actively participate in shaping the country's future, including influencing legislation, policies, and community development. This engagement extends to local councils and community services.\n\n7. **Pathway to Non-Citizen Family**: Citizens can sponsor family members for resident visas, providing a pathway for family reunification.\n\n8. **Civic Responsibility and Identity**: Citizenship fosters a sense of belonging and civic responsibility, allowing individuals to contribute to their community and society.\n\nIn summary, becoming an Australian citizen opens the door to a wide array of benefits that enhance quality of life and provide individuals with the rights and tools to fully participate in Australian society."}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_Fe06cKLYo7GP55IigeIDx70I
+Input arguments: {'response': 'Being an Australian citizen comes with a variety of benefits and rights that can enhance your personal, social, and legal standing in Australia. Here are some key benefits of Australian citizenship:\n\n1. **Right to Vote and Stand for Office**: Citizens have the democratic right to vote in federal and state elections and referendums, and they can stand for election to parliament.\n\n2. **Access to Passport and Consular Assistance**: Australian citizens can apply for an Australian passport, which is highly respected globally and allows visa-free or visa-on-arrival travel to many countries. Citizens can also receive consular assistance from Australian embassies while overseas.\n\n3. **Unrestricted Work and Live Rights**: Citizenship grants the right to live and work anywhere in Australia without restrictions.\n\n4. **Eligibility for Government Jobs**: Some government positions and security-related jobs require Australian citizenship.\n\n5. **Social Security and Government Benefits**: Citizens are eligible for various government payments and benefits, including healthcare through Medicare, social security payments, and pensions.\n\n6. **Access to Education**: Citizens can access certain education benefits like subsidized university fees and student loans (e.g., HECS-HELP).\n\n7. **Protection under Australian Law**: Citizens receive full protection under Australian law and the Australian Constitution.\n\n8. **Ability to Pass Citizenship to Children**: Children born overseas to Australian citizens may automatically acquire citizenship.\n\n9. **Freedom from Deportation**: Unlike permanent residents, Australian citizens cannot be deported from Australia.\n\n10. **Sense of Belonging and National Identity**: Citizenship often provides a stronger sense of belonging and identity within Australia.\n\nIf you have specific aspects you want to explore further or need information about the citizenship application process, feel free to ask!'}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_g3mBBGkUA9k5ypepqAhgTI3f) *****
+***** Response from calling tool (call_Fe06cKLYo7GP55IigeIDx70I) *****
 General knowledge specialist response provided.
 **********************************************************************
 
@@ -764,25 +738,29 @@ Next speaker: general_specialist
 >>>>>>>> USING AUTO REPLY...
 general_specialist (to chat_manager):
 
-Being an Australian citizen comes with a range of benefits that cover social, political, and economic aspects. Here are some key advantages:
+Being an Australian citizen comes with a variety of benefits and rights that can enhance your personal, social, and legal standing in Australia. Here are some key benefits of Australian citizenship:
 
-1. **Rights and Freedoms**: Australian citizens enjoy specific rights under the law, including the right to vote in federal, state, and local elections. They also have the right to stand for election and hold public office.
+1. **Right to Vote and Stand for Office**: Citizens have the democratic right to vote in federal and state elections and referendums, and they can stand for election to parliament.
 
-2. **Access to Services**: Citizens have access to various government services and programs, such as healthcare through Medicare, which provides free or subsidized medical services. Citizens benefit from educational resources, including government-funded universities and training programs.
+2. **Access to Passport and Consular Assistance**: Australian citizens can apply for an Australian passport, which is highly respected globally and allows visa-free or visa-on-arrival travel to many countries. Citizens can also receive consular assistance from Australian embassies while overseas.
 
-3. **Social Security and Welfare**: Australian citizens are eligible for various social security benefits, such as unemployment benefits, family payments, pensions for retirees, and disability support, further promoting financial security and wellbeing.
+3. **Unrestricted Work and Live Rights**: Citizenship grants the right to live and work anywhere in Australia without restrictions.
 
-4. **Consular Protection**: Australian citizens can receive consular support from Australian embassies and consulates while traveling or living abroad, providing assistance in emergencies, legal situations, or if they encounter issues with local authorities.
+4. **Eligibility for Government Jobs**: Some government positions and security-related jobs require Australian citizenship.
 
-5. **Freedom of Travel**: Being an Australian citizen allows for easier entry into many countries without requiring a visa and access to Australian passports, which are considered strong for international travel.
+5. **Social Security and Government Benefits**: Citizens are eligible for various government payments and benefits, including healthcare through Medicare, social security payments, and pensions.
 
-6. **Participation in Democracy**: Citizens can actively participate in shaping the country's future, including influencing legislation, policies, and community development. This engagement extends to local councils and community services.
+6. **Access to Education**: Citizens can access certain education benefits like subsidized university fees and student loans (e.g., HECS-HELP).
 
-7. **Pathway to Non-Citizen Family**: Citizens can sponsor family members for resident visas, providing a pathway for family reunification.
+7. **Protection under Australian Law**: Citizens receive full protection under Australian law and the Australian Constitution.
 
-8. **Civic Responsibility and Identity**: Citizenship fosters a sense of belonging and civic responsibility, allowing individuals to contribute to their community and society.
+8. **Ability to Pass Citizenship to Children**: Children born overseas to Australian citizens may automatically acquire citizenship.
 
-In summary, becoming an Australian citizen opens the door to a wide array of benefits that enhance quality of life and provide individuals with the rights and tools to fully participate in Australian society.
+9. **Freedom from Deportation**: Unlike permanent residents, Australian citizens cannot be deported from Australia.
+
+10. **Sense of Belonging and National Identity**: Citizenship often provides a stronger sense of belonging and identity within Australia.
+
+If you have specific aspects you want to explore further or need information about the citizenship application process, feel free to ask!
 
 --------------------------------------------------------------------------------
 
@@ -792,27 +770,7 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-User Question: Can you tell me about the benefits of being an Australian Citizen?
-
-Answer: Being an Australian citizen comes with a range of benefits that cover social, political, and economic aspects. Here are some key advantages:
-
-1. **Rights and Freedoms**: Australian citizens enjoy specific rights under the law, including the right to vote in federal, state, and local elections. They also have the right to stand for election and hold public office.
-
-2. **Access to Services**: Citizens have access to various government services and programs, such as healthcare through Medicare, which provides free or subsidized medical services. Citizens benefit from educational resources, including government-funded universities and training programs.
-
-3. **Social Security and Welfare**: Australian citizens are eligible for various social security benefits, such as unemployment benefits, family payments, pensions for retirees, and disability support, further promoting financial security and wellbeing.
-
-4. **Consular Protection**: Australian citizens can receive consular support from Australian embassies and consulates while traveling or living abroad, providing assistance in emergencies, legal situations, or if they encounter issues with local authorities.
-
-5. **Freedom of Travel**: Being an Australian citizen allows for easier entry into many countries without requiring a visa and access to Australian passports, which are considered strong for international travel.
-
-6. **Participation in Democracy**: Citizens can actively participate in shaping the country's future, including influencing legislation, policies, and community development. This engagement extends to local councils and community services.
-
-7. **Pathway to Non-Citizen Family**: Citizens can sponsor family members for resident visas, providing a pathway for family reunification.
-
-8. **Civic Responsibility and Identity**: Citizenship fosters a sense of belonging and civic responsibility, allowing individuals to contribute to their community and society.
-
-In summary, becoming an Australian citizen opens the door to a wide array of benefits that enhance quality of life and provide individuals with the rights and tools to fully participate in Australian society.
+If you have any more questions or need clarification on any of the benefits or related topics about Australian citizenship, just let me know!
 
 --------------------------------------------------------------------------------
 
@@ -831,22 +789,22 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_vgrygrWG0sNrg6XYw4IOUWMx): analyze_request *****
+***** Suggested tool call (call_oDTbE64qgvNeMNq78F8zpa6j): analyze_request *****
 Arguments:
 {"request":"I've been experiencing frequent headaches, particularly in the morning, along with some dizziness. What might be causing this and what lifestyle changes or treatments should I consider? Are there specific foods that could help reduce headache frequency?"}
 ********************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION analyze_request...
-Call ID: call_vgrygrWG0sNrg6XYw4IOUWMx
+Call ID: call_oDTbE64qgvNeMNq78F8zpa6j
 Input arguments: {'request': "I've been experiencing frequent headaches, particularly in the morning, along with some dizziness. What might be causing this and what lifestyle changes or treatments should I consider? Are there specific foods that could help reduce headache frequency?"}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_vgrygrWG0sNrg6XYw4IOUWMx) *****
+***** Response from calling tool (call_oDTbE64qgvNeMNq78F8zpa6j) *****
 Request analyzed. Will determine the best specialist to handle: 'I've been experiencing frequent headaches, particularly in the morning, along with some dizziness. What might be causing this and what lifestyle changes or treatments should I consider? Are there specific foods that could help reduce headache frequency?'
 **********************************************************************
 
@@ -858,32 +816,24 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-***** Suggested tool call (call_qgnYQSgy80NAUF39WYTnODKF): route_to_healthcare_specialist *****
+***** Suggested tool call (call_XlFLYIUZkrEvOehQnp2yHcqj): route_to_healthcare_specialist *****
 Arguments:
-{"confidence":9,"reasoning":"The query directly relates to health concerns, specifically headaches and dizziness, and seeks advice on potential causes, lifestyle changes, and dietary considerations. These are within the healthcare domain."}
+{"confidence":10,"reasoning":"The user's symptoms of frequent morning headaches and dizziness, along with inquiries about causes, treatments, lifestyle changes, and dietary recommendations, clearly align with healthcare and medical expertise. The healthcare specialist is best suited to address these health-related concerns comprehensively."}
 ***********************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION route_to_healthcare_specialist...
-Call ID: call_qgnYQSgy80NAUF39WYTnODKF
-Input arguments: {'confidence': 9, 'reasoning': 'The query directly relates to health concerns, specifically headaches and dizziness, and seeks advice on potential causes, lifestyle changes, and dietary considerations. These are within the healthcare domain.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_XlFLYIUZkrEvOehQnp2yHcqj
+Input arguments: {'confidence': 10, 'reasoning': "The user's symptoms of frequent morning headaches and dizziness, along with inquiries about causes, treatments, lifestyle changes, and dietary recommendations, clearly align with healthcare and medical expertise. The healthcare specialist is best suited to address these health-related concerns comprehensively."}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_qgnYQSgy80NAUF39WYTnODKF) *****
-Routing to healthcare specialist with confidence 9/10. Reasoning: The query directly relates to health concerns, specifically headaches and dizziness, and seeks advice on potential causes, lifestyle changes, and dietary considerations. These are within the healthcare domain.
+***** Response from calling tool (call_XlFLYIUZkrEvOehQnp2yHcqj) *****
+Routing to healthcare specialist with confidence 10/10. Reasoning: The user's symptoms of frequent morning headaches and dizziness, along with inquiries about causes, treatments, lifestyle changes, and dietary recommendations, clearly align with healthcare and medical expertise. The healthcare specialist is best suited to address these health-related concerns comprehensively.
 **********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: router_agent
-
-router_agent (to chat_manager):
-
-[Handing off to healthcare_specialist]
 
 --------------------------------------------------------------------------------
 
@@ -893,22 +843,22 @@ Next speaker: healthcare_specialist
 >>>>>>>> USING AUTO REPLY...
 healthcare_specialist (to chat_manager):
 
-***** Suggested tool call (call_wzx3jTM1dg8CoKItC1V4AUk5): provide_healthcare_response *****
+***** Suggested tool call (call_DpmQGTHXZXDN6jz3bnV6pIDC): provide_healthcare_response *****
 Arguments:
-{"response":"Frequent headaches, especially when they occur in the morning, accompanied by dizziness can be concerning and may stem from a variety of causes. Here are some potential factors to consider along with preventive strategies and dietary suggestions:\n\n### Possible Causes:\n1. **Dehydration**: Not drinking enough water can lead to headaches. Dehydration can also cause dizziness.\n2. **Sleep Disorders**: Conditions like sleep apnea might lead to headaches upon waking, as they can interrupt normal sleep cycles.\n3. **Posture Issues**: Poor posture, especially during sleep (like sleeping on an improper pillow), can strain your neck and lead to tension headaches.\n4. **Stress and Anxiety**: These can manifest as tension headaches, which might be worse in the mornings if stress accumulates overnight.\n5. **Dietary Factors**: Certain foods (like those high in sugar or caffeine) can trigger headaches. Additionally, skipping meals can lead to headaches.\n6. **Medical Conditions**: Conditions such as migraines, cluster headaches, or even more serious issues like hypertension or neurological disorders could be contributing factors. \n\n### Suggested Lifestyle Changes:\n- **Stay Hydrated**: Aim to drink sufficient water throughout the day.\n- **Establish a Sleep Routine**: Ensure you get enough quality sleep. A consistent sleep schedule helps.\n- **Review Your Sleep Position**: Evaluate whether your pillow and mattress provide the right support for your neck and back.\n- **Manage Stress**: Incorporate relaxation techniques such as meditation, yoga, or deep-breathing exercises.\n- **Regular Physical Activity**: Regular exercise can help reduce headache frequency and overall stress.\n- **Identify Triggers**: Keep a headache diary to track when headaches occur, along with any associated factors like food intake, sleep patterns, and stress levels.\n\n### Dietary Considerations:\nCertain foods may help reduce the frequency and severity of headaches, including:\n- **Fruits and Vegetables**: Consuming a variety can provide hydration and valuable nutrients. Spinach, avocados, and bananas may be particularly beneficial.\n- **Whole Grains**: Foods like oats and brown rice can help maintain stable blood sugar levels.\n- **Healthy Fats**: Sources like fish rich in omega-3 fatty acids (salmon, sardines) and nuts may help reduce inflammation.\n- **Magnesium-Rich Foods**: Such as leafy greens, nuts, seeds, and whole grains, as magnesium deficiency has been linked to headaches.\n- **Regular Meals**: Eating regular, balanced meals can prevent blood sugar drops that could trigger headaches.\n\n### When to See a Doctor:\nIf your headaches persist, worsen, or are accompanied by other concerning symptoms (like neurological issues, loss of vision, or severe dizziness), it’s important to consult a healthcare professional. They can help identify any underlying conditions and tailor a treatment plan suitable for you.\n\n### Important Note:\nWhile this information may be helpful, it does not replace professional medical advice. Always consult with a healthcare provider for personalized recommendations."}
+{"response":"Frequent morning headaches accompanied by dizziness can have several potential causes, ranging from lifestyle factors to medical conditions. Some common causes include:\n\n- **Sleep issues:** Poor quality sleep, sleep apnea, or insufficient sleep can trigger headaches and dizziness in the morning.\n- **Dehydration:** Not drinking enough fluids can cause headaches.\n- **Low blood sugar:** Skipping meals or having low blood sugar overnight may lead to morning headaches.\n- **Medication side effects:** Certain medications or their withdrawal can cause headaches.\n- **Tension headaches or migraines:** These can present with morning symptoms.\n- **Blood pressure changes:** High or low blood pressure can cause headaches and dizziness.\n- **Sinus problems or allergies:** Congestion might cause morning headaches.\n- **Other medical conditions:** Such as anemia, vision problems, or neurological issues.\n\n**Lifestyle changes and management strategies:**\n- Ensure consistent, adequate, and quality sleep (7-9 hours per night) with a regular schedule.\n- Stay well hydrated throughout the day.\n- Avoid skipping meals and maintain balanced blood sugar levels.\n- Limit caffeine and alcohol intake.\n- Manage stress through relaxation techniques, exercise, or mindfulness.\n- Maintain good posture and take breaks if you work at a desk or computer.\n\n**Diet and headache reduction:**\nSome foods and nutrients may help reduce headache frequency:\n- Magnesium-rich foods: spinach, nuts, seeds, whole grains.\n- Riboflavin (Vitamin B2): found in eggs, dairy, lean meats.\n- Omega-3 fatty acids: fatty fish like salmon, flaxseeds.\n- Stay consistent with meals and avoid trigger foods (such as processed meats, aged cheese, artificial sweeteners, and excessive caffeine).\n\nBecause headaches with dizziness can sometimes indicate underlying health issues, especially if frequent or worsening, it's important to consult a healthcare professional for an accurate diagnosis and tailored treatment. They may recommend investigations or specific therapies if needed.\n\nThis information is general and not a substitute for personalized medical advice. If your symptoms are severe, sudden, or accompanied by other signs like vision changes, weakness, confusion, or persistent vomiting, seek medical attention promptly."}
 ********************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION provide_healthcare_response...
-Call ID: call_wzx3jTM1dg8CoKItC1V4AUk5
-Input arguments: {'response': 'Frequent headaches, especially when they occur in the morning, accompanied by dizziness can be concerning and may stem from a variety of causes. Here are some potential factors to consider along with preventive strategies and dietary suggestions:\n\n### Possible Causes:\n1. **Dehydration**: Not drinking enough water can lead to headaches. Dehydration can also cause dizziness.\n2. **Sleep Disorders**: Conditions like sleep apnea might lead to headaches upon waking, as they can interrupt normal sleep cycles.\n3. **Posture Issues**: Poor posture, especially during sleep (like sleeping on an improper pillow), can strain your neck and lead to tension headaches.\n4. **Stress and Anxiety**: These can manifest as tension headaches, which might be worse in the mornings if stress accumulates overnight.\n5. **Dietary Factors**: Certain foods (like those high in sugar or caffeine) can trigger headaches. Additionally, skipping meals can lead to headaches.\n6. **Medical Conditions**: Conditions such as migraines, cluster headaches, or even more serious issues like hypertension or neurological disorders could be contributing factors. \n\n### Suggested Lifestyle Changes:\n- **Stay Hydrated**: Aim to drink sufficient water throughout the day.\n- **Establish a Sleep Routine**: Ensure you get enough quality sleep. A consistent sleep schedule helps.\n- **Review Your Sleep Position**: Evaluate whether your pillow and mattress provide the right support for your neck and back.\n- **Manage Stress**: Incorporate relaxation techniques such as meditation, yoga, or deep-breathing exercises.\n- **Regular Physical Activity**: Regular exercise can help reduce headache frequency and overall stress.\n- **Identify Triggers**: Keep a headache diary to track when headaches occur, along with any associated factors like food intake, sleep patterns, and stress levels.\n\n### Dietary Considerations:\nCertain foods may help reduce the frequency and severity of headaches, including:\n- **Fruits and Vegetables**: Consuming a variety can provide hydration and valuable nutrients. Spinach, avocados, and bananas may be particularly beneficial.\n- **Whole Grains**: Foods like oats and brown rice can help maintain stable blood sugar levels.\n- **Healthy Fats**: Sources like fish rich in omega-3 fatty acids (salmon, sardines) and nuts may help reduce inflammation.\n- **Magnesium-Rich Foods**: Such as leafy greens, nuts, seeds, and whole grains, as magnesium deficiency has been linked to headaches.\n- **Regular Meals**: Eating regular, balanced meals can prevent blood sugar drops that could trigger headaches.\n\n### When to See a Doctor:\nIf your headaches persist, worsen, or are accompanied by other concerning symptoms (like neurological issues, loss of vision, or severe dizziness), it’s important to consult a healthcare professional. They can help identify any underlying conditions and tailor a treatment plan suitable for you.\n\n### Important Note:\nWhile this information may be helpful, it does not replace professional medical advice. Always consult with a healthcare provider for personalized recommendations.'}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_DpmQGTHXZXDN6jz3bnV6pIDC
+Input arguments: {'response': "Frequent morning headaches accompanied by dizziness can have several potential causes, ranging from lifestyle factors to medical conditions. Some common causes include:\n\n- **Sleep issues:** Poor quality sleep, sleep apnea, or insufficient sleep can trigger headaches and dizziness in the morning.\n- **Dehydration:** Not drinking enough fluids can cause headaches.\n- **Low blood sugar:** Skipping meals or having low blood sugar overnight may lead to morning headaches.\n- **Medication side effects:** Certain medications or their withdrawal can cause headaches.\n- **Tension headaches or migraines:** These can present with morning symptoms.\n- **Blood pressure changes:** High or low blood pressure can cause headaches and dizziness.\n- **Sinus problems or allergies:** Congestion might cause morning headaches.\n- **Other medical conditions:** Such as anemia, vision problems, or neurological issues.\n\n**Lifestyle changes and management strategies:**\n- Ensure consistent, adequate, and quality sleep (7-9 hours per night) with a regular schedule.\n- Stay well hydrated throughout the day.\n- Avoid skipping meals and maintain balanced blood sugar levels.\n- Limit caffeine and alcohol intake.\n- Manage stress through relaxation techniques, exercise, or mindfulness.\n- Maintain good posture and take breaks if you work at a desk or computer.\n\n**Diet and headache reduction:**\nSome foods and nutrients may help reduce headache frequency:\n- Magnesium-rich foods: spinach, nuts, seeds, whole grains.\n- Riboflavin (Vitamin B2): found in eggs, dairy, lean meats.\n- Omega-3 fatty acids: fatty fish like salmon, flaxseeds.\n- Stay consistent with meals and avoid trigger foods (such as processed meats, aged cheese, artificial sweeteners, and excessive caffeine).\n\nBecause headaches with dizziness can sometimes indicate underlying health issues, especially if frequent or worsening, it's important to consult a healthcare professional for an accurate diagnosis and tailored treatment. They may recommend investigations or specific therapies if needed.\n\nThis information is general and not a substitute for personalized medical advice. If your symptoms are severe, sudden, or accompanied by other signs like vision changes, weakness, confusion, or persistent vomiting, seek medical attention promptly."}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_wzx3jTM1dg8CoKItC1V4AUk5) *****
+***** Response from calling tool (call_DpmQGTHXZXDN6jz3bnV6pIDC) *****
 Healthcare specialist response provided.
 **********************************************************************
 
@@ -920,37 +870,35 @@ Next speaker: healthcare_specialist
 >>>>>>>> USING AUTO REPLY...
 healthcare_specialist (to chat_manager):
 
-Frequent headaches, especially when they occur in the morning, accompanied by dizziness can be concerning and may stem from a variety of causes. Here are some potential factors to consider along with preventive strategies and dietary suggestions:
+Frequent morning headaches accompanied by dizziness can have several potential causes, ranging from lifestyle factors to medical conditions. Some common causes include:
 
-### Possible Causes:
-1. **Dehydration**: Not drinking enough water can lead to headaches. Dehydration can also cause dizziness.
-2. **Sleep Disorders**: Conditions like sleep apnea might lead to headaches upon waking, as they can interrupt normal sleep cycles.
-3. **Posture Issues**: Poor posture, especially during sleep (like sleeping on an improper pillow), can strain your neck and lead to tension headaches.
-4. **Stress and Anxiety**: These can manifest as tension headaches, which might be worse in the mornings if stress accumulates overnight.
-5. **Dietary Factors**: Certain foods (like those high in sugar or caffeine) can trigger headaches. Additionally, skipping meals can lead to headaches.
-6. **Medical Conditions**: Conditions such as migraines, cluster headaches, or even more serious issues like hypertension or neurological disorders could be contributing factors.
+- **Sleep issues:** Poor quality sleep, sleep apnea, or insufficient sleep can trigger headaches and dizziness in the morning.
+- **Dehydration:** Not drinking enough fluids can cause headaches.
+- **Low blood sugar:** Skipping meals or having low blood sugar overnight may lead to morning headaches.
+- **Medication side effects:** Certain medications or their withdrawal can cause headaches.
+- **Tension headaches or migraines:** These can present with morning symptoms.
+- **Blood pressure changes:** High or low blood pressure can cause headaches and dizziness.
+- **Sinus problems or allergies:** Congestion might cause morning headaches.
+- **Other medical conditions:** Such as anemia, vision problems, or neurological issues.
 
-### Suggested Lifestyle Changes:
-- **Stay Hydrated**: Aim to drink sufficient water throughout the day.
-- **Establish a Sleep Routine**: Ensure you get enough quality sleep. A consistent sleep schedule helps.
-- **Review Your Sleep Position**: Evaluate whether your pillow and mattress provide the right support for your neck and back.
-- **Manage Stress**: Incorporate relaxation techniques such as meditation, yoga, or deep-breathing exercises.
-- **Regular Physical Activity**: Regular exercise can help reduce headache frequency and overall stress.
-- **Identify Triggers**: Keep a headache diary to track when headaches occur, along with any associated factors like food intake, sleep patterns, and stress levels.
+**Lifestyle changes and management strategies:**
+- Ensure consistent, adequate, and quality sleep (7-9 hours per night) with a regular schedule.
+- Stay well hydrated throughout the day.
+- Avoid skipping meals and maintain balanced blood sugar levels.
+- Limit caffeine and alcohol intake.
+- Manage stress through relaxation techniques, exercise, or mindfulness.
+- Maintain good posture and take breaks if you work at a desk or computer.
 
-### Dietary Considerations:
-Certain foods may help reduce the frequency and severity of headaches, including:
-- **Fruits and Vegetables**: Consuming a variety can provide hydration and valuable nutrients. Spinach, avocados, and bananas may be particularly beneficial.
-- **Whole Grains**: Foods like oats and brown rice can help maintain stable blood sugar levels.
-- **Healthy Fats**: Sources like fish rich in omega-3 fatty acids (salmon, sardines) and nuts may help reduce inflammation.
-- **Magnesium-Rich Foods**: Such as leafy greens, nuts, seeds, and whole grains, as magnesium deficiency has been linked to headaches.
-- **Regular Meals**: Eating regular, balanced meals can prevent blood sugar drops that could trigger headaches.
+**Diet and headache reduction:**
+Some foods and nutrients may help reduce headache frequency:
+- Magnesium-rich foods: spinach, nuts, seeds, whole grains.
+- Riboflavin (Vitamin B2): found in eggs, dairy, lean meats.
+- Omega-3 fatty acids: fatty fish like salmon, flaxseeds.
+- Stay consistent with meals and avoid trigger foods (such as processed meats, aged cheese, artificial sweeteners, and excessive caffeine).
 
-### When to See a Doctor:
-If your headaches persist, worsen, or are accompanied by other concerning symptoms (like neurological issues, loss of vision, or severe dizziness), it’s important to consult a healthcare professional. They can help identify any underlying conditions and tailor a treatment plan suitable for you.
+Because headaches with dizziness can sometimes indicate underlying health issues, especially if frequent or worsening, it's important to consult a healthcare professional for an accurate diagnosis and tailored treatment. They may recommend investigations or specific therapies if needed.
 
-### Important Note:
-While this information may be helpful, it does not replace professional medical advice. Always consult with a healthcare provider for personalized recommendations.
+This information is general and not a substitute for personalized medical advice. If your symptoms are severe, sudden, or accompanied by other signs like vision changes, weakness, confusion, or persistent vomiting, seek medical attention promptly.
 
 --------------------------------------------------------------------------------
 
@@ -960,39 +908,7 @@ Next speaker: router_agent
 >>>>>>>> USING AUTO REPLY...
 router_agent (to chat_manager):
 
-User Question: I've been experiencing frequent headaches, particularly in the morning, along with some dizziness. What might be causing this and what lifestyle changes or treatments should I consider? Are there specific foods that could help reduce headache frequency?
-
-Answer: Frequent headaches, especially when they occur in the morning, accompanied by dizziness can be concerning and may stem from a variety of causes. Here are some potential factors to consider along with preventive strategies and dietary suggestions:
-
-### Possible Causes:
-1. **Dehydration**: Not drinking enough water can lead to headaches. Dehydration can also cause dizziness.
-2. **Sleep Disorders**: Conditions like sleep apnea might lead to headaches upon waking, as they can interrupt normal sleep cycles.
-3. **Posture Issues**: Poor posture, especially during sleep (like sleeping on an improper pillow), can strain your neck and lead to tension headaches.
-4. **Stress and Anxiety**: These can manifest as tension headaches, which might be worse in the mornings if stress accumulates overnight.
-5. **Dietary Factors**: Certain foods (like those high in sugar or caffeine) can trigger headaches. Additionally, skipping meals can lead to headaches.
-6. **Medical Conditions**: Conditions such as migraines, cluster headaches, or even more serious issues like hypertension or neurological disorders could be contributing factors.
-
-### Suggested Lifestyle Changes:
-- **Stay Hydrated**: Aim to drink sufficient water throughout the day.
-- **Establish a Sleep Routine**: Ensure you get enough quality sleep. A consistent sleep schedule helps.
-- **Review Your Sleep Position**: Evaluate whether your pillow and mattress provide the right support for your neck and back.
-- **Manage Stress**: Incorporate relaxation techniques such as meditation, yoga, or deep-breathing exercises.
-- **Regular Physical Activity**: Regular exercise can help reduce headache frequency and overall stress.
-- **Identify Triggers**: Keep a headache diary to track when headaches occur, along with any associated factors like food intake, sleep patterns, and stress levels.
-
-### Dietary Considerations:
-Certain foods may help reduce the frequency and severity of headaches, including:
-- **Fruits and Vegetables**: Consuming a variety can provide hydration and valuable nutrients. Spinach, avocados, and bananas may be particularly beneficial.
-- **Whole Grains**: Foods like oats and brown rice can help maintain stable blood sugar levels.
-- **Healthy Fats**: Sources like fish rich in omega-3 fatty acids (salmon, sardines) and nuts may help reduce inflammation.
-- **Magnesium-Rich Foods**: Such as leafy greens, nuts, seeds, and whole grains, as magnesium deficiency has been linked to headaches.
-- **Regular Meals**: Eating regular, balanced meals can prevent blood sugar drops that could trigger headaches.
-
-### When to See a Doctor:
-If your headaches persist, worsen, or are accompanied by other concerning symptoms (like neurological issues, loss of vision, or severe dizziness), it’s important to consult a healthcare professional. They can help identify any underlying conditions and tailor a treatment plan suitable for you.
-
-### Important Note:
-While this information may be helpful, it does not replace professional medical advice. Always consult with a healthcare provider for personalized recommendations.
+You asked about frequent morning headaches with dizziness, possible causes, lifestyle changes, treatments, and specific foods to help reduce headache frequency. The potential causes include sleep issues, dehydration, low blood sugar, medication effects, tension headaches or migraines, blood pressure changes, sinus problems, or other medical conditions. Lifestyle changes to consider are improving sleep quality and regularity, staying hydrated, avoiding meal skipping, limiting caffeine and alcohol, managing stress, and maintaining good posture. Foods that may help include magnesium-rich foods (spinach, nuts, seeds), riboflavin sources (eggs, dairy, lean meats), and omega-3 fatty acids (fatty fish, flaxseeds), while avoiding known trigger foods is also advised. Because these symptoms might indicate underlying health issues, seeing a healthcare provider for diagnosis and personalized advice is important, especially if symptoms worsen or are accompanied by other concerning signs. If you need more detailed guidance or have other questions, feel free to ask!
 
 --------------------------------------------------------------------------------
 
@@ -1000,64 +916,70 @@ Next speaker: user
 
 Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
 
+>>>>>>>> TERMINATING RUN (d9f918c8-2f32-45cf-9849-da39d1404a5b): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (cb6d7abb-890b-45a7-83bc-8e7d8e49a9ea): No reply generated
+
 ===== QUESTION-RESPONSE PAIRS =====
 
 1. Domain: General
-Question: Sorry, I meant the benefits of being an Australian Citizen.
-Response: Being an Australian citizen comes with a range of benefits that cover social, political, and economic aspects. Here are some key advantages:
+Question: the benefits of being an Australian Citizen
+Response: Being an Australian citizen comes with a variety of benefits and rights that can enhance your personal, social, and legal standing in Australia. Here are some key benefits of Australian citizenship:
 
-1. **Rights and Freedoms**: Australian citizens enjoy specific rights under the law, including the right to vote in federal, state, and local elections. They also have the right to stand for election and hold public office.
+1. **Right to Vote and Stand for Office**: Citizens have the democratic right to vote in federal and state elections and referendums, and they can stand for election to parliament.
 
-2. **Access to Services**: Citizens have access to various government services and programs, such as healthcare through Medicare, which provides free or subsidized medical services. Citizens benefit from educational resources, including government-funded universities and training programs.
+2. **Access to Passport and Consular Assistance**: Australian citizens can apply for an Australian passport, which is highly respected globally and allows visa-free or visa-on-arrival travel to many countries. Citizens can also receive consular assistance from Australian embassies while overseas.
 
-3. **Social Security and Welfare**: Australian citizens are eligible for various social security benefits, such as unemployment benefits, family payments, pensions for retirees, and disability support, further promoting financial security and wellbeing.
+3. **Unrestricted Work and Live Rights**: Citizenship grants the right to live and work anywhere in Australia without restrictions.
 
-4. **Consular Protection**: Australian citizens can receive consular support from Australian embassies and consulates while traveling or living abroad, providing assistance in emergencies, legal situations, or if they encounter issues with local authorities.
+4. **Eligibility for Government Jobs**: Some government positions and security-related jobs require Australian citizenship.
 
-5. **Freedom of Travel**: Being an Australian citizen allows for easier entry into many countries without requiring a visa and access to Australian passports, which are considered strong for international travel.
+5. **Social Security and Government Benefits**: Citizens are eligible for various government payments and benefits, including healthcare through Medicare, social security payments, and pensions.
 
-6. **Participation in Democracy**: Citizens can actively participate in shaping the country's future, including influencing legislation, policies, and community development. This engagement extends to local councils and community services.
+6. **Access to Education**: Citizens can access certain education benefits like subsidized university fees and student loans (e.g., HECS-HELP).
 
-7. **Pathway to Non-Citizen Family**: Citizens can sponsor family members for resident visas, providing a pathway for family reunification.
+7. **Protection under Australian Law**: Citizens receive full protection under Australian law and the Australian Constitution.
 
-8. **Civic Responsibility and Identity**: Citizenship fosters a sense of belonging and civic responsibility, allowing individuals to contribute to their community and society.
+8. **Ability to Pass Citizenship to Children**: Children born overseas to Australian citizens may automatically acquire citizenship.
 
-In summary, becoming an Australian citizen opens the door to a wide array of benefits that enhance quality of life and provide individuals with the rights and tools to fully participate in Australian society.
+9. **Freedom from Deportation**: Unlike permanent residents, Australian citizens cannot be deported from Australia.
+
+10. **Sense of Belonging and National Identity**: Citizenship often provides a stronger sense of belonging and identity within Australia.
+
+If you have specific aspects you want to explore further or need information about the citizenship application process, feel free to ask!
 
 
 2. Domain: Healthcare
 Question: I've been experiencing frequent headaches, particularly in the morning, along with some dizziness. What might be causing this and what lifestyle changes or treatments should I consider? Are there specific foods that could help reduce headache frequency?
-Response: Frequent headaches, especially when they occur in the morning, accompanied by dizziness can be concerning and may stem from a variety of causes. Here are some potential factors to consider along with preventive strategies and dietary suggestions:
+Response: Frequent morning headaches accompanied by dizziness can have several potential causes, ranging from lifestyle factors to medical conditions. Some common causes include:
 
-### Possible Causes:
-1. **Dehydration**: Not drinking enough water can lead to headaches. Dehydration can also cause dizziness.
-2. **Sleep Disorders**: Conditions like sleep apnea might lead to headaches upon waking, as they can interrupt normal sleep cycles.
-3. **Posture Issues**: Poor posture, especially during sleep (like sleeping on an improper pillow), can strain your neck and lead to tension headaches.
-4. **Stress and Anxiety**: These can manifest as tension headaches, which might be worse in the mornings if stress accumulates overnight.
-5. **Dietary Factors**: Certain foods (like those high in sugar or caffeine) can trigger headaches. Additionally, skipping meals can lead to headaches.
-6. **Medical Conditions**: Conditions such as migraines, cluster headaches, or even more serious issues like hypertension or neurological disorders could be contributing factors.
+- **Sleep issues:** Poor quality sleep, sleep apnea, or insufficient sleep can trigger headaches and dizziness in the morning.
+- **Dehydration:** Not drinking enough fluids can cause headaches.
+- **Low blood sugar:** Skipping meals or having low blood sugar overnight may lead to morning headaches.
+- **Medication side effects:** Certain medications or their withdrawal can cause headaches.
+- **Tension headaches or migraines:** These can present with morning symptoms.
+- **Blood pressure changes:** High or low blood pressure can cause headaches and dizziness.
+- **Sinus problems or allergies:** Congestion might cause morning headaches.
+- **Other medical conditions:** Such as anemia, vision problems, or neurological issues.
 
-### Suggested Lifestyle Changes:
-- **Stay Hydrated**: Aim to drink sufficient water throughout the day.
-- **Establish a Sleep Routine**: Ensure you get enough quality sleep. A consistent sleep schedule helps.
-- **Review Your Sleep Position**: Evaluate whether your pillow and mattress provide the right support for your neck and back.
-- **Manage Stress**: Incorporate relaxation techniques such as meditation, yoga, or deep-breathing exercises.
-- **Regular Physical Activity**: Regular exercise can help reduce headache frequency and overall stress.
-- **Identify Triggers**: Keep a headache diary to track when headaches occur, along with any associated factors like food intake, sleep patterns, and stress levels.
+**Lifestyle changes and management strategies:**
+- Ensure consistent, adequate, and quality sleep (7-9 hours per night) with a regular schedule.
+- Stay well hydrated throughout the day.
+- Avoid skipping meals and maintain balanced blood sugar levels.
+- Limit caffeine and alcohol intake.
+- Manage stress through relaxation techniques, exercise, or mindfulness.
+- Maintain good posture and take breaks if you work at a desk or computer.
 
-### Dietary Considerations:
-Certain foods may help reduce the frequency and severity of headaches, including:
-- **Fruits and Vegetables**: Consuming a variety can provide hydration and valuable nutrients. Spinach, avocados, and bananas may be particularly beneficial.
-- **Whole Grains**: Foods like oats and brown rice can help maintain stable blood sugar levels.
-- **Healthy Fats**: Sources like fish rich in omega-3 fatty acids (salmon, sardines) and nuts may help reduce inflammation.
-- **Magnesium-Rich Foods**: Such as leafy greens, nuts, seeds, and whole grains, as magnesium deficiency has been linked to headaches.
-- **Regular Meals**: Eating regular, balanced meals can prevent blood sugar drops that could trigger headaches.
+**Diet and headache reduction:**
+Some foods and nutrients may help reduce headache frequency:
+- Magnesium-rich foods: spinach, nuts, seeds, whole grains.
+- Riboflavin (Vitamin B2): found in eggs, dairy, lean meats.
+- Omega-3 fatty acids: fatty fish like salmon, flaxseeds.
+- Stay consistent with meals and avoid trigger foods (such as processed meats, aged cheese, artificial sweeteners, and excessive caffeine).
 
-### When to See a Doctor:
-If your headaches persist, worsen, or are accompanied by other concerning symptoms (like neurological issues, loss of vision, or severe dizziness), it’s important to consult a healthcare professional. They can help identify any underlying conditions and tailor a treatment plan suitable for you.
+Because headaches with dizziness can sometimes indicate underlying health issues, especially if frequent or worsening, it's important to consult a healthcare professional for an accurate diagnosis and tailored treatment. They may recommend investigations or specific therapies if needed.
 
-### Important Note:
-While this information may be helpful, it does not replace professional medical advice. Always consult with a healthcare provider for personalized recommendations.
+This information is general and not a substitute for personalized medical advice. If your symptoms are severe, sudden, or accompanied by other signs like vision changes, weakness, confusion, or persistent vomiting, seek medical attention promptly.
 
 
 
@@ -1081,19 +1003,25 @@ General Knowledge Specialist: 1
 
 user
 router_agent
+_Group_Tool_Executor
+router_agent
+_Group_Tool_Executor
+user
+router_agent
+_Group_Tool_Executor
+router_agent
+_Group_Tool_Executor
+general_specialist
+_Group_Tool_Executor
+general_specialist
 router_agent
 user
 router_agent
+_Group_Tool_Executor
 router_agent
-router_agent
-general_specialist
-general_specialist
-router_agent
-user
-router_agent
-router_agent
-router_agent
+_Group_Tool_Executor
 healthcare_specialist
+_Group_Tool_Executor
 healthcare_specialist
 router_agent
 ```

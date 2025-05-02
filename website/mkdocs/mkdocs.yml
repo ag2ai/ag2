@@ -77,6 +77,11 @@ plugins:
       redirect_maps:
         'docs/home/home.md': 'docs/quick-start.md'
         'docs/home/quick-start.md': 'docs/quick-start.md'
+        'docs/home.md': 'docs/quick-start.md'
+        'docs/home/user.md': 'docs/quick-start.md'
+        'docs/user-guide/quick-start.md': 'docs/quick-start.md'
+        'docs/user-guide/models.md': 'docs/user-guide/models/amazon-bedrock.md'
+        'docs/user-guide/advanced-concepts/resuming-group-chat.md': 'docs/user-guide/advanced-concepts/orchestration/group-chat/introduction.md'
   - glightbox:                   # image zoom
       manual: true
   - macros:                      # Jinja templates

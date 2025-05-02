@@ -5,11 +5,13 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ....formatting_utils import colored
-from ...conversable_agent import ConversableAgent
 from .transforms import MessageTransform
+
+if TYPE_CHECKING:
+    from ...conversable_agent import ConversableAgent
 
 
 class TransformMessages:
@@ -55,7 +57,7 @@ class TransformMessages:
         self._transforms = transforms
         self._verbose = verbose
 
-    def add_to_agent(self, agent: ConversableAgent):
+    def add_to_agent(self, agent: "ConversableAgent"):
         """Adds the message transformations capability to the specified ConversableAgent.
 
         This function performs the following modifications to the agent:

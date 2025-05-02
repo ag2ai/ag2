@@ -103,15 +103,11 @@ from pydantic import BaseModel, Field
 from autogen import (
     ConversableAgent,
     UserProxyAgent,
-    register_hand_off,
-    OnContextCondition,
-    AfterWork,
-    AfterWorkOption,
-    initiate_swarm_chat,
-    ContextExpression,
-    SwarmResult,
     LLMConfig,
 )
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group import AgentTarget, AgentNameTarget, OnContextCondition, ContextExpression, ExpressionContextCondition, ReplyResult, ContextVariables, RevertToUserTarget
 
 # E-commerce order processing pipeline
 # Each agent handles a specific stage of order processing in sequence
@@ -120,7 +116,7 @@ from autogen import (
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False, cache_seed=None)
 
 # Shared context for tracking order processing state
-shared_context = {
+shared_context = ContextVariables(data={
     # Pipeline state
     "pipeline_started": False,
     "pipeline_completed": False,
@@ -144,7 +140,7 @@ shared_context = {
     "has_error": False,
     "error_message": "",
     "error_stage": ""
-}
+})
 
 # Pydantic models for pipeline stages
 class ValidationResult(BaseModel):
@@ -173,7 +169,7 @@ class NotificationResult(BaseModel):
     notification_content: str = Field(..., description="Content of the notification message")
 
 # Pipeline stage functions
-def start_order_processing(order_json: str, context_variables: dict) -> SwarmResult:
+def start_order_processing(order_json: str, context_variables: ContextVariables) -> ReplyResult:
     """Start the order processing pipeline with provided order details JSON string"""
     context_variables["pipeline_started"] = True
 
@@ -182,27 +178,27 @@ def start_order_processing(order_json: str, context_variables: dict) -> SwarmRes
         order_details = json.loads(order_json)
         context_variables["order_details"] = order_details
 
-        return SwarmResult(
-            values=f"Order processing started for Order #{order_details.get('order_id', 'Unknown')}",
+        return ReplyResult(
+            message=f"Order processing started for Order #{order_details.get('order_id', 'Unknown')}",
             context_variables=context_variables,
-            agent="validation_agent"
+            target=AgentNameTarget("validation_agent")
         )
     except json.JSONDecodeError:
         context_variables["has_error"] = True
         context_variables["error_message"] = "Invalid order JSON format"
         context_variables["error_stage"] = "entry"
 
-        return SwarmResult(
-            values="Failed to process order: Invalid JSON format",
+        return ReplyResult(
+            message="Failed to process order: Invalid JSON format",
             context_variables=context_variables,
-            agent=AfterWorkOption.REVERT_TO_USER
+            target=RevertToUserTarget()
         )
 
-def run_validation_check(context_variables: dict) -> str:
+def run_validation_check(context_variables: ContextVariables) -> str:
     """Run the validation check for the order"""
     return "Validation check completed successfully."
 
-def complete_validation(validation_result: ValidationResult, context_variables: dict) -> SwarmResult:
+def complete_validation(validation_result: ValidationResult, context_variables: ContextVariables) -> ReplyResult:
     """Complete the validation stage and pass to inventory check"""
     # Store the validation result in context variables
     context_variables["validation_results"] = validation_result.model_dump()
@@ -214,23 +210,23 @@ def complete_validation(validation_result: ValidationResult, context_variables: 
         context_variables["error_message"] = validation_result.error_message or "Validation failed"
         context_variables["error_stage"] = "validation"
 
-        return SwarmResult(
-            values=f"Validation failed: {validation_result.error_message or 'Unknown error'}",
+        return ReplyResult(
+            message=f"Validation failed: {validation_result.error_message or 'Unknown error'}",
             context_variables=context_variables,
-            agent=AfterWorkOption.REVERT_TO_USER
+            target=RevertToUserTarget
         )
 
-    return SwarmResult(
-        values="Order validated successfully. Proceeding to inventory check.",
+    return ReplyResult(
+        message="Order validated successfully. Proceeding to inventory check.",
         context_variables=context_variables,
-        agent="inventory_agent"
+        target=AgentNameTarget("inventory_agent")
     )
 
-def run_inventory_check(context_variables: dict) -> str:
+def run_inventory_check(context_variables: ContextVariables) -> str:
     """Run the inventory check for the order"""
     return "Inventory check completed successfully."
 
-def complete_inventory_check(inventory_result: InventoryResult, context_variables: dict) -> SwarmResult:
+def complete_inventory_check(inventory_result: InventoryResult, context_variables: ContextVariables) -> ReplyResult:
     """Complete the inventory check stage and pass to payment processing"""
     # Store the inventory result in context variables
     context_variables["inventory_results"] = inventory_result.model_dump()
@@ -242,23 +238,23 @@ def complete_inventory_check(inventory_result: InventoryResult, context_variable
         context_variables["error_message"] = inventory_result.error_message or "Inventory check failed"
         context_variables["error_stage"] = "inventory"
 
-        return SwarmResult(
-            values=f"Inventory check failed: {inventory_result.error_message or 'Unknown error'}",
+        return ReplyResult(
+            message=f"Inventory check failed: {inventory_result.error_message or 'Unknown error'}",
             context_variables=context_variables,
-            agent=AfterWorkOption.REVERT_TO_USER
+            target=RevertToUserTarget()
         )
 
-    return SwarmResult(
-        values="Inventory check completed successfully. Proceeding to payment processing.",
+    return ReplyResult(
+        message="Inventory check completed successfully. Proceeding to payment processing.",
         context_variables=context_variables,
-        agent="payment_agent"
+        target=AgentNameTarget("payment_agent")
     )
 
-def check_payment_info(context_variables: dict) -> str:
+def check_payment_info(context_variables: ContextVariables) -> str:
     """Check the payment information for the order"""
     return "Payment information verified successfully."
 
-def complete_payment_processing(payment_result: PaymentResult, context_variables: dict) -> SwarmResult:
+def complete_payment_processing(payment_result: PaymentResult, context_variables: ContextVariables) -> ReplyResult:
     """Complete the payment processing stage and pass to fulfillment"""
     # Store the payment result in context variables
     context_variables["payment_results"] = payment_result.model_dump()
@@ -270,41 +266,41 @@ def complete_payment_processing(payment_result: PaymentResult, context_variables
         context_variables["error_message"] = payment_result.error_message or "Payment processing failed"
         context_variables["error_stage"] = "payment"
 
-        return SwarmResult(
-            values=f"Payment processing failed: {payment_result.error_message or 'Unknown error'}",
+        return ReplyResult(
+            message=f"Payment processing failed: {payment_result.error_message or 'Unknown error'}",
             context_variables=context_variables,
-            agent=AfterWorkOption.REVERT_TO_USER
+            target=RevertToUserTarget()
         )
 
-    return SwarmResult(
-        values="Payment processed successfully. Proceeding to order fulfillment.",
+    return ReplyResult(
+        message="Payment processed successfully. Proceeding to order fulfillment.",
         context_variables=context_variables,
-        agent="fulfillment_agent"
+        target=AgentNameTarget("fulfillment_agent")
     )
 
-def complete_fulfillment(fulfillment_result: FulfillmentResult, context_variables: dict) -> SwarmResult:
+def complete_fulfillment(fulfillment_result: FulfillmentResult, context_variables: ContextVariables) -> ReplyResult:
     """Complete the fulfillment stage and pass to notification"""
     # Store the fulfillment result in context variables
     context_variables["fulfillment_results"] = fulfillment_result.model_dump()
     context_variables["fulfillment_completed"] = True
 
-    return SwarmResult(
-        values="Order fulfillment completed. Proceeding to customer notification.",
+    return ReplyResult(
+        message="Order fulfillment completed. Proceeding to customer notification.",
         context_variables=context_variables,
-        agent="notification_agent"
+        target=AgentNameTarget("notification_agent")
     )
 
-def complete_notification(notification_result: NotificationResult, context_variables: dict) -> SwarmResult:
+def complete_notification(notification_result: NotificationResult, context_variables: ContextVariables) -> ReplyResult:
     """Complete the notification stage and finish the pipeline"""
     # Store the notification result in context variables
     context_variables["notification_results"] = notification_result.model_dump()
     context_variables["notification_completed"] = True
     context_variables["pipeline_completed"] = True
 
-    return SwarmResult(
-        values="Customer notification sent. Order processing completed successfully.",
+    return ReplyResult(
+        message="Customer notification sent. Order processing completed successfully.",
         context_variables=context_variables,
-        agent=AfterWorkOption.REVERT_TO_USER
+        target=RevertToUserTarget()
     )
 
 # Pipeline agents
@@ -430,61 +426,33 @@ user = UserProxyAgent(
 
 # Register handoffs for the pipeline
 # Entry agent starts the pipeline
-register_hand_off(
-    agent=entry_agent,
-    hand_to=[
-        OnContextCondition(
-            target=validation_agent,
-            condition=ContextExpression("${pipeline_started} == True and ${validation_completed} == False")
-        ),
-        AfterWork(AfterWorkOption.REVERT_TO_USER)
-    ]
+entry_agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(validation_agent),
+        condition=ExpressionContextCondition(ContextExpression("${pipeline_started} == True and ${validation_completed} == False"))
+    ),
 )
+entry_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Validation agent passes to Inventory agent if validation succeeds
-register_hand_off(
-    agent=validation_agent,
-    hand_to=[
-        AfterWork(agent=AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+validation_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Inventory agent passes to Payment agent if inventory check succeeds
-register_hand_off(
-    agent=inventory_agent,
-    hand_to=[
-        AfterWork(agent=AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+inventory_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Payment agent passes to Fulfillment agent if payment succeeds
-register_hand_off(
-    agent=payment_agent,
-    hand_to=[
-        AfterWork(agent=AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+payment_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Fulfillment agent passes to Notification agent
-register_hand_off(
-    agent=fulfillment_agent,
-    hand_to=[
-        AfterWork(agent=notification_agent)
-    ]
-)
+fulfillment_agent.handoffs.set_after_work(AgentTarget(notification_agent))
 
 # Notification agent finishes the pipeline and returns to user
-register_hand_off(
-    agent=notification_agent,
-    hand_to=[
-        AfterWork(AfterWorkOption.REVERT_TO_USER)
-    ]
-)
+notification_agent.handoffs.set_after_work(RevertToUserTarget())
 
 # Run the pipeline
-def run_pipeline_pattern_swarm():
-    """Run the pipeline pattern swarm for e-commerce order processing"""
-    print("Initiating Pipeline Pattern Swarm for E-commerce Order Processing...")
+def run_pipeline_pattern():
+    """Run the pipeline pattern for e-commerce order processing"""
+    print("Initiating Pipeline Pattern for E-commerce Order Processing...")
 
     # Sample order to process
     sample_order = {
@@ -536,7 +504,7 @@ def run_pipeline_pattern_swarm():
 
     sample_order_json = json.dumps(sample_order)
 
-    chat_result, final_context, last_agent = initiate_swarm_chat(
+    agent_pattern = DefaultPattern(
         initial_agent=entry_agent,
         agents=[
             entry_agent,
@@ -546,9 +514,13 @@ def run_pipeline_pattern_swarm():
             fulfillment_agent,
             notification_agent
         ],
-        messages=f"Please process this order through the pipeline:\n\n{sample_order_json}",
-        context_variables=shared_context,
         user_agent=user,
+        context_variables=shared_context,
+    )
+
+    chat_result, final_context, last_agent = initiate_group_chat(
+        pattern=agent_pattern,
+        messages=f"Please process this order through the pipeline:\n\n{sample_order_json}",
         max_rounds=30,
     )
 
@@ -575,7 +547,7 @@ def run_pipeline_pattern_swarm():
 
         print("\n\n===== SPEAKER ORDER =====\n")
         for message in chat_result.chat_history:
-            if "name" in message and message["name"] != "_Swarm_Tool_Executor":
+            if "name" in message and message["name"] != "_Group_Tool_Executor":
                 print(f"{message['name']}")
     else:
         print("Order processing did not complete successfully.")
@@ -583,12 +555,13 @@ def run_pipeline_pattern_swarm():
             print(f"Error during {final_context['error_stage']} stage: {final_context['error_message']}")
 
 if __name__ == "__main__":
-    run_pipeline_pattern_swarm()
+    run_pipeline_pattern()
 ```
 
 ## Output
 
 ```console
+Initiating Pipeline Pattern for E-commerce Order Processing...
 user (to chat_manager):
 
 Please process this order through the pipeline:
@@ -603,22 +576,22 @@ Next speaker: entry_agent
 >>>>>>>> USING AUTO REPLY...
 entry_agent (to chat_manager):
 
-***** Suggested tool call (call_UgUYT2cfybFpdWMvnkTI5HUJ): start_order_processing *****
+***** Suggested tool call (call_lRGPvXdVtnqeQ5ncz18bNzNF): start_order_processing *****
 Arguments:
 {"order_json":"{\"order_id\": \"ORD-12345\", \"customer\": {\"id\": \"CUST-789\", \"name\": \"Jane Smith\", \"email\": \"jane.smith@example.com\", \"phone\": \"555-123-4567\", \"shipping_address\": {\"street\": \"123 Main St\", \"city\": \"Anytown\", \"state\": \"CA\", \"zip\": \"90210\", \"country\": \"USA\"}, \"billing_address\": {\"street\": \"123 Main St\", \"city\": \"Anytown\", \"state\": \"CA\", \"zip\": \"90210\", \"country\": \"USA\"}}, \"order_items\": [{\"item_id\": \"PROD-001\", \"name\": \"Smartphone XYZ\", \"quantity\": 1, \"price\": 699.99}, {\"item_id\": \"PROD-042\", \"name\": \"Phone Case\", \"quantity\": 2, \"price\": 24.99}], \"shipping_method\": \"express\", \"payment_info\": {\"method\": \"credit_card\", \"card_last_four\": \"4242\", \"amount\": 749.97, \"currency\": \"USD\"}, \"promocode\": \"SUMMER10\", \"order_date\": \"2025-03-08T14:30:00Z\"}"}
 ***************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION start_order_processing...
-Call ID: call_UgUYT2cfybFpdWMvnkTI5HUJ
+Call ID: call_lRGPvXdVtnqeQ5ncz18bNzNF
 Input arguments: {'order_json': '{"order_id": "ORD-12345", "customer": {"id": "CUST-789", "name": "Jane Smith", "email": "jane.smith@example.com", "phone": "555-123-4567", "shipping_address": {"street": "123 Main St", "city": "Anytown", "state": "CA", "zip": "90210", "country": "USA"}, "billing_address": {"street": "123 Main St", "city": "Anytown", "state": "CA", "zip": "90210", "country": "USA"}}, "order_items": [{"item_id": "PROD-001", "name": "Smartphone XYZ", "quantity": 1, "price": 699.99}, {"item_id": "PROD-042", "name": "Phone Case", "quantity": 2, "price": 24.99}], "shipping_method": "express", "payment_info": {"method": "credit_card", "card_last_four": "4242", "amount": 749.97, "currency": "USD"}, "promocode": "SUMMER10", "order_date": "2025-03-08T14:30:00Z"}'}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_UgUYT2cfybFpdWMvnkTI5HUJ) *****
+***** Response from calling tool (call_lRGPvXdVtnqeQ5ncz18bNzNF) *****
 Order processing started for Order #ORD-12345
 **********************************************************************
 
@@ -630,22 +603,22 @@ Next speaker: validation_agent
 >>>>>>>> USING AUTO REPLY...
 validation_agent (to chat_manager):
 
-***** Suggested tool call (call_WrKYbeMPXbqhScrSjeSKSMA3): run_validation_check *****
+***** Suggested tool call (call_G9hvnRUPVCIDuY08c1WOc16l): run_validation_check *****
 Arguments:
 {}
 *************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION run_validation_check...
-Call ID: call_WrKYbeMPXbqhScrSjeSKSMA3
+Call ID: call_G9hvnRUPVCIDuY08c1WOc16l
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_WrKYbeMPXbqhScrSjeSKSMA3) *****
+***** Response from calling tool (call_G9hvnRUPVCIDuY08c1WOc16l) *****
 Validation check completed successfully.
 **********************************************************************
 
@@ -657,22 +630,22 @@ Next speaker: validation_agent
 >>>>>>>> USING AUTO REPLY...
 validation_agent (to chat_manager):
 
-***** Suggested tool call (call_felSnjY5uJYWxxCZbAqjMi8E): complete_validation *****
+***** Suggested tool call (call_x7SK1809Lag1rduuvbe7158e): complete_validation *****
 Arguments:
 {"validation_result":{"is_valid":true}}
 ************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_validation...
-Call ID: call_felSnjY5uJYWxxCZbAqjMi8E
+Call ID: call_x7SK1809Lag1rduuvbe7158e
 Input arguments: {'validation_result': {'is_valid': True}}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_felSnjY5uJYWxxCZbAqjMi8E) *****
+***** Response from calling tool (call_x7SK1809Lag1rduuvbe7158e) *****
 Order validated successfully. Proceeding to inventory check.
 **********************************************************************
 
@@ -684,22 +657,22 @@ Next speaker: inventory_agent
 >>>>>>>> USING AUTO REPLY...
 inventory_agent (to chat_manager):
 
-***** Suggested tool call (call_63Zh4QwzRiD2ZKRquFEkgjCX): run_inventory_check *****
+***** Suggested tool call (call_gVZK493aZUjdyqqRXHTygbQc): run_inventory_check *****
 Arguments:
 {}
 ************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION run_inventory_check...
-Call ID: call_63Zh4QwzRiD2ZKRquFEkgjCX
+Call ID: call_gVZK493aZUjdyqqRXHTygbQc
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_63Zh4QwzRiD2ZKRquFEkgjCX) *****
+***** Response from calling tool (call_gVZK493aZUjdyqqRXHTygbQc) *****
 Inventory check completed successfully.
 **********************************************************************
 
@@ -711,22 +684,22 @@ Next speaker: inventory_agent
 >>>>>>>> USING AUTO REPLY...
 inventory_agent (to chat_manager):
 
-***** Suggested tool call (call_8cS8CfDLNMLm2DoRAXPB1ZK5): complete_inventory_check *****
+***** Suggested tool call (call_zgcR96Y0mAxPjQD1XA0cX7Bl): complete_inventory_check *****
 Arguments:
-{"inventory_result":{"items_available":true,"reserved_items":[{"item_id":"PROD-001","name":"Smartphone XYZ","quantity":1},{"item_id":"PROD-042","name":"Phone Case","quantity":2}]}}
+{"inventory_result":{"items_available":true,"reserved_items":[{"item_id":"PROD-001","quantity":1},{"item_id":"PROD-042","quantity":2}]}}
 *****************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_inventory_check...
-Call ID: call_8cS8CfDLNMLm2DoRAXPB1ZK5
-Input arguments: {'inventory_result': {'items_available': True, 'reserved_items': [{'item_id': 'PROD-001', 'name': 'Smartphone XYZ', 'quantity': 1}, {'item_id': 'PROD-042', 'name': 'Phone Case', 'quantity': 2}]}}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_zgcR96Y0mAxPjQD1XA0cX7Bl
+Input arguments: {'inventory_result': {'items_available': True, 'reserved_items': [{'item_id': 'PROD-001', 'quantity': 1}, {'item_id': 'PROD-042', 'quantity': 2}]}}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_8cS8CfDLNMLm2DoRAXPB1ZK5) *****
+***** Response from calling tool (call_zgcR96Y0mAxPjQD1XA0cX7Bl) *****
 Inventory check completed successfully. Proceeding to payment processing.
 **********************************************************************
 
@@ -738,22 +711,22 @@ Next speaker: payment_agent
 >>>>>>>> USING AUTO REPLY...
 payment_agent (to chat_manager):
 
-***** Suggested tool call (call_3WgnOQZYa1s53GyWBXOylxgx): check_payment_info *****
+***** Suggested tool call (call_Ug9Bsjf7I2i8BPD4ej3ifonm): check_payment_info *****
 Arguments:
 {}
 ***********************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION check_payment_info...
-Call ID: call_3WgnOQZYa1s53GyWBXOylxgx
+Call ID: call_Ug9Bsjf7I2i8BPD4ej3ifonm
 Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_3WgnOQZYa1s53GyWBXOylxgx) *****
+***** Response from calling tool (call_Ug9Bsjf7I2i8BPD4ej3ifonm) *****
 Payment information verified successfully.
 **********************************************************************
 
@@ -765,22 +738,22 @@ Next speaker: payment_agent
 >>>>>>>> USING AUTO REPLY...
 payment_agent (to chat_manager):
 
-***** Suggested tool call (call_WJpnMPz98kfq9HC7pcEepAnD): complete_payment_processing *****
+***** Suggested tool call (call_FMcK9XYNynvtjYaMxaH5H4W5): complete_payment_processing *****
 Arguments:
-{"payment_result":{"payment_successful":true,"transaction_details":{"transaction_id":"TXN-98765","amount":749.97,"currency":"USD","date":"2025-03-08T14:31:00Z"}}}
+{"payment_result":{"payment_successful":true,"transaction_details":{"transaction_id":"TX123456789","amount":749.97,"currency":"USD"}}}
 ********************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_payment_processing...
-Call ID: call_WJpnMPz98kfq9HC7pcEepAnD
-Input arguments: {'payment_result': {'payment_successful': True, 'transaction_details': {'transaction_id': 'TXN-98765', 'amount': 749.97, 'currency': 'USD', 'date': '2025-03-08T14:31:00Z'}}}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_FMcK9XYNynvtjYaMxaH5H4W5
+Input arguments: {'payment_result': {'payment_successful': True, 'transaction_details': {'transaction_id': 'TX123456789', 'amount': 749.97, 'currency': 'USD'}}}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_WJpnMPz98kfq9HC7pcEepAnD) *****
+***** Response from calling tool (call_FMcK9XYNynvtjYaMxaH5H4W5) *****
 Payment processed successfully. Proceeding to order fulfillment.
 **********************************************************************
 
@@ -792,22 +765,22 @@ Next speaker: fulfillment_agent
 >>>>>>>> USING AUTO REPLY...
 fulfillment_agent (to chat_manager):
 
-***** Suggested tool call (call_Rq6EIsk9uZjYHhBJSrPsbKw7): complete_fulfillment *****
+***** Suggested tool call (call_Lx7wiuKPAIYMPEsgmfac9qdk): complete_fulfillment *****
 Arguments:
-{"fulfillment_result":{"fulfillment_instructions":"1. Pick 1 unit of Smartphone XYZ (Item ID: PROD-001) from aisle A3, shelf 2.\n2. Pick 2 units of Phone Case (Item ID: PROD-042) from aisle B5, shelf 4.\n3. Inspect items for quality before packing.\n4. Pack the Smartphone and the Phone Cases securely with appropriate padding to prevent damage in transit.\n5. Generate a shipping label for express delivery to:\n   Jane Smith\n   123 Main St\n   Anytown, CA 90210\n   USA\n6. Use an express shipping option for delivery within 1-2 business days.","shipping_details":"Shipping Method: Express\nTracking Number: EXPR-123456789\nDelivery Service: FastShip Express","estimated_delivery":"Expected delivery within 1-2 business days from shipping."}}
+{"fulfillment_result":{"fulfillment_instructions":"1. Pick the following items: \n   - 1x Smartphone XYZ (Item ID: PROD-001) \n   - 2x Phone Case (Item ID: PROD-042) \n2. Verify the quantities against the order. \n3. Pack the items securely: \n   - Use a padded envelope for the Phone Cases and a sturdy box for the Smartphone. \n4. Label the shipment with the following details: \n   - Recipient: Jane Smith \n   - Address: 123 Main St, Anytown, CA, 90210, USA \n   - Phone: 555-123-4567 \n5. Select Express shipping as per customer's choice. \n6. Ensure the shipping label is affixed properly and include the invoice inside the package.","shipping_details":"Shipping Method: Express\nTracking will be provided via email once the package has shipped.","estimated_delivery":"Estimated delivery is 1-2 business days."}}
 *************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_fulfillment...
-Call ID: call_Rq6EIsk9uZjYHhBJSrPsbKw7
-Input arguments: {'fulfillment_result': {'fulfillment_instructions': '1. Pick 1 unit of Smartphone XYZ (Item ID: PROD-001) from aisle A3, shelf 2.\n2. Pick 2 units of Phone Case (Item ID: PROD-042) from aisle B5, shelf 4.\n3. Inspect items for quality before packing.\n4. Pack the Smartphone and the Phone Cases securely with appropriate padding to prevent damage in transit.\n5. Generate a shipping label for express delivery to:\n   Jane Smith\n   123 Main St\n   Anytown, CA 90210\n   USA\n6. Use an express shipping option for delivery within 1-2 business days.', 'shipping_details': 'Shipping Method: Express\nTracking Number: EXPR-123456789\nDelivery Service: FastShip Express', 'estimated_delivery': 'Expected delivery within 1-2 business days from shipping.'}}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_Lx7wiuKPAIYMPEsgmfac9qdk
+Input arguments: {'fulfillment_result': {'fulfillment_instructions': "1. Pick the following items: \n   - 1x Smartphone XYZ (Item ID: PROD-001) \n   - 2x Phone Case (Item ID: PROD-042) \n2. Verify the quantities against the order. \n3. Pack the items securely: \n   - Use a padded envelope for the Phone Cases and a sturdy box for the Smartphone. \n4. Label the shipment with the following details: \n   - Recipient: Jane Smith \n   - Address: 123 Main St, Anytown, CA, 90210, USA \n   - Phone: 555-123-4567 \n5. Select Express shipping as per customer's choice. \n6. Ensure the shipping label is affixed properly and include the invoice inside the package.", 'shipping_details': 'Shipping Method: Express\nTracking will be provided via email once the package has shipped.', 'estimated_delivery': 'Estimated delivery is 1-2 business days.'}}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_Rq6EIsk9uZjYHhBJSrPsbKw7) *****
+***** Response from calling tool (call_Lx7wiuKPAIYMPEsgmfac9qdk) *****
 Order fulfillment completed. Proceeding to customer notification.
 **********************************************************************
 
@@ -819,22 +792,22 @@ Next speaker: notification_agent
 >>>>>>>> USING AUTO REPLY...
 notification_agent (to chat_manager):
 
-***** Suggested tool call (call_3FPuRLZE7W58YzqPJ75fYEpL): complete_notification *****
+***** Suggested tool call (call_ANfywzcdQvGsBLOc7KjoD0Yr): complete_notification *****
 Arguments:
-{"notification_result":{"notification_sent":true,"notification_method":"email","notification_content":"Subject: Order Confirmation - ORD-12345\n\nDear Jane Smith,\n\nThank you for your order! We are pleased to confirm your order details below:\n\n- **Order ID**: ORD-12345\n- **Order Date**: March 8, 2025\n- **Items Ordered**:\n  - Smartphone XYZ (Quantity: 1, Price: $699.99)\n  - Phone Case (Quantity: 2, Price: $24.99 each)\n- **Promocode Applied**: SUMMER10\n- **Total Amount Charged**: $749.97 USD (Payment Method: Credit Card ending in 4242)\n\n**Shipping Address**:\nJane Smith\n123 Main St\nAnytown, CA 90210\nUSA\n\n**Shipping Method**: Express\n**Tracking Number**: EXPR-123456789\n**Estimated Delivery**: Expected within 1-2 business days.\n\nThank you for shopping with us! If you have any questions or concerns, please do not hesitate to contact us.\n\nBest regards,\nCustomer Support Team"}}
+{"notification_result":{"notification_sent":true,"notification_method":"email","notification_content":"Order Confirmation\n\nDear Jane Smith,\n\nThank you for your order! Here are the details:\n\n**Order ID:** ORD-12345  \n**Order Date:** March 8, 2025  \n\n**Order Items:**  \n- Smartphone XYZ (1) - $699.99  \n- Phone Case (2) - $49.98  \n\n**Total Amount:** $749.97  \n**Payment Method:** Credit Card (****4242)  \n\n**Shipping Address:**  \n123 Main St  \nAnytown, CA 90210  \nUSA  \n\n**Shipping Method:** Express  \n\n**Estimated Delivery:** 1-2 business days from dispatch  \n\nOnce your order has been dispatched, we will send you an email with tracking details.\n\nThank you for choosing us!\n\nBest regards,  \nYour Company Name"}}
 **************************************************************************************
 
 --------------------------------------------------------------------------------
 
-Next speaker: _Swarm_Tool_Executor
+Next speaker: _Group_Tool_Executor
 
 
 >>>>>>>> EXECUTING FUNCTION complete_notification...
-Call ID: call_3FPuRLZE7W58YzqPJ75fYEpL
-Input arguments: {'notification_result': {'notification_sent': True, 'notification_method': 'email', 'notification_content': 'Subject: Order Confirmation - ORD-12345\n\nDear Jane Smith,\n\nThank you for your order! We are pleased to confirm your order details below:\n\n- **Order ID**: ORD-12345\n- **Order Date**: March 8, 2025\n- **Items Ordered**:\n  - Smartphone XYZ (Quantity: 1, Price: $699.99)\n  - Phone Case (Quantity: 2, Price: $24.99 each)\n- **Promocode Applied**: SUMMER10\n- **Total Amount Charged**: $749.97 USD (Payment Method: Credit Card ending in 4242)\n\n**Shipping Address**:\nJane Smith\n123 Main St\nAnytown, CA 90210\nUSA\n\n**Shipping Method**: Express\n**Tracking Number**: EXPR-123456789\n**Estimated Delivery**: Expected within 1-2 business days.\n\nThank you for shopping with us! If you have any questions or concerns, please do not hesitate to contact us.\n\nBest regards,\nCustomer Support Team'}}
-_Swarm_Tool_Executor (to chat_manager):
+Call ID: call_ANfywzcdQvGsBLOc7KjoD0Yr
+Input arguments: {'notification_result': {'notification_sent': True, 'notification_method': 'email', 'notification_content': 'Order Confirmation\n\nDear Jane Smith,\n\nThank you for your order! Here are the details:\n\n**Order ID:** ORD-12345  \n**Order Date:** March 8, 2025  \n\n**Order Items:**  \n- Smartphone XYZ (1) - $699.99  \n- Phone Case (2) - $49.98  \n\n**Total Amount:** $749.97  \n**Payment Method:** Credit Card (****4242)  \n\n**Shipping Address:**  \n123 Main St  \nAnytown, CA 90210  \nUSA  \n\n**Shipping Method:** Express  \n\n**Estimated Delivery:** 1-2 business days from dispatch  \n\nOnce your order has been dispatched, we will send you an email with tracking details.\n\nThank you for choosing us!\n\nBest regards,  \nYour Company Name'}}
+_Group_Tool_Executor (to chat_manager):
 
-***** Response from calling tool (call_3FPuRLZE7W58YzqPJ75fYEpL) *****
+***** Response from calling tool (call_ANfywzcdQvGsBLOc7KjoD0Yr) *****
 Customer notification sent. Order processing completed successfully.
 **********************************************************************
 
@@ -843,6 +816,10 @@ Customer notification sent. Order processing completed successfully.
 Next speaker: user
 
 Replying as user. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: exit
+
+>>>>>>>> TERMINATING RUN (3754ea15-31da-4d82-9b34-dbb7dd9faac4): User requested to end the conversation
+
+>>>>>>>> TERMINATING RUN (c38f365a-a875-4c7f-a7b0-0dc14b4bb011): No reply generated
 Order processing completed successfully!
 
 ===== ORDER PROCESSING SUMMARY =====
@@ -862,9 +839,8 @@ Notification: ✅ Sent
 ===== SHIPPING INFORMATION =====
 
 Shipping Method: Shipping Method: Express
-Tracking Number: EXPR-123456789
-Delivery Service: FastShip Express
-Estimated Delivery: Expected delivery within 1-2 business days from shipping.
+Tracking will be provided via email once the package has shipped.
+Estimated Delivery: Estimated delivery is 1-2 business days.
 
 
 ===== SPEAKER ORDER =====

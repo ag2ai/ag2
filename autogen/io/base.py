@@ -8,7 +8,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, Union, runtime_checkable
 
 from ..doc_utils import export_module
 from ..events.base_event import BaseEvent
@@ -60,16 +60,47 @@ class InputStream(Protocol):
 
 @runtime_checkable
 @export_module("autogen.io")
-class IOStream(InputStream, OutputStream, Protocol):
+class AsyncInputStream(Protocol):
+    async def input(self, prompt: str = "", *, password: bool = False) -> str:
+        """Read a line from the input stream.
+
+        Args:
+            prompt (str, optional): The prompt to display. Defaults to "".
+            password (bool, optional): Whether to read a password. Defaults to False.
+
+        Returns:
+            str: The line read from the input stream.
+
+        """
+        ...  # pragma: no cover
+
+
+@runtime_checkable
+@export_module("autogen.io")
+class IOStreamProtocol(InputStream, OutputStream, Protocol):
+    """A protocol for input/output streams."""
+
+
+@runtime_checkable
+@export_module("autogen.io")
+class AsyncIOStreamProtocol(AsyncInputStream, OutputStream, Protocol):
+    """A protocol for input/output streams."""
+
+
+iostream_union = Union[IOStreamProtocol, AsyncIOStreamProtocol]
+
+
+@export_module("autogen.io")
+class IOStream:
     """A protocol for input/output streams."""
 
     # ContextVar must be used in multithreaded or async environments
-    _default_io_stream: ContextVar[Optional["IOStream"]] = ContextVar("default_iostream", default=None)
+    _default_io_stream: ContextVar[Optional[iostream_union]] = ContextVar("default_iostream", default=None)
     _default_io_stream.set(None)
-    _global_default: Optional["IOStream"] = None
+    _global_default: Optional[iostream_union] = None
 
     @staticmethod
-    def set_global_default(stream: "IOStream") -> None:
+    def set_global_default(stream: iostream_union) -> None:
         """Set the default input/output stream.
 
         Args:
@@ -78,7 +109,7 @@ class IOStream(InputStream, OutputStream, Protocol):
         IOStream._global_default = stream
 
     @staticmethod
-    def get_global_default() -> "IOStream":
+    def get_global_default() -> iostream_union:
         """Get the default input/output stream.
 
         Returns:
@@ -89,7 +120,7 @@ class IOStream(InputStream, OutputStream, Protocol):
         return IOStream._global_default
 
     @staticmethod
-    def get_default() -> "IOStream":
+    def get_default() -> iostream_union:
         """Get the default input/output stream.
 
         Returns:
@@ -104,7 +135,7 @@ class IOStream(InputStream, OutputStream, Protocol):
 
     @staticmethod
     @contextmanager
-    def set_default(stream: Optional["IOStream"]) -> Iterator[None]:
+    def set_default(stream: Optional[iostream_union]) -> Iterator[None]:
         """Set the default input/output stream.
 
         Args:

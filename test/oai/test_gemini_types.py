@@ -32,11 +32,35 @@ class TestGeminiTypes:
         assert LocalToolConfig.model_json_schema() == ToolConfig.model_json_schema()
 
     def test_CaseInSensitiveEnum(self) -> None:  # noqa: N802
-        actual = LocalCaseInSensitiveEnum("test")
-        assert actual.value == "test"
-        assert actual == CaseInSensitiveEnum("test")
-        assert actual == "test"
-        assert actual != "Test"
+        class LocalTestEnum(LocalCaseInSensitiveEnum):
+            """Test enum."""
+
+            TEST = "TEST"
+            TEST_2 = "TEST_2"
+
+        class TestEnum(CaseInSensitiveEnum):  # type: ignore[misc, no-any-unimported]
+            """Test enum."""
+
+            TEST = "TEST"
+            TEST_2 = "TEST_2"
+
+        actual = LocalTestEnum("test")
+
+        assert actual == TestEnum("test")  # type: ignore[comparison-overlap]
+        assert actual == TestEnum("TEST")  # type: ignore[comparison-overlap]
+        assert LocalTestEnum("TEST") == TestEnum("test")  # type: ignore[comparison-overlap]
+        assert actual.value == "TEST"
+        assert actual == "TEST"
+        assert actual != "test"
+
+        actual = LocalTestEnum("TEST_2")
+
+        assert actual == TestEnum("TEST_2")  # type: ignore[comparison-overlap]
+        assert actual == TestEnum("test_2")  # type: ignore[comparison-overlap]
+        assert LocalTestEnum("test_2") == TestEnum("TEST_2")  # type: ignore[comparison-overlap]
+        assert actual.value == "TEST_2"
+        assert actual == "TEST_2"
+        assert actual != "test_2"
 
     def test_CommonBaseModel(self) -> None:  # noqa: N802
         assert LocalCommonBaseModel.model_config == CommonBaseModel.model_config
