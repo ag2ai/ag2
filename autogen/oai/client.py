@@ -247,6 +247,9 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
+    # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    max_completion_tokens: Optional[int] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -259,6 +262,11 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
+    # reasoning models - see:
+    # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
+    # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    max_completion_tokens: Optional[int] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
