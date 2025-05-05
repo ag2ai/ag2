@@ -6,7 +6,9 @@
 import copy
 import logging
 import os
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Type, Union
+
+from pydantic import BaseModel
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -31,6 +33,7 @@ class WebSearchPreviewTool(Tool):
         search_context_size: Literal["low", "medium", "high"] = "medium",
         user_location: Optional[dict[str, str]] = None,
         instructions: Optional[str] = None,
+        text_format: Optional[Type[BaseModel]] = None,
     ):
         """Initialize the WebSearchPreviewTool.
 
@@ -42,6 +45,8 @@ class WebSearchPreviewTool(Tool):
             user_location: The location of the user. This should be a dictionary containing
                 the city, country, region, and timezone.
             instructions: Inserts a system (or developer) message as the first item in the model's context.
+            text_format: The format of the text to be returned. This should be a subclass of `BaseModel`.
+                The default is `None`, which means the text will be returned as a string.
         """
         self.web_search_tool_param = WebSearchToolParam(
             type="web_search_preview",
@@ -49,6 +54,7 @@ class WebSearchPreviewTool(Tool):
             user_location=UserLocation(**user_location) if user_location else None,  # type: ignore[typeddict-item]
         )
         self.instructions = instructions
+        self.text_format = text_format
 
         if isinstance(llm_config, LLMConfig):
             llm_config = llm_config.model_dump()
@@ -79,16 +85,27 @@ class WebSearchPreviewTool(Tool):
 
         def web_search_preview(
             query: Annotated[str, "The search query. Add all relevant context to the query."],
-        ) -> Any:
+        ) -> Union[str, Optional[BaseModel]]:
             client = OpenAI()
-            response = client.responses.create(
-                model=self.model,  # type: ignore[arg-type]
-                tools=[self.web_search_tool_param],
-                input=query,
-                instructions=self.instructions,
-            )
 
-            return response.output_text
+            if not self.text_format:
+                response = client.responses.create(
+                    model=self.model,  # type: ignore[arg-type]
+                    tools=[self.web_search_tool_param],
+                    input=query,
+                    instructions=self.instructions,
+                )
+                return response.output_text
+
+            else:
+                response = client.responses.parse(
+                    model=self.model,  # type: ignore[arg-type]
+                    tools=[self.web_search_tool_param],
+                    input=query,
+                    instructions=self.instructions,
+                    text_format=self.text_format,
+                )
+                return response.output_parsed
 
         super().__init__(
             name="web_search_preview",
