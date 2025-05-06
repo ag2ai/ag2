@@ -176,7 +176,7 @@ class AgentOptimizer:
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: Union[LLMConfig, dict[str, Any], None] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
