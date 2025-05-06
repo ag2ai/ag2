@@ -43,12 +43,12 @@ jobs:
         run: |
           uv pip install --system twine
           uv build
-      - name: Publish pyautogen to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYAUTOGEN_PYPI_PASSWORD }}
-        shell: pwsh
-        run: twine upload dist/*pyautogen*
+      # - name: Publish pyautogen to PyPI
+      #   env:
+      #     TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
+      #     TWINE_PASSWORD: ${{ secrets.PYAUTOGEN_PYPI_PASSWORD }}
+      #   shell: pwsh
+      #   run: twine upload dist/*pyautogen*
       - name: Build autogen
         shell: pwsh
         run: |
