@@ -78,7 +78,7 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any], None] = None,
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         browser: Optional["Browser"] = None,
         agent_kwargs: Optional[dict[str, Any]] = None,
         browser_config: Optional[dict[str, Any]] = None,
