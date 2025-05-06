@@ -6,7 +6,7 @@
   <br>
   <br>
   <img src="https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads">
-  <a href="https://badge.fury.io/py/autogen"><img src="https://badge.fury.io/py/autogen.svg"></a>
+  <a href="https://pypi.org/project/autogen"><img src="https://pypi.org/project/autogen.svg"></a>
   <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
     <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
   </a>
