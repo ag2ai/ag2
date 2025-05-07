@@ -34,6 +34,6 @@ muffet \
   --rate-limit=1 \
   --max-response-body-size=20000000 \
   --ignore-fragments \
-  --accepted-status-codes='200..300,503,429' \
+  --accepted-status-codes='200..300,503,403,429' \
   --exclude="($(paste -sd '|' .muffet-excluded-links.txt))" \
   "$URL"
