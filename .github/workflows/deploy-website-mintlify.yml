@@ -1,5 +1,12 @@
 name: mintlify docs
 
+
+# WORKFLOW DISABLED
+# This workflow is temporarily disabled via "if: false" at the job level
+# and will be completely removed in a future PR as part of the mintlify
+# cleanup task. It's preserved here temporarily for reference purposes.
+# To re-enable, remove the "if: false" condition from the job.
+
 on:
   push:
     branches: [main]
@@ -17,6 +24,8 @@ permissions:
   contents: write
 jobs:
   mintlify-release:
+    # DISABLED: This workflow will be removed as part of the mintlify cleanup task
+    if: false
     uses: ./.github/workflows/build-docs.yml
     with:
       python-version: "3.10"
