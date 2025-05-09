@@ -7,7 +7,7 @@ license_file = "LICENSE"
 description_file = "README.md"
 
 [project]
-name = "pyautogen"
+name = "ag2"
 description = "A programming framework for agentic AI"
 readme = "README.md"
 authors = [
@@ -19,7 +19,6 @@ keywords = [
     "agent",
     "autogen",
     "ag2",
-    "pyautogen",
     "ag2.ai",
     "ag2ai",
     "agentic"
@@ -81,7 +80,7 @@ openai = [
 ]
 
 openai-realtime = [
-    "pyautogen[openai]",
+    "ag2[openai]",
     "openai[realtime]",
 ]
 
@@ -104,26 +103,26 @@ retrievechat = [
 ]
 
 retrievechat-pgvector = [
-    "pyautogen[retrievechat]",
+    "ag2[retrievechat]",
     "pgvector>=0.2.5",
     "psycopg[binary]>=3.1.18; platform_system=='Windows' or platform_system=='Darwin'",
     "psycopg>=3.1.18; platform_system=='Linux'",
 ]
 
 retrievechat-mongodb = [
-    "pyautogen[retrievechat]",
+    "ag2[retrievechat]",
     "pymongo>=4.0.0",
     "numpy",
 ]
 
 retrievechat-qdrant = [
-    "pyautogen[retrievechat]",
+    "ag2[retrievechat]",
     "qdrant_client",
     "fastembed>=0.3.1",
 ]
 
 retrievechat-couchbase = [
-    "pyautogen[retrievechat]",
+    "ag2[retrievechat]",
     "couchbase>=4.3.0",
     "numpy",
 ]
@@ -162,13 +161,13 @@ google-client = [
 ]
 
 google-api = [
-    "pyautogen[google-client]",
+    "ag2[google-client]",
     "google-auth-httplib2>=0.2.0,<0.3",
     "google-auth-oauthlib>=1.2.1,<2.0",
 ]
 
 google-search = [
-    "pyautogen[google-client]",
+    "ag2[google-client]",
 ]
 
 wikipedia = [
@@ -205,7 +204,7 @@ interop-crewai = [
 interop-langchain = ["langchain-community>=0.3.12,<1"]
 interop-pydantic-ai = ["pydantic-ai==0.0.31"]
 interop =[
-    "pyautogen[interop-crewai, interop-langchain, interop-pydantic-ai]"
+    "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
 
 autobuild = [
@@ -216,7 +215,7 @@ autobuild = [
 
 blendsearch = ["flaml[blendsearch]"]
 mathchat = ["sympy", "wolframalpha"]
-captainagent = ["pyautogen[autobuild]", "pandas"]
+captainagent = ["ag2[autobuild]", "pandas"]
 teachable = ["chromadb"]
 lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
@@ -230,8 +229,8 @@ gemini = [
 ]
 
 gemini-realtime = [
-    "pyautogen[gemini]",
-    "pyautogen[websockets]",
+    "ag2[gemini]",
+    "ag2[websockets]",
 ]
 
 together = ["together>=1.2"]
@@ -247,7 +246,7 @@ groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
 ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
-deepseek = ["pyautogen[openai]"]
+deepseek = ["ag2[openai]"]
 
 commsagent-discord = ["discord.py>=2.4.0,<2.6"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
@@ -293,7 +292,7 @@ docs = [
 
 types = [
     "mypy==1.15.0",
-    "pyautogen[test, openai]",
+    "ag2[test, openai]",
 ]
 
 lint = [
@@ -304,7 +303,7 @@ lint = [
 
 dev = [
     "toml==0.10.2",
-    "pyautogen[lint,test,types,docs]",
+    "ag2[lint,test,types,docs]",
     "pre-commit==4.2.0",
     "detect-secrets==1.5.0",
     "uv==0.6.14",
