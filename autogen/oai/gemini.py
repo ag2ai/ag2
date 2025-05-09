@@ -898,7 +898,11 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
 
-        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+        if (
+            "gemini-2.5-pro-preview-03-25" in model_name
+            or "gemini-2.5-pro-exp-03-25" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+        ):
             if up_to_200k:
                 return total_cost_mil(1.25, 10)
             else:
@@ -938,7 +942,11 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+        if (
+            "gemini-2.5-pro-preview-03-25" in model_name
+            or "gemini-2.5-pro-exp-03-25" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+        ):
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
             if up_to_200k:
                 return total_cost_mil(1.25, 10)

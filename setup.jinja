@@ -23,13 +23,13 @@ __version__ = version["__version__"]
 setuptools.setup(
     name="{{ name }}",
     version=__version__,
-    description="Alias package for pyautogen",
+    description="Alias package for ag2",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    install_requires=["pyautogen==" + __version__],
+    install_requires=["ag2==" + __version__],
     extras_require={
         {% for group, packages in optional_dependencies.items() -%}
-        "{{ group }}": ["pyautogen[{{ group }}]==" + __version__],
+        "{{ group }}": ["ag2[{{ group }}]==" + __version__],
         {% endfor %}
     },
     url="https://github.com/ag2ai/ag2",

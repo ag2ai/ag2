@@ -202,7 +202,7 @@ class DeepResearchTool(Tool):
                     "Do not accept redundant or unnecessary subquestions, focus solely on the minimal viable subset of subqestions necessary to answer the original question. \n"
                     "Do not accept banal, general knowledge questions\n"
                     "Do not accept questions that go into unnecessary detail that is not relevant to the original question\n"
-                    "Remove questions that can be answered with combinig knowledge from other questions\n"
+                    "Remove questions that can be answered with combining knowledge from other questions\n"
                     "After you are satisfied with the subquestions, call the 'generate_subquestions' method to answer each subquestion.\n"
                     "This is an example of an argument that can be passed to the 'generate_subquestions' method:\n"
                     f"{{'task': {example_task.model_dump()}}}\n"

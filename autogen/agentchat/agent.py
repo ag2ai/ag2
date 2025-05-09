@@ -4,11 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, Union, runtime_checkable
 
 from ..doc_utils import export_module
 
 __all__ = ["Agent", "LLMAgent", "LLMMessageType"]
+
+Tool = TypeVar("Tool")
 
 LLMMessageType = dict[str, Any]
 
@@ -138,6 +140,22 @@ class Agent(Protocol):
         """
         ...
 
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agent.
+
+        Args:
+            tools: a list of UI tools to set.
+        """
+        ...
+
+    def unset_ui_tools(self, tools: list[Tool]) -> None:
+        """Unset the UI tools for the agent.
+
+        Args:
+            tools: a list of UI tools to set.
+        """
+        ...
+
 
 @runtime_checkable
 @export_module("autogen")
@@ -157,7 +175,7 @@ class LLMAgent(Agent, Protocol):
 
 
 if TYPE_CHECKING:
-    # mypy will fail if Conversible agent does not implement Agent protocol
+    # mypy will fail if Conversable agent does not implement Agent protocol
     from .conversable_agent import ConversableAgent
 
     def _check_protocol_implementation(agent: ConversableAgent) -> Agent:

@@ -66,9 +66,10 @@ def get_pil_image(image_file: Union[str, "Image.Image"]) -> "Image.Image":
         response = requests.get(image_file)
         content = BytesIO(response.content)
         image = Image.open(content)
-    elif re.match(r"data:image/(?:png|jpeg);base64,", image_file):
+    # Match base64-encoded image URIs for supported formats: jpg, jpeg, png, gif, bmp, webp
+    elif re.match(r"data:image/(?:jpg|jpeg|png|gif|bmp|webp);base64,", image_file):
         # A URI. Remove the prefix and decode the base64 string.
-        base64_data = re.sub(r"data:image/(?:png|jpeg);base64,", "", image_file)
+        base64_data = re.sub(r"data:image/(?:jpg|jpeg|png|gif|bmp|webp);base64,", "", image_file)
         image = _to_pil(base64_data)
     elif os.path.exists(image_file):
         # A local file
@@ -250,9 +251,10 @@ def extract_img_paths(paragraph: str) -> list:
     Returns:
         list: A list of extracted image paths.
     """
-    # Regular expression to match image URLs and file paths
+    # Regular expression to match image URLs and file paths.
+    # This regex detects URLs and file paths with common image extensions, including support for the webp format.
     img_path_pattern = re.compile(
-        r"\b(?:http[s]?://\S+\.(?:jpg|jpeg|png|gif|bmp)|\S+\.(?:jpg|jpeg|png|gif|bmp))\b", re.IGNORECASE
+        r"\b(?:http[s]?://\S+\.(?:jpg|jpeg|png|gif|bmp|webp)|\S+\.(?:jpg|jpeg|png|gif|bmp|webp))\b", re.IGNORECASE
     )
 
     # Find all matches in the paragraph

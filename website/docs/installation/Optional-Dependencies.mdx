@@ -7,15 +7,15 @@ pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
 
 <Tip>
-If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
 or
 ```bash
-pip install -U pyautogen[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install -U ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
 ```
-as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 Check out the [notebook](/docs/use-cases/notebooks/notebooks/autogen_uniformed_api_calling) and
@@ -124,20 +124,20 @@ pip install "ag2[long-context]"
 
 ## mathchat
 
-`pyautogen<0.2` offers an experimental agent for math problem solving. Please install with the [mathchat] option to use it.
+`ag2<0.2` offers an experimental agent for math problem solving. Please install with the [mathchat] option to use it.
 
 ```bash
-pip install "pyautogen[mathchat]<0.2"
+pip install "ag2[mathchat]<0.2"
 ```
 
 Example notebook: [Using MathChat to Solve Math Problems](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_MathChat.ipynb)
 
 ## blendsearch
 
-`pyautogen<0.2` offers a cost-effective hyperparameter optimization technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) for tuning Large Language Models. Please install with the [blendsearch] option to use it.
+`ag2<0.2` offers a cost-effective hyperparameter optimization technique [EcoOptiGen](https://arxiv.org/abs/2303.04673) for tuning Large Language Models. Please install with the [blendsearch] option to use it.
 
 ```bash
-pip install "pyautogen[blendsearch]<0.2"
+pip install "ag2[blendsearch]<0.2"
 ```
 
 Checkout [Optimize for Code Generation](https://github.com/ag2ai/ag2/blob/main/notebook/oai_completion.ipynb) and [Optimize for Math](https://github.com/ag2ai/ag2/blob/main/notebook/oai_chatgpt_gpt4.ipynb) for details.

@@ -89,18 +89,19 @@ class TestGetImageData:
         assert are_b64_images_equal(result, base64_encoded_image.split(",", 1)[1])
 
     def test_local_image(self):
-        # Create a temporary file to simulate a local image file.
-        temp_file = "_temp.png"
-        image = Image.new("RGB", (60, 30), color=(73, 109, 137))
-        image.save(temp_file)
+        # Create temporary files to simulate a local image files.
+        for extension in ("png", "jpg", "jpeg", "gif", "webp"):
+            temp_file = f"_temp.{extension}"
+            image = Image.new("RGB", (60, 30), color=(73, 109, 137))
+            image.save(temp_file)
 
-        result = get_image_data(temp_file)
-        with open(temp_file, "rb") as temp_image_file:
-            temp_image_file.seek(0)
-            expected_content = base64.b64encode(temp_image_file.read()).decode("utf-8")
+            result = get_image_data(temp_file)
+            with open(temp_file, "rb") as temp_image_file:
+                temp_image_file.seek(0)
+                expected_content = base64.b64encode(temp_image_file.read()).decode("utf-8")
 
-        assert result == expected_content
-        os.remove(temp_file)
+            assert result == expected_content
+            os.remove(temp_file)
 
 
 @run_for_optional_imports(["PIL"], "unknown")
@@ -192,10 +193,13 @@ class TestGpt4vFormatter:
         mock_get_image_data.return_value = raw_encoded_image
 
         prompt = (
-            "This is a test with images <img http://example.com/image1.png> and <img http://example.com/image2.png>."
+            "This is a test with images <img http://example.com/image1.png>, "
+            "<img http://example.com/image2.png> and <img http://example.com/image3.webp>."
         )
         expected_output = [
             {"type": "text", "text": "This is a test with images "},
+            {"type": "image_url", "image_url": {"url": base64_encoded_image}},
+            {"type": "text", "text": ", "},
             {"type": "image_url", "image_url": {"url": base64_encoded_image}},
             {"type": "text", "text": " and "},
             {"type": "image_url", "image_url": {"url": base64_encoded_image}},
@@ -217,23 +221,36 @@ class TestExtractImgPaths:
     def test_with_images(self):
         """Test the extract_img_paths function with a paragraph containing images."""
         paragraph = (
-            "This is a test paragraph with images http://example.com/image1.jpg and http://example.com/image2.png."
+            "This is a test paragraph with images http://example.com/image1.jpg, "
+            "http://example.com/image2.png "
+            "and http://example.com/image3.webp."
         )
-        expected_output = ["http://example.com/image1.jpg", "http://example.com/image2.png"]
+        expected_output = [
+            "http://example.com/image1.jpg",
+            "http://example.com/image2.png",
+            "http://example.com/image3.webp",
+        ]
         result = extract_img_paths(paragraph)
         assert result == expected_output
 
     def test_mixed_case(self):
         """Test the extract_img_paths function with mixed case image extensions."""
-        paragraph = "Mixed case extensions http://example.com/image.JPG and http://example.com/image.Png."
-        expected_output = ["http://example.com/image.JPG", "http://example.com/image.Png"]
+        paragraph = (
+            "Mixed case extensions http://example.com/image.JPG, "
+            "http://example.com/image.Png and http://example.com/image.WebP."
+        )
+        expected_output = [
+            "http://example.com/image.JPG",
+            "http://example.com/image.Png",
+            "http://example.com/image.WebP",
+        ]
         result = extract_img_paths(paragraph)
         assert result == expected_output
 
     def test_local_paths(self):
         """Test the extract_img_paths function with local file paths."""
-        paragraph = "Local paths image1.jpeg and image2.GIF."
-        expected_output = ["image1.jpeg", "image2.GIF"]
+        paragraph = "Local paths image1.jpeg, image2.GIF image3.webp."
+        expected_output = ["image1.jpeg", "image2.GIF", "image3.webp"]
         result = extract_img_paths(paragraph)
         assert result == expected_output
 

@@ -213,7 +213,7 @@ def complete_validation(validation_result: ValidationResult, context_variables: 
         return ReplyResult(
             message=f"Validation failed: {validation_result.error_message or 'Unknown error'}",
             context_variables=context_variables,
-            target=RevertToUserTarget
+            target=RevertToUserTarget()
         )
 
     return ReplyResult(

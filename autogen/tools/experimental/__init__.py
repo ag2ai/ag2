@@ -5,6 +5,7 @@
 from .browser_use import BrowserUseTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
+from .duckduckgo import DuckDuckGoSearchTool
 from .google_search import GoogleSearchTool, YoutubeSearchTool
 from .messageplatform import (
     DiscordRetrieveTool,
@@ -17,6 +18,7 @@ from .messageplatform import (
 )
 from .perplexity import PerplexitySearchTool
 from .tavily import TavilySearchTool
+from .web_search_preview import WebSearchPreviewTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
 
 __all__ = [
@@ -25,6 +27,7 @@ __all__ = [
     "DeepResearchTool",
     "DiscordRetrieveTool",
     "DiscordSendTool",
+    "DuckDuckGoSearchTool",
     "GoogleSearchTool",
     "PerplexitySearchTool",
     "SlackRetrieveRepliesTool",
@@ -33,6 +36,7 @@ __all__ = [
     "TavilySearchTool",
     "TelegramRetrieveTool",
     "TelegramSendTool",
+    "WebSearchPreviewTool",
     "WikipediaPageLoadTool",
     "WikipediaQueryRunTool",
     "YoutubeSearchTool",
