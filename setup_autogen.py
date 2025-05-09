@@ -48,6 +48,7 @@ setuptools.setup(
         "neo4j": ["ag2[neo4j]==" + __version__],
         "twilio": ["ag2[twilio]==" + __version__],
         "mcp": ["ag2[mcp]==" + __version__],
+        "mcp-proxy-gen": ["ag2[mcp-proxy-gen]==" + __version__],
         "interop-crewai": ["ag2[interop-crewai]==" + __version__],
         "interop-langchain": ["ag2[interop-langchain]==" + __version__],
         "interop-pydantic-ai": ["ag2[interop-pydantic-ai]==" + __version__],
