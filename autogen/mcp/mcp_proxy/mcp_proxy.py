@@ -28,7 +28,7 @@ import yaml
 from pydantic import PydanticInvalidForJsonSchema
 from pydantic_core import PydanticUndefined
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, require_optional_import
 
 from .security import BaseSecurity, BaseSecurityParameters
 
@@ -269,6 +269,7 @@ class MCPProxy:
             raise RuntimeError(f"Template directory {path.resolve()} not found.")
         return path
 
+    @require_optional_import(["datamodel_code_generator", "fastapi_code_generator"], "mcp-proxy-gen")
     @classmethod
     def generate_code(
         cls,
