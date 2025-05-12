@@ -269,8 +269,8 @@ class MCPProxy:
             raise RuntimeError(f"Template directory {path.resolve()} not found.")
         return path
 
-    @require_optional_import(["datamodel_code_generator", "fastapi_code_generator"], "mcp-proxy-gen")
     @classmethod
+    @require_optional_import(["datamodel_code_generator", "fastapi_code_generator"], "mcp-proxy-gen")
     def generate_code(
         cls,
         input_text: str,
