@@ -766,6 +766,7 @@ class ExecutedFunctionEvent(BaseEvent):
     arguments: dict[str, Any]
     content: str
     recipient: str
+    is_exec_success: bool = True
 
     def __init__(
         self,
@@ -776,6 +777,7 @@ class ExecutedFunctionEvent(BaseEvent):
         arguments: dict[str, Any],
         content: str,
         recipient: Union["Agent", str],
+        is_exec_success: bool = True,
     ):
         super().__init__(
             uuid=uuid,
@@ -785,6 +787,7 @@ class ExecutedFunctionEvent(BaseEvent):
             content=content,
             recipient=recipient.name if hasattr(recipient, "name") else recipient,
         )
+        self.is_exec_success = is_exec_success
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
