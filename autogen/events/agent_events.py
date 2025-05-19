@@ -764,7 +764,7 @@ class ExecutedFunctionEvent(BaseEvent):
     func_name: str
     call_id: Optional[str] = None
     arguments: dict[str, Any]
-    content: str
+    content: Any
     recipient: str
     is_exec_success: bool = True
 
@@ -775,7 +775,7 @@ class ExecutedFunctionEvent(BaseEvent):
         func_name: str,
         call_id: Optional[str] = None,
         arguments: dict[str, Any],
-        content: str,
+        content: Any,
         recipient: Union["Agent", str],
         is_exec_success: bool = True,
     ):
