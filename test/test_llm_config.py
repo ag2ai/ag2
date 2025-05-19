@@ -749,11 +749,12 @@ class TestLLMConfig:
         ],
     )
     def test_where(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
-        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.1)
 
         actual = openai_llm_config.where(**filter_dict, exclude=exclude)
         assert isinstance(actual, LLMConfig)
         assert actual.config_list == LLMConfig(config_list=expected).config_list
+        assert actual.temperature == 0.1
 
     def test_where_invalid_filter(self) -> None:
         openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)

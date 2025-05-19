@@ -23,6 +23,7 @@
 | Alec Solder  | [alecsolder](https://github.com/alecsolder)               | -                | swarms, reasoning, function calling |
 | Marc Willhaus | [willhama](https://github.com/willhama)               | -                | - |
 | George Sideris | [giorgossideris](https://github.com/giorgossideris)               | -                | reasoning, RAG |
+| Beibin Li | [BeibinLi](https://github.com/BeibinLi)               | GenAI, Meta               | multimodal, reasoning, optiguide |
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |

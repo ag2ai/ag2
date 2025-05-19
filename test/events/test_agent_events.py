@@ -1391,6 +1391,7 @@ class TestExecutedFunctionEvent:
             "content": {
                 "uuid": uuid,
                 "func_name": func_name,
+                "is_exec_success": True,
                 "call_id": call_id,
                 "arguments": arguments,
                 "content": content,
@@ -1426,6 +1427,7 @@ class TestExecutedFunctionEvent:
             "content": {
                 "uuid": uuid,
                 "func_name": func_name,
+                "is_exec_success": True,
                 "call_id": call_id,
                 "arguments": arguments,
                 "content": content,
