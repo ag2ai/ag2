@@ -91,6 +91,7 @@ class TestGetImageData:
     def test_local_image(self):
         # Create temporary files to simulate a local image files.
         for extension in ("png", "jpg", "jpeg", "gif", "webp"):
+            print("Testing with extension:", extension)
             temp_file = f"_temp.{extension}"
             image = Image.new("RGB", (60, 30), color=(73, 109, 137))
             image.save(temp_file)
@@ -100,7 +101,7 @@ class TestGetImageData:
                 temp_image_file.seek(0)
                 expected_content = base64.b64encode(temp_image_file.read()).decode("utf-8")
 
-            assert result == expected_content
+            assert result == expected_content, f"Failed for extension: {extension}"
             os.remove(temp_file)
 
 
