@@ -61,6 +61,7 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..guardrail import Guardrail
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -83,7 +84,6 @@ from .utils import consolidate_chat_info, gather_usage_summary
 if TYPE_CHECKING:
     from .group.on_condition import OnCondition
     from .group.on_context_condition import OnContextCondition
-
 __all__ = ("ConversableAgent",)
 
 logger = logging.getLogger(__name__)
@@ -166,6 +166,8 @@ class ConversableAgent(LLMAgent):
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
         ] = None,
         handoffs: Optional[Handoffs] = None,
+        input_guardrails: Optional[list[Guardrail]] = None,
+        output_guardrails: Optional[list[Guardrail]] = None,
     ):
         """
         Args:
@@ -222,8 +224,12 @@ class ConversableAgent(LLMAgent):
             functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
+            input_guardrails (list[Guardrail]): A list of guardrails to be applied to the input messages.
+            output_guardrails (list[Guardrail]): A list of guardrails to be applied to the output message.
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
+        self.input_guardrails = input_guardrails if input_guardrails is not None else []
+        self.output_guardrails = output_guardrails if output_guardrails is not None else []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -2821,6 +2827,10 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
+        # Apply the input guardrails
+        for input_guardrail in self.input_guardrails:
+            input_guardrail.enforce(context=messages)
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
@@ -2839,6 +2849,10 @@ class ConversableAgent(LLMAgent):
                         reply=reply,
                     )
                 if final:
+                    # Apply the output guardrails
+                    for output_guardrail in self.output_guardrails:
+                        output_guardrail.enforce(context=reply)
+
                     return reply
         return self._default_auto_reply
 
@@ -2895,6 +2909,10 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
+        # Apply the input guardrails
+        for input_guardrail in self.input_guardrails:
+            input_guardrail.enforce(context=messages)
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
@@ -2908,6 +2926,10 @@ class ConversableAgent(LLMAgent):
                 else:
                     final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
                 if final:
+                    # Apply the output guardrails
+                    for output_guardrail in self.output_guardrails:
+                        output_guardrail.enforce(context=reply)
+
                     return reply
         return self._default_auto_reply
 
