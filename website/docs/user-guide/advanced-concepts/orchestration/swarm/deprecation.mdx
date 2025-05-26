@@ -89,9 +89,9 @@ def my_function(location: str, context_variables: dict[str, Any]) -> SwarmResult
     return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
 
 # v0.9 and up - replace context_variables parameter type of dict[str, Any] with ContextVariables
-def my_function(location: str, context_variables: ContextVariables) -> SwarmResult:
+def my_function(location: str, context_variables: ContextVariables) -> ReplyResult:
     """Important docstring for my function."""
-    return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
+    return ReplyResult(target=AgentTarget(the_next_agent), context_variables=context_variables, message="The weather is very hot!")
 ```
 
 ## Migrate from Swarm code to the new Group Chat
@@ -173,9 +173,9 @@ def my_function(location: str, context_variables: dict[str, Any]) -> SwarmResult
     return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
 
 # NEW
-def my_function(location: str, context_variables: ContextVariables) -> SwarmResult:
+def my_function(location: str, context_variables: ContextVariables) -> ReplyResult:
     """Important docstring for my function."""
-    return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
+    return ReplyResult(target=AgentTarget(the_next_agent), context_variables=context_variables, message="The weather is very hot!")
 ```
 
 ### Replace SwarmResult with ReplyResult
