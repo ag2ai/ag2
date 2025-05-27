@@ -98,6 +98,7 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
     print("Chat cost:", res.cost)
 
 
+@run_for_optional_imports("openai", "openai")
 @pytest.mark.asyncio
 async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credentials):
     # Configure the LLM
