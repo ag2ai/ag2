@@ -76,7 +76,9 @@ class CustomizedTeachability(AgentCapability):
         # Register a hook for processing the last message.
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
-        agent.register_reply([Agent, None], self._customized_teachability_gen_reply) #, position=self._register_reply_position)
+        agent.register_reply(
+            [Agent, None], self._customized_teachability_gen_reply
+        )  # , position=self._register_reply_position)
 
         # Was an llm_config passed to the constructor?
         if self.llm_config is None:
@@ -101,7 +103,7 @@ class CustomizedTeachability(AgentCapability):
         # Try to retrieve relevant memos from the DB.
         expanded_text = text
         expanded_text, nearest_memo = self._consider_memo_retrieval(text)
-        #print("[test] process_last_received_message()\n")
+        # print("[test] process_last_received_message()\n")
 
         # Try to store any user teachings in new memos to be used in the future.
         task_id = self._consider_memo_storage(text, expanded_text, nearest_memo)
@@ -119,16 +121,16 @@ class CustomizedTeachability(AgentCapability):
         if messages is None:
             return False, None
 
-        #print(f"_customized_teachability_gen_reply() messages: {messages}")
+        # print(f"_customized_teachability_gen_reply() messages: {messages}")
 
         last_message = code_utils.content_str(messages[-1]["content"])
-        #print(f"_customized_teachability_gen_reply() last_message: {last_message}")
+        # print(f"_customized_teachability_gen_reply() last_message: {last_message}")
         task_id, last_message = self._separate_taskid_from_message(last_message)
-        #print(f"_customized_teachability_gen_reply() task_id: {task_id}\n    last_message: {last_message}")
+        # print(f"_customized_teachability_gen_reply() task_id: {task_id}\n    last_message: {last_message}")
 
         reply = self.teachable_agent.generate_oai_reply(sender=sender, messages=messages)
-        #print(f"_customized_teachability_gen_reply() reply (type(reply)={type(reply)}): {reply}")
-        if (reply[0]) and (task_id != -1):            
+        # print(f"_customized_teachability_gen_reply() reply (type(reply)={type(reply)}): {reply}")
+        if (reply[0]) and (task_id != -1):
             self.memo_store.update_task_context(task_id, reply[1])
         return reply
 
@@ -137,9 +139,9 @@ class CustomizedTeachability(AgentCapability):
         st = str(message)
         if st.startswith(CustomizedTeachability.static_task_id_prefix):
             prefix_len = len(CustomizedTeachability.static_task_id_prefix)
-            space_loc = st.find(' ')
-            if (space_loc >= prefix_len + 2) and (len(st) > prefix_len and st[prefix_len] == '='):
-                task_id_st = st[prefix_len+1:space_loc]
+            space_loc = st.find(" ")
+            if (space_loc >= prefix_len + 2) and (len(st) > prefix_len and st[prefix_len] == "="):
+                task_id_st = st[prefix_len + 1 : space_loc]
                 try:
                     task_id = int(task_id_st)
                     st = st[space_loc:]
@@ -148,26 +150,23 @@ class CustomizedTeachability(AgentCapability):
                         print(colored(f"Could not parse int from {task_id_st}.", "red"))
         return (task_id, st)
 
-
-    def _consider_memo_storage(
-        self, 
-        comment: Union[dict[str, Any], str], 
-        expanded_text, 
-        nearest_memo: dict
-    ) -> int:
+    def _consider_memo_storage(self, comment: Union[dict[str, Any], str], expanded_text, nearest_memo: dict) -> int:
         """Decides whether to store something from one user comment in the DB."""
-        
-        #print(f'[test] _consider_memo_storage() comment: {comment}\n')
+
+        # print(f'[test] _consider_memo_storage() comment: {comment}\n')
 
         task_id = -1
-        
-        if 'task_id' in nearest_memo:
+
+        if "task_id" in nearest_memo:
             # Extract the detailed task.
             detailed_task = self._analyze(
-                expanded_text, "Briefly summarize this task from the TEXT and include all requirements and constraints if any."
+                expanded_text,
+                "Briefly summarize this task from the TEXT and include all requirements and constraints if any.",
             )
-            task_id = nearest_memo['task_id']
-            self.memo_store.update_task(task_id, nearest_memo['summarized_task'], detailed_task, nearest_memo['context'])
+            task_id = nearest_memo["task_id"]
+            self.memo_store.update_task(
+                task_id, nearest_memo["summarized_task"], detailed_task, nearest_memo["context"]
+            )
         else:
             response = self._analyze(
                 comment,
@@ -176,7 +175,8 @@ class CustomizedTeachability(AgentCapability):
             if "yes" in response.lower():
                 # Extract the detailed task.
                 detailed_task = self._analyze(
-                    comment, "Briefly summarize this task from the TEXT and include all requirements and constraints if any."
+                    comment,
+                    "Briefly summarize this task from the TEXT and include all requirements and constraints if any.",
                 )
                 # Summarize the task.
                 summarized_task = self._analyze(
@@ -184,7 +184,7 @@ class CustomizedTeachability(AgentCapability):
                     "Summarize very briefly the task described in the TEXT. Leave out the detailed requirements and constraints.",
                 )
                 context = ""
-            
+
                 if self.verbosity >= 1:
                     print(colored("\nREMEMBER THIS TASK", "light_yellow"))
                 task_id = self.memo_store.add_task(summarized_task, detailed_task, context)
@@ -195,13 +195,13 @@ class CustomizedTeachability(AgentCapability):
 
     def _consider_memo_retrieval(self, comment: Union[dict[str, Any], str]):
         """Decides whether to retrieve memos from the DB, and add them to the chat context."""
-        
+
         if self.verbosity >= 1:
             print(colored("\nLOOK FOR NEAREST MEMO", "light_yellow"))
         nearest_memo = self.memo_store.get_nearest_memo(comment, self.recall_threshold)
         # TODO: Add keyword-based rag
-        if 'detailed_task' in nearest_memo:
-            comment = comment + self._concatenate_memo_texts([(nearest_memo['detailed_task'], nearest_memo['context'])])
+        if "detailed_task" in nearest_memo:
+            comment = comment + self._concatenate_memo_texts([(nearest_memo["detailed_task"], nearest_memo["context"])])
 
         return comment, nearest_memo
 
@@ -323,7 +323,7 @@ class CustomizedMemoStore:
         if st_tid not in self.uid_text_dict:
             if self.verbosity >= 1:
                 print(colored(f"\nTASK NOT FOUND IN uid_text_dict:\n  ID\n    {task_id}\n", "red"))
-            return 
+            return
         summarized_task, detailed_task, old_context = self.uid_text_dict[st_tid]
         self.uid_text_dict[st_tid] = summarized_task, detailed_task, context
         if self.verbosity >= 1:
@@ -377,8 +377,10 @@ class CustomizedMemoStore:
                     "light_yellow",
                 )
             )
-        return {'task_id': uid, 'summarized_task': summarized_task, 'detailed_task': detailed_task, 'distance': distance, 'context': context}
-
-    
-
-
+        return {
+            "task_id": uid,
+            "summarized_task": summarized_task,
+            "detailed_task": detailed_task,
+            "distance": distance,
+            "context": context,
+        }
