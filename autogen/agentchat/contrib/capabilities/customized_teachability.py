@@ -131,7 +131,19 @@ class CustomizedTeachability(AgentCapability):
         reply = self.teachable_agent.generate_oai_reply(sender=sender, messages=messages)
         # print(f"_customized_teachability_gen_reply() reply (type(reply)={type(reply)}): {reply}")
         if (reply[0]) and (task_id != -1):
-            self.memo_store.update_task_context(task_id, reply[1])
+            # Merge the new reply with the latest state
+
+            new_context = reply[1]
+            memo = self.memo_store._get_memo_by_id(task_id)
+            if ("context" in memo) and (memo["context"] != ""):
+                new_context = f"{memo['context']} \n# [Latest Change]:\n{new_context}"
+                response = self._analyze(
+                    new_context,
+                    f"Please merge the above TEXT, prioritizing and fully respecting the content under '[Latest Change]', as a single plan (or a single solution) for the task (or the problem) below: {memo['detailed_task']}",
+                )
+                new_context = response
+
+            self.memo_store.update_task_context(task_id, new_context)
         return reply
 
     def _separate_taskid_from_message(self, message) -> (int, str):
@@ -214,7 +226,7 @@ class CustomizedTeachability(AgentCapability):
                 detailed_task = memo[0]
                 context = memo[1]
                 info = info + "- " + detailed_task + "\n"
-                info = info + "\n# Latest Output and Context that you should respect\n - " + context + "\n"
+                info = info + "\n# Latest Output and Context that you should respect below\n" + context + "\n"
             if self.verbosity >= 1:
                 print(colored("\nMEMOS APPENDED TO LAST MESSAGE...\n" + info + "\n", "light_yellow"))
             memo_texts = memo_texts + "\n" + info
@@ -351,6 +363,27 @@ class CustomizedMemoStore:
         if self.verbosity >= 3:
             self.list_memos()
         return self.last_memo_id
+
+    def _get_memo_by_id(self, task_id: int):
+        st_tid = str(task_id)
+        if st_tid not in self.uid_text_dict:
+            if self.verbosity >= 1:
+                print(colored(f"\nTASK NOT FOUND IN uid_text_dict:\n  ID\n    {task_id}\n", "red"))
+            return None
+        summarized_task, detailed_task, context = self.uid_text_dict[st_tid]
+        if self.verbosity >= 1:
+            print(
+                colored(
+                    f"\nGET MEMO BY ID IN uid_text_dict:\n  ID\n    {task_id}\n  TASK\n    {summarized_task}\n  DETAIL\n    {detailed_task}\n  CONTEXT\n    {context}\n",
+                    "light_yellow",
+                )
+            )
+        return {
+            "task_id": task_id,
+            "summarized_task": summarized_task,
+            "detailed_task": detailed_task,
+            "context": context,
+        }
 
     def get_nearest_memo(self, query_text: str, recall_threshold: float):
         """Retrieves the nearest memo to the given query text."""
