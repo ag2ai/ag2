@@ -2321,6 +2321,21 @@ class ConversableAgent(LLMAgent):
 
         return False, None
 
+    def _run_async_in_thread(self, coro):
+        """Run an async coroutine in a separate thread with its own event loop."""
+        result = {}
+
+        def runner():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result["value"] = loop.run_until_complete(coro)
+            loop.close()
+
+        t = threading.Thread(target=runner)
+        t.start()
+        t.join()
+        return result["value"]
+
     def generate_function_call_reply(
         self,
         messages: Optional[list[dict[str, Any]]] = None,
@@ -2342,18 +2357,8 @@ class ConversableAgent(LLMAgent):
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
-                try:
-                    # get the running loop if it was already created
-                    loop = asyncio.get_running_loop()
-                    close_loop = False
-                except RuntimeError:
-                    # create a loop if there is no running loop
-                    loop = asyncio.new_event_loop()
-                    close_loop = True
-
-                _, func_return = loop.run_until_complete(self.a_execute_function(func_call, call_id=call_id))
-                if close_loop:
-                    loop.close()
+                coro = self.a_execute_function(func_call, call_id=call_id)
+                _, func_return = self._run_async_in_thread(coro)
             else:
                 _, func_return = self.execute_function(message["function_call"], call_id=call_id)
             return True, func_return
@@ -2409,18 +2414,8 @@ class ConversableAgent(LLMAgent):
             tool_call_id = tool_call.get("id", None)
             func = self._function_map.get(function_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
-                try:
-                    # get the running loop if it was already created
-                    loop = asyncio.get_running_loop()
-                    close_loop = False
-                except RuntimeError:
-                    # create a loop if there is no running loop
-                    loop = asyncio.new_event_loop()
-                    close_loop = True
-
-                _, func_return = loop.run_until_complete(self.a_execute_function(function_call, call_id=tool_call_id))
-                if close_loop:
-                    loop.close()
+                coro = self.a_execute_function(function_call, call_id=tool_call_id)
+                _, func_return = self._run_async_in_thread(coro)
             else:
                 _, func_return = self.execute_function(function_call, call_id=tool_call_id)
             content = func_return.get("content", "")
