@@ -420,7 +420,12 @@ class MCPProxy:
             "server_url": self._servers[0]["url"],  # single or list depending on your structure
             "authentications": self._get_authentications(),  # list of auth blocks, we will also need to check _security_params
             "operations": [
-                {"name": op.__name__, "description": op._description.replace("\n", " ").replace("\r", "").strip()}
+                {
+                    "name": op.__name__,
+                    "description": op._description.replace("\n", " ").replace("\r", "").strip()
+                    if op._description is not None
+                    else "",
+                }
                 for op in functions
             ],
         }
