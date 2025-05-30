@@ -832,7 +832,8 @@ class OpenAIWrapper:
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         openai_config["azure_deployment"] = openai_config.get("azure_deployment", config.get("model"))
         if openai_config["azure_deployment"] is not None:
-            openai_config["azure_deployment"] = openai_config["azure_deployment"].replace(".", "")
+            # Preserve dots in version numbers (e.g., gpt-4.1) while removing other dots
+            openai_config["azure_deployment"] = re.sub(r'\.(?![0-9])', '', openai_config["azure_deployment"])
         openai_config["azure_endpoint"] = openai_config.get("azure_endpoint", openai_config.pop("base_url", None))
 
         # Create a default Azure token provider if requested
