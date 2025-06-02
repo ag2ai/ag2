@@ -62,7 +62,7 @@ jobs:
           echo $VERSION
           echo $IS_RC
 
-          if [ "$IS_RC" == "False" ]; then
+          if [ "$IS_RC" == "False" ] || [ "$VERSION" == "0.9.1post0" ]; then
             cd website/mkdocs && mike deploy -F mkdocs.yml --update-aliases $VERSION latest
             mike set-default --push --allow-empty -F mkdocs.yml latest
           else

@@ -5,12 +5,12 @@ sidebarTitle: FAQ
 
 ## Install the correct package
 
-The valid aliases of the AG2 package at PyPI are `ag2`, `autogen`, and `pyautogen`.
+The valid aliases of the AG2 package at PyPI are `autogen` and `ag2`.
 Any one of the following three lines works:
 ```bash
 pip install ag2
 pip install autogen
-pip install pyautogen
+pip install ag2
 ```
 
 After installation of any of them, you can import `autogen` using the same import statement:
@@ -246,11 +246,11 @@ user_proxy = autogen.UserProxyAgent(
 
 ### What should I do if I get the error "TypeError: Assistants.create() got an unexpected keyword argument 'file_ids'"?
 
-This error typically occurs when using `pyautogen` version earlier than 0.2.27 in combination with OpenAI library version 1.21 or later. The issue arises because the older version of `pyautogen` does not support the file_ids parameter used by newer versions of the OpenAI API.
-To resolve this issue, you need to upgrade your `pyautogen` package to version 0.2.27 or higher that ensures compatibility between AG2 and the OpenAI library.
+This error typically occurs when using `ag2` version earlier than 0.2.27 in combination with OpenAI library version 1.21 or later. The issue arises because the older version of `ag2` does not support the file_ids parameter used by newer versions of the OpenAI API.
+To resolve this issue, you need to upgrade your `ag2` package to version 0.2.27 or higher that ensures compatibility between AG2 and the OpenAI library.
 
 ```python
-pip install --upgrade pyautogen
+pip install --upgrade ag2
 ```
 
 ## None of the Dev Containers are building due to "Hash sum mismatch", what should I do?

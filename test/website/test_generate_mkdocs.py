@@ -798,7 +798,7 @@ class TestRemoveMdxCodeBlocks:
     Some extra dependencies are needed for this notebook, which can be installed via pip:
 
     ```bash
-    pip install pyautogen[openai,lmm]
+    pip install ag2[openai,lmm]
     ```
 
     For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
@@ -808,7 +808,7 @@ class TestRemoveMdxCodeBlocks:
     Some extra dependencies are needed for this notebook, which can be installed via pip:
 
     ```bash
-    pip install pyautogen[openai,lmm]
+    pip install ag2[openai,lmm]
     ```
 
     For more information, please refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2)."""

@@ -41,7 +41,7 @@ if len(template_str) < 100:
 # Create a Jinja2 template object
 template = Template(template_str)
 
-for name in ["ag2", "autogen"]:
+for name in ["autogen"]:
     file_name = f"setup_{name}.py"
     file_path = Path(__file__).parents[1].joinpath(file_name)
     # Render the template with the optional dependencies

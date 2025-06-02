@@ -5,7 +5,7 @@
   <img src="https://raw.githubusercontent.com/ag2ai/ag2/27b37494a6f72b1f8050f6bd7be9a7ff232cf749/website/static/img/ag2.svg" width="150" title="hover text">
   <br>
   <br>
-  <img src="https://img.shields.io/pypi/dm/pyautogen?label=PyPI%20downloads">
+  <img src="https://img.shields.io/pypi/dm/ag2?label=PyPI%20downloads">
   <a href="https://badge.fury.io/py/autogen"><img src="https://badge.fury.io/py/autogen.svg"></a>
   <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
     <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
@@ -65,7 +65,7 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 ### Installation
 
-AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `pyautogen` or `autogen`) on PyPI.
+AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
 
 ```bash
 pip install ag2[openai]
@@ -292,7 +292,7 @@ teacher.initiate_chat(
 
 When executed, this code creates a collaborative system where the teacher initiates the conversation, and the lesson planner and reviewer agents work together to create and refine a lesson plan. The GroupChatManager orchestrates the conversation, selecting the next agent to respond based on the context of the discussion.
 
-For workflows requiring more structured processes, explore the Swarm pattern in the detailed [documentation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive).
+For workflows requiring more structured processes, explore the Group Chat pattern in the detailed [documentation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction).
 
 ### Tools
 
@@ -353,7 +353,7 @@ AG2 supports more advanced concepts to help you build your AI agent workflows. Y
 - [Ending a conversation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/ending-a-chat/)
 - [Retrieval Augmented Generation (RAG)](https://docs.ag2.ai/docs/user-guide/advanced-concepts/rag)
 - [Code Execution](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/code-execution)
-- [Tools with Secrets](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/introducing-tools/tools-with-secrets)
+- [Tools with Secrets](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/tools/tools-with-secrets/)
 
 ## Announcements
 
