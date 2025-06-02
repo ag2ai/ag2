@@ -6,7 +6,10 @@ import re
 from functools import cached_property, wraps
 from typing import Any
 
-import yaml
+from ...import_utils import optional_import_block, require_optional_import
+
+with optional_import_block():
+    import yaml
 
 from autogen.import_utils import optional_import_block
 
@@ -56,6 +59,7 @@ def patch_function_name_parsing() -> None:
     logger.info("Patched Operation.function_name")
 
 
+@require_optional_import(["yaml"], "mcp-proxy-gen")
 def patch_generate_code() -> None:
     # Save reference to the original generate_code function
     org_generate_code = fastapi_code_generator_main.generate_code

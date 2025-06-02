@@ -191,7 +191,7 @@ twilio = [
 mcp = [
     # mcp 1.6.0 keeps hanging in stdio_client context manager
     # test_mcp_issue_with_stdio_client_context_manager is failing for mcp=1.6.0
-    "mcp>=1.4.0,<1.6; python_version>='3.10'"
+    "mcp>=1.4.0,<1.6; python_version>='3.10'",
 ]
 
 mcp-proxy-gen = [
@@ -199,6 +199,7 @@ mcp-proxy-gen = [
     "fastapi>=0.112,<1",
     "requests",  # do not pin it
     "typer",
+    "PyYAML",
 ]
 
 interop-crewai = [

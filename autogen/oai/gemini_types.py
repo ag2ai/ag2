@@ -108,6 +108,25 @@ class FunctionCallingConfigMode(CaseInSensitiveEnum):
     NONE = "NONE"
 
 
+class LatLng(CommonBaseModel):
+    """An object that represents a latitude/longitude pair.
+
+    This is expressed as a pair of doubles to represent degrees latitude and
+    degrees longitude. Unless specified otherwise, this object must conform to the
+    <a href="https://en.wikipedia.org/wiki/World_Geodetic_System#1984_version">
+    WGS84 standard</a>. Values must be within normalized ranges.
+    """
+
+    latitude: Optional[float] = Field(
+        default=None,
+        description="""The latitude in degrees. It must be in the range [-90.0, +90.0].""",
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        description="""The longitude in degrees. It must be in the range [-180.0, +180.0]""",
+    )
+
+
 class FunctionCallingConfig(CommonBaseModel):
     """Function calling config."""
 
@@ -116,6 +135,12 @@ class FunctionCallingConfig(CommonBaseModel):
         default=None,
         description="""Optional. Function names to call. Only set when the Mode is ANY. Function names should match [FunctionDeclaration.name]. With mode set to ANY, model will predict a function call from the set of function names provided.""",
     )
+
+
+class RetrievalConfig(CommonBaseModel):
+    """Retrieval config."""
+
+    lat_lng: Optional[LatLng] = Field(default=None, description="""Optional. The location of the user.""")
 
 
 class ToolConfig(CommonBaseModel):
@@ -127,3 +152,4 @@ class ToolConfig(CommonBaseModel):
     function_calling_config: Optional[FunctionCallingConfig] = Field(
         default=None, description="""Optional. Function calling config."""
     )
+    retrieval_config: Optional[RetrievalConfig] = Field(default=None, description="""Optional. Retrieval config.""")

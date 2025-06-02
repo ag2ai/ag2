@@ -419,7 +419,11 @@ flowchart TD
 
 ### Setting Default After-Work Behavior
 
-Finally, we set the default behavior for when agents complete their work without a specific handoff triggering:
+After-work behavior defines what happens when an agent completes its work and no specific LLM or context-based handoff conditions are triggered. AG2 provides two levels of control for setting after-work behavior: **agent-level** and **pattern-level**.
+
+#### Agent-Level After-Work Behavior
+
+You can set the after-work behavior for an agent using the `set_after_work` method. This method takes a `Target` object as an argument, which defines what happens when the agent completes its work.
 
 ```python
 # Configure handoffs for advanced troubleshooting agent
@@ -429,7 +433,59 @@ advanced_troubleshooting_agent.handoffs.set_after_work(RevertToUserTarget())
 general_agent.handoffs.set_after_work(RevertToUserTarget())
 ```
 
-This ensures that after these agents finish helping a customer, control returns to the user, who can ask another question or end the conversation.
+This approach is ideal when different agents in your system need different behaviors after completing their tasks.
+
+#### Pattern-Level After-Work Behavior
+
+Pattern-level after-work behavior sets a default behavior for all agents in the group chat using the `group_after_work` parameter:
+
+```python
+# Set pattern-level after-work behavior that applies to all agents
+pattern = DefaultPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    group_manager_args={"llm_config": llm_config},
+    group_after_work=RevertToUserTarget()  # All agents revert to user when done
+)
+```
+
+This approach is useful when you want consistent behavior across all agents in your system, reducing the need to configure each agent individually.
+
+#### Precedence and Override Behavior
+
+When both agent-level and pattern-level after-work behaviors are set, agent-level settings take precedence:
+
+```python
+# Pattern-level setting applies to all agents
+pattern = AutoPattern(
+    initial_agent=triage_agent,
+    agents=[triage_agent, tech_agent, general_agent],
+    user_agent=user,
+    group_after_work=RevertToUserTarget()  # Default for all agents
+)
+
+# Agent-level setting overrides pattern-level for this specific agent
+tech_agent.handoffs.set_after_work(TerminateTarget())  # This overrides the pattern setting
+```
+
+In this example, `triage_agent` and `general_agent` will revert to the user after completing their work, while `tech_agent` will terminate the conversation.
+
+The `group_after_work` parameter accepts any of the [transition targets](/docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs/#transition-targets) available in AG2.
+
+#### Choosing the Right Approach
+
+Use `agent-level` after-work behavior when:
+
+- Different agents need different behaviors after completing their tasks
+- You want fine-grained control over conversation flow
+- Some agents should terminate while others should continue the conversation
+
+Use `pattern-level` after-work behavior when:
+
+- You want consistent behavior across all agents
+- You're setting up a simple workflow where all agents should behave similarly
+- You want to minimize configuration overhead
 
 ### Putting It All Together
 

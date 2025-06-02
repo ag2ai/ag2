@@ -24,7 +24,6 @@ from typing import (
 )
 
 import requests
-import yaml
 from pydantic import PydanticInvalidForJsonSchema
 from pydantic_core import PydanticUndefined
 
@@ -34,6 +33,7 @@ from .security import BaseSecurity, BaseSecurityParameters
 
 with optional_import_block() as result:
     import fastapi
+    import yaml
     from datamodel_code_generator import DataModelType
     from fastapi_code_generator.__main__ import generate_code
     from jinja2 import Environment, FileSystemLoader
@@ -315,6 +315,7 @@ class MCPProxy:
         }
 
     @classmethod
+    @require_optional_import(["yaml"], "mcp-proxy-gen")
     def create(
         cls,
         *,
@@ -419,7 +420,12 @@ class MCPProxy:
             "server_url": self._servers[0]["url"],  # single or list depending on your structure
             "authentications": self._get_authentications(),  # list of auth blocks, we will also need to check _security_params
             "operations": [
-                {"name": op.__name__, "description": op._description.replace("\n", " ").replace("\r", "").strip()}
+                {
+                    "name": op.__name__,
+                    "description": op._description.replace("\n", " ").replace("\r", "").strip()
+                    if op._description is not None
+                    else "",
+                }
                 for op in functions
             ],
         }
