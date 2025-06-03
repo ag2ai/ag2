@@ -57,7 +57,7 @@ You can create context variables when setting up your group chat pattern:
 
 ```python hl_lines="5-9 16"
 from autogen.agentchat.group import ContextVariables
-from autogen.agentchat.group.patterns import AutoPattern 
+from autogen.agentchat.group.patterns import AutoPattern
 
 # Initialize context variables with initial data
 context = ContextVariables(data={
@@ -157,7 +157,7 @@ def check_user_history(
     """Check user's previous issues and provide personalized help."""
     user_name = context_variables.get("user_name", "User")
     issue_count = context_variables.get("issue_count", 0)
-    
+
     if issue_count > 3:
         return f"I see you've had {issue_count} issues today, {user_name}. Let me escalate this to a senior technician."
     else:
@@ -394,7 +394,7 @@ def get_user_context(context_variables: ContextVariables) -> str:
     user_name = context_variables.get("user_name", "User")
     query_count = context_variables.get("query_count", 0)
     session_start = context_variables.get("session_start", "Unknown")
-    
+
     return f"""Current session information:
     - Session started: {session_start}
     - Total queries: {query_count}
