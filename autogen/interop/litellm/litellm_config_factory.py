@@ -18,8 +18,8 @@ T = TypeVar("T", bound="LiteLLmConfigFactory")
 def get_crawl4ai_version():
     """Get the installed crawl4ai version."""
     try:
-        import crawl4ai.__version__
-        return crawl4ai.__version__.__version__
+        import crawl4ai
+        return getattr(crawl4ai, "__version__", None)
     except ImportError:
         return None
 
