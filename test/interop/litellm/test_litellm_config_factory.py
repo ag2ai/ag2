@@ -4,7 +4,7 @@
 
 
 from typing import Any
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -76,14 +76,14 @@ class TestCrawl4aiCompatibility:
         # Mock crawl4ai being installed with version 0.5.0
         mock_crawl4ai = MagicMock()
         mock_crawl4ai.__version__ = "0.5.0"
-        
-        with patch.dict('sys.modules', {'crawl4ai': mock_crawl4ai}):
+
+        with patch.dict("sys.modules", {"crawl4ai": mock_crawl4ai}):
             version = get_crawl4ai_version()
             assert version == "0.5.0"
 
     def test_get_crawl4ai_version_when_not_installed(self) -> None:
         """Test version detection when crawl4ai is not installed."""
-        with patch.dict('sys.modules', {'crawl4ai': None}):
+        with patch.dict("sys.modules", {"crawl4ai": None}):
             version = get_crawl4ai_version()
             assert version is None
 
@@ -103,13 +103,13 @@ class TestCrawl4aiCompatibility:
     )
     def test_is_crawl4ai_v05_or_higher(self, version: str | None, expected: bool) -> None:
         """Test version comparison logic."""
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value=version):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value=version):
             result = is_crawl4ai_v05_or_higher()
             assert result == expected
 
     def test_is_crawl4ai_v05_or_higher_invalid_version(self) -> None:
         """Test version comparison with invalid version string."""
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value="invalid"):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value="invalid"):
             result = is_crawl4ai_v05_or_higher()
             assert result is False
 
@@ -160,7 +160,9 @@ class TestCrawl4aiCompatibility:
         self, crawl4ai_version: str | None, config_list: list[dict[str, Any]], expected: dict[str, Any]
     ) -> None:
         """Test that config is properly adapted based on crawl4ai version."""
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value=crawl4ai_version):
+        with patch(
+            "autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value=crawl4ai_version
+        ):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             assert lite_llm_config == expected
 
@@ -175,7 +177,7 @@ class TestCrawl4aiCompatibility:
                 "api_version": "2023-12-01-preview",
             }
         ]
-        
+
         expected_v05 = {
             "llmConfig": {
                 "api_token": "test-key",
@@ -184,21 +186,21 @@ class TestCrawl4aiCompatibility:
                 "api_version": "2023-12-01-preview",
             }
         }
-        
+
         expected_legacy = {
             "api_token": "test-key",
             "provider": "azure/gpt-4o-mini",
             "base_url": "https://test.openai.azure.com/",
             "api_version": "2023-12-01-preview",
         }
-        
+
         # Test with crawl4ai >=0.5
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value="0.5.0"):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value="0.5.0"):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             assert lite_llm_config == expected_v05
-        
+
         # Test with crawl4ai <0.5
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value="0.4.247"):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value="0.4.247"):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             assert lite_llm_config == expected_legacy
 
@@ -212,9 +214,9 @@ class TestCrawl4aiCompatibility:
                 "tags": ["test-tag"],
             }
         ]
-        
+
         # Test with crawl4ai >=0.5 - tags should remain at top level
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value="0.5.0"):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value="0.5.0"):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             assert "tags" in lite_llm_config
             assert lite_llm_config["tags"] == ["test-tag"]
@@ -235,17 +237,17 @@ class TestCrawl4aiCompatibility:
     def test_provider_format_in_adapted_config(self, api_type: str, model: str, expected_provider: str) -> None:
         """Test that provider format is correct in adapted config for different API types."""
         config_list = [{"api_type": api_type, "model": model, "api_key": "test-key"}]
-        
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value="0.5.0"):
+
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value="0.5.0"):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             assert lite_llm_config["llmConfig"]["provider"] == expected_provider
 
     def test_backward_compatibility_no_crawl4ai(self) -> None:
         """Test that the fix doesn't break anything when crawl4ai is not installed."""
         config_list = [{"api_type": "openai", "model": "gpt-4o-mini", "api_key": "test-key"}]
-        
+
         # Mock crawl4ai not being installed
-        with patch('autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version', return_value=None):
+        with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value=None):
             lite_llm_config = LiteLLmConfigFactory.create_lite_llm_config({"config_list": config_list})
             # Should use legacy format
             assert lite_llm_config == {"api_token": "test-key", "provider": "openai/gpt-4o-mini"}

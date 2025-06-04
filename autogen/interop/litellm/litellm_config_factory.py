@@ -4,7 +4,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 from ...doc_utils import export_module
 from ...llm_config import LLMConfig
@@ -15,25 +15,27 @@ __all__ = ["LiteLLmConfigFactory"]
 T = TypeVar("T", bound="LiteLLmConfigFactory")
 
 
-def get_crawl4ai_version():
+def get_crawl4ai_version() -> Optional[str]:
     """Get the installed crawl4ai version."""
     try:
         import crawl4ai
-        return getattr(crawl4ai, "__version__", None)
-    except ImportError:
+        version = getattr(crawl4ai, "__version__", None)
+        return version if isinstance(version, str) else None
+    except (ImportError, AttributeError):
         return None
 
 
-def is_crawl4ai_v05_or_higher():
+def is_crawl4ai_v05_or_higher() -> bool:
     """Check if crawl4ai version is 0.5 or higher."""
     version = get_crawl4ai_version()
     if version is None:
         return False
-    
+
     # Parse version string (e.g., "0.5.0" -> [0, 5, 0])
     try:
-        version_parts = [int(x) for x in version.split('.')]
-        return version_parts[0] > 0 or (version_parts[0] == 0 and version_parts[1] >= 5)
+        version_parts = [int(x) for x in version.split(".")]
+        # Check if version >= 0.5.0
+        return version_parts >= [0, 5, 0]
     except (ValueError, IndexError):
         return False
 
@@ -46,7 +48,7 @@ class LiteLLmConfigFactory(ABC):
     def create_lite_llm_config(cls, llm_config: Union[LLMConfig, dict[str, Any]]) -> dict[str, Any]:
         """
         Create a lite LLM config compatible with the installed crawl4ai version.
-        
+
         For crawl4ai >=0.5: Returns config with llmConfig parameter
         For crawl4ai <0.5: Returns config with provider parameter (legacy)
         """
@@ -54,7 +56,7 @@ class LiteLLmConfigFactory(ABC):
         for factory in LiteLLmConfigFactory._factories:
             if factory.accepts(first_llm_config):
                 base_config = factory.create(first_llm_config)
-                
+
                 # Check crawl4ai version and adapt config accordingly
                 if is_crawl4ai_v05_or_higher():
                     return cls._adapt_for_crawl4ai_v05(base_config)
@@ -70,25 +72,25 @@ class LiteLLmConfigFactory(ABC):
         into an llmConfig object.
         """
         adapted_config = base_config.copy()
-        
+
         # Extract deprecated parameters
         llm_config_params = {}
-        
-        if 'provider' in adapted_config:
-            llm_config_params['provider'] = adapted_config.pop('provider')
-        
-        if 'api_token' in adapted_config:
-            llm_config_params['api_token'] = adapted_config.pop('api_token')
-        
+
+        if "provider" in adapted_config:
+            llm_config_params["provider"] = adapted_config.pop("provider")
+
+        if "api_token" in adapted_config:
+            llm_config_params["api_token"] = adapted_config.pop("api_token")
+
         # Add other parameters that should be in llmConfig
-        for param in ['base_url', 'api_base', 'api_version']:
+        for param in ["base_url", "api_base", "api_version"]:
             if param in adapted_config:
                 llm_config_params[param] = adapted_config.pop(param)
-        
+
         # Create the llmConfig object if we have parameters for it
         if llm_config_params:
-            adapted_config['llmConfig'] = llm_config_params
-        
+            adapted_config["llmConfig"] = llm_config_params
+
         return adapted_config
 
     @classmethod
