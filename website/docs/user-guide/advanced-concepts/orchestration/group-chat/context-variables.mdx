@@ -127,22 +127,178 @@ def route_to_tech_support(issue: str, context_variables: ContextVariables) -> Re
     )
 ```
 
+## How Agents Access Context Variables
+
+!!! important "Context Variables are NOT Automatically Visible to LLMs"
+    Context variables are not automatically included in the prompts sent to LLMs. Unlike conversation history, which is always visible, context variables remain in AG2's memory layer and must be explicitly accessed through specific mechanisms provided by the framework.
+
+### Why This Design?
+
+AG2 keeps context variables separate from LLM prompts for several important reasons:
+
+- **Token efficiency**: Automatically serializing potentially large context objects into every prompt would consume valuable tokens
+- **Clean prompts**: Keeps LLM prompts focused and predictable without unexpected data injection
+- **Explicit control**: Developers have full control over what context the LLM sees and when
+- **Security**: Sensitive data in context variables won't accidentally leak into prompts
+
+### Three Access Methods
+
+There are three primary ways agents can access context variables:
+
+#### 1. Through Tools with Context Parameters
+
+The most common method is through tools that have a `context_variables` parameter. AG2's dependency injection automatically provides the current context:
+
+```python
+def check_user_history(
+    query: str,
+    context_variables: ContextVariables  # AG2 injects this automatically
+) -> str:
+    """Check user's previous issues and provide personalized help."""
+    user_name = context_variables.get("user_name", "User")
+    issue_count = context_variables.get("issue_count", 0)
+
+    if issue_count > 3:
+        return f"I see you've had {issue_count} issues today, {user_name}. Let me escalate this to a senior technician."
+    else:
+        return f"Let me help you with this issue, {user_name}."
+```
+
+#### 2. Using System Message Templates
+
+For critical context that agents should always be aware of, use the `UpdateSystemMessage` feature to dynamically update the system prompt:
+
+```python
+from autogen import UpdateSystemMessage
+
+agent = ConversableAgent(
+    name="support_agent",
+    system_message="You are a helpful support agent.",
+    update_agent_state_before_reply=[
+        UpdateSystemMessage(
+            "You are helping {user_name} (Premium: {is_premium}). "
+            "They have reported {issue_count} issues in this session. "
+            "Current issue type: {issue_type}"
+        )
+    ]
+)
+```
+
+This approach ensures that key context variables are always visible in the agent's system message, updated before each response.
+
+#### 3. Creating Context Summary Tools
+
+For complex contexts, create dedicated tools that summarize the current state:
+
+```python
+def get_session_summary(context_variables: ContextVariables) -> str:
+    """Get a summary of the current support session."""
+    summary = f"""
+    Session Summary:
+    - User: {context_variables.get('user_name', 'Unknown')}
+    - Session Duration: {calculate_duration(context_variables.get('session_start'))}
+    - Issues Reported: {context_variables.get('issue_count', 0)}
+    - Current Status: {context_variables.get('status', 'Active')}
+    - Last Action: {context_variables.get('last_action', 'None')}
+    """
+    return summary
+```
+
+### Best Practices
+
+- **Tools**: Best for dynamic context access during specific operations
+- **System Messages**: Ideal for context that agents should always be aware of
+- **Templates**: Keep concise to avoid token bloat
+- **Documentation**: Clearly define your context structure
+- **Summaries**: Consider context summary tools for complex applications
+
+## Context Variables in Handoffs
+
+Agent handoffs provide a sophisticated mechanism for using context variables to control conversation flow. Unlike tools and system messages where agents actively access context, handoffs use context to automatically determine routing between agents.
+
+### Context-Based Handoffs (OnContextCondition)
+
+The most efficient way to route agents based on context is through `OnContextCondition`. These conditions evaluate context variables directly without using the LLM:
+
+```python
+from autogen.agentchat.group import OnContextCondition, ExpressionContextCondition, ContextExpression
+from autogen.agentchat.group import StringContextCondition, AgentTarget
+
+# Simple context check - triggers when 'logged_in' is truthy
+agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(order_mgmt_agent),
+        condition=StringContextCondition(variable_name="logged_in")
+    )
+)
+
+# Complex expression - evaluates boolean expressions on context
+agent.handoffs.add_context_condition(
+    OnContextCondition(
+        target=AgentTarget(advanced_support),
+        condition=ExpressionContextCondition(
+            ContextExpression("${issue_count} >= 3 and ${is_premium} == True")
+        )
+    )
+)
+```
+
+These conditions are evaluated automatically before each agent response, without any LLM involvement.
+
+### LLM-Based Handoffs with Context (OnCondition)
+
+For more nuanced decisions that require understanding message content, use `OnCondition` with context-aware prompts:
+
+```python
+from autogen.agentchat.group import OnCondition, ContextStrLLMCondition, ContextStr
+from autogen.agentchat.group import StringAvailableCondition
+
+# The ContextStr template substitutes context variables into the prompt
+agent.handoffs.add_llm_condition(
+    OnCondition(
+        target=AgentTarget(tech_support),
+        condition=ContextStrLLMCondition(
+            ContextStr("Transfer to tech support if the user mentions technical issues. "
+                      "Current user: {user_name}, Issue count: {issue_count}")
+        )
+    )
+)
+```
+
+AG2 dynamically substitutes context variables into these prompts before each agent response, so the LLM sees actual values (e.g., "Current user: John, Issue count: 3") without the context being part of the conversation history.
+
+### Conditional Availability
+
+Both types of handoffs can be conditionally available based on context:
+
+```python
+# This handoff is only available when not logged in
+OnCondition(
+    target=AgentTarget(auth_agent),
+    condition=StringLLMCondition("Transfer to authentication if user needs to log in"),
+    available=StringAvailableCondition(context_variable="requires_login")
+)
+```
+
+### How It All Works Together
+
+The context-aware handoff mechanism provides a powerful way to create dynamic agent workflows:
+
+- **Context conditions** (`OnContextCondition`) evaluate first, enabling instant routing without LLM calls
+- **LLM conditions** (`OnCondition`) see prompts with current context values substituted
+- **Availability filters** control which handoff options are active based on application state
+- **All context remains separate** from the conversation history, maintaining clean prompts
+
+This design allows you to build sophisticated routing logic that adapts to your application's state while keeping LLM prompts focused and token-efficient.
+
 ## Extending the Triage Example
 
-Let's extend our triage example to demonstrate how context variables enhance the customer support experience by maintaining information about the user and their issues.
-
-Here's how we can enhance our triage system with context variables:
-
-- Create initial context variables with session information
-- Track and store each user query in the context
-- Record solutions provided by technical support
-- Intentionally print the context variables before and after processing in the functions for debugging
-
+Let's enhance our triage system with context variables to maintain session state and provide personalized support:
 
 ```python
 from typing import Annotated
 from datetime import datetime
-from autogen import ConversableAgent, LLMConfig
+from autogen import ConversableAgent, LLMConfig, UpdateSystemMessage
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
@@ -233,6 +389,18 @@ def provide_technical_solution(
         context_variables=context_variables
     )
 
+def get_user_context(context_variables: ContextVariables) -> str:
+    """Get information about the current user and session."""
+    user_name = context_variables.get("user_name", "User")
+    query_count = context_variables.get("query_count", 0)
+    session_start = context_variables.get("session_start", "Unknown")
+
+    return f"""Current session information:
+    - Session started: {session_start}
+    - Total queries: {query_count}
+    - Last query: {context_variables.get("last_query", "None")}
+    - Query type: {context_variables.get("query_type", "Unknown")}"""
+
 # Create the agents
 llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
@@ -249,17 +417,23 @@ with llm_config:
         name="tech_agent",
         system_message="""You solve technical problems like software bugs
         and hardware issues. After analyzing the problem, use the provide_technical_solution
-        tool to format your response consistently and log it for future reference.
-
-        Check context variables for any user history before responding.""",
-        functions=[provide_technical_solution]
+        tool to format your response consistently and log it for future reference.""",
+        functions=[provide_technical_solution],
+        # Using UpdateSystemMessage to make context visible
+        update_agent_state_before_reply=[
+            UpdateSystemMessage(
+                "You are assisting with query #{query_count}. "
+                "The current issue is: {last_query} (Type: {query_type})"
+            )
+        ]
     )
 
     general_agent = ConversableAgent(
         name="general_agent",
         system_message="""You handle general, non-technical support questions.
-        Check context variables for user history before responding to provide
-        a personalized experience."""
+        Use the get_user_context tool to understand the current session before responding.""",
+        # Providing a tool to access context
+        functions=[get_user_context]
     )
 
 # User agent
@@ -405,6 +579,14 @@ Replying as user. Provide feedback to chat_manager. Press enter to skip and use 
 
 >>>>>>>> TERMINATING RUN (38356a45-e550-4e8f-9d3e-d7b07461b646): No reply generated
 ```
+
+## Key Takeaways
+
+!!! summary "Understanding Context Variables in AG2"
+    - **Context variables are separate from conversation history** and require explicit access methods
+    - **Three access patterns**: Tools (for actions), System Messages (for awareness), and Handoffs (for routing)
+    - **Context-aware handoffs** can evaluate conditions directly or provide context to LLM decisions
+    - **Choose the right method** based on your use case to maintain efficient, focused agent interactions
 
 ## Next Steps
 
