@@ -19,6 +19,7 @@ def get_crawl4ai_version() -> Optional[str]:
     """Get the installed crawl4ai version."""
     try:
         import crawl4ai
+
         version = getattr(crawl4ai, "__version__", None)
         return version if isinstance(version, str) else None
     except (ImportError, AttributeError):
