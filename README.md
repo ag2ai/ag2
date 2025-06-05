@@ -292,7 +292,7 @@ teacher.initiate_chat(
 
 When executed, this code creates a collaborative system where the teacher initiates the conversation, and the lesson planner and reviewer agents work together to create and refine a lesson plan. The GroupChatManager orchestrates the conversation, selecting the next agent to respond based on the context of the discussion.
 
-For workflows requiring more structured processes, explore the Swarm pattern in the detailed [documentation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/conversation-patterns-deep-dive).
+For workflows requiring more structured processes, explore the Group Chat pattern in the detailed [documentation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction).
 
 ### Tools
 

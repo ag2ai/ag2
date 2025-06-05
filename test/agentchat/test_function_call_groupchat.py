@@ -7,10 +7,13 @@
 # !/usr/bin/env python3 -m pytest
 
 import asyncio
+from unittest.mock import MagicMock
 
 import pytest
 
 import autogen
+from autogen.agentchat import a_initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 from autogen.import_utils import run_for_optional_imports
 
 from ..conftest import Credentials
@@ -93,6 +96,51 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
     assert func.call_count >= 1, "The function get_random_number should be called at least once."
     print("Chat summary:", res.summary)
     print("Chat cost:", res.cost)
+
+
+@run_for_optional_imports("openai", "openai")
+@pytest.mark.asyncio
+async def test_async_function_call_groupchat(credentials_gpt_4o_mini: Credentials):
+    # Configure the LLM
+    llm_config = {
+        "config_list": credentials_gpt_4o_mini.config_list,
+    }
+
+    mock_func = MagicMock()
+    # Mock database of previous transactions
+
+    async def dummy_func() -> str:
+        """Dummy function to satisfy the async requirement"""
+        mock_func()
+        return "dummy"
+
+    # Create the finance agent with LLM intelligence
+    dummy_bot_1 = autogen.ConversableAgent(
+        name="dummy_bot",
+        functions=[dummy_func],
+        llm_config=llm_config,
+    )
+    dummy_bot_2 = autogen.ConversableAgent(
+        name="dummy_bot_2",
+        llm_config=llm_config,
+    )
+
+    # Create pattern and start group chat
+    pattern = AutoPattern(
+        initial_agent=dummy_bot_1,
+        agents=[dummy_bot_1, dummy_bot_2],
+        group_manager_args={
+            "llm_config": llm_config,
+        },
+    )
+
+    _, _, _ = await a_initiate_group_chat(
+        pattern=pattern,
+        messages="Call dummy_func and report the results",
+        max_rounds=3,
+    )
+
+    assert mock_func.called, "Expected dummy_func to be called"
 
 
 def test_no_function_map():
