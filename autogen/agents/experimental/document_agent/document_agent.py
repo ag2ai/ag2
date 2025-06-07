@@ -583,7 +583,7 @@ class DocAgent(ConversableAgent):
             tuple: (should_terminate, reply_message)
         """
         # Use existing context_variables if available, otherwise create new ones
-        if hasattr(self, "_group_chat_context_variables"):
+        if hasattr(self, "_group_chat_context_variables") and self._group_chat_context_variables is not None:
             context_variables = self._group_chat_context_variables
             # Reset for the new run
             context_variables["DocumentsToIngest"] = []  # type: ignore[index]
