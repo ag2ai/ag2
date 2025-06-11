@@ -61,7 +61,6 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
-from ..guardrail import Guardrail
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -78,6 +77,7 @@ from .chat import (
     initiate_chats,
 )
 from .group.context_variables import ContextVariables
+from .group.guardrails import Guardrail
 from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 

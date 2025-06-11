@@ -2,15 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import BaseModel, Field
 
-from .oai.client import OpenAIWrapper
+from ...oai.client import OpenAIWrapper
 
 if TYPE_CHECKING:
-    from .llm_config import LLMConfig
+    from ...llm_config import LLMConfig
 
 
 class GuardrailResult(BaseModel):
@@ -22,8 +24,17 @@ class GuardrailResult(BaseModel):
     def __str__(self) -> str:
         return f"Guardrail Result: {self.activated}\nJustification: {self.justification}"
 
+    @staticmethod
+    def parse(text: str) -> "GuardrailResult":
+        """Parses a JSON string into a GuardrailResult object."""
+        try:
+            data = json.loads(text)
+            return GuardrailResult(**data)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e
 
-class GuardrailException(Exception):
+
+class GuardrailError(Exception):
     """Custom exception for guardrail violations."""
 
     def __init__(self, message: str, result: GuardrailResult):
@@ -37,9 +48,10 @@ class GuardrailException(Exception):
 class Guardrail(ABC):
     """Abstract base class for guardrails."""
 
-    def __init__(self, name: str, should_check_fn: Optional[Callable[..., bool]] = None) -> None:
+    def __init__(self, name: str, condition: str, activation_message: str) -> None:
         self.name = name
-        self.should_check_fn = should_check_fn
+        self.condition = condition
+        self.activation_message = activation_message
 
     @abstractmethod
     def check(
@@ -49,25 +61,14 @@ class Guardrail(ABC):
         """Checks the text against the guardrail and returns a GuardrailResult."""
         pass
 
-    def should_check(
-        self,
-        context: Union[str, list[dict[str, Any]]],
-    ) -> bool:
-        """Determines whether the guardrail should be applied to the given text."""
-        if self.should_check_fn:
-            return self.should_check_fn(context)
-        return True  # default to always checking
-
     def enforce(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> None:
-        """Runs check and raises GuardrailException if the result is not successful."""
-        if not self.should_check(context):
-            return
+        """Runs check and raises GuardrailError if the result is not successful."""
         result = self.check(context)
         if result.activated:
-            raise GuardrailException(
+            raise GuardrailError(
                 f"Guardrail '{self.name}' check failed.",
                 result,
             )
@@ -79,44 +80,62 @@ class LLMGuardrail(Guardrail):
     def __init__(
         self,
         name: str,
-        check_message: str,
+        condition: str,
+        activation_message: str,
         llm_config: "LLMConfig",
-        should_check_fn: Optional[Callable[..., bool]] = None,
     ) -> None:
-        super().__init__(name, should_check_fn)
-        self.check_message = check_message
+        super().__init__(name, condition, activation_message)
+        self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
+You will activate the guardrail only if the condition is met.
+
+**Condition: {condition}**"""
 
         if not llm_config:
             raise ValueError("LLMConfig is required.")
 
-        self.llm_config = llm_config
+        self.llm_config = llm_config.deepcopy()
         setattr(self.llm_config, "response_format", GuardrailResult)
-        self.client = OpenAIWrapper(**llm_config.model_dump())
+        self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
     def check(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
-        check_messages = [{"role": "system", "content": self.check_message}]
+        check_messages = [{"role": "system", "content": self.check_prompt}]
         if isinstance(context, str):
             check_messages.append({"role": "user", "content": context})
         elif isinstance(context, list):
             check_messages.extend(context)
         response = self.client.create(messages=check_messages)
-        return self.client.extract_text_or_completion_object(response)[0]
+        assert type(response.choices[0].message.content) is str
+        return GuardrailResult.parse(response.choices[0].message.content)
 
 
-class CustomGuardrail(Guardrail):
-    """Custom guardrail that uses a user-defined function to check the context."""
+class RegexGuardrail(Guardrail):
+    """Guardrail that checks the context against a regular expression."""
 
     def __init__(
-        self, name: str, check_fn: Callable[..., GuardrailResult], should_check_fn: Optional[Callable[..., bool]] = None
+        self,
+        name: str,
+        condition: str,
+        activation_message: str,
     ) -> None:
-        super().__init__(name, should_check_fn)
-        self.check_fn = check_fn
+        super().__init__(name, condition, activation_message)
+        self.regex = re.compile(condition)
 
     def check(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
-        return self.check_fn(context)
+        if isinstance(context, str):
+            text = context
+        elif isinstance(context, list):
+            text = " ".join([msg.get("content", "") for msg in context])
+        else:
+            raise ValueError("Context must be a string or a list of messages.")
+
+        match = self.regex.search(text)
+        activated = bool(match)
+        justification = f"Match found: {match.group(0)}" if match else "No match found"
+
+        return GuardrailResult(activated=activated, justification=justification)
