@@ -106,6 +106,8 @@ You will activate the guardrail only if the condition is met.
             check_messages.append({"role": "user", "content": context})
         elif isinstance(context, list):
             check_messages.extend(context)
+        else:
+            raise ValueError("Context must be a string or a list of messages.")
         response = self.client.create(messages=check_messages)
         assert type(response.choices[0].message.content) is str
         return GuardrailResult.parse(response.choices[0].message.content)
@@ -128,14 +130,16 @@ class RegexGuardrail(Guardrail):
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
         if isinstance(context, str):
-            text = context
+            texts = [context]
         elif isinstance(context, list):
-            text = " ".join([msg.get("content", "") for msg in context])
+            texts = [message.get("content", "") for message in context]
         else:
             raise ValueError("Context must be a string or a list of messages.")
 
-        match = self.regex.search(text)
-        activated = bool(match)
-        justification = f"Match found: {match.group(0)}" if match else "No match found"
-
-        return GuardrailResult(activated=activated, justification=justification)
+        for text in texts:
+            match = self.regex.search(text)
+            if match:
+                activated = True
+                justification = f"Match found: {match.group(0)}"
+                return GuardrailResult(activated=activated, justification=justification)
+        return GuardrailResult(activated=False, justification="No match found in the context.")

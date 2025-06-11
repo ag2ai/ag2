@@ -2822,10 +2822,6 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
-        # Apply the input guardrails
-        for input_guardrail in self.input_guardrails:
-            input_guardrail.enforce(context=messages)
-
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
@@ -2844,10 +2840,6 @@ class ConversableAgent(LLMAgent):
                         reply=reply,
                     )
                 if final:
-                    # Apply the output guardrails
-                    for output_guardrail in self.output_guardrails:
-                        output_guardrail.enforce(context=reply)
-
                     return reply
         return self._default_auto_reply
 
@@ -2904,10 +2896,6 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
-        # Apply the input guardrails
-        for input_guardrail in self.input_guardrails:
-            input_guardrail.enforce(context=messages)
-
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if "exclude" in kwargs and reply_func in kwargs["exclude"]:
@@ -2921,10 +2909,6 @@ class ConversableAgent(LLMAgent):
                 else:
                     final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
                 if final:
-                    # Apply the output guardrails
-                    for output_guardrail in self.output_guardrails:
-                        output_guardrail.enforce(context=reply)
-
                     return reply
         return self._default_auto_reply
 
