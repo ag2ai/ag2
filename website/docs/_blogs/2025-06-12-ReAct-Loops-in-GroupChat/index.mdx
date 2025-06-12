@@ -69,9 +69,7 @@ executed within the system.
 
 The diagram below illustrates the architecture of the agentic workflow.
 
-![](img/image3.png){width="6.267716535433071in"
-height="4.541666666666667in"}Essay Evaluation: Multi-Agentic
-Collaborative Workflow
+![Architecture: Multi-Agentic Collaborative Workflow](img/image3.png)
 
 For each essay we initiate a new group chat
 
@@ -130,7 +128,7 @@ system_message = f"""You are an agent representing a student. You have access to
       name="Student", #you can derive the student name and assign it here as well, but there is an ethical consideration in doing so
       system_message=system_message,
       description="Student representative, answers questions based on a student essay",
-      llm_config=llm_config_gpt_4o,
+      llm_config=llm_config_gpt_4o
   )
 ```
 **Examiner Agent:**
@@ -169,7 +167,7 @@ examiner = ConversableAgent(
               description="Examiner, examine the essay using a list of questions that address a specific set of criteria.",
               is_termination_msg=lambda x: "EVALUATION-END" in (x.get("content", "") or "").upper(),
               human_input_mode="NEVER",
-              llm_config=llm_config_gpt_4o,
+              llm_config=llm_config_gpt_4o
  )
 ```
 
@@ -212,7 +210,7 @@ evaluator = ConversableAgent(
 
               """,
       description="Evaluator, Evaluates the essay based on the answers provided and the student",
-      llm_config=llm_config_gpt_4o,
+      llm_config=llm_config_gpt_4o
   )
 ```
 
@@ -321,7 +319,7 @@ Sample Evaluation Criteria:
 
 ```text
 Content-Based Focus Areas for Essay Evaluation
-1\. Ethical Insight & Social Implications
+1. Ethical Insight & Social Implications
 What to Evaluate:
 • Does the essay meaningfully engage with ethical considerations related
 to the topic?
@@ -335,9 +333,8 @@ student groups.
 • Considers transparency and fairness in algorithmic decision-making.
 • Acknowledges ethical trade-offs between efficiency and pedagogical
 integrity.
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-2\. Technical & Practical Feasibility
+2. Technical & Practical Feasibility
 What to Evaluate:
 • Does the essay demonstrate understanding of the real-world
 implementation of the subject matter?
@@ -351,8 +348,6 @@ Example in AI Essay Grading Context:
 in education).
 • Proposes reasonable implementation methods (e.g., AI as first-pass
 grader).
-
-\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 Educational & Pedagogical Impact
 What to Evaluate:
@@ -376,31 +371,31 @@ Sample Scoring Rubric that uses a weighted scoring mechanism:
 ```text
 Dimensions and Scoring Adjustments:
 
-1\. Problem Understanding (PU)
+1. Problem Understanding (PU)
 o Assess whether the student identifies the primary issue AI aims to
 solve (efficiency, consistency, accessibility).
 o Higher scores for recognizing multiple dimensions and contextualizing
 the problem in real-world educational settings.
 
-2\. Ethical Insight (EI)
+2. Ethical Insight (EI)
 o Evaluate how well the essay engages with ethical concerns, such as
 fairness, bias, transparency, and inclusivity.
 o Essays with nuanced, multi-perspective analysis of these concerns will
 be scored higher.
 
-3\. Solution Proposal (SP)
+3. Solution Proposal (SP)
 o Examine the quality and clarity of the proposed solution (e.g., hybrid
 human-AI model).
 o Stronger scores for realistic, balanced, and well-justified
 alternatives to full automation.
 
-4\. Educational Impact (ED)
+4. Educational Impact (ED)
 o Determine how thoroughly the essay discusses the pedagogical
 consequences of AI on teachers, students, and learning processes.
 o High-scoring essays provide thoughtful analysis of classroom dynamics,
 teacher agency, and long-term outcomes.
 
-5\. Argument Balance (BA)
+5. Argument Balance (BA)
 o Check whether the essay presents a fair and well-rounded view of both
 pros and cons.
 o Balanced treatment with critical evaluation of opposing views scores
@@ -419,10 +414,9 @@ ensuring holistic evaluation.)
 
 Agent Communication Log (*this is **actual output**, not mock-ups*):
 
-![](img/image2.png){width="6.267716535433071in"
-height="7.777777777777778in"}![](img/image4.png){width="6.267716535433071in"
-height="8.597222222222221in"}![](img/image1.png){width="6.267716535433071in"
-height="3.0833333333333335in"}
+![](img/image2.png)
+![](img/image4.png)
+![](img/image1.png)
 
 As you can see the Evaluator has provided an Evaluation Summary as we've
 instructed along with a score of 68 for this particular essay *(essay
