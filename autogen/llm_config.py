@@ -76,6 +76,12 @@ class LLMConfig(metaclass=MetaLLMConfig):
         modified_kwargs["config_list"] = [
             _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
         ]
+        # Propagate stream setting to all config entries if set at top level
+        if "stream" in modified_kwargs:
+            stream_value = modified_kwargs["stream"]
+            modified_kwargs["config_list"] = [
+                {**v, "stream": stream_value} if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
+            ]
         for x in ["max_tokens", "top_p"]:
             if x in modified_kwargs:
                 modified_kwargs["config_list"] = [{**v, x: modified_kwargs[x]} for v in modified_kwargs["config_list"]]
@@ -259,6 +265,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
                 response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
                 timeout: Optional[int] = None
                 cache_seed: Optional[int] = None
+                stream: Optional[bool] = None
 
                 tools: list[Any] = Field(default_factory=list)
                 functions: list[Any] = Field(default_factory=list)

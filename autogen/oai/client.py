@@ -39,7 +39,6 @@ with optional_import_block() as openai_result:
 if openai_result.is_successful:
     # raises exception if openai>=1 is installed and something is wrong with imports
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
-    from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
     from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
@@ -244,6 +243,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
+    stream: bool = False
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
@@ -497,6 +497,9 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
+        # Check if streaming is enabled in the config
+        stream_enabled = params.get("stream", False)
+
         if self.response_format is not None or "response_format" in params:
 
             def _create_or_parse(*args, **kwargs):
@@ -536,10 +539,11 @@ class OpenAIClient:
             OpenAIClient._convert_system_role_to_user(params["messages"])
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params and not is_o1:
+        if stream_enabled and "messages" in params and not is_o1:
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
+            last_chunk = None
 
             # Prepare for potential function call
             full_function_call: Optional[dict[str, Any]] = None
@@ -547,6 +551,7 @@ class OpenAIClient:
 
             # Send the chat completion request to OpenAI's API and process the response in chunks
             for chunk in create_or_parse(**params):
+                last_chunk = chunk
                 if chunk.choices:
                     for choice in chunk.choices:
                         content = choice.delta.content
@@ -594,52 +599,36 @@ class OpenAIClient:
                             iostream.send(StreamEvent(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
-                        else:
-                            pass
+
+            if not last_chunk:
+                raise ValueError("No response received from the API")
 
             # Prepare the final ChatCompletion object based on the accumulated data
-            model = chunk.model.replace("gpt-35", "gpt-3.5")  # hack for Azure API
+            model = last_chunk.model.replace("gpt-35", "gpt-3.5")  # hack for Azure API
             prompt_tokens = count_token(params["messages"], model)
-            response = ChatCompletion(
-                id=chunk.id,
-                model=chunk.model,
-                created=chunk.created,
-                object="chat.completion",
-                choices=[],
-                usage=CompletionUsage(
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=prompt_tokens + completion_tokens,
-                ),
-            )
-            for i in range(len(response_contents)):
-                if openai_version >= "1.5":  # pragma: no cover
-                    # OpenAI versions 1.5.0 and above
-                    choice = Choice(
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                        logprobs=None,
-                    )
-                else:
-                    # OpenAI versions below 1.5.0
-                    choice = Choice(  # type: ignore [call-arg]
-                        index=i,
-                        finish_reason=finish_reasons[i],
-                        message=ChatCompletionMessage(
-                            role="assistant",
-                            content=response_contents[i],
-                            function_call=full_function_call,
-                            tool_calls=full_tool_calls,
-                        ),
-                    )
 
-                response.choices.append(choice)
+            # Create the final response
+            message = ChatCompletionMessage(
+                role="assistant",
+                content=response_contents[0],
+                function_call=full_function_call,
+                tool_calls=full_tool_calls,
+            )
+            choices = [Choice(finish_reason=finish_reasons[0], index=0, message=message)]
+            usage = CompletionUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+            )
+            response = ChatCompletion(
+                id=last_chunk.id,
+                choices=choices,
+                created=last_chunk.created,
+                model=model,
+                usage=usage,
+                object="chat.completion",
+            )
+            return response
         else:
             # If streaming is not enabled, send a regular chat completion request
             params = params.copy()
@@ -661,7 +650,7 @@ class OpenAIClient:
                         msg["role"] = "system"
                         msg["content"] = msg["content"][len("System message: ") :]
 
-        return response
+            return response
 
     def _process_reasoning_model_params(self, params: dict[str, Any]) -> None:
         """Cater for the reasoning model (o1, o3..) parameters
@@ -744,6 +733,7 @@ class OpenAIWrapper:
         "api_type",
         "tags",
         "price",
+        "stream",
     }
 
     @property
@@ -825,8 +815,19 @@ class OpenAIWrapper:
 
     def _separate_create_config(self, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Separate the config into create_config and extra_kwargs."""
+        # First, handle stream parameter specially
+        stream_value = config.get("stream", False)
+        config = config.copy()
+        if "stream" in config:
+            del config["stream"]
+
+        # Then separate the rest of the config
         create_config = {k: v for k, v in config.items() if k not in self.extra_kwargs}
         extra_kwargs = {k: v for k, v in config.items() if k in self.extra_kwargs}
+
+        # Add stream back to create_config
+        create_config["stream"] = stream_value
+
         return create_config, extra_kwargs
 
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:

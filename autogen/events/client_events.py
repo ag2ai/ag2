@@ -159,9 +159,9 @@ class StreamEvent(BaseEvent):
         f = f or print
 
         # Set the terminal text color to green
-        f("\033[32m", end="")
+        # f("\033[32m", end="")
 
         f(self.content, end="", flush=True)
 
         # Reset the terminal text color
-        f("\033[0m\n")
+        # f("\033[0m\n")
