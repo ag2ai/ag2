@@ -166,8 +166,6 @@ class ConversableAgent(LLMAgent):
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
         ] = None,
         handoffs: Optional[Handoffs] = None,
-        input_guardrails: Optional[list[Guardrail]] = None,
-        output_guardrails: Optional[list[Guardrail]] = None,
     ):
         """
         Args:
@@ -224,12 +222,10 @@ class ConversableAgent(LLMAgent):
             functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
-            input_guardrails (list[Guardrail]): A list of guardrails to be applied to the input messages.
-            output_guardrails (list[Guardrail]): A list of guardrails to be applied to the output message.
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
-        self.input_guardrails = input_guardrails if input_guardrails is not None else []
-        self.output_guardrails = output_guardrails if output_guardrails is not None else []
+        self.input_guardrails = []
+        self.output_guardrails = []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -3999,6 +3995,42 @@ class ConversableAgent(LLMAgent):
             conditions: List of conditions to add
         """
         self.handoffs.add_many(conditions)
+
+    def register_input_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for input validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.input_guardrails.append(guardrail)
+
+    def register_input_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for input validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.input_guardrails.extend(guardrails)
+
+    def register_output_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for output validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.output_guardrails.append(guardrail)
+
+    def register_output_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for output validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.output_guardrails.extend(guardrails)
 
 
 @export_module("autogen")

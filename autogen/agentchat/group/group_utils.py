@@ -65,6 +65,9 @@ def establish_group_agent(agent: "ConversableAgent") -> None:
     # Register a reply function to run Python function-based OnContextConditions before any other reply function
     agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
 
+    # # Register a reply function to run input guardrails before any other reply function
+    # agent.register_reply(trigger=([Agent, None]), reply_func=_run_input_guardrails, position=0)
+
     agent._get_display_name = MethodType(_group_agent_str, agent)  # type: ignore[method-assign]
 
     # Mark this agent as established as a group agent
@@ -95,13 +98,7 @@ def _run_oncontextconditions(
         )
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
-            # Condition has been met, we'll set the Tool Executor's next target
-            # attribute and that will be picked up on the next iteration when
-            # _determine_next_agent is called
-            for agent in agent._group_manager.groupchat.agents:  # type: ignore[attr-defined]
-                if isinstance(agent, GroupToolExecutor):
-                    agent.set_next_target(on_condition.target)
-                    break
+            on_condition.target.activate_target(agent._group_manager.groupchat)
 
             transfer_name = on_condition.target.display_name()
 

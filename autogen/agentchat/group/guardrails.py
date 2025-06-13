@@ -5,7 +5,7 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,7 @@ from ...oai.client import OpenAIWrapper
 
 if TYPE_CHECKING:
     from ...llm_config import LLMConfig
+    from .targets.transition_target import TransitionTarget
 
 
 class GuardrailResult(BaseModel):
@@ -34,24 +35,18 @@ class GuardrailResult(BaseModel):
             raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e
 
 
-class GuardrailError(Exception):
-    """Custom exception for guardrail violations."""
-
-    def __init__(self, message: str, result: GuardrailResult):
-        super().__init__(message)
-        self.result = result
-
-    def __str__(self) -> str:
-        return f"{super().__str__()}\n{self.result}"
-
-
 class Guardrail(ABC):
     """Abstract base class for guardrails."""
 
-    def __init__(self, name: str, condition: str, activation_message: str) -> None:
+    def __init__(
+        self, name: str, condition: str, target: "TransitionTarget", activation_message: Optional[str] = None
+    ) -> None:
         self.name = name
         self.condition = condition
-        self.activation_message = activation_message
+        self.target = target
+        self.activation_message = (
+            activation_message if activation_message else f"Guardrail '{name}' has been activated."
+        )
 
     @abstractmethod
     def check(
@@ -61,18 +56,6 @@ class Guardrail(ABC):
         """Checks the text against the guardrail and returns a GuardrailResult."""
         pass
 
-    def enforce(
-        self,
-        context: Union[str, list[dict[str, Any]]],
-    ) -> None:
-        """Runs check and raises GuardrailError if the result is not successful."""
-        result = self.check(context)
-        if result.activated:
-            raise GuardrailError(
-                f"Guardrail '{self.name}' check failed.",
-                result,
-            )
-
 
 class LLMGuardrail(Guardrail):
     """Guardrail that uses an LLM to check the context."""
@@ -81,14 +64,11 @@ class LLMGuardrail(Guardrail):
         self,
         name: str,
         condition: str,
-        activation_message: str,
+        target: "TransitionTarget",
         llm_config: "LLMConfig",
+        activation_message: Optional[str] = None,
     ) -> None:
-        super().__init__(name, condition, activation_message)
-        self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
-You will activate the guardrail only if the condition is met.
-
-**Condition: {condition}**"""
+        super().__init__(name, condition, target, activation_message)
 
         if not llm_config:
             raise ValueError("LLMConfig is required.")
@@ -97,20 +77,29 @@ You will activate the guardrail only if the condition is met.
         setattr(self.llm_config, "response_format", GuardrailResult)
         self.client = OpenAIWrapper(**self.llm_config.model_dump())
 
+        self.check_prompt = f"""You are a guardrail that checks if a condition is met in the conversation you are given.
+You will activate the guardrail only if the condition is met.
+
+**Condition: {self.condition}**"""
+
     def check(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
+        """Checks the context against the guardrail using an LLM."""
+        # Set the check prompt as the system message
         check_messages = [{"role": "system", "content": self.check_prompt}]
+        # If context is a string, wrap it in a user message and append it
         if isinstance(context, str):
             check_messages.append({"role": "user", "content": context})
+        # If context is a list of messages, append them
         elif isinstance(context, list):
             check_messages.extend(context)
         else:
             raise ValueError("Context must be a string or a list of messages.")
+        # Call the LLM with the check messages
         response = self.client.create(messages=check_messages)
-        assert type(response.choices[0].message.content) is str
-        return GuardrailResult.parse(response.choices[0].message.content)
+        return GuardrailResult.parse(response.choices[0].message.content)  # type: ignore
 
 
 class RegexGuardrail(Guardrail):
@@ -120,26 +109,32 @@ class RegexGuardrail(Guardrail):
         self,
         name: str,
         condition: str,
-        activation_message: str,
+        target: "TransitionTarget",
+        activation_message: Optional[str] = None,
     ) -> None:
-        super().__init__(name, condition, activation_message)
+        super().__init__(name, condition, target, activation_message)
+        # Compile the regular expression condition
         self.regex = re.compile(condition)
 
     def check(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
+        """Checks the context against the guardrail using a regular expression."""
+        # Create a list of the messages to check
         if isinstance(context, str):
-            texts = [context]
+            messages = [context]
         elif isinstance(context, list):
-            texts = [message.get("content", "") for message in context]
+            messages = [message.get("content", "") for message in context]
         else:
             raise ValueError("Context must be a string or a list of messages.")
 
-        for text in texts:
-            match = self.regex.search(text)
+        # Check each message against the regex
+        for message in messages:
+            match = self.regex.search(message)
+            # If a match is found, activate the guardrail and return the result
             if match:
                 activated = True
-                justification = f"Match found: {match.group(0)}"
+                justification = f"Match found -> {match.group(0)}"
                 return GuardrailResult(activated=activated, justification=justification)
         return GuardrailResult(activated=False, justification="No match found in the context.")
