@@ -156,6 +156,7 @@ def mock_tool_executor() -> MagicMock:
     executor.clear_next_target = MagicMock()
     executor.set_next_target = MagicMock()
     executor.register_agents_functions = MagicMock()
+    type(executor).__name__ = "GroupToolExecutor"
     return executor
 
 

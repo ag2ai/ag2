@@ -98,7 +98,7 @@ def _run_oncontextconditions(
         )
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
-            on_condition.target.activate_target(agent._group_manager.groupchat)
+            on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
 

@@ -73,8 +73,9 @@ class TransitionTarget(BaseModel):
 
         The Tool Executor's next target attribute will be picked up on the next iteration when _determine_next_agent is called"""
         for agent in groupchat.agents:  # type: ignore[attr-defined]
-            if type(agent).__name__ == "GroupToolExecutor":  # get the GroupToolExecutor agent
-                agent.set_next_target(self)
+            # get the GroupToolExecutor agent
+            if type(agent).__name__ == "GroupToolExecutor":
+                agent.set_next_target(self)  # type: ignore[attr-defined]
                 return
 
 
