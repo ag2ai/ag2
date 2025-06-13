@@ -72,7 +72,7 @@ def create_mock_agent(name: str, handoffs: Optional[Handoffs] = None) -> MagicMo
         agent.handoffs = MagicMock(spec=Handoffs)
         agent.handoffs.llm_conditions = []
         agent.handoffs.context_conditions = []
-        agent.handoffs.after_work = None
+        agent.handoffs.after_works = []
         agent.handoffs.get_llm_conditions_requiring_wrapping = MagicMock(return_value=[])
         agent.handoffs.get_context_conditions_requiring_wrapping = MagicMock(return_value=[])
         agent.handoffs.set_llm_function_names = MagicMock()
@@ -107,7 +107,7 @@ def user_proxy() -> MagicMock:
     agent._group_manager = None
 
     agent.handoffs = MagicMock()
-    agent.handoffs.after_work = None
+    agent.handoffs.after_works = []
 
     # Mock initiate_chat
     chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
@@ -302,7 +302,9 @@ class TestHelperFunctions:
         target = AgentTarget(agent=agent2)
         cond = OnCondition(target=target, condition=StringLLMCondition(prompt="prompt"))
         agent1.handoffs.llm_conditions = [cond]
-        agent1.handoffs.after_work = AgentNameTarget(agent_name=agent1.name)
+        agent1.handoffs.after_works = [
+            OnContextCondition(target=AgentNameTarget(agent_name=agent1.name), condition=None)
+        ]
         ensure_handoff_agents_in_group([agent1, agent2])  # Should not raise
 
         # Invalid case (LLM condition)
@@ -640,7 +642,7 @@ class TestHelperFunctions:
 
         # Case 6: After Work (Agent level - stay)
         mock_group_chat.messages = [{"role": "assistant", "name": "agent1", "content": "..."}]
-        agent1.handoffs.after_work = StayTarget()
+        agent1.handoffs.after_works = [OnContextCondition(target=StayTarget(), condition=None)]
         next_agent = determine_next_agent(
             agent1,
             mock_group_chat,
@@ -654,7 +656,7 @@ class TestHelperFunctions:
         assert next_agent == agent1
 
         # Case 7: After Work (Group level - terminate)
-        agent1.handoffs.after_work = None  # Remove agent level
+        agent1.handoffs.after_works = []  # Remove agent level
         group_after_work = TerminateTarget()
         next_agent = determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, group_after_work
