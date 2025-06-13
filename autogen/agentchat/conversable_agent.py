@@ -77,13 +77,13 @@ from .chat import (
     initiate_chats,
 )
 from .group.context_variables import ContextVariables
+from .group.guardrails import Guardrail
 from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
     from .group.on_condition import OnCondition
     from .group.on_context_condition import OnContextCondition
-
 __all__ = ("ConversableAgent",)
 
 logger = logging.getLogger(__name__)
@@ -224,6 +224,8 @@ class ConversableAgent(LLMAgent):
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
+        self.input_guardrails = []
+        self.output_guardrails = []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -3993,6 +3995,42 @@ class ConversableAgent(LLMAgent):
             conditions: List of conditions to add
         """
         self.handoffs.add_many(conditions)
+
+    def register_input_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for input validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.input_guardrails.append(guardrail)
+
+    def register_input_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for input validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.input_guardrails.extend(guardrails)
+
+    def register_output_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for output validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.output_guardrails.append(guardrail)
+
+    def register_output_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for output validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.output_guardrails.extend(guardrails)
 
 
 @export_module("autogen")
