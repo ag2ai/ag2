@@ -320,17 +320,19 @@ def setup_context_variables(
     tool_execution: "ConversableAgent",
     agents: list["ConversableAgent"],
     manager: GroupChatManager,
+    user_agent: Optional["ConversableAgent"],
     context_variables: ContextVariables,
 ) -> None:
-    """Assign a common context_variables reference to all agents in the group, including the tool executor and group chat manager.
+    """Assign a common context_variables reference to all agents in the group, including the tool executor, group chat manager, and user proxy agent.
 
     Args:
         tool_execution: The tool execution agent.
         agents: List of all agents in the conversation.
         manager: GroupChatManager instance.
+        user_agent: Optional user proxy agent.
         context_variables: Context variables to assign to all agents.
     """
-    for agent in agents + [tool_execution] + [manager]:
+    for agent in agents + [tool_execution] + [manager] + ([user_agent] if user_agent else []):
         agent.context_variables = context_variables
 
 

@@ -467,17 +467,19 @@ class TestHelperFunctions:
         agent2: MagicMock,
         mock_tool_executor: MagicMock,
         mock_group_chat_manager: MagicMock,
+        user_proxy: MagicMock,
         context_vars: ContextVariables,
     ) -> None:
         """Test assigning the common context variables object."""
         agents = [agent1, agent2]
         typed_agents = cast(list[ConversableAgent], agents)
-        setup_context_variables(mock_tool_executor, typed_agents, mock_group_chat_manager, context_vars)
+        setup_context_variables(mock_tool_executor, typed_agents, mock_group_chat_manager, user_proxy, context_vars)
 
         assert agent1.context_variables is context_vars
         assert agent2.context_variables is context_vars
         assert mock_tool_executor.context_variables is context_vars
         assert mock_group_chat_manager.context_variables is context_vars
+        assert user_proxy.context_variables is context_vars
 
     def test_cleanup_temp_user_messages(self) -> None:
         """Test removing the temporary user name from messages."""
