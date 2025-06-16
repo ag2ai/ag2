@@ -1489,10 +1489,10 @@ class GroupChatManager(ConversableAgent):
                 for agent in self._groupchat.agents:
                     if agent.name == message["name"]:
                         # An agent`s message is sent to the Group Chat Manager
-                        agent.a_send(message, self, request_reply=False, silent=True)
+                        await agent.a_send(message, self, request_reply=False, silent=True)
                     else:
                         # Otherwise, messages are sent from the Group Chat Manager to the agent
-                        self.a_send(message, agent, request_reply=False, silent=True)
+                        await self.a_send(message, agent, request_reply=False, silent=True)
 
                 # Add previous message to the new groupchat, if it's an admin message the name may not match so add the message directly
                 if message_speaker_agent:
