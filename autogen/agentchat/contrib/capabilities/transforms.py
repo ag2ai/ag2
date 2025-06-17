@@ -70,6 +70,8 @@ class MessageHistoryLimiter:
         max_messages Optional[int]: Maximum number of messages to keep in the context. Must be greater than 0 if not None.
         keep_first_message bool: Whether to keep the original first message in the conversation history.
             Defaults to False.
+        exclude_names Optional[list[str]]: List of message sender names to exclude from the message history.
+            Messages from these senders will be filtered out before applying the message limit. Defaults to None.
         """
         self._validate_max_messages(max_messages)
         self._max_messages = max_messages
