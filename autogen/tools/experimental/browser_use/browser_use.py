@@ -92,7 +92,7 @@ class BrowserUseTool(Tool):
             browser_config: The browser configuration to use. If defined, browser must be None
         """
         if llm_config is None:
-            llm_config = LLMConfig.current()
+            llm_config = LLMConfig.current
         if agent_kwargs is None:
             agent_kwargs = {}
         if browser_config is None:
@@ -101,6 +101,7 @@ class BrowserUseTool(Tool):
             raise ValueError(
                 f"Cannot provide both browser and additional keyword parameters: {browser=}, {browser_config=}"
             )
+
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
             llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
@@ -136,6 +137,7 @@ class BrowserUseTool(Tool):
                 extracted_content=extracted_content,
                 final_result=result.final_result(),
             )
+
         super().__init__(
             name="browser_use",
             description="Use the browser to perform a task.",
