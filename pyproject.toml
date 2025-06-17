@@ -189,9 +189,8 @@ twilio = [
 ]
 
 mcp = [
-    # mcp 1.6.0 keeps hanging in stdio_client context manager
-    # test_mcp_issue_with_stdio_client_context_manager is failing for mcp=1.6.0
-    "mcp>=1.7.0; python_version>='3.10'",
+    # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
+    "mcp>=1.9.4; python_version>='3.10'",
 ]
 
 mcp-proxy-gen = [
