@@ -51,7 +51,7 @@ class TestReliableTool:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
-        
+
         should_bad_response = True
 
         def generate_sub_questions_list(
@@ -90,7 +90,7 @@ class TestReliableTool:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
-        
+
         should_error = True
 
         def generate_sub_questions_list(
@@ -129,7 +129,7 @@ class TestReliableTool:
         # Skip this test in GitHub Actions due to SQLite database permission issues
         if os.getenv("GITHUB_ACTIONS") == "true":
             pytest.skip("Skipping ReliableTool test in GitHub Actions due to SQLite database permission issues")
-        
+
         should_error = True
 
         def generate_sub_questions_list(
