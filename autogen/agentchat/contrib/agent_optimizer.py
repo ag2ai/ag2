@@ -205,7 +205,7 @@ class AgentOptimizer:
         self._best_performance = -1
 
         if llm_config is None:
-            llm_config = LLMConfig.current()
+            llm_config = LLMConfig.current
         assert isinstance(llm_config, (dict, LLMConfig)), "llm_config must be a dict or LLMConfig"
         llm_config = copy.deepcopy(llm_config)
         self.llm_config = llm_config
