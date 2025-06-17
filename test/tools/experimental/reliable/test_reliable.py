@@ -4,7 +4,7 @@
 
 import os
 import tempfile
-from typing import Annotated, List, Tuple
+from typing import Annotated, Generator, List, Tuple
 
 import pytest
 
@@ -33,7 +33,7 @@ sub_question_validator_system_message_addition = """You are a quality control as
 
 
 @pytest.fixture(autouse=True)
-def setup_test_environment():
+def setup_test_environment() -> Generator[None, None, None]:
     """Set up a temporary directory for SQLite database."""
     with tempfile.TemporaryDirectory() as temp_dir:
         # Change to temporary directory so logs.db gets created there
