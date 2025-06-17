@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+import tempfile
 from typing import Annotated, List, Tuple
+
+import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
@@ -26,6 +30,19 @@ sub_question_validator_system_message_addition = """You are a quality control as
 2.  **Correct Quantity:** The list MUST contain exactly 3 sub-questions.
 3.  **Relevance:** Each sub-question MUST be clearly relevant to the original main question described in the initial task.
 """
+
+
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """Set up a temporary directory for SQLite database."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Change to temporary directory so logs.db gets created there
+        original_cwd = os.getcwd()
+        os.chdir(temp_dir)
+        try:
+            yield
+        finally:
+            os.chdir(original_cwd)
 
 
 class TestReliableTool:
