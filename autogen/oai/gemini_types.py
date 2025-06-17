@@ -141,6 +141,7 @@ class RetrievalConfig(CommonBaseModel):
     """Retrieval config."""
 
     lat_lng: Optional[LatLng] = Field(default=None, description="""Optional. The location of the user.""")
+    language_code: Optional[str] = Field(default=None, description="""The language code of the user.""")
 
 
 class ToolConfig(CommonBaseModel):

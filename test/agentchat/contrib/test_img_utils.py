@@ -9,6 +9,7 @@
 import base64
 import os
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 
 import requests
@@ -97,9 +98,11 @@ class TestGetImageData:
             image.save(temp_file)
 
             result = get_image_data(temp_file)
-            with open(temp_file, "rb") as temp_image_file:
-                temp_image_file.seek(0)
-                expected_content = base64.b64encode(temp_image_file.read()).decode("utf-8")
+            # get_image_data always converts to PNG format, so we need to get the expected PNG content
+            expected_image = Image.open(temp_file).convert("RGB")
+            buffered = BytesIO()
+            expected_image.save(buffered, format="PNG")
+            expected_content = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             assert result == expected_content, f"Failed for extension: {extension}"
             os.remove(temp_file)
