@@ -109,6 +109,7 @@ class TestOnContextCondition:
         mock_context_variables = MagicMock()
 
         # Call evaluate through the condition
+        assert on_context_condition.condition is not None
         result = on_context_condition.condition.evaluate(mock_context_variables)
 
         # Verify the mock was called correctly

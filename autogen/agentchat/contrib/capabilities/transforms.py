@@ -60,15 +60,23 @@ class MessageHistoryLimiter:
     It trims the conversation history by removing older messages, retaining only the most recent messages.
     """
 
-    def __init__(self, max_messages: Optional[int] = None, keep_first_message: bool = False):
+    def __init__(
+        self,
+        max_messages: Optional[int] = None,
+        keep_first_message: bool = False,
+        exclude_names: Optional[list[str]] = None,
+    ):
         """Args:
         max_messages Optional[int]: Maximum number of messages to keep in the context. Must be greater than 0 if not None.
         keep_first_message bool: Whether to keep the original first message in the conversation history.
             Defaults to False.
+        exclude_names Optional[list[str]]: List of message sender names to exclude from the message history.
+            Messages from these senders will be filtered out before applying the message limit. Defaults to None.
         """
         self._validate_max_messages(max_messages)
         self._max_messages = max_messages
         self._keep_first_message = keep_first_message
+        self._exclude_names = exclude_names
 
     def apply_transform(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Truncates the conversation history to the specified maximum number of messages.
@@ -83,25 +91,30 @@ class MessageHistoryLimiter:
         Returns:
             List[Dict]: A new list containing the most recent messages up to the specified maximum.
         """
-        if self._max_messages is None or len(messages) <= self._max_messages:
-            return messages
+
+        exclude_names = getattr(self, "_exclude_names", None)
+
+        filtered = [msg for msg in messages if msg.get("name") not in exclude_names] if exclude_names else messages
+
+        if self._max_messages is None or len(filtered) <= self._max_messages:
+            return filtered
 
         truncated_messages = []
         remaining_count = self._max_messages
 
         # Start with the first message if we need to keep it
-        if self._keep_first_message:
-            truncated_messages = [messages[0]]
+        if self._keep_first_message and filtered:
+            truncated_messages = [filtered[0]]
             remaining_count -= 1
 
         # Loop through messages in reverse
-        for i in range(len(messages) - 1, 0, -1):
+        for i in range(len(filtered) - 1, 0, -1):
             if remaining_count > 1:
-                truncated_messages.insert(1 if self._keep_first_message else 0, messages[i])
+                truncated_messages.insert(1 if self._keep_first_message else 0, filtered[i])
             if remaining_count == 1:  # noqa: SIM102
                 # If there's only 1 slot left and it's a 'tools' message, ignore it.
-                if messages[i].get("role") != "tool":
-                    truncated_messages.insert(1, messages[i])
+                if filtered[i].get("role") != "tool":
+                    truncated_messages.insert(1, filtered[i])
 
             remaining_count -= 1
             if remaining_count == 0:

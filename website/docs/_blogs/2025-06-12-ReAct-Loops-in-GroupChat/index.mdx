@@ -1,0 +1,341 @@
+---
+title: "From Reasoning to Evaluation: Advanced ReAct Loops"
+authors: [nipun_suwandaratna]
+tags: [ReAct, Reasoning]
+render_macros: false
+---
+
+### **From Reasoning to Evaluation: Advanced ReAct Loops for Multi-Agent Essay Evaluation**
+
+[ReAct](https://www.promptingguide.ai/techniques/react) is a very powerful prompting technique in prompt engineering. The ability to Reason and then Act based on that reasoning (e.g. execute a tool call) and subsequently observe the result before proceeding to the next step gives engineers the flexibility to embed complex workflows by chaining multiple actions (and re-actions).
+
+ReAct Loops puts this on steroids by allowing the agent to iteratively perform a set of tasks while providing it with the autonomy to decide what to do next, and when to break out.
+
+However, implementing a reliable ReAct loop in a production environment can be challenging. The inherently non-deterministic nature of LLM outputs tends to be enhanced on occasion by the iterations that may in many cases produce wildly inaccurate outputs, or even never-ending loops that might result in massive, unexpected API costs.
+
+While there are several prompting strategies that enable the implementation of a successful ReAct loop, increasing complexity in production grade systems presents a challenge in finding the right balance between reliability and output quality, especially when dealing with complex and dynamic input variables (input variables that may change upon each iteration). This issue becomes even more pronounced when the workflow involves conversational agents, as the autonomy granted by frameworks for fully autonomous agents can limit a developer's ability to explicitly manipulate the loop, memory, or context.
+
+This eventually boils down to providing clear instructions for each agent for when to start or end execution.
+
+Enabling clear exit (break out of the loop) prompts take center stage in getting agents to know when it is time to break out.
+
+But when multiple agents are working, who should run the ReAct loop? Who decides when to break out? It might not be the same agent.
+
+This article explores a real-world multi-agent workflow designed to evaluate student essays, showcasing the implementation of advanced ReAct loops within a collaborative agentic system.
+
+We introduce a scenario in which a multi-agent system collaboratively evaluates student-submitted essays, using advanced ReAct loops to emulate nuanced grading behavior.
+
+For this we create the following agents:
+
+**Student (representative agent):** An agent to represent the student (the student's essay), who can intelligently and descriptively answer questions by reading and understanding the essay's content.
+
+**Examiner**: An examiner agent that evaluates student essays using a predefined set of grading criteria. In this example we implement this as a specific set of questions.
+
+**Evaluator**: A scorer agent that evaluates the responses provided by the student representative to the examiner's questions, assesses them against the provided evaluation criteria, and determines a final score using a structured scoring rubric.
+
+**Group chat moderator**: This is a framework requirement. This agent will moderate the group chat, but will not influence any of the logic executed within the system.
+
+The diagram below illustrates the architecture of the agentic workflow.
+
+![Architecture: Multi-Agentic Collaborative Workflow](img/image3.png)
+
+For each essay we initiate a new group chat
+
+**Note**: Do not confuse the loop that runs for each essay with the ReAct loop. The ReAct loop runs within the group-chat for each evaluation.
+
+**But who should run the ReAct loop ?**
+
+You have several options here to experiment with. But what I've figured works well practically is when you allow the Examiner to run the loop, and leave the grading agent (Evaluator) as a silent observer until Prompted to Act (this we will cover next)
+
+**Note**: If you provide a list of criteria or questions for the Examiner agent to run through, this tutorial demonstrates how to execute the process fully autonomously, trusting the agents to go through each of the questions in-order. However, please note that the reliability of this approach (i.e., whether the agent consistently addresses all questions) depends on how well the selected framework handles conversational context. Ultimately, the accuracy and completeness of the evaluation are best assessed at test time. For this tutorial, we're using AG2, and in our tests, it performed exactly as expected.
+
+We will not cover manual intervention in the loop where you programmatically inject the next question at each turn. Doing so would compromise the fully autonomous nature of the workflow. Additionally, such an approach may require direct manipulation of the Agent Scratchpad.
+
+
+Next we will see how to define each agent.
+
+**Student Agent**
+
+```python
+system_message = f"""You are an agent representing a student. You have access to the following essay content: {essay}.
+
+    Your task is to answer questions about the essay strictly based on information found in the essay content.
+
+    Instructions:
+
+    Analysis of the essay
+    - Carefully analyze the essay for the following:
+    Does the essay meaningfully engage with ethical considerations?
+    Are issues like fairness, bias, equity, accessibility, or unintended consequences addressed?
+    Does the exploration consider multiple perspectives thoughtfully, or does it present a simplistic or biased viewpoint?
+
+
+    Answering questions from the examiner:
+    - Provide descriptive answers based on the essay Content,
+    - Use only the essay content. Do not fabricate or make up any answers or descriptions that do not reflect the essay Content.
+    - If you cannot find any information relevant to the question in the essay Content, simply say 'I cannot see that point being addressed in the essay'.
+    """
+
+  agent = ConversableAgent(
+      name="Student", # You can derive the student name and assign it here as well, but there is an ethical consideration in doing so
+      system_message=system_message,
+      description="Student representative, answers questions based on a student essay",
+      llm_config=llm_config_gpt_4o
+  )
+```
+**Examiner Agent:**
+
+```python
+examiner = ConversableAgent(
+    name="Examiner",
+    system_message=f"""I am an examiner who will cross examine an agent representing a student.
+
+    Thought:
+    I have a list of questions: {questions} which I need to ask from the representative.
+
+    Actions:
+    - I will identify how many questions are there in the list of questions.
+    - I am going to ask all the question starting from the beginning, one-by-one in order.
+    - I will not skip any question, I will ask all the questions.
+    - I will stick to the original list of questions, I will not create new questions or modify any question.
+
+    Reflection:
+    - Have I asked all the questions?
+    - If the answer is yes, I will move on to the Next Section (Observation). If not, I will return back to the Actions Step and ask the next question in the questions list.
+
+    (This Thought/Action/Reflection can repeat n number of times, n being the number of questions in the list of questions. e.g: If there are 5 questions then n=5)
+
+    Observation:
+    - I have asked all the questions. I can now move on to the Output Section.
+
+    Output:
+    - I MUST Conclude the examination by stating:
+    "Examination Complete - [EVALUATOR_START]"
+    - I will ensure that I state this phrase before ending the conversation.
+    - Once I state this phrase, I will not engage in any further conversation.
+
+    """,
+
+    description="Examiner, examine the essay using a list of questions that address a specific set of criteria.",
+    is_termination_msg=lambda x: "EVALUATION-END" in (x.get("content", "") or "").upper(),
+    human_input_mode="NEVER",
+    llm_config=llm_config_gpt_4o
+ )
+```
+
+**Evaluator Agent:**
+
+```python
+evaluator = ConversableAgent(
+    name="Evaluator",
+    system_message=f"""You are an agent who evaluates a student essays based on an examination conducted between an examiner and a representative agent on behalf of a student.
+
+        During the examination:
+        - If you observe a direct question from the examiner to the representative, stay silent. Simply respond with "noted!"
+        - Once the examination has concluded, you will see the phrase:
+        "Examination Complete - [EVALUATOR_START]"
+        - Wait until you see this exact phrase. Once you see it, execute the following Actions/Steps, do not start your evaluation prematurely before you see the above phrase:
+
+
+        Actions:
+
+        Step 1: (evaluation)
+        - Based on the answers provided by the representative, evaluate the essay using the criteria: {evaluation_criteria}
+        - Evaluate how well the representative’s responses align with the criteria
+        - Be strict in the evaluation and only consider the information provided during the examination
+
+        Step 2: (scoring)
+        - Compute a score on a scale of 100 based on your evaluation using the scoring rubric: {scoring_rubric}.
+        - Be strict with the calculation and only consider the information provided during the examination.
+        - Only consider the content within the examiner and representative conversation when evaluating and scoring.
+        - Provide a numeric value for the score. If you have no information at all to derive a score, provide a score of 0.
+        - Treat all applicants across gender, ethnicity, and age equally.
+
+
+        response_format:
+            ### EVALUATION-START ###
+            ### evaluation-summary-start ### <Detailed evaluation from 'Step 1: (evaluation)'> ### evaluation-summary-end ###
+            ### score-start ### <numeric score calculated in 'Step 2: (scoring)'> ### score-end ###
+            ### EVALUATION-END ###
+
+            Strictly adhere to the response format. Replace the placeholders with the actual values.
+
+            """,
+    description="Evaluator, Evaluates the essay based on the answers provided and the student",
+    llm_config=llm_config_gpt_4o
+  )
+```
+
+As you can see, there are **template variables** used within each prompt (e.g., {essay} for the Student Agent). These variables allow you to provide the necessary inputs dynamically.
+
+The values for these variables are typically defined before the prompt is executed. For example, `essay = getEssayContent()`, uses a function that retrieves the essay content from its source.
+
+This approach ensures the prompt receives the correct input at runtime.
+
+**Initiating the group chat**
+
+The following code snippet does 4 things
+
+1.  Defines the allowed transitions --- that is who can talk to who, and in which order
+
+2.  Define the group chat
+
+3.  Create a group chat manager agent --- All communications will route through this Agent in AG2
+
+4.  Initiate the examination
+
+```python
+allowed_transitions = {
+    examiner: [student, examiner],
+    student: [examiner],
+    examiner: [evaluator],
+    evaluator: []
+}
+
+
+group_chat = GroupChat(
+    agents=[examiner, student, evaluator],
+    messages=[],
+    max_round=100,
+    send_introductions=True,
+    allowed_or_disallowed_speaker_transitions=allowed_transitions,
+    speaker_transitions_type="allowed",
+)
+
+group_chat_manager = GroupChatManager(
+    name="Chat_Manager",
+    groupchat=group_chat,
+    llm_config=llm_config_gpt_4o,
+)
+
+# Start the examination
+examination = examiner.initiate_chat(
+    group_chat_manager,
+    message="I am starting the examination",
+    summary_method=my_summary_method
+)
+
+```
+
+Note: allowed_transitions defines the agent communication pattern.
+
+Logic behind each step:
+
+```text
+examiner: [student, examiner]
+Once the examiner asks a question the student answers, and the execution will then come back to the examiner
+
+student: [examiner]
+Student answers to the examiner
+
+examiner: [evaluator]
+Once done, the examiner hands it over to the evaluator
+
+evaluator: []
+No agent should execute after the evaluator
+```
+
+In an ideal scenario the examination would conclude neatly after the evaluator agent provides the verdict.
+
+However, there are rare scenarios where the agents might fall into a conversation loop even after the evaluator has provided the final output.
+
+In such a scenario the *max_round* parameter will limit the communication to a pre-determined set of rounds (a round is one agent speaking). It is up to the programmer to decide how many max rounds the conversation might require based on the scenario.
+
+This has no harm (other than the occasional extra API calls). As you can see, the response format has clear place holders that allow you to programmatically extract the Evaluator output.
+
+**Running the Program**
+
+Essay Topic:
+
+**Balancing Efficiency, Equity, and Ethics: Should AI Grade Student Essays?**
+
+Sample Evaluation Criteria:
+
+```text
+Content-Based Focus Areas for Essay Evaluation
+1. Ethical Insight & Social Implications
+What to Evaluate:
+• Does the essay meaningfully engage with ethical considerations related to the topic?
+• Are issues like fairness, bias, equity, accessibility, or unintended consequences addressed?
+• Is the discussion nuanced, or does it reflect a shallow or one-sided ethical view?
+Example in AI Essay Grading Context:
+• Discusses risks of reinforcing language bias in underrepresented student groups.
+• Considers transparency and fairness in algorithmic decision-making.
+• Acknowledges ethical trade-offs between efficiency and pedagogical integrity.
+
+2. Technical & Practical Feasibility
+What to Evaluate:
+• Does the essay demonstrate understanding of the real-world implementation of the subject matter?
+• Are technological capabilities, limitations, and infrastructure needs acknowledged?
+• Does it address practical trade-offs, such as cost, deployment, and human oversight?
+Example in AI Essay Grading Context:
+• Mentions how NLP models are trained and where they typically fail.
+• Discusses real-world examples (e.g., ETS e-rater, Turnitin, GPT models in education).
+• Proposes reasonable implementation methods (e.g., AI as first-pass grader).
+
+Educational & Pedagogical Impact
+What to Evaluate:
+• How well does the essay explore the impact of the topic on learning processes, student agency, teacher roles, or educational philosophy?
+• Does it examine potential changes to curriculum, assessment goals, or learning equity?
+• Are long-term educational outcomes considered?
+Example in AI Essay Grading Context:
+• Considers how AI feedback might deskill educators or reduce critical thinking in students.
+• Explores whether automated grading could shift classroom priorities toward test optimization.
+• Suggests how AI could be used to enrich pedagogy without undermining teacher judgment.
+(AI generated content)
+```
+
+Sample Scoring Rubric that uses a weighted scoring mechanism:
+
+```text
+Dimensions and Scoring Adjustments:
+
+1. Problem Understanding (PU)
+o Assess whether the student identifies the primary issue AI aims to solve (efficiency, consistency, accessibility).
+o Higher scores for recognizing multiple dimensions and contextualizing the problem in real-world educational settings.
+
+2. Ethical Insight (EI)
+o Evaluate how well the essay engages with ethical concerns, such as fairness, bias, transparency, and inclusivity.
+o Essays with nuanced, multi-perspective analysis of these concerns will be scored higher.
+
+3. Solution Proposal (SP)
+o Examine the quality and clarity of the proposed solution (e.g., hybrid human-AI model).
+o Stronger scores for realistic, balanced, and well-justified alternatives to full automation.
+
+4. Educational Impact (ED)
+o Determine how thoroughly the essay discusses the pedagogical consequences of AI on teachers, students, and learning processes.
+o High-scoring essays provide thoughtful analysis of classroom dynamics, teacher agency, and long-term outcomes.
+
+5. Argument Balance (BA)
+o Check whether the essay presents a fair and well-rounded view of both pros and cons.
+o Balanced treatment with critical evaluation of opposing views scores higher.
+
+Weighted Scoring:
+Each category will be weighted as follows to reflect its relevance in assessing essay depth and insight:
+
+Score = (PU × 0.20) + (EI × 0.25) + (SP × 0.20) + (ED × 0.20) + (BA × 0.15)
+
+(Weights prioritize ethical reasoning and solution quality while ensuring holistic evaluation.)
+```
+
+Agent Communication Log (*this is **actual output**, not mock-ups*):
+
+![](img/image2.png)
+![](img/image4.png)
+![](img/image1.png)
+
+As you can see the Evaluator has provided an Evaluation Summary as we've instructed along with a score of 68 for this particular essay *(essay content not attached)*
+
+**So, why use this approach instead of simply having a single agent evaluate based on the predefined criteria and scoring rubric?**
+
+**The answer is granularity.**
+
+This method offers greater flexibility by allowing you to steer the evaluation using targeted questions, while still adhering to the overall evaluation criteria and scoring rubric.
+
+In other words, if you want to use the same set of essays to identify (or reward more highly) students who address specific topics or concerns, this approach ensures those aspects are captured through the question-answer process. This reduces the risk of such contributions being overlooked in a generic evaluation based solely on broad criteria.
+
+Of course, the **accuracy of the evaluation** in such cases will depend not only on the evaluation criteria and scoring rubric, but also on the **design and relevance of the questions** themselves.
+
+I hope this has given you a practical understanding of how to set up conversational agents to collaborate effectively within the scope of a ReAct loop.
+
+For information on how to deploy such a long running agentic workflow to an Azure environment, check out my post [Deploying Long-Running Multi-Agentic Workflows on Azure Triggered Asynchronously via Copilot](https://medium.com/agentloop/deploying-long-running-multi-agentic-workflows-on-azure-triggered-asynchronously-via-copilot-agents-221c417d0766).
