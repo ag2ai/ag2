@@ -574,7 +574,16 @@ class GeminiClient:
                     if self.use_vertexai
                     else rst.append(Content(parts=parts, role=role))
                 )
-            elif part_type == "tool" or part_type == "tool_call":
+            elif part_type == "tool":
+                # Function responses should be assigned "model" role to keep them separate from function calls
+                role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "model"
+                rst.append(
+                    VertexAIContent(parts=parts, role=role)
+                    if self.use_vertexai
+                    else rst.append(Content(parts=parts, role=role))
+                )
+            elif part_type == "tool_call":
+                # Function calls should be assigned "user" role
                 role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "user"
                 rst.append(
                     VertexAIContent(parts=parts, role=role)
