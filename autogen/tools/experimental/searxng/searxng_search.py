@@ -107,32 +107,33 @@ class SearxngSearchTool(Tool):
         """
         self.base_url = base_url
 
-        def searxng_search(
-            query: Annotated[str, "The search query."],
-            max_results: Annotated[int, "The number of results to return."] = 5,
-            categories: Annotated[Optional[List[str]], "List of categories to search in."] = None,
-            language: Annotated[Optional[str], "Language code (e.g., 'en-US')."] = None,
-        ) -> list[dict[str, Any]]:
-            """
-            Performs a search using the SearxNG API and returns formatted results.
-            Args:
-                query: The search query string.
-                max_results: The maximum number of results to return. Defaults to 5.
-                categories: List of categories to search in.
-                language: Language code.
-            Returns:
-                A list of dictionaries, each containing 'title', 'link', and 'snippet' of a search result.
-            """
-            return _searxng_search(
-                query=query,
-                max_results=max_results,
-                categories=categories,
-                language=language,
-                base_url=self.base_url,
-            )
-
-        super().__init__(
-            name="searxng_search",
-            description="Use the SearxNG API to perform a search.",
-            func_or_tool=searxng_search,
+    def searxng_search(
+        self,
+        query: Annotated[str, "The search query."],
+        max_results: Annotated[int, "The number of results to return."] = 5,
+        categories: Annotated[Optional[List[str]], "List of categories to search in."] = None,
+        language: Annotated[Optional[str], "Language code (e.g., 'en-US')."] = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Performs a search using the SearxNG API and returns formatted results.
+        Args:
+            query: The search query string.
+            max_results: The maximum number of results to return. Defaults to 5.
+            categories: List of categories to search in.
+            language: Language code.
+        Returns:
+            A list of dictionaries, each containing 'title', 'link', and 'snippet' of a search result.
+        """
+        return _searxng_search(
+            query=query,
+            max_results=max_results,
+            categories=categories,
+            language=language,
+            base_url=self.base_url,
         )
+
+    super().__init__(
+        name="searxng_search",
+        description="Use the SearxNG API to perform a search.",
+        func_or_tool=self.searxng_search,
+    )
