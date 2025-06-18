@@ -18,6 +18,7 @@ from .messageplatform import (
 )
 from .perplexity import PerplexitySearchTool
 from .reliable import ReliableTool, ReliableToolError, SuccessfulExecutionParameters, ToolExecutionDetails
+from .searxng import SearxngSearchTool
 from .tavily import TavilySearchTool
 from .web_search_preview import WebSearchPreviewTool
 from .wikipedia import WikipediaPageLoadTool, WikipediaQueryRunTool
@@ -33,6 +34,7 @@ __all__ = [
     "PerplexitySearchTool",
     "ReliableTool",
     "ReliableToolError",
+    "SearxngSearchTool",
     "SlackRetrieveRepliesTool",
     "SlackRetrieveTool",
     "SlackSendTool",

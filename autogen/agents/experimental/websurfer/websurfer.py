@@ -13,6 +13,7 @@ from ....tools.experimental import (
     Crawl4AITool,
     DuckDuckGoSearchTool,
     PerplexitySearchTool,
+    SearxngSearchTool,
     TavilySearchTool,
 )
 
@@ -28,7 +29,7 @@ class WebSurferAgent(ConversableAgent):
         *,
         llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         web_tool_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        web_tool: Literal["browser_use", "crawl4ai", "duckduckgo", "perplexity", "tavily"] = "browser_use",
+        web_tool: Literal["browser_use", "crawl4ai", "duckduckgo", "perplexity", "tavily", "searxng"] = "browser_use",
         web_tool_kwargs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
@@ -54,6 +55,8 @@ class WebSurferAgent(ConversableAgent):
             self.tool = TavilySearchTool(llm_config=web_tool_llm_config, **web_tool_kwargs)
         elif web_tool == "duckduckgo":
             self.tool = DuckDuckGoSearchTool(**web_tool_kwargs)
+        elif web_tool == "searxng":
+            self.tool = SearxngSearchTool(**web_tool_kwargs)
         else:
             raise ValueError(f"Unsupported {web_tool=}.")
 
