@@ -1173,7 +1173,9 @@ class TestTerminationEvent:
         ]
         assert mock.call_args_list == expected_call_args_list
 
-    def test_serialization_and_deserialization(self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent) -> None:
+    def test_serialization_and_deserialization(
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent
+    ) -> None:
         termination_reason = "User requested to end the conversation."
 
         actual = TerminationEvent(

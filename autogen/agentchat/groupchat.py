@@ -1233,11 +1233,11 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationEvent(
-                termination_reason=termination_reason,
-                sender=self,
-                recipient=speaker if speaker else None
-            ))
+            iostream.send(
+                TerminationEvent(
+                    termination_reason=termination_reason, sender=self, recipient=speaker if speaker else None
+                )
+            )
 
         return True, None
 
@@ -1321,11 +1321,11 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(TerminationEvent(
-                termination_reason=termination_reason,
-                sender=self,
-                recipient=speaker if speaker else None
-            ))
+            iostream.send(
+                TerminationEvent(
+                    termination_reason=termination_reason, sender=self, recipient=speaker if speaker else None
+                )
+            )
 
         return True, None
 
