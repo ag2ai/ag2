@@ -54,7 +54,7 @@ def _execute_searxng_query(
                 typed_results.append(item)
         return typed_results
     except Exception as e:
-        print(f"SearxNG Search failed: {e}")
+        logger.error(f"SearxNG Search failed: {e}")
         return []
 
 
