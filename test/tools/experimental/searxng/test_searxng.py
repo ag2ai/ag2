@@ -43,11 +43,24 @@ class TestSearxngSearchTool:
                             "description": "The number of results to return.",
                         },
                         "categories": {
-                            "type": "array",
-                            "items": {"type": "string"},
+                            "anyOf": [
+                                {
+                                    "items": {"type": "string"},
+                                    "type": "array",
+                                },
+                                {"type": "null"},
+                            ],
+                            "default": None,
                             "description": "List of categories to search in.",
                         },
-                        "language": {"type": "string", "description": "Language code (e.g., 'en-US')."},
+                        "language": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {"type": "null"},
+                            ],
+                            "default": None,
+                            "description": "Language code (e.g., 'en-US').",
+                        },
                     },
                     "required": ["query"],
                 },
