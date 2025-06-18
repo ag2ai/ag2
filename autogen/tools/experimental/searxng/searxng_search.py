@@ -6,12 +6,15 @@ SearxNG Search Tool
 A simple tool to perform web searches using a SearxNG instance.
 """
 
+import logging
 from typing import Annotated, Any, List, Optional
 
 import requests
 
 from autogen.doc_utils import export_module
 from autogen.tools import Tool
+
+logger = logging.getLogger(__name__)
 
 
 def _execute_searxng_query(
@@ -106,6 +109,11 @@ class SearxngSearchTool(Tool):
             base_url (str): The SearxNG instance URL.
         """
         self.base_url = base_url
+        super().__init__(
+            name="searxng_search",
+            description="Use the SearxNG API to perform a search.",
+            func_or_tool=self.searxng_search,
+        )
 
     def searxng_search(
         self,
@@ -131,9 +139,3 @@ class SearxngSearchTool(Tool):
             language=language,
             base_url=self.base_url,
         )
-
-    super().__init__(
-        name="searxng_search",
-        description="Use the SearxNG API to perform a search.",
-        func_or_tool=self.searxng_search,
-    )

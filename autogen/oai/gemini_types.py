@@ -91,7 +91,7 @@ class CaseInSensitiveEnum(str, enum.Enum):
                 try:
                     # Creating a enum instance based on the value
                     # We need to use super() to avoid infinite recursion.
-                    unknown_enum_val = super().__new__(cls, value)
+                    unknown_enum_val = super(CaseInSensitiveEnum, cls).__new__(cls, value)
                     unknown_enum_val._name_ = str(value)  # pylint: disable=protected-access
                     unknown_enum_val._value_ = value  # pylint: disable=protected-access
                     return unknown_enum_val
