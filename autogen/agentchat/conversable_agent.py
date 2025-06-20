@@ -1471,7 +1471,11 @@ class ConversableAgent(LLMAgent):
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
 
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationEvent(termination_reason=f"Maximum turns ({max_turns}) reached"))
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -1651,7 +1655,11 @@ class ConversableAgent(LLMAgent):
                     break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationEvent(termination_reason=f"Maximum turns ({max_turns}) reached"))
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -2587,7 +2595,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationEvent(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
@@ -2727,7 +2735,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationEvent(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
