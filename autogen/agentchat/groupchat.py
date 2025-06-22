@@ -1041,7 +1041,7 @@ class GroupChat:
                 return f"{guardrail.activation_message}\nJustification: {guardrail_result.justification}"
         return None
 
-    def _run_ouptput_guardrails(self, agent: "ConversableAgent", reply: str) -> None:
+    def _run_output_guardrails(self, agent: "ConversableAgent", reply: str) -> None:
         """Run output guardrails for an agent after the reply is generated.
         Args:
             agent (ConversableAgent): The agent whose output guardrails to run.
@@ -1258,7 +1258,7 @@ class GroupChatManager(ConversableAgent):
 
             if not guardrails_activated:
                 # if the input guardrails were not activated, and the agent returned a reply
-                guardrails_reply = groupchat._run_ouptput_guardrails(speaker, reply)
+                guardrails_reply = groupchat._run_output_guardrails(speaker, reply)
 
                 if guardrails_reply is not None:
                     # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
@@ -1337,8 +1337,19 @@ class GroupChatManager(ConversableAgent):
             try:
                 # select the next speaker
                 speaker = await groupchat.a_select_speaker(speaker, self)
-                # let the speaker speak
-                reply = await speaker.a_generate_reply(sender=self)
+                if not silent:
+                    iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
+
+                guardrails_activated = False
+                guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
+
+                if guardrails_reply is not None:
+                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
+                    guardrails_activated = True
+                    reply = guardrails_reply
+                else:
+                    # let the speaker speak
+                    reply = await speaker.a_generate_reply(sender=self)
             except KeyboardInterrupt:
                 # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
@@ -1357,6 +1368,24 @@ class GroupChatManager(ConversableAgent):
                 # no reply is generated, exit the chat
                 termination_reason = "No reply generated"
                 break
+
+            if not guardrails_activated:
+                # if the input guardrails were not activated, and the agent returned a reply
+                guardrails_reply = groupchat._run_output_guardrails(speaker, reply)
+
+                if guardrails_reply is not None:
+                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
+                    guardrails_activated = True
+                    reply = guardrails_reply
+
+            # check for "clear history" phrase in reply and activate clear history function if found
+            if (
+                groupchat.enable_clear_history
+                and isinstance(reply, dict)
+                and reply["content"]
+                and "CLEAR HISTORY" in reply["content"].upper()
+            ):
+                reply["content"] = self.clear_agents_history(reply, groupchat)
 
             # The speaker sends the message without requesting a reply
             await speaker.a_send(reply, self, request_reply=False, silent=silent)

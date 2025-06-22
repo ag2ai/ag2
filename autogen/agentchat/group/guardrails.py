@@ -27,7 +27,14 @@ class GuardrailResult(BaseModel):
 
     @staticmethod
     def parse(text: str) -> "GuardrailResult":
-        """Parses a JSON string into a GuardrailResult object."""
+        """Parses a JSON string into a GuardrailResult object.
+
+        Args:
+            text (str): The JSON string to parse.
+
+        Returns:
+            GuardrailResult: The parsed GuardrailResult object.
+        """
         try:
             data = json.loads(text)
             return GuardrailResult(**data)
@@ -53,7 +60,14 @@ class Guardrail(ABC):
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
-        """Checks the text against the guardrail and returns a GuardrailResult."""
+        """Checks the text against the guardrail and returns a GuardrailResult.
+
+        Args:
+            context (Union[str, list[dict[str, Any]]]): The context to check against the guardrail.
+
+        Returns:
+            GuardrailResult: The result of the guardrail check.
+        """
         pass
 
 
@@ -86,7 +100,14 @@ You will activate the guardrail only if the condition is met.
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
-        """Checks the context against the guardrail using an LLM."""
+        """Checks the context against the guardrail using an LLM.
+
+        Args:
+            context (Union[str, list[dict[str, Any]]]): The context to check against the guardrail.
+
+        Returns:
+            GuardrailResult: The result of the guardrail check.
+        """
         # Set the check prompt as the system message
         check_messages = [{"role": "system", "content": self.check_prompt}]
         # If context is a string, wrap it in a user message and append it
@@ -114,13 +135,23 @@ class RegexGuardrail(Guardrail):
     ) -> None:
         super().__init__(name, condition, target, activation_message)
         # Compile the regular expression condition
-        self.regex = re.compile(condition)
+        try:
+            self.regex = re.compile(condition)
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern '{condition}': {str(e)}")
 
     def check(
         self,
         context: Union[str, list[dict[str, Any]]],
     ) -> GuardrailResult:
-        """Checks the context against the guardrail using a regular expression."""
+        """Checks the context against the guardrail using a regular expression.
+
+        Args:
+            context (Union[str, list[dict[str, Any]]]): The context to check against the guardrail.
+
+        Returns:
+            GuardrailResult: The result of the guardrail check.
+        """
         # Create a list of the messages to check
         if isinstance(context, str):
             messages = [context]

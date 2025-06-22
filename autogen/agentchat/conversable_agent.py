@@ -224,8 +224,8 @@ class ConversableAgent(LLMAgent):
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
-        self.input_guardrails = []
-        self.output_guardrails = []
+        self.input_guardrails: list["Guardrail"] = []
+        self.output_guardrails: list["Guardrail"] = []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
