@@ -210,17 +210,25 @@ class TestFirecrawlTool:
         assert results[1]["url"] == "https://example.com/about"
         assert results[2]["url"] == "https://example.com/contact"
 
-    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool.FirecrawlApp")
-    def test_scrape_with_custom_api_url(self, mock_firecrawl_app: Any, mock_scrape_response: dict[str, Any]) -> None:
-        mock_app_instance = mock_firecrawl_app.return_value
-        mock_app_instance.scrape_url.return_value = mock_scrape_response
+    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool._execute_firecrawl_scrape")
+    def test_scrape_with_custom_api_url(self, mock_execute: Any, mock_scrape_response: dict[str, Any]) -> None:
+        mock_execute.return_value = mock_scrape_response
 
         tool = FirecrawlTool(firecrawl_api_key="test-key", firecrawl_api_url="https://custom.firecrawl.com")
         result = tool(url="https://example.com")
 
-        # Verify FirecrawlApp was initialized with the custom API URL
-        mock_firecrawl_app.assert_called_with(api_key="test-key", api_url="https://custom.firecrawl.com")
-        mock_app_instance.scrape_url.assert_called_once()
+        # Verify the execution function was called with the custom API URL
+        mock_execute.assert_called_once_with(
+            url="https://example.com",
+            firecrawl_api_key="test-key",
+            firecrawl_api_url="https://custom.firecrawl.com",
+            formats=None,
+            include_tags=None,
+            exclude_tags=None,
+            headers=None,
+            wait_for=None,
+            timeout=None,
+        )
 
         assert result == [
             {
@@ -234,10 +242,9 @@ class TestFirecrawlTool:
             }
         ]
 
-    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool.FirecrawlApp")
-    def test_crawl_with_custom_api_url(self, mock_firecrawl_app: Any, mock_crawl_response: dict[str, Any]) -> None:
-        mock_app_instance = mock_firecrawl_app.return_value
-        mock_app_instance.crawl_url.return_value = mock_crawl_response
+    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool._execute_firecrawl_crawl")
+    def test_crawl_with_custom_api_url(self, mock_execute: Any, mock_crawl_response: dict[str, Any]) -> None:
+        mock_execute.return_value = mock_crawl_response
 
         tool = FirecrawlTool(firecrawl_api_key="test-key", firecrawl_api_url="https://custom.firecrawl.com")
         result = tool.crawl(
@@ -247,8 +254,19 @@ class TestFirecrawlTool:
             firecrawl_api_url="https://custom.firecrawl.com",
         )
 
-        # Verify FirecrawlApp was initialized with the custom API URL
-        mock_firecrawl_app.assert_called_with(api_key="test-key", api_url="https://custom.firecrawl.com")
+        # Verify the execution function was called with the custom API URL
+        mock_execute.assert_called_once_with(
+            url="https://example.com",
+            firecrawl_api_key="test-key",
+            firecrawl_api_url="https://custom.firecrawl.com",
+            limit=2,
+            formats=None,
+            include_paths=None,
+            exclude_paths=None,
+            max_depth=None,
+            allow_backward_crawling=False,
+            allow_external_content_links=False,
+        )
 
         expected_result = [
             {
@@ -272,18 +290,25 @@ class TestFirecrawlTool:
         ]
         assert result == expected_result
 
-    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool.FirecrawlApp")
-    def test_map_with_custom_api_url(self, mock_firecrawl_app: Any, mock_map_response: dict[str, Any]) -> None:
-        mock_app_instance = mock_firecrawl_app.return_value
-        mock_app_instance.map_url.return_value = mock_map_response
+    @patch("autogen.tools.experimental.firecrawl.firecrawl_tool._execute_firecrawl_map")
+    def test_map_with_custom_api_url(self, mock_execute: Any, mock_map_response: dict[str, Any]) -> None:
+        mock_execute.return_value = mock_map_response
 
         tool = FirecrawlTool(firecrawl_api_key="test-key", firecrawl_api_url="https://custom.firecrawl.com")
         result = tool.map(
             url="https://example.com", firecrawl_api_key="test-key", firecrawl_api_url="https://custom.firecrawl.com"
         )
 
-        # Verify FirecrawlApp was initialized with the custom API URL
-        mock_firecrawl_app.assert_called_with(api_key="test-key", api_url="https://custom.firecrawl.com")
+        # Verify the execution function was called with the custom API URL
+        mock_execute.assert_called_once_with(
+            url="https://example.com",
+            firecrawl_api_key="test-key",
+            firecrawl_api_url="https://custom.firecrawl.com",
+            search=None,
+            ignore_sitemap=False,
+            include_subdomains=False,
+            limit=5000,
+        )
 
         expected_result = [
             {"url": "https://example.com", "title": "", "content": ""},
