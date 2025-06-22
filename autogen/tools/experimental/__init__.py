@@ -6,6 +6,7 @@ from .browser_use import BrowserUseTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
 from .duckduckgo import DuckDuckGoSearchTool
+from .firecrawl import FirecrawlTool
 from .google_search import GoogleSearchTool, YoutubeSearchTool
 from .messageplatform import (
     DiscordRetrieveTool,
@@ -30,6 +31,7 @@ __all__ = [
     "DiscordRetrieveTool",
     "DiscordSendTool",
     "DuckDuckGoSearchTool",
+    "FirecrawlTool",
     "GoogleSearchTool",
     "PerplexitySearchTool",
     "ReliableTool",
