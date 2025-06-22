@@ -140,7 +140,7 @@ History:
 
 According to the information I provide, please take one of four actions to manipulate list B using the functions you know.
 Instead of returning TERMINATE directly or taking no action, you should try your best to optimize the function list. Only take no action if you really think the current list is optimal, as more actions will harm performance in future tasks.
-Even adding a general function that can substitute the assistant’s repeated suggestions of Python code with the same functionality could also be helpful.
+Even adding a general function that can substitute the assistant's repeated suggestions of Python code with the same functionality could also be helpful.
 """
 
 
@@ -176,14 +176,15 @@ class AgentOptimizer:
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         optimizer_model: Optional[str] = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
 
         Args:
             max_actions_per_step (int): the maximum number of actions that the optimizer can take in one step.
-            llm_config (LLMConfig or dict): llm inference configuration.
+            llm_config (LLMConfig or dict or None): llm inference configuration.
+                If None, the current LLMConfig from context is used.
                 Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
             optimizer_model: the model used for the optimizer.
@@ -203,6 +204,8 @@ class AgentOptimizer:
         self._failure_functions_performance = []
         self._best_performance = -1
 
+        if llm_config is None:
+            llm_config = LLMConfig.current
         assert isinstance(llm_config, (dict, LLMConfig)), "llm_config must be a dict or LLMConfig"
         llm_config = copy.deepcopy(llm_config)
         self.llm_config = llm_config

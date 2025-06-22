@@ -78,7 +78,7 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
         browser: Optional["Browser"] = None,
         agent_kwargs: Optional[dict[str, Any]] = None,
         browser_config: Optional[dict[str, Any]] = None,
@@ -86,17 +86,17 @@ class BrowserUseTool(Tool):
         """Use the browser to perform a task.
 
         Args:
-            llm_config: The LLM configuration.
+            llm_config: The LLM configuration. If None, the current LLMConfig from context is used.
             browser: The browser to use. If defined, browser_config must be None
             agent_kwargs: Additional keyword arguments to pass to the Agent
             browser_config: The browser configuration to use. If defined, browser must be None
         """
+        if llm_config is None:
+            llm_config = LLMConfig.current
         if agent_kwargs is None:
             agent_kwargs = {}
-
         if browser_config is None:
             browser_config = {}
-
         if browser is not None and browser_config:
             raise ValueError(
                 f"Cannot provide both browser and additional keyword parameters: {browser=}, {browser_config=}"
@@ -114,18 +114,13 @@ class BrowserUseTool(Tool):
             if browser is None:
                 # set default value for headless
                 headless = browser_config.pop("headless", True)
-
                 browser_config = BrowserConfig(headless=headless, **browser_config)
                 browser = Browser(config=browser_config)
-
             # set default value for generate_gif
             if "generate_gif" not in agent_kwargs:
                 agent_kwargs["generate_gif"] = False
-
             llm = LangChainChatModelFactory.create_base_chat_model(llm_config)
-
             max_steps = agent_kwargs.pop("max_steps", 100)
-
             agent = Agent(
                 task=task,
                 llm=llm,
@@ -133,9 +128,7 @@ class BrowserUseTool(Tool):
                 controller=BrowserUseTool._get_controller(llm_config),
                 **agent_kwargs,
             )
-
             result = await agent.run(max_steps=max_steps)
-
             extracted_content = [
                 ExtractedContent(content=content, url=url)
                 for content, url in zip(result.extracted_content(), result.urls())
