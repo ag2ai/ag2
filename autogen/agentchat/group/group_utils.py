@@ -137,16 +137,8 @@ def _run_oncontextconditions(
             on_condition.available.is_available(agent, messages if messages else []) if on_condition.available else True
         )
 
-        if is_available and (
-            on_condition.condition is None or on_condition.condition.evaluate(agent.context_variables)
-        ):
-            # Condition has been met, we'll set the Tool Executor's next target
-            # attribute and that will be picked up on the next iteration when
-            # _determine_next_agent is called
-            for agent in agent._group_manager.groupchat.agents:  # type: ignore[attr-defined]
-                if isinstance(agent, GroupToolExecutor):
-                    agent.set_next_target(on_condition.target)
-                    break
+        if is_available and on_condition.condition.evaluate(agent.context_variables):
+            on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
 
