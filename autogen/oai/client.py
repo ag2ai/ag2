@@ -1611,14 +1611,50 @@ class OpenAIResponsesClient:
                 item = item.model_dump()
 
             item_type = item.get("type")
+
+            # ------------------------------------------------------------------
+            # 1) Normal messages
+            # ------------------------------------------------------------------
             if item_type == "message":
-                # Flatten blocks into text when possible
-                # Support multimodal by re-emitting the list if not pure text
                 blocks = item.get("content", [])
                 if len(blocks) == 1 and blocks[0].get("type") == "output_text":
                     messages.append(blocks[0]["text"])
                 else:
                     messages.append(blocks)  # let upper layer handle multimodal structure
+                continue
+
+            # ------------------------------------------------------------------
+            # 2) Function calls
+            # ------------------------------------------------------------------
+            if item_type == "function_call":
+                messages.append({
+                    "role": "assistant",
+                    "function_call": {
+                        "name": item.get("name"),
+                        "arguments": item.get("arguments"),
+                    },
+                })
+                continue
+
+            # ------------------------------------------------------------------
+            # 3) Tool / other *_call items
+            # ------------------------------------------------------------------
+            if item_type and item_type.endswith("_call"):
+                tool_call = {
+                    "id": item.get("id"),
+                    "type": "function",  # Responses API currently routes via function-like tools
+                    "function": {
+                        "name": item_type.replace("_call", ""),
+                        "arguments": item.get("arguments", {}),
+                    },
+                }
+                messages.append({"role": "assistant", "tool_calls": [tool_call]})
+                continue
+
+            # ------------------------------------------------------------------
+            # 4) Fallback – store raw dict so information isn't lost
+            # ------------------------------------------------------------------
+            messages.append(item)
         return messages
 
     def cost(self, response):
