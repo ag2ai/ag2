@@ -1470,9 +1470,9 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     ```python
     {
-        "api_type": "responses",          # <-- key differentiator
-        "model": "o3",                   # reasoning model
-        "reasoning_effort": "medium",    # low / medium / high
+        "api_type": "responses",  # <-- key differentiator
+        "model": "o3",  # reasoning model
+        "reasoning_effort": "medium",  # low / medium / high
         "stream": True,
     }
     ```
@@ -1571,18 +1571,14 @@ class OpenAIResponsesClient:
                     kwargs["text_format"] = {
                         "type": "json_schema",
                         "json_schema": {
-                            "schema": _ensure_strict_json_schema(
-                                rf, path=(), root=rf
-                            ),
+                            "schema": _ensure_strict_json_schema(rf, path=(), root=rf),
                             "name": "response_format",
                             "strict": True,
                         },
                     }
                 else:
                     # pydantic.BaseModel subclass
-                    kwargs["text_format"] = type_to_response_format_param(
-                        rf
-                    )
+                    kwargs["text_format"] = type_to_response_format_param(rf)
                 if "response_format" in kwargs:
                     kwargs["text_format"] = kwargs.pop("response_format")
 
