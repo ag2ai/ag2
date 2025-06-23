@@ -65,9 +65,6 @@ def establish_group_agent(agent: "ConversableAgent") -> None:
     # Register a reply function to run Python function-based OnContextConditions before any other reply function
     agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
 
-    # # Register a reply function to run input guardrails before any other reply function
-    # agent.register_reply(trigger=([Agent, None]), reply_func=_run_input_guardrails, position=0)
-
     agent._get_display_name = MethodType(_group_agent_str, agent)  # type: ignore[method-assign]
 
     # Mark this agent as established as a group agent
@@ -137,7 +134,9 @@ def _run_oncontextconditions(
             on_condition.available.is_available(agent, messages if messages else []) if on_condition.available else True
         )
 
-        if is_available and on_condition.condition.evaluate(agent.context_variables):
+        if is_available and (
+            on_condition.condition is None or on_condition.condition.evaluate(agent.context_variables)
+        ):
             on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
