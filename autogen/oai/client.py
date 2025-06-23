@@ -50,6 +50,7 @@ if openai_result.is_successful:
     )
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
+    from openai.types.responses.response import Response
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
@@ -952,6 +953,15 @@ class OpenAIWrapper:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
+            elif api_type is not None and api_type.startswith("responses"):
+                # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
+                @require_optional_import("openai>=1.66.2", "openai")
+                def create_responses_client() -> "OpenAI":
+                    client = OpenAI(**openai_config)
+                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))
+                    return client
+
+                client = create_responses_client()
             else:
 
                 @require_optional_import("openai>=1.66.2", "openai")
@@ -1442,3 +1452,182 @@ class OpenAIWrapper:
             A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
         """
         return response.message_retrieval_function(response)
+
+
+# -----------------------------------------------------------------------------
+# New: Responses API config entry (OpenAI-hosted preview endpoint)
+# -----------------------------------------------------------------------------
+
+
+@register_llm_config
+class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
+
+    This reuses all the OpenAI fields but changes *api_type* so the wrapper can
+    route traffic to the `client.responses` endpoint instead of
+    `chat.completions`.  It inherits everything else – including reasoning
+    fields – from *OpenAILLMConfigEntry* so users can simply set
+
+    ```python
+    {
+        "api_type": "responses",          # <-- key differentiator
+        "model": "o3",                   # reasoning model
+        "reasoning_effort": "medium",    # low / medium / high
+        "stream": True,
+    }
+    ```
+    """
+
+    api_type: Literal["responses"] = "responses"
+
+    def create_client(self) -> "ModelClient":  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
+
+
+# -----------------------------------------------------------------------------
+# OpenAI Client that calls the /responses endpoint
+# -----------------------------------------------------------------------------
+class OpenAIResponsesClient:
+    """Minimal implementation targeting the experimental /responses endpoint.
+
+    We purposefully keep the surface small – *create*, *message_retrieval*,
+    *cost* and *get_usage* – enough for ConversableAgent to operate.  Anything
+    that the new endpoint does natively (web_search, file_search, image
+    generation, function calling, etc.) is transparently passed through by the
+    OpenAI SDK so we don't replicate logic here.
+    """
+
+    def __init__(self, client: "OpenAI", response_format: Union[BaseModel, dict[str, Any], None] = None):
+        self._oai_client = client  # plain openai.OpenAI instance
+        self.response_format = response_format  # kept for parity but unused for now
+
+    # ------------------------------------------------------------------ helpers
+    # responses objects embed usage similarly to chat completions
+    @staticmethod
+    def _usage_dict(resp) -> dict:
+        usage_obj = getattr(resp, "usage", None) or {}
+
+        # Convert pydantic/BaseModel usage objects to dict for uniform access
+        if hasattr(usage_obj, "model_dump"):
+            usage = usage_obj.model_dump()
+        elif isinstance(usage_obj, dict):
+            usage = usage_obj
+        else:  # fallback – unknown structure
+            usage = {}
+
+        output_tokens_details = usage.get("output_tokens_details", {})
+
+        return {
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+            "cost": getattr(resp, "cost", 0),
+            "model": getattr(resp, "model", ""),
+            "reasoning_tokens": output_tokens_details.get("reasoning_tokens", 0),
+        }
+
+    # ---------------------------------------------------------------- interface
+    def create(self, params: dict[str, Any]) -> Response:
+        """Invoke `client.responses.create()`.
+
+        If the caller provided a classic *messages* array we convert it to the
+        *input* format expected by the Responses API.
+        """
+        params = params.copy()
+
+        # Back-compat: transform messages → input if needed ------------------
+        if "messages" in params and "input" not in params:
+            msgs = params.pop("messages")
+            input_items = []
+            for m in msgs:
+                role = m.get("role", "user")
+                content = m.get("content")
+                blocks = content if isinstance(content, list) else [{"type": "input_text", "text": content}]
+                input_items.append({"type": "message", "role": role, "content": blocks})
+            params["input"] = input_items
+
+        # Ensure we don't mix legacy params that Responses doesn't accept
+        if params.get("stream") and params.get("background"):
+            warnings.warn(
+                "Streaming a background response may introduce latency.",
+                UserWarning,
+            )
+
+        # ------------------------------------------------------------------
+        # Structured output handling – mimic OpenAIClient behaviour
+        # ------------------------------------------------------------------
+
+        if self.response_format is not None or "response_format" in params:
+
+            def _create_or_parse(**kwargs):
+                # For structured output we must convert dict / pydantic model
+                # into the JSON-schema body expected by the API.
+                if "stream" in kwargs:
+                    kwargs.pop("stream")  # Responses API rejects stream with RF for now
+
+                rf = kwargs.get("response_format", self.response_format)
+
+                if isinstance(rf, dict):
+                    kwargs["text_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "schema": _ensure_strict_json_schema(
+                                rf, path=(), root=rf
+                            ),
+                            "name": "response_format",
+                            "strict": True,
+                        },
+                    }
+                else:
+                    # pydantic.BaseModel subclass
+                    kwargs["text_format"] = type_to_response_format_param(
+                        rf
+                    )
+                if "response_format" in kwargs:
+                    kwargs["text_format"] = kwargs.pop("response_format")
+
+                try:
+                    return self._oai_client.responses.parse(**kwargs)
+                except TypeError as e:
+                    # Older openai-python versions may not yet expose the
+                    # text_format parameter on the Responses endpoint.
+                    if "text_format" in str(e) and "unexpected" in str(e):
+                        warnings.warn(
+                            "Installed openai-python version doesn't support "
+                            "`response_format` for the Responses API. "
+                            "Falling back to raw text output.",
+                            UserWarning,
+                        )
+                        kwargs.pop("text_format", None)
+                        return self._oai_client.responses.create(**kwargs)
+
+            return _create_or_parse(**params)
+
+        # No structured output
+        return self._oai_client.responses.create(**params)
+
+    def message_retrieval(self, response):
+        output = getattr(response, "output", [])
+        messages = []
+        for item in output:
+            # Convert pydantic objects to plain dicts for uniform handling
+            if hasattr(item, "model_dump"):
+                item = item.model_dump()
+
+            item_type = item.get("type")
+            if item_type == "message":
+                # Flatten blocks into text when possible
+                # Support multimodal by re-emitting the list if not pure text
+                blocks = item.get("content", [])
+                if len(blocks) == 1 and blocks[0].get("type") == "output_text":
+                    messages.append(blocks[0]["text"])
+                else:
+                    messages.append(blocks)  # let upper layer handle multimodal structure
+        return messages
+
+    def cost(self, response):
+        return self._usage_dict(response).get("cost", 0)
+
+    @staticmethod
+    def get_usage(response):
+        return OpenAIResponsesClient._usage_dict(response)
