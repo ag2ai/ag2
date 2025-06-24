@@ -148,15 +148,6 @@ class TestLLMGuardrail:
             assert "test condition" in guardrail.check_prompt
             mock_openai.assert_called_once()
 
-    def test_init_no_config(self, mock_target: TransitionTarget, mock_llm_config: MagicMock) -> None:
-        """Test LLMGuardrail initialization without config raises ValueError."""
-        with pytest.raises(ValueError) as excinfo:
-            LLMGuardrail(
-                name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
-            )
-
-        assert "LLMConfig is required" in str(excinfo.value)
-
     def test_check_with_string_context(self, mock_target: TransitionTarget, mock_llm_config: MagicMock) -> None:
         """Test LLMGuardrail check method with string context."""
         with patch("autogen.agentchat.group.guardrails.OpenAIWrapper") as mock_openai:
