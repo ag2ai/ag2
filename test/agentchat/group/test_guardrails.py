@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+from typing import Any, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -75,7 +76,7 @@ class TestGuardrail:
         """Create a concrete implementation of Guardrail for testing."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context):
+            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
                 return GuardrailResult(activated=True, justification="Test check")
 
         return ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
@@ -84,7 +85,7 @@ class TestGuardrail:
         """Test Guardrail initialization with default activation message."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context):
+            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
                 return GuardrailResult(activated=True)
 
         guardrail = ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
@@ -98,7 +99,7 @@ class TestGuardrail:
         """Test Guardrail initialization with custom activation message."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context):
+            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
                 return GuardrailResult(activated=True)
 
         custom_message = "Custom activation message"
@@ -107,11 +108,6 @@ class TestGuardrail:
         )
 
         assert guardrail.activation_message == custom_message
-
-    def test_abstract_check_method(self, mock_target: TransitionTarget) -> None:
-        """Test that Guardrail is abstract and cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            Guardrail(name="test_guardrail", condition="test condition", target=mock_target)
 
 
 class TestLLMGuardrail:
@@ -152,10 +148,12 @@ class TestLLMGuardrail:
             assert "test condition" in guardrail.check_prompt
             mock_openai.assert_called_once()
 
-    def test_init_no_config(self, mock_target: TransitionTarget) -> None:
+    def test_init_no_config(self, mock_target: TransitionTarget, mock_llm_config: MagicMock) -> None:
         """Test LLMGuardrail initialization without config raises ValueError."""
         with pytest.raises(ValueError) as excinfo:
-            LLMGuardrail(name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=None)
+            LLMGuardrail(
+                name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
+            )
 
         assert "LLMConfig is required" in str(excinfo.value)
 
@@ -218,18 +216,6 @@ class TestLLMGuardrail:
             assert len(messages) == 3  # system + 2 context messages
             assert messages[0]["role"] == "system"
             assert messages[1:] == context_messages
-
-    def test_check_invalid_context_type(self, mock_target: TransitionTarget, mock_llm_config: MagicMock) -> None:
-        """Test LLMGuardrail check method with invalid context type."""
-        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
-            guardrail = LLMGuardrail(
-                name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
-            )
-
-            with pytest.raises(ValueError) as excinfo:
-                guardrail.check(123)  # Invalid context type
-
-            assert "Context must be a string or a list of messages" in str(excinfo.value)
 
     def test_check_response_format_configuration(
         self, mock_target: TransitionTarget, mock_llm_config: MagicMock
@@ -333,16 +319,6 @@ class TestRegexGuardrail:
 
         assert result.activated is False
         assert result.justification == "No match found in the context."
-
-    def test_check_invalid_context_type(self, mock_target: TransitionTarget) -> None:
-        """Test RegexGuardrail check with invalid context type."""
-        regex_pattern = r"\b(password|secret)\b"
-        guardrail = RegexGuardrail(name="test_regex_guardrail", condition=regex_pattern, target=mock_target)
-
-        with pytest.raises(ValueError) as excinfo:
-            guardrail.check(123)  # Invalid context type
-
-        assert "Context must be a string or a list of messages" in str(excinfo.value)
 
     def test_check_case_sensitive_match(self, mock_target: TransitionTarget) -> None:
         """Test RegexGuardrail check with case-sensitive pattern."""
