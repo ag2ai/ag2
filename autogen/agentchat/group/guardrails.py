@@ -38,7 +38,7 @@ class GuardrailResult(BaseModel):
         try:
             data = json.loads(text)
             return GuardrailResult(**data)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to parse GuardrailResult from text: {text}") from e
 
 
