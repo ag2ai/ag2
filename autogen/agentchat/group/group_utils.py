@@ -206,6 +206,18 @@ def ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
                 raise ValueError("Agent in after work target Hand-offs must be in the agents list")
 
 
+def ensure_guardrail_agents_in_group(agents: list["ConversableAgent"]) -> None:
+    """Ensure the agents in handoffs are in the group chat."""
+    agent_names = [agent.name for agent in agents]
+    for agent in agents:
+        for guardrail in agent.input_guardrails + agent.output_guardrails:
+            if (
+                isinstance(guardrail.target, (AgentTarget, AgentNameTarget))
+                and guardrail.target.agent_name not in agent_names
+            ):
+                raise ValueError("Agent in guardrail's target must be in the agents list")
+
+
 def prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
     """Preparation for excluding transit messages by getting all tool names and registering a hook on agents to remove those messages."""
     # get all transit functions names
@@ -247,6 +259,9 @@ def prepare_group_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     ensure_handoff_agents_in_group(agents)
+
+    # Ensure all agents in guardrails are in the passed in agents list
+    ensure_guardrail_agents_in_group(agents)
 
     # Create Tool Executor for the group
     tool_execution = GroupToolExecutor()
