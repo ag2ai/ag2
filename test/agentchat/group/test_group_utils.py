@@ -324,6 +324,31 @@ class TestHelperFunctions:
         with pytest.raises(ValueError, match="Agent in OnContextCondition Hand-offs must be in the agents list"):
             ensure_handoff_agents_in_group([agent1, agent2])
 
+    def test_ensure_guardrail_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
+        """Test validation of handoff targets."""
+        # Valid case
+        target = AgentTarget(agent=agent2)
+        cond = OnCondition(target=target, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond]
+        agent1.handoffs.after_work = AgentNameTarget(agent_name=agent1.name)
+        ensure_handoff_agents_in_group([agent1, agent2])  # Should not raise
+
+        # Invalid case (LLM condition)
+        target_invalid = AgentNameTarget(agent_name="non_existent_agent")
+        cond_invalid = OnCondition(target=target_invalid, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond_invalid]
+        with pytest.raises(ValueError, match="Agent in OnCondition Hand-offs must be in the agents list"):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+        # Invalid case (Context condition)
+        agent1.handoffs.llm_conditions = []
+        context_cond_invalid = OnContextCondition(
+            target=target_invalid, condition=StringContextCondition(variable_name="var")
+        )
+        agent1.handoffs.context_conditions = [context_cond_invalid]
+        with pytest.raises(ValueError, match="Agent in OnContextCondition Hand-offs must be in the agents list"):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
     @patch("autogen.agentchat.group.group_utils.make_remove_function")
     def test_prepare_exclude_transit_messages(
         self, mock_make_remove: MagicMock, agent1: MagicMock, agent2: MagicMock
