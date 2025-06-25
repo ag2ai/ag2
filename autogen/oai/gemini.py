@@ -578,14 +578,23 @@ class GeminiClient:
                 rst.append(
                     VertexAIContent(parts=parts, role=role)
                     if self.use_vertexai
-                    else rst.append(Content(parts=parts, role=role))
+                    else Content(parts=parts, role=role)
                 )
-            elif part_type == "tool" or part_type == "tool_call":
-                role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "user"
+            elif part_type == "tool_call":
+                # Function calls should be from the model/assistant
+                role = "model"
                 rst.append(
                     VertexAIContent(parts=parts, role=role)
                     if self.use_vertexai
-                    else rst.append(Content(parts=parts, role=role))
+                    else Content(parts=parts, role=role)
+                )
+            elif part_type == "tool":
+                # Function responses should be from the user
+                role = "user"
+                rst.append(
+                    VertexAIContent(parts=parts, role=role)
+                    if self.use_vertexai
+                    else Content(parts=parts, role=role)
                 )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
@@ -605,14 +614,14 @@ class GeminiClient:
                     rst.append(
                         VertexAIContent(parts=text_parts, role=role)
                         if self.use_vertexai
-                        else rst.append(Content(parts=text_parts, role=role))
+                        else Content(parts=text_parts, role=role)
                     )
 
                 if len(image_parts) > 0:
                     rst.append(
                         VertexAIContent(parts=image_parts, role=role)
                         if self.use_vertexai
-                        else rst.append(Content(parts=image_parts, role=role))
+                        else Content(parts=image_parts, role=role)
                     )
 
             if len(rst) != 0 and rst[-1] is None:
