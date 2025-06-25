@@ -332,6 +332,12 @@ class GeminiClient:
                 recitation_part = Part(text="Unsuccessful Finish Reason: RECITATION")
                 parts = [recitation_part]
                 error_finish_reason = "content_filter"  # As per available finish_reason in Choice
+            elif not response.candidates[0].content or not response.candidates[0].content.parts:
+                error_part = Part(
+                    text=f"Unsuccessful Finish Reason: ({str(response.candidates[0].finish_reason)}) NO CONTENT RETURNED"
+                )
+                parts = [error_part]
+                error_finish_reason = "content_filter"  # No other option in Choice in chat_completion.py
             else:
                 parts = response.candidates[0].content.parts
         elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
@@ -574,16 +580,7 @@ class GeminiClient:
                     if self.use_vertexai
                     else rst.append(Content(parts=parts, role=role))
                 )
-            elif part_type == "tool":
-                # Function responses should be assigned "model" role to keep them separate from function calls
-                role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "model"
-                rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role=role))
-                )
-            elif part_type == "tool_call":
-                # Function calls should be assigned "user" role
+            elif part_type == "tool" or part_type == "tool_call":
                 role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "user"
                 rst.append(
                     VertexAIContent(parts=parts, role=role)
@@ -907,11 +904,7 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
 
-        if (
-            "gemini-2.5-pro-preview-03-25" in model_name
-            or "gemini-2.5-pro-exp-03-25" in model_name
-            or "gemini-2.5-pro-preview-05-06" in model_name
-        ):
+        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
             if up_to_200k:
                 return total_cost_mil(1.25, 10)
             else:
@@ -951,11 +944,7 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if (
-            "gemini-2.5-pro-preview-03-25" in model_name
-            or "gemini-2.5-pro-exp-03-25" in model_name
-            or "gemini-2.5-pro-preview-05-06" in model_name
-        ):
+        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
             if up_to_200k:
                 return total_cost_mil(1.25, 10)
