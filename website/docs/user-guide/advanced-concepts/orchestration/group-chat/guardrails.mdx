@@ -199,7 +199,7 @@ support_agent.register_output_guardrail(data_leak_guardrail)
 # Set up the conversation pattern
 pattern = AutoPattern(
     initial_agent=support_agent,
-    agents=[support_agent, compliance_agent, escalation_agent],
+    agents=[support_agent, compliance_agent, escalation_agent, user],
     user_agent=user,
     group_manager_args={"llm_config": llm_config}
 )
@@ -379,7 +379,7 @@ support_agent.register_output_guardrail(data_leak_guardrail)
 # Set up pattern and run
 pattern = AutoPattern(
     initial_agent=support_agent,
-    agents=[support_agent, compliance_agent, escalation_agent],
+    agents=[support_agent, compliance_agent, escalation_agent, user],
     user_agent=user,
     group_manager_args={"llm_config": llm_config}
 )
