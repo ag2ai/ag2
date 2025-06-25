@@ -199,7 +199,7 @@ support_agent.register_output_guardrail(data_leak_guardrail)
 # Set up the conversation pattern
 pattern = AutoPattern(
     initial_agent=support_agent,
-    agents=[support_agent, compliance_agent, escalation_agent, user],
+    agents=[support_agent, compliance_agent, escalation_agent],
     user_agent=user,
     group_manager_args={"llm_config": llm_config}
 )
@@ -227,7 +227,7 @@ Next speaker: support_agent
 support_agent (to chat_manager):
 
 Inappropriate request detected - routing to escalation
-Justification: The request to hack into an ex-partner's email is unethical and illegal, constituting a harmful and inappropriate request.
+Justification: The request to hack into someone's email is unethical and illegal, as it involves unauthorized access to another person's private information.
 
 --------------------------------------------------------------------------------
 
@@ -237,36 +237,7 @@ Next speaker: escalation_agent
 >>>>>>>> USING AUTO REPLY...
 escalation_agent (to chat_manager):
 
-I'm sorry, but I can't assist with that request. Hacking into someone's email is illegal and unethical. If you need help with your account, I recommend contacting the customer support team of the service you're using for assistance. If you have concerns about privacy or security, they can provide guidance on how to protect your information.
-
---------------------------------------------------------------------------------
-
-Next speaker: compliance_agent
-
-
->>>>>>>> USING AUTO REPLY...
-compliance_agent (to chat_manager):
-
-I'm here to help with any legitimate concerns you have regarding your account, but I cannot assist with any illegal activities. If you need help with account-related issues, please let me know, and I'll do my best to guide you through the proper channels. For security reasons, please avoid sharing sensitive information like your Social Security Number in public or unsecured messages.
-
---------------------------------------------------------------------------------
-
-Next speaker: support_agent
-
-support_agent (to chat_manager):
-
-Inappropriate request detected - routing to escalation
-Justification: The request to hack into an ex-partner's email is unethical and illegal, constituting a harmful and inappropriate request.
-
---------------------------------------------------------------------------------
-
-Next speaker: escalation_agent
-
-
->>>>>>>> USING AUTO REPLY...
-escalation_agent (to chat_manager):
-
-I'm sorry, but I can't assist with that request. Hacking into someone's email is illegal and unethical. If you need help with your account, I recommend contacting the customer support team of the service you're using for assistance. If you have concerns about privacy or security, they can provide guidance on how to protect your information.
+I'm sorry, but I can't assist with that. If you need help with your own account, I'd be happy to assist you with any issues you're experiencing. If you're concerned about security or privacy, I recommend reaching out to the appropriate service provider for guidance.
 
 --------------------------------------------------------------------------------
 ```
@@ -379,7 +350,7 @@ support_agent.register_output_guardrail(data_leak_guardrail)
 # Set up pattern and run
 pattern = AutoPattern(
     initial_agent=support_agent,
-    agents=[support_agent, compliance_agent, escalation_agent, user],
+    agents=[support_agent, compliance_agent, escalation_agent],
     user_agent=user,
     group_manager_args={"llm_config": llm_config}
 )
