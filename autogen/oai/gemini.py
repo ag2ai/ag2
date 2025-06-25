@@ -54,7 +54,6 @@ from io import BytesIO
 from typing import Any, Literal, Optional, Type, Union
 
 import requests
-from packaging import version
 from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -576,25 +575,19 @@ class GeminiClient:
 
             if part_type == "text":
                 rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else Content(parts=parts, role=role)
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
             elif part_type == "tool_call":
                 # Function calls should be from the model/assistant
                 role = "model"
                 rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else Content(parts=parts, role=role)
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
             elif part_type == "tool":
                 # Function responses should be from the user
                 role = "user"
                 rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else Content(parts=parts, role=role)
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
