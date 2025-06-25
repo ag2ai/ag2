@@ -904,14 +904,25 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
 
-        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+        if (
+            model_name == "gemini-2.5-pro"
+            or "gemini-2.5-pro-preview-06-05" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+            or "gemini-2.5-pro-preview-03-25" in model_name
+        ):
             if up_to_200k:
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
 
-        elif "gemini-2.5-flash-preview-04-17" in model_name:
+        elif "gemini-2.5-flash" in model_name:
+            return total_cost_mil(0.3, 2.5)
+
+        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
             return total_cost_mil(0.15, 0.6)  # NON-THINKING OUTPUT PRICE, $3 FOR THINKING!
+
+        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
+            return total_cost_mil(0.1, 0.4)
 
         elif "gemini-2.0-flash-lite" in model_name:
             return total_cost_mil(0.075, 0.3)
@@ -944,16 +955,29 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if "gemini-2.5-pro-preview-03-25" in model_name or "gemini-2.5-pro-exp-03-25" in model_name:
+        if (
+            model_name == "gemini-2.5-pro"
+            or "gemini-2.5-pro-preview-06-05" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+            or "gemini-2.5-pro-preview-03-25" in model_name
+        ):
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
             if up_to_200k:
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
 
-        elif "gemini-2.5-flash-preview-04-17" in model_name:
+        elif "gemini-2.5-flash" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
+            return total_cost_mil(0.3, 2.5)
+
+        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
             return total_cost_mil(0.15, 0.6)
+
+        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite
+            return total_cost_mil(0.1, 0.4)
 
         elif "gemini-2.0-flash-lite" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
