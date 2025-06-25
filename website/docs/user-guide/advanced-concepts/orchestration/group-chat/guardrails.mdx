@@ -46,7 +46,7 @@ Regex guardrails use regular expressions to match specific patterns in text. The
 - Numeric patterns or codes
 
 ```python
-from autogen.agentchat.group import RegexGuardrail, AgentTarget
+from autogen.agentchat.group.guardrails import RegexGuardrail, AgentTarget
 
 # Create a regex guardrail to detect numbers
 number_guardrail = RegexGuardrail(
@@ -67,7 +67,7 @@ LLM guardrails use language models to understand the meaning and context of mess
 - Complex policy violations
 
 ```python
-from autogen.agentchat.group import LLMGuardrail, AgentTarget
+from autogen.agentchat.group.guardrails import LLMGuardrail, AgentTarget
 
 # Create an LLM guardrail to detect mobile phone questions
 mobile_guardrail = LLMGuardrail(
