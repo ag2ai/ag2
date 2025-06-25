@@ -46,7 +46,8 @@ Regex guardrails use regular expressions to match specific patterns in text. The
 - Numeric patterns or codes
 
 ```python
-from autogen.agentchat.group.guardrails import RegexGuardrail, AgentTarget
+from autogen.agentchat.group.guardrails import RegexGuardrail
+from autogen.agentchat.group import AgentTarget
 
 # Create a regex guardrail to detect numbers
 number_guardrail = RegexGuardrail(
@@ -67,15 +68,16 @@ LLM guardrails use language models to understand the meaning and context of mess
 - Complex policy violations
 
 ```python
-from autogen.agentchat.group.guardrails import LLMGuardrail, AgentTarget
+from autogen.agentchat.group.guardrails import LLMGuardrail
+from autogen.agentchat.group import AgentTarget
 
-# Create an LLM guardrail to detect mobile phone questions
-mobile_guardrail = LLMGuardrail(
-    name="mobile_detector",
-    condition="Is this a question about mobile phones or smartphones?",
-    target=AgentTarget(mobile_specialist),
+# Create an LLM guardrail to detect requests for personal information
+privacy_violation_guardrail = LLMGuardrail(
+    name="privacy_violation_detector",
+    condition="Is this message asking for or attempting to share personal information like passwords, SSNs, or private account details?",
+    target=AgentTarget(security_agent),
     llm_config=llm_config,
-    activation_message="Mobile phone question detected - routing to specialist"
+    activation_message="Privacy violation detected - routing to security review"
 )
 ```
 
@@ -88,8 +90,8 @@ Guardrails can be placed at two key points in the conversation flow:
 Input guardrails monitor messages **before** they reach an agent. They're registered using `register_input_guardrail()`:
 
 ```python
-# Monitor messages coming TO the tech agent
-tech_agent.register_input_guardrail(mobile_guardrail)
+# Monitor messages coming TO the support agent for privacy violations
+support_agent.register_input_guardrail(privacy_violation_guardrail)
 ```
 
 Input guardrails are useful for:
