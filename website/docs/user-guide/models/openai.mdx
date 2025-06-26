@@ -31,7 +31,9 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 
 See the [LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration) for further details on setting an creating an LLM configuration.
 
-The below example of an `OAI_CONFIG_LIST` shows how the OpenAI client class is used by specifying the `api_type` as `openai`.
+The below example of an `OAI_CONFIG_LIST` shows how the OpenAI client class is used.
+By specifying the `api_type` as `openai`, the client will use the OpenAI ChatCompletion API.
+If you want to use the OpenAI Responses API, you can specify the `api_type` as `responses`.
 
 ```python
 [
@@ -41,13 +43,13 @@ The below example of an `OAI_CONFIG_LIST` shows how the OpenAI client class is u
         "api_key": "your OpenAI Key goes here",
     },
     {
-        "api_type": "openai",
+        "api_type": "openai", # use OpenAI ChatCompletion API
         "model": "gpt-4o-mini",
         "api_key": "your OpenAI Key goes here",
     },
     {
-        "api_type": "openai",
-        "model": "gpt-4o-mini",
+        "api_type": "responses", # use OpenAI Responses API
+        "model": "gpt-4o",
         "api_key": "your OpenAI Key goes here",
     }
 ]
