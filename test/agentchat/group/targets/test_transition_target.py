@@ -68,6 +68,37 @@ class TestTransitionTarget:
             target.create_wrapper_agent(mock_agent, 0)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
+    def test_activate_target(self) -> None:
+        """Test that activate_target sets the next target on GroupToolExecutor agent."""
+        # Create a mock GroupToolExecutor agent
+        mock_group_tool_executor = MagicMock()
+        mock_group_tool_executor.__class__.__name__ = "GroupToolExecutor"
+        mock_group_tool_executor.set_next_target = MagicMock()
+
+        # Create other mock agents that are not GroupToolExecutor
+        mock_agent1 = MagicMock()
+        mock_agent1.__class__.__name__ = "ConversableAgent"
+
+        mock_agent2 = MagicMock()
+        mock_agent2.__class__.__name__ = "SomeOtherAgent"
+
+        # Create a mock groupchat with agents including GroupToolExecutor
+        mock_groupchat = MagicMock(spec=GroupChat)
+        mock_groupchat.agents = [mock_agent1, mock_group_tool_executor, mock_agent2]
+
+        # Create a target instance
+        target = TerminateTarget()  # Using TerminateTarget as a concrete implementation
+
+        # Call activate_target
+        target.activate_target(mock_groupchat)
+
+        # Verify that set_next_target was called on the GroupToolExecutor with the target
+        mock_group_tool_executor.set_next_target.assert_called_once_with(target)
+
+        # Verify that set_next_target was not called on other agents
+        assert not hasattr(mock_agent1, "set_next_target") or not mock_agent1.set_next_target.called
+        assert not hasattr(mock_agent2, "set_next_target") or not mock_agent2.set_next_target.called
+
 
 class TestAgentTarget:
     def test_init(self) -> None:

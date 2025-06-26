@@ -117,9 +117,8 @@ class MCPProxy:
 
         return q_params, path_params, body, security
 
-    @property
-    def mcp(self) -> "FastMCP":
-        mcp = FastMCP(title=self._title)
+    def get_mcp(self, **settings: Any) -> "FastMCP":
+        mcp = FastMCP(title=self._title, **settings)
 
         for func in self._registered_funcs:
             try:

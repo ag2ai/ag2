@@ -669,16 +669,22 @@ class TerminationEvent(BaseEvent):
     """When a workflow termination condition is met"""
 
     termination_reason: str
+    sender: str
+    recipient: Optional[str] = None
 
     def __init__(
         self,
         *,
         uuid: Optional[UUID] = None,
+        sender: Union["Agent", str],
+        recipient: Optional[Union["Agent", str]] = None,
         termination_reason: str,
     ):
         super().__init__(
             uuid=uuid,
             termination_reason=termination_reason,
+            sender=sender.name if hasattr(sender, "name") else sender,
+            recipient=recipient.name if hasattr(recipient, "name") else recipient if recipient else None,
         )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:

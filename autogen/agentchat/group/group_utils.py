@@ -137,13 +137,7 @@ def _run_oncontextconditions(
         if is_available and (
             on_condition.condition is None or on_condition.condition.evaluate(agent.context_variables)
         ):
-            # Condition has been met, we'll set the Tool Executor's next target
-            # attribute and that will be picked up on the next iteration when
-            # _determine_next_agent is called
-            for agent in agent._group_manager.groupchat.agents:  # type: ignore[attr-defined]
-                if isinstance(agent, GroupToolExecutor):
-                    agent.set_next_target(on_condition.target)
-                    break
+            on_condition.target.activate_target(agent._group_manager.groupchat)  # type: ignore[attr-defined]
 
             transfer_name = on_condition.target.display_name()
 
@@ -212,6 +206,18 @@ def ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
                 raise ValueError("Agent in after work target Hand-offs must be in the agents list")
 
 
+def ensure_guardrail_agents_in_group(agents: list["ConversableAgent"]) -> None:
+    """Ensure the agents in handoffs are in the group chat."""
+    agent_names = [agent.name for agent in agents]
+    for agent in agents:
+        for guardrail in agent.input_guardrails + agent.output_guardrails:
+            if (
+                isinstance(guardrail.target, (AgentTarget, AgentNameTarget))
+                and guardrail.target.agent_name not in agent_names
+            ):
+                raise ValueError("Agent in guardrail's target must be in the agents list")
+
+
 def prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
     """Preparation for excluding transit messages by getting all tool names and registering a hook on agents to remove those messages."""
     # get all transit functions names
@@ -253,6 +259,9 @@ def prepare_group_agents(
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     ensure_handoff_agents_in_group(agents)
+
+    # Ensure all agents in guardrails are in the passed in agents list
+    ensure_guardrail_agents_in_group(agents)
 
     # Create Tool Executor for the group
     tool_execution = GroupToolExecutor()
