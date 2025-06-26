@@ -43,6 +43,7 @@ class _FakeResponse:
         self.usage = usage or {}
         self.cost = 1.23  # arbitrary
         self.model = "gpt-4o"
+        self.id = "fake-id"
 
 
 # -----------------------------------------------------------------------------
@@ -153,11 +154,82 @@ def test_message_retrieval_handles_various_item_types():
 
     msgs = client.message_retrieval(resp)
 
-    # Should have produced three message entries
-    assert len(msgs) == 3
-    # first is plain string
-    assert msgs[0] == "Hi"
-    # second is a function_call dict
-    assert msgs[1]["function_call"]["name"] == "foo"
-    # third contains tool_calls list
-    assert msgs[2]["tool_calls"][0]["function"]["name"] == "web_search"
+    # The client aggregates the three items into a single assistant message
+    assert len(msgs) == 1
+
+    top_msg = msgs[0]
+    assert top_msg["role"] == "assistant"
+
+    blocks = top_msg["content"]
+    # Within the aggregated content we expect three blocks
+    assert len(blocks) == 3
+
+    # 1) Plain text block
+    assert blocks[0]["text"] == "Hi"
+
+    # 2) Function-call block
+    assert blocks[1]["name"] == "foo"
+
+    # 3) Tool-call block (web_search)
+    assert blocks[2]["name"] == "web_search"
+
+
+# -----------------------------------------------------------------------------
+# New tests --------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+def test_get_delta_messages_filters_completed_blocks():
+    """_get_delta_messages should drop already-completed messages and return only deltas."""
+
+    client = OpenAIResponsesClient(MagicMock())
+
+    msgs = [
+        {"role": "assistant", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "output_text", "text": "Previous reply"},
+                {"status": "completed"},
+            ],
+        },
+        {"role": "user", "content": "follow-up"},
+    ]
+
+    deltas = client._get_delta_messages(msgs)
+
+    # Only the last message (after completed) should be returned
+    assert deltas == [msgs[-1]]
+
+
+def test_create_converts_multimodal_blocks(mocked_openai_client):
+    """create() must turn mixed text / image blocks into correct input schema."""
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages_param = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Describe this image."},
+                {"type": "input_image", "image_url": "https://example.com/cat.png"},
+            ],
+        }
+    ]
+
+    client.create({"messages": messages_param})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Ensure conversion occurred
+    assert "input" in kwargs
+    first = kwargs["input"][0]
+    blocks = first["content"]
+    assert blocks[0]["type"] == "input_text"
+    assert blocks[0]["text"] == "Describe this image."
+    assert blocks[1]["type"] == "input_image"
+    assert blocks[1]["image_url"] == "https://example.com/cat.png"
+
+    # default tools should include image_generation and web_search_preview
+    tool_types = {t["type"] for t in kwargs["tools"]}
+    assert {"image_generation", "web_search_preview"}.issubset(tool_types)
