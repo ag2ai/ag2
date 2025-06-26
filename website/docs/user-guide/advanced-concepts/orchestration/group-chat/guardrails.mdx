@@ -6,7 +6,7 @@ Guardrails are safety mechanisms that monitor agent behavior and enforce operati
 
 ## Introduction to Guardrails
 
-Guardrails act as protective barriers that ensure your agents operate within safe, expected parameters. They continuously monitor agent inputs and outputs, triggering specific actions when certain conditions are met.
+Guardrails act as protective barriers that ensure your agents operate within safe, expected parameters. They check agent inputs and outputs, triggering specific actions when defined conditions are met.
 
 ### Why Guardrails Matter
 
@@ -33,8 +33,8 @@ Each guardrail monitors specific conditions and takes appropriate action when th
 
 AG2 provides two main types of guardrails:
 
-- **Regex Guardrails**: Use pattern matching to detect specific text patterns
-- **LLM Guardrails**: Use language models to understand context and meaning
+- **Regex (Regular Expression) Guardrails**: Use pattern matching to detect specific text patterns
+- **LLM Guardrails**: Use large language models to understand context and meaning
 
 ### Regex Guardrails
 
@@ -60,7 +60,7 @@ number_guardrail = RegexGuardrail(
 
 ### LLM Guardrails
 
-LLM guardrails use language models to understand the meaning and context of messages. They're ideal for detecting:
+LLM guardrails use large language models to understand the meaning and context of messages. They're ideal for detecting:
 
 - Inappropriate language or sentiment
 - Off-topic conversations
@@ -90,7 +90,7 @@ Guardrails can be placed at two key points in the conversation flow:
 Input guardrails monitor messages **before** they reach an agent. They're registered using `register_input_guardrail()`:
 
 ```python
-# Monitor messages coming TO the support agent for privacy violations
+# Monitor messages coming INTO the support agent for privacy violations
 support_agent.register_input_guardrail(privacy_violation_guardrail)
 ```
 
@@ -104,7 +104,7 @@ Input guardrails are useful for:
 Output guardrails monitor messages **after** an agent generates them. They're registered using `register_output_guardrail()`:
 
 ```python
-# Monitor messages coming FROM the general agent
+# Monitor messages coming OUT OF the general agent
 general_agent.register_output_guardrail(number_guardrail)
 ```
 

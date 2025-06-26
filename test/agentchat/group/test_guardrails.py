@@ -212,7 +212,7 @@ class TestLLMGuardrail:
         self, mock_target: TransitionTarget, mock_llm_config: MagicMock
     ) -> None:
         """Test that LLMGuardrail properly configures response format."""
-        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper") as mock_openai:
+        with patch("autogen.agentchat.group.guardrails.OpenAIWrapper"):
             LLMGuardrail(
                 name="test_llm_guardrail", condition="test condition", target=mock_target, llm_config=mock_llm_config
             )
