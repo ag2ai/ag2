@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 import logging
@@ -315,7 +316,7 @@ class ModelClient(Protocol):
     class ModelClientResponseProtocol(Protocol):
         class Choice(Protocol):
             class Message(Protocol):
-                content: Optional[str]
+                content: Optional[str] | Optional[dict[str, Any]]
 
             message: Message
 
@@ -1479,6 +1480,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     """
 
     api_type: Literal["responses"] = "responses"
+    tool_choice: Optional[Literal["none", "auto", "required"]] = "auto"
 
     def create_client(self) -> "ModelClient":  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
@@ -1500,6 +1502,16 @@ class OpenAIResponsesClient:
     def __init__(self, client: "OpenAI", response_format: Union[BaseModel, dict[str, Any], None] = None):
         self._oai_client = client  # plain openai.OpenAI instance
         self.response_format = response_format  # kept for parity but unused for now
+
+        # Initialize the image generation parameters
+        self.image_output_params = {
+            "quality": None,  # "high" or "low"
+            "background": None,  # "white" or "black" or "transparent"
+            "size": None,  # "1024x1024" or "1024x1792" or "1792x1024"
+            "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
+            "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
+        }
+        self.previous_response_id = None
 
     # ------------------------------------------------------------------ helpers
     # responses objects embed usage similarly to chat completions
@@ -1528,12 +1540,18 @@ class OpenAIResponsesClient:
 
     # ---------------------------------------------------------------- interface
     def create(self, params: dict[str, Any]) -> Response:
-        """Invoke `client.responses.create()`.
+        """Invoke `client.responses.create() or .parse()`.
 
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
         """
         params = params.copy()
+
+        image_generation_tool_params = {"type": "image_generation"}
+        web_search_tool_params = {"type": "web_search_preview"}
+
+        if self.previous_response_id is not None and "previous_response_id" not in params:
+            params["previous_response_id"] = self.previous_response_id
 
         # Back-compat: transform messages → input if needed ------------------
         if "messages" in params and "input" not in params:
@@ -1542,9 +1560,30 @@ class OpenAIResponsesClient:
             for m in msgs:
                 role = m.get("role", "user")
                 content = m.get("content")
-                blocks = content if isinstance(content, list) else [{"type": "input_text", "text": content}]
-                input_items.append({"type": "message", "role": role, "content": blocks})
+                blocks = []
+                if isinstance(content, list):
+                    for c in content:
+                        if c.get("type") == "input_text":
+                            blocks.append({"type": "input_text", "text": c.get("text")})
+                        elif c.get("type") == "input_image":
+                            blocks.append({"type": "input_image", "image_url": c.get("image_url")})
+                        elif c.get("type") == "image_params":
+                            for k, v in c.get("image_params", {}).items():
+                                if k in self.image_output_params:
+                                    image_generation_tool_params[k] = v
+                        else:
+                            raise ValueError(f"Invalid content type: {c.get('type')}")
+                else:
+                    blocks.append({"type": "input_text", "text": content})
+                input_items.append({"role": role, "content": blocks})
             params["input"] = input_items
+
+        # Back-compat: add default tools
+        if "tools" not in params:
+            params["tools"] = [image_generation_tool_params, web_search_tool_params]
+        else:
+            params["tools"].append(image_generation_tool_params)
+            params["tools"].append(web_search_tool_params)
 
         # Ensure we don't mix legacy params that Responses doesn't accept
         if params.get("stream") and params.get("background"):
@@ -1597,14 +1636,20 @@ class OpenAIResponsesClient:
                         kwargs.pop("text_format", None)
                         return self._oai_client.responses.create(**kwargs)
 
-            return _create_or_parse(**params)
+            response = _create_or_parse(**params)
+            self.previous_response_id = response.id
+            return response
 
         # No structured output
-        return self._oai_client.responses.create(**params)
+        response = self._oai_client.responses.create(**params)
+        self.previous_response_id = response.id
+        return response
 
-    def message_retrieval(self, response):
+    def message_retrieval(
+        self, response
+    ) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
         output = getattr(response, "output", [])
-        messages = []
+        content = []  # list[dict[str, Union[str, dict[str, Any]]]]]
         for item in output:
             # Convert pydantic objects to plain dicts for uniform handling
             if hasattr(item, "model_dump"):
@@ -1616,23 +1661,29 @@ class OpenAIResponsesClient:
             # 1) Normal messages
             # ------------------------------------------------------------------
             if item_type == "message":
+                new_item = copy.deepcopy(item)
+                new_item["type"] = "text"
+                new_item["role"] = "assistant"
                 blocks = item.get("content", [])
                 if len(blocks) == 1 and blocks[0].get("type") == "output_text":
-                    messages.append(blocks[0]["text"])
-                else:
-                    messages.append(blocks)  # let upper layer handle multimodal structure
+                    new_item["text"] = blocks[0]["text"]
+                if "content" in new_item:
+                    del new_item["content"]
+                content.append(new_item)
                 continue
 
             # ------------------------------------------------------------------
             # 2) Function calls
             # ------------------------------------------------------------------
             if item_type == "function_call":
-                messages.append({
-                    "role": "assistant",
-                    "function_call": {
-                        "name": item.get("name"),
-                        "arguments": item.get("arguments"),
-                    },
+                output = item.get("output", {})
+                content.append({
+                    "role": "tool",
+                    "content": output.get("content", ""),
+                    "id": item.get("call_id", None),
+                    "name": item.get("name", None),
+                    "arguments": item.get("arguments"),
+                    "type": "function",
                 })
                 continue
 
@@ -1640,22 +1691,41 @@ class OpenAIResponsesClient:
             # 3) Tool / other *_call items
             # ------------------------------------------------------------------
             if item_type and item_type.endswith("_call"):
-                tool_call = {
+                tool_name = item_type.replace("_call", "")
+                tool_call_args = {
                     "id": item.get("id"),
-                    "type": "function",  # Responses API currently routes via function-like tools
-                    "function": {
-                        "name": item_type.replace("_call", ""),
-                        "arguments": item.get("arguments", {}),
-                    },
+                    "role": "tool_calls",
+                    "type": "tool_call",  # Responses API currently routes via function-like tools
+                    "name": tool_name,
                 }
-                messages.append({"role": "assistant", "tool_calls": [tool_call]})
+                if tool_name == "image_generation":
+                    for k in self.image_output_params:
+                        if k in item:
+                            tool_call_args[k] = item[k]
+                    encoded_base64_result = item.get("result", "")
+                    tool_call_args["content"] = encoded_base64_result
+                    # add image_url for image input back to oai response api.
+                    output_format = self.image_output_params["output_format"]
+                    tool_call_args["image_url"] = f"data:image/{output_format};base64,{encoded_base64_result}"
+                elif tool_name == "web_search":
+                    pass
+                else:
+                    raise ValueError(f"Invalid tool name: {tool_name}")
+                content.append(tool_call_args)
                 continue
 
             # ------------------------------------------------------------------
             # 4) Fallback – store raw dict so information isn't lost
             # ------------------------------------------------------------------
-            messages.append(item)
-        return messages
+            content.append(item)
+
+        return [
+            {
+                "role": "assistant",
+                "id": response.id,
+                "content": content,
+            }
+        ]
 
     def cost(self, response):
         return self._usage_dict(response).get("cost", 0)
