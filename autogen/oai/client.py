@@ -1538,7 +1538,25 @@ class OpenAIResponsesClient:
             "reasoning_tokens": output_tokens_details.get("reasoning_tokens", 0),
         }
 
-    # ---------------------------------------------------------------- interface
+    def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Get the delta messages from the messages."""
+        delta_messages = []
+        for m in messages[::-1]:
+            contents = m.get("content")
+            is_last_completed_response = False
+            if isinstance(contents, list):
+                for c in contents:
+                    if "status" in c and c.get("status") == "completed":
+                        is_last_completed_response = True
+                        break
+            elif isinstance(contents, str):
+                is_last_completed_response = "status" in m and m.get("status") == "completed"
+
+            if is_last_completed_response:
+                break
+            delta_messages.append(m)
+        return delta_messages[::-1]
+
     def create(self, params: dict[str, Any]) -> Response:
         """Invoke `client.responses.create() or .parse()`.
 
@@ -1555,7 +1573,7 @@ class OpenAIResponsesClient:
 
         # Back-compat: transform messages → input if needed ------------------
         if "messages" in params and "input" not in params:
-            msgs = params.pop("messages")
+            msgs = self._get_delta_messages(params.pop("messages"))
             input_items = []
             for m in msgs:
                 role = m.get("role", "user")
@@ -1563,7 +1581,7 @@ class OpenAIResponsesClient:
                 blocks = []
                 if isinstance(content, list):
                     for c in content:
-                        if c.get("type") == "input_text":
+                        if c.get("type") in ["input_text", "text"]:
                             blocks.append({"type": "input_text", "text": c.get("text")})
                         elif c.get("type") == "input_image":
                             blocks.append({"type": "input_image", "image_url": c.get("image_url")})
