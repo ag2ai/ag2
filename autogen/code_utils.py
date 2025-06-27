@@ -82,7 +82,7 @@ def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserM
         elif item["type"] in ["image_url", "input_image"]:
             rst.append("<image>")
         elif item["type"] in ["function", "tool_call", "tool_calls"]:
-            rst.append("<function>")
+            rst.append("<function>" if "name" not in item else f"<function: {item['name']}>")
         else:
             raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
     return "\n".join(rst)

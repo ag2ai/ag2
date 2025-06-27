@@ -217,7 +217,11 @@ def test_create_converts_multimodal_blocks(mocked_openai_client):
         }
     ]
 
-    client.create({"messages": messages_param})
+    client.create({
+        "messages": messages_param,
+        # Explicitly request these built-in tools so the client injects them.
+        "built_in_tools": ["image_generation", "web_search"],
+    })
 
     kwargs = mocked_openai_client.responses.create.call_args.kwargs
 
@@ -230,6 +234,6 @@ def test_create_converts_multimodal_blocks(mocked_openai_client):
     assert blocks[1]["type"] == "input_image"
     assert blocks[1]["image_url"] == "https://example.com/cat.png"
 
-    # default tools should include image_generation and web_search_preview
+    # The requested built-in tools should map to image_generation and web_search_preview
     tool_types = {t["type"] for t in kwargs["tools"]}
     assert {"image_generation", "web_search_preview"}.issubset(tool_types)

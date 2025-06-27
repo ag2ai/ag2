@@ -51,6 +51,10 @@ If you want to use the OpenAI Responses API, you can specify the `api_type` as `
         "api_type": "responses", # use OpenAI Responses API
         "model": "gpt-4o",
         "api_key": "your OpenAI Key goes here",
+
+        # Optional: use image_generation and web_search built-in tools
+        # See https://platform.openai.com/docs/guides/images-vision?api-mode=responses
+        "built_in_tools": ["image_generation", "web_search"],
     }
 ]
 ```

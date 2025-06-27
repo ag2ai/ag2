@@ -1481,6 +1481,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     api_type: Literal["responses"] = "responses"
     tool_choice: Optional[Literal["none", "auto", "required"]] = "auto"
+    built_in_tools: Optional[list[str]] = None
 
     def create_client(self) -> "ModelClient":  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
@@ -1499,7 +1500,11 @@ class OpenAIResponsesClient:
     OpenAI SDK so we don't replicate logic here.
     """
 
-    def __init__(self, client: "OpenAI", response_format: Union[BaseModel, dict[str, Any], None] = None):
+    def __init__(
+        self,
+        client: "OpenAI",
+        response_format: Union[BaseModel, dict[str, Any], None] = None,
+    ):
         self._oai_client = client  # plain openai.OpenAI instance
         self.response_format = response_format  # kept for parity but unused for now
 
@@ -1597,11 +1602,13 @@ class OpenAIResponsesClient:
             params["input"] = input_items
 
         # Back-compat: add default tools
-        if "tools" not in params:
-            params["tools"] = [image_generation_tool_params, web_search_tool_params]
-        else:
-            params["tools"].append(image_generation_tool_params)
-            params["tools"].append(web_search_tool_params)
+        built_in_tools = params.pop("built_in_tools", [])
+        if built_in_tools:
+            params["tools"] = []
+            if "image_generation" in built_in_tools:
+                params["tools"].append(image_generation_tool_params)
+            if "web_search" in built_in_tools:
+                params["tools"].append(web_search_tool_params)
 
         # Ensure we don't mix legacy params that Responses doesn't accept
         if params.get("stream") and params.get("background"):
