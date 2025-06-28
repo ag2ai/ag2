@@ -20,7 +20,9 @@ def multiply(a: int, b: int) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Math Server")
-    parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode (stdio or sse)")
+    parser.add_argument(
+        "transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode (stdio, sse or streamable-http)"
+    )
     args = parser.parse_args()
 
     mcp.run(transport=args.transport)
