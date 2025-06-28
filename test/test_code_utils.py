@@ -387,11 +387,11 @@ class TestContentStr:
 
     def test_list_of_text_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "text", "text": " world"}]
-        assert content_str(content) == "hello world"
+        assert content_str(content) == "hello\n world"
 
     def test_mixed_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "image_url", "url": "http://example.com/image.png"}]
-        assert content_str(content) == "hello<image>"
+        assert content_str(content) == "hello\n<image>"
 
     def test_invalid_content(self):
         content = [{"type": "text", "text": "hello"}, {"type": "wrong_type", "url": "http://example.com/image.png"}]

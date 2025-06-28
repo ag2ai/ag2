@@ -51,6 +51,8 @@ if openai_result.is_successful:
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
+    from autogen.oai.openai_responses import OpenAIResponsesClient
+
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
@@ -314,7 +316,7 @@ class ModelClient(Protocol):
     class ModelClientResponseProtocol(Protocol):
         class Choice(Protocol):
             class Message(Protocol):
-                content: Optional[str]
+                content: Optional[str] | Optional[dict[str, Any]]
 
             message: Message
 
@@ -952,6 +954,15 @@ class OpenAIWrapper:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
+            elif api_type is not None and api_type.startswith("responses"):
+                # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
+                @require_optional_import("openai>=1.66.2", "openai")
+                def create_responses_client() -> "OpenAI":
+                    client = OpenAI(**openai_config)
+                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))
+                    return client
+
+                client = create_responses_client()
             else:
 
                 @require_optional_import("openai>=1.66.2", "openai")
@@ -1442,3 +1453,35 @@ class OpenAIWrapper:
             A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
         """
         return response.message_retrieval_function(response)
+
+
+# -----------------------------------------------------------------------------
+# New: Responses API config entry (OpenAI-hosted preview endpoint)
+# -----------------------------------------------------------------------------
+
+
+@register_llm_config
+class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
+
+    This reuses all the OpenAI fields but changes *api_type* so the wrapper can
+    route traffic to the `client.responses` endpoint instead of
+    `chat.completions`.  It inherits everything else – including reasoning
+    fields – from *OpenAILLMConfigEntry* so users can simply set
+
+    ```python
+    {
+        "api_type": "responses",  # <-- key differentiator
+        "model": "o3",  # reasoning model
+        "reasoning_effort": "medium",  # low / medium / high
+        "stream": True,
+    }
+    ```
+    """
+
+    api_type: Literal["responses"] = "responses"
+    tool_choice: Optional[Literal["none", "auto", "required"]] = "auto"
+    built_in_tools: Optional[list[str]] = None
+
+    def create_client(self) -> "ModelClient":  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
