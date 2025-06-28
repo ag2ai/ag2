@@ -1,7 +1,6 @@
-# -----------------------------------------------------------------------------
-# New: Responses API config entry (OpenAI-hosted preview endpoint)
-# -----------------------------------------------------------------------------
-
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
 
 import copy
 import warnings
@@ -9,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Tuple, Union
 
 from pydantic import BaseModel
 
-from autogen.import_utils import optional_import_block
+from autogen.import_utils import optional_import_block, require_optional_import
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -20,9 +19,6 @@ else:
     OpenAI = None
 
 with optional_import_block() as openai_result:
-    pass
-
-if openai_result.is_successful:
     from openai.types.responses.response import Response
     from openai.types.responses.response_output_item import ImageGenerationCall
 
@@ -100,36 +96,10 @@ def _get_base_class():
     return OpenAILLMConfigEntry
 
 
-# @register_llm_config
-# class OpenAIResponsesLLMConfigEntry(_get_base_class()):
-#     """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
-
-#     This reuses all the OpenAI fields but changes *api_type* so the wrapper can
-#     route traffic to the `client.responses` endpoint instead of
-#     `chat.completions`.  It inherits everything else - including reasoning
-#     fields - from *OpenAILLMConfigEntry* so users can simply set
-
-#     ```python
-#     {
-#         "api_type": "responses",  # <-- key differentiator
-#         "model": "o3",  # reasoning model
-#         "reasoning_effort": "medium",  # low / medium / high
-#         "stream": True,
-#     }
-#     ```
-#     """
-
-#     api_type: Literal["responses"] = "responses"
-#     tool_choice: Optional[Literal["none", "auto", "required"]] = "auto"
-#     built_in_tools: Optional[list[str]] = None
-
-#     def create_client(self) -> Any:  # pragma: no cover
-#         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
-
-
 # -----------------------------------------------------------------------------
 # OpenAI Client that calls the /responses endpoint
 # -----------------------------------------------------------------------------
+@require_optional_import("openai", "openai")
 class OpenAIResponsesClient:
     """Minimal implementation targeting the experimental /responses endpoint.
 
@@ -186,21 +156,24 @@ class OpenAIResponsesClient:
             "reasoning_tokens": output_tokens_details.get("reasoning_tokens", 0),
         }
 
-    def _add_image_cost(self, response: Response) -> None:
+    def _add_image_cost(self, response: "Response") -> None:
         """Add image cost to self._image_costs when an image is generated"""
         for output in response.output:
-            if isinstance(output, ImageGenerationCall):
-                if hasattr(response.output[0], "model_extra") and response.output[0].model_extra:
-                    extra_fields = output.model_extra
+            if (
+                isinstance(output, ImageGenerationCall)
+                and hasattr(response.output[0], "model_extra")
+                and response.output[0].model_extra
+            ):
+                extra_fields = output.model_extra
 
-                    image_cost, image_error = calculate_openai_image_cost(
-                        model="gpt-image-1",
-                        size=extra_fields.get("size", "1024x1536"),
-                        quality=extra_fields.get("quality", "high"),
-                    )
+                image_cost, image_error = calculate_openai_image_cost(
+                    model="gpt-image-1",
+                    size=extra_fields.get("size", "1024x1536"),
+                    quality=extra_fields.get("quality", "high"),
+                )
 
-                    if not image_error and image_cost:
-                        self.image_costs += image_cost
+                if not image_error and image_cost:
+                    self.image_costs += image_cost
 
     def _get_delta_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Get the delta messages from the messages."""
@@ -221,7 +194,7 @@ class OpenAIResponsesClient:
             delta_messages.append(m)
         return delta_messages[::-1]
 
-    def create(self, params: dict[str, Any]) -> Response:
+    def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
         If the caller provided a classic *messages* array we convert it to the
