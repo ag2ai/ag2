@@ -550,16 +550,61 @@ def filter_config(
 
 
 def _satisfies_criteria(config_value: Any, criteria_values: Any) -> bool:
+    """Check if a configuration field value satisfies the filter criteria.
+
+    This helper function implements the matching logic between a single configuration
+    field value and the acceptable values specified in the filter criteria. It handles
+    both scalar and list-type configuration values with appropriate matching strategies.
+
+    Args:
+        config_value (Any): The value from a configuration dictionary field.
+                           Can be None, a scalar value, or a list of values.
+        criteria_values (Any): The acceptable values from the filter dictionary.
+                              Can be a single value or a list/set of acceptable values.
+
+    Returns:
+        bool: True if the config_value satisfies the criteria, False otherwise.
+
+    Matching Logic:
+        - **None config values**: Always return False (missing fields don't match)
+        - **List config values**:
+            - If criteria is a list: Match if there's any intersection (set overlap)
+            - If criteria is scalar: Match if the scalar is contained in the config list
+        - **Scalar config values**:
+            - If criteria is a list: Match if the config value is in the criteria list
+            - If criteria is scalar: Match if the values are exactly equal
+
+    Examples:
+        ```python
+        # List config value with list criteria (intersection matching)
+        _satisfies_criteria(["gpt-4", "gpt-3.5"], ["gpt-4", "claude"])  # True (gpt-4 intersects)
+        _satisfies_criteria(["tag1", "tag2"], ["tag3", "tag4"])  # False (no intersection)
+
+        # List config value with scalar criteria (containment matching)
+        _satisfies_criteria(["premium", "latest"], "premium")  # True (premium is in list)
+        _satisfies_criteria(["tag1", "tag2"], "tag3")  # False (tag3 not in list)
+
+        # Scalar config value with list criteria (membership matching)
+        _satisfies_criteria("gpt-4", ["gpt-4", "gpt-3.5"])  # True (gpt-4 in criteria)
+        _satisfies_criteria("claude", ["gpt-4", "gpt-3.5"])  # False (claude not in criteria)
+
+        # Scalar config value with scalar criteria (equality matching)
+        _satisfies_criteria("openai", "openai")  # True (exact match)
+        _satisfies_criteria("openai", "azure")  # False (different values)
+
+        # None config values (missing fields)
+        _satisfies_criteria(None, ["gpt-4"])  # False (missing field)
+        _satisfies_criteria(None, "gpt-4")  # False (missing field)
+        ```
+
+    Note:
+        This is an internal helper function used by `filter_config()`. The function
+        assumes that both parameters can be of various types and handles type
+        checking internally to determine the appropriate matching strategy.
+    """
     if config_value is None:
         return False
 
-    # if the config value is a list:
-    #  and criteria values is a list -> get intersection and assert that it is not empty
-    # and criteria values is not a list -> check if criteria values is in config value
-    # else:
-    # criteria values is a list -> check if config value is in criteria values
-    # criteria values is not a list -> check if config value is equal to criteria values
-    # For example, config_value = ["gpt-4o-mini", "gpt-4o"] and criteria_values = ["gpt-4o-mini"] -> True or config_value = ["tools", "vision"] and criteria_values = "tools" -> True
     if isinstance(config_value, list):
         if isinstance(criteria_values, list):
             return bool(set(config_value) & set(criteria_values))  # Non-empty intersection
