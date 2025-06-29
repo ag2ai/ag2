@@ -526,11 +526,6 @@ def filter_config(
         filter_dict = {"api_type": ["openai"]}
         result = filter_config(configs, filter_dict, exclude=True)
         # Returns configs that do NOT have api_type="openai"
-
-        # Example 5: Handle missing fields with None
-        filter_dict = {"api_version": ["2024-02-01", None]}
-        result = filter_config(configs, filter_dict)
-        # Returns configs with api_version="2024-02-01" OR configs missing the api_version field
         ```
     Note:
         - If `filter_dict` is empty or None, no filtering is applied and `config_list` is returned as is.
