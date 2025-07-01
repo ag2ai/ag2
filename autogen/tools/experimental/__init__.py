@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .browser_use import BrowserUseTool
+from .code_execution import PythonCodeExecutionTool
 from .crawl4ai import Crawl4AITool
 from .deep_research import DeepResearchTool
 from .duckduckgo import DuckDuckGoSearchTool
@@ -34,6 +35,7 @@ __all__ = [
     "FirecrawlTool",
     "GoogleSearchTool",
     "PerplexitySearchTool",
+    "PythonCodeExecutionTool",
     "ReliableTool",
     "ReliableToolError",
     "SearxngSearchTool",
