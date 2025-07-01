@@ -17,15 +17,15 @@ pip install ag2[cerebras]
 ```
 
 <Tip>
-If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[cerebras]
 ```
 or
 ```bash
-pip install -U pyautogen[cerebras]
+pip install -U ag2[cerebras]
 ```
-as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 ## Getting Started
@@ -138,7 +138,7 @@ chat_result = user_proxy_agent.initiate_chat(
 )
 ```
 
-```console
+````console
 User (to Cerebras Assistant):
 
 Provide code to count the number of prime numbers from 1 to 10000.
@@ -347,5 +347,5 @@ For a great holiday, explore the Statue of Liberty, take a walk through Central 
 LLM SUMMARY: New York will be 11 degrees fahrenheit. 123.45 EUR is equivalent to 135.80 USD. Explore the Statue of Liberty, walk through Central Park, or visit one of the many world-class museums for a great holiday in New York.
 
 Duration: 73.97937774658203ms
-```
+````
 We can see that the Cerebras Wafer-Scale Engine-3 (WSE-3) completed the query in 74ms -- faster than the blink of an eye!

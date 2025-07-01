@@ -385,7 +385,7 @@ def render_gallery_html(gallery_file_path: Path) -> str:
 
             data_link_target = "_self" if notebook_src else "_blank"
             html += f"""
-            <div class="card" data-link="{item.get("link", "#")}" data-tags="{tags_str}" data-link-target="{data_link_target}">
+            <div class="card" data-link="{item.get("link", "#")}" data-rel-link="{item.get("rel_link", "#")}" data-tags="{tags_str}" data-link-target="{data_link_target}">
                 <div class="card-container">
                     {img_tag}
                     <p class="card-title">{item.get("title", "")}</p>

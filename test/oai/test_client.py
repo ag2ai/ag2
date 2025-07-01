@@ -250,7 +250,7 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
         shutil.rmtree(LEGACY_CACHE_DIR)
 
     # Test default cache seed.
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
     start_time = time.time()
     cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
     end_time = time.time()
@@ -301,6 +301,50 @@ def test_legacy_cache(credentials_gpt_4o_mini: Credentials):
     duration_with_cold_cache = end_time - start_time
     assert duration_with_warm_cache < duration_with_cold_cache
     assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(21)))
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_no_default_cache(credentials_gpt_4o_mini: Credentials):
+    # Prompt to use for testing.
+    prompt = "Write a 100 word summary on the topic of the history of human civilization."
+
+    # Clear cache.
+    if os.path.exists(LEGACY_CACHE_DIR):
+        shutil.rmtree(LEGACY_CACHE_DIR)
+
+    # Test default cache which is no cache
+    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
+    start_time = time.time()
+    no_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
+    end_time = time.time()
+    duration_with_no_cache = end_time - start_time
+
+    # Legacy cache should not be used.
+    assert not os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
+
+    # Create cold cache
+    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list, cache_seed=LEGACY_DEFAULT_CACHE_SEED)
+    start_time = time.time()
+    cold_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
+    end_time = time.time()
+    duration_with_cold_cache = end_time - start_time
+
+    # Create warm cache
+    start_time = time.time()
+    warm_cache_response = client.create(messages=[{"role": "user", "content": prompt}])
+    end_time = time.time()
+    duration_with_warm_cache = end_time - start_time
+
+    # Test that warm cache is the same as cold cache.
+    assert cold_cache_response == warm_cache_response
+    assert no_cache_response != warm_cache_response
+
+    # Test that warm cache is faster than cold cache and no cache.
+    assert duration_with_warm_cache < duration_with_cold_cache
+    assert duration_with_warm_cache < duration_with_no_cache
+
+    # Test legacy cache is used.
+    assert os.path.exists(os.path.join(LEGACY_CACHE_DIR, str(LEGACY_DEFAULT_CACHE_SEED)))
 
 
 @run_for_optional_imports("openai", "openai")
@@ -404,12 +448,14 @@ def test_azure_llm_config_entry() -> None:
         model="gpt-4o-mini",
         api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         base_url="https://api.openai.com/v1",
+        user="unique_user_id",
     )
     expected = {
         "api_type": "azure",
         "model": "gpt-4o-mini",
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "base_url": "https://api.openai.com/v1",
+        "user": "unique_user_id",
         "tags": [],
     }
     actual = azure_llm_config.model_dump()

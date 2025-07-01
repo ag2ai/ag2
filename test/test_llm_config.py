@@ -181,6 +181,28 @@ class TestLLMConfig:
                 {
                     "config_list": [
                         {
+                            "model": "o3",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "max_completion_tokens": 1024,
+                            "reasoning_effort": "low",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="o3",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            max_completion_tokens=1024,
+                            reasoning_effort="low",
+                        )
+                    ]
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
                             "model": "gpt-4o-mini",
                             "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                             "api_type": "openai",
@@ -219,6 +241,31 @@ class TestLLMConfig:
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                             base_url="https://api.openai.com",
+                        )
+                    ],
+                ),
+            ),
+            (
+                {
+                    "config_list": [
+                        {
+                            "model": "o3",
+                            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            "api_type": "azure",
+                            "base_url": "https://api.openai.com",
+                            "max_completion_tokens": 1024,
+                            "reasoning_effort": "low",
+                        }
+                    ],
+                },
+                LLMConfig(
+                    config_list=[
+                        AzureOpenAILLMConfigEntry(
+                            model="o3",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            base_url="https://api.openai.com",
+                            max_completion_tokens=1024,
+                            reasoning_effort="low",
                         )
                     ],
                 ),
@@ -702,11 +749,12 @@ class TestLLMConfig:
         ],
     )
     def test_where(self, filter_dict: dict[str, Any], exclude: bool, expected: list[dict[str, Any]]) -> None:
-        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)
+        openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT, temperature=0.1)
 
         actual = openai_llm_config.where(**filter_dict, exclude=exclude)
         assert isinstance(actual, LLMConfig)
         assert actual.config_list == LLMConfig(config_list=expected).config_list
+        assert actual.temperature == 0.1
 
     def test_where_invalid_filter(self) -> None:
         openai_llm_config = LLMConfig(config_list=JSON_SAMPLE_DICT)

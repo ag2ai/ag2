@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -20,6 +23,20 @@ with optional_import_block():
 __all__ = ["handle_input", "preprocess_path"]
 
 _logger = logging.getLogger(__name__)
+
+
+class QueryType(Enum):
+    RAG_QUERY = "RAG_QUERY"
+    # COMMON_QUESTION = "COMMON_QUESTION"
+
+
+class Ingest(BaseModel):
+    path_or_url: str = Field(description="The path or URL of the documents to ingest.")
+
+
+class Query(BaseModel):
+    query_type: QueryType = Field(description="The type of query to perform for the Document Agent.")
+    query: str = Field(description="The query to perform for the Document Agent.")
 
 
 def is_url(url: str) -> bool:
@@ -37,7 +54,7 @@ def is_url(url: str) -> bool:
         return False
 
 
-@require_optional_import(["selenium", "webdriver_manager"], "rag")
+@require_optional_import(["selenium", "webdriver_manager", "requests"], "rag")
 def _download_rendered_html(url: str) -> str:
     """Downloads a rendered HTML page of a given URL using headless ChromeDriver.
 
@@ -73,7 +90,7 @@ def _download_rendered_html(url: str) -> str:
         driver.quit()
 
 
-@require_optional_import(["requests"], "rag")
+@require_optional_import(["requests", "selenium", "webdriver_manager"], "rag")
 def _download_binary_file(url: str, output_dir: Path) -> Path:
     """Downloads a file directly from the given URL.
 
@@ -226,6 +243,7 @@ def _is_valid_extension_for_file_type(extension: str, file_type: InputFormat) ->
     return extension in ExtensionToFormat and ExtensionToFormat[extension] == file_type
 
 
+@require_optional_import(["selenium", "webdriver_manager", "requests"], "rag")
 def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
     """Download the content of a URL and save it as a file.
 

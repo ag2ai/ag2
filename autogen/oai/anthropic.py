@@ -96,6 +96,7 @@ with optional_import_block():
 
 
 ANTHROPIC_PRICING_1k = {
+    "claude-3-7-sonnet-20250219": (0.003, 0.015),
     "claude-3-5-sonnet-20241022": (0.003, 0.015),
     "claude-3-5-haiku-20241022": (0.0008, 0.004),
     "claude-3-5-sonnet-20240620": (0.003, 0.015),
@@ -111,12 +112,16 @@ ANTHROPIC_PRICING_1k = {
 @register_llm_config
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
+    timeout: Optional[int] = Field(default=None, ge=1)
     temperature: float = Field(default=1.0, ge=0.0, le=1.0)
     top_k: Optional[int] = Field(default=None, ge=1)
     top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     stop_sequences: Optional[list[str]] = None
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=1)
+    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    tool_choice: Optional[dict] = None
+    thinking: Optional[dict] = None
 
     gcp_project_id: Optional[str] = None
     gcp_region: Optional[str] = None
@@ -142,6 +147,7 @@ class AnthropicClient:
         self._gcp_project_id = kwargs.get("gcp_project_id")
         self._gcp_region = kwargs.get("gcp_region")
         self._gcp_auth_token = kwargs.get("gcp_auth_token")
+        self._base_url = kwargs.get("base_url")
 
         if not self._api_key:
             self._api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -169,20 +175,28 @@ class AnthropicClient:
                 raise ValueError("API key or AWS credentials or GCP credentials are required to use the Anthropic API.")
 
         if self._api_key is not None:
-            self._client = Anthropic(api_key=self._api_key)
+            client_kwargs = {"api_key": self._api_key}
+            if self._base_url:
+                client_kwargs["base_url"] = self._base_url
+            self._client = Anthropic(**client_kwargs)
         elif self._gcp_region is not None:
             kw = {}
             for i, p in enumerate(inspect.signature(AnthropicVertex).parameters):
                 if hasattr(self, f"_gcp_{p}"):
                     kw[p] = getattr(self, f"_gcp_{p}")
+            if self._base_url:
+                kw["base_url"] = self._base_url
             self._client = AnthropicVertex(**kw)
         else:
-            self._client = AnthropicBedrock(
-                aws_access_key=self._aws_access_key,
-                aws_secret_key=self._aws_secret_key,
-                aws_session_token=self._aws_session_token,
-                aws_region=self._aws_region,
-            )
+            client_kwargs = {
+                "aws_access_key": self._aws_access_key,
+                "aws_secret_key": self._aws_secret_key,
+                "aws_session_token": self._aws_session_token,
+                "aws_region": self._aws_region,
+            }
+            if self._base_url:
+                client_kwargs["base_url"] = self._base_url
+            self._client = AnthropicBedrock(**client_kwargs)
 
         self._last_tooluse_status = {}
 
@@ -200,10 +214,13 @@ class AnthropicClient:
             params, "temperature", (float, int), False, 1.0, (0.0, 1.0), None
         )
         anthropic_params["max_tokens"] = validate_parameter(params, "max_tokens", int, False, 4096, (1, None), None)
+        anthropic_params["timeout"] = validate_parameter(params, "timeout", int, True, None, (1, None), None)
         anthropic_params["top_k"] = validate_parameter(params, "top_k", int, True, None, (1, None), None)
         anthropic_params["top_p"] = validate_parameter(params, "top_p", (float, int), True, None, (0.0, 1.0), None)
         anthropic_params["stop_sequences"] = validate_parameter(params, "stop_sequences", list, True, None, None, None)
         anthropic_params["stream"] = validate_parameter(params, "stream", bool, False, False, None, None)
+        if "thinking" in params:
+            anthropic_params["thinking"] = params["thinking"]
 
         if anthropic_params["stream"]:
             warnings.warn(
@@ -211,6 +228,11 @@ class AnthropicClient:
                 UserWarning,
             )
             anthropic_params["stream"] = False
+
+        # Note the Anthropic API supports "tool" for tool_choice but you must specify the tool name so we will ignore that here
+        # Dictionary, see options here: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#controlling-claudes-output
+        # type = auto, any, tool, none | name = the name of the tool if type=tool
+        anthropic_params["tool_choice"] = validate_parameter(params, "tool_choice", dict, True, None, None, None)
 
         return anthropic_params
 
@@ -288,6 +310,8 @@ class AnthropicClient:
             del anthropic_params["top_p"]
         if anthropic_params["stop_sequences"] is None:
             del anthropic_params["stop_sequences"]
+        if anthropic_params["tool_choice"] is None:
+            del anthropic_params["tool_choice"]
 
         response = self._client.messages.create(**anthropic_params)
 

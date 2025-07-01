@@ -1,5 +1,6 @@
 ---
 title: CaptainAgent
+sidebarTitle: CaptainAgent
 ---
 
 [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) is an agent enhanced with the capability to call AutoBuild to break down and solve complex tasks.
@@ -12,20 +13,20 @@ pip install ag2[openai,captainagent]
 ```
 
 <Tip>
-If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai,captainagent]
 ```
 or
 ```bash
-pip install -U pyautogen[openai,captainagent]
+pip install -U ag2[openai,captainagent]
 ```
-as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 ## Using CaptainAgent without libraries
 
-We begin with demonstrating how to use [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](https://docs.ag2.ai/docs/topics/captainagent/configurations).
+We begin with demonstrating how to use [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](/docs/user-guide/reference-agents/captainagent).
 
 ```python
 import autogen
@@ -449,7 +450,7 @@ The initial task was to find a recent paper about large language models on arXiv
 ## Building Agents from library & Retrieve tools from tool library
 One significant feature of [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) is that the agents and tools can be retrieved from a dedicated library. When [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) starts building experts for group chat, it will retrieve and select from agent library, then assign tools retrieved from tool library to the experts.
 
-For agent library, refer to [`captainagent_expert_library.json`](https://github.com/ag2ai/ag2/blob/main/notebook/captainagent_expert_library.json) for samples. You can refer to [docs](https://docs.ag2.ai/docs/topics/captainagent/agent_library) on how to customize your own expert library.
+For agent library, refer to [`captainagent_expert_library.json`](https://github.com/ag2ai/ag2/blob/main/notebook/captainagent_expert_library.json) for samples. You can refer to [docs](/docs/user-guide/reference-agents/captainagent) on how to customize your own expert library.
 
 For tool library, we provide a set of tools [here](https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md), the tools are categorized into three types: data analysis, information_retrieval, math. If you are using the tools, you should [install the requirements](https://github.com/ag2ai/ag2/tree/main/autogen/agentchat/contrib/captainagent/tools/README.md#how-to-use) for them.
 
@@ -1366,7 +1367,7 @@ captain_user_proxy (to captain_agent):
 ## Using Both Agent Library and Tool Library
 Now let's retrieve from both agent library and tool library while building experts for nested chat.
 
-To run the following demo, it is required to install the dependencies from the tool library and obtain BING search api and Rapid API key for tools in library to fully function. Please follow the instructions [here](https://docs.ag2.ai/docs/topics/captainagent/tool_library).
+To run the following demo, it is required to install the dependencies from the tool library and obtain BING search api and Rapid API key for tools in library to fully function. Please follow the instructions [here](/docs/user-guide/reference-agents/captainagent).
 
 ```python
 # The function requires BING api key and Rapid API key to work. You can follow the instructions from docs to get one.

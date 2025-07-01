@@ -1,0 +1,117 @@
+---
+title: Overview
+sidebarTitle: Overview
+---
+
+Before diving into details, let's explore the core building blocks of AG2. Understanding these concepts will help you build dynamic, multi-agent AI systems that communicate, collaborate, and solve problems.
+
+## Basic Concepts
+
+Here are the basic concepts you'll need to get started.
+
+### LLM Configuration
+
+The LLM Configuration defines the language model intelligence that powers your agents. It's the first element you should configure when building with AG2, as it determines how your agents will think and reason.
+
+LLM Configuration controls how an agent:
+
+- Connects to and authenticates with language model providers
+- Selects models and sets parameters
+- Thinks, reasons, and generates responses
+
+[Learn more about LLM Configuration →](../llm-configuration)
+
+### ConversableAgent
+
+The [`ConversableAgent`](../../../api-reference/autogen/ConversableAgent) is the core building block of AG2 — a smart, interactive agent that uses your configured LLM to process information and interact with other agents or humans. With a properly configured LLM, your agents can:
+
+- Communicate with other agents and humans
+- Process information using Large Language Models (LLMs)
+- Make decisions based on its defined purpose
+- Execute tools and functions when needed
+
+[Learn more about ConversableAgent →](../conversable-agent)
+
+### Human in the Loop (HITL)
+
+Human in the Loop (HITL) brings human oversight into your agent workflows, allowing agents to act as humans to request input for crucial decision points. This capability:
+
+- Enables human approval before proceeding in a workflow
+- Integrates feedback into the decision-making process
+- Balances automation with human judgment
+
+[Learn more about Human in the Loop →](../human-in-the-loop)
+
+### Agent Orchestration
+
+Agent Orchestration defines patterns for coordinating multiple agents, allowing them to work together in various configurations:
+
+- Two-agent conversations
+- Sequential conversations that chain multiple dialogues
+- Group collaborations with many agents
+- Nested workflows
+
+This orchestration enables you to build rich, collaborative, multi-agent applications. [Learn more about Agent Orchestration →](/docs/user-guide/basic-concepts/introducing-group-chat)
+
+### Tools
+
+The tools extend an agent’s capabilities beyond text conversations, enabling them to:
+
+- Connect with external APIs and services
+- Perform calculations and data processing
+- Access and work with files, databases, or other systems
+
+[Learn more about Tools →](../introducing-tools)
+
+### Structured Outputs
+
+Structured Outputs ensure agents return well-defined, consistent, and validated responses using Pydantic models. This allows you to:
+
+- Define structured response formats
+- Guarantee consistent data structures
+- Simplify downstream processing and application integration
+- Ensure responses are complete and reliable
+
+[Learn more about Structured Outputs →](../structured-outputs)
+
+
+## How These Concepts Work Together
+
+In a typical AG2 application, these components work together in the following sequence:
+
+1. **Configuration Setup**: Begin by setting up your configurations
+
+    - Configure the **LLM Configuration** to define the intelligence powering your agents
+    - Optionally define **Structured Outputs** for consistent response formats
+
+
+2. **Workflow Design**: Design your agent workflow
+
+    - **Create ConversableAgents** with specific roles and capabilities
+    - **Set up Agent Orchestration** patterns to connect your agents
+    - Configure **Conversation Ending** options
+    - Optionally add **Human in the Loop** for oversight at critical points
+    - Optionally extend with **Tools** for additional capabilities
+    - **Finalize the Workflow** design combining all components
+
+
+3. **Execution**: Run Workflow to execute your solution
+
+The following diagram illustrates the workflow of a **group chat**
+
+![workflow_overview](../assets/overview-workflow.png)
+
+Together, these core concepts allow you to build powerful, flexible AI systems — from simple agents to collaborative, multi-agent workflows — with or without human supervision.
+
+## Financial Compliance Example
+
+Throughout the following sections, we'll use a financial compliance assistant example to illustrate these concepts in action. This example demonstrates how different components work together to create a functional agent system that:
+
+- Uses LLMs to analyze financial transactions
+- Reviews transactions for compliance issues
+- Flags suspicious transactions for human review
+- Provides summary reports of transaction status
+
+Each section will build upon the previous example, showing how that specific concept applies to building our financial compliance system.
+
+**Next up**: Dive deeper into each of these components, starting with [LLM Configuration](../llm-configuration) — the foundation for all AG2 agents.

@@ -21,6 +21,15 @@
   <meta name="twitter:title" content="{{ title }}" />
   <meta name="twitter:description" content="{{ config.site_description }}" />
   <meta name="twitter:image" content="{{ config.extra.social_image }}" />
+
+  <!-- Default favicon (for browsers not supporting media queries) -->
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon.svg" type="image/x-icon">
+
+  <!-- Light mode favicon (for light theme) -->
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon-dark.svg" type="image/x-icon" media="(prefers-color-scheme: light)">
+
+  <!-- Dark mode favicon (for dark theme) -->
+  <link rel="icon" href="{{ config.site_url.rstrip('/') }}/assets/img/favicon.svg" type="image/x-icon" media="(prefers-color-scheme: dark)">
 {% endblock %}
 
 {% block outdated %}
@@ -28,11 +37,4 @@
   <a href="{{ '../' ~ base_url }}">  <!-- nosemgrep -->
     <strong>Click here to go to latest.</strong>
   </a>
-{% endblock %}
-
-{% block announce %}
-  You're viewing the <strong class="primary-text">work in progress</strong> version of the documentation.
-  Please click
-  <a rel="me" href="http://docs.ag2.ai"><strong>here</strong></a>
-  for the latest.
 {% endblock %}

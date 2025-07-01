@@ -54,13 +54,13 @@ from io import BytesIO
 from typing import Any, Literal, Optional, Type, Union
 
 import requests
-from packaging import version
 from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config import LLMConfigEntry, register_llm_config
 from .client_utils import FormatterProtocol
+from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -70,6 +70,7 @@ with optional_import_block():
     from google.auth.credentials import Credentials
     from google.genai.types import (
         Content,
+        FinishReason,
         FunctionCall,
         FunctionDeclaration,
         FunctionResponse,
@@ -111,6 +112,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     stream: bool = False
     safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    tool_config: Optional[ToolConfig] = None
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -231,7 +233,7 @@ class GeminiClient:
             raise ValueError(
                 "Please provide a model name for the Gemini Client. "
                 "You can configure it in the OAI Config List file. "
-                "See this [LLM configuration tutorial](https://docs.ag2.ai/docs/topics/llm_configuration/) for more details."
+                "See this [LLM configuration tutorial](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/) for more details."
             )
 
         params.get("api_type", "google")  # not used
@@ -242,6 +244,7 @@ class GeminiClient:
         system_instruction = self._extract_system_instruction(messages)
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
+        tool_config = params.get("tool_config")
 
         generation_config = {
             gemini_term: params[autogen_term]
@@ -293,6 +296,7 @@ class GeminiClient:
                 generation_config=GenerationConfig(**generation_config),
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
+                tool_config=tool_config,
                 tools=tools,
             )
 
@@ -304,6 +308,7 @@ class GeminiClient:
                 safety_settings=safety_settings,
                 system_instruction=system_instruction,
                 tools=tools,
+                tool_config=tool_config,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
@@ -313,13 +318,27 @@ class GeminiClient:
         ans = ""
         random_id = random.randint(0, 10000)
         prev_function_calls = []
+        error_finish_reason = None
 
         if isinstance(response, GenerateContentResponse):
             if len(response.candidates) != 1:
                 raise ValueError(
                     f"Unexpected number of candidates in the response. Expected 1, got {len(response.candidates)}"
                 )
-            parts = response.candidates[0].content.parts
+
+            # Look at https://cloud.google.com/vertex-ai/generative-ai/docs/reference/python/latest/vertexai.generative_models.FinishReason
+            if response.candidates[0].finish_reason and response.candidates[0].finish_reason == FinishReason.RECITATION:
+                recitation_part = Part(text="Unsuccessful Finish Reason: RECITATION")
+                parts = [recitation_part]
+                error_finish_reason = "content_filter"  # As per available finish_reason in Choice
+            elif not response.candidates[0].content or not response.candidates[0].content.parts:
+                error_part = Part(
+                    text=f"Unsuccessful Finish Reason: ({str(response.candidates[0].finish_reason)}) NO CONTENT RETURNED"
+                )
+                parts = [error_part]
+                error_finish_reason = "content_filter"  # No other option in Choice in chat_completion.py
+            else:
+                parts = response.candidates[0].content.parts
         elif isinstance(response, VertexAIGenerationResponse):  # or hasattr(response, "candidates"):
             # google.generativeai also raises an error len(candidates) != 1:
             if len(response.candidates) != 1:
@@ -376,11 +395,21 @@ class GeminiClient:
             role="assistant", content=ans, function_call=None, tool_calls=autogen_tool_calls
         )
         choices = [
-            Choice(finish_reason="tool_calls" if autogen_tool_calls is not None else "stop", index=0, message=message)
+            Choice(
+                finish_reason="tool_calls"
+                if autogen_tool_calls is not None
+                else error_finish_reason
+                if error_finish_reason
+                else "stop",
+                index=0,
+                message=message,
+            )
         ]
 
         prompt_tokens = response.usage_metadata.prompt_token_count
-        completion_tokens = response.usage_metadata.candidates_token_count
+        completion_tokens = (
+            response.usage_metadata.candidates_token_count if response.usage_metadata.candidates_token_count else 0
+        )
 
         response_oai = ChatCompletion(
             id=str(random.randint(0, 1000)),
@@ -546,16 +575,19 @@ class GeminiClient:
 
             if part_type == "text":
                 rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role=role))
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
-            elif part_type == "tool" or part_type == "tool_call":
-                role = "function" if version.parse(genai.__version__) < version.parse("1.4.0") else "user"
+            elif part_type == "tool_call":
+                # Function calls should be from the model/assistant
+                role = "model"
                 rst.append(
-                    VertexAIContent(parts=parts, role=role)
-                    if self.use_vertexai
-                    else rst.append(Content(parts=parts, role=role))
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
+                )
+            elif part_type == "tool":
+                # Function responses should be from the user
+                role = "user"
+                rst.append(
+                    VertexAIContent(parts=parts, role=role) if self.use_vertexai else Content(parts=parts, role=role)
                 )
             elif part_type == "image":
                 # Image has multiple parts, some can be text and some can be image based
@@ -575,14 +607,14 @@ class GeminiClient:
                     rst.append(
                         VertexAIContent(parts=text_parts, role=role)
                         if self.use_vertexai
-                        else rst.append(Content(parts=text_parts, role=role))
+                        else Content(parts=text_parts, role=role)
                     )
 
                 if len(image_parts) > 0:
                     rst.append(
                         VertexAIContent(parts=image_parts, role=role)
                         if self.use_vertexai
-                        else rst.append(Content(parts=image_parts, role=role))
+                        else Content(parts=image_parts, role=role)
                     )
 
             if len(rst) != 0 and rst[-1] is None:
@@ -868,12 +900,33 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     model_name = model_name.lower()
     up_to_128k = input_tokens <= 128000
+    up_to_200k = input_tokens <= 200000
 
     if use_vertexai:
         # Vertex AI pricing - based on Text input
         # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
 
-        if "gemini-2.0-flash-lite" in model_name:
+        if (
+            model_name == "gemini-2.5-pro"
+            or "gemini-2.5-pro-preview-06-05" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+            or "gemini-2.5-pro-preview-03-25" in model_name
+        ):
+            if up_to_200k:
+                return total_cost_mil(1.25, 10)
+            else:
+                return total_cost_mil(2.5, 15)
+
+        elif "gemini-2.5-flash" in model_name:
+            return total_cost_mil(0.3, 2.5)
+
+        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
+            return total_cost_mil(0.15, 0.6)  # NON-THINKING OUTPUT PRICE, $3 FOR THINKING!
+
+        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
+            return total_cost_mil(0.1, 0.4)
+
+        elif "gemini-2.0-flash-lite" in model_name:
             return total_cost_mil(0.075, 0.3)
 
         elif "gemini-2.0-flash" in model_name:
@@ -904,7 +957,31 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if "gemini-2.0-flash-lite" in model_name:
+        if (
+            model_name == "gemini-2.5-pro"
+            or "gemini-2.5-pro-preview-06-05" in model_name
+            or "gemini-2.5-pro-preview-05-06" in model_name
+            or "gemini-2.5-pro-preview-03-25" in model_name
+        ):
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-pro-preview
+            if up_to_200k:
+                return total_cost_mil(1.25, 10)
+            else:
+                return total_cost_mil(2.5, 15)
+
+        elif "gemini-2.5-flash" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
+            return total_cost_mil(0.3, 2.5)
+
+        elif "gemini-2.5-flash-preview-04-17" in model_name or "gemini-2.5-flash-preview-05-20" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
+            return total_cost_mil(0.15, 0.6)
+
+        elif "gemini-2.5-flash-lite-preview-06-17" in model_name:
+            # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash-lite
+            return total_cost_mil(0.1, 0.4)
+
+        elif "gemini-2.0-flash-lite" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.0-flash-lite
             return total_cost_mil(0.075, 0.3)
 

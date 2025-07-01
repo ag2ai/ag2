@@ -21,12 +21,12 @@ from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
 from ..doc_utils import export_module
+from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
 from ..llm_config import LLMConfigEntry, register_llm_config
 from ..logger.logger_utils import get_current_ts
-from ..messages.client_messages import StreamMessage, UsageSummaryMessage
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
 from .client_utils import FormatterProtocol, logging_formatter
@@ -242,6 +242,14 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
     top_p: Optional[float] = None
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    user: Optional[str] = None
+    extra_body: Optional[dict[str, Any]] = (
+        None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
+    )
+    # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    max_completion_tokens: Optional[int] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -252,6 +260,13 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    user: Optional[str] = None
+    # reasoning models - see:
+    # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
+    # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    max_completion_tokens: Optional[int] = None
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
@@ -264,6 +279,7 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     @field_validator("top_p", mode="before")
     @classmethod
@@ -575,7 +591,7 @@ class OpenAIClient:
 
                         # If content is present, print it to the terminal and update response variables
                         if content is not None:
-                            iostream.send(StreamMessage(content=content))
+                            iostream.send(StreamEvent(content=content))
                             response_contents[choice.index] += content
                             completion_tokens += 1
                         else:
@@ -651,8 +667,6 @@ class OpenAIClient:
         """Cater for the reasoning model (o1, o3..) parameters
         please refer: https://platform.openai.com/docs/guides/reasoning#limitations
         """
-        print(f"{params=}")
-
         # Unsupported parameters
         unsupported_params = [
             "temperature",
@@ -754,7 +768,7 @@ class OpenAIWrapper:
 
         Args:
             config_list: a list of config dicts to override the base_config.
-                They can contain additional kwargs as allowed in the [create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) method. E.g.,
+                They can contain additional kwargs as allowed in the [create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) method. E.g.,
 
                 ```python
                     config_list = [
@@ -818,7 +832,16 @@ class OpenAIWrapper:
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         openai_config["azure_deployment"] = openai_config.get("azure_deployment", config.get("model"))
         if openai_config["azure_deployment"] is not None:
-            openai_config["azure_deployment"] = openai_config["azure_deployment"].replace(".", "")
+            # Preserve dots for specific model versions that require them
+            deployment_name = openai_config["azure_deployment"]
+            if deployment_name in [
+                "gpt-4.1"
+            ]:  # Add more as needed, Whitelist approach so as to not break existing deployments
+                # Keep the deployment name as-is for these specific models
+                pass
+            else:
+                # Remove dots for all other models (maintain existing behavior)
+                openai_config["azure_deployment"] = deployment_name.replace(".", "")
         openai_config["azure_endpoint"] = openai_config.get("azure_endpoint", openai_config.pop("base_url", None))
 
         # Create a default Azure token provider if requested
@@ -961,7 +984,7 @@ class OpenAIWrapper:
                 existing_client_class = True
 
         if existing_client_class:
-            logger.warn(
+            logger.warning(
                 f"Model client {model_client_cls.__name__} is already registered. Add more entries in the config_list to use multiple model clients."
             )
         else:
@@ -1051,7 +1074,7 @@ class OpenAIWrapper:
             # construct the create params
             params = self._construct_create_params(create_config, extra_kwargs)
             # get the cache_seed, filter_func and context
-            cache_seed = extra_kwargs.get("cache_seed", LEGACY_DEFAULT_CACHE_SEED)
+            cache_seed = extra_kwargs.get("cache_seed")
             cache = extra_kwargs.get("cache")
             filter_func = extra_kwargs.get("filter_func")
             context = extra_kwargs.get("context")
@@ -1133,7 +1156,7 @@ class OpenAIWrapper:
             except Exception as e:
                 if openai_result.is_successful:
                     if APITimeoutError is not None and isinstance(e, APITimeoutError):
-                        logger.debug(f"config {i} timed out", exc_info=True)
+                        # logger.debug(f"config {i} timed out", exc_info=True)
                         if i == last:
                             raise TimeoutError(
                                 "OpenAI API call timed out. This could be due to congestion or too small a timeout value. The timeout can be specified by setting the 'timeout' value (in seconds) in the llm_config (if you are using agents) or the OpenAIWrapper constructor (if you are using the OpenAIWrapper directly)."
@@ -1156,7 +1179,7 @@ class OpenAIWrapper:
                         if error_code == "content_filter":
                             # raise the error for content_filter
                             raise
-                        logger.debug(f"config {i} failed", exc_info=True)
+                        # logger.debug(f"config {i} failed", exc_info=True)
                         if i == last:
                             raise
                     else:
@@ -1185,7 +1208,7 @@ class OpenAIWrapper:
                 cerebras_InternalServerError,
                 cerebras_RateLimitError,
             ):
-                logger.debug(f"config {i} failed", exc_info=True)
+                # logger.debug(f"config {i} failed", exc_info=True)
                 if i == last:
                     raise
             else:
@@ -1396,7 +1419,7 @@ class OpenAIWrapper:
                 mode = "total"
 
         iostream.send(
-            UsageSummaryMessage(
+            UsageSummaryEvent(
                 actual_usage_summary=self.actual_usage_summary, total_usage_summary=self.total_usage_summary, mode=mode
             )
         )

@@ -14,15 +14,15 @@ Since our examples also use `openai`, install it as well:
 ```bash
 pip install -U ag2[openai,google-search]
 ```
-> **Note:** If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+> **Note:** If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 > ```bash
 > pip install -U autogen[openai,google-search]
 > ```
 > or
 > ```bash
-> pip install -U pyautogen[openai,google-search]
+> pip install -U ag2[openai,google-search]
 > ```
-> as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+> as `autogen` and `ag2` are aliases for the same PyPI package.
 
 You're all set! Now you can start using YouTube Search with AG2.
 
@@ -84,12 +84,15 @@ youtube_tool.register_for_llm(assistant)
 Let's start with a basic search to find YouTube videos on a particular topic.
 
 ```python
-assistant.run(
+response = assistant.run(
     message="Find the latest YouTube videos on large language models. List the titles and provide brief summaries.",
     tools=assistant.tools,
     max_turns=2,
     user_input=False,
 )
+
+# Iterate through the chat automatically with console output
+response.process()
 ```
 
 ### Output
@@ -175,6 +178,7 @@ The `YoutubeSearchTool` provides several advanced features:
 ### 1. Video Details Retrieval
 
 The tool can retrieve detailed information about videos, including:
+
 - Video title and description
 - Channel name
 - Publication date
@@ -185,5 +189,6 @@ The tool can retrieve detailed information about videos, including:
 ### 2. Customizable Search Parameters
 
 You can customize your search with these parameters:
+
 - `max_results`: Control the number of videos returned (default is 5)
 - `include_video_details`: Whether to include detailed video statistics (default is True)

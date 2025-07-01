@@ -172,10 +172,12 @@ def test_load_config(anthropic_client):
         "model": "claude-3-5-sonnet-latest",
         "stream": False,
         "temperature": 1,
+        "timeout": None,
         "top_p": 0.8,
         "max_tokens": 100,
         "stop_sequences": None,
         "top_k": None,
+        "tool_choice": None,
     }
     result = anthropic_client.load_config(params)
     assert result == expected_params, "Config should be correctly loaded"

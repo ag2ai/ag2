@@ -7,12 +7,14 @@
 
 import importlib
 import importlib.metadata
+import inspect
 import json
 import logging
 import os
 import re
 import tempfile
 import time
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -50,19 +52,34 @@ OAI_PRICE1K = {
     "o1-mini": (0.0003, 0.0012),
     "o1": (0.0015, 0.0060),
     "o1-2024-12-17": (0.0015, 0.0060),
+    # o1 pro
+    "o1-pro": (0.15, 0.6),  # $150 / $600!
+    "o1-pro-2025-03-19": (0.15, 0.6),
+    # o3
+    "o3": (0.0011, 0.0044),
+    "o3-mini-2025-01-31": (0.0011, 0.0044),
     # gpt-4o
     "gpt-4o": (0.005, 0.015),
     "gpt-4o-2024-05-13": (0.005, 0.015),
     "gpt-4o-2024-08-06": (0.0025, 0.01),
     "gpt-4o-2024-11-20": (0.0025, 0.01),
+    # gpt-4o-mini
+    "gpt-4o-mini": (0.000150, 0.000600),
+    "gpt-4o-mini-2024-07-18": (0.000150, 0.000600),
     # gpt-4-turbo
     "gpt-4-turbo-2024-04-09": (0.01, 0.03),
     # gpt-4
     "gpt-4": (0.03, 0.06),
     "gpt-4-32k": (0.06, 0.12),
-    # gpt-4o-mini
-    "gpt-4o-mini": (0.000150, 0.000600),
-    "gpt-4o-mini-2024-07-18": (0.000150, 0.000600),
+    # gpt-4.1
+    "gpt-4.1": (0.002, 0.008),
+    "gpt-4.1-2025-04-14": (0.002, 0.008),
+    # gpt-4.1 mini
+    "gpt-4.1-mini": (0.0004, 0.0016),
+    "gpt-4.1-mini-2025-04-14": (0.0004, 0.0016),
+    # gpt-4.1 nano
+    "gpt-4.1-nano": (0.0001, 0.0004),
+    "gpt-4.1-nano-2025-04-14": (0.0001, 0.0004),
     # gpt-3.5 turbo
     "gpt-3.5-turbo": (0.0005, 0.0015),  # default is 0125
     "gpt-3.5-turbo-0125": (0.0005, 0.0015),  # 16k
@@ -505,6 +522,13 @@ def filter_config(
           dictionaries that do not have that key will also be considered a match.
 
     """
+    if inspect.stack()[1].function != "where":
+        warnings.warn(
+            "filter_config is deprecated and will be removed in a future release. "
+            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead.',
+            DeprecationWarning,
+        )
+
     if filter_dict:
         return [
             item
@@ -569,6 +593,13 @@ def config_list_from_json(
     Raises:
         FileNotFoundError: if env_or_file is neither found as an environment variable nor a file
     """
+    if inspect.stack()[1].function != "from_json":
+        warnings.warn(
+            "config_list_from_json is deprecated and will be removed in a future release. "
+            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead.',
+            DeprecationWarning,
+        )
+
     env_str = os.environ.get(env_or_file)
 
     if env_str:

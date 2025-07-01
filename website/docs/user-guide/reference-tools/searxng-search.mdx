@@ -1,0 +1,70 @@
+---
+title: SearxNG Search Tool
+---
+
+The SearxNG Search integration in AG2 allows users to perform real-time web searches using a SearxNG instance. This is useful for retrieving up-to-date information from a privacy-friendly, open-source metasearch engine.
+
+## Installation
+
+No API key is required for public SearxNG instances. For private instances, consult your administrator.
+
+## Imports
+
+```python
+from autogen.tools.experimental import SearxngSearchTool
+```
+
+## Usage
+
+### Basic Usage
+
+```python
+search_tool = SearxngSearchTool()
+results = search_tool(query="open source search engine", max_results=3)
+for r in results:
+    print(r["title"], r["link"])
+```
+
+### With AG2 Agents
+
+```python
+from autogen import AssistantAgent
+search_tool = SearxngSearchTool()
+assistant = AssistantAgent(name="assistant")
+search_tool.register_for_llm(assistant)
+response = assistant.run(
+    message="What is SearxNG?",
+    tools=assistant.tools,
+    max_turns=2,
+    user_input=False,
+)
+response.process()
+```
+
+## Parameters
+
+- `query` (str): The search query string. **Required**
+- `max_results` (int): Maximum number of results to return. Default: 5
+- `categories` (list[str], optional): List of categories to search in (e.g., `["general", "news"]`).
+- `language` (str, optional): Language code (e.g., 'en-US').
+- `base_url` (str, optional): SearxNG instance URL. Default: `https://searxng.site/search`
+
+## Output
+
+Returns a list of dictionaries, each with:
+- `title`: The result title
+- `link`: The result URL
+- `snippet`: The result summary/content
+
+## Example Output
+
+```python
+[
+    {"title": "SearxNG - Privacy-respecting metasearch engine", "link": "https://searxng.site/", "snippet": "SearxNG is a free internet metasearch engine..."},
+    ...
+]
+```
+
+## See Also
+- [SearxNG Project](https://searxng.org/)
+- [Reference Tools Index](/docs/user-guide/reference-tools/index)

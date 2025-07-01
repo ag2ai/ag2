@@ -1,0 +1,70 @@
+name: Build MkDocs
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: true
+        default: '3.10'
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python-version }}
+
+      - name: Install quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Build MkDocs documentation
+        run: |
+          uv venv
+          . .venv/bin/activate
+          uv pip install -e ".[docs]"
+          ./scripts/docs_build_mkdocs.sh --force
+        working-directory: .
+
+      - name: Verify the build
+        run: |
+          ls -la ./website/mkdocs/site
+        working-directory: .
+
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Deploy docs to GH Pages
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/0.9'
+        run: |
+          . .venv/bin/activate
+
+          # Get version directly from the package
+          VERSION=$(python -c 'import os, sys; sys.path.insert(0, os.getcwd()); import autogen; print(".".join(autogen.__version__.split(".")[:3]))')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Check if version contains "rc"
+          IS_RC=$(python -c 'import os, sys, re; sys.path.insert(0, os.getcwd()); import autogen; version = autogen.__version__; print(not bool(re.match(r"^[0-9]+(\.[0-9]+)*$", version)))')
+          echo "IS_RC=$IS_RC" >> $GITHUB_ENV
+
+          echo $VERSION
+          echo $IS_RC
+
+          if [ "$IS_RC" == "False" ] || [ "$VERSION" == "0.9.1post0" ]; then
+            cd website/mkdocs && mike deploy -F mkdocs.yml --update-aliases $VERSION latest
+            mike set-default --push --allow-empty -F mkdocs.yml latest
+          else
+            cd website/mkdocs && mike deploy --push -F mkdocs.yml --update-aliases $VERSION
+          fi

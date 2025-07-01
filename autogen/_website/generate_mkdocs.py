@@ -4,6 +4,7 @@
 
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -22,12 +23,24 @@ from .utils import (
     get_git_tracked_and_untracked_files_in_directory,
     remove_marker_blocks,
     render_gallery_html,
+    separate_front_matter_and_content,
     sort_files_by_date,
 )
 
 with optional_import_block():
     import yaml
     from jinja2 import Template
+
+
+root_dir = Path(__file__).resolve().parents[2]
+website_dir = root_dir / "website"
+
+mint_docs_dir = website_dir / "docs"
+
+mkdocs_root_dir = website_dir / "mkdocs"
+
+mkdocs_docs_dir = mkdocs_root_dir / "docs"
+mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
 
 
 def filter_excluded_files(files: list[Path], exclusion_list: list[str], website_dir: Path) -> list[Path]:
@@ -140,16 +153,144 @@ def transform_card_grp_component(content: str) -> str:
 
 
 def fix_asset_path(content: str) -> str:
-    # Replace static/img paths with ag2/assets/img
+    # Replace static/img paths with /assets/img
     modified_content = re.sub(r'src="/static/img/([^"]+)"', r'src="/assets/img/\1"', content)
+    modified_content = re.sub(r"!\[([^\]]*)\]\(/static/img/([^)]+)\)", r"![\1](/assets/img/\2)", modified_content)
 
-    # Replace docs paths with ag2/docs
+    # Replace docs paths with /docs
     modified_content = re.sub(r'href="/docs/([^"]+)"', r'href="/docs/\1"', modified_content)
 
     return modified_content
 
 
-def transform_content_for_mkdocs(content: str) -> str:
+def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_docs_dir) -> str:
+    # Special case for the API Reference
+    if abs_file_url in {"/docs/api-reference", "/docs/api-reference/autogen"}:
+        return (
+            f"{abs_file_url}/autogen/AfterWork"
+            if abs_file_url == "/docs/api-reference"
+            else f"{abs_file_url}/AfterWork"
+        )
+
+    # Handle API reference URLs with hash fragments
+    if abs_file_url.startswith("/docs/api-reference/") and "#" in abs_file_url:
+        base_url, fragment = abs_file_url.split("#")
+        module_prefix = base_url.replace("/docs/api-reference/", "").replace("/", ".")
+        return f"{base_url}#{module_prefix}.{fragment.replace('-', '_')}"
+
+    file_path = mkdocs_docs_dir / (abs_file_url.lstrip("/") + ".md")
+    if file_path.is_file():
+        return abs_file_url
+
+    full_path = mkdocs_docs_dir / abs_file_url.lstrip("/")
+
+    if not full_path.is_dir():
+        return abs_file_url
+
+    # Find the first .md file in the directory
+    md_files = sorted(list(full_path.glob("*.md")))
+    return f"{abs_file_url}/{md_files[0].stem}"
+
+
+def absolute_to_relative(source_path: str, dest_path: str) -> str:
+    """Convert an absolute path to a relative path from the source directory.
+
+    Args:
+        source_path: The source file's absolute path (e.g., "/docs/home/quick-start.md")
+        dest_path: The destination file's absolute path (e.g., "/docs/user-guide/basic-concepts/installing-ag2")
+
+    Returns:
+        A relative path from source to destination (e.g., "../../user-guide/basic-concepts/installing-ag2")
+    """
+    sep = os.sep
+    try:
+        # Primary approach: Use pathlib for clean path calculation
+        rel_path = str(Path(dest_path).relative_to(Path(source_path).parent))
+        return f".{sep}{rel_path}" if Path(source_path).stem == "index" else f"..{sep}{rel_path}"
+    except ValueError:
+        # Fallback approach: Use os.path.relpath when paths don't share a common parent
+        rel_path = os.path.relpath(dest_path, source_path)
+
+        # Special case for blog directories: add deeper path traversal
+        ret_val = os.path.join("..", "..", "..", rel_path) if "blog" in source_path else rel_path
+
+        # Special case for index files: strip leading "../"
+        if Path(source_path).stem == "index":
+            ret_val = ret_val[3:]
+
+        return ret_val
+
+
+def fix_internal_links(source_path: str, content: str) -> str:
+    """Detect internal links in content that start with '/docs' and convert them to relative paths.
+
+    Args:
+        source_path: The source file's absolute path
+        content: The content with potential internal links
+
+    Returns:
+        Content with internal links converted to relative paths
+    """
+
+    # Define regex patterns for HTML and Markdown links
+    html_link_pattern = r'href="(/docs/[^"]*)"'
+    html_img_src_pattern = r'src="(/snippets/[^"]+)"'
+    html_assets_src_pattern = r'src="(/assets/[^"]+)"'
+
+    markdown_link_pattern = r"\[([^\]]+)\]\((/docs/[^)]*)\)"
+    markdown_img_pattern = r"!\[([^\]]*)\]\((/snippets/[^)]+)\)"
+    markdown_assets_pattern = r"!\[([^\]]*)\]\((/assets/[^)]+)\)"
+
+    def handle_blog_url(url: str) -> str:
+        """Special handling for blog URLs, converting date format from YYYY-MM-DD to YYYY/MM/DD.
+
+        Args:
+            url: The URL to process
+
+        Returns:
+            The URL with date format converted if it matches the blog URL pattern
+        """
+        blog_date_pattern = r"/docs/blog/(\d{4})-(\d{2})-(\d{2})-([\w-]+)"
+
+        if re.match(blog_date_pattern, url):
+            return re.sub(blog_date_pattern, r"/docs/blog/\1/\2/\3/\4", url)
+
+        return url
+
+    # Convert HTML links
+    def replace_html(match: re.Match[str], attr_type: str) -> str:
+        # There's only one group in the pattern, which is the path
+        absolute_link = match.group(1)
+
+        absolute_link = handle_blog_url(absolute_link)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
+        return f'{attr_type}="{relative_link}"'
+
+    # Convert Markdown links
+    def replace_markdown(match: re.Match[str], is_image: bool) -> str:
+        text = match.group(1)
+        absolute_link = match.group(2)
+
+        absolute_link = handle_blog_url(absolute_link)
+        abs_file_path = fix_internal_references(absolute_link)
+        relative_link = absolute_to_relative(source_path, abs_file_path)
+        prefix = "!" if is_image else ""
+        return f"{prefix}[{text}]({relative_link})"
+
+    # Apply replacements
+    content = re.sub(html_link_pattern, lambda match: replace_html(match, "href"), content)
+    content = re.sub(html_img_src_pattern, lambda match: replace_html(match, "src"), content)
+    content = re.sub(html_assets_src_pattern, lambda match: replace_html(match, "src"), content)
+
+    content = re.sub(markdown_link_pattern, lambda match: replace_markdown(match, False), content)
+    content = re.sub(markdown_img_pattern, lambda match: replace_markdown(match, True), content)
+    content = re.sub(markdown_assets_pattern, lambda match: replace_markdown(match, True), content)
+
+    return content
+
+
+def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
     # Transform admonitions (Tip, Warning, Note)
     tag_mappings = {
         "Tip": "tip",
@@ -194,6 +335,9 @@ def transform_content_for_mkdocs(content: str) -> str:
 
     content = re.sub(style_pattern, style_replacement, content)
 
+    # Fix snippet imports
+    content = fix_snippet_imports(content)
+
     # Transform tab components
     content = transform_tab_component(content)
 
@@ -206,40 +350,90 @@ def transform_content_for_mkdocs(content: str) -> str:
     # Remove the mintlify specific markers
     content = remove_marker_blocks(content, "DELETE-ME-WHILE-BUILDING-MKDOCS")
 
+    # Fix Internal links
+    content = fix_internal_links(rel_file_path, content)
+
     return content
 
 
+def rename_user_story(p: Path) -> Path:
+    name = p.parent.name.split("-")[3:]
+    return p.parent / ("_".join(name).lower() + p.suffix)
+
+
 def process_and_copy_files(input_dir: Path, output_dir: Path, files: list[Path]) -> None:
+    sep = os.sep
+    # Keep track of MD files we need to process
+    md_files_to_process = []
+
+    # Step 1: First copy mdx files to destination as md files
     for file in files:
         if file.suffix == ".mdx":
-            content = file.read_text()
-            processed_content = transform_content_for_mkdocs(content)
             dest = output_dir / file.relative_to(input_dir).with_suffix(".md")
+
+            if file.name == "home.mdx":
+                dest = output_dir / "home.md"
+
+            if f"{sep}user-stories{sep}" in str(dest):
+                dest = rename_user_story(dest)
+
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(processed_content)
+            dest.write_text(file.read_text())
+            md_files_to_process.append(dest)
         else:
             copy_files(input_dir, output_dir, [file])
-            # copy_file(file, output_dir)
+
+    # Step 2: Process the MD files we created
+    for md_file in md_files_to_process:
+        content = md_file.read_text()
+
+        rel_path = f"{sep}{md_file.relative_to(output_dir.parents[0])}"
+        processed_content = transform_content_for_mkdocs(content, rel_path)
+
+        md_file.write_text(processed_content)
 
 
-def format_title(title: str, keywords: dict[str, str]) -> str:
+def format_title(file_path_str: str, keywords: dict[str, str], mkdocs_docs_dir: Path) -> str:
     """Format a page title with proper capitalization for special keywords."""
-    words = title.replace("-", " ").title().split()
-    return " ".join(keywords.get(word, word) for word in words)
+    file_path = mkdocs_docs_dir / Path(file_path_str)
+
+    # Default formatting function for filenames
+    def format_with_keywords(text: str) -> str:
+        words = text.replace("-", " ").title().split()
+        return " ".join(keywords.get(word, word) for word in words)
+
+    try:
+        front_matter_string, _ = separate_front_matter_and_content(file_path)
+        if front_matter_string:
+            front_matter = yaml.safe_load(front_matter_string[4:-3])
+            sidebar_title: str = front_matter.get("sidebarTitle")
+            if sidebar_title:
+                return sidebar_title
+    except (FileNotFoundError, yaml.YAMLError):
+        pass
+
+    # Fall back to filename if file not found or no sidebarTitle
+    return format_with_keywords(Path(file_path_str).stem)
 
 
-def format_page_entry(page_path: str, indent: str, keywords: dict[str, str]) -> str:
+def format_page_entry(page_loc: str, indent: str, keywords: dict[str, str], mkdocs_docs_dir: Path) -> str:
     """Format a single page entry as either a parenthesized path or a markdown link."""
-    path = f"{page_path}.md"
-    title = format_title(Path(page_path).name, keywords)
-    return f"{indent}    - [{title}]({path})"
+    file_path_str = f"{page_loc}.md"
+    title = format_title(file_path_str, keywords, mkdocs_docs_dir)
+    return f"{indent}    - [{title}]({file_path_str})"
 
 
-def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Optional[dict[str, str]] = None) -> str:
+def format_navigation(
+    nav: list[NavigationGroup],
+    mkdocs_docs_dir: Path = mkdocs_docs_dir,
+    depth: int = 0,
+    keywords: Optional[dict[str, str]] = None,
+) -> str:
     """Recursively format navigation structure into markdown-style nested list.
 
     Args:
         nav: List of navigation items with groups and pages
+        mkdocs_docs_dir: Directory where the markdown files are located
         depth: Current indentation depth
         keywords: Dictionary of special case word capitalizations
 
@@ -264,13 +458,22 @@ def format_navigation(nav: list[NavigationGroup], depth: int = 0, keywords: Opti
         for page in item["pages"]:
             if isinstance(page, dict):
                 # Handle nested navigation groups
-                result.append(format_navigation([page], depth + 1, keywords))
+                result.append(format_navigation([page], mkdocs_docs_dir, depth + 1, keywords))
             else:
                 # Handle individual pages
-                result.append(format_page_entry(page, indent, keywords))
+                result.append(format_page_entry(page, indent, keywords, mkdocs_docs_dir))
 
     ret_val = "\n".join(result)
-    ret_val = ret_val.replace("- Home\n", "- [Home](index.md)\n")
+
+    ret_val = ret_val.replace(
+        "- Quick Start\n    - [Quick Start](docs/quick-start.md)\n",
+        "- [Quick Start](docs/quick-start.md)\n",
+    )
+    ret_val = ret_val.replace(
+        "- Basic Concepts\n",
+        "- [Basic Concepts](docs/user-guide/basic-concepts/overview.md)\n",
+    )
+    ret_val = ret_val.replace("- FAQs\n    - [Faq](docs/faq/FAQ.md)\n", "- [FAQs](docs/faq/FAQ.md)\n")
     return ret_val
 
 
@@ -296,10 +499,11 @@ def generate_mkdocs_navigation(website_dir: Path, mkdocs_root_dir: Path, nav_exc
     mintlify_nav = mintlify_json["navigation"]
     filtered_nav = [item for item in mintlify_nav if item["group"] not in nav_exclusions]
 
-    mkdocs_nav = format_navigation(filtered_nav)
+    mkdocs_docs_dir = mkdocs_root_dir / "docs"
+    mkdocs_nav = format_navigation(filtered_nav, mkdocs_docs_dir)
     mkdocs_nav_with_api_ref = add_api_ref_to_mkdocs_template(mkdocs_nav, "Contributor Guide")
 
-    blog_nav = "- Blog\n    - [Blog](docs/blog)"
+    blog_nav = "- Blog\n    - [Blog](docs/blog/index.md)"
 
     mkdocs_nav_content = "---\nsearch:\n  exclude: true\n---\n" + mkdocs_nav_with_api_ref + "\n" + blog_nav + "\n"
     mkdocs_nav_path.write_text(mkdocs_nav_content)
@@ -390,7 +594,7 @@ def process_blog_contents(contents: str, file: Path) -> str:
     return f"---\n{frontmatter}\n{tags_yaml}\n{categories_yaml}{date_yaml}{url_slug}\n---{content_with_excerpt_marker}"
 
 
-def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
+def fix_snippet_imports(content: str, snippets_dir: Path = mkdocs_output_dir.parent / "snippets") -> str:
     """Replace import statements for MDX files from snippets directory with the target format.
 
     Args:
@@ -403,20 +607,32 @@ def fix_snippet_imports(content: str, snippets_dir: Path) -> str:
     # Regular expression to find import statements for MDX files from /snippets/
     import_pattern = re.compile(r'import\s+(\w+)\s+from\s+"(/snippets/[^"]+\.mdx)"\s*;')
 
-    # Function to replace the matched import statement
-    def replace_import(match: re.Match[str]) -> str:
-        relative_path = match.group(2).lstrip("/")
+    # Process all matches
+    matches = list(import_pattern.finditer(content))
 
-        # Remove "snippets/" prefix from the relative path if it exists
-        if relative_path.startswith("snippets/"):
-            relative_path = relative_path[len("snippets/") :]
+    # Process matches in reverse order to avoid offset issues when replacing text
+    for match in reversed(matches):
+        imported_path = match.group(2)
 
-        # Create the new format: {!<full_path_to_snippets>/<relative_path> !}
-        new_path = "{!" + (snippets_dir / relative_path).as_posix() + " !}"
-        return new_path + "\n"
+        # Check if the path starts with /snippets/
+        if not imported_path.startswith("/snippets/"):
+            continue
 
-    # Replace all matching import statements
-    return import_pattern.sub(replace_import, content)
+        # Extract the relative path (without the /snippets/ prefix)
+        relative_path = imported_path[len("/snippets/") :]
+
+        # Construct the full file path
+        file_path = snippets_dir / relative_path
+
+        # Read the file content
+        with open(file_path, "r") as f:
+            file_content = f.read()
+
+        # Replace the import statement with the file content
+        start, end = match.span()
+        content = content[:start] + file_content + content[end:]
+
+    return content
 
 
 def process_blog_files(mkdocs_output_dir: Path, authors_yml_path: Path, snippets_src_path: Path) -> None:
@@ -481,7 +697,8 @@ def add_front_matter_to_metadata_yml(
 
     # Create new entry for current notebook
     title = front_matter.get("title", "")
-    link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}"
+    link = f"/docs/use-cases/notebooks/notebooks/{rendered_mdx.stem}.md"
+    rel_link = f"../notebooks/{rendered_mdx.stem}"
     description = front_matter.get("description", "")
     tags = front_matter.get("tags", []) or []
 
@@ -495,6 +712,7 @@ def add_front_matter_to_metadata_yml(
         # Write the entry
         f.write(f'- title: "{title}"\n')
         f.write(f'  link: "{link}"\n')
+        f.write(f'  rel_link: "{rel_link}"\n')
         f.write(f'  description: "{description}"\n')
         f.write('  image: ""\n')
 
@@ -718,8 +936,9 @@ def post_process_func(
     # Add render_macros: false to the front matter
     front_matter_str += "render_macros: false\n"
 
-    # Convert callout blocks
-    # content = convert_callout_blocks(content)
+    # transform content for mkdocs
+    rel_path = f"/{rendered_mdx.relative_to(website_build_directory.parents[0])}"
+    content = transform_content_for_mkdocs(content, rel_path)
 
     # Convert mdx image syntax to mintly image syntax
     # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
@@ -795,7 +1014,7 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
 
     # Find where to insert the notebook entries
     for i, line in enumerate(lines):
-        if line.strip() == "- [Notebooks](docs/use-cases/notebooks/Notebooks.md)":
+        if line.strip() == "- [All Notebooks](docs/use-cases/notebooks/Notebooks.md)":
             # Insert all notebook items after the Notebooks line
             # No need to insert extra blank lines, just the notebook entries
             for j, nav_item in enumerate(nav_list):
@@ -807,14 +1026,22 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
         file.writelines(lines)
 
 
-def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) -> None:
-    user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
+def _generate_navigation_entries(dir_path: Path, mkdocs_output_dir: Path) -> list[str]:
+    """Generate navigation entries for user stories and community talks.
+
+    Args:
+        dir_path (Path): Path to the directory containing user stories or community talks.
+        mkdocs_output_dir (Path): Path to the MkDocs output directory.
+
+    Returns:
+        str: Formatted navigation entries.
+    """
 
     # Read all user story files and sort them by date (newest first)
-    files = sorted(user_stories_dir.glob("**/index.md"), key=sort_files_by_date, reverse=True)
+    files = sorted(dir_path.glob("**/*.md"), key=sort_files_by_date, reverse=True)
 
     # Prepare user stories navigation entries
-    user_stories_entries = []
+    entries = []
     for file in files:
         # Extract the title from the frontmatter using a simpler split approach
         content = file.read_text()
@@ -835,15 +1062,28 @@ def generate_user_stories_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) ->
         path_for_link = str(relative_path).replace("\\", "/")
 
         # Format navigation entry
-        user_stories_entries.append(f"    - [{title}]({path_for_link})")
+        entries.append(f"        - [{title}]({path_for_link}/{file.name})")
+
+    return entries
+
+
+def generate_community_insights_nav(mkdocs_output_dir: Path, mkdocs_nav_path: Path) -> None:
+    user_stories_dir = mkdocs_output_dir / "docs" / "user-stories"
+    community_talks_dir = mkdocs_output_dir / "docs" / "community-talks"
+
+    user_stories_entries = _generate_navigation_entries(user_stories_dir, mkdocs_output_dir)
+    community_talks_entries = _generate_navigation_entries(community_talks_dir, mkdocs_output_dir)
+
+    user_stories_nav = "    - User Stories\n" + "\n".join(user_stories_entries)
+    community_talks_nav = "    - Community Talks\n" + "\n".join(community_talks_entries)
+    community_insights_nav = "- Community Insights\n" + user_stories_nav + "\n" + community_talks_nav
 
     # Read existing navigation template
     nav_content = mkdocs_nav_path.read_text()
-    user_stories_section = "- User Stories\n" + "\n".join(user_stories_entries)
 
-    section_to_follow_marker = "- Contributor Guide"
+    section_to_follow_marker = "- Blog"
 
-    replacement_content = f"{user_stories_section}\n{section_to_follow_marker}"
+    replacement_content = f"{community_insights_nav}\n{section_to_follow_marker}"
     updated_nav_content = nav_content.replace(section_to_follow_marker, replacement_content)
 
     # Write updated navigation to file
@@ -861,19 +1101,12 @@ def add_authors_info_to_user_stories(website_dir: Path) -> None:
 
     for file_path in user_stories_dir.glob("**/*.md"):
         content = file_path.read_text(encoding="utf-8")
-        updated_content = transform_content_for_mkdocs(content)
+        rel_path = f"/{file_path.relative_to(mkdocs_output_dir.parents[0])}"
+        updated_content = transform_content_for_mkdocs(content, rel_path)
         file_path.write_text(updated_content, encoding="utf-8")
 
 
 def main(force: bool) -> None:
-    root_dir = Path(__file__).resolve().parents[2]
-    website_dir = root_dir / "website"
-
-    mint_input_dir = website_dir / "docs"
-
-    mkdocs_root_dir = website_dir / "mkdocs"
-    mkdocs_output_dir = mkdocs_root_dir / "docs" / "docs"
-
     parser = create_base_argument_parser()
     args = parser.parse_args(["render"])
     args.dry_run = False
@@ -893,11 +1126,15 @@ def main(force: bool) -> None:
     ]
     nav_exclusions = [""]
 
-    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_input_dir)
+    files_to_copy = get_git_tracked_and_untracked_files_in_directory(mint_docs_dir)
     filtered_files = filter_excluded_files(files_to_copy, exclusion_list, website_dir)
 
+    # Copy snippet files
+    snippet_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "snippets")
+    copy_files(website_dir / "snippets", mkdocs_output_dir.parent / "snippets", snippet_files)
+
     copy_assets(website_dir)
-    process_and_copy_files(mint_input_dir, mkdocs_output_dir, filtered_files)
+    process_and_copy_files(mint_docs_dir, mkdocs_output_dir, filtered_files)
 
     snippets_dir_path = website_dir / "snippets"
     authors_yml_path = website_dir / "blogs_and_user_stories_authors.yml"
@@ -911,12 +1148,13 @@ def main(force: bool) -> None:
     if args.notebook_directory is None:
         args.notebook_directory = mkdocs_root_dir / "../../notebook"
 
-    if force and mkdocs_output_dir.exists():
+    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
+
+    if not metadata_yml_path.exists() or (force and mkdocs_output_dir.exists()):
         process_notebooks_core(args, post_process_func, target_dir_func)
 
     # Render Notebooks Gallery HTML
     notebooks_md_path = mkdocs_output_dir / "use-cases" / "notebooks" / "Notebooks.md"
-    metadata_yml_path = Path(args.website_build_directory) / "../../data/notebooks_metadata.yml"
     inject_gallery_html(notebooks_md_path, metadata_yml_path)
 
     # Add Notebooks Navigation to Summary.md
@@ -930,7 +1168,7 @@ def main(force: bool) -> None:
 
     # Generate Navigation for User Stories
     docs_dir = mkdocs_root_dir / "docs"
-    generate_user_stories_nav(docs_dir, mkdocs_nav_path)
+    generate_community_insights_nav(docs_dir, mkdocs_nav_path)
 
     # Add Authors info to User Stories
     add_authors_info_to_user_stories(website_dir)

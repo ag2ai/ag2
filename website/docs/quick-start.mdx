@@ -1,0 +1,140 @@
+---
+title: Quick Start
+sidebarTitle: Quick Start
+---
+
+Get up and running with AG2 in just **3 minutes**! This guide will help you set up your environment and build your very first multi-agent workflow. In just a few steps, you'll have your first agent up and running. Let's make it happen!
+
+### Set Up Your Environment
+
+<Tip>
+We recommend using a virtual environment for your project to keep your packages contained. See <a href="https://docs.python.org/3/library/venv.html" target="_blank">venv</a>.
+</Tip>
+
+**Install AG2**
+
+AG2 requires **Python version >= 3.9, < 3.14**. Install AG2 with OpenAI integration using pip:
+
+```bash
+pip install ag2[openai]
+```
+
+The package is available under either the `ag2` or `autogen` name. The default installation includes minimal dependencies, you can add extra options based on your specific requirements.
+
+<Warning>
+**From version 0.8**: The OpenAI package, `openai`, is not installed by default.
+
+Install AG2 with your preferred model provider(s), for example:
+
+- `pip install ag2[openai]`
+- `pip install ag2[gemini]`
+- `pip install ag2[anthropic,cohere,mistral]`
+
+On Mac OS, if you get "no matches found:", add a quote to the package name, for example:
+- `pip install "ag2[openai]"`
+</Warning>
+
+### Build Your First Agent Workflow
+
+Let’s build a poetic AI assistant that responds in rhymes using AG2 and OpenAI’s GPT-4o-mini model.
+
+This example demonstrates how to:
+
+- Set up an LLM configuration
+- Create a conversational AI agent
+- Run an interactive multi-turn conversation
+
+Create a Python script called `first_agent.py`, and paste the following code into it:
+
+```python
+# 1. Import our agent class
+from autogen import ConversableAgent, LLMConfig
+
+# 2. Define our LLM configuration for OpenAI's GPT-4o mini
+#    uses the OPENAI_API_KEY environment variable
+llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+
+# 3. Create our LLM agent
+with llm_config:
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+    )
+
+# 4. Run the agent with a prompt
+response = my_agent.run(
+    message="In one sentence, what's the big deal about AI?",
+    max_turns=3,
+    user_input=True
+)
+
+# 5. Iterate through the chat automatically with console output
+response.process()
+
+# 6. Print the chat
+print(response.messages)
+```
+
+import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
+
+<RunMethodHelpMsg/>
+
+
+### Run Your Example
+
+Now you're ready to see your poetic AI agent in action!
+
+<Note>
+
+Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
+
+=== "macOS / Linux"
+
+    ```
+    export OPENAI_API_KEY="YOUR_API_KEY"
+    ```
+
+=== "Windows"
+
+    ```
+    setx OPENAI_API_KEY "YOUR_API_KEY"
+    ```
+
+</Note>
+
+In your terminal, run:
+
+
+```bash
+python first_agent.py
+```
+
+If everything is set up correctly, the agent will reply to your initial message in rhyme, then prompt you for a response.
+You can either:
+
+- **Type a reply** — and the agent will respond in rhyme to your message
+- **Press Enter** — to send an empty message to the agent, and see how it creatively responds
+- **Type exit** — to end the conversation
+
+The interaction continues for up to 3 turns (or until you exit).
+
+#### Example Output
+
+```console
+user (to helpful_agent):
+
+In one sentence, what's the big deal about AI?
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> USING AUTO REPLY...
+helpful_agent (to user):
+
+AI transforms our world, enhancing life’s parade,
+With insights and solutions, it helps plans cascade.
+
+--------------------------------------------------------------------------------
+Replying as user. Provide feedback to helpful_agent. Press enter to skip and use auto-reply, or type 'exit' to end the conversation:
+```
+
+That's it—you've built your first multi-agent system with AG2 🎉

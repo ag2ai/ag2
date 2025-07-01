@@ -93,82 +93,101 @@
   "anchors": [],
   "navigation": [
     {
-      "group": "Home",
+      "group": "Quick Start",
       "pages": [
-        "docs/home/home",
-        "docs/home/quick-start"
+        "docs/quick-start"
       ]
     },
     {
       "group": "User Guide",
       "pages": [
+        "docs/user-guide/basic-concepts/installing-ag2",
         {
           "group": "Basic Concepts",
           "pages": [
-            "docs/user-guide/basic-concepts/installing-ag2",
-            {
-              "group": "LLM Configuration",
-              "pages":
-              [
-                "docs/user-guide/basic-concepts/llm-configuration/llm-configuration",
-                "docs/user-guide/basic-concepts/llm-configuration/structured-outputs"
-              ]
-            },
+            "docs/user-guide/basic-concepts/llm-configuration",
             "docs/user-guide/basic-concepts/conversable-agent",
             "docs/user-guide/basic-concepts/human-in-the-loop",
+            "docs/user-guide/basic-concepts/introducing-group-chat",
+            "docs/user-guide/basic-concepts/introducing-tools",
+            "docs/user-guide/basic-concepts/structured-outputs"
+          ]
+        },
+        {
+          "group": "Advanced Concepts",
+          "pages": [
+            "docs/user-guide/advanced-concepts/llm-configuration-deep-dive",
             {
-              "group": "Orchestrating Agents",
+              "group": "Agent Orchestration Deep Dive",
               "pages":
               [
-                "docs/user-guide/basic-concepts/orchestration/orchestrations",
-                "docs/user-guide/basic-concepts/orchestration/sequential-chat",
-                "docs/user-guide/basic-concepts/orchestration/nested-chat",
-                "docs/user-guide/basic-concepts/orchestration/swarm",
-                "docs/user-guide/basic-concepts/orchestration/ending-a-chat"
+                "docs/user-guide/advanced-concepts/orchestration/orchestrations",
+                "docs/user-guide/advanced-concepts/orchestration/two-agent-chat",
+                "docs/user-guide/advanced-concepts/orchestration/sequential-chat",
+                "docs/user-guide/advanced-concepts/orchestration/nested-chat",
+                {
+                  "group": "Group Chats",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/introduction",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/agent-tools-functions",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/handoffs",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/patterns",
+                    "docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails"
+                  ]
+                },
+                {
+                  "group": "Swarm",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/orchestration/swarm/deprecation"
+                  ]
+                },
+                "docs/user-guide/advanced-concepts/orchestration/ending-a-chat",
+                {
+                  "group": "Pattern Cookbook",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/overview",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/escalation",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/feedback_loop",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/hierarchical",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/organic",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/pipeline",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/redundant",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/star",
+                    "docs/user-guide/advanced-concepts/pattern-cookbook/triage_with_tasks"
+
+                  ]
+                }
               ]
             },
             {
               "group": "Tools",
               "pages":
               [
-                "docs/user-guide/basic-concepts/tools/index",
-                "docs/user-guide/basic-concepts/tools/basics",
-                "docs/user-guide/basic-concepts/tools/tools-with-secrets",
+                "docs/user-guide/advanced-concepts/tools/index",
+                "docs/user-guide/advanced-concepts/tools/basics",
+                "docs/user-guide/advanced-concepts/tools/controlling-use",
+                "docs/user-guide/advanced-concepts/tools/tools-with-secrets",
+                {
+                  "group": "Model Context Protocol",
+                  "pages":
+                  [
+                    "docs/user-guide/advanced-concepts/tools/mcp/client"
+                  ]
+                },
                 {
                   "group": "Interoperability",
                   "pages":
                   [
-                    "docs/user-guide/basic-concepts/tools/interop/langchain",
-                    "docs/user-guide/basic-concepts/tools/interop/crewai",
-                    "docs/user-guide/basic-concepts/tools/interop/pydanticai"
+                    "docs/user-guide/advanced-concepts/tools/interop/langchain",
+                    "docs/user-guide/advanced-concepts/tools/interop/crewai",
+                    "docs/user-guide/advanced-concepts/tools/interop/pydanticai"
                   ]
                 }
-              ]
-            }
-          ]
-        },
-        {
-          "group": "Advanced Concepts",
-          "pages": [
-            "docs/user-guide/advanced-concepts/rag",
-            {
-              "group": "GroupChat",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/groupchat/groupchat",
-                "docs/user-guide/advanced-concepts/groupchat/tools",
-                "docs/user-guide/advanced-concepts/groupchat/custom-group-chat",
-                "docs/user-guide/advanced-concepts/groupchat/resuming-group-chat"
-              ]
-            },
-            {
-              "group": "Swarm",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/swarm/deep-dive",
-                "docs/user-guide/advanced-concepts/swarm/nested-chat",
-                "docs/user-guide/advanced-concepts/swarm/concept-code",
-                "docs/user-guide/advanced-concepts/swarm/use-case"
               ]
             },
             {
@@ -181,26 +200,8 @@
                 "docs/user-guide/advanced-concepts/realtime-agent/twilio"
               ]
             },
-            "docs/user-guide/advanced-concepts/code-execution",
-            "docs/user-guide/advanced-concepts/conversation-patterns-deep-dive",
-            "docs/user-guide/advanced-concepts/llm-configuration-deep-dive",
-            {
-              "group": "Pattern Cookbook",
-              "pages":
-              [
-                "docs/user-guide/advanced-concepts/pattern-cookbook/overview",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/context_aware_routing",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/escalation",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/feedback_loop",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/hierarchical",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/organic",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/pipeline",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/redundant",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/star",
-                "docs/user-guide/advanced-concepts/pattern-cookbook/triage_with_tasks"
-
-              ]
-            }
+            "docs/user-guide/advanced-concepts/rag",
+            "docs/user-guide/advanced-concepts/code-execution"
           ]
         },
         {
@@ -248,9 +249,11 @@
               ]
             },
             "docs/user-guide/reference-agents/docagent",
+            "docs/user-guide/reference-agents/docagent-performance",
             "docs/user-guide/reference-agents/reasoningagent",
+            "docs/user-guide/reference-agents/deepresearchagent",
             "docs/user-guide/reference-agents/websurferagent",
-            "docs/user-guide/reference-agents/deepresearchagent"
+            "docs/user-guide/reference-agents/wikipediaagent"
           ]
         },
         {
@@ -258,6 +261,17 @@
           "pages":
           [
             "docs/user-guide/reference-tools/index",
+            {
+              "group": "Google APIs",
+              "pages":
+              [
+                "docs/user-guide/reference-tools/google-api/youtube-search",
+                "docs/user-guide/reference-tools/google-api/google-search",
+                "docs/user-guide/reference-tools/google-api/google-drive"
+              ]
+            },
+            "docs/user-guide/reference-tools/perplexity-search",
+            "docs/user-guide/reference-tools/wikipedia-search",
             "docs/user-guide/reference-tools/browser-use",
             "docs/user-guide/reference-tools/code-execution",
             {
@@ -271,34 +285,11 @@
             },
             "docs/user-guide/reference-tools/crawl4ai",
             "docs/user-guide/reference-tools/deep-research",
-            {
-              "group": "Google APIs",
-              "pages":
-              [
-                "docs/user-guide/reference-tools/google-api/google-search"
-              ]
-            },
-            "docs/user-guide/reference-tools/perplexity-search"
-          ]
-        }
-      ]
-    },
-    {
-      "group": "Use Cases",
-      "pages": [
-        {
-          "group": "Use cases",
-          "pages": [
-            "docs/use-cases/use-cases/customer-service",
-            "docs/use-cases/use-cases/game-design",
-            "docs/use-cases/use-cases/travel-planning"
+            "docs/user-guide/reference-tools/firecrawl",
+            "docs/user-guide/reference-tools/searxng-search"
           ]
         },
-        {
-          "group": "Notebooks",
-          "pages": ["docs/use-cases/notebooks/Notebooks"]
-        },
-        "docs/use-cases/community-gallery/community-gallery"
+        "docs/faq/FAQ"
       ]
     },
     {
@@ -331,10 +322,6 @@
       ]
     },
     {
-      "group": "FAQs",
-      "pages": ["docs/faq/FAQ"]
-    },
-    {
       "group": "Ecosystem",
       "pages": [
         "docs/ecosystem/agentops",
@@ -349,6 +336,24 @@
         "docs/ecosystem/pgvector",
         "docs/ecosystem/portkey",
         "docs/ecosystem/promptflow"
+      ]
+    },
+     {
+      "group": "Use Cases",
+      "pages": [
+        {
+          "group": "Use cases",
+          "pages": [
+            "docs/use-cases/use-cases/customer-service",
+            "docs/use-cases/use-cases/game-design",
+            "docs/use-cases/use-cases/travel-planning"
+          ]
+        },
+        {
+          "group": "Notebooks",
+          "pages": ["docs/use-cases/notebooks/Notebooks"]
+        },
+        "docs/use-cases/community-gallery/community-gallery"
       ]
     }
   ],

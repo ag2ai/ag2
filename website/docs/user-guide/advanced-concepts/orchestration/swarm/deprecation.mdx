@@ -1,0 +1,330 @@
+---
+title: Swarm deprecation
+---
+
+From version 0.9, the swarm functionality has been merged into a new group chat. The new group chat functionality supports all of the swarm capabilities, and more.
+
+For this reason, we have deprecated the swarm code but you can still run it for now.
+
+In this page, we will cover the difference between the swarm functionality and the new group chat and provide guidance on how to update your swarm code to either (a) the new group chat or (b) to continue to work with version 0.9.
+
+<Warning>
+There isn't a set date or version for the deprecated swarm code to be removed from the code base. We will endeavour to provide sufficient notice but advise you to change your code to the new group chat when possible.
+
+You can find the documentation for the swarm in the `0.8.7` version of the documentation [here](https://docs.ag2.ai/0.8.7/docs/user-guide/advanced-concepts/swarm/overview).
+</Warning>
+
+## How to keep running your Swarm code in v0.9 and up
+Here are the changes you'll need to make to your code to run your Swarm code in v0.9. You will be up and running with your existing code by making these two simple changes.
+
+### Imports
+The following functions are no longer available for importing directly from the `autogen` module (and shouldn't be used for the new group chat):
+
+- `AFTER_WORK`
+- `AfterWork`
+- `AfterWorkOption`
+- `initiate_swarm_chat`
+- `ON_CONDITION`
+- `OnCondition`
+- `OnContextCondition`
+- `register_hand_off`
+- `SwarmAgent`
+- `SwarmResult`
+
+Update your imports to be from `autogen.agentchat.contrib.swarm_agent`:
+```
+from autogen.agentchat.contrib.swarm_agent import (
+    AfterWork,
+    AfterWorkOption,
+    initiate_swarm_chat,
+    OnCondition,
+    OnContextCondition,
+    register_hand_off,
+    SwarmAgent,
+    SwarmResult,
+)
+```
+
+For `ContextExpression` and `ContextStr`, these are available to import from the new group module:
+```
+from autogen.agentchat.group import (
+    ContextExpression,
+    ContextStr,
+)
+
+```
+
+### Context Variables
+Prior to version 0.9, the context variables associated with a swarm (and the `ConversableAgent`s in the swarm) were a dictionary (type: `dict[str, Any]`). This has now been put into a dedicated class called `ContextVariables`. When interacting with your context variables, this still appears as a dictionary.
+
+To use the context variables on an agent instance, access them via the agent's `context_variable` attribute, e.g. `triage_agent.context_variables.get("my_key")`.
+
+The changes you will need to make are to (1) change the import location and (2) change your type references from `dict[str, Any]` to `ContextVariables`.
+```
+# Import the class
+from autogen.agentchat.group import ContextVariables
+
+# 1. Creating your context variables
+
+# Prior to v0.9
+my_context_variables = {
+    "basic_agent_confidence": 0,
+    "intermediate_agent_confidence": 0,
+    "advanced_agent_confidence": 0,
+}
+
+# v0.9 and up - dictionary is wrapped with ContextVariables
+my_context_variables = ContextVariables(data={
+    # Agent-specific variables
+    "basic_agent_confidence": 0,
+    "intermediate_agent_confidence": 0,
+    "advanced_agent_confidence": 0,
+})
+
+# 2. Functions used as tools
+
+# Prior to v0.9
+def my_function(location: str, context_variables: dict[str, Any]) -> SwarmResult:
+    """Important docstring for my function."""
+    return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
+
+# v0.9 and up - replace context_variables parameter type of dict[str, Any] with ContextVariables
+def my_function(location: str, context_variables: ContextVariables) -> SwarmResult:
+    """Important docstring for my function."""
+    return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
+```
+
+## Migrate from Swarm code to the new Group Chat
+In this section we will cover the migration of existing Swarm code to the new Group Chat.
+
+### Changing imports
+Ensure you don't have any imports from `autogen.agentchat.contrib.swarm_agent` as there are a few classes that have the same name.
+
+The new group chat classes can be imported from `autogen.agentchat.group` (primary), as well as `autogen.agentchat.group.patterns` and `autogen.agentchat.group.targets`.
+
+For example:
+```
+from autogen.agentchat.group import (
+    AgentNameTarget,
+    AgentTarget,
+    AskUserTarget,
+    ContextExpression,
+    ContextStr,
+    ContextStrLLMCondition,
+    ContextVariables,
+    ExpressionAvailableCondition,
+    ExpressionContextCondition,
+    GroupChatConfig,
+    GroupChatTarget,
+    Handoffs,
+    NestedChatTarget,
+    OnCondition,
+    OnContextCondition,
+    ReplyResult,
+    RevertToUserTarget,
+    SpeakerSelectionResult,
+    StayTarget,
+    StringAvailableCondition,
+    StringContextCondition,
+    StringLLMCondition,
+    TerminateTarget,
+)
+
+from autogen.agentchat.group.patterns (
+    DefaultPattern,
+    ManualPattern,
+    AutoPattern,
+    RandomPattern,
+    RoundRobinPattern,
+
+)
+```
+
+### Context variables
+Context variables are no longer a `dict[str, Any]` type, they use a new class called `ContextVariables`. You can continue to interact with context variables like it is a dictionary.
+
+The changes you will need to make are to (1) change the import location and (2) change your type references from `dict[str, Any]` to `ContextVariables`.
+```
+# Import the class
+from autogen.agentchat.group import ContextVariables
+
+# 1. Creating your context variables
+
+# OLD
+my_context_variables = {
+    "basic_agent_confidence": 0,
+    "intermediate_agent_confidence": 0,
+    "advanced_agent_confidence": 0,
+}
+
+# NEW
+my_context_variables = ContextVariables(data={
+    # Agent-specific variables
+    "basic_agent_confidence": 0,
+    "intermediate_agent_confidence": 0,
+    "advanced_agent_confidence": 0,
+})
+
+# 2. Functions used as tools
+
+# OLD
+def my_function(location: str, context_variables: dict[str, Any]) -> SwarmResult:
+    """Important docstring for my function."""
+    return SwarmResult(agent=the_next_agent, context_variables=context_variables, values="The weather is very hot!")
+
+# NEW
+def my_function(location: str, context_variables: ContextVariables) -> ReplyResult:
+    """Important docstring for my function."""
+    return ReplyResult(target=AgentTarget(the_next_agent), context_variables=context_variables, message="The weather is very hot!")
+```
+
+### Replace SwarmResult with ReplyResult
+Functions attached to your agents should now return a `ReplyResult` instead of a `SwarmResult`.
+
+A new concept introduced here is a `Transition Target`, which is what AG2 will transition to next. In a swarm you could transition to an agent by passing in the agent or the name of the agent, alternatively you could transition to an `AfterWorkOption` such as to terminate or revert to the user. In the new group chat all the possible transitions are `Targets`, such as `AgentTarget`, `AgentNameTarget`, and `TerminateTarget`.
+
+
+```
+# OLD
+def check_order_id(order_id: str, context_variables: dict[str, Any]) -> SwarmResult:
+    """Check if the order ID is valid"""
+    ...
+    return SwarmResult(
+        agent=order_triage_agent,
+        context_variables=context_variables,
+        values=f"Order ID {order_id} is valid.",
+    )
+
+# NEW
+# Now returning ReplyResult
+# (and we make sure to use the ContextVariables type for context_variables, if needed)
+def check_order_id(order_id: str, context_variables: ContextVariables) -> ReplyResult:
+    """Check if the order ID is valid"""
+    ...
+    return ReplyResult(
+        # Parameter now called target and we pass in a suitable TransitionTarget:
+        target=AgentTarget(order_triage_agent),
+        context_variables=context_variables,
+        # Parameter now called message:
+        message=f"Order ID {order_id} is valid.",
+    )
+```
+
+### Handoffs
+Handoffs are largely the same with the new group chat, except that they are handled directly on the agent (as opposed to using `register_hand_off`).
+
+Handoffs have been split into LLM conditions (`OnCondition`), context variable based conditions (`OnContextCondition`), and the after work. You will generally be setting these separately.
+
+New classes have been introduced for use with the `condition` and the `available` parameters to ensure compliance while giving flexibility to introduce new classes without changing the fundamental group chat mechanism.
+
+For LLM-based conditions
+```
+# OLD
+register_hand_off(
+    agent=order_triage_agent,
+    hand_to=[
+        OnCondition(
+            target=authentication_agent,
+            condition="The customer is not logged in, authenticate the customer.",
+            available="requires_login",
+        ),
+        OnCondition(
+            target=order_mgmt_agent,
+            condition="The customer is logged in, continue with the order triage.",
+            available="logged_in",
+        )
+    ]
+)
+
+# NEW
+# handoffs are added directly from the agent's handoffs attribute
+order_triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            target=AgentTarget(authentication_agent),
+            condition=StringLLMCondition(prompt="The customer is not logged in,authenticate the customer."),
+            available=StringAvailableCondition(context_variable="requires_login"),
+        ),
+        OnCondition(
+            target=AgentTarget(agent=order_mgmt_agent),
+            condition=StringLLMCondition(prompt="The customer is logged in, continue with the order triage."),
+            available=StringAvailableCondition(context_variable="logged_in"),
+        )
+    ]
+)
+```
+
+Context-based conditions:
+```
+# OLD
+register_hand_off(
+    agent=router_agent,
+    hand_to=[
+        OnContextCondition(
+            target=tech_specialist,
+            condition=ContextExpression(expression="${current_domain} == 'technology'"),
+            available=ContextExpression(expression="!${question_answered}")
+        ),
+])
+
+
+# NEW (you can use register_handoffs to register multiple conditions)
+router_agent.register_handoffs(conditions=[
+    OnContextCondition(
+        target=AgentTarget(agent=tech_specialist),
+        condition=ExpressionContextCondition(expression=ContextExpression(expression="${current_domain} == 'technology'")),
+        available=ExpressionAvailableCondition(expression=ContextExpression(expression="!${question_answered}"))
+    )
+])
+```
+
+After works:
+```
+# OLD
+register_hand_off(
+    agent=order_triage_agent,
+    hand_to=[
+        AfterWork(AfterWorkOption.REVERT_TO_USER),
+    ]
+)
+
+# NEW
+order_triage_agent.handoffs.set_after_work(after_work=RevertToUserTarget())
+```
+
+
+### Initiating the chat
+Another new concept arrives when we look to initiate the chat. With the new group chat we have introduced the concept of an orchestration Pattern and these are used to setup the base transitions for the agents.
+
+So to initiate a chat you will choose and configure a pattern and then pass that into a new initiate chat function called `initiate_group_chat`.
+
+To replicate the current swarm, you can use the base `Pattern` class and the parameters and types are largely the same as those of `initiate_swarm_chat`.
+
+```
+# OLD
+chat_history = initiate_group_chat(
+    initial_agent=order_triage_agent,
+    agents=[order_triage_agent, authentication_agent, order_mgmt_agent],
+    context_variables=workflow_context,
+    messages="Can you help me with my order.",
+    user_agent=user,
+    max_rounds=40,
+    after_work=AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate")),
+)
+
+# NEW
+# Create the pattern
+agent_pattern = DefaultPattern(
+  agents=[order_triage_agent, authentication_agent, order_mgmt_agent],
+  initial_agent=order_triage_agent,
+  context_variables=workflow_context,
+  user_agent=user,
+)
+
+# Then initiate the chat with the pattern
+result, final_context, last_agent = initiate_group_chat(
+    pattern=agent_pattern,
+    messages="Can you help me with my order.",
+    max_rounds=40,
+)
+
+```

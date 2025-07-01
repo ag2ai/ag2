@@ -10,50 +10,35 @@ from .chat import ChatResult, a_initiate_chats, initiate_chats
 
 # Imported last to avoid circular imports
 from .contrib.swarm_agent import (
-    AFTER_WORK,
-    ON_CONDITION,
-    AfterWork,
-    AfterWorkOption,
-    ContextStr,
-    OnCondition,
-    OnContextCondition,
-    SwarmAgent,
-    SwarmResult,
     a_initiate_swarm_chat,
-    initiate_swarm_chat,
-    register_hand_off,
+    a_run_swarm,
+    run_swarm,
 )
-from .conversable_agent import UPDATE_SYSTEM_MESSAGE, ConversableAgent, UpdateSystemMessage, register_function
+from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
+from .group.multi_agent_chat import a_initiate_group_chat, a_run_group_chat, initiate_group_chat, run_group_chat
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
-from .utils import ContextExpression, gather_usage_summary
+from .utils import gather_usage_summary
 
 __all__ = [
-    "AFTER_WORK",
-    "ON_CONDITION",
-    "UPDATE_SYSTEM_MESSAGE",
-    "AfterWork",
-    "AfterWorkOption",
     "Agent",
     "AssistantAgent",
     "ChatResult",
-    "ContextExpression",
-    "ContextStr",
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",
-    "OnCondition",
-    "OnContextCondition",
-    "SwarmAgent",
-    "SwarmResult",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "a_initiate_chats",
+    "a_initiate_group_chat",
     "a_initiate_swarm_chat",
+    "a_run_group_chat",
+    "a_run_swarm",
     "gather_usage_summary",
     "initiate_chats",
-    "initiate_swarm_chat",
+    "initiate_group_chat",
     "register_function",
-    "register_hand_off",
+    "run_group_chat",
+    "run_swarm",
 ]

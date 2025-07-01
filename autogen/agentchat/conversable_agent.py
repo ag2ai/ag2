@@ -11,12 +11,14 @@ import inspect
 import json
 import logging
 import re
+import threading
 import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from inspect import signature
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Generator,
@@ -27,7 +29,7 @@ from typing import (
     Union,
 )
 
-from ..cache.cache import AbstractCache
+from ..cache.cache import AbstractCache, Cache
 from ..code_utils import (
     PYTHON_VARIANTS,
     UNKNOWN,
@@ -41,43 +43,56 @@ from ..code_utils import (
 from ..coding.base import CodeExecutor
 from ..coding.factory import CodeExecutorFactory
 from ..doc_utils import export_module
+from ..events.agent_events import (
+    ClearConversableAgentHistoryEvent,
+    ClearConversableAgentHistoryWarningEvent,
+    ConversableAgentUsageSummaryEvent,
+    ConversableAgentUsageSummaryNoCostIncurredEvent,
+    ErrorEvent,
+    ExecuteCodeBlockEvent,
+    ExecuteFunctionEvent,
+    ExecutedFunctionEvent,
+    GenerateCodeExecutionReplyEvent,
+    PostCarryoverProcessingEvent,
+    RunCompletionEvent,
+    TerminationAndHumanReplyNoInputEvent,
+    TerminationEvent,
+    UsingAutoReplyEvent,
+    create_received_event_model,
+)
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
+from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
-from ..messages.agent_messages import (
-    ClearConversableAgentHistoryMessage,
-    ClearConversableAgentHistoryWarningMessage,
-    ConversableAgentUsageSummaryMessage,
-    ConversableAgentUsageSummaryNoCostIncurredMessage,
-    ExecuteCodeBlockMessage,
-    ExecuteFunctionMessage,
-    ExecutedFunctionMessage,
-    GenerateCodeExecutionReplyMessage,
-    TerminationAndHumanReplyNoInputMessage,
-    TerminationMessage,
-    UsingAutoReplyMessage,
-    create_received_message_model,
-)
 from ..oai.client import ModelClient, OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
-from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
+from .chat import (
+    ChatResult,
+    _post_process_carryover_item,
+    _validate_recipients,
+    a_initiate_chats,
+    initiate_chats,
+)
+from .group.context_variables import ContextVariables
+from .group.guardrails import Guardrail
+from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 
+if TYPE_CHECKING:
+    from .group.on_condition import OnCondition
+    from .group.on_context_condition import OnContextCondition
 __all__ = ("ConversableAgent",)
 
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-# Parameter name for context variables
-# Use the value in functions and they will be substituted with the context variables:
-# e.g. def my_function(context_variables: Dict[str, Any], my_other_parameters: Any) -> Any:
-__CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
-
 
 @dataclass
+@export_module("autogen")
 class UpdateSystemMessage:
     """Update the agent's system message before they reply
 
@@ -107,18 +122,6 @@ class UpdateSystemMessage:
                 raise ValueError("The update function must return a string")
         else:
             raise ValueError("The update function must be either a string or a callable")
-
-
-class UPDATE_SYSTEM_MESSAGE(UpdateSystemMessage):  # noqa: N801
-    """Deprecated: Use UpdateSystemMessage instead. This class will be removed in a future version (TBD)."""
-
-    def __init__(self, *args: Any, **kwargs):
-        warnings.warn(
-            "UPDATE_SYSTEM_MESSAGE is deprecated and will be removed in a future version (TBD). Use UpdateSystemMessage instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(*args, **kwargs)
 
 
 @export_module("autogen")
@@ -157,11 +160,12 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
         silent: Optional[bool] = None,
-        context_variables: Optional[dict[str, Any]] = None,
+        context_variables: Optional["ContextVariables"] = None,
         functions: Union[list[Callable[..., Any]], Callable[..., Any]] = None,
         update_agent_state_before_reply: Optional[
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
         ] = None,
+        handoffs: Optional[Handoffs] = None,
     ):
         """
         Args:
@@ -199,7 +203,7 @@ class ConversableAgent(LLMAgent):
                 - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
                     If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
             llm_config (LLMConfig or dict or False or None): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
+                Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
                 for available options.
                 When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
                 To disable llm-based auto reply, set to False.
@@ -212,16 +216,17 @@ class ConversableAgent(LLMAgent):
                 resume previous had conversations. Defaults to an empty chat history.
             silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
                 silent in each function.
-            context_variables (dict or None): Context variables that provide a persistent context for the agent.
-                Note: Will maintain a reference to the passed in context variables (enabling a shared context)
-                Only used in Swarms at this stage:
-                https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
-            functions (List[Callable[..., Any]]): A list of functions to register with the agent.
-                These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
-                If the agent is in a swarm, the swarm's tool executor will execute the function.
-                When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
+            context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
+                Note: This will be a reference to a shared context for multi-agent chats.
+                Behaves like a dictionary with keys and values (akin to dict[str, Any]).
+            functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
+            handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
+        self.handoffs = handoffs if handoffs is not None else Handoffs()
+        self.input_guardrails: list["Guardrail"] = []
+        self.output_guardrails: list["Guardrail"] = []
+
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
         code_execution_config = (
@@ -251,7 +256,7 @@ class ConversableAgent(LLMAgent):
             except TypeError as e:
                 raise TypeError(
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
-                    " Refer to the docs for more details: https://docs.ag2.ai/docs/topics/llm_configuration#adding-http-client-in-llm-config-for-proxy"
+                    " Refer to the docs for more details: https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive/#adding-http-client-in-llm_config-for-proxy"
                 ) from e
 
         self.llm_config = self._validate_llm_config(llm_config)
@@ -264,6 +269,9 @@ class ConversableAgent(LLMAgent):
 
         # Initialize standalone client cache object.
         self.client_cache = None
+
+        # To track UI tools
+        self._ui_tools: list[Tool] = []
 
         self.human_input_mode = human_input_mode
         self._max_consecutive_auto_reply = (
@@ -283,7 +291,7 @@ class ConversableAgent(LLMAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
 
-        self._context_variables = context_variables if context_variables is not None else {}
+        self.context_variables = context_variables if context_variables is not None else ContextVariables()
 
         self._tools: list[Tool] = []
 
@@ -381,8 +389,8 @@ class ConversableAgent(LLMAgent):
 
         If you would like to change the standard string representation for an
         instance of ConversableAgent, you can point it to another function.
-        In this example a function called _swarm_agent_str that returns a string:
-        agent._get_display_name = MethodType(_swarm_agent_str, agent)
+        In this example a function called _group_agent_str that returns a string:
+        agent._get_display_name = MethodType(_group_agent_str, agent)
         """
         return self.name
 
@@ -410,11 +418,16 @@ class ConversableAgent(LLMAgent):
         elif not hasattr(func, "_name"):
             func._name = func.__name__
 
-        if description:
-            func._description = description
+        if hasattr(func, "_description") and func._description and not description:
+            # If the function already has a description, use it
+            description = func._description
         else:
-            # Use function's docstring, strip whitespace, fall back to empty string
-            func._description = (func.__doc__ or "").strip()
+            if description:
+                func._description = description
+            else:
+                # Use function's docstring, strip whitespace, fall back to empty string
+                description = (func.__doc__ or "").strip()
+                func._description = description
 
         # Register the function
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
@@ -452,7 +465,7 @@ class ConversableAgent(LLMAgent):
                             # use the context_variables for substitution
                             sys_message = OpenAIWrapper.instantiate(
                                 template=update_func.content_updater,
-                                context=agent._context_variables,
+                                context=agent.context_variables.to_dict(),
                                 allow_format_str_template=True,
                             )
                         else:
@@ -650,7 +663,7 @@ class ConversableAgent(LLMAgent):
         config: Any,
         trim_n_messages: int = 0,
     ) -> None:
-        """Process carryover messages for a nested chat (typically for the first chat of a swarm)
+        """Process carryover messages for a nested chat (typically for the first chat of a group chat)
 
         The carryover_config key is a dictionary containing:
             "summary_method": The method to use to summarise the messages, can be "all", "last_msg", "reflection_with_llm" or a Callable
@@ -755,7 +768,7 @@ class ConversableAgent(LLMAgent):
             messages: Chat messages
             sender: Sending agent
             config: LLM configuration
-            trim_messages: Number of messages to trim for nested chat carryover (default 2 for swarm chats)
+            trim_messages: Number of messages to trim for nested chat carryover (default 2 for nested chat in group chats)
 
         Returns:
             Tuple containing:
@@ -765,14 +778,14 @@ class ConversableAgent(LLMAgent):
         restore_chat_queue_message = False
         original_chat_queue_message = None
 
-        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for swarm nested chat carryover as these are the messages for the transition to the nested chat agent
+        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for group chat nested chat carryover as these are the messages for the transition to the nested chat agent
         if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
             if "message" in chat_queue[0]:
                 # As we're updating the message in the nested chat queue, we need to restore it after finishing this nested chat.
                 restore_chat_queue_message = True
                 original_chat_queue_message = chat_queue[0]["message"]
 
-            # TODO Check the trimming required if not a swarm chat, it may not be 2 because other chats don't have the swarm transition messages. We may need to add as a carryover_config parameter.
+            # TODO Check the trimming required if not a group chat, it may not be 2 because other chats don't have the group transition messages. We may need to add as a carryover_config parameter.
             ConversableAgent._process_nested_chat_carryover(
                 chat=chat_queue[0],
                 recipient=recipient,
@@ -930,45 +943,6 @@ class ConversableAgent(LLMAgent):
                 not use_async if use_async is not None else kwargs.get("ignore_async_in_sync_chat")
             ),
         )
-
-    def get_context(self, key: str, default: Any = None) -> Any:
-        """Get a context variable by key.
-
-        Args:
-            key: The key to look up
-            default: Value to return if key doesn't exist
-        Returns:
-            The value associated with the key, or default if not found
-        """
-        return self._context_variables.get(key, default)
-
-    def set_context(self, key: str, value: Any) -> None:
-        """Set a context variable.
-
-        Args:
-            key: The key to set
-            value: The value to associate with the key
-        """
-        self._context_variables[key] = value
-
-    def update_context(self, context_variables: dict[str, Any]) -> None:
-        """Update multiple context variables at once.
-
-        Args:
-            context_variables: Dictionary of variables to update/add
-        """
-        self._context_variables.update(context_variables)
-
-    def pop_context(self, key: str, default: Any = None) -> Any:
-        """Remove and return a context variable.
-
-        Args:
-            key: The key to remove
-            default: Value to return if key doesn't exist
-        Returns:
-            The value that was removed, or default if key not found
-        """
-        return self._context_variables.pop(key, default)
 
     @property
     def system_message(self) -> str:
@@ -1162,7 +1136,7 @@ class ConversableAgent(LLMAgent):
                 - role (str): the role of the message, any role that is not "function"
                     will be modified to "assistant".
                 - context (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
                     For example, one agent can send a message A as:
         ```python
         {
@@ -1210,7 +1184,7 @@ class ConversableAgent(LLMAgent):
                 - role (str): the role of the message, any role that is not "function"
                     will be modified to "assistant".
                 - context (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
                     For example, one agent can send a message A as:
         ```python
         {
@@ -1242,7 +1216,7 @@ class ConversableAgent(LLMAgent):
 
     def _print_received_message(self, message: Union[dict[str, Any], str], sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
-        message_model = create_received_message_model(message=message, sender=sender, recipient=self)
+        message_model = create_received_event_model(event=message, sender=sender, recipient=self)
         iostream = IOStream.get_default()
         # message_model.print(iostream.print)
         iostream.send(message_model)
@@ -1282,7 +1256,7 @@ class ConversableAgent(LLMAgent):
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
             sender: sender of an Agent instance.
             request_reply (bool or None): whether a reply is requested from the sender.
                 If None, the value is determined by `self.reply_at_receive[sender]`.
@@ -1319,7 +1293,7 @@ class ConversableAgent(LLMAgent):
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
-                    [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                    [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
             sender: sender of an Agent instance.
             request_reply (bool or None): whether a reply is requested from the sender.
                 If None, the value is determined by `self.reply_at_receive[sender]`.
@@ -1393,7 +1367,7 @@ class ConversableAgent(LLMAgent):
             silent (bool or None): (Experimental) whether to print the messages for this conversation. Default is False.
             cache (AbstractCache or None): the cache client to be used for this conversation. Default is None.
             max_turns (int or None): the maximum number of turns for the chat between the two agents. One turn means one conversation round trip. Note that this is different from
-                [max_consecutive_auto_reply](#max-consecutive-auto-reply) which is the maximum number of consecutive auto replies; and it is also different from [max_rounds in GroupChat](./groupchat) which is the maximum number of rounds in a group chat session.
+                `max_consecutive_auto_reply` which is the maximum number of consecutive auto replies; and it is also different from `max_rounds` in GroupChat which is the maximum number of rounds in a group chat session.
                 If max_turns is set to None, the chat will continue until a termination condition is met. Default is None.
             summary_method (str or callable): a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg".
                 Supported strings are "last_msg" and "reflection_with_llm":
@@ -1427,7 +1401,7 @@ class ConversableAgent(LLMAgent):
                             This field is only needed to distinguish between "function" or "assistant"/"user".
                         5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                         6. "context" (dict): the context of the message, which will be passed to
-                            [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create).
+                            `OpenAIWrapper.create`.
 
                 - If a callable is provided, it will be called to get the initial message in the form of a string or a dict.
                     If the returned type is dict, it may contain the reserved fields mentioned above.
@@ -1473,6 +1447,7 @@ class ConversableAgent(LLMAgent):
         """
         iostream = IOStream.get_default()
 
+        cache = Cache.get_current_cache(cache)
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1498,7 +1473,11 @@ class ConversableAgent(LLMAgent):
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
 
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationMessage(termination_reason=f"Maximum turns ({max_turns}) reached"))
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -1523,6 +1502,116 @@ class ConversableAgent(LLMAgent):
         )
         return chat_result
 
+    def run(
+        self,
+        recipient: Optional["ConversableAgent"] = None,
+        clear_history: bool = True,
+        silent: Optional[bool] = False,
+        cache: Optional[AbstractCache] = None,
+        max_turns: Optional[int] = None,
+        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_args: Optional[dict[str, Any]] = {},
+        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        user_input: Optional[bool] = False,
+        msg_to: Optional[str] = "agent",
+        **kwargs: Any,
+    ) -> RunResponseProtocol:
+        iostream = ThreadIOStream()
+        agents = [self, recipient] if recipient else [self]
+        response = RunResponse(iostream, agents=agents)
+
+        if recipient is None:
+
+            def initiate_chat(
+                self=self,
+                iostream: ThreadIOStream = iostream,
+                response: RunResponse = response,
+            ) -> None:
+                with (
+                    IOStream.set_default(iostream),
+                    self._create_or_get_executor(
+                        executor_kwargs=executor_kwargs,
+                        tools=tools,
+                        agent_name="user",
+                        agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                    ) as executor,
+                ):
+                    try:
+                        if msg_to == "agent":
+                            chat_result = executor.initiate_chat(
+                                self,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+                        else:
+                            chat_result = self.initiate_chat(
+                                executor,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=self.name,
+                            )
+                        )
+                    except Exception as e:
+                        response.iostream.send(ErrorEvent(error=e))
+
+        else:
+
+            def initiate_chat(
+                self=self,
+                iostream: ThreadIOStream = iostream,
+                response: RunResponse = response,
+            ) -> None:
+                with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                    try:
+                        chat_result = self.initiate_chat(
+                            recipient,
+                            clear_history=clear_history,
+                            silent=silent,
+                            cache=cache,
+                            max_turns=max_turns,
+                            summary_method=summary_method,
+                            summary_args=summary_args,
+                            message=message,
+                            **kwargs,
+                        )
+
+                        response._summary = chat_result.summary
+                        response._messages = chat_result.chat_history
+
+                        _last_speaker = recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                        if hasattr(recipient, "last_speaker"):
+                            _last_speaker = recipient.last_speaker
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=_last_speaker.name,
+                            )
+                        )
+                    except Exception as e:
+                        response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(
+            target=initiate_chat,
+        ).start()
+
+        return response
+
     async def a_initiate_chat(
         self,
         recipient: "ConversableAgent",
@@ -1546,6 +1635,8 @@ class ConversableAgent(LLMAgent):
         Returns:
             ChatResult: an ChatResult object.
         """
+        iostream = IOStream.get_default()
+
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -1565,6 +1656,12 @@ class ConversableAgent(LLMAgent):
                 if msg2send is None:
                     break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
+            else:  # No breaks in the for loop, so we have reached max turns
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -1588,6 +1685,112 @@ class ConversableAgent(LLMAgent):
             human_input=self._human_input,
         )
         return chat_result
+
+    async def a_run(
+        self,
+        recipient: Optional["ConversableAgent"] = None,
+        clear_history: bool = True,
+        silent: Optional[bool] = False,
+        cache: Optional[AbstractCache] = None,
+        max_turns: Optional[int] = None,
+        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_args: Optional[dict[str, Any]] = {},
+        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
+        executor_kwargs: Optional[dict[str, Any]] = None,
+        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        user_input: Optional[bool] = False,
+        msg_to: Optional[str] = "agent",
+        **kwargs: Any,
+    ) -> AsyncRunResponseProtocol:
+        iostream = AsyncThreadIOStream()
+        agents = [self, recipient] if recipient else [self]
+        response = AsyncRunResponse(iostream, agents=agents)
+
+        if recipient is None:
+
+            async def initiate_chat(
+                self=self,
+                iostream: AsyncThreadIOStream = iostream,
+                response: AsyncRunResponse = response,
+            ) -> None:
+                with (
+                    IOStream.set_default(iostream),
+                    self._create_or_get_executor(
+                        executor_kwargs=executor_kwargs,
+                        tools=tools,
+                        agent_name="user",
+                        agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                    ) as executor,
+                ):
+                    try:
+                        if msg_to == "agent":
+                            chat_result = await executor.a_initiate_chat(
+                                self,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+                        else:
+                            chat_result = await self.a_initiate_chat(
+                                executor,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=self.name,
+                            )
+                        )
+                    except Exception as e:
+                        response.iostream.send(ErrorEvent(error=e))
+
+        else:
+
+            async def initiate_chat(
+                self=self,
+                iostream: AsyncThreadIOStream = iostream,
+                response: AsyncRunResponse = response,
+            ) -> None:
+                with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                    try:
+                        chat_result = await self.a_initiate_chat(
+                            recipient,
+                            clear_history=clear_history,
+                            silent=silent,
+                            cache=cache,
+                            max_turns=max_turns,
+                            summary_method=summary_method,
+                            summary_args=summary_args,
+                            message=message,
+                            **kwargs,
+                        )
+
+                        last_speaker = recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                        if hasattr(recipient, "last_speaker"):
+                            last_speaker = recipient.last_speaker
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=last_speaker.name,
+                            )
+                        )
+
+                    except Exception as e:
+                        response.iostream.send(ErrorEvent(error=e))
+
+        asyncio.create_task(initiate_chat())
+
+        return response
 
     def _summarize_chat(
         self,
@@ -1741,12 +1944,144 @@ class ConversableAgent(LLMAgent):
         """
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
         self._finished_chats = initiate_chats(_chat_queue)
+
         return self._finished_chats
+
+    def sequential_run(
+        self,
+        chat_queue: list[dict[str, Any]],
+    ) -> list[RunResponseProtocol]:
+        """(Experimental) Initiate chats with multiple agents sequentially.
+
+        Args:
+            chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
+                Each dictionary should contain the input arguments for [`initiate_chat`](#initiate-chat)
+
+        Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        """
+        iostreams = [ThreadIOStream() for _ in range(len(chat_queue))]
+        # todo: add agents
+        responses = [RunResponse(iostream, agents=[]) for iostream in iostreams]
+
+        def _initiate_chats(
+            iostreams: list[ThreadIOStream] = iostreams,
+            responses: list[RunResponseProtocol] = responses,
+        ) -> None:
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
+
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+
+                        if not chat_info.get("silent", False):
+                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+
+                        sender = chat_info["sender"]
+                        chat_res = sender.initiate_chat(**chat_info)
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_res.chat_history,
+                                summary=chat_res.summary,
+                                cost=chat_res.cost,
+                                last_speaker=(self if chat_res.chat_history[-1]["name"] == self.name else sender).name,
+                            )
+                        )
+
+                        finished_chats.append(chat_res)
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))
+
+        threading.Thread(target=_initiate_chats).start()
+
+        return responses
 
     async def a_initiate_chats(self, chat_queue: list[dict[str, Any]]) -> dict[int, ChatResult]:
         _chat_queue = self._check_chat_queue_for_sender(chat_queue)
         self._finished_chats = await a_initiate_chats(_chat_queue)
         return self._finished_chats
+
+    async def a_sequential_run(
+        self,
+        chat_queue: list[dict[str, Any]],
+    ) -> list[AsyncRunResponseProtocol]:
+        """(Experimental) Initiate chats with multiple agents sequentially.
+
+        Args:
+            chat_queue (List[Dict]): a list of dictionaries containing the information of the chats.
+                Each dictionary should contain the input arguments for [`initiate_chat`](#initiate-chat)
+
+        Returns: a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        """
+        iostreams = [AsyncThreadIOStream() for _ in range(len(chat_queue))]
+        # todo: add agents
+        responses = [AsyncRunResponse(iostream, agents=[]) for iostream in iostreams]
+
+        async def _a_initiate_chats(
+            iostreams: list[AsyncThreadIOStream] = iostreams,
+            responses: list[AsyncRunResponseProtocol] = responses,
+        ) -> None:
+            response = responses[0]
+            try:
+                _chat_queue = self._check_chat_queue_for_sender(chat_queue)
+
+                consolidate_chat_info(_chat_queue)
+                _validate_recipients(_chat_queue)
+                finished_chats = []
+                for chat_info, response, iostream in zip(_chat_queue, responses, iostreams):
+                    with IOStream.set_default(iostream):
+                        _chat_carryover = chat_info.get("carryover", [])
+                        finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
+                            "finished_chat_indexes_to_exclude_from_carryover", []
+                        )
+
+                        if isinstance(_chat_carryover, str):
+                            _chat_carryover = [_chat_carryover]
+                        chat_info["carryover"] = _chat_carryover + [
+                            r.summary
+                            for i, r in enumerate(finished_chats)
+                            if i not in finished_chat_indexes_to_exclude_from_carryover
+                        ]
+
+                        if not chat_info.get("silent", False):
+                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+
+                        sender = chat_info["sender"]
+                        chat_res = await sender.a_initiate_chat(**chat_info)
+
+                        IOStream.get_default().send(
+                            RunCompletionEvent(
+                                history=chat_res.chat_history,
+                                summary=chat_res.summary,
+                                cost=chat_res.cost,
+                                last_speaker=(self if chat_res.chat_history[-1]["name"] == self.name else sender).name,
+                            )
+                        )
+
+                        finished_chats.append(chat_res)
+
+            except Exception as e:
+                response.iostream.send(ErrorEvent(error=e))
+
+        asyncio.create_task(_a_initiate_chats())
+
+        return responses
 
     def get_chat_results(self, chat_index: Optional[int] = None) -> Union[list[ChatResult], ChatResult]:
         """A summary from the finished chats of particular agents."""
@@ -1804,16 +2139,14 @@ class ConversableAgent(LLMAgent):
                         no_messages_preserved += 1
                     # Remove messages from history except last `nr_messages_to_preserve` messages.
                     self._oai_messages[key] = self._oai_messages[key][-nr_messages_to_preserve_internal:]
-                iostream.send(
-                    ClearConversableAgentHistoryMessage(agent=self, no_messages_preserved=no_messages_preserved)
-                )
+                iostream.send(ClearConversableAgentHistoryEvent(agent=self, no_events_preserved=no_messages_preserved))
             else:
                 self._oai_messages.clear()
         else:
             self._oai_messages[recipient].clear()
             # clear_conversable_agent_history.print_warning(iostream.print)
             if nr_messages_to_preserve:
-                iostream.send(ClearConversableAgentHistoryWarningMessage(recipient=self))
+                iostream.send(ClearConversableAgentHistoryWarningEvent(recipient=self))
 
     def generate_oai_reply(
         self,
@@ -1939,7 +2272,7 @@ class ConversableAgent(LLMAgent):
             if len(code_blocks) == 0:
                 continue
 
-            iostream.send(GenerateCodeExecutionReplyMessage(code_blocks=code_blocks, sender=sender, recipient=self))
+            iostream.send(GenerateCodeExecutionReplyEvent(code_blocks=code_blocks, sender=sender, recipient=self))
 
             # found code blocks, execute code.
             code_result = self._code_executor.execute_code_blocks(code_blocks)
@@ -1998,6 +2331,21 @@ class ConversableAgent(LLMAgent):
 
         return False, None
 
+    def _run_async_in_thread(self, coro):
+        """Run an async coroutine in a separate thread with its own event loop."""
+        result = {}
+
+        def runner():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result["value"] = loop.run_until_complete(coro)
+            loop.close()
+
+        t = threading.Thread(target=runner)
+        t.start()
+        t.join()
+        return result["value"]
+
     def generate_function_call_reply(
         self,
         messages: Optional[list[dict[str, Any]]] = None,
@@ -2019,18 +2367,8 @@ class ConversableAgent(LLMAgent):
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
-                try:
-                    # get the running loop if it was already created
-                    loop = asyncio.get_running_loop()
-                    close_loop = False
-                except RuntimeError:
-                    # create a loop if there is no running loop
-                    loop = asyncio.new_event_loop()
-                    close_loop = True
-
-                _, func_return = loop.run_until_complete(self.a_execute_function(func_call, call_id=call_id))
-                if close_loop:
-                    loop.close()
+                coro = self.a_execute_function(func_call, call_id=call_id)
+                _, func_return = self._run_async_in_thread(coro)
             else:
                 _, func_return = self.execute_function(message["function_call"], call_id=call_id)
             return True, func_return
@@ -2086,18 +2424,8 @@ class ConversableAgent(LLMAgent):
             tool_call_id = tool_call.get("id", None)
             func = self._function_map.get(function_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
-                try:
-                    # get the running loop if it was already created
-                    loop = asyncio.get_running_loop()
-                    close_loop = False
-                except RuntimeError:
-                    # create a loop if there is no running loop
-                    loop = asyncio.new_event_loop()
-                    close_loop = True
-
-                _, func_return = loop.run_until_complete(self.a_execute_function(function_call, call_id=tool_call_id))
-                if close_loop:
-                    loop.close()
+                coro = self.a_execute_function(function_call, call_id=tool_call_id)
+                _, func_return = self._run_async_in_thread(coro)
             else:
                 _, func_return = self.execute_function(function_call, call_id=tool_call_id)
             content = func_return.get("content", "")
@@ -2258,7 +2586,7 @@ class ConversableAgent(LLMAgent):
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReplyNoInputMessage(
+                TerminationAndHumanReplyNoInputEvent(
                     no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
                 )
             )
@@ -2269,7 +2597,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationMessage(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
@@ -2301,7 +2629,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
+            iostream.send(UsingAutoReplyEvent(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -2398,7 +2726,7 @@ class ConversableAgent(LLMAgent):
         # print the no_human_input_msg
         if no_human_input_msg:
             iostream.send(
-                TerminationAndHumanReplyNoInputMessage(
+                TerminationAndHumanReplyNoInputEvent(
                     no_human_input_msg=no_human_input_msg, sender=sender, recipient=self
                 )
             )
@@ -2409,7 +2737,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationMessage(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
@@ -2441,7 +2769,7 @@ class ConversableAgent(LLMAgent):
         # increment the consecutive_auto_reply_counter
         self._consecutive_auto_reply_counter[sender] += 1
         if self.human_input_mode != "NEVER":
-            iostream.send(UsingAutoReplyMessage(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
+            iostream.send(UsingAutoReplyEvent(human_input_mode=self.human_input_mode, sender=sender, recipient=self))
 
         return False, None
 
@@ -2650,9 +2978,26 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: human input.
         """
-        loop = asyncio.get_running_loop()
-        reply = await loop.run_in_executor(None, functools.partial(self.get_human_input, prompt))
+        iostream = IOStream.get_default()
+
+        reply = await iostream.input(prompt)
+        self._human_input.append(reply)
         return reply
+
+        # def _get_human_input(
+        #     self, iostream: IOStream, prompt: str,
+        # ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        #     with IOStream.set_default(iostream):
+        #         print("!"*100)
+        #         print("Getting human input...")
+        #         return self.get_human_input(prompt)
+
+        # return await asyncio.get_event_loop().run_in_executor(
+        #     None,
+        #     functools.partial(
+        #         _get_human_input, self=self, iostream=iostream, prompt=prompt,
+        #     ),
+        # )
 
     def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
         """Run the code and return the result.
@@ -2681,7 +3026,7 @@ class ConversableAgent(LLMAgent):
             if not lang:
                 lang = infer_lang(code)
 
-            iostream.send(ExecuteCodeBlockMessage(code=code, language=lang, code_block_count=i, recipient=self))
+            iostream.send(ExecuteCodeBlockEvent(code=code, language=lang, code_block_count=i, recipient=self))
 
             if lang in ["bash", "shell", "sh"]:
                 exitcode, logs, image = self.run_code(code, lang=lang, **self._code_execution_config)
@@ -2779,7 +3124,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 iostream.send(
-                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                    ExecuteFunctionEvent(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     content = func(**arguments)
@@ -2790,12 +3135,16 @@ class ConversableAgent(LLMAgent):
             arguments = {}
             content = f"Error: Function {func_name} not found."
 
-        if verbose:
-            iostream.send(
-                ExecutedFunctionMessage(
-                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
-                )
+        iostream.send(
+            ExecutedFunctionEvent(
+                func_name=func_name,
+                call_id=call_id,
+                arguments=arguments,
+                content=content,
+                recipient=self,
+                is_exec_success=is_exec_success,
             )
+        )
 
         return is_exec_success, {
             "name": func_name,
@@ -2843,7 +3192,7 @@ class ConversableAgent(LLMAgent):
             # Try to execute the function
             if arguments is not None:
                 iostream.send(
-                    ExecuteFunctionMessage(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
+                    ExecuteFunctionEvent(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
                     if inspect.iscoroutinefunction(func):
@@ -2858,12 +3207,16 @@ class ConversableAgent(LLMAgent):
             arguments = {}
             content = f"Error: Function {func_name} not found."
 
-        if verbose:
-            iostream.send(
-                ExecutedFunctionMessage(
-                    func_name=func_name, call_id=call_id, arguments=arguments, content=content, recipient=self
-                )
+        iostream.send(
+            ExecutedFunctionEvent(
+                func_name=func_name,
+                call_id=call_id,
+                arguments=arguments,
+                content=content,
+                recipient=self,
+                is_exec_success=is_exec_success,
             )
+        )
 
         return is_exec_success, {
             "name": func_name,
@@ -3237,7 +3590,8 @@ class ConversableAgent(LLMAgent):
             tool = self._create_tool_if_needed(func_or_tool, name, description)
 
             self._register_for_llm(tool, api_style, silent_override=silent_override)
-            self._tools.append(tool)
+            if tool not in self._tools:
+                self._tools.append(tool)
 
             return tool
 
@@ -3268,6 +3622,53 @@ class ConversableAgent(LLMAgent):
             self.update_tool_signature(tool.tool_schema, is_remove=is_remove, silent_override=silent_override)
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be set.
+        """
+        # Unset the previous UI tools
+        self._unset_previous_ui_tools()
+
+        # Set the new UI tools
+        for tool in tools:
+            # Register the tool for LLM
+            self._register_for_llm(tool, api_style="tool", silent_override=True)
+            if tool not in self._tools:
+                self._tools.append(tool)
+
+            # Register for execution
+            self.register_for_execution(serialize=False, silent_override=True)(tool)
+
+        # Set the current UI tools
+        self._ui_tools = tools
+
+    def unset_ui_tools(self, tools: list[Tool]) -> None:
+        """Unset the UI tools for the agent.
+
+        Args:
+            tools: a list of tools to be unset.
+        """
+        for tool in tools:
+            self.remove_tool_for_llm(tool)
+
+    def _unset_previous_ui_tools(self) -> None:
+        """Unset the previous UI tools for the agent.
+
+        This is used to remove UI tools that were previously registered for LLM.
+        """
+        self.unset_ui_tools(self._ui_tools)
+        for tool in self._ui_tools:
+            if tool in self._tools:
+                self._tools.remove(tool)
+
+            # Unregister the function from the function map
+            if tool.name in self._function_map:
+                del self._function_map[tool.name]
+
+        self._ui_tools = []
 
     def register_for_execution(
         self,
@@ -3420,9 +3821,9 @@ class ConversableAgent(LLMAgent):
         """Print the usage summary."""
         iostream = IOStream.get_default()
         if self.client is None:
-            iostream.send(ConversableAgentUsageSummaryNoCostIncurredMessage(recipient=self))
+            iostream.send(ConversableAgentUsageSummaryNoCostIncurredEvent(recipient=self))
         else:
-            iostream.send(ConversableAgentUsageSummaryMessage(recipient=self))
+            iostream.send(ConversableAgentUsageSummaryEvent(recipient=self))
 
         if self.client is not None:
             self.client.print_usage_summary(mode)
@@ -3483,7 +3884,7 @@ class ConversableAgent(LLMAgent):
                 for tool in tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
-    def run(
+    def _deprecated_run(
         self,
         message: str,
         *,
@@ -3534,7 +3935,7 @@ class ConversableAgent(LLMAgent):
                     summary_method=summary_method,
                 )
 
-    async def a_run(
+    async def _deprecated_a_run(
         self,
         message: str,
         *,
@@ -3584,6 +3985,60 @@ class ConversableAgent(LLMAgent):
                     max_turns=max_turns,
                     summary_method=summary_method,
                 )
+
+    def register_handoff(self, condition: Union["OnContextCondition", "OnCondition"]) -> None:
+        """
+        Register a single handoff condition (OnContextCondition or OnCondition).
+
+        Args:
+            condition: The condition to add (OnContextCondition, OnCondition)
+        """
+        self.handoffs.add(condition)
+
+    def register_handoffs(self, conditions: list[Union["OnContextCondition", "OnCondition"]]) -> None:
+        """
+        Register multiple handoff conditions (OnContextCondition or OnCondition).
+
+        Args:
+            conditions: List of conditions to add
+        """
+        self.handoffs.add_many(conditions)
+
+    def register_input_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for input validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.input_guardrails.append(guardrail)
+
+    def register_input_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for input validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.input_guardrails.extend(guardrails)
+
+    def register_output_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for output validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.output_guardrails.append(guardrail)
+
+    def register_output_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for output validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.output_guardrails.extend(guardrails)
 
 
 @export_module("autogen")

@@ -7,31 +7,22 @@
 import logging
 
 from .agentchat import (
-    AFTER_WORK,
-    ON_CONDITION,
-    UPDATE_SYSTEM_MESSAGE,
-    AfterWork,
-    AfterWorkOption,
     Agent,
     AssistantAgent,
     ChatResult,
-    ContextExpression,
     ConversableAgent,
     GroupChat,
     GroupChatManager,
-    OnCondition,
-    OnContextCondition,
-    SwarmAgent,
-    SwarmResult,
     UpdateSystemMessage,
     UserProxyAgent,
     a_initiate_swarm_chat,
+    a_run_swarm,
     gather_usage_summary,
     initiate_chats,
-    initiate_swarm_chat,
     register_function,
-    register_hand_off,
+    run_swarm,
 )
+from .agentchat.group.context_expression import ContextExpression
 from .code_utils import DEFAULT_MODEL, FAST_MODEL
 from .exception_utils import (
     AgentNameConflictError,
@@ -61,13 +52,8 @@ logger.setLevel(logging.INFO)
 
 
 __all__ = [
-    "AFTER_WORK",
     "DEFAULT_MODEL",
     "FAST_MODEL",
-    "ON_CONDITION",
-    "UPDATE_SYSTEM_MESSAGE",
-    "AfterWork",
-    "AfterWorkOption",
     "Agent",
     "AgentNameConflictError",
     "AssistantAgent",
@@ -81,17 +67,14 @@ __all__ = [
     "LLMConfig",
     "ModelClient",
     "NoEligibleSpeakerError",
-    "OnCondition",
-    "OnContextCondition",
     "OpenAIWrapper",
     "SenderRequiredError",
-    "SwarmAgent",
-    "SwarmResult",
     "UndefinedNextAgentError",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "__version__",
     "a_initiate_swarm_chat",
+    "a_run_swarm",
     "config_list_from_dotenv",
     "config_list_from_json",
     "config_list_from_models",
@@ -101,7 +84,6 @@ __all__ = [
     "gather_usage_summary",
     "get_config_list",
     "initiate_chats",
-    "initiate_swarm_chat",
     "register_function",
-    "register_hand_off",
+    "run_swarm",
 ]

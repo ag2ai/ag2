@@ -7,7 +7,8 @@
 
 import inspect
 import unittest.mock
-from typing import Annotated, Any, Literal, Optional
+from enum import Enum
+from typing import Annotated, Any, Callable, Literal, Optional, Set, Tuple, Union
 
 import pytest
 from pydantic import BaseModel, Field
@@ -333,6 +334,14 @@ def test_get_function_schema_pydantic() -> None:
     assert actual == expected, actual
 
 
+# test_load_param_if_needed_function tests
+
+
+class NonBaseModelClass:
+    def __init__(self, value: int):
+        self.value = value
+
+
 def test_get_load_param_if_needed_function() -> None:
     assert get_load_param_if_needed_function(CurrencySymbol) is None
     assert get_load_param_if_needed_function(Currency)({"currency": "USD", "amount": 123.45}, Currency) == Currency(  # type: ignore[misc]
@@ -343,6 +352,80 @@ def test_get_load_param_if_needed_function() -> None:
     actual = f({"currency": "USD", "amount": 123.45}, Currency)  # type: ignore[misc]
     expected = Currency(currency="USD", amount=123.45)
     assert actual == expected, actual
+
+
+def test_get_load_param_if_needed_function_base_model() -> None:
+    """Tests direct BaseModel subclasses."""
+    loader = get_load_param_if_needed_function(Currency)
+    assert loader is not None, "Should return a loader function for BaseModel"
+    assert callable(loader), "Returned value should be callable"
+    instance = loader({"currency": "USD", "amount": 123.45}, Currency)
+    assert isinstance(instance, Currency)
+    assert instance == Currency(currency="USD", amount=123.45)
+
+
+def test_get_load_param_if_needed_function_annotated_base_model() -> None:
+    """Tests Annotated BaseModel subclasses."""
+    loader = get_load_param_if_needed_function(Annotated[Currency, "Description"])
+    assert loader is not None, "Should return a loader for Annotated[BaseModel]"
+    assert callable(loader), "Returned value should be callable"
+    instance = loader({"currency": "EUR", "amount": 99.0}, Currency)
+    assert isinstance(instance, Currency)
+    assert instance == Currency(currency="EUR", amount=99.0)
+
+
+def test_get_load_param_if_needed_function_basic_types() -> None:
+    """Tests basic built-in types."""
+    assert get_load_param_if_needed_function(str) is None
+    assert get_load_param_if_needed_function(int) is None
+    assert get_load_param_if_needed_function(float) is None
+    assert get_load_param_if_needed_function(bool) is None
+    assert get_load_param_if_needed_function(bytes) is None
+    assert get_load_param_if_needed_function(type(None)) is None
+
+
+def test_get_load_param_if_needed_function_plain_classes() -> None:
+    """Tests non-BaseModel classes."""
+    assert get_load_param_if_needed_function(NonBaseModelClass) is None
+    assert get_load_param_if_needed_function(Enum) is None  # The Enum base class itself
+    assert get_load_param_if_needed_function(CurrencySymbol) is None  # Specific Enum
+
+
+def test_get_load_param_if_needed_function_generic_aliases_fixed() -> None:
+    """Tests the generic types that previously caused errors."""
+    assert get_load_param_if_needed_function(list[str]) is None
+    assert get_load_param_if_needed_function(dict[str, int]) is None
+    assert get_load_param_if_needed_function(list[Currency]) is None  # List *containing* BaseModel
+    assert get_load_param_if_needed_function(dict[str, Currency]) is None  # Dict *containing* BaseModel
+
+
+def test_get_load_param_if_needed_function_other_typing_constructs() -> None:
+    """Tests other constructs from the typing module."""
+    assert get_load_param_if_needed_function(Any) is None
+    assert get_load_param_if_needed_function(Union[str, int]) is None
+    assert get_load_param_if_needed_function(Optional[str]) is None  # Equivalent to Union[str, None]
+    assert get_load_param_if_needed_function(Optional[Currency]) is None  # Optional BaseModel
+    assert get_load_param_if_needed_function(Callable[[], str]) is None
+    assert get_load_param_if_needed_function(Tuple[int, str]) is None
+    assert get_load_param_if_needed_function(Set[float]) is None
+    assert get_load_param_if_needed_function(list) is None  # The raw list type
+    assert get_load_param_if_needed_function(dict) is None  # The raw dict type
+
+
+def test_get_load_param_if_needed_function_annotated_non_base_model() -> None:
+    """Tests Annotated non-BaseModel types."""
+    assert get_load_param_if_needed_function(Annotated[str, "A string"]) is None
+    assert get_load_param_if_needed_function(Annotated[list[int], "A list of ints"]) is None
+
+
+def test_get_load_param_if_needed_function_nested_annotated() -> None:
+    """Tests nested Annotated types wrapping a BaseModel."""
+    loader = get_load_param_if_needed_function(Annotated[Annotated[Currency, "Inner"], "Outer"])
+    assert loader is not None, "Should find BaseModel inside nested Annotated"
+    assert callable(loader), "Returned value should be callable"
+    instance = loader({"currency": "USD", "amount": 1.0}, Currency)
+    assert isinstance(instance, Currency)
+    assert instance == Currency(currency="USD", amount=1.0)
 
 
 def test_load_basemodels_if_needed_sync() -> None:

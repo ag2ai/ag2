@@ -1,4 +1,4 @@
-LangChain is a popular framework with lots of tools for working with LLMs. It's got a range of tools that can be easily integrated into AG2. If you want to see the full list, check out the [LangChain Community Tools](https://github.com/langchain-ai/langchain/tree/master/libs/community/langchain_community/tools). You can quickly add things like API queries, web scraping, and text generation to your AG2 setup.
+LangChain is a popular framework with lots of tools for working with LLMs. It's got a range of tools that can be easily integrated into AG2. If you want to see the full list, check out the [LangChain Community Tools](https://github.com/langchain-ai/langchain-community/tree/main/libs/community/langchain_community/tools). You can quickly add things like API queries, web scraping, and text generation to your AG2 setup.
 
 ### Installation
 To get LangChain tools working with AG2, you’ll need to install a couple of dependencies:
@@ -8,15 +8,15 @@ pip install ag2[openai,interop-langchain]
 ```
 
 <Tip>
-If you have been using `autogen` or `pyautogen`, all you need to do is upgrade it using:
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
 pip install -U autogen[openai,interop-langchain]
 ```
 or
 ```bash
-pip install -U pyautogen[openai,interop-langchain]
+pip install -U ag2[openai,interop-langchain]
 ```
-as `pyautogen`, `autogen`, and `ag2` are aliases for the same PyPI package.
+as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
 
 Also, we’ll use LangChain’s [Wikipedia Tool](https://python.langchain.com/docs/integrations/tools/wikipedia/), which needs the wikipedia package. Install it like this:
@@ -31,7 +31,7 @@ Now, let’s import the necessary modules and tools.
 
 - [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) and [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html) are the tools for querying Wikipedia.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) and [`UserProxyAgent`](/docs/api-reference/autogen/UserProxyAgent) are the agents for interaction within AG2.
-- [`Interoperability`](/docs/api-reference/autogen/interop/overview) is what helps connect LangChain tools with AG2.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) is what helps connect LangChain tools with AG2.
 
 ```python
 import os
@@ -63,9 +63,10 @@ with llm_config:
 
 ### Tool Integration
 Here’s where we connect everything.
+
 - First, we set up [WikipediaAPIWrapper](https://python.langchain.com/api_reference/community/utilities/langchain_community.utilities.wikipedia.WikipediaAPIWrapper.html), which fetches the top Wikipedia result (with a character limit).
 - Then, we use [WikipediaQueryRun](https://api.python.langchain.com/en/latest/tools/langchain_community.tools.wikipedia.tool.WikipediaQueryRun.html) to perform Wikipedia queries.
-- [`Interoperability`](/docs/reference/interop/interoperability) helps convert the LangChain tool to AG2’s format.
+- [`Interoperability`](/docs/api-reference/autogen/interop/Interoperability) helps convert the LangChain tool to AG2’s format.
 - Finally, we register the tool for use with both the `user_proxy` and `chatbot`.
 
 ```python

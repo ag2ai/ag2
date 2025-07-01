@@ -1,0 +1,61 @@
+{{imports}}
+
+import argparse
+import os
+from typing import *
+
+from autogen.mcp.mcp_proxy import MCPProxy
+from autogen.mcp.mcp_proxy.security import BaseSecurity
+from autogen.mcp.mcp_proxy.security import {% for i in security_classes %}{{i}}{% if not loop.last %}, {% endif %}{% endfor %}
+
+app = MCPProxy(
+    {% if info %}
+    {% for key,value in info.items() %}
+    {% set info_value= value.__repr__() %}
+    {% if not key.startswith('x-') %}
+    {{ key }} = {{info_value}},
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    )
+
+
+{% for operation in operations %}
+@app.{{operation.type}}('{{operation.path}}'
+    {% if operation.description %}
+    , description=""" {{operation.description}} """
+    {% endif %}
+    {% if operation.tags %}
+    , tags={{operation.tags}}
+    {% endif %}
+    {% if operation.security %}
+    , security=[{% for security in operation.security %}
+    {% for key, value in security.items() %}
+    {{security_parameters[key]}},
+    {% endfor %}
+    {% endfor %}]
+    {% endif %}
+    )
+def {{operation.function_name}}({{operation.snake_case_arguments}}
+    ):
+    {%- if operation.summary %}
+    """
+    {{ operation.summary }}
+    """
+    {%- endif %}
+    raise RuntimeError("Should be patched by MCPProxy and never executed")
+{% endfor %}
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Math Server")
+    parser.add_argument("transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode (stdio, sse or streamable-http)")
+    args = parser.parse_args()
+
+    if "SECURITY" in os.environ:
+        security_params = BaseSecurity.parse_security_parameters_from_env(
+            os.environ,
+        )
+
+        app.set_security_params(security_params)
+
+    app._mcp.run(transport=args.transport)

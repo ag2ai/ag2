@@ -9,6 +9,7 @@ from .reasoning import ReasoningAgent, ThinkNode
 from .slack import SlackAgent
 from .telegram import TelegramAgent
 from .websurfer import WebSurferAgent
+from .wikipedia import WikipediaAgent
 
 __all__ = [
     "DeepResearchAgent",
@@ -22,4 +23,5 @@ __all__ = [
     "ThinkNode",
     "VectorChromaQueryEngine",
     "WebSurferAgent",
+    "WikipediaAgent",
 ]

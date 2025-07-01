@@ -23,6 +23,7 @@
 | Alec Solder  | [alecsolder](https://github.com/alecsolder)               | -                | swarms, reasoning, function calling |
 | Marc Willhaus | [willhama](https://github.com/willhama)               | -                | - |
 | George Sideris | [giorgossideris](https://github.com/giorgossideris)               | -                | reasoning, RAG |
+| Beibin Li | [BeibinLi](https://github.com/BeibinLi)               | GenAI, Meta               | multimodal, reasoning, optiguide |
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
@@ -39,7 +40,7 @@
 | Linxin Song     | [LinxinS97](https://github.com/LinxinS97)                  | University of Southern California | autobuild, group chat       |
 
 ## I would like to join this list. How can I help the project?
-> We're always looking for new contributors to join our team and help improve the project. For more information, please refer to our [CONTRIBUTING](https://docs.ag2.ai/docs/contributor-guide/contributing) guide.
+> We're always looking for new contributors to join our team and help improve the project. For more information, please refer to our [CONTRIBUTING](https://docs.ag2.ai/latest/docs/contributor-guide/contributing) guide.
 
 
 ## Are you missing from this list?

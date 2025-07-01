@@ -14,7 +14,7 @@ For each type of executor, AG2 provides two ways to execute code: locally and in
 | [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
 | [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
-# Local Execution
+## Local Execution
 
 The figure below shows the architecture of the local command line code executor
 ([`autogen.coding.LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)).
@@ -113,7 +113,7 @@ temp_dir.cleanup()
 ['scatter.png', '6507ea07b63b45aabb027ade4e213de6.py']
 ```
 
-# Docker Execution
+## Docker Execution
 To mitigate the security risk of running LLM-generated code locally, we can use the docker command line code executor ([`autogen.coding.DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)) to execute code in a docker container.
 
 This way, the generated code can only access resources that are explicitly given to it.
@@ -156,7 +156,7 @@ code_executor_agent_using_docker = ConversableAgent(
 The `work_dir` in the constructor points to a local file system directory just like in the local execution case.
 The docker container will mount this directory and the executor write code files and output to it.
 
-## Use Code Execution in Conversation
+### Use Code Execution in Conversation
 
 Writing and executing code is necessary for many tasks such as data analysis, machine learning, and mathematical modeling. In AG2, coding can be a conversation between a code writer agent and a code executor agent, mirroring the interaction between a programmer and a code interpreter.
 
@@ -398,7 +398,7 @@ temp_dir.cleanup()
 executor.stop()
 ```
 
-### Command Line or Jupyter Code Executor?
+#### Command Line or Jupyter Code Executor?
 
 The command line code executor does not keep any state in memory between executions of different code blocks it receives, as it writes each code block to a separate file and executes the code block in a new process.
 

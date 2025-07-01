@@ -33,7 +33,10 @@ jobs:
         optional-dependencies:
           - "browser-use"
           - "crawl4ai"
+          - "mcp"
           - "interop"
+          - "google-api"
+          - "wikipedia-api"
         # Add more LLMs if needed
         llm: ["openai", "gemini", "anthropic", "deepseek"]
         # Run tests only for py versions 3.11

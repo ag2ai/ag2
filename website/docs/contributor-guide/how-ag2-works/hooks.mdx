@@ -6,7 +6,7 @@ API Reference: [ConversableAgent.register_hook](/docs/api-reference/autogen/Conv
 
 Hooks are a means to update/review agent state before replying, and messages before sending and replying.
 
-You can define functions and associate them with these hooks and they will execute at certain points in the workflow, see the [initiate_chat](./initiate-chat) page to see where these occur (blue circles).
+You can define functions and associate them with these hooks and they will execute at certain points in the workflow, see the [initiate_chat](/docs/contributor-guide/how-ag2-works/initiate-chat) page to see where these occur (blue circles).
 
 ### How to register a hook
 
@@ -20,7 +20,7 @@ There are **four hooks** available on a ConversableAgent, let's look at them and
 
 ### 1. "process_message_before_send"
 
-This hook is the only hook not in ConversableAgent's [generate_reply](./generate-reply) method and is designed to intercept a message before it is sent to another agent.
+This hook is the only hook not in ConversableAgent's [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) method and is designed to intercept a message before it is sent to another agent.
 
 You can change the message with the hook and the change will be permanent. This is because this hook is called before a message is displayed or added to the message list.
 
@@ -253,8 +253,8 @@ If the last message is a function call or is "exit" then it will not execute the
 Changing the message will result in permanent changes to the chat messages of the agent with the hook, but not other agents. So, changes to the messages will be present in future [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) calls for the agent with the hook, but not other agent's calls to [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply).
 
 A couple of examples of where it is used:
-- The [Teachability capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/teachability/Teachability) appends any relevant memos to the last message.
-- The [Vision capability](/docs/api-reference/autogen/agentchat/contrib/capabilities/vision_capability/VisionCapability) will update the last message if it contains an image with a caption for the image using an LLM call.
+- The [Teachability capability](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/capabilities/teachability.py#L23) appends any relevant memos to the last message.
+- The [Vision capability](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/capabilities/vision_capability.py#L28) will update the last message if it contains an image with a caption for the image using an LLM call.
 
 Signature:
 ```python
@@ -335,7 +335,7 @@ This hook is used to work on all messages before replying.
 
 The changes to these messages will be used for the replying but will not persist beyond the [generate_reply](/docs/api-reference/autogen/ConversableAgent#generate-reply) call.
 
-An example of the use of this hook is the [TransformMessages](/docs/api-reference/autogen/agentchat/contrib/capabilities/transform_messages/TransformMessages) capability where it carries out all transforms (such as limiting the number messages, filtering sensitive information, truncating individual messages) on messages before an agent replies.
+An example of the use of this hook is the [TransformMessages](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/contrib/capabilities/transform_messages.py#L15) capability where it carries out all transforms (such as limiting the number messages, filtering sensitive information, truncating individual messages) on messages before an agent replies.
 
 Signature:
 ```python

@@ -153,7 +153,7 @@ Note that the previous experts will forget everything after you obtain the respo
         system_message (str): system message for the ChatCompletion inference.
             Please override this attribute if you want to reprogram the agent.
         llm_config (LLMConfig or dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create) for available options.
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.
         is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
             The dict can contain the following keys: "content", "role", "name", "function_call".
@@ -163,7 +163,7 @@ Note that the previous experts will forget everything after you obtain the respo
         agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
         tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
         nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
-            A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/docs/topics/captainagent/configurations).
+            A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/latest/docs/user-guide/reference-agents/captainagent).
         agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
         **kwargs (dict): Please refer to other kwargs in
             [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).
@@ -340,7 +340,7 @@ Collect information from the general task, follow the suggestions from manager t
             - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
         default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
         llm_config (LLMConfig or dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](/docs/api-reference/autogen/OpenAIWrapper#autogen.OpenAIWrapper.create)
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
             for available options.
             Default to false, which disables llm-based auto reply.
         system_message (str or List): system message for ChatCompletion inference.

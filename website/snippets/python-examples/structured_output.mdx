@@ -5,18 +5,15 @@ from pydantic import BaseModel
 
 from autogen import ConversableAgent, LLMConfig
 
-
 # 1. Define our lesson plan structure, a lesson with a number of objectives
 class LearningObjective(BaseModel):
     title: str
     description: str
 
-
 class LessonPlan(BaseModel):
     title: str
     learning_objectives: list[LearningObjective]
     script: str
-
 
 # 2. Add our lesson plan structure to the LLM configuration
 llm_config = LLMConfig(
@@ -37,9 +34,16 @@ with llm_config:
     )
 
 # 4. Chat directly with our agent
-chat_result = my_agent.run("In one sentence, what's the big deal about AI?")
+response = my_agent.run(
+    message="Let's learn about the solar system!",
+    user_input=True,
+    max_turns=1
+    )
 
-# 5. Get and print our lesson plan
-lesson_plan_json = json.loads(chat_result.chat_history[-1]["content"])
+# 5. Iterate through the chat automatically with console output
+response.process()
+
+# 6. Get and print our lesson plan
+lesson_plan_json = json.loads(response.messages[-1]["content"])
 print(json.dumps(lesson_plan_json, indent=2))
 ```

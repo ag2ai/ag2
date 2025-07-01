@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+from contextvars import ContextVar
 from types import TracebackType
 from typing import Any, Optional, Union
 
@@ -26,6 +27,8 @@ class Cache(AbstractCache):
         config (Dict[str, Any]): A dictionary containing cache configuration.
         cache: The cache instance created based on the provided configuration.
     """
+
+    _current_cache: ContextVar[Cache] = ContextVar("current_cache", default=None)
 
     ALLOWED_CONFIG_KEYS = [
         "cache_seed",
@@ -119,6 +122,11 @@ class Cache(AbstractCache):
         Returns:
             The cache instance for use within a context block.
         """
+        # Store the previous cache so we can restore it
+        self._previous_cache = self.__class__._current_cache.get(None)
+        # Set the current cache to this instance
+        self._token = self.__class__._current_cache.set(self)
+        # Call the underlying cache's __enter__ method
         return self.cache.__enter__()
 
     def __exit__(
@@ -137,7 +145,19 @@ class Cache(AbstractCache):
             exc_value: The exception value if an exception was raised in the context.
             traceback: The traceback if an exception was raised in the context.
         """
-        return self.cache.__exit__(exc_type, exc_value, traceback)
+        # First exit the underlying cache context
+        result = self.cache.__exit__(exc_type, exc_value, traceback)
+
+        try:
+            # Then reset the context variable to previous value
+            self.__class__._current_cache.reset(self._token)
+        except RuntimeError:
+            # Token might have been reset by a nested context manager
+            # In this case, we just set it back to the previous value
+            if self._previous_cache is not None:
+                self.__class__._current_cache.set(self._previous_cache)
+
+        return result
 
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
         """Retrieve an item from the cache.
@@ -167,3 +187,17 @@ class Cache(AbstractCache):
         Perform any necessary cleanup, such as closing connections or releasing resources.
         """
         self.cache.close()
+
+    @classmethod
+    def get_current_cache(cls, cache: "Optional[Cache]" = None) -> "Optional[Cache]":
+        """Get the current cache instance.
+
+        Returns:
+            Cache: The current cache instance.
+        """
+        if cache is not None:
+            return cache
+        try:
+            return cls._current_cache.get()
+        except LookupError:
+            return None

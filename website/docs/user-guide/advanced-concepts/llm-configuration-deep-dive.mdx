@@ -34,11 +34,11 @@ Different tasks may require different models, and the `config_list` allows speci
 
 <Tabs>
   <Tab title="OpenAI">
-    - `api_type` (str, required): The model provider
-    - `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `api_type` (str, required): The model provider
+- `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json
@@ -52,12 +52,12 @@ Different tasks may require different models, and the `config_list` allows speci
     ```
   </Tab>
   <Tab title="Azure OpenAI">
-    - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `api_type`: `azure`
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `api_version` (str, optional): The version of the Azure API you wish to use.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `api_type`: `azure`
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `api_version` (str, optional): The version of the Azure API you wish to use.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json
@@ -73,10 +73,10 @@ Different tasks may require different models, and the `config_list` allows speci
     ```
   </Tab>
   <Tab title="Other OpenAI compatible">
-    - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
-    - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-    - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-    - `tags` (List[str], optional): Tags which can be used for filtering.
+- `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `tags` (List[str], optional): Tags which can be used for filtering.
 
     Example:
     ```json
@@ -358,9 +358,9 @@ llm_config = LLMConfig(
 
 ## Other helpers for loading a config list
 
-- [`get_config_list`](/docs/api-reference/autogen/oai/openai_utils/): Generates configurations for API calls, primarily from provided API keys.
-- [`config_list_openai_aoai`](/docs/api-reference/autogen/oai/openai_utils/): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
-- [`config_list_from_models`](/docs/api-reference/autogen/oai/openai_utils/): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
-- [`config_list_from_dotenv`](/docs/api-reference/autogen/oai/openai_utils/): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
+- [`get_config_list`](/docs/api-reference/autogen/get_config_list): Generates configurations for API calls, primarily from provided API keys.
+- [`config_list_openai_aoai`](/docs/api-reference/autogen/config_list_openai_aoai): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
+- [`config_list_from_models`](/docs/api-reference/autogen/config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
+- [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
 See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.

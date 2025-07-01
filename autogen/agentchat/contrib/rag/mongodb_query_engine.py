@@ -84,7 +84,9 @@ class MongoDBQueryEngine:
         self.collection_name = collection_name or DEFAULT_COLLECTION_NAME
         self.llm: LLM = llm or OpenAI(model="gpt-4o", temperature=0.0)  # type: ignore[no-any-unimported]
         self.embedding_model = embedding_model or "local:all-MiniLM-L6-v2"  # type: ignore[no-any-unimported]
-        self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode
+
+        # encode is a method of SentenceTransformer, so we need to use a type ignore here.
+        self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode  # type: ignore[call-overload]
 
         # These will be initialized later.
         self.vector_db: Optional[MongoDBAtlasVectorDB] = None

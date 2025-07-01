@@ -138,7 +138,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         if len(filtered_config_list) == 0:
             raise ValueError(f"No config found that satisfies the filter criteria: {kwargs}")
 
-        return LLMConfig(config_list=filtered_config_list)
+        kwargs = self.model_dump()
+        kwargs["config_list"] = filtered_config_list
+
+        return LLMConfig(**kwargs)
 
     # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:

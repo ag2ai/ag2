@@ -3,6 +3,203 @@ title: GroupChat
 sidebarTitle: Overview
 ---
 
+So far we have only seen conversation patterns that involve two agents or a sequence of two-agent chats. AutoGen provides a more general conversation pattern called group chat, which involves more than two agents.
+
+The core idea of group chat is that all agents contribute to a single conversation thread and share the same context.
+
+This is useful for tasks that require collaboration among multiple agents.
+
+The figure below illustrates how group chat works.
+
+![group_chat](../assets/group-chat.png)
+
+A group chat is orchestrated by a special agent type `GroupChatManager`. In the first step of the group chat, the Group Chat Manager selects an agent to speak. Then, the selected agent speaks and the message is sent back to the Group Chat Manager, who **broadcasts** the message to all other agents in the group.
+
+This process repeats until the conversation stops.
+
+The Group Chat Manager can use several strategies to select the next agent.
+
+Currently, the following strategies are supported:
+
+1. `round_robin`: The Group Chat Manager selects agents in a round-robin
+   fashion based on the order of the agents provided.
+2. `random`: The Group Chat Manager selects agents randomly.
+3. `manual`: The Group Chat Manager selects agents by asking for human input.
+4. `auto`: The default strategy, which selects agents using the Group Chat
+   Manager's LLM.
+
+To illustrate this pattern, let's consider a simple example of a group chat among the same arithmetic operator agents as in the previous example, with the objective of turning a number into a specific target number using a sequence of arithmetic operations powered by the agents.
+
+In this example, we use the `auto` strategy to select the next agent.
+
+To help the Group Chat Manager select the next agent, we also set the `description` of the agents. Without the `description`, the Group Chat Manager will use the agents' `system_message`, which may be not be the best choice.
+
+```python
+# The `description` attribute is a string that describes the agent.
+# It can also be set in `ConversableAgent` constructor.
+adder_agent.description = "Add 1 to each input number."
+multiplier_agent.description = "Multiply each input number by 2."
+subtracter_agent.description = "Subtract 1 from each input number."
+divider_agent.description = "Divide each input number by 2."
+number_agent.description = "Return the numbers given."
+```
+
+We first create a `GroupChat` object and provide the list of agents. If we were to use the `round_robin` strategy, this list would specify the order of the agents to be selected.
+
+We also initialize the group chat with an empty message list and a maximum round of 6, which means there will be at most 6 iteratiosn of selecting speaker, agent speaks and broadcasting message.
+
+```python
+from autogen import GroupChat
+
+group_chat = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    messages=[],
+    max_round=6,
+)
+```
+
+Now we create a `GroupChatManager` object and provide the `GroupChat` object as input. We also need to specify the `llm_config` of the Group Chat Manager so it can use the LLM to select the next agent (the `auto` strategy).
+
+```python
+from autogen import GroupChatManager
+
+group_chat_manager = GroupChatManager(
+    groupchat=group_chat,
+    llm_config=llm_config,
+)
+```
+
+Finally, we have the Number Agent from before to start a two-agent chat with the Group Chat Manager, which runs the group chat internally and terminates the two-agent chat when the internal group chat is done. Because the Number Agent is selected to speak by us, it counts as the first round of the group chat.
+
+```python
+chat_result = number_agent.initiate_chat(
+    group_chat_manager,
+    message="My number is 3, I want to turn it into 13.",
+    summary_method="reflection_with_llm",
+)
+
+print(chat_result.summary)
+```
+
+You will see that the Number Agent is selected to speak first, then the Group Chat Manager selects the Multiplier Agent to speak, then the Adder Agent, and so on. The number is operated upon by each agent in the group chat, and the final result is 13.
+
+### Send Introductions
+
+In the previous example, we set the `description` of the agents to help the Group Chat Manager select the next agent. This only helps the Group Chat Manager, however, does not help the participating agents to know about each other.
+
+Sometimes it is useful have each agent introduce themselves to other agents in the group chat. This can be done by setting the `send_introductions=True`.
+
+```python
+group_chat_with_introductions = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    messages=[],
+    max_round=6,
+    send_introductions=True,
+)
+```
+
+Under the hood, the Group Chat Manager sends a message containing the agents' names and descriptions to all agents in the group chat before the group chat starts.
+
+### Group Chat in a Sequential Chat
+
+Group chat can also be used as a part of a sequential chat.
+
+In this case, the Group Chat Manager is treated as a regular agent in the sequence of two-agent chats.
+
+```python
+# Let's use the group chat with introduction messages created above.
+group_chat_manager_with_intros = GroupChatManager(
+    groupchat=group_chat_with_introductions,
+    llm_config=llm_config,
+)
+
+# Start a sequence of two-agent chats between the number agent and
+# the group chat manager.
+chat_result = number_agent.initiate_chats(
+    [
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "My number is 3, I want to turn it into 13.",
+        },
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "Turn this number to 32.",
+        },
+    ]
+)
+```
+
+In the above example, the Group Chat Manager runs the group chat two times. In the first time the number 3 becomes 13, and the last message of this group chat is being used as the carryover for the next group chat, which starts from 13.
+
+You will also see from the warning message that the Group Chat Manager's history is being cleared after the first group chat, which is the default.
+
+To keep the history of the Group Chat Manager, you can set the `clear_history=False` for the first chat.
+
+### Constrained Speaker Selection
+
+Group chat is a powerful conversation pattern, but it can be hard to control if the number of participating agents is large.
+
+AG2 provides a way to constrain the selection of the next speaker by using the `allowed_or_disallowed_speaker_transitions` argument of the `GroupChat` class.
+
+The `allowed_or_disallowed_speaker_transitions` argument is a dictionary that maps a given agent to a list of agents that can (or cannot) be selected to speak next. The `speaker_transitions_type` argument specifies whether the transitions are allowed or disallowed.
+
+Here is an example:
+
+```python
+allowed_transitions = {
+    number_agent: [adder_agent, number_agent],
+    adder_agent: [multiplier_agent, number_agent],
+    subtracter_agent: [divider_agent, number_agent],
+    multiplier_agent: [subtracter_agent, number_agent],
+    divider_agent: [adder_agent, number_agent],
+}
+```
+
+In this example, the allowed transitions are specified for each agent.
+
+The Number Agent can be followed by the Adder Agent and the Number Agent, the Adder Agent can be followed by the Multiplier Agent and the Number Agent, and so on.
+
+Let's put this into the group chat and see how it works.
+
+The `speaker_transitions_type` is set to `allowed` so the transitions are positive constraints.
+
+```python
+constrained_graph_chat = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    allowed_or_disallowed_speaker_transitions=allowed_transitions,
+    speaker_transitions_type="allowed",
+    messages=[],
+    max_round=12,
+    send_introductions=True,
+)
+
+constrained_group_chat_manager = GroupChatManager(
+    groupchat=constrained_graph_chat,
+    llm_config=llm_config,
+)
+
+chat_result = number_agent.initiate_chat(
+    constrained_group_chat_manager,
+    message="My number is 3, I want to turn it into 10. Once I get to 10, keep it there.",
+    summary_method="reflection_with_llm",
+)
+```
+
+When this is run, the agents are selected following the constraints we have specified.
+
+### Changing the select speaker role name
+
+As part of the Group chat process, when the select_speaker_method is set to 'auto' (the default value), a select speaker message is sent to the LLM to determine the next speaker.
+
+Each message in the chat sequence has a `role` attribute that is typically `user`, `assistant`, or `system`. The select speaker message is the last in the chat sequence when used and, by default, has a role of `system`.
+
+When using some models, such as Mistral through Mistral.AI's API, the role on the last message in the chat sequence has to be `user`.
+
+To change the default behaviour, Autogen provides a way to set the value of the select speaker message's role to any string value by setting the `role_for_select_speaker_messages` parameter in the GroupChat's constructor. The default value is `system` and by setting it to `user` you can accommodate the last message role requirement of Mistral.AI's API.
+
+
+## Conversation Patterns
+
 `GroupChat` has four built-in conversation patterns:
 
 | Method | Agent selection|

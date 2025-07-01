@@ -30,7 +30,7 @@
         },
         "AZURE_API_VERSION": {
             "description": "This key is required to specify the version of the Azure API you are using. Set this along with AZURE_OPENAI_API_KEY, AZURE_API_ENDPOINT for Azure OpenAI services. These variables can be configured later as environment variables in the codespace terminal."
-        },
+        }
     },
     "shutdownAction": "stopContainer",
     "workspaceFolder": "/workspaces/ag2",
@@ -46,7 +46,7 @@
         "TOGETHER_API_KEY": "${localEnv:TOGETHER_API_KEY}",
         "GEMINI_API_KEY": "${localEnv:GEMINI_API_KEY}",
         "AZURE_API_ENDPOINT": "${localEnv:AZURE_API_ENDPOINT}",
-        "AZURE_API_VERSION": "${localEnv:AZURE_API_VERSION}",
+        "AZURE_API_VERSION": "${localEnv:AZURE_API_VERSION}"
     },
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
