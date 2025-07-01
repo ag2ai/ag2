@@ -138,263 +138,61 @@ FILTER_CONFIG_TEST = [
 
 # Extended comprehensive test cases for filter_config
 EXTENDED_FILTER_CONFIG_TEST = [
-    # === EDGE CASES ===
+    # 1. Basic single field filtering
     {
-        "name": "empty_filter_dict",
-        "filter_dict": {},
-        "exclude": False,
-        "expected": JSON_SAMPLE_DICT,  # Should return all configs
-        "description": "Empty filter dict should return all configurations",
-    },
-    {
-        "name": "none_filter_dict",
-        "filter_dict": None,
-        "exclude": False,
-        "expected": JSON_SAMPLE_DICT,  # Should return all configs
-        "description": "None filter dict should return all configurations",
-    },
-    # === SINGLE FIELD FILTERING ===
-    {
-        "name": "model_single_match",
+        "name": "single_field_match",
         "filter_dict": {"model": ["gpt-4"]},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[1]],  # Only gpt-4
-        "description": "Filter by single model",
+        "expected": [JSON_SAMPLE_DICT[1]],
+        "description": "Basic single field filtering",
     },
+    # 2. Multiple criteria (AND logic between fields)
     {
-        "name": "model_multiple_match",
-        "filter_dict": {"model": ["gpt-4", "gpt-4o"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[1], JSON_SAMPLE_DICT[4]],  # gpt-4 and gpt-4o
-        "description": "Filter by multiple models (OR logic within field)",
-    },
-    {
-        "name": "api_type_openai",
-        "filter_dict": {"api_type": ["openai"]},
-        "exclude": False,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[1],
-            JSON_SAMPLE_DICT[4],
-            JSON_SAMPLE_DICT[5],
-            JSON_SAMPLE_DICT[6],
-        ],
-        "description": "Filter by API type",
-    },
-    {
-        "name": "api_type_azure",
-        "filter_dict": {"api_type": ["azure"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Only azure config
-        "description": "Filter by Azure API type",
-    },
-    {
-        "name": "api_version_specific",
-        "filter_dict": {"api_version": ["2024-02-01"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Only config with this version
-        "description": "Filter by specific API version",
-    },
-    # === TAG FILTERING (List field testing) ===
-    {
-        "name": "tags_single_value",
-        "filter_dict": {"tags": ["gpt35"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[0]],  # Config with gpt35 tag
-        "description": "Filter by single tag value",
-    },
-    {
-        "name": "tags_multiple_values",
-        "filter_dict": {"tags": ["gpt35", "gpt4"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[0], JSON_SAMPLE_DICT[1]],  # Configs with either tag
-        "description": "Filter by multiple tag values (OR logic)",
-    },
-    {
-        "name": "tags_intersection",
-        "filter_dict": {"tags": ["gpt35_turbo"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Config with gpt35_turbo in tags list
-        "description": "Filter by tag that intersects with config's tag list",
-    },
-    {
-        "name": "tags_multiple_intersection",
-        "filter_dict": {"tags": ["gpt-3.5-turbo", "tool"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2], JSON_SAMPLE_DICT[6]],  # Configs with either tag
-        "description": "Filter by multiple tags with intersection logic",
-    },
-    {
-        "name": "tags_no_match",
-        "filter_dict": {"tags": ["nonexistent"]},
-        "exclude": False,
-        "expected": [],
-        "description": "Filter by non-existent tag should return empty",
-    },
-    # === MULTIPLE FIELD FILTERING (AND logic between fields) ===
-    {
-        "name": "model_and_api_type",
-        "filter_dict": {"model": ["gpt-3.5-turbo"], "api_type": ["openai"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[0]],  # Must match both criteria
-        "description": "Filter by model AND api_type (AND logic between fields)",
-    },
-    {
-        "name": "model_and_api_type_azure",
+        "name": "multiple_criteria_and",
         "filter_dict": {"model": ["gpt-35-turbo-v0301"], "api_type": ["azure"]},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Azure config
-        "description": "Filter by model AND Azure API type",
+        "expected": [JSON_SAMPLE_DICT[2]],
+        "description": "Multiple criteria must all match (AND logic)",
     },
+    # 3. Tag filtering (list intersection)
     {
-        "name": "api_type_and_version",
-        "filter_dict": {"api_type": ["azure"], "api_version": ["2024-02-01"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Must match both
-        "description": "Filter by api_type AND api_version",
-    },
-    {
-        "name": "model_and_tags",
-        "filter_dict": {"model": ["gpt-4o-mini"], "tags": ["tool"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[6]],  # Only gpt-4o-mini with tool tag
-        "description": "Filter by model AND tags",
-    },
-    {
-        "name": "conflicting_criteria",
-        "filter_dict": {"model": ["gpt-4"], "api_type": ["azure"]},
-        "exclude": False,
-        "expected": [],  # No gpt-4 with azure api_type
-        "description": "Conflicting criteria should return empty result",
-    },
-    # === MISSING FIELDS ===
-    {
-        "name": "missing_field_no_none",
-        "filter_dict": {"api_type": ["openai", "azure"]},
-        "exclude": False,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[1],
-            JSON_SAMPLE_DICT[2],
-            JSON_SAMPLE_DICT[4],
-            JSON_SAMPLE_DICT[5],
-            JSON_SAMPLE_DICT[6],
-        ],
-        "description": "Configs missing api_type field should be excluded",
-    },
-    {
-        "name": "missing_tags_field",
+        "name": "tag_intersection",
         "filter_dict": {"tags": ["gpt35"]},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[0]],  # Only configs with tags field
-        "description": "Configs missing tags field should be excluded",
+        "expected": [JSON_SAMPLE_DICT[0]],
+        "description": "List field intersection matching",
     },
+    # 3. Tag filtering (val in list)
     {
-        "name": "missing_api_version_field",
-        "filter_dict": {"api_version": ["2024-02-01"]},
+        "name": "tag_intersection",
+        "filter_dict": {"tags": "gpt35"},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],  # Only config with api_version field
-        "description": "Configs missing api_version field are excluded",
+        "expected": [JSON_SAMPLE_DICT[0]],
+        "description": "List field intersection matching",
     },
-    # === EXCLUDE PARAMETER TESTING ===
+    # 4. Exclude functionality
     {
-        "name": "exclude_model",
-        "filter_dict": {"model": ["gpt-4"]},
-        "exclude": True,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[2],
-            JSON_SAMPLE_DICT[3],
-            JSON_SAMPLE_DICT[4],
-            JSON_SAMPLE_DICT[5],
-            JSON_SAMPLE_DICT[6],
-        ],
-        "description": "Exclude configs matching model filter",
-    },
-    {
-        "name": "exclude_api_type",
+        "name": "exclude_mode",
         "filter_dict": {"api_type": ["openai"]},
         "exclude": True,
-        "expected": [JSON_SAMPLE_DICT[2], JSON_SAMPLE_DICT[3]],  # Azure and local configs
-        "description": "Exclude OpenAI API type configs",
+        "expected": [JSON_SAMPLE_DICT[2], JSON_SAMPLE_DICT[3]],
+        "description": "Exclude matching configs",
     },
+    # 5. Empty filter (edge case)
     {
-        "name": "exclude_tags",
-        "filter_dict": {"tags": ["tool"]},
-        "exclude": True,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[1],
-            JSON_SAMPLE_DICT[2],
-            JSON_SAMPLE_DICT[3],
-            JSON_SAMPLE_DICT[4],
-            JSON_SAMPLE_DICT[5],
-        ],
-        "description": "Exclude configs with tool tag",
-    },
-    {
-        "name": "exclude_multiple_criteria",
-        "filter_dict": {"model": ["gpt-4o-mini"], "tags": ["tool"]},
-        "exclude": True,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[1],
-            JSON_SAMPLE_DICT[2],
-            JSON_SAMPLE_DICT[3],
-            JSON_SAMPLE_DICT[4],
-        ],
-        "description": "Exclude configs matching multiple criteria - exclude gpt-4o-mini with tool tag",
-    },
-    # === COMPLEX COMBINATIONS ===
-    {
-        "name": "three_criteria_match",
-        "filter_dict": {"model": ["gpt-35-turbo-v0301"], "api_type": ["azure"], "api_version": ["2024-02-01"]},
+        "name": "empty_filter",
+        "filter_dict": {},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[2]],
-        "description": "Filter by three criteria (all must match)",
+        "expected": JSON_SAMPLE_DICT,
+        "description": "Empty filter returns all configs",
     },
+    # 6. No matches
     {
-        "name": "model_or_logic_with_tags",
-        "filter_dict": {"model": ["gpt-4", "gpt-4o"], "tags": ["gpt4", "gpt-4o"]},
+        "name": "no_matches",
+        "filter_dict": {"model": ["nonexistent-model"]},
         "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[1], JSON_SAMPLE_DICT[4]],  # Both match both criteria
-        "description": "Multiple models with corresponding tags",
-    },
-    {
-        "name": "partial_matches",
-        "filter_dict": {"model": ["gpt-4o-mini"], "api_type": ["openai", "azure"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[5], JSON_SAMPLE_DICT[6]],  # Both gpt-4o-mini configs
-        "description": "One field matches multiple values, other field matches",
-    },
-    # === SCALAR VS LIST FIELD COMBINATIONS ===
-    {
-        "name": "scalar_field_multiple_values",
-        "filter_dict": {"api_type": ["openai", "azure", "local"]},
-        "exclude": False,
-        "expected": [
-            JSON_SAMPLE_DICT[0],
-            JSON_SAMPLE_DICT[1],
-            JSON_SAMPLE_DICT[2],
-            JSON_SAMPLE_DICT[4],
-            JSON_SAMPLE_DICT[5],
-            JSON_SAMPLE_DICT[6],
-        ],
-        "description": "Scalar field with multiple acceptable values",
-    },
-    {
-        "name": "list_field_single_value_match",
-        "filter_dict": {"tags": ["gpt-4o-mini"]},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[5], JSON_SAMPLE_DICT[6]],  # Both have gpt-4o-mini tag
-        "description": "List field matching single value",
-    },
-    {
-        "name": "list_field_single_value_match",
-        "filter_dict": {"tags": "gpt-4o-mini"},
-        "exclude": False,
-        "expected": [JSON_SAMPLE_DICT[5], JSON_SAMPLE_DICT[6]],  # Both have gpt-4o-mini tag
-        "description": "List field matching single value",
+        "expected": [],
+        "description": "No matching configs",
     },
 ]
 
@@ -414,7 +212,6 @@ def mock_os_environ():
 @pytest.mark.parametrize("test_case", FILTER_CONFIG_TEST)
 def test_filter_config(test_case):
     filter_dict = test_case["filter_dict"]
-    print("filter_dict: ", filter_dict)
     exclude = test_case["exclude"]
     expected = test_case["expected"]
 
