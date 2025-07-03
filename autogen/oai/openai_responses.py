@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Tuple, Union
 
 from pydantic import BaseModel
 
+from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
 
 if TYPE_CHECKING:
@@ -212,35 +213,59 @@ class OpenAIResponsesClient:
         if "messages" in params and "input" not in params:
             msgs = self._get_delta_messages(params.pop("messages"))
             input_items = []
-            for m in msgs:
+            for m in msgs[::-1]:  # reverse the list to get the last item first
                 role = m.get("role", "user")
+                # First, we need to convert the content to the Responses API format
                 content = m.get("content")
                 blocks = []
-                if isinstance(content, list):
-                    for c in content:
-                        if c.get("type") in ["input_text", "text"]:
-                            blocks.append({"type": "input_text", "text": c.get("text")})
-                        elif c.get("type") == "input_image":
-                            blocks.append({"type": "input_image", "image_url": c.get("image_url")})
-                        elif c.get("type") == "image_params":
-                            for k, v in c.get("image_params", {}).items():
-                                if k in self.image_output_params:
-                                    image_generation_tool_params[k] = v
-                        else:
-                            raise ValueError(f"Invalid content type: {c.get('type')}")
-                else:
-                    blocks.append({"type": "input_text", "text": content})
-                input_items.append({"role": role, "content": blocks})
-            params["input"] = input_items
+                if role != "tool":
+                    if isinstance(content, list):
+                        for c in content:
+                            if c.get("type") in ["input_text", "text"]:
+                                blocks.append({"type": "input_text", "text": c.get("text")})
+                            elif c.get("type") == "input_image":
+                                blocks.append({"type": "input_image", "image_url": c.get("image_url")})
+                            elif c.get("type") == "image_params":
+                                for k, v in c.get("image_params", {}).items():
+                                    if k in self.image_output_params:
+                                        image_generation_tool_params[k] = v
+                            else:
+                                raise ValueError(f"Invalid content type: {c.get('type')}")
+                    else:
+                        blocks.append({"type": "input_text", "text": content})
+                    input_items.append({"role": role, "content": blocks})
 
+                else:
+                    if input_items:
+                        break
+                    # tool call response is the last item in the list
+                    content = content_str(m.get("content"))
+                    input_items.append({
+                        "type": "function_call_output",
+                        "call_id": m.get("tool_call_id", None),
+                        "output": content,
+                    })
+                    break
+            params["input"] = input_items[::-1]
+
+        # Initialize tools list
+        tools_list = []
         # Back-compat: add default tools
         built_in_tools = params.pop("built_in_tools", [])
         if built_in_tools:
-            params["tools"] = []
             if "image_generation" in built_in_tools:
-                params["tools"].append(image_generation_tool_params)
+                tools_list.append(image_generation_tool_params)
             if "web_search" in built_in_tools:
-                params["tools"].append(web_search_tool_params)
+                tools_list.append(web_search_tool_params)
+
+        if "tools" in params:
+            for tool in params["tools"]:
+                tool_item = {"type": "function"}
+                if "function" in tool:
+                    tool_item |= tool["function"]
+                    tools_list.append(tool_item)
+        params["tools"] = tools_list
+        params["tool_choice"] = "auto"
 
         # Ensure we don't mix legacy params that Responses doesn't accept
         if params.get("stream") and params.get("background"):
@@ -315,6 +340,7 @@ class OpenAIResponsesClient:
     ) -> Union[list[str], list["ModelClient.ModelClientResponseProtocol.Choice.Message"]]:
         output = getattr(response, "output", [])
         content = []  # list[dict[str, Union[str, dict[str, Any]]]]]
+        tool_calls = []
         for item in output:
             # Convert pydantic objects to plain dicts for uniform handling
             if hasattr(item, "model_dump"):
@@ -338,22 +364,21 @@ class OpenAIResponsesClient:
                 continue
 
             # ------------------------------------------------------------------
-            # 2) Function calls
+            # 2) Custom function calls
             # ------------------------------------------------------------------
             if item_type == "function_call":
-                output = item.get("output", {})
-                content.append({
-                    "role": "tool",
-                    "content": output.get("content", ""),
+                tool_calls.append({
                     "id": item.get("call_id", None),
-                    "name": item.get("name", None),
-                    "arguments": item.get("arguments"),
-                    "type": "function",
+                    "function": {
+                        "name": item.get("name", None),
+                        "arguments": item.get("arguments"),
+                    },
+                    "type": "function_call",
                 })
                 continue
 
             # ------------------------------------------------------------------
-            # 3) Tool / other *_call items
+            # 3) Built-in tool calls
             # ------------------------------------------------------------------
             if item_type and item_type.endswith("_call"):
                 tool_name = item_type.replace("_call", "")
@@ -388,7 +413,8 @@ class OpenAIResponsesClient:
             {
                 "role": "assistant",
                 "id": response.id,
-                "content": content,
+                "content": content if content else None,
+                "tool_calls": tool_calls,
             }
         ]
 

@@ -175,17 +175,22 @@ def test_message_retrieval_handles_various_item_types():
     assert top_msg["role"] == "assistant"
 
     blocks = top_msg["content"]
-    # Within the aggregated content we expect three blocks
-    assert len(blocks) == 3
+
+    # After the refactor function calls are stored in `tool_calls`,
+    # so `content` now contains only the assistant text and built-in tool calls.
+    assert len(blocks) == 2
 
     # 1) Plain text block
     assert blocks[0]["text"] == "Hi"
 
-    # 2) Function-call block
-    assert blocks[1]["name"] == "foo"
+    # 2) Tool-call block (web_search)
+    assert blocks[1]["name"] == "web_search"
 
-    # 3) Tool-call block (web_search)
-    assert blocks[2]["name"] == "web_search"
+    # Custom function call moved to `tool_calls`
+    tool_calls = top_msg["tool_calls"]
+    assert len(tool_calls) == 1
+    func_call = tool_calls[0]
+    assert func_call["function"]["name"] == "foo"
 
 
 # -----------------------------------------------------------------------------
