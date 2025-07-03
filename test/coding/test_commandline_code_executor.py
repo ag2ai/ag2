@@ -115,6 +115,19 @@ def test_container_create_kwargs_forwarding() -> None:
         assert result.exit_code == 0
         assert "VALUE123" in result.output
 
+@pytest.mark.docker
+@pytest.mark.skipif(skip_docker_test, reason="docker is not running or requested to skip docker tests")
+def test_container_create_kwargs_forwarding() -> None:
+    """Values in `container_create_kwargs` must reach docker.create()."""
+    env = {"FOO_BAR_TEST": "VALUE123"}
+
+    with DockerCommandLineCodeExecutor(container_create_kwargs={"environment": env}) as executor:
+        result = executor.execute_code_blocks([CodeBlock(code="echo $FOO_BAR_TEST", language="sh")])
+
+        assert result.exit_code == 0
+        assert "VALUE123" in result.output
+
+
 @pytest.mark.parametrize("cls", classes_to_test)
 def test_commandline_executor_init(cls) -> None:
     executor = cls(timeout=10, work_dir=".")
