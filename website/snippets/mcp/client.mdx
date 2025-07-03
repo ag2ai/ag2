@@ -30,7 +30,7 @@ pip install -U ag2[openai,mcp]
 
 ## Imports
 
-Before diving into the code, let’s go over the main imports used in this guide:
+Before diving into the code, let's go over the main imports used in this guide:
 
 - `ClientSession`: Manages the client session for connecting to the MCP server, allowing you to send requests and handle responses.
 - `StdioServerParameters`: Provides parameters to set up communication with an MCP server over `stdio`.
@@ -47,6 +47,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
+from datetime import timedelta
 
 
 from autogen import LLMConfig
@@ -123,7 +124,7 @@ To allow AG2 to interact with the MCP server, we need to establish a connection,
 **Steps to Create a Toolkit from MCP Tools**
 
 - **Wrap MCP tools and resources into a toolkit**: The tools exposed by the MCP server (like `add` and `multiply`) and resource endpoints (like `get_server_file`) are wrapped into a toolkit for easy use by AG2.
-- **Register the toolkit with an AG2 agent**: This step allows AG2 to use the toolkit’s tools when processing requests.
+- **Register the toolkit with an AG2 agent**: This step allows AG2 to use the toolkit's tools when processing requests.
 - **Start a conversation**: AG2 can now send a message to the MCP server requesting a task to be performed (e.g., adding two numbers) and receive the result.
 
 ```python
@@ -172,7 +173,7 @@ server_params = StdioServerParameters(
     ],  # Path to server script and transport mode
 )
 
-async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+async with stdio_client(server_params) as (read, write), ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session:
     # Initialize the connection
     await session.initialize()
     await create_toolkit_and_run(session)
@@ -385,3 +386,17 @@ TERMINATE
 ```
 
 For a complete example on how to use MCPProxy and streamable-http checkout: [MCPProxy example notebook](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy.ipynb)
+
+## Related Notebooks: MCP Servers
+
+Explore more MCP server and proxy examples in this collection of notebooks:
+
+- [General MCP Proxy Example](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_general.ipynb)
+- [MCP Proxy (Base Example)](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy.ipynb)
+- [MCP Proxy for PokeAPI](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_PokeAPI.ipynb)
+- [MCP Proxy for Giphy](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_giphy.ipynb)
+- [MCP Proxy for GitHub](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_github.ipynb)
+- [MCP Proxy for Asana](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_asana.ipynb)
+- [MCP Proxy for WhatsApp](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_whatsapp.ipynb)
+
+You can find these and more in the [notebook/mcp/ directory](https://github.com/ag2ai/ag2/tree/main/notebook/mcp/).
