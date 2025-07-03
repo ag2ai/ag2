@@ -18,8 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.oai.client import OpenAIResponsesClient
-from autogen.oai.openai_responses import calculate_openai_image_cost
+from autogen.oai.openai_responses import OpenAIResponsesClient, calculate_openai_image_cost
 
 # Try to import ImageGenerationCall for proper mocking
 try:
