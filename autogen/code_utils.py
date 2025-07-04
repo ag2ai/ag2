@@ -72,18 +72,20 @@ def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserM
     if not isinstance(content, list):
         raise TypeError(f"content must be None, str, or list, but got {type(content)}")
 
-    rst = ""
+    rst = []
     for item in content:
         if not isinstance(item, dict):
             raise TypeError("Wrong content format: every element should be dict if the content is a list.")
         assert "type" in item, "Wrong content format. Missing 'type' key in content's dict."
-        if item["type"] == "text":
-            rst += item["text"]
-        elif item["type"] == "image_url":
-            rst += "<image>"
+        if item["type"] in ["text", "input_text"]:
+            rst.append(item["text"])
+        elif item["type"] in ["image_url", "input_image"]:
+            rst.append("<image>")
+        elif item["type"] in ["function", "tool_call", "tool_calls"]:
+            rst.append("<function>" if "name" not in item else f"<function: {item['name']}>")
         else:
             raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
-    return rst
+    return "\n".join(rst)
 
 
 def infer_lang(code: str) -> str:
