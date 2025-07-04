@@ -1,0 +1,67 @@
+---
+title: OpenAI Responses API
+sidebarTitle: OpenAI Responses
+---
+
+[OpenAI](https://openai.com/)'s Responses API is a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations.
+
+Additionally, it includes built-in tools for web search, file search, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
+
+<Warning>
+This OpenAI Responses model provider is currently only supported in a two-agent chat using the agent's `initiate_chat`.
+
+Support for group chat and the `run` methods is planned for a future release.
+
+See the examples in the [Notebook section](/docs/use-cases/notebooks/Notebooks/?tags=responses) of the documentation for examples of using this model provider.
+</Warning>
+
+## Installation
+
+``` bash
+pip install ag2[openai]
+```
+
+<Tip>
+If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+```bash
+pip install -U autogen[openai]
+```
+or
+```bash
+pip install -U ag2[openai]
+```
+as `autogen` and `ag2` are aliases for the same PyPI package.
+</Tip>
+
+## LLM Configurations
+
+See the [LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration) for further details on setting an creating an LLM configuration.
+
+The below example of an `OAI_CONFIG_LIST` shows how the OpenAI client class is used.
+By specifying the `api_type` as `responses`, the client will use the OpenAI Responses API.
+
+```python
+[
+    {
+        "api_type": "responses", # use OpenAI Responses API
+        "model": "gpt-4o",
+        "api_key": "your OpenAI Key goes here",
+
+        # Optional: use image_generation and web_search built-in tools
+        # See https://platform.openai.com/docs/guides/images-vision?api-mode=responses
+        "built_in_tools": ["image_generation", "web_search"],
+    }
+]
+```
+
+As an alternative to the `api_key` key and value in the config, you can set the environment variable `OPENAI_API_KEY` to your OpenAI key.
+
+Linux/Mac:
+``` bash
+export OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+Windows:
+``` bash
+set OPENAI_API_KEY=your_openai_api_key_here
+```

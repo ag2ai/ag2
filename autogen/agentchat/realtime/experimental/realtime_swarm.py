@@ -359,6 +359,8 @@ class SwarmableRealtimeAgent(SwarmableAgent):
             description=None,
             silent=None,
         )
+        self.input_guardrails = []
+        self.output_guardrails = []
 
     def reset_answer(self) -> None:
         """Reset the answer event."""

@@ -4,6 +4,7 @@
 
 import json
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 import anyio
@@ -41,14 +42,17 @@ class TestMCPClient:
     @pytest.mark.asyncio
     async def test_mcp_issue_with_stdio_client_context_manager(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
         async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as _:
+            async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as _:
                 pass
             print("exit ClientSession")
         print("exit stdio_client")
 
     @pytest.mark.asyncio
     async def test_tools_schema(self, server_params: "StdioServerParameters", mock_credentials: Credentials) -> None:  # type: ignore[no-any-unimported]
-        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
             # Initialize the connection
             await session.initialize()
             toolkit = await create_toolkit(session=session)
@@ -114,7 +118,10 @@ class TestMCPClient:
 
     @pytest.mark.asyncio
     async def test_convert_resource(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
-        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
             # Initialize the connection
             await session.initialize()
             toolkit = await create_toolkit(session=session)
@@ -131,7 +138,10 @@ class TestMCPClient:
 
     @pytest.mark.asyncio
     async def test_convert_resource_with_download_folder(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
-        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
             await session.initialize()
             with tempfile.TemporaryDirectory() as tmp:
                 temp_path = Path(tmp)
@@ -156,7 +166,10 @@ class TestMCPClient:
     @pytest.mark.asyncio
     @run_for_optional_imports("openai", "openai")
     async def test_with_llm(self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
-        async with stdio_client(server_params) as (read, write), ClientSession(read, write) as session:
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
             # Initialize the connection
             await session.initialize()
             toolkit = await create_toolkit(session=session)
