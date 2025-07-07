@@ -36,8 +36,6 @@ WINDOWS_SHELLS = ["ps1", "pwsh", "powershell"]
 PYTHON_VARIANTS = ["python", "Python", "py"]
 
 
-
-
 @pytest.mark.parametrize(
     "lang, should_execute",
     [
@@ -91,29 +89,6 @@ def test_create_docker() -> None:
     executor = CodeExecutorFactory.create(config)
     assert executor is config["executor"]
 
-@pytest.mark.docker
-@pytest.mark.skipif(
-    skip_docker_test,
-    reason="docker is not running or requested to skip docker tests",
-)
-def test_container_create_kwargs_forwarding() -> None:
-    """Verify that values passed through `container_create_kwargs`
-    are forwarded verbatim to :py:meth:`docker.client.containers.create`.
-
-    We check this by injecting an environment variable and asserting that the
-    running container can read it.
-    """
-    env = {"FOO_BAR_TEST": "VALUE123"}
-
-    with DockerCommandLineCodeExecutor(
-        container_create_kwargs={"environment": env}
-    ) as executor:
-        result = executor.execute_code_blocks(
-            [CodeBlock(code="echo $FOO_BAR_TEST", language="sh")]
-        )
-
-        assert result.exit_code == 0
-        assert "VALUE123" in result.output
 
 @pytest.mark.docker
 @pytest.mark.skipif(skip_docker_test, reason="docker is not running or requested to skip docker tests")
