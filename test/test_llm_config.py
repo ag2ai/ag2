@@ -763,15 +763,51 @@ class TestLLMConfig:
             openai_llm_config.where(api_type="invalid")
         assert str(e.value) == "No config found that satisfies the filter criteria: {'api_type': 'invalid'}"
 
-    def test_repr(self, openai_llm_config: LLMConfig) -> None:
-        actual = repr(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
-        assert actual == expected, actual
+    def test_repr(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        # Case 1: routing_method is None (default)
+        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        actual_repr_default = repr(config_default_routing)
+        # Check that routing_method is None and not in the repr string
+        assert config_default_routing.routing_method is None
+        assert "routing_method" not in actual_repr_default
+        # Check that other parts are there
+        entry_repr = repr(OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump(exclude_none=False)))
+        assert f"config_list=[{entry_repr}]" in actual_repr_default
 
-    def test_str(self, openai_llm_config: LLMConfig) -> None:
-        actual = str(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
-        assert actual == expected, actual
+        # Case 2: routing_method is explicitly set
+        config_custom_routing = LLMConfig(config_list=[openai_llm_config_entry], routing_method="round_robin")
+        actual_repr_custom = repr(config_custom_routing)
+        assert config_custom_routing.routing_method == "round_robin"
+        assert "routing_method='round_robin'" in actual_repr_custom
+        assert f"config_list=[{entry_repr}]" in actual_repr_custom
+
+    def test_str(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        # Case 1: routing_method is None (default)
+        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        actual_str_default = str(config_default_routing)
+        assert config_default_routing.routing_method is None
+        assert "routing_method" not in actual_str_default
+        entry_repr = repr(OpenAILLMConfigEntry(**openai_llm_config_entry.model_dump(exclude_none=False)))
+        assert f"config_list=[{entry_repr}]" in actual_str_default
+
+        # Case 2: routing_method is explicitly set
+        config_custom_routing = LLMConfig(config_list=[openai_llm_config_entry], routing_method="round_robin")
+        actual_str_custom = str(config_custom_routing)
+        assert config_custom_routing.routing_method == "round_robin"
+        assert "routing_method='round_robin'" in actual_str_custom
+        assert f"config_list=[{entry_repr}]" in actual_str_custom
+
+    def test_routing_method_default(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        llm_config = LLMConfig(config_list=[openai_llm_config_entry])
+        assert llm_config.routing_method is None
+
+    def test_routing_method_custom(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        llm_config = LLMConfig(config_list=[openai_llm_config_entry], routing_method="round_robin")
+        assert llm_config.routing_method == "round_robin"
+
+    def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        with pytest.raises(ValueError):
+            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)

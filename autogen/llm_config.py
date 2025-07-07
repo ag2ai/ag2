@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -268,6 +268,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
                     Field(default_factory=list, min_length=1),
                 ]
+                routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
 
                 # Following field is configuration for pydantic to disallow extra fields
                 model_config = ConfigDict(extra="forbid")
