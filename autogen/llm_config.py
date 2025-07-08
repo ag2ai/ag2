@@ -303,13 +303,15 @@ class LLMConfigEntry(BaseModel, ABC):
     @field_validator("base_url", mode="before")
     @classmethod
     def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
+        if v is None:  # Handle None case explicitly
+            return None
         if not str(v).startswith("https://") and not str(v).startswith("http://"):
             v = f"http://{str(v)}"
         return v
 
-    @field_serializer("base_url")
+    @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
     def serialize_base_url(self, v: Any) -> Any:
-        return str(v)
+        return str(v) if v is not None else None
 
     @field_serializer("api_key", when_used="unless-none")
     def serialize_api_key(self, v: SecretStr) -> Any:
