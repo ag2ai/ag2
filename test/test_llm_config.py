@@ -9,6 +9,7 @@ from copy import copy, deepcopy
 from typing import Any
 
 import pytest
+from pydantic import ValidationError  # Added import
 
 from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
@@ -806,7 +807,7 @@ class TestLLMConfig:
         assert llm_config.routing_method == "round_robin"
 
     def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):  # Changed from ValueError to ValidationError
             LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:

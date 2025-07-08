@@ -34,10 +34,12 @@ from autogen.oai.client import (
 )
 from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 
-with optional_import_block(suppress_error=True) as openai_import_result:  # Allow test to run if openai not installed
+# Attempt to import APIError from openai, define as base Exception if openai is not available.
+try:
     from openai import APIError
-if not openai_import_result.is_successful:
-    APIError = Exception  # Fallback if openai is not installed, MockModelClient will raise this
+except ImportError:
+    APIError = Exception
+
 
 from ..conftest import Credentials
 
