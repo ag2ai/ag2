@@ -139,6 +139,12 @@ executor = DockerCommandLineCodeExecutor(
     image="python:3.12-slim",  # Execute code using the given docker image name.
     timeout=10,  # Timeout for each code execution in seconds.
     work_dir=temp_dir.name,  # Use the temporary directory to store the code files.
+    # (Optional): forward any extra kwargs directly to docker.containers.create().
+    container_create_kwargs={
+        # Example: pass an env-var and request GPU 0
+        "environment": {"TOKEN": "<your-token>"},
+        # "device_requests": [docker.types.DeviceRequest(device_ids=["0"], capabilities=[["gpu"]])],
+    },
 )
 
 # Create an agent with code executor configuration that uses docker.
