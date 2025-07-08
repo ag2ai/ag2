@@ -806,17 +806,29 @@ class OpenAIWrapper:
         self._clients: list[ModelClient] = []
         self._config_list: list[dict[str, Any]] = []
 
+        # Determine routing_method from base_config only.
+        self.routing_method = base_config.get("routing_method") or "fixed_order"
+        self._round_robin_index = 0
+
+        # Remove routing_method from extra_kwargs after it has been used to set self.routing_method
+        # This ensures it's not part of the individual client configurations that are based on extra_kwargs.
+        extra_kwargs.pop("routing_method", None)
+
         if config_list:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
-            for config in config_list:
-                self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append({
-                    **extra_kwargs,
-                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
-                })
+            for config_item in config_list:
+                self._register_default_client(config_item, openai_config)
+                # Construct current_config_extra_kwargs using the cleaned extra_kwargs
+                # (which doesn't have routing_method from base_config)
+                # and specific non-openai kwargs from config_item.
+                config_item_specific_extras = {k: v for k, v in config_item.items() if k not in self.openai_kwargs}
+                self._config_list.append({**extra_kwargs, **config_item_specific_extras})
         else:
+            # For a single config passed via base_config (already in extra_kwargs)
             self._register_default_client(extra_kwargs, openai_config)
+            # extra_kwargs has already had routing_method popped.
             self._config_list = [extra_kwargs]
+
         self.wrapper_id = id(self)
 
     def _separate_openai_config(self, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1074,7 +1086,16 @@ class OpenAIWrapper:
             raise RuntimeError(
                 f"Model client(s) {non_activated} are not activated. Please register the custom model clients using `register_model_client` or filter them out form the config list."
             )
-        for i, client in enumerate(self._clients):
+
+        ordered_clients_indices = list(range(len(self._clients)))
+        if self.routing_method == "round_robin" and len(self._clients) > 0:
+            ordered_clients_indices = (
+                ordered_clients_indices[self._round_robin_index :] + ordered_clients_indices[: self._round_robin_index]
+            )
+            self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
+
+        for i in ordered_clients_indices:
+            client = self._clients[i]
             # merge the input config with the i-th config in the config list
             full_config = {**config, **self._config_list[i]}
             # separate the config into create_config and extra_kwargs
