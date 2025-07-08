@@ -149,7 +149,7 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
 
 
 @pytest.mark.parametrize(
-    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_explicit_fixed_order"]
+    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
 )
 def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
     wrapper = request.getfixturevalue(fixture_name)

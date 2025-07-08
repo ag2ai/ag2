@@ -770,10 +770,10 @@ class TestLLMConfig:
         actual_repr_default = repr(config_default_routing)
         assert config_default_routing.routing_method is None
         assert "routing_method" not in actual_repr_default
-        # Construct expected entry repr without base_url if it's None
-        expected_entry_dict = openai_llm_config_entry.model_dump(exclude_none=True)
-        expected_entry_repr = repr(OpenAILLMConfigEntry(**expected_entry_dict))
-        assert f"config_list=[{expected_entry_repr}]" in actual_repr_default
+        # LLMConfig.__repr__ uses model_dump(), which for config_list items (which are LLMConfigEntry models)
+        # will produce dicts. So we expect a list of dicts.
+        expected_config_list_repr = repr([openai_llm_config_entry.model_dump(exclude_none=True)])
+        assert f"config_list={expected_config_list_repr}" in actual_repr_default
 
         # Case 2: routing_method is explicitly set
         config_custom_routing = LLMConfig(
@@ -782,7 +782,7 @@ class TestLLMConfig:
         actual_repr_custom = repr(config_custom_routing)
         assert config_custom_routing.routing_method == "round_robin"
         assert "routing_method='round_robin'" in actual_repr_custom
-        assert f"config_list=[{expected_entry_repr}]" in actual_repr_custom
+        assert f"config_list={expected_config_list_repr}" in actual_repr_custom  # Should be the same list of dicts
         assert "temperature=0.77" in actual_repr_custom
 
     def test_str(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
@@ -791,9 +791,8 @@ class TestLLMConfig:
         actual_str_default = str(config_default_routing)
         assert config_default_routing.routing_method is None
         assert "routing_method" not in actual_str_default
-        expected_entry_dict = openai_llm_config_entry.model_dump(exclude_none=True)
-        expected_entry_repr = repr(OpenAILLMConfigEntry(**expected_entry_dict))
-        assert f"config_list=[{expected_entry_repr}]" in actual_str_default
+        expected_config_list_repr = repr([openai_llm_config_entry.model_dump(exclude_none=True)])
+        assert f"config_list={expected_config_list_repr}" in actual_str_default
 
         # Case 2: routing_method is explicitly set
         config_custom_routing = LLMConfig(
@@ -802,7 +801,7 @@ class TestLLMConfig:
         actual_str_custom = str(config_custom_routing)
         assert config_custom_routing.routing_method == "round_robin"
         assert "routing_method='round_robin'" in actual_str_custom
-        assert f"config_list=[{expected_entry_repr}]" in actual_str_custom
+        assert f"config_list={expected_config_list_repr}" in actual_str_custom
         assert "temperature=0.77" in actual_str_custom
 
     def test_routing_method_default(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
