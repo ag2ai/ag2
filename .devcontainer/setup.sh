@@ -8,4 +8,4 @@ pip install -e ".[dev]"
 pre-commit install
 
 # install Claude Code CLI
-npm install -g @anthropic-ai/claude-code
+npm install --location=global @anthropic-ai/claude-code
