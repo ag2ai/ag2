@@ -1,0 +1,55 @@
+```python
+from autogen import ConversableAgent, LLMConfig, register_function
+
+# Import the environment, working directory, and code execution tool
+from autogen.environments import DockerPythonEnvironment, WorkingDirectory
+from autogen.tools.experimental import PythonCodeExecutionTool
+
+with DockerPythonEnvironment(image="python:3.11-slim", pip_packages=["numpy", "pandas", "matplotlib"]) as docker_env:
+    # When you exit the DockerPythonEnvironment context manager it will delete the Docker container (unless you set cleanup_container=False)
+
+    with WorkingDirectory(path="/tmp/ag2_working_dir/") as wd:
+        # Create our code execution tool, using the environment and working directory from the above context managers
+        python_executor = PythonCodeExecutionTool(
+            timeout=60,
+            # If not using the context managers above, you can set the working directory and python environment here
+            # working_directory=wd,
+            # python_environment=docker_env,
+        )
+
+    with LLMConfig(model="gpt-4o", api_type="openai"):
+
+        # code_runner has the code execution tool available to execute
+        code_runner = ConversableAgent(
+            name="code_runner",
+            system_message="You are a code executor agent, when you don't execute code write the message 'TERMINATE' by itself.",
+            human_input_mode="NEVER",
+        )
+
+        # question_agent has the code execution tool available to its LLM
+        question_agent = ConversableAgent(
+            name="question_agent",
+            system_message=("You are a developer AI agent. "
+                "Send all your code suggestions to the python_executor tool where it will be executed and result returned to you. "
+                "Keep refining the code until it works."
+            ),
+        )
+
+    # Register the python execution tool with the agents
+    register_function(
+        python_executor,
+        caller=question_agent,
+        executor=code_runner,
+        description="Run Python code",
+    )
+
+    result = code_runner.initiate_chat(
+        recipient=question_agent,
+        message=("Write Python code to print the current Python version followed by the numbers 1 to 11. "
+                "Make a syntax error in the first version and fix it in the second version."
+        ),
+        max_turns=5,
+    )
+
+    print(f"Result: {result.summary}")
+```
