@@ -96,8 +96,7 @@ class Tool:
         """
         if self._func_schema:
             agent.update_tool_signature(self._func_schema, is_remove=False)
-        else:
-            agent.register_for_llm()(self)
+        agent.register_for_llm()(self)
 
     def register_for_execution(self, agent: "ConversableAgent") -> None:
         """Registers the tool for direct execution by a ConversableAgent.
