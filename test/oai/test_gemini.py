@@ -29,7 +29,7 @@ with optional_import_block() as result:
 
 def test_gemini_llm_config_entry():
     gemini_llm_config = GeminiLLMConfigEntry(
-        model="gemini-2.0-flash-lite", api_key="dummy_api_key", project_id="fake-project-id", location="us-west1"
+        model="gemini-2.0-flash-lite", api_key="dummy_api_key", project_id="fake-project-id", location="us-west1", proxy="http://mock-test-proxy:90/"
     )
     expected = {
         "api_type": "google",
@@ -39,6 +39,7 @@ def test_gemini_llm_config_entry():
         "location": "us-west1",
         "stream": False,
         "tags": [],
+        "proxy": "http://mock-test-proxy:90/"
     }
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual
@@ -101,6 +102,11 @@ class TestGeminiClient:
 
     def test_valid_initialization(self, gemini_client):
         assert gemini_client.api_key == "fake_api_key", "API Key should be correctly set"
+
+    @pytest.fixture
+    def test_proxy_initialization(self):
+        proxy = "http://mock-test-proxy:90/"
+        return GeminiClient(proxy=proxy)
 
     def test_google_application_credentials_initialization(self):
         GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")

@@ -115,6 +115,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_config: Optional[ToolConfig] = None
     proxy: Optional[str] = None
+    """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -243,7 +244,7 @@ class GeminiClient:
         if self.proxy:
             http_options.client_args = {'proxy': self.proxy}
             http_options.async_client_args = {'proxy': self.proxy}
-        
+
         if self.api_version:
             http_options.api_version = self.api_version
         
