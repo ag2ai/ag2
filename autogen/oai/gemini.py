@@ -181,7 +181,7 @@ class GeminiClient:
             )
 
         self.api_version = kwargs.get("api_version")
-        self.proxy = kwargs.get("proxy")
+        self.proxy = kwargs.get("proxy", None)
 
         # Store the response format, if provided (for structured outputs)
         self._response_format: Optional[type[BaseModel]] = None
