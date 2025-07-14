@@ -137,6 +137,24 @@ class TestMCPClient:
             assert result.contents == expected_result
 
     @pytest.mark.asyncio
+    async def test_register_for_llm_tool(
+        self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials
+    ) -> None:  # type: ignore[no-any-unimported]
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
+            # Initialize the connection
+            await session.initialize()
+            toolkit = await create_toolkit(session=session)
+            agent = AssistantAgent(
+                name="agent",
+                llm_config=credentials_gpt_4o_mini.llm_config,
+            )
+            toolkit.register_for_llm(agent)
+            assert len(agent.tools) == len(toolkit.tools)
+
+    @pytest.mark.asyncio
     async def test_convert_resource_with_download_folder(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),

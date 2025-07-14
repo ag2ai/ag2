@@ -467,59 +467,70 @@ def filter_config(
     filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
     exclude: bool = False,
 ) -> list[dict[str, Any]]:
-    """This function filters `config_list` by checking each configuration dictionary against the criteria specified in
-    `filter_dict`. A configuration dictionary is retained if for every key in `filter_dict`, see example below.
+    """Filter configuration dictionaries based on specified criteria.
+
+    This function filters a list of configuration dictionaries by applying ALL criteria specified in `filter_dict`.
+    A configuration is included in the result if it satisfies every key-value constraint in the filter dictionary.
+    For each filter key, the configuration's corresponding field value must match at least one of the acceptable
+    values (OR logic within each criteria, AND logic between different criteria).
 
     Args:
         config_list (list of dict): A list of configuration dictionaries to be filtered.
-        filter_dict (dict): A dictionary representing the filter criteria, where each key is a
-                            field name to check within the configuration dictionaries, and the
-                            corresponding value is a list of acceptable values for that field.
-                            If the configuration's field's value is not a list, then a match occurs
-                            when it is found in the list of acceptable values. If the configuration's
-                            field's value is a list, then a match occurs if there is a non-empty
-                            intersection with the acceptable values.
-        exclude (bool): If False (the default value), configs that match the filter will be included in the returned
-            list. If True, configs that match the filter will be excluded in the returned list.
+
+        filter_dict (dict, optional): A dictionary specifying filter criteria where:
+            - Keys are field names to check in each configuration dictionary
+            - Values are lists/sets of acceptable values for that field
+            - A configuration matches if ALL filter keys are satisfied AND for each key,
+              the config's field value matches at least one acceptable value
+            - If a filter value includes None, configurations missing that field will match
+            - If None, no filtering is applied
+
+        exclude (bool, optional): If False (default), return configurations that match the filter.
+                                If True, return configurations that do NOT match the filter.
 
     Returns:
-        list of dict: A list of configuration dictionaries that meet all the criteria specified
-                      in `filter_dict`.
+        list of dict: Filtered list of configuration dictionaries.
 
-    Example:
+    Matching Logic:
+        - **Between different filter keys**: AND logic (all criteria must be satisfied)
+        - **Within each filter key's values**: OR logic (any acceptable value can match)
+        - **For list-type config values**: Match if there's any intersection with acceptable values
+        - **For scalar config values**: Match if the value is in the list of acceptable values
+        - **Missing fields**: Only match if None is included in the acceptable values for that field
+
+    Examples:
         ```python
-        # Example configuration list with various models and API types
         configs = [
-            {"model": "gpt-3.5-turbo"},
-            {"model": "gpt-4"},
-            {"model": "gpt-3.5-turbo", "api_type": "azure"},
-            {"model": "gpt-3.5-turbo", "tags": ["gpt35_turbo", "gpt-35-turbo"]},
+            {"model": "gpt-3.5-turbo", "api_type": "openai"},
+            {"model": "gpt-4", "api_type": "openai"},
+            {"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"},
+            {"model": "gpt-4", "tags": ["premium", "latest"]},
         ]
-        # Define filter criteria to select configurations for the 'gpt-3.5-turbo' model
-        # that are also using the 'azure' API type
-        filter_criteria = {
-            "model": ["gpt-3.5-turbo"],  # Only accept configurations for 'gpt-3.5-turbo'
-            "api_type": ["azure"],  # Only accept configurations for 'azure' API type
-        }
-        # Apply the filter to the configuration list
-        filtered_configs = filter_config(configs, filter_criteria)
-        # The resulting `filtered_configs` will be:
-        # [{'model': 'gpt-3.5-turbo', 'api_type': 'azure', ...}]
-        # Define a filter to select a given tag
-        filter_criteria = {
-            "tags": ["gpt35_turbo"],
-        }
-        # Apply the filter to the configuration list
-        filtered_configs = filter_config(configs, filter_criteria)
-        # The resulting `filtered_configs` will be:
-        # [{'model': 'gpt-3.5-turbo', 'tags': ['gpt35_turbo', 'gpt-35-turbo']}]
+
+        # Example 1: Single criterion - matches any model in the list
+        filter_dict = {"model": ["gpt-4", "gpt-4o"]}
+        result = filter_config(configs, filter_dict)
+        # Returns: [{"model": "gpt-4", "api_type": "openai"}, {"model": "gpt-4", "tags": ["premium", "latest"]}]
+
+        # Example 2: Multiple criteria - must satisfy ALL conditions
+        filter_dict = {"model": ["gpt-3.5-turbo"], "api_type": ["azure"]}
+        result = filter_config(configs, filter_dict)
+        # Returns: [{"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"}]
+
+        # Example 3: Tag filtering with list intersection
+        filter_dict = {"tags": ["premium"]}
+        result = filter_config(configs, filter_dict)
+        # Returns: [{"model": "gpt-4", "tags": ["premium", "latest"]}]
+
+        # Example 4: Exclude matching configurations
+        filter_dict = {"api_type": ["openai"]}
+        result = filter_config(configs, filter_dict, exclude=True)
+        # Returns configs that do NOT have api_type="openai"
         ```
     Note:
         - If `filter_dict` is empty or None, no filtering is applied and `config_list` is returned as is.
         - If a configuration dictionary in `config_list` does not contain a key specified in `filter_dict`,
           it is considered a non-match and is excluded from the result.
-        - If the list of acceptable values for a key in `filter_dict` includes None, then configuration
-          dictionaries that do not have that key will also be considered a match.
 
     """
     if inspect.stack()[1].function != "where":
@@ -538,18 +549,73 @@ def filter_config(
     return config_list
 
 
-def _satisfies_criteria(value: Any, criteria_values: Any) -> bool:
-    if value is None:
+def _satisfies_criteria(config_value: Any, criteria_values: Any) -> bool:
+    """Check if a configuration field value satisfies the filter criteria.
+
+    This helper function implements the matching logic between a single configuration
+    field value and the acceptable values specified in the filter criteria. It handles
+    both scalar and list-type configuration values with appropriate matching strategies.
+
+    Args:
+        config_value (Any): The value from a configuration dictionary field.
+                           Can be None, a scalar value, or a list of values.
+        criteria_values (Any): The acceptable values from the filter dictionary.
+                              Can be a single value or a list/set of acceptable values.
+
+    Returns:
+        bool: True if the config_value satisfies the criteria, False otherwise.
+
+    Matching Logic:
+        - **None config values**: Always return False (missing fields don't match)
+        - **List config values**:
+            - If criteria is a list: Match if there's any intersection (set overlap)
+            - If criteria is scalar: Match if the scalar is contained in the config list
+        - **Scalar config values**:
+            - If criteria is a list: Match if the config value is in the criteria list
+            - If criteria is scalar: Match if the values are exactly equal
+
+    Examples:
+        ```python
+        # List config value with list criteria (intersection matching)
+        _satisfies_criteria(["gpt-4", "gpt-3.5"], ["gpt-4", "claude"])  # True (gpt-4 intersects)
+        _satisfies_criteria(["tag1", "tag2"], ["tag3", "tag4"])  # False (no intersection)
+
+        # List config value with scalar criteria (containment matching)
+        _satisfies_criteria(["premium", "latest"], "premium")  # True (premium is in list)
+        _satisfies_criteria(["tag1", "tag2"], "tag3")  # False (tag3 not in list)
+
+        # Scalar config value with list criteria (membership matching)
+        _satisfies_criteria("gpt-4", ["gpt-4", "gpt-3.5"])  # True (gpt-4 in criteria)
+        _satisfies_criteria("claude", ["gpt-4", "gpt-3.5"])  # False (claude not in criteria)
+
+        # Scalar config value with scalar criteria (equality matching)
+        _satisfies_criteria("openai", "openai")  # True (exact match)
+        _satisfies_criteria("openai", "azure")  # False (different values)
+
+        # None config values (missing fields)
+        _satisfies_criteria(None, ["gpt-4"])  # False (missing field)
+        _satisfies_criteria(None, "gpt-4")  # False (missing field)
+        ```
+
+    Note:
+        This is an internal helper function used by `filter_config()`. The function
+        assumes that both parameters can be of various types and handles type
+        checking internally to determine the appropriate matching strategy.
+    """
+    if config_value is None:
         return False
 
-    if isinstance(value, list):
-        return bool(set(value) & set(criteria_values))  # Non-empty intersection
+    if isinstance(config_value, list):
+        if isinstance(criteria_values, list):
+            return bool(set(config_value) & set(criteria_values))  # Non-empty intersection
+        else:
+            return criteria_values in config_value
     else:
         # In filter_dict, filter could be either a list of values or a single value.
         # For example, filter_dict = {"model": ["gpt-3.5-turbo"]} or {"model": "gpt-3.5-turbo"}
         if isinstance(criteria_values, list):
-            return value in criteria_values
-        return bool(value == criteria_values)
+            return config_value in criteria_values
+        return bool(config_value == criteria_values)
 
 
 @export_module("autogen")
@@ -619,8 +685,6 @@ def config_list_from_json(
 
         with open(config_list_path) as json_file:
             config_list = json.load(json_file)
-
-    config_list = filter_config(config_list, filter_dict)
 
     return filter_config(config_list, filter_dict)
 
