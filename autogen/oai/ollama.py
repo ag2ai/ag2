@@ -59,6 +59,7 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     top_k: int = Field(default=40)
     top_p: float = Field(default=0.9)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    native_tool_calls: bool = False
 
     def create_client(self):
         raise NotImplementedError("OllamaLLMConfigEntry.create_client is not implemented.")
