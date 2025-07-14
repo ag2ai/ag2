@@ -29,7 +29,11 @@ with optional_import_block() as result:
 
 def test_gemini_llm_config_entry():
     gemini_llm_config = GeminiLLMConfigEntry(
-        model="gemini-2.0-flash-lite", api_key="dummy_api_key", project_id="fake-project-id", location="us-west1", proxy="http://mock-test-proxy:90/"
+        model="gemini-2.0-flash-lite",
+        api_key="dummy_api_key",
+        project_id="fake-project-id",
+        location="us-west1",
+        proxy="http://mock-test-proxy:90/",
     )
     expected = {
         "api_type": "google",
@@ -39,7 +43,7 @@ def test_gemini_llm_config_entry():
         "location": "us-west1",
         "stream": False,
         "tags": [],
-        "proxy": "http://mock-test-proxy:90/"
+        "proxy": "http://mock-test-proxy:90/",
     }
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual

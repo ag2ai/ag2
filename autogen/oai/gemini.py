@@ -181,7 +181,7 @@ class GeminiClient:
             )
 
         self.api_version = kwargs.get("api_version")
-        self.proxy = kwargs.get("proxy", None)
+        self.proxy = kwargs.get("proxy")
 
         # Store the response format, if provided (for structured outputs)
         self._response_format: Optional[type[BaseModel]] = None
@@ -242,12 +242,12 @@ class GeminiClient:
 
         http_options = types.HttpOptions()
         if self.proxy:
-            http_options.client_args = {'proxy': self.proxy}
-            http_options.async_client_args = {'proxy': self.proxy}
+            http_options.client_args = {"proxy": self.proxy}
+            http_options.async_client_args = {"proxy": self.proxy}
 
         if self.api_version:
             http_options.api_version = self.api_version
-        
+
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
