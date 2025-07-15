@@ -78,6 +78,7 @@ class TestLLMConfigEntry:
             "model": "gpt-4o-mini",
             "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             "tags": [],
+            "stream": False,
         }
         assert actual == expected
 
@@ -560,6 +561,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
             "temperature": 0.5,
@@ -624,6 +626,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
             "temperature": 0.5,
@@ -651,6 +654,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
         ]
@@ -668,6 +672,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "base_url": "localhost:8080",
+                    "stream": False,
                     "tags": [],
                 }
             ],
