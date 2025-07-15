@@ -246,6 +246,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
+    stream: bool = False
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
@@ -262,6 +263,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
+    stream: bool = False
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
     # reasoning models - see:
@@ -280,6 +282,7 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
     base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
+    stream: bool = False
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
