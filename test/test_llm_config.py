@@ -488,6 +488,7 @@ class TestLLMConfig:
                             "temperature": 0.8,
                             "top_k": 40,
                             "top_p": 0.9,
+                            "native_tool_calls": False,
                         }
                     ]
                 },
