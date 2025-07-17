@@ -1343,6 +1343,14 @@ class ConversableAgent(LLMAgent):
 
             raise RuntimeError(msg)
 
+    def _terminate_chat(self, recipient: "ConversableAgent", message: dict[str, Any]) -> bool:
+        return (
+            isinstance(recipient, ConversableAgent)
+            and isinstance(message.get("content"), str)
+            and hasattr(recipient, "_is_termination_msg")
+            and recipient._is_termination_msg(message)
+        )
+
     def initiate_chat(
         self,
         recipient: "ConversableAgent",
@@ -1470,18 +1478,10 @@ class ConversableAgent(LLMAgent):
                 else:
                     last_message = self.chat_messages[recipient][-1]
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                    if (
-                        isinstance(recipient, ConversableAgent)
-                        and isinstance(last_message.get("content"), str)
-                        and hasattr(recipient, "_is_termination_msg")
-                    ):
-                        is_termination = recipient._is_termination_msg(last_message)
-                if msg2send is None:
+                    is_termination = self._terminate_chat(recipient, last_message)
+                if is_termination or msg2send is None:
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
-                if is_termination:
-                    break
-
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
                     TerminationEvent(
@@ -1665,17 +1665,10 @@ class ConversableAgent(LLMAgent):
                 else:
                     last_message = self.chat_messages[recipient][-1]
                     msg2send = await self.a_generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                    if (
-                        isinstance(recipient, ConversableAgent)
-                        and isinstance(last_message.get("content"), str)
-                        and hasattr(recipient, "_is_termination_msg")
-                    ):
-                        is_termination = recipient._is_termination_msg(last_message)
-                if msg2send is None:
+                    is_termination = self._terminate_chat(recipient, last_message)
+                if is_termination or msg2send is None:
                     break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
-                if is_termination:
-                    break
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
                     TerminationEvent(
