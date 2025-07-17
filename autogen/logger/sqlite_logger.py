@@ -293,7 +293,7 @@ class SqliteLogger(BaseLogger):
             client_id,
             wrapper_id,
             self.session_id,
-            json.dumps(request),
+            json.dumps(to_dict(request)),
             response_messages,
             is_cached,
             cost,
