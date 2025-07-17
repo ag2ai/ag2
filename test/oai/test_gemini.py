@@ -90,6 +90,11 @@ class TestGeminiClient:
         mock_credentials = MagicMock(Credentials)
         return GeminiClient(credentials=mock_credentials)
 
+    @pytest.fixture
+    def test_proxy_initialization(self):
+        proxy = "http://mock-test-proxy:90/"
+        return GeminiClient(proxy=proxy)
+
     # Test compute location initialization and configuration
     def test_compute_location_initialization(self):
         with pytest.raises(AssertionError):
@@ -107,11 +112,6 @@ class TestGeminiClient:
     def test_valid_initialization(self, gemini_client):
         assert gemini_client.api_key == "fake_api_key", "API Key should be correctly set"
 
-    @pytest.fixture
-    def test_proxy_initialization(self):
-        proxy = "http://mock-test-proxy:90/"
-        return GeminiClient(proxy=proxy)
-
     def test_google_application_credentials_initialization(self):
         GeminiClient(google_application_credentials="credentials.json", project_id="fake-project-id")
         assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "credentials.json", (
@@ -124,6 +124,10 @@ class TestGeminiClient:
         assert vertexai_global_config.location == "us-west1", "Incorrect VertexAI location initialization"
         assert vertexai_global_config.project == "fake-project-id", "Incorrect VertexAI project initialization"
         assert vertexai_global_config.credentials == mock_credentials, "Incorrect VertexAI credentials initialization"
+
+    def test_proxy_scenario(self, test_proxy_initialization):
+        mock_proxy = "http://mock-test-proxy:90/"
+        assert test_proxy_initialization.proxy == mock_proxy, "Invalid proxy set."
 
     def test_extract_system_instruction(self, gemini_client):
         # Test: valid system instruction

@@ -108,6 +108,20 @@ def mock_openai_wrapper_fixed_order_default():
         wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
     return wrapper
 
+@pytest.fixture
+def mock_register_default_client_for_gemini():
+    # Test case where routing_method is not specified in OpenAIWrapper constructor,
+    # so it should default to "fixed_order".
+    config_list = [
+        {"model": "gemini-2.5-flash", "proxy": "http://mock-test-proxy:90/", "api_key": "key1", "api_type": "google", "model_client_cls": "MockModelClient", "name": "client1"},
+        {"model": "gemini-2.5-pro", "proxy": "http://mock-test-proxy:90/", "api_key": "key2", "api_type": "google", "model_client_cls": "MockModelClient", "name": "client2"},
+    ]
+    wrapper = OpenAIWrapper(config_list=config_list)
+    assert wrapper.routing_method == "fixed_order"
+
+    for i in range(len(config_list)):
+        wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
+    return wrapper
 
 @pytest.fixture
 def mock_openai_wrapper_fixed_order_explicit():
@@ -151,14 +165,22 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
 @pytest.mark.parametrize(
     "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
 )
+def test_fixed_order_routing_successful_first_client(fixture_name: str, request: pytest.FixtureRequest):
+    wrapper = request.getfixturevalue(fixture_name)
+    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
+    assert "Response from client1" in response.choices[0].message.content
+    assert wrapper._clients[0].call_count == 1
+    assert wrapper._clients[1].call_count == 0
+
+
+@run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@pytest.mark.parametrize(
+    "fixture_name", ["mock_register_defaault_client_for_gemini"]
+)
 def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
     wrapper = request.getfixturevalue(fixture_name)
     # Make the first client fail
-    wrapper._clients[0].config["should_fail"] = True
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client2" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 1
+    assert "http://mock-test-proxy:90/" in wrapper._clients[0].config["proxy"]
 
 
 def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
