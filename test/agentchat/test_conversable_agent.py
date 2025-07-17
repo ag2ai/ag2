@@ -493,6 +493,38 @@ def test_conversable_agent():
     )
     assert dummy_agent_5.description == "The fifth dummy agent used for testing."  # Same as system message
 
+def test_terminate_chat_true():
+    """Test _terminate_chat returns True for a termination message."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": "TERMINATE"}
+    assert agent._terminate_chat(recipient, message) is True
+
+def test_terminate_chat_false_non_termination_content():
+    """Test _terminate_chat returns False for a non-termination message."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": "Hello"}
+    assert agent._terminate_chat(recipient, message) is False
+
+def test_terminate_chat_false_non_string_content():
+    """Test _terminate_chat returns False if content is not a string."""
+    agent = ConversableAgent("agent", llm_config=False)
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+    message = {"content": None}
+    assert agent._terminate_chat(recipient, message) is False
 
 def test_generate_reply():
     def add_num(num_to_be_added):
