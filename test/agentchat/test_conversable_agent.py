@@ -530,6 +530,26 @@ def test_terminate_chat_false_non_string_content():
     assert agent._terminate_chat(recipient, message) is False
 
 
+@pytest.mark.asyncio
+async def test_a_initiate_chat_triggers_terminate_chat(monkeypatch):
+    agent = ConversableAgent("agent", llm_config=False, human_input_mode="NEVER")
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+        human_input_mode="NEVER",
+    )
+    async def fake_a_generate_init_message(self, message, **kwargs):
+        return {"content": "TERMINATE"}
+    monkeypatch.setattr(ConversableAgent, "a_generate_init_message", fake_a_generate_init_message)
+    async def fake_a_get_human_input(self, prompt):
+        return ""
+    monkeypatch.setattr(ConversableAgent, "a_get_human_input", fake_a_get_human_input)
+    result = await agent.a_initiate_chat(recipient, message="irrelevant", max_turns=2)
+    assert len(result.chat_history) == 1
+    assert result.chat_history[0]["content"] == "TERMINATE"
+
+
 def test_generate_reply():
     def add_num(num_to_be_added):
         given_num = 10
