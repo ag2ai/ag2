@@ -126,6 +126,7 @@ class GeminiClient:
     PARAMS_MAPPING = {
         "max_tokens": "max_output_tokens",
         # "n": "candidate_count", # Gemini supports only `n=1`
+        "seed": "seed",
         "stop_sequences": "stop_sequences",
         "temperature": "temperature",
         "top_p": "top_p",
