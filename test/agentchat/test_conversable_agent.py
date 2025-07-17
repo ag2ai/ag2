@@ -1876,7 +1876,9 @@ def test_create_or_get_executor(mock_credentials: Credentials):
             else:
                 assert executor_agent == executor
             assert isinstance(executor_agent, ConversableAgent)
+            # Runtime tools should be available to the LLM during execution
             assert agent.llm_config["tools"] == expected_tools
+            # And should be available for execution in the executor
             assert len(executor_agent.function_map.keys()) == 1
 
 
