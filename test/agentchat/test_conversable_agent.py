@@ -544,7 +544,7 @@ async def test_a_initiate_chat_triggers_terminate_chat(monkeypatch):
         return {"content": "TERMINATE"}
 
     monkeypatch.setattr(ConversableAgent, "a_generate_init_message", fake_a_generate_init_message)
-    
+
     async def fake_a_get_human_input(self, prompt):
         return ""
 
