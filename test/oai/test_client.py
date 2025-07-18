@@ -1031,6 +1031,28 @@ class TestO1:
         assert openai_config["proxy"] == "http://proxy.example.com:8080"
 
 
+def test_register_default_client_calls_configure_openai_config_for_gemini(monkeypatch):
+    from autogen.oai.client import OpenAIWrapper
+
+    # Patch GeminiClient to avoid real initialization
+    class DummyGeminiClient:
+        def __init__(self, **kwargs):
+            self.called_kwargs = kwargs
+
+    monkeypatch.setattr("autogen.oai.client.GeminiClient", DummyGeminiClient)
+
+    config = {
+        "api_type": "google",
+        "model": "gemini-pro",
+        "proxy": "http://proxy.example.com:8080",
+    }
+    wrapper = OpenAIWrapper(config_list=[config])
+    # The client should be our DummyGeminiClient
+    assert isinstance(wrapper._clients[0], DummyGeminiClient)
+    # The proxy should be set in the GeminiClient's kwargs
+    assert wrapper._clients[0].called_kwargs["proxy"] == "http://proxy.example.com:8080"
+
+
 if __name__ == "__main__":
     pass
     # test_aoai_chat_completion()

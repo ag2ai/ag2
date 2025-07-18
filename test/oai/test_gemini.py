@@ -677,7 +677,6 @@ class TestGeminiClient:
             patch("autogen.oai.gemini.genai.Client") as mock_client,
             patch("autogen.oai.gemini.GenerateContentConfig") as mock_config,
             patch("autogen.oai.gemini.genai.configure"),
-            patch("autogen.oai.gemini.genai"),
         ):
             mock_chat = MagicMock()
             mock_client.return_value.chats.create.return_value = mock_chat
@@ -694,3 +693,35 @@ class TestGeminiClient:
             assert http_options is not None, "http_options should be passed to genai.Client"
             assert hasattr(http_options, "client_args"), "http_options should have client_args"
             assert http_options.client_args.get("proxy") == proxy_url, "Proxy should be set in http_options"
+
+    def test_api_version_is_set_on_client(self):
+        proxy_url = "http://mock-test-proxy:90/"
+        api_version = "v1beta"
+        client = GeminiClient(proxy=proxy_url, api_version=api_version)
+        assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
+        assert client.api_version == api_version, "API version should be set correctly on GeminiClient"
+
+        params = {
+            "model": "gemini-pro",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "proxy": proxy_url,
+        }
+        with (
+            patch("autogen.oai.gemini.genai.Client") as mock_client,
+            patch("autogen.oai.gemini.GenerateContentConfig") as mock_config,
+            patch("autogen.oai.gemini.genai.configure"),
+        ):
+            mock_chat = MagicMock()
+            mock_client.return_value.chats.create.return_value = mock_chat
+            mock_chat.send_message.return_value = MagicMock(
+                candidates=[
+                    MagicMock(content=MagicMock(parts=[MagicMock(text="hi", function_call=None)]), finish_reason=None)
+                ],
+                usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
+            )
+            client.create(params)
+            called_kwargs = mock_client.call_args.kwargs
+            http_options = called_kwargs.get("http_options")
+            assert http_options is not None, "http_options should be passed to genai.Client"
+            assert hasattr(http_options, "api_version"), "http_options should have api_version"
+            assert http_options.api_version == api_version, "api_version should be set in http_options"
