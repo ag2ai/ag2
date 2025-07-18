@@ -665,7 +665,6 @@ class TestGeminiClient:
     def test_proxy_is_set_on_client(self):
         proxy_url = "http://mock-test-proxy:90/"
 
-        # Mock all necessary components
         with (
             patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
@@ -673,8 +672,14 @@ class TestGeminiClient:
             patch("autogen.oai.gemini.genai.configure"),
             patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("autogen.oai.gemini.vertexai"),
+            patch("autogen.oai.gemini.genai.GenerationConfig"),
+            patch("google.auth.default", return_value=(None, "fake-project-id")),
         ):
-            # Setup the mock response
+            # Setup mock genai configuration
+            mock_genai.GenerationConfig = MagicMock()
+            mock_genai.ChatSession = MagicMock()
+
+            # Setup mock chat response
             mock_chat = MagicMock()
             mock_client.return_value.chats.create.return_value = mock_chat
             mock_chat.send_message.return_value = MagicMock(
@@ -684,8 +689,11 @@ class TestGeminiClient:
                 usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
             )
 
-            # Create client and test proxy setting
-            client = GeminiClient(proxy=proxy_url)
+            # Create client with proxy
+            client = GeminiClient(
+                proxy=proxy_url,
+                api_key="fake-api-key",  # Add fake API key to prevent actual auth
+            )
             assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
 
             # Test create() method
@@ -696,7 +704,7 @@ class TestGeminiClient:
             }
             client.create(params)
 
-            # Verify proxy was passed correctly
+            # Verify proxy configuration
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
             assert http_options is not None, "http_options should be passed to genai.Client"
@@ -707,7 +715,6 @@ class TestGeminiClient:
         proxy_url = "http://mock-test-proxy:90/"
         api_version = "v1beta"
 
-        # Mock all necessary components
         with (
             patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
@@ -715,8 +722,14 @@ class TestGeminiClient:
             patch("autogen.oai.gemini.genai.configure"),
             patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("autogen.oai.gemini.vertexai"),
+            patch("autogen.oai.gemini.genai.GenerationConfig"),
+            patch("google.auth.default", return_value=(None, "fake-project-id")),
         ):
-            # Setup the mock response
+            # Setup mock genai configuration
+            mock_genai.GenerationConfig = MagicMock()
+            mock_genai.ChatSession = MagicMock()
+
+            # Setup mock chat response
             mock_chat = MagicMock()
             mock_client.return_value.chats.create.return_value = mock_chat
             mock_chat.send_message.return_value = MagicMock(
@@ -726,8 +739,12 @@ class TestGeminiClient:
                 usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
             )
 
-            # Create client and test api_version setting
-            client = GeminiClient(proxy=proxy_url, api_version=api_version)
+            # Create client with proxy and api_version
+            client = GeminiClient(
+                proxy=proxy_url,
+                api_version=api_version,
+                api_key="fake-api-key",  # Add fake API key to prevent actual auth
+            )
             assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
             assert client.api_version == api_version, "API version should be set correctly on GeminiClient"
 
@@ -739,7 +756,7 @@ class TestGeminiClient:
             }
             client.create(params)
 
-            # Verify both proxy and api_version were passed correctly
+            # Verify proxy and api_version configuration
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
             assert http_options is not None, "http_options should be passed to genai.Client"

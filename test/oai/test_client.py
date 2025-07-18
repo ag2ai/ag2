@@ -1020,6 +1020,7 @@ class TestO1:
         self._test_completion(o1_client, messages)
 
     def test_configure_openai_config_for_gemini_proxy_field(self):
+        """Test that proxy configuration is properly set for Gemini."""
         from autogen.oai.client import OpenAIWrapper
 
         config = {"proxy": "http://proxy.example.com:8080", "api_key": "key1"}
