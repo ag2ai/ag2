@@ -1053,6 +1053,30 @@ def test_register_default_client_calls_configure_openai_config_for_gemini(monkey
     assert wrapper._clients[0].called_kwargs["proxy"] == "http://proxy.example.com:8080"
 
 
+def test_google_api_type_calls_configure_for_gemini():
+    """Test that google api_type triggers _configure_openai_config_for_gemini."""
+    from unittest.mock import patch
+
+    from autogen.oai.client import OpenAIWrapper
+
+    # Config with google api_type and proxy
+    config = {"api_type": "google", "model": "gemini-pro", "proxy": "http://proxy.example.com:8080"}
+
+    # Mock GeminiClient to prevent actual initialization
+    with patch("autogen.oai.client.GeminiClient") as mock_gemini_client:
+        # Create wrapper with our test config
+        wrapper = OpenAIWrapper(config_list=[config])
+
+        # Verify GeminiClient was created with correct proxy
+        mock_gemini_client.assert_called_once()
+        call_kwargs = mock_gemini_client.call_args[1]
+        assert "proxy" in call_kwargs
+        assert call_kwargs["proxy"] == "http://proxy.example.com:8080"
+
+    # Clean up
+    wrapper._clients = []
+
+
 if __name__ == "__main__":
     pass
     # test_aoai_chat_completion()
