@@ -1019,10 +1019,10 @@ class TestO1:
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
 
-    def test_configure_openai_config_for_gemini_proxy_field():
+    def test_configure_openai_config_for_gemini_proxy_field(self):
         from autogen.oai.client import OpenAIWrapper
 
-        config = {"proxy": "http://proxy.example.com:8080"}
+        config = {"proxy": "http://proxy.example.com:8080", "api_key": "key1"}
         openai_config = {}
 
         wrapper = OpenAIWrapper(config_list=[])
