@@ -108,13 +108,28 @@ def mock_openai_wrapper_fixed_order_default():
         wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
     return wrapper
 
+
 @pytest.fixture
 def mock_register_default_client_for_gemini():
     # Test case where routing_method is not specified in OpenAIWrapper constructor,
     # so it should default to "fixed_order".
     config_list = [
-        {"model": "gemini-2.5-flash", "proxy": "http://mock-test-proxy:90/", "api_key": "key1", "api_type": "google", "model_client_cls": "MockModelClient", "name": "client1"},
-        {"model": "gemini-2.5-pro", "proxy": "http://mock-test-proxy:90/", "api_key": "key2", "api_type": "google", "model_client_cls": "MockModelClient", "name": "client2"},
+        {
+            "model": "gemini-2.5-flash",
+            "proxy": "http://mock-test-proxy:90/",
+            "api_key": "key1",
+            "api_type": "google",
+            "model_client_cls": "MockModelClient",
+            "name": "client1",
+        },
+        {
+            "model": "gemini-2.5-pro",
+            "proxy": "http://mock-test-proxy:90/",
+            "api_key": "key2",
+            "api_type": "google",
+            "model_client_cls": "MockModelClient",
+            "name": "client2",
+        },
     ]
     wrapper = OpenAIWrapper(config_list=config_list)
     assert wrapper.routing_method == "fixed_order"
@@ -122,6 +137,7 @@ def mock_register_default_client_for_gemini():
     for i in range(len(config_list)):
         wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
     return wrapper
+
 
 @pytest.fixture
 def mock_openai_wrapper_fixed_order_explicit():
@@ -174,9 +190,7 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
 
 
 @run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema"], "gemini")
-@pytest.mark.parametrize(
-    "fixture_name", ["mock_register_defaault_client_for_gemini"]
-)
+@pytest.mark.parametrize("fixture_name", ["mock_register_defaault_client_for_gemini"])
 def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
     wrapper = request.getfixturevalue(fixture_name)
     # Make the first client fail
@@ -1005,7 +1019,7 @@ class TestO1:
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
 
-    def test_configure_openai_config_for_gemini_proxy():
+    def test_configure_openai_config_for_gemini_proxy_field():
         from autogen.oai.client import OpenAIWrapper
 
         config = {"proxy": "http://proxy.example.com:8080"}

@@ -667,29 +667,30 @@ class TestGeminiClient:
         client = GeminiClient(proxy=proxy_url)
         assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
 
-        # Also test that the proxy is used in http_options when creating a request
         params = {
             "model": "gemini-pro",
             "messages": [{"role": "user", "content": "Hello"}],
             "proxy": proxy_url,
         }
-        # Patch genai.Client to check http_options
-        with patch("autogen.oai.gemini.genai.Client") as mock_client:
-            with patch("autogen.oai.gemini.GenerateContentConfig") as mock_config:
-                mock_chat = MagicMock()
-                mock_client.return_value.chats.create.return_value = mock_chat
-                mock_chat.send_message.return_value = MagicMock(
-                    candidates=[
-                        MagicMock(
-                            content=MagicMock(parts=[MagicMock(text="hi", function_call=None)]), finish_reason=None
-                        )
-                    ],
-                    usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
-                )
-                client.create(params)
-                # Check that http_options was constructed with the proxy
-                called_kwargs = mock_client.call_args.kwargs
-                http_options = called_kwargs.get("http_options")
-                assert http_options is not None, "http_options should be passed to genai.Client"
-                assert hasattr(http_options, "client_args"), "http_options should have client_args"
-                assert http_options.client_args.get("proxy") == proxy_url, "Proxy should be set in http_options"
+        # Patch all network-related Gemini objects to prevent real HTTP requests
+        with (
+            patch("autogen.oai.gemini.genai.Client") as mock_client,
+            patch("autogen.oai.gemini.GenerateContentConfig") as mock_config,
+            patch("autogen.oai.gemini.genai.configure"),
+            patch("autogen.oai.gemini.genai"),
+        ):
+            mock_chat = MagicMock()
+            mock_client.return_value.chats.create.return_value = mock_chat
+            mock_chat.send_message.return_value = MagicMock(
+                candidates=[
+                    MagicMock(content=MagicMock(parts=[MagicMock(text="hi", function_call=None)]), finish_reason=None)
+                ],
+                usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
+            )
+            client.create(params)
+            # Check that http_options was constructed with the proxy
+            called_kwargs = mock_client.call_args.kwargs
+            http_options = called_kwargs.get("http_options")
+            assert http_options is not None, "http_options should be passed to genai.Client"
+            assert hasattr(http_options, "client_args"), "http_options should have client_args"
+            assert http_options.client_args.get("proxy") == proxy_url, "Proxy should be set in http_options"
