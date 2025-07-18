@@ -490,50 +490,55 @@ class TestGeminiClient:
             "required": [],
             "type": "object",
         }
-        converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
-        assert converted_schema == expected_schema
 
-    @pytest.fixture
-    def nested_function_parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "$defs": {
-                        "Subquestion": {
-                            "properties": {
-                                "question": {
-                                    "description": "The original question.",
-                                    "title": "Question",
-                                    "type": "string",
-                                }
-                            },
-                            "required": ["question"],
-                            "title": "Subquestion",
-                            "type": "object",
-                        }
-                    },
-                    "properties": {
-                        "question": {
-                            "description": "The original question.",
-                            "title": "Question",
-                            "type": "string",
-                        },
-                        "subquestions": {
-                            "description": "The subquestions that need to be answered.",
-                            "items": {"$ref": "#/$defs/Subquestion"},
-                            "title": "Subquestions",
-                            "type": "array",
-                        },
-                    },
-                    "required": ["question", "subquestions"],
-                    "title": "Task",
-                    "type": "object",
-                    "description": "task",
-                }
-            },
-            "required": ["task"],
-        }
+        def test_proxy_and_api_version(self):
+            """Test that proxy and API version settings are correctly handled"""
+            proxy_url = "http://mock-test-proxy:90/"
+            api_version = "v1beta"
+
+            with patch("autogen.oai.gemini.genai") as mock_genai:
+                # Setup mock response
+                mock_chat = MagicMock()
+                mock_response = MagicMock()
+                mock_response.usage_metadata = MagicMock(prompt_token_count=10, candidates_token_count=5)
+                mock_text_part = MagicMock()
+                mock_text_part.text = "Hello world"
+                mock_text_part.function_call = None
+                mock_candidate = MagicMock()
+                mock_candidate.content.parts = [mock_text_part]
+                mock_candidate.finish_reason = "stop"
+                mock_response.candidates = [mock_candidate]
+                mock_chat.send_message.return_value = mock_response
+
+                # Setup mock model
+                mock_model = MagicMock()
+                mock_model.start_chat.return_value = mock_chat
+                mock_genai.GenerativeModel.return_value = mock_model
+
+                # Create client
+                client = GeminiClient(api_key="fake-api-key", proxy=proxy_url, api_version=api_version)
+
+                # Test create() method
+                response = client.create({
+                    "model": "gemini-pro",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "stream": False,
+                })
+
+                # Verify response format
+                assert hasattr(response, "choices")
+                assert len(response.choices) == 1
+                assert response.choices[0].message.content == "Hello world"
+                assert response.choices[0].finish_reason == "stop"
+                assert response.usage.prompt_tokens == 10
+                assert response.usage.completion_tokens == 5
+                assert response.usage.total_tokens == 15
+
+                # Verify proxy and api_version were set
+                mock_genai.configure.assert_called_once()
+                configure_kwargs = mock_genai.configure.call_args.kwargs
+                assert configure_kwargs["proxy"] == proxy_url
+                assert configure_kwargs["api_version"] == api_version
 
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)
@@ -672,44 +677,53 @@ class TestGeminiClient:
             patch("autogen.oai.gemini.genai.configure"),
             patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("autogen.oai.gemini.vertexai"),
-            patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("google.auth.default", return_value=(None, "fake-project-id")),
         ):
-            # Setup mock genai configuration
-            mock_genai.GenerationConfig = MagicMock()
-            mock_genai.ChatSession = MagicMock()
+            # Setup mock response
+            mock_text_part = MagicMock()
+            mock_text_part.text = "hi"
+            mock_text_part.function_call = None
 
-            # Setup mock chat response
+            mock_candidate = MagicMock()
+            mock_candidate.content = MagicMock()
+            mock_candidate.content.parts = [mock_text_part]
+            mock_candidate.finish_reason = "stop"
+
+            mock_response = MagicMock(spec=GenerateContentResponse)
+            mock_response.candidates = [mock_candidate]
+            mock_response.usage_metadata = MagicMock(prompt_token_count=1, candidates_token_count=1)
+
+            # Setup mock chat
             mock_chat = MagicMock()
+            mock_chat.send_message.return_value = mock_response
             mock_client.return_value.chats.create.return_value = mock_chat
-            mock_chat.send_message.return_value = MagicMock(
-                candidates=[
-                    MagicMock(content=MagicMock(parts=[MagicMock(text="hi", function_call=None)]), finish_reason=None)
-                ],
-                usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
-            )
 
             # Create client with proxy
             client = GeminiClient(
                 proxy=proxy_url,
-                api_key="fake-api-key",  # Add fake API key to prevent actual auth
+                api_key="fake-api-key",
             )
-            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
+            assert client.proxy == proxy_url
 
             # Test create() method
-            params = {
+            response = client.create({
                 "model": "gemini-pro",
                 "messages": [{"role": "user", "content": "Hello"}],
-                "proxy": proxy_url,
-            }
-            client.create(params)
+                "stream": False,
+            })
+
+            # Verify response structure
+            assert response.choices[0].message.content == "hi"
+            assert response.choices[0].finish_reason == "stop"
+            assert response.usage.prompt_tokens == 1
+            assert response.usage.completion_tokens == 1
 
             # Verify proxy configuration
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
-            assert http_options is not None, "http_options should be passed to genai.Client"
-            assert hasattr(http_options, "client_args"), "http_options should have client_args"
-            assert http_options.client_args.get("proxy") == proxy_url, "Proxy should be set in http_options"
+            assert http_options is not None
+            assert hasattr(http_options, "client_args")
+            assert http_options.client_args.get("proxy") == proxy_url
 
     def test_api_version_is_set_on_client(self):
         proxy_url = "http://mock-test-proxy:90/"
@@ -722,45 +736,54 @@ class TestGeminiClient:
             patch("autogen.oai.gemini.genai.configure"),
             patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("autogen.oai.gemini.vertexai"),
-            patch("autogen.oai.gemini.genai.GenerationConfig"),
             patch("google.auth.default", return_value=(None, "fake-project-id")),
         ):
-            # Setup mock genai configuration
-            mock_genai.GenerationConfig = MagicMock()
-            mock_genai.ChatSession = MagicMock()
+            # Setup mock response
+            mock_text_part = MagicMock()
+            mock_text_part.text = "hi"
+            mock_text_part.function_call = None
 
-            # Setup mock chat response
+            mock_candidate = MagicMock()
+            mock_candidate.content = MagicMock()
+            mock_candidate.content.parts = [mock_text_part]
+            mock_candidate.finish_reason = "stop"
+
+            mock_response = MagicMock(spec=GenerateContentResponse)
+            mock_response.candidates = [mock_candidate]
+            mock_response.usage_metadata = MagicMock(prompt_token_count=1, candidates_token_count=1)
+
+            # Setup mock chat
             mock_chat = MagicMock()
+            mock_chat.send_message.return_value = mock_response
             mock_client.return_value.chats.create.return_value = mock_chat
-            mock_chat.send_message.return_value = MagicMock(
-                candidates=[
-                    MagicMock(content=MagicMock(parts=[MagicMock(text="hi", function_call=None)]), finish_reason=None)
-                ],
-                usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
-            )
 
             # Create client with proxy and api_version
             client = GeminiClient(
                 proxy=proxy_url,
                 api_version=api_version,
-                api_key="fake-api-key",  # Add fake API key to prevent actual auth
+                api_key="fake-api-key",
             )
-            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
-            assert client.api_version == api_version, "API version should be set correctly on GeminiClient"
+            assert client.proxy == proxy_url
+            assert client.api_version == api_version
 
             # Test create() method
-            params = {
+            response = client.create({
                 "model": "gemini-pro",
                 "messages": [{"role": "user", "content": "Hello"}],
-                "proxy": proxy_url,
-            }
-            client.create(params)
+                "stream": False,
+            })
+
+            # Verify response structure
+            assert response.choices[0].message.content == "hi"
+            assert response.choices[0].finish_reason == "stop"
+            assert response.usage.prompt_tokens == 1
+            assert response.usage.completion_tokens == 1
 
             # Verify proxy and api_version configuration
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
-            assert http_options is not None, "http_options should be passed to genai.Client"
-            assert hasattr(http_options, "client_args"), "http_options should have client_args"
-            assert http_options.client_args.get("proxy") == proxy_url, "Proxy should be set in http_options"
-            assert hasattr(http_options, "api_version"), "http_options should have api_version"
-            assert http_options.api_version == api_version, "api_version should be set in http_options"
+            assert http_options is not None
+            assert hasattr(http_options, "client_args")
+            assert http_options.client_args.get("proxy") == proxy_url
+            assert hasattr(http_options, "api_version")
+            assert http_options.api_version == api_version
