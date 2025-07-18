@@ -665,26 +665,16 @@ class TestGeminiClient:
     def test_proxy_is_set_on_client(self):
         proxy_url = "http://mock-test-proxy:90/"
 
-        # Mock the genai module and its components
+        # Mock all necessary components
         with (
             patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
-            patch("autogen.oai.gemini.GenerateContentConfig") as mock_config,
-            patch("autogen.oai.gemini.genai.configure") as mock_configure,
+            patch("autogen.oai.gemini.GenerateContentConfig"),
+            patch("autogen.oai.gemini.genai.configure"),
+            patch("autogen.oai.gemini.genai.GenerationConfig"),
+            patch("autogen.oai.gemini.vertexai"),
         ):
-            # Setup the mock genai module
-            mock_genai.GenerationConfig = MagicMock()
-            mock_genai.ChatSession = MagicMock()
-
-            client = GeminiClient(proxy=proxy_url)
-            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
-
-            params = {
-                "model": "gemini-pro",
-                "messages": [{"role": "user", "content": "Hello"}],
-                "proxy": proxy_url,
-            }
-
+            # Setup the mock response
             mock_chat = MagicMock()
             mock_client.return_value.chats.create.return_value = mock_chat
             mock_chat.send_message.return_value = MagicMock(
@@ -694,9 +684,19 @@ class TestGeminiClient:
                 usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
             )
 
+            # Create client and test proxy setting
+            client = GeminiClient(proxy=proxy_url)
+            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
+
+            # Test create() method
+            params = {
+                "model": "gemini-pro",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "proxy": proxy_url,
+            }
             client.create(params)
 
-            # Check that http_options was constructed with the proxy
+            # Verify proxy was passed correctly
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
             assert http_options is not None, "http_options should be passed to genai.Client"
@@ -707,27 +707,16 @@ class TestGeminiClient:
         proxy_url = "http://mock-test-proxy:90/"
         api_version = "v1beta"
 
-        # Mock the genai module and its components
+        # Mock all necessary components
         with (
             patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
-            patch("autogen.oai.gemini.GenerateContentConfig") as mock_config,
-            patch("autogen.oai.gemini.genai.configure") as mock_configure,
+            patch("autogen.oai.gemini.GenerateContentConfig"),
+            patch("autogen.oai.gemini.genai.configure"),
+            patch("autogen.oai.gemini.genai.GenerationConfig"),
+            patch("autogen.oai.gemini.vertexai"),
         ):
-            # Setup the mock genai module
-            mock_genai.GenerationConfig = MagicMock()
-            mock_genai.ChatSession = MagicMock()
-
-            client = GeminiClient(proxy=proxy_url, api_version=api_version)
-            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
-            assert client.api_version == api_version, "API version should be set correctly on GeminiClient"
-
-            params = {
-                "model": "gemini-pro",
-                "messages": [{"role": "user", "content": "Hello"}],
-                "proxy": proxy_url,
-            }
-
+            # Setup the mock response
             mock_chat = MagicMock()
             mock_client.return_value.chats.create.return_value = mock_chat
             mock_chat.send_message.return_value = MagicMock(
@@ -737,9 +726,20 @@ class TestGeminiClient:
                 usage_metadata=MagicMock(prompt_token_count=1, candidates_token_count=1),
             )
 
+            # Create client and test api_version setting
+            client = GeminiClient(proxy=proxy_url, api_version=api_version)
+            assert client.proxy == proxy_url, "Proxy URL should be set correctly on GeminiClient"
+            assert client.api_version == api_version, "API version should be set correctly on GeminiClient"
+
+            # Test create() method
+            params = {
+                "model": "gemini-pro",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "proxy": proxy_url,
+            }
             client.create(params)
 
-            # Check that http_options was constructed with both proxy and api_version
+            # Verify both proxy and api_version were passed correctly
             called_kwargs = mock_client.call_args.kwargs
             http_options = called_kwargs.get("http_options")
             assert http_options is not None, "http_options should be passed to genai.Client"
