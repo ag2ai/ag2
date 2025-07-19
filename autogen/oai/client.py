@@ -246,6 +246,12 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
+
+    # ⏺ The extra_body parameter flows from OpenAILLMConfigEntry to the LLM request through this path:
+    #   1. Config Definition: extra_body is defined in OpenAILLMConfigEntry (autogen/oai/client.py:248)
+    #   2. Parameter Classification: It's classified as an OpenAI client parameter (not AG2-specific) via the openai_kwargs property (autogen/oai/client.py:752-758)
+    #   3. Request Separation: In _separate_create_config() (autogen/oai/client.py:842), extra_body goes into create_config since it's not in the extra_kwargs set.
+    #   4. API Call: The create_config becomes params and gets passed directly to OpenAI's create() method via **params (autogen/oai/client.py:551,658)
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )

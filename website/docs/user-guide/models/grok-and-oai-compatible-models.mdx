@@ -1,0 +1,337 @@
+---
+title: Grok and OpenAI-API-Compatible Models
+sidebarTitle: Grok & OpenAI-API-Compatible
+---
+
+[Grok](https://x.ai/) is a powerful AI model developed by xAI that combines cutting-edge reasoning capabilities with real-time access to information via search integration. Grok-4 is among the most intelligent models available, offering native tool use capabilities and real-time search functionality.
+
+This guide demonstrates how to use Grok and other OpenAI-API-compatible models with AG2. Since Grok follows OpenAI's API specification, it works seamlessly with AG2's existing OpenAI client infrastructure.
+
+## Requirements
+
+To get started, ensure you meet the following requirements:
+
+1. **Install the AG2 package:**
+   - Run the following command to install the [AG2](https://pypi.org/project/ag2/) package:
+   ```bash
+   pip install ag2[openai]
+   ```
+
+   <Tip>
+   If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+   ```bash
+   pip install -U autogen[openai]
+   ```
+   or
+   ```bash
+   pip install -U ag2[openai]
+   ```
+   as `autogen` and `ag2` are aliases for the same PyPI package.
+   </Tip>
+
+2. **Obtain a Grok API Key:**
+   - Sign up for a Grok account at [x.ai](https://x.ai/) to generate your API key.
+   - Refer to the [official Grok documentation](https://docs.x.ai/) for more information about obtaining and using the API key.
+
+## Configuration for Grok
+
+### Basic Configuration
+
+Here's how to configure AG2 to use Grok:
+
+```python
+import os
+from autogen import LLMConfig
+
+# Basic Grok configuration
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "model": "grok-4",
+            "api_type": "openai",  # Grok is OpenAI-compatible
+            "base_url": "https://api.x.ai/v1",
+            "api_key": os.environ.get("XAI_API_KEY"),
+        }
+    ],
+    temperature=0.7,
+)
+```
+
+### Configuration with Real-time Search
+
+Grok's unique capability is its real-time access to information. You can enable and configure this using the `extra_body` parameter:
+
+```python
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "model": "grok-4",
+            "api_type": "openai",
+            "base_url": "https://api.x.ai/v1",
+            "api_key": os.environ.get("XAI_API_KEY"),
+            "extra_body": {
+                "search_enabled": True,
+                "real_time_data": True,
+                "search_parameters": {
+                    "max_search_results": 5,
+                    "include_citations": True,
+                    "search_timeout": 10,
+                    "return_citations": True
+                },
+            },
+        }
+    ],
+    temperature=0.5,
+)
+```
+
+## API Parameters
+
+Grok supports standard OpenAI-compatible parameters. You can include additional parameters in your configuration. Some commonly used parameters include:
+
+- **temperature** (number 0..1): Controls randomness in outputs
+- **max_tokens** (integer): Maximum tokens in the response
+- **top_p** (number 0..1): Nucleus sampling parameter
+
+<Warning>
+**Important Configuration Note:** In AG2's LLMConfig, parameters like `temperature` and `max_tokens` should be placed at the **top level**, not inside individual `config_list` entries. This is due to AG2's two-tier validation system.
+
+```python
+#  CORRECT
+LLMConfig(
+    config_list=[{
+        "model": "grok-4",
+        "api_type": "openai",
+        "base_url": "https://api.x.ai/v1",
+        "api_key": os.environ.get("XAI_API_KEY"),
+    }],
+    temperature=0.3,  # Top-level parameters
+    max_tokens=800,
+)
+
+# L WRONG - Causes ValidationError
+LLMConfig(
+    config_list=[{
+        "model": "grok-4",
+        "temperature": 0.3,  # ERROR: Not allowed here
+    }]
+)
+```
+</Warning>
+
+## Basic Conversation Example
+
+Here's a simple example demonstrating a conversation with Grok:
+
+```python
+import os
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+# Configure Grok with real-time search
+grok_config = LLMConfig(
+    config_list=[
+        {
+            "model": "grok-4",
+            "api_type": "openai",
+            "base_url": "https://api.x.ai/v1",
+            "api_key": os.getenv("XAI_API_KEY"),
+            "max_tokens": 1000,
+            "extra_body": {
+                "search_enabled": True,
+                "real_time_data": True,
+                "search_parameters": {
+                    "max_search_results": 5,
+                    "include_citations": True,
+                    "search_timeout": 10
+                },
+            },
+        }
+    ],
+    temperature=0.5,
+)
+
+# Create agents
+assistant = AssistantAgent(
+    name="grok_assistant",
+    system_message="You are a helpful AI assistant powered by Grok. You have access to real-time information and can help with various tasks.",
+    llm_config=grok_config,
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+)
+
+# Start conversation
+user_proxy.initiate_chat(
+    assistant,
+    message="What is the current date and what's happening in the tech world today?",
+    max_turns=2,
+)
+```
+
+## Function Calling with Grok
+
+Grok supports advanced function calling capabilities. Here's how to set it up properly with AG2:
+
+<Warning>
+**Critical Pattern:** Functions must be registered with the `ConversableAgent`, not passed to `LLMConfig.tools`. Passing function objects to `LLMConfig.tools` will cause a "TypeError: Object of type function is not JSON serializable" error.
+</Warning>
+
+```python
+import os
+from typing import Annotated
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+def get_weather(city: Annotated[str, "The city name"]) -> str:
+    """Get current weather for a city."""
+    # Mock function - in production, call a real weather API
+    return f"The current weather in {city} is sunny with a temperature of 22�C."
+
+def calculate_math(expression: Annotated[str, "Mathematical expression to evaluate"]) -> str:
+    """Calculate a mathematical expression safely."""
+    try:
+        # Simple evaluation - use a safer parser in production
+        result = eval(expression.replace("^", "**"))
+        return f"The result of {expression} is {result}"
+    except:
+        return f"Could not evaluate the expression: {expression}"
+
+# Configure Grok for function calling
+function_config = LLMConfig(
+    config_list=[
+        {
+            "model": "grok-4",
+            "api_key": os.getenv("XAI_API_KEY"),
+            "base_url": "https://api.x.ai/v1",
+            "api_type": "openai",
+        }
+    ],
+    temperature=0.3,
+    max_tokens=800,
+    # NOTE: Do NOT put functions here - causes JSON serialization error
+)
+
+# Create function-calling assistant
+function_assistant = AssistantAgent(
+    name="grok_function_assistant",
+    system_message="You are a helpful assistant that can call functions to get weather information and perform calculations. Use the available tools when appropriate.",
+    llm_config=function_config,
+    functions=[get_weather, calculate_math],  #  CORRECT: Functions go here
+)
+
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+)
+
+# Test function calling
+user_proxy.initiate_chat(
+    function_assistant,
+    message="What's the weather like in Tokyo? Also, can you calculate 15 * 23 + 7?",
+    max_turns=2,
+)
+```
+
+## Function Calling Features
+
+Grok's function calling API supports several advanced features:
+
+### Tool Choice Options
+
+You can control how Grok uses functions with the `tool_choice` parameter:
+
+```python
+# Automatic function calling (default)
+llm_config = LLMConfig(
+    config_list=[{
+        "model": "grok-4",
+        "api_type": "openai",
+        "base_url": "https://api.x.ai/v1",
+        "api_key": os.environ.get("XAI_API_KEY"),
+        "tool_choice": "auto",  # Model decides when to call functions
+    }],
+    # ... other parameters
+)
+
+# Force function calling
+llm_config = LLMConfig(
+    config_list=[{
+        # ... config
+        "tool_choice": "required",  # Always call a function
+    }],
+)
+
+# Disable function calling
+llm_config = LLMConfig(
+    config_list=[{
+        # ... config
+        "tool_choice": "none",  # Never call functions
+    }],
+)
+```
+
+### Parallel Function Calling
+
+Grok supports calling multiple functions simultaneously, which is enabled by default:
+
+```python
+llm_config = LLMConfig(
+    config_list=[{
+        "model": "grok-4",
+        # ... other config
+    }],
+    parallel_tool_calls=True,  # Enable parallel function calls (default)
+)
+```
+
+
+
+
+## Best Practices
+
+### 1. Security
+- Always use environment variables for API keys
+- Never hardcode sensitive information in your code
+
+### 2. Configuration
+- Use the correct `api_type` for your provider (`"openai"` for most compatible services)
+- Place common parameters like `temperature` at the top level of `LLMConfig`
+- Use `extra_body` for provider-specific features like Grok's search parameters
+
+### 3. Function Registration
+- Register functions with `ConversableAgent.functions`, not `LLMConfig.tools`
+- Use type annotations and docstrings for better function calling performance
+- Consider using the decorator pattern for complex registration scenarios
+
+### 4. Error Handling
+- Implement proper error handling for API calls
+- Use secure evaluation methods for mathematical expressions
+- Test function calling thoroughly before production use
+
+## Troubleshooting
+
+### Common Issues
+
+**ValidationError: Extra inputs are not permitted**
+- **Cause:** Placing parameters like `temperature` inside `config_list` entries
+- **Solution:** Move parameters to the top level of `LLMConfig`
+
+**TypeError: Object of type function is not JSON serializable**
+- **Cause:** Passing function objects to `LLMConfig.tools`
+- **Solution:** Use `ConversableAgent.functions` instead
+
+**Model not found warnings**
+- **Cause:** AG2 doesn't recognize the model name for cost calculation
+- **Solution:** Add custom pricing with the `price` parameter or ignore the warning
+
+## Additional Resources
+
+- [Grok API Documentation](https://docs.x.ai/)
+- [x.ai Function Calling Guide](https://docs.x.ai/docs/guides/function-calling)
+- [AG2 Documentation](https://ag2.ai/)
+- [OpenAI API Specification](https://platform.openai.com/docs/api-reference)
