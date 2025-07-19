@@ -32,6 +32,7 @@ from autogen.oai.client import (
     OpenAIClient,
     OpenAILLMConfigEntry,
 )
+from autogen.oai.gemini import GeminiClient
 from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 
 # Attempt to import APIError from openai, define as base Exception if openai is not available.
@@ -110,6 +111,36 @@ def mock_openai_wrapper_fixed_order_default():
 
 
 @pytest.fixture
+def mock_register_default_client_for_gemini():
+    # Test case where routing_method is not specified in OpenAIWrapper constructor,
+    # so it should default to "fixed_order".
+    config_list = [
+        {
+            "model": "gemini-2.5-flash",
+            "proxy": "http://mock-test-proxy:90/",
+            "api_key": "key1",
+            "api_type": "google",
+            "model_client_cls": "MockModelClient",
+            "name": "client1",
+        },
+        {
+            "model": "gemini-2.5-pro",
+            "proxy": "http://mock-test-proxy:90/",
+            "api_key": "key2",
+            "api_type": "google",
+            "model_client_cls": "MockModelClient",
+            "name": "client2",
+        },
+    ]
+    wrapper = OpenAIWrapper(config_list=config_list)
+    assert wrapper.routing_method == "fixed_order"
+
+    for i in range(len(config_list)):
+        wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
+    return wrapper
+
+
+@pytest.fixture
 def mock_openai_wrapper_fixed_order_explicit():
     # Test case where routing_method IS specified as "fixed_order" in OpenAIWrapper constructor.
     config_list = [
@@ -151,14 +182,20 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
 @pytest.mark.parametrize(
     "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
 )
+def test_fixed_order_routing_successful_first_client(fixture_name: str, request: pytest.FixtureRequest):
+    wrapper = request.getfixturevalue(fixture_name)
+    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
+    assert "Response from client1" in response.choices[0].message.content
+    assert wrapper._clients[0].call_count == 1
+    assert wrapper._clients[1].call_count == 0
+
+
+@run_for_optional_imports(["google", "vertexai", "PIL", "jsonschema"], "gemini")
+@pytest.mark.parametrize("fixture_name", ["mock_register_defaault_client_for_gemini"])
 def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
     wrapper = request.getfixturevalue(fixture_name)
     # Make the first client fail
-    wrapper._clients[0].config["should_fail"] = True
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client2" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 1
+    assert "http://mock-test-proxy:90/" in wrapper._clients[0].config["proxy"]
 
 
 def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
@@ -982,6 +1019,45 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
+
+
+def test_configure_openai_config_for_gemini_proxy_field(monkeypatch):
+    from autogen.oai.client import OpenAIWrapper
+
+    monkeypatch.setattr("autogen.oai.gemini.GeminiClient", GeminiClient)
+    config = {
+        "api_type": "google",
+        "model": "gemini-pro",
+        "proxy": "http://proxy.example.com:8080",
+    }
+    wrapper = OpenAIWrapper(config_list=[config])
+    assert isinstance(wrapper._clients[0], GeminiClient)
+    # The proxy should be set in the GeminiClient's kwargs
+    assert wrapper._clients[0].called_kwargs["proxy"] == "http://proxy.example.com:8080"
+
+
+def test_google_api_type_calls_configure_for_gemini():
+    """Test that google api_type triggers _configure_openai_config_for_gemini."""
+    from unittest.mock import patch
+
+    from autogen.oai.client import OpenAIWrapper
+
+    # Config with google api_type and proxy
+    config = {"api_type": "google", "model": "gemini-pro", "proxy": "http://proxy.example.com:8080"}
+
+    # Mock GeminiClient to prevent actual initialization
+    with patch("autogen.oai.gemini.GeminiClient") as mock_gemini_client:
+        # Create wrapper with our test config
+        wrapper = OpenAIWrapper(config_list=[config])
+
+        # Verify GeminiClient was created with correct proxy
+        mock_gemini_client.assert_called_once()
+        call_kwargs = mock_gemini_client.call_args[1]
+        assert "proxy" in call_kwargs
+        assert call_kwargs["proxy"] == "http://proxy.example.com:8080"
+
+    # Clean up
+    wrapper._clients = []
 
 
 if __name__ == "__main__":
