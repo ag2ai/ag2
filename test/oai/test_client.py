@@ -1019,20 +1019,7 @@ class TestO1:
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
 
-    def test_configure_openai_config_for_gemini_proxy_field(self):
-        """Test that proxy configuration is properly set for Gemini."""
-        from autogen.oai.client import OpenAIWrapper
-
-        config = {"proxy": "http://proxy.example.com:8080", "api_key": "key1"}
-        openai_config = {}
-
-        wrapper = OpenAIWrapper(config_list=[])
-        wrapper._configure_openai_config_for_gemini(config, openai_config)
-
-        assert openai_config["proxy"] == "http://proxy.example.com:8080"
-
-
-def test_register_default_client_calls_configure_openai_config_for_gemini(monkeypatch):
+def test_configure_openai_config_for_gemini_proxy_field(monkeypatch):
     from autogen.oai.client import OpenAIWrapper
 
     # Patch GeminiClient to avoid real initialization
