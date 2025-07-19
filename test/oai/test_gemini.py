@@ -491,7 +491,7 @@ class TestGeminiClient:
             "type": "object",
         }
 
-        def test_proxy_and_api_version(self):
+    def test_proxy_and_api_version(self):
             """Test that proxy and API version settings are correctly handled"""
             proxy_url = "http://mock-test-proxy:90/"
             api_version = "v1beta"
