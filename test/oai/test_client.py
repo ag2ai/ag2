@@ -1024,7 +1024,7 @@ class TestO1:
 def test_configure_openai_config_for_gemini_proxy_field(monkeypatch):
     from autogen.oai.client import OpenAIWrapper
 
-    monkeypatch.setattr("autogen.oai.client.GeminiClient", GeminiClient)
+    monkeypatch.setattr("autogen.oai.gemini.GeminiClient", GeminiClient)
     config = {
         "api_type": "google",
         "model": "gemini-pro",
