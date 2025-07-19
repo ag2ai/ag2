@@ -1046,7 +1046,7 @@ def test_google_api_type_calls_configure_for_gemini():
     config = {"api_type": "google", "model": "gemini-pro", "proxy": "http://proxy.example.com:8080"}
 
     # Mock GeminiClient to prevent actual initialization
-    with patch("autogen.oai.client.GeminiClient") as mock_gemini_client:
+    with patch("autogen.oai.gemini.GeminiClient") as mock_gemini_client:
         # Create wrapper with our test config
         wrapper = OpenAIWrapper(config_list=[config])
 
