@@ -33,6 +33,7 @@ from autogen.oai.client import (
     OpenAILLMConfigEntry,
 )
 from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
+from autogen.oai.gemini import GeminiClient
 
 # Attempt to import APIError from openai, define as base Exception if openai is not available.
 try:
@@ -1022,21 +1023,14 @@ class TestO1:
 def test_configure_openai_config_for_gemini_proxy_field(monkeypatch):
     from autogen.oai.client import OpenAIWrapper
 
-    # Patch GeminiClient to avoid real initialization
-    class DummyGeminiClient:
-        def __init__(self, **kwargs):
-            self.called_kwargs = kwargs
-
-    monkeypatch.setattr("autogen.oai.client.GeminiClient", DummyGeminiClient)
-
+    monkeypatch.setattr("autogen.oai.client.GeminiClient", GeminiClient)
     config = {
         "api_type": "google",
         "model": "gemini-pro",
         "proxy": "http://proxy.example.com:8080",
     }
     wrapper = OpenAIWrapper(config_list=[config])
-    # The client should be our DummyGeminiClient
-    assert isinstance(wrapper._clients[0], DummyGeminiClient)
+    assert isinstance(wrapper._clients[0], GeminiClient)
     # The proxy should be set in the GeminiClient's kwargs
     assert wrapper._clients[0].called_kwargs["proxy"] == "http://proxy.example.com:8080"
 
