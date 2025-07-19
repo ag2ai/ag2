@@ -32,8 +32,8 @@ from autogen.oai.client import (
     OpenAIClient,
     OpenAILLMConfigEntry,
 )
-from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 from autogen.oai.gemini import GeminiClient
+from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 
 # Attempt to import APIError from openai, define as base Exception if openai is not available.
 try:
