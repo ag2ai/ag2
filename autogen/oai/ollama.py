@@ -22,6 +22,7 @@ Resources:
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import random
@@ -613,7 +614,7 @@ def _object_to_tool_call(data_object: Any) -> list[dict[str, Any]]:
         is_invalid = False
         for i, item in enumerate(data_copy):
             try:
-                new_item = eval(item)
+                new_item = ast.literal_eval(item)
                 if isinstance(new_item, dict):
                     if is_valid_tool_call_item(new_item):
                         data_object[i] = new_item
