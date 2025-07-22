@@ -1260,6 +1260,27 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
+def test_summarize_chat_with_dict_summary():
+    user = UserProxyAgent(name="user", human_input_mode="NEVER", default_auto_reply="Hello.", llm_config=False)
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return {"content": "This is a summary of the conversation."}
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello, how are you?",
+        max_turns=1,
+        summary_method=my_summary,
+        summary_args={"summary_prompt": "Summarize the conversation."},
+    )
+    assert chat_res.summary == "This is a summary of the conversation."
+
+
 def test_process_before_send():
     print_mock = unittest.mock.MagicMock()
 
