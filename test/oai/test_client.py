@@ -32,7 +32,6 @@ from autogen.oai.client import (
     OpenAIClient,
     OpenAILLMConfigEntry,
 )
-from autogen.oai.gemini import GeminiClient
 from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
 
 # Attempt to import APIError from openai, define as base Exception if openai is not available.
@@ -108,6 +107,7 @@ def mock_openai_wrapper_fixed_order_default():
     for i in range(len(config_list)):
         wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
     return wrapper
+
 
 @pytest.fixture
 def mock_openai_wrapper_fixed_order_explicit():
@@ -847,26 +847,26 @@ class TestDeepSeekPatch:
 
 
 class TestGemini:
-        
     def test_configure_openai_config_for_gemini_updates_proxy(self):
         config_list = [
-        {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
         ]
         client = OpenAIWrapper(config_list=config_list)
         openai_config = {}
-        config = {'proxy': 'http://proxy.example.com:8080'}
+        config = {"proxy": "http://proxy.example.com:8080"}
         client._configure_openai_config_for_gemini(config, openai_config)
-        assert openai_config['proxy'] == 'http://proxy.example.com:8080'
+        assert openai_config["proxy"] == "http://proxy.example.com:8080"
 
     def test_configure_openai_config_for_gemini_no_proxy(self):
         config_list = [
-        {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
         ]
         config = {}
         openai_config = {}
         client = OpenAIWrapper(config_list=config_list)
         client._configure_openai_config_for_gemini(config, openai_config)
-        assert 'proxy' not in openai_config
+        assert "proxy" not in openai_config
+
 
 class TestO1:
     @pytest.fixture
@@ -1002,8 +1002,6 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
-
-    
 
 
 if __name__ == "__main__":

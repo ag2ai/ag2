@@ -764,7 +764,6 @@ class TestGeminiClient:
         proxy_url = "http://mock-test-proxy:90/"
 
         with (
-            patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
             patch("autogen.oai.gemini.GenerateContentConfig"),
             patch("autogen.oai.gemini.genai.configure"),
@@ -823,7 +822,6 @@ class TestGeminiClient:
         api_version = "v1beta"
 
         with (
-            patch("autogen.oai.gemini.genai") as mock_genai,
             patch("autogen.oai.gemini.genai.Client") as mock_client,
             patch("autogen.oai.gemini.GenerateContentConfig"),
             patch("autogen.oai.gemini.genai.configure"),
