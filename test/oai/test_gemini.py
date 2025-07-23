@@ -94,7 +94,7 @@ class TestGeminiClient:
     def test_proxy_initialization(self):
         proxy = "http://mock-test-proxy:90/"
         return GeminiClient(proxy=proxy)
-    
+
     def test_proxy_setting_in_create(self):
         """Test that the proxy setting is correctly passed to the Gemini API client."""
         proxy_url = "http://mock-test-proxy:90/"
