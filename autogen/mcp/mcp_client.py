@@ -3,20 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import os
 import sys
-from datetime import datetime
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union
 
 import anyio
-from pydantic import BaseModel
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
+from pydantic import BaseModel, Field
 
 from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
 with optional_import_block():
-    from mcp import ClientSession
     from mcp.types import (
         CallToolResult,
         ReadResourceResult,
@@ -28,6 +31,39 @@ with optional_import_block():
     )
 
 __all__ = ["ResultSaved", "create_toolkit"]
+
+# Type definitions
+EncodingErrorHandlerType = Literal["strict", "ignore", "replace"]
+
+# Default constants
+DEFAULT_TEXT_ENCODING = "utf-8"
+DEFAULT_TEXT_ENCODING_ERROR_HANDLER: EncodingErrorHandlerType = "strict"
+DEFAULT_HTTP_REQUEST_TIMEOUT = 5
+DEFAULT_SSE_EVENT_READ_TIMEOUT = 60 * 5
+DEFAULT_STREAMABLE_HTTP_REQUEST_TIMEOUT = timedelta(seconds=30)
+DEFAULT_STREAMABLE_HTTP_SSE_EVENT_READ_TIMEOUT = timedelta(seconds=60 * 5)
+
+
+class StdioConfig(BaseModel):
+    """Configuration for a single stdio MCP server."""
+
+    command: str = Field(..., description="Command to execute")
+    args: List[str] = Field(..., description="Arguments for the command")
+    transport: Literal["stdio"] = Field(default="stdio", description="Transport type")
+    server_name: str = Field(..., description="Name of the server")
+    environment: Optional[Dict[str, str]] = Field(default=None, description="Environment variables")
+    working_dir: Optional[Union[str, Path]] = Field(default=None, description="Working directory")
+    encoding: str = Field(default=DEFAULT_TEXT_ENCODING, description="Character encoding")
+    encoding_error_handler: EncodingErrorHandlerType = Field(
+        default=DEFAULT_TEXT_ENCODING_ERROR_HANDLER, description="How to handle encoding errors"
+    )
+    session_options: Optional[Dict[str, Any]] = Field(default=None, description="Additional session options")
+
+
+class MCPConfig(BaseModel):
+    """Configuration for multiple MCP sessions using stdio transport."""
+
+    servers: List[StdioConfig] = Field(..., description="List of stdio server configurations")
 
 
 class MCPClient:
@@ -167,6 +203,80 @@ Here is the correct format for the URI template:
             return "Please install `mcp` extra to use this module:\n\n\tpip install ag2[mcp]"
 
         return None
+
+
+class MCPClientSessionManager:
+    """
+    A class to manage MCP client sessions using stdio transport.
+    """
+
+    def __init__(self):
+        """Initialize the MCP client session manager."""
+
+        self._validate_mcp_import()
+
+    @staticmethod
+    def _validate_mcp_import() -> None:
+        """Validate that the MCP library is available."""
+        with optional_import_block() as result:
+            import mcp  # noqa: F401
+
+        if not result.is_successful:
+            raise ImportError("MCP library is not available. Please install it with:\npip install mcp")
+
+    @asynccontextmanager
+    async def create_stdio_session(
+        self,
+        config: StdioConfig,
+    ) -> AsyncIterator[ClientSession]:
+        """
+        Create a new session to an MCP server using stdio transport.
+
+        Args:
+            config: StdioConfig object containing stdio session parameters
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        environment = config.environment or {}
+        if "PATH" not in environment:
+            environment["PATH"] = os.environ.get("PATH", "")
+
+        server_params = StdioServerParameters(
+            command=config.command,
+            args=config.args,
+            env=environment,
+            cwd=config.working_dir,
+            encoding=config.encoding,
+            encoding_error_handler=config.encoding_error_handler,
+        )
+
+        async with (
+            stdio_client(server_params) as (reader, writer),
+            ClientSession(reader, writer, **(config.session_options or {})) as session,
+        ):
+            yield session
+
+    @asynccontextmanager
+    async def open_session(
+        self,
+        config: StdioConfig,
+    ) -> AsyncIterator[ClientSession]:
+        """
+        Open a new session to an MCP server based on configuration.
+
+        Args:
+            config: StdioConfig object containing session configuration
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        try:
+            if isinstance(config, StdioConfig):
+                async with self.create_stdio_session(config) as session:
+                    yield session
+        except Exception as e:
+            raise NotImplementedError(f"Error opening session: {e}")
 
 
 @export_module("autogen.mcp")
