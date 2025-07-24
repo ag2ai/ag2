@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -141,6 +142,7 @@ class TestMCPClient:
             assert result.contents == expected_result
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     async def test_register_for_llm_tool(
         self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials
     ) -> None:  # type: ignore[no-any-unimported]
@@ -189,6 +191,7 @@ class TestMCPClient:
                     assert loaded_result.contents == expected_result
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     @run_for_optional_imports("openai", "openai")
     async def test_with_llm(self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with (
