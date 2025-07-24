@@ -3,11 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import anyio
 import pytest
@@ -15,10 +13,6 @@ from pydantic.networks import AnyUrl
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
-
-sys.modules["mcp.client"] = MagicMock()
-sys.modules["mcp.client.session"] = MagicMock()
-sys.modules["mcp.client.stdio"] = MagicMock()
 from autogen.mcp.mcp_client import ResultSaved, create_toolkit
 
 from ..conftest import Credentials
@@ -36,13 +30,12 @@ with optional_import_block():
     ],
     "mcp",
 )
-@pytest.mark.skip
 class TestMCPClient:
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
         server_file = Path(__file__).parent / "math_server.py"
         return StdioServerParameters(
-            command="python",
+            command="python3",
             args=[str(server_file)],
         )
 
@@ -70,20 +63,22 @@ class TestMCPClient:
                 llm_config=mock_credentials.llm_config,
             )
             toolkit.register_for_llm(agent)
-            expected_schema = [
+            expected_schema = expected_schema = [
                 {
                     "type": "function",
                     "function": {
                         "name": "add",
                         "description": "Add two numbers",
                         "parameters": {
-                            "properties": {
-                                "a": {"title": "A", "type": "integer"},
-                                "b": {"title": "B", "type": "integer"},
-                            },
-                            "required": ["a", "b"],
-                            "title": "addArguments",
                             "type": "object",
+                            "properties": {
+                                "arguments": {
+                                    "type": "object",
+                                    "description": "arguments",
+                                    "additionalProperties": True,
+                                }
+                            },
+                            "required": ["arguments"],
                         },
                     },
                 },
@@ -93,13 +88,15 @@ class TestMCPClient:
                         "name": "multiply",
                         "description": "Multiply two numbers",
                         "parameters": {
-                            "properties": {
-                                "a": {"title": "A", "type": "integer"},
-                                "b": {"title": "B", "type": "integer"},
-                            },
-                            "required": ["a", "b"],
-                            "title": "multiplyArguments",
                             "type": "object",
+                            "properties": {
+                                "arguments": {
+                                    "type": "object",
+                                    "description": "arguments",
+                                    "additionalProperties": True,
+                                }
+                            },
+                            "required": ["arguments"],
                         },
                     },
                 },
@@ -183,7 +180,10 @@ class TestMCPClient:
 
                     expected_result = [
                         TextResourceContents(
-                            uri=AnyUrl("echo://AG2User"), mimeType="text/plain", text="Resource echo: AG2User"
+                            uri=AnyUrl("echo://AG2User"),
+                            mimeType="text/plain",
+                            text="Resource echo: AG2User",
+                            meta=None,
                         )
                     ]
                     assert loaded_result.contents == expected_result
