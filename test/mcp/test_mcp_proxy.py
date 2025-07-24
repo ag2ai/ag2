@@ -8,8 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-sys.modules["mcp"] = MagicMock()
-sys.modules["mcp.client"] = MagicMock()
 sys.modules["mcp.client.session"] = MagicMock()
 sys.modules["mcp.client.stdio"] = MagicMock()
 from autogen.mcp.mcp_proxy.mcp_proxy import MCPProxy
