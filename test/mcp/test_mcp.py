@@ -64,7 +64,7 @@ class TestMCPClient:
                 llm_config=mock_credentials.llm_config,
             )
             toolkit.register_for_llm(agent)
-            expected_schema = expected_schema = [
+            expected_schema = [
                 {
                     "type": "function",
                     "function": {
@@ -218,3 +218,91 @@ class TestMCPClient:
             await result.process()
             summary = await result.summary
             assert "6912" in summary
+
+
+class TestMCPClientSessionManager:
+    def test_validate_mcp_import(self, monkeypatch):
+        # Should not raise if mcp import is successful
+        from autogen.mcp.mcp_client import MCPClientSessionManager
+
+        monkeypatch.setitem(__import__("sys").modules, "mcp", type("FakeMCP", (), {})())
+        # Should not raise
+        MCPClientSessionManager._validate_mcp_import()
+
+    @pytest.mark.asyncio
+    async def test_create_stdio_session(self):
+        import sys
+
+        from autogen.mcp.mcp_client import MCPClientSessionManager, StdioConfig
+
+        if sys.platform == "win32":
+            pytest.skip("Skipping stdio session test on Windows.")
+        # Use the math_server.py as a dummy server
+        server_file = Path(__file__).parent / "math_server.py"
+        config = StdioConfig(
+            command="python3",
+            args=[str(server_file)],
+            transport="stdio",
+            server_name="test_server",
+        )
+        manager = MCPClientSessionManager()
+        async with manager.create_stdio_session(config) as session:
+            assert session is not None
+
+    @pytest.mark.asyncio
+    async def test_open_session(self):
+        import sys
+
+        from autogen.mcp.mcp_client import MCPClientSessionManager, StdioConfig
+
+        if sys.platform == "win32":
+            pytest.skip("Skipping open_session test on Windows.")
+        server_file = Path(__file__).parent / "math_server.py"
+        config = StdioConfig(
+            command="python3",
+            args=[str(server_file)],
+            transport="stdio",
+            server_name="test_server",
+        )
+        manager = MCPClientSessionManager()
+        async with manager.open_session(config) as session:
+            assert session is not None
+
+
+def test_stdioconfig_creation():
+    from autogen.mcp.mcp_client import StdioConfig
+
+    config = StdioConfig(
+        command="python3",
+        args=["script.py", "--foo", "bar"],
+        transport="stdio",
+        server_name="test_server",
+        environment={"ENV_VAR": "value"},
+        working_dir="/tmp",
+        encoding="utf-8",
+        encoding_error_handler="strict",
+        session_options={"read_timeout_seconds": 10},
+    )
+    assert config.command == "python3"
+    assert config.args == ["script.py", "--foo", "bar"]
+    assert config.transport == "stdio"
+    assert config.server_name == "test_server"
+    assert config.environment["ENV_VAR"] == "value"
+    assert config.working_dir == "/tmp"
+    assert config.encoding == "utf-8"
+    assert config.encoding_error_handler == "strict"
+    assert config.session_options["read_timeout_seconds"] == 10
+
+
+def test_mcpconfig_creation():
+    from autogen.mcp.mcp_client import MCPConfig, StdioConfig
+
+    stdio_cfg = StdioConfig(
+        command="python3",
+        args=["script.py"],
+        transport="stdio",
+        server_name="server1",
+    )
+    mcp_cfg = MCPConfig(servers=[stdio_cfg])
+    assert len(mcp_cfg.servers) == 1
+    assert mcp_cfg.servers[0].server_name == "server1"
