@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import anyio
 import pytest
@@ -13,6 +15,11 @@ from pydantic.networks import AnyUrl
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
+
+sys.modules["mcp"] = MagicMock()
+sys.modules["mcp.client"] = MagicMock()
+sys.modules["mcp.client.session"] = MagicMock()
+sys.modules["mcp.client.stdio"] = MagicMock()
 from autogen.mcp.mcp_client import ResultSaved, create_toolkit
 
 from ..conftest import Credentials
