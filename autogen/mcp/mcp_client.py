@@ -3,12 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import os
 import sys
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union, cast
 
 import anyio
 from mcp.client.session import ClientSession
@@ -212,17 +211,12 @@ class MCPClientSessionManager:
 
     def __init__(self):
         """Initialize the MCP client session manager."""
+        self.exit_stack = AsyncExitStack()
+        self.sessions: dict[str, ClientSession] = {}
 
-        self._validate_mcp_import()
-
-    @staticmethod
-    def _validate_mcp_import() -> None:
-        """Validate that the MCP library is available."""
-        with optional_import_block() as result:
-            import mcp  # noqa: F401
-
-        if not result.is_successful:
-            raise ImportError("MCP library is not available. Please install it with:\npip install mcp")
+    async def _initialize_session(self, server_name: str, session: ClientSession) -> None:
+        await session.initialize()
+        self.sessions[server_name] = session
 
     @asynccontextmanager
     async def create_stdio_session(
@@ -238,24 +232,24 @@ class MCPClientSessionManager:
         Yields:
             ClientSession: The MCP client session
         """
-        environment = config.environment or {}
-        if "PATH" not in environment:
-            environment["PATH"] = os.environ.get("PATH", "")
 
         server_params = StdioServerParameters(
             command=config.command,
             args=config.args,
-            env=environment,
-            cwd=config.working_dir,
+            env=config.environment,
             encoding=config.encoding,
             encoding_error_handler=config.encoding_error_handler,
         )
 
-        async with (
-            stdio_client(server_params) as (reader, writer),
-            ClientSession(reader, writer, **(config.session_options or {})) as session,
-        ):
-            yield session
+        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+        reader, writer = stdio_transport
+
+        session = cast(
+            ClientSession,
+            await self.exit_stack.enter_async_context(ClientSession(reader, writer)),
+        )
+        await self._initialize_session(config.server_name, session)
+        yield session
 
     @asynccontextmanager
     async def open_session(
@@ -271,12 +265,9 @@ class MCPClientSessionManager:
         Yields:
             ClientSession: The MCP client session
         """
-        try:
-            if isinstance(config, StdioConfig):
-                async with self.create_stdio_session(config) as session:
-                    yield session
-        except Exception as e:
-            raise NotImplementedError(f"Error opening session: {e}")
+        if isinstance(config, StdioConfig):
+            async with self.create_stdio_session(config) as session:
+                yield session
 
 
 @export_module("autogen.mcp")
