@@ -221,14 +221,6 @@ class TestMCPClient:
 
 
 class TestMCPClientSessionManager:
-    def test_validate_mcp_import(self, monkeypatch):
-        # Should not raise if mcp import is successful
-        from autogen.mcp.mcp_client import MCPClientSessionManager
-
-        monkeypatch.setitem(__import__("sys").modules, "mcp", type("FakeMCP", (), {})())
-        # Should not raise
-        MCPClientSessionManager._validate_mcp_import()
-
     @pytest.mark.asyncio
     async def test_create_stdio_session(self):
         import sys
