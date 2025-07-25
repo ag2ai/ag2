@@ -23,7 +23,6 @@ ArxivServer = StdioConfig(
     transport="stdio",
     server_name="ArxivServer",
 )
-# wiki = Path("notebook/mcp/mcp_wikipedia.py")
 WikipediaServer = StdioConfig(
     command="python3",
     args=["mcp/mcp_wikipedia.py", "stdio", "--storage-path", "tmp/wikipedia_articles"],
@@ -34,7 +33,7 @@ WikipediaServer = StdioConfig(
 mcp_config = MCPConfig(servers=[ArxivServer, WikipediaServer])
 
 
-def get_stdio_config_not_in_mcp_config(mcp_config: MCPConfig, server_name: str) -> StdioConfig:
+def get_stdio_config(mcp_config: MCPConfig, server_name: str) -> StdioConfig:
     existing_names = {server.server_name for server in mcp_config.servers}
     for server in mcp_config.servers:
         if server.server_name in server_name:
@@ -77,7 +76,7 @@ You have two mcp servers to use:
 
 @tool(description=TOOL_PROMPT)
 async def run_mcp_agent_to_client(query: str, server_name: str) -> ReplyResult:
-    server = get_stdio_config_not_in_mcp_config(mcp_config, server_name)
+    server = get_stdio_config(mcp_config, server_name)
     async with MCPClientSessionManager().open_session(server) as session:
         await session.initialize()
         agent_tool_prompt = await session.list_tools()
