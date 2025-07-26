@@ -246,8 +246,8 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
-
-    # ⏺ The extra_body parameter flows from OpenAILLMConfigEntry to the LLM request through this path:
+    stream: bool = False
+    #   The extra_body parameter flows from OpenAILLMConfigEntry to the LLM request through this path:
     #   1. Config Definition: extra_body is defined in OpenAILLMConfigEntry (autogen/oai/client.py:248)
     #   2. Parameter Classification: It's classified as an OpenAI client parameter (not AG2-specific) via the openai_kwargs property (autogen/oai/client.py:752-758)
     #   3. Request Separation: In _separate_create_config() (autogen/oai/client.py:842), extra_body goes into create_config since it's not in the extra_kwargs set.
@@ -268,6 +268,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
+    stream: bool = False
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
     # reasoning models - see:
@@ -286,6 +287,7 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
     base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
+    stream: bool = False
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
 

@@ -641,6 +641,7 @@ def test_openai_llm_config_entry():
         "model": "gpt-4o-mini",
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "tags": [],
+        "stream": False,
     }
     actual = openai_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
@@ -660,6 +661,7 @@ def test_azure_llm_config_entry() -> None:
         "base_url": "https://api.openai.com/v1",
         "user": "unique_user_id",
         "tags": [],
+        "stream": False,
     }
     actual = azure_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
@@ -686,6 +688,7 @@ def test_deepseek_llm_config_entry() -> None:
         "max_tokens": 8192,
         "temperature": 0.5,
         "tags": [],
+        "stream": False,
     }
     actual = deepseek_llm_config.model_dump()
     assert actual == expected, actual

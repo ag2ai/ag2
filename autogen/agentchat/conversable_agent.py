@@ -3873,15 +3873,29 @@ class ConversableAgent(LLMAgent):
                     **executor_kwargs,
                 )
 
-            tools = [] if tools is None else tools
-            tools = [tools] if isinstance(tools, Tool) else tools
-            for tool in tools:
+            # Combine agent's existing tools with passed tools
+            agent_tools = self._tools.copy()  # Get agent's pre-registered tools
+            passed_tools = [] if tools is None else tools
+            passed_tools = [passed_tools] if isinstance(passed_tools, Tool) else passed_tools
+
+            # Combine both sets of tools (avoid duplicates)
+            all_tools = agent_tools.copy()
+            for tool in passed_tools:
+                if tool not in all_tools:
+                    all_tools.append(tool)
+
+            # Register all tools with the executor
+            for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
+
+            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered)
+            for tool in passed_tools:
                 tool.register_for_llm(self)
             yield self.run_executor
         finally:
-            if tools is not None:
-                for tool in tools:
+            # Clean up only newly passed tools (not agent's pre-existing tools)
+            if "passed_tools" in locals():
+                for tool in passed_tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
     def _deprecated_run(
