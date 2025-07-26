@@ -88,31 +88,7 @@ class TestGeminiClient:
     @pytest.fixture
     def gemini_client_with_credentials(self):
         mock_credentials = MagicMock(Credentials)
-        return GeminiClient(credentials=mock_credentials)
-
-    @pytest.fixture
-    def test_proxy_initialization(self):
-        proxy = "http://mock-test-proxy:90/"
-        return GeminiClient(proxy=proxy)
-
-    def test_proxy_setting_in_create(self):
-        """Test that the proxy setting is correctly passed to the Gemini API client."""
-        proxy_url = "http://mock-test-proxy:90/"
-        client = GeminiClient(api_key="fake-api-key", proxy=proxy_url)
-
-        try:
-            client.create({
-                "model": "gemini-pro",
-                "messages": [{"role": "user", "content": "Hello"}],
-                "stream": False,
-            })
-        except Exception as e:
-            # The test should not fail if the API call fails due to the proxy.
-            # We only care about whether the proxy setting is passed to the API client.
-            print(f"API call failed, but proxy setting was tested. Error: {e}")
-
-        # Access the genai.configure to verify that proxy was set.
-        assert client.proxy == proxy_url, "Proxy was not correctly set on the client."
+        return GeminiClient(credentials=mock_credentials)   
 
     # Test compute location initialization and configuration
     def test_compute_location_initialization(self):
@@ -143,10 +119,6 @@ class TestGeminiClient:
         assert vertexai_global_config.location == "us-west1", "Incorrect VertexAI location initialization"
         assert vertexai_global_config.project == "fake-project-id", "Incorrect VertexAI project initialization"
         assert vertexai_global_config.credentials == mock_credentials, "Incorrect VertexAI credentials initialization"
-
-    def test_proxy_scenario(self, test_proxy_initialization):
-        mock_proxy = "http://mock-test-proxy:90/"
-        assert test_proxy_initialization.proxy == mock_proxy, "Invalid proxy set."
 
     def test_extract_system_instruction(self, gemini_client):
         # Test: valid system instruction
@@ -547,6 +519,53 @@ class TestGeminiClient:
         }
         assert result == expected_result, result
 
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_generation_config_with_proxy(self, mock_generate_content_config, mock_generative_client, gemini_client):
+        """Test that proxy parameter is properly set in Gemini LLM Config"""
+        # Mock setup
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Mock response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create with proxy parameter
+        gemini_client.create({
+            "model": "gemini-2.5-flash",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "proxy": "http://mock-test-proxy:90/",
+            "temperature": 0.7,
+            "max_tokens": 265,
+            "top_p": 0.5,
+            "top_k": 3,
+        })
+
+        # Verify GenerateContentConfig was called with correct parameters
+        mock_generate_content_config.assert_called_once()
+        call_kwargs = mock_generate_content_config.call_args.kwargs
+
+        # Check that generation config parameters are correctly mapped
+        assert call_kwargs["proxy"] == "http://mock-test-proxy:90/", "Proxy parameter should be set in the config"
+        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
+        assert call_kwargs["max_output_tokens"] == 265, "max_tokens should be mapped to max_output_tokens"
+        assert call_kwargs["top_p"] == 0.5, "top_p parameter should be passed to generation config"
+        assert call_kwargs["top_k"] == 3, "top_k parameter should be passed to generation config"
+
     def test_create_gemini_function_parameters_with_nested_parameters(
         self, nested_function_parameters: dict[str, Any]
     ) -> None:
@@ -577,6 +596,8 @@ class TestGeminiClient:
         }
 
         assert result == expected_result, result
+    
+
 
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.GenerateContentConfig")
