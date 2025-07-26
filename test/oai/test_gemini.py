@@ -88,7 +88,7 @@ class TestGeminiClient:
     @pytest.fixture
     def gemini_client_with_credentials(self):
         mock_credentials = MagicMock(Credentials)
-        return GeminiClient(credentials=mock_credentials)   
+        return GeminiClient(credentials=mock_credentials)
 
     # Test compute location initialization and configuration
     def test_compute_location_initialization(self):
@@ -596,8 +596,6 @@ class TestGeminiClient:
         }
 
         assert result == expected_result, result
-    
-
 
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.GenerateContentConfig")
