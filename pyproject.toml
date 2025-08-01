@@ -298,6 +298,7 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==3.0.1",
     "nbclient==0.10.2",
+    "mcp>=1.9.4; python_version>='3.10'",
 ]
 
 types = [
