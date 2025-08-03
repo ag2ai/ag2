@@ -1477,9 +1477,10 @@ class ConversableAgent(LLMAgent):
                         msg2send = self.generate_init_message(message, **kwargs)
                 else:
                     last_message = self.chat_messages[recipient][-1]
+                    if self._terminate_chat(recipient, last_message):
+                        break
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                    is_termination = self._terminate_chat(recipient, last_message)
-                if is_termination or msg2send is None:
+                if msg2send is None:
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
