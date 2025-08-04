@@ -479,6 +479,8 @@ convention = "google"
 
 
 [tool.mypy]
+python_version = "3.9"
+
 files = [
     "autogen/agentchat/agent.py",
 #    "autogen/agentchat/cenversable_agent.py",
