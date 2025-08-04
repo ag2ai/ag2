@@ -11,6 +11,7 @@ from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional,
 
 import anyio
 from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from pydantic import BaseModel, Field
 
@@ -43,6 +44,16 @@ DEFAULT_STREAMABLE_HTTP_REQUEST_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_EVENT_READ_TIMEOUT = timedelta(seconds=60 * 5)
 
 
+class SseConfig(BaseModel):
+    """Configuration for a single SSE MCP server."""
+
+    url: str = Field(..., description="URL of the SSE server")
+    headers: Optional[Dict[str, Any]] = Field(default=None, description="HTTP headers to send to the SSE endpoint")
+    timeout: float = Field(default=DEFAULT_HTTP_REQUEST_TIMEOUT, description="HTTP timeout")
+    sse_read_timeout: float = Field(default=DEFAULT_SSE_EVENT_READ_TIMEOUT, description="SSE read timeout")
+    server_name: str = Field(..., description="Name of the server")
+
+
 class StdioConfig(BaseModel):
     """Configuration for a single stdio MCP server."""
 
@@ -62,7 +73,7 @@ class StdioConfig(BaseModel):
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[StdioConfig] = Field(..., description="List of stdio server configurations")
+    servers: List[StdioConfig | SseConfig] = Field(..., description="List of stdio server configurations")
 
 
 class MCPClient:
@@ -252,9 +263,35 @@ class MCPClientSessionManager:
         yield session
 
     @asynccontextmanager
+    async def create_sse_session(
+        self,
+        config: SseConfig,
+    ) -> AsyncIterator[ClientSession]:
+        """
+        Establish a connection to an MCP server using SSE transport.
+
+        Args:
+            config: SseConfig object containing SSE session parameters
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        # Create and store the connection
+        sse_transport = await self.exit_stack.enter_async_context(
+            sse_client(config.url, config.headers, config.timeout, config.sse_read_timeout)
+        )
+        read, write = sse_transport
+        session = cast(
+            ClientSession,
+            await self.exit_stack.enter_async_context(ClientSession(read, write)),
+        )
+        await self._initialize_session(config.server_name, session)
+        yield session
+
+    @asynccontextmanager
     async def open_session(
         self,
-        config: StdioConfig,
+        config: List[StdioConfig | SseConfig],
     ) -> AsyncIterator[ClientSession]:
         """
         Open a new session to an MCP server based on configuration.
@@ -268,6 +305,11 @@ class MCPClientSessionManager:
         if isinstance(config, StdioConfig):
             async with self.create_stdio_session(config) as session:
                 yield session
+        elif isinstance(config, SseConfig):
+            async with self.create_sse_session(config) as session:
+                yield session
+        else:
+            raise ValueError(f"Invalid configuration type: {type(config)}")
 
 
 @export_module("autogen.mcp")

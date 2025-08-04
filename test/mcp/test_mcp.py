@@ -2,11 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import json
 import os
+import signal
 import tempfile
+from asyncio.subprocess import PIPE, Process, create_subprocess_exec
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
+from typing import AsyncGenerator, Dict, Optional
 
 import anyio
 import pytest
@@ -22,6 +27,47 @@ with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     from mcp.types import ReadResourceResult, TextResourceContents
+
+
+@asynccontextmanager
+async def run_sse_server(
+    *,
+    mcp_server_path: str,
+    storage_path: str,
+    env_vars: Optional[Dict[str, str]] = None,
+    startup_wait_secs: float = 3.0,
+) -> AsyncGenerator[Process, None]:
+    """
+    Async context manager to run a Python subprocess for SSE server with custom env vars.
+
+    Args:
+        mcp_server_path: Path to the Python script to run.
+        storage_path: Path for the server to store files.
+        env_vars: Environment variables to export to the subprocess.
+        startup_wait_secs: Time to wait for the server to start (in seconds).
+    Yields:
+        An asyncio.subprocess.Process object.
+    """
+    env = os.environ.copy()
+    if env_vars:
+        env.update(env_vars)
+
+    process = await create_subprocess_exec(
+        "python", mcp_server_path, "sse", "--storage-path", storage_path, env=env, stdout=PIPE, stderr=PIPE
+    )
+
+    # Optional startup delay to let the server initialize
+    await asyncio.sleep(startup_wait_secs)
+
+    try:
+        yield process
+    finally:
+        if process.returncode is None:
+            process.send_signal(signal.SIGINT)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
 
 
 @skip_on_missing_imports(
@@ -222,6 +268,24 @@ class TestMCPClient:
 
 class TestMCPClientSessionManager:
     @pytest.mark.asyncio
+    async def test_create_sse_session(self):
+        from autogen.mcp.mcp_client import MCPClientSessionManager, SseConfig
+
+        # Create a temporary directory for the server storage
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Start the SSE server
+            server_path = Path(__file__).parent.parent.parent / "notebook" / "mcp" / "mcp_wikipedia.py"
+
+            async with run_sse_server(mcp_server_path=str(server_path), storage_path=temp_dir):
+                config = SseConfig(
+                    url="http://127.0.0.1:8000/sse",
+                    server_name="test_server",
+                )
+                manager = MCPClientSessionManager()
+                async with manager.create_sse_session(config) as session:
+                    assert type(session) is ClientSession
+
+    @pytest.mark.asyncio
     async def test_create_stdio_session(self):
         import sys
 
@@ -239,10 +303,10 @@ class TestMCPClientSessionManager:
         )
         manager = MCPClientSessionManager()
         async with manager.create_stdio_session(config) as session:
-            assert session is not None
+            assert type(session) is ClientSession
 
     @pytest.mark.asyncio
-    async def test_open_session(self):
+    async def test_open_session_stdio(self):
         import sys
 
         from autogen.mcp.mcp_client import MCPClientSessionManager, StdioConfig
@@ -258,7 +322,41 @@ class TestMCPClientSessionManager:
         )
         manager = MCPClientSessionManager()
         async with manager.open_session(config) as session:
-            assert session is not None
+            assert type(session) is ClientSession
+
+    @pytest.mark.asyncio
+    async def test_open_session_sse(self):
+        from autogen.mcp.mcp_client import MCPClientSessionManager, SseConfig
+
+        # Create a temporary directory for the server storage
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Start the SSE server
+            server_path = Path(__file__).parent.parent.parent / "notebook" / "mcp" / "mcp_wikipedia.py"
+
+            async with run_sse_server(mcp_server_path=str(server_path), storage_path=temp_dir):
+                config = SseConfig(
+                    url="http://127.0.0.1:8000/sse",
+                    server_name="WikipediaServer",
+                )
+                manager = MCPClientSessionManager()
+                async with manager.open_session(config) as session:
+                    assert type(session) is ClientSession
+
+
+def test_sseconfig_creation():
+    from autogen.mcp.mcp_client import MCPConfig, SseConfig
+
+    sse_cfg = SseConfig(
+        url="http://127.0.0.1:8000/sse",
+        server_name="mock_server",
+        timeout=10,
+        sse_read_timeout=10,
+    )
+    mcp_cfg = MCPConfig(servers=[sse_cfg])
+    assert len(mcp_cfg.servers) == 1
+    assert mcp_cfg.servers[0].server_name == "mock_server"
+    assert mcp_cfg.servers[0].timeout == 10
+    assert mcp_cfg.servers[0].sse_read_timeout == 10
 
 
 def test_stdioconfig_creation():
