@@ -189,7 +189,7 @@ twilio = [
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 mcp-proxy-gen = [
@@ -297,7 +297,7 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
     "nbclient==0.10.2",
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 types = [
