@@ -24,7 +24,7 @@ keywords = [
     "agentic"
 ]
 
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<3.14"
 
 dynamic = ["version"]
 
@@ -35,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -414,7 +413,7 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 [tool.ruff]
 fix = true
 line-length = 120
-target-version = 'py39'
+target-version = 'py310'
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -485,7 +484,7 @@ convention = "google"
 
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",
