@@ -68,6 +68,16 @@ class TransitionTarget(BaseModel):
         """Create a wrapper agent for the target if needed."""
         raise NotImplementedError("Requires subclasses to implement.")
 
+    def activate_target(self, groupchat: "GroupChat") -> None:
+        """Activate the target in the groupchat, setting the next target for GroupToolExecutor.
+
+        The Tool Executor's next target attribute will be picked up on the next iteration when _determine_next_agent is called"""
+        for agent in groupchat.agents:  # type: ignore[attr-defined]
+            # get the GroupToolExecutor agent
+            if type(agent).__name__ == "GroupToolExecutor":
+                agent.set_next_target(self)  # type: ignore[attr-defined]
+                return
+
 
 class AgentTarget(TransitionTarget):
     """Target that represents a direct agent reference."""

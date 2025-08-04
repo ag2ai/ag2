@@ -43,8 +43,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MCP Filesystem Server")
     parser.add_argument(
         "transport",
-        choices=["stdio", "sse"],
-        help="Transport mode (stdio or sse)",
+        choices=["stdio", "sse", "streamable-http"],
+        help="Transport mode (stdio, sse or streamable-http)",
     )
     parser.add_argument("--context-path", required=True, help="Path to context docs")
     args = parser.parse_args()

@@ -13,12 +13,15 @@ logger = logging.getLogger(__name__)
 def deprecated_by(
     new_class: type[BaseModel],
     param_mapping: dict[str, str] = None,
+    default_params: dict[str, any] = None,
 ) -> Callable[[type[BaseModel]], Callable[..., BaseModel]]:
     param_mapping = param_mapping or {}
+    default_params = default_params or {}
 
     def decorator(
         old_class: type[BaseModel],
         param_mapping: dict[str, str] = param_mapping,
+        default_params: dict[str, any] = default_params,
     ) -> Callable[..., BaseModel]:
         @wraps(old_class)
         def wrapper(*args, **kwargs) -> BaseModel:
@@ -27,6 +30,11 @@ def deprecated_by(
             )
             # Translate old parameters to new parameters
             new_kwargs = {param_mapping.get(k, k): v for k, v in kwargs.items()}
+
+            # Add default parameters if not already present
+            for key, value in default_params.items():
+                if key not in new_kwargs:
+                    new_kwargs[key] = value
 
             # Pass the translated parameters to the new class
             return new_class(*args, **new_kwargs)

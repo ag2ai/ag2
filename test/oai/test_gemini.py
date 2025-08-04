@@ -589,6 +589,99 @@ class TestGeminiClient:
 
         assert result == expected_result, result
 
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_generation_config_with_seed(self, mock_generate_content_config, mock_generative_client, gemini_client):
+        """Test that seed parameter is properly passed to generation config"""
+        # Mock setup
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Test response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create with seed parameter
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "seed": 42,
+            "temperature": 0.7,
+            "max_tokens": 100,
+            "top_p": 0.9,
+            "top_k": 5,
+        })
+
+        # Verify GenerateContentConfig was called with correct parameters
+        mock_generate_content_config.assert_called_once()
+        call_kwargs = mock_generate_content_config.call_args.kwargs
+
+        # Check that generation config parameters are correctly mapped
+        assert call_kwargs["seed"] == 42, "Seed parameter should be passed to generation config"
+        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
+        assert call_kwargs["max_output_tokens"] == 100, "max_tokens should be mapped to max_output_tokens"
+        assert call_kwargs["top_p"] == 0.9, "top_p parameter should be passed to generation config"
+        assert call_kwargs["top_k"] == 5, "top_k parameter should be passed to generation config"
+
+    @patch("autogen.oai.gemini.GenerativeModel")
+    @patch("autogen.oai.gemini.GenerationConfig")
+    def test_vertexai_generation_config_with_seed(
+        self, mock_generation_config, mock_generative_model, gemini_client_with_credentials
+    ):
+        """Test that seed parameter is properly passed to VertexAI generation config"""
+        # Mock setup
+        mock_chat = MagicMock()
+        mock_model = MagicMock()
+        mock_generative_model.return_value = mock_model
+        mock_model.start_chat.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Test response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=VertexAIGenerationResponse)
+        mock_response.candidates = [mock_candidate]
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create with seed parameter
+        gemini_client_with_credentials.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "seed": 123,
+            "temperature": 0.5,
+            "max_tokens": 200,
+        })
+
+        # Verify GenerationConfig was called with correct parameters
+        mock_generation_config.assert_called_once()
+        call_kwargs = mock_generation_config.call_args.kwargs
+
+        # Check that generation config parameters are correctly mapped
+        assert call_kwargs["seed"] == 123, "Seed parameter should be passed to VertexAI generation config"
+        assert call_kwargs["temperature"] == 0.5, "Temperature parameter should be passed to VertexAI generation config"
+        assert call_kwargs["max_output_tokens"] == 200, "max_tokens should be mapped to max_output_tokens"
+
     @pytest.mark.parametrize("name", ["prebuilt_google_search", "google_search"])
     def test_check_if_prebuilt_google_search_tool_exists(self, name: str) -> None:
         tools = [

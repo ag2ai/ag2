@@ -42,7 +42,8 @@ TASK_MANAGER_NAME = "TaskManagerAgent"
 TASK_MANAGER_SYSTEM_MESSAGE = """
     You are a task manager agent. You have 2 priorities:
     1. You initiate the tasks which updates the context variables based on the task decisions (DocumentTask) from the DocumentTriageAgent.
-    If the DocumentTriageAgent has suggested any ingestions or queries, call initiate_tasks to record them.
+    ALWAYS call initiate_tasks first when you receive a message from the DocumentTriageAgent, even if you think there are no new tasks.
+    This ensures that any new ingestions or queries from the triage agent are properly recorded.
     Put all ingestion and query tasks into the one tool call.
         i.e. output
         {
@@ -75,7 +76,7 @@ TASK_MANAGER_SYSTEM_MESSAGE = """
     Transfer to the summary agent if all ingestion and query tasks are done.
     """
 
-DEFAULT_ERROR_SWARM_MESSAGE: str = """
+DEFAULT_ERROR_GROUP_CHAT_MESSAGE: str = """
 Document Agent failed to perform task.
 """
 
@@ -147,7 +148,7 @@ class DocAgent(ConversableAgent):
     """
     The DocAgent is responsible for ingest and querying documents.
 
-    Internally, it generates a group of swarm agents to solve tasks.
+    Internally, it generates a group chat with a set of agents to ingest, query, and summarize.
     """
 
     def __init__(
@@ -196,7 +197,7 @@ class DocAgent(ConversableAgent):
             llm_config=llm_config,
             human_input_mode="NEVER",
         )
-        self.register_reply([ConversableAgent, None], self.generate_inner_swarm_reply, position=0)
+        self.register_reply([ConversableAgent, None], self.generate_inner_group_chat_reply, position=0)
 
         self.context_variables: ContextVariables = ContextVariables(
             data={
@@ -210,7 +211,15 @@ class DocAgent(ConversableAgent):
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
 
         def create_error_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
-            """Create the error agent prompt, primarily used to update ingested documents for ending"""
+            """Create the error agent prompt, primarily used to update ingested documents for ending.
+
+            Args:
+                agent: The conversable agent requesting the prompt
+                messages: List of conversation messages
+
+            Returns:
+                str: The error manager system message
+            """
             update_ingested_documents()
 
             return ERROR_MANAGER_SYSTEM_MESSAGE
@@ -223,7 +232,11 @@ class DocAgent(ConversableAgent):
         )
 
         def update_ingested_documents() -> None:
-            """Updates the list of ingested documents, persisted so we can keep a list over multiple replies"""
+            """Updates the list of ingested documents, persisted so we can keep a list over multiple replies.
+
+            This function updates self.documents_ingested with any new documents that have been ingested
+            by the triage agent, ensuring persistence across multiple DocAgent interactions.
+            """
             agent_documents_ingested = self._triage_agent.context_variables.get("DocumentsIngested", [])
             # Update self.documents_ingested with any new documents ingested
             for doc in agent_documents_ingested:  # type: ignore[union-attr]
@@ -234,21 +247,162 @@ class DocAgent(ConversableAgent):
             ingestions: Annotated[list[Ingest], Field(description="List of documents, files, and URLs to ingest")]
             queries: Annotated[list[Query], Field(description="List of queries to run")]
 
+        def _deduplicate_ingestions(
+            new_ingestions: list[Ingest], existing_ingestions: list[Ingest], documents_ingested: list[str]
+        ) -> tuple[list[Ingest], list[str]]:
+            """Deduplicate ingestions against existing pending and already ingested documents.
+
+            Args:
+                new_ingestions: List of new ingestion requests to process
+                existing_ingestions: List of ingestions already pending
+                documents_ingested: List of document paths already ingested
+
+            Returns:
+                tuple: (new_unique_ingestions, ignored_duplicate_paths)
+            """
+            unique_ingestions = []
+            ignored_paths = []
+
+            for ingestion in new_ingestions:
+                ingestion_path = ingestion.path_or_url
+                # Check if already in pending ingestions
+                already_pending = any(existing.path_or_url == ingestion_path for existing in existing_ingestions)
+                # Check if already ingested
+                already_ingested = ingestion_path in documents_ingested
+
+                if already_pending or already_ingested:
+                    ignored_paths.append(ingestion_path)
+                else:
+                    unique_ingestions.append(ingestion)
+
+            return unique_ingestions, ignored_paths
+
+        def _deduplicate_queries(
+            new_queries: list[Query], existing_queries: list[Query]
+        ) -> tuple[list[Query], list[str]]:
+            """Deduplicate queries against existing pending queries.
+
+            Args:
+                new_queries: List of new query requests to process
+                existing_queries: List of queries already pending
+
+            Returns:
+                tuple: (new_unique_queries, ignored_duplicate_query_texts)
+            """
+            unique_queries = []
+            ignored_query_texts = []
+
+            for query in new_queries:
+                query_text = query.query
+                # Check if query already exists in pending queries
+                already_pending = any(existing.query == query_text for existing in existing_queries)
+
+                if already_pending:
+                    ignored_query_texts.append(query_text)
+                else:
+                    unique_queries.append(query)
+
+            return unique_queries, ignored_query_texts
+
+        def _build_response_message(
+            added_ingestions: int, ignored_ingestions: list[str], added_queries: int, ignored_queries: list[str]
+        ) -> str:
+            """Build a descriptive response message about what was added/ignored.
+
+            Args:
+                added_ingestions: Number of unique ingestions added
+                ignored_ingestions: List of duplicate ingestion paths ignored
+                added_queries: Number of unique queries added
+                ignored_queries: List of duplicate query texts ignored
+
+            Returns:
+                str: Formatted message describing the results
+            """
+            messages = []
+
+            if added_ingestions > 0:
+                messages.append(f"Added {added_ingestions} new document(s) for ingestion")
+
+            if ignored_ingestions:
+                messages.append(
+                    f"Ignored {len(ignored_ingestions)} duplicate document(s): {', '.join(ignored_ingestions)}"
+                )
+
+            if added_queries > 0:
+                messages.append(f"Added {added_queries} new query/queries")
+
+            if ignored_queries:
+                messages.append(f"Ignored {len(ignored_queries)} duplicate query/queries: {', '.join(ignored_queries)}")
+
+            if messages:
+                return "; ".join(messages)
+            else:
+                return "All requested tasks were duplicates and ignored"
+
         def initiate_tasks(
             task_init_info: Annotated[TaskInitInfo, "Documents, Files, URLs to ingest and the queries to run"],
             context_variables: Annotated[ContextVariables, "Context variables"],
         ) -> ReplyResult:
-            """Add documents to ingest and queries to answer when received."""
+            """Add documents to ingest and queries to answer when received.
+
+            Args:
+                task_init_info: Information about documents to ingest and queries to run
+                context_variables: The current context variables containing task state
+
+            Returns:
+                ReplyResult: Contains response message, updated context, and target agent
+            """
             ingestions = task_init_info.ingestions
             queries = task_init_info.queries
 
             if "TaskInitiated" in context_variables:
-                return ReplyResult(message="Task already initiated", context_variables=context_variables)
-            context_variables["DocumentsToIngest"] = ingestions
-            context_variables["QueriesToRun"] = [query for query in queries]
-            context_variables["TaskInitiated"] = True
+                # Handle follow-up tasks with deduplication
+                added_ingestions_count = 0
+                ignored_ingestions = []
+                added_queries_count = 0
+                ignored_queries = []
+
+                if ingestions:
+                    existing_ingestions: list[Ingest] = context_variables.get("DocumentsToIngest", [])  # type: ignore[assignment]
+                    documents_ingested: list[str] = context_variables.get("DocumentsIngested", [])  # type: ignore[assignment]
+
+                    unique_ingestions, ignored_ingestion_paths = _deduplicate_ingestions(
+                        ingestions, existing_ingestions, documents_ingested
+                    )
+
+                    if unique_ingestions:
+                        context_variables["DocumentsToIngest"] = existing_ingestions + unique_ingestions
+                        added_ingestions_count = len(unique_ingestions)
+
+                    ignored_ingestions = ignored_ingestion_paths
+
+                if queries:
+                    existing_queries: list[Query] = context_variables.get("QueriesToRun", [])  # type: ignore[assignment]
+
+                    unique_queries, ignored_query_texts = _deduplicate_queries(queries, existing_queries)
+
+                    if unique_queries:
+                        context_variables["QueriesToRun"] = existing_queries + unique_queries
+                        added_queries_count = len(unique_queries)
+
+                    ignored_queries = ignored_query_texts
+
+                if not ingestions and not queries:
+                    return ReplyResult(message="No new tasks to initiate", context_variables=context_variables)
+
+                response_message = _build_response_message(
+                    added_ingestions_count, ignored_ingestions, added_queries_count, ignored_queries
+                )
+
+            else:
+                # First time initialization - no deduplication needed
+                context_variables["DocumentsToIngest"] = ingestions
+                context_variables["QueriesToRun"] = [query for query in queries]
+                context_variables["TaskInitiated"] = True
+                response_message = "Updated context variables with task decisions"
+
             return ReplyResult(
-                message="Updated context variables with task decisions",
+                message=response_message,
                 context_variables=context_variables,
                 target=AgentNameTarget(agent_name=TASK_MANAGER_NAME),
             )
@@ -271,7 +425,14 @@ class DocAgent(ConversableAgent):
         )
 
         def execute_rag_query(context_variables: ContextVariables) -> ReplyResult:  # type: ignore[type-arg]
-            """Execute outstanding RAG queries, call the tool once for each outstanding query. Call this tool with no arguments."""
+            """Execute outstanding RAG queries, call the tool once for each outstanding query. Call this tool with no arguments.
+
+            Args:
+                context_variables: The current context variables containing queries to run
+
+            Returns:
+                ReplyResult: Contains query answer, updated context, and target agent
+            """
             if len(context_variables["QueriesToRun"]) == 0:
                 return ReplyResult(
                     target=AgentNameTarget(agent_name=TASK_MANAGER_NAME),
@@ -303,6 +464,9 @@ class DocAgent(ConversableAgent):
                 context_variables["QueriesToRun"].pop(0)
                 context_variables["CompletedTaskCount"] += 1
                 context_variables["QueryResults"].append({"query": query, "answer": answer, "citations": txt_citations})
+
+                # Query completed
+
                 return ReplyResult(message=answer, context_variables=context_variables)
             except Exception as e:
                 return ReplyResult(
@@ -322,9 +486,17 @@ class DocAgent(ConversableAgent):
             functions=[execute_rag_query],
         )
 
-        # Summary agent prompt will include the results of the ingestions and swarms
+        # Summary agent prompt will include the results of the ingestions and queries
         def create_summary_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
-            """Create the summary agent prompt and updates ingested documents"""
+            """Create the summary agent prompt and updates ingested documents.
+
+            Args:
+                agent: The conversable agent requesting the prompt
+                messages: List of conversation messages
+
+            Returns:
+                str: The summary agent system message with context information
+            """
             update_ingested_documents()
 
             documents_to_ingest: list[Ingest] = cast(list[Ingest], agent.context_variables.get("DocumentsToIngest", []))
@@ -368,14 +540,7 @@ class DocAgent(ConversableAgent):
                     expression=ContextExpression(expression="len(${QueriesToRun}) > 0")
                 ),
             ),
-            OnContextCondition(  # Go to Summary agent if no documents or queries left to run and we have query results
-                target=AgentTarget(agent=self._summary_agent),
-                condition=ExpressionContextCondition(
-                    expression=ContextExpression(
-                        expression="len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
-                    )
-                ),
-            ),
+            # Removed automatic context condition - let task manager decide when to summarize
             OnCondition(
                 target=AgentTarget(agent=self._summary_agent),
                 condition=StringLLMCondition(
@@ -396,28 +561,45 @@ class DocAgent(ConversableAgent):
         # The Error Agent always terminates the DocumentAgent
         self._error_agent.handoffs.set_after_work(target=TerminateTarget())
 
-        self.register_reply([Agent, None], DocAgent.generate_inner_swarm_reply)
+        self.register_reply([Agent, None], DocAgent.generate_inner_group_chat_reply)
 
         self.documents_ingested: list[str] = []
+        self._group_chat_context_variables: Optional[ContextVariables] = None
 
-    def generate_inner_swarm_reply(
+    def generate_inner_group_chat_reply(
         self,
         messages: Optional[Union[list[dict[str, Any]], str]] = None,
         sender: Optional[Agent] = None,
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
-        """Reply function that generates the inner swarm reply for the DocAgent."""
-        context_variables: ContextVariables = ContextVariables(
-            data={
-                "CompletedTaskCount": 0,
-                "DocumentsToIngest": [],
-                "DocumentsIngested": self.documents_ingested,
-                "QueriesToRun": [],
-                "QueryResults": [],
-            }
-        )
+        """Reply function that generates the inner group chat reply for the DocAgent.
 
-        swarm_agents = [
+        Args:
+            messages: Input messages to process
+            sender: The agent that sent the message
+            config: OpenAI wrapper configuration
+
+        Returns:
+            tuple: (should_terminate, reply_message)
+        """
+        # Use existing context_variables if available, otherwise create new ones
+        if hasattr(self, "_group_chat_context_variables") and self._group_chat_context_variables is not None:
+            context_variables = self._group_chat_context_variables
+            # Reset for the new run
+            context_variables["DocumentsToIngest"] = []  # type: ignore[index]
+        else:
+            context_variables = ContextVariables(
+                data={
+                    "CompletedTaskCount": 0,
+                    "DocumentsToIngest": [],
+                    "DocumentsIngested": self.documents_ingested,
+                    "QueriesToRun": [],
+                    "QueryResults": [],
+                }
+            )
+            self._group_chat_context_variables = context_variables
+
+        group_chat_agents = [
             self._triage_agent,
             self._task_manager_agent,
             self._data_ingestion_agent,
@@ -428,7 +610,7 @@ class DocAgent(ConversableAgent):
 
         agent_pattern = DefaultPattern(
             initial_agent=self._triage_agent,
-            agents=swarm_agents,
+            agents=group_chat_agents,
             context_variables=context_variables,
             group_after_work=TerminateTarget(),
         )
@@ -441,13 +623,23 @@ class DocAgent(ConversableAgent):
             # If we finish with the error agent, we return their message which contains the error
             return True, chat_result.summary
         if last_speaker != self._summary_agent:
-            # If the swarm finished but not with the summary agent, we assume something has gone wrong with the flow
-            return True, DEFAULT_ERROR_SWARM_MESSAGE
+            # If the group chat finished but not with the summary agent, we assume something has gone wrong with the flow
+            return True, DEFAULT_ERROR_GROUP_CHAT_MESSAGE
 
         return True, chat_result.summary
 
     def _get_document_input_message(self, messages: Optional[Union[list[dict[str, Any]], str]]) -> str:  # type: ignore[type-arg]
-        """Gets and validates the input message(s) for the document agent."""
+        """Gets and validates the input message(s) for the document agent.
+
+        Args:
+            messages: Input messages as string or list of message dictionaries
+
+        Returns:
+            str: The extracted message content
+
+        Raises:
+            NotImplementedError: If messages format is invalid
+        """
         if isinstance(messages, str):
             return messages
         elif (

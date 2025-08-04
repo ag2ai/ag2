@@ -12,6 +12,7 @@ import os
 import shutil
 import time
 from collections.abc import Generator
+from typing import Any  # Added import for Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -31,9 +32,213 @@ from autogen.oai.client import (
     OpenAIClient,
     OpenAILLMConfigEntry,
 )
-from autogen.oai.oai_models import ChatCompletion
+from autogen.oai.oai_models import ChatCompletion, ChatCompletionMessage, Choice, CompletionUsage
+
+# Attempt to import APIError from openai, define as base Exception if openai is not available.
+try:
+    from openai import APIError
+except ImportError:
+    APIError = Exception
+
 
 from ..conftest import Credentials
+
+
+class MockModelClient:
+    def __init__(self, config: dict, name: str = "mock_client"):
+        self.config = config
+        self.name = name  # Store the name if provided in config, else use default
+        self.call_count = 0
+
+    def create(self, params: dict[str, Any]):
+        self.call_count += 1
+        # Simulate a successful response or raise an exception based on config
+        if self.config.get("should_fail", False):
+            raise APIError(
+                message="Mock API Error", request=None, body=None
+            )  # Use openai.APIError or a general Exception
+
+        client_name_to_respond = self.config.get("name", self.name)
+        # Simulate a ChatCompletion response
+        return ChatCompletion(
+            id="chatcmpl-test",
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(content=f"Response from {client_name_to_respond}", role="assistant"),
+                )
+            ],
+            created=1677652288,
+            model=params.get("model", "gpt-3.5-turbo"),
+            object="chat.completion",
+            usage=CompletionUsage(completion_tokens=10, prompt_tokens=10, total_tokens=20),
+        )
+
+    def message_retrieval(self, response):
+        return [choice.message.content for choice in response.choices]
+
+    def cost(self, response):
+        return 0.02  # Example cost
+
+    @staticmethod
+    def get_usage(response):
+        return {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+            "cost": response.cost if hasattr(response, "cost") else 0,
+            "model": response.model,
+        }
+
+
+# Fixture for OpenAIWrapper with mocked clients
+@pytest.fixture
+def mock_openai_wrapper_fixed_order_default():
+    # Test case where routing_method is not specified in OpenAIWrapper constructor,
+    # so it should default to "fixed_order".
+    config_list = [
+        {"model": "gpt-3.5-turbo", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"},
+        {"model": "gpt-4", "api_key": "key2", "model_client_cls": "MockModelClient", "name": "client2"},
+    ]
+    wrapper = OpenAIWrapper(config_list=config_list)
+    assert wrapper.routing_method == "fixed_order"
+
+    for i in range(len(config_list)):
+        wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
+    return wrapper
+
+
+@pytest.fixture
+def mock_openai_wrapper_fixed_order_explicit():
+    # Test case where routing_method IS specified as "fixed_order" in OpenAIWrapper constructor.
+    config_list = [
+        {"model": "gpt-3.5-turbo", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"},
+        {"model": "gpt-4", "api_key": "key2", "model_client_cls": "MockModelClient", "name": "client2"},
+    ]
+    wrapper = OpenAIWrapper(config_list=config_list, routing_method="fixed_order")
+    assert wrapper.routing_method == "fixed_order"
+    for i in range(len(config_list)):
+        wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
+    return wrapper
+
+
+@pytest.fixture
+def mock_openai_wrapper_round_robin():
+    config_list = [
+        {"model": "gpt-3.5-turbo", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"},
+        {"model": "gpt-4", "api_key": "key2", "model_client_cls": "MockModelClient", "name": "client2"},
+        {"model": "gpt-4o", "api_key": "key3", "model_client_cls": "MockModelClient", "name": "client3"},
+    ]
+    wrapper = OpenAIWrapper(config_list=config_list, routing_method="round_robin")
+    assert wrapper.routing_method == "round_robin"
+    for i in range(len(config_list)):
+        wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
+    return wrapper
+
+
+@pytest.mark.parametrize(
+    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
+)
+def test_fixed_order_routing_successful_first_client(fixture_name: str, request: pytest.FixtureRequest):
+    wrapper = request.getfixturevalue(fixture_name)
+    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
+    assert "Response from client1" in response.choices[0].message.content
+    assert wrapper._clients[0].call_count == 1
+    assert wrapper._clients[1].call_count == 0
+
+
+@pytest.mark.parametrize(
+    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
+)
+def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
+    wrapper = request.getfixturevalue(fixture_name)
+    # Make the first client fail
+    wrapper._clients[0].config["should_fail"] = True
+    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
+    assert "Response from client2" in response.choices[0].message.content
+    assert wrapper._clients[0].call_count == 1
+    assert wrapper._clients[1].call_count == 1
+
+
+def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
+    # First call
+    response1 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 1"}])
+    assert "Response from client1" in response1.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 0
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 0
+    assert mock_openai_wrapper_round_robin._round_robin_index == 1
+
+    # Second call
+    response2 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 2"}])
+    assert "Response from client2" in response2.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 0
+    assert mock_openai_wrapper_round_robin._round_robin_index == 2
+
+    # Third call
+    response3 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 3"}])
+    assert "Response from client3" in response3.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 1
+    assert mock_openai_wrapper_round_robin._round_robin_index == 0
+
+    # Fourth call (wraps around)
+    response4 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 4"}])
+    assert "Response from client1" in response4.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 2
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 1
+    assert mock_openai_wrapper_round_robin._round_robin_index == 1
+
+
+def test_round_robin_routing_with_failures(mock_openai_wrapper_round_robin: OpenAIWrapper):
+    # Make client2 fail
+    mock_openai_wrapper_round_robin._clients[1].config["should_fail"] = True
+
+    # First call (client1)
+    response1 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 1"}])
+    assert "Response from client1" in response1.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 1
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 0
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 0
+    assert mock_openai_wrapper_round_robin._round_robin_index == 1
+
+    # Second call (client2 fails, client3 should be called)
+    response2 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 2"}])
+    assert "Response from client3" in response2.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == 1  # Not called again
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == 1  # Called and failed
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == 1  # Called
+    assert mock_openai_wrapper_round_robin._round_robin_index == 2
+
+    # Third call (client3 is the start of this round)
+    # Reset call counts for clarity for this specific call
+    client1_prev_calls = mock_openai_wrapper_round_robin._clients[0].call_count
+    client2_prev_calls = mock_openai_wrapper_round_robin._clients[1].call_count
+    client3_prev_calls = mock_openai_wrapper_round_robin._clients[2].call_count
+
+    response3 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 3"}])
+    assert "Response from client3" in response3.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == client1_prev_calls
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == client2_prev_calls
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == client3_prev_calls + 1
+    assert mock_openai_wrapper_round_robin._round_robin_index == 0  # Wraps around
+
+    # Fourth call (client1 is the start of this round)
+    client1_prev_calls = mock_openai_wrapper_round_robin._clients[0].call_count
+    client2_prev_calls = mock_openai_wrapper_round_robin._clients[1].call_count
+    client3_prev_calls = mock_openai_wrapper_round_robin._clients[2].call_count
+    response4 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 4"}])
+    assert "Response from client1" in response4.choices[0].message.content
+    assert mock_openai_wrapper_round_robin._clients[0].call_count == client1_prev_calls + 1
+    assert mock_openai_wrapper_round_robin._clients[1].call_count == client2_prev_calls
+    assert mock_openai_wrapper_round_robin._clients[2].call_count == client3_prev_calls
+    assert mock_openai_wrapper_round_robin._round_robin_index == 1
+
 
 TOOL_ENABLED = False
 
@@ -438,6 +643,7 @@ def test_openai_llm_config_entry():
         "model": "gpt-4o-mini",
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "tags": [],
+        "stream": False,
     }
     actual = openai_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
@@ -457,6 +663,7 @@ def test_azure_llm_config_entry() -> None:
         "base_url": "https://api.openai.com/v1",
         "user": "unique_user_id",
         "tags": [],
+        "stream": False,
     }
     actual = azure_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
@@ -483,6 +690,7 @@ def test_deepseek_llm_config_entry() -> None:
         "max_tokens": 8192,
         "temperature": 0.5,
         "tags": [],
+        "stream": False,
     }
     actual = deepseek_llm_config.model_dump()
     assert actual == expected, actual

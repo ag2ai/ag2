@@ -66,7 +66,7 @@ class ChatCompletion(BaseModel):
     object: Literal["chat.completion"]
     """The object type, which is always `chat.completion`."""
 
-    service_tier: Optional[Literal["auto", "default", "flex"]] = None
+    service_tier: Optional[Literal["auto", "default", "flex", "scale"]] = None
     """The service tier used for processing the request."""
 
     system_fingerprint: Optional[str] = None

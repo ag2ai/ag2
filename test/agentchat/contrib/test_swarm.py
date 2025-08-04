@@ -1680,7 +1680,7 @@ def test_on_context_condition_run() -> None:
     assert tool_executor._swarm_next_agent is None  # type: ignore[attr-defined]
 
     # Test with a nested chat target
-    nested_chat_config = {
+    nested_chat_config: dict[str, Any] = {
         "chat_queue": [],
         "reply_func_from_nested_chats": "summary_from_nested_chats",
         "config": None,

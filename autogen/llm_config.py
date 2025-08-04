@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Mapping, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Mapping, Optional, Type, TypeVar, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -268,6 +268,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
                     list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
                     Field(default_factory=list, min_length=1),
                 ]
+                routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
 
                 # Following field is configuration for pydantic to disallow extra fields
                 model_config = ConfigDict(extra="forbid")
@@ -302,13 +303,15 @@ class LLMConfigEntry(BaseModel, ABC):
     @field_validator("base_url", mode="before")
     @classmethod
     def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
+        if v is None:  # Handle None case explicitly
+            return None
         if not str(v).startswith("https://") and not str(v).startswith("http://"):
             v = f"http://{str(v)}"
         return v
 
-    @field_serializer("base_url")
+    @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
     def serialize_base_url(self, v: Any) -> Any:
-        return str(v)
+        return str(v) if v is not None else None
 
     @field_serializer("api_key", when_used="unless-none")
     def serialize_api_key(self, v: SecretStr) -> Any:

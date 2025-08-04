@@ -72,7 +72,7 @@ def create_mock_agent(name: str, handoffs: Optional[Handoffs] = None) -> MagicMo
         agent.handoffs = MagicMock(spec=Handoffs)
         agent.handoffs.llm_conditions = []
         agent.handoffs.context_conditions = []
-        agent.handoffs.after_work = None
+        agent.handoffs.after_works = []
         agent.handoffs.get_llm_conditions_requiring_wrapping = MagicMock(return_value=[])
         agent.handoffs.get_context_conditions_requiring_wrapping = MagicMock(return_value=[])
         agent.handoffs.set_llm_function_names = MagicMock()
@@ -107,7 +107,7 @@ def user_proxy() -> MagicMock:
     agent._group_manager = None
 
     agent.handoffs = MagicMock()
-    agent.handoffs.after_work = None
+    agent.handoffs.after_works = []
 
     # Mock initiate_chat
     chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
@@ -156,6 +156,7 @@ def mock_tool_executor() -> MagicMock:
     executor.clear_next_target = MagicMock()
     executor.set_next_target = MagicMock()
     executor.register_agents_functions = MagicMock()
+    type(executor).__name__ = "GroupToolExecutor"
     return executor
 
 
@@ -297,6 +298,33 @@ class TestHelperFunctions:
         assert agent1._add_single_function.call_args_list[1][0][2] == "prompt2"
 
     def test_ensure_handoff_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
+        """Test validation of handoff targets."""
+        # Valid case
+        target = AgentTarget(agent=agent2)
+        cond = OnCondition(target=target, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond]
+        agent1.handoffs.after_works = [
+            OnContextCondition(target=AgentNameTarget(agent_name=agent1.name), condition=None)
+        ]
+        ensure_handoff_agents_in_group([agent1, agent2])  # Should not raise
+
+        # Invalid case (LLM condition)
+        target_invalid = AgentNameTarget(agent_name="non_existent_agent")
+        cond_invalid = OnCondition(target=target_invalid, condition=StringLLMCondition(prompt="prompt"))
+        agent1.handoffs.llm_conditions = [cond_invalid]
+        with pytest.raises(ValueError, match="Agent in OnCondition Hand-offs must be in the agents list"):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+        # Invalid case (Context condition)
+        agent1.handoffs.llm_conditions = []
+        context_cond_invalid = OnContextCondition(
+            target=target_invalid, condition=StringContextCondition(variable_name="var")
+        )
+        agent1.handoffs.context_conditions = [context_cond_invalid]
+        with pytest.raises(ValueError, match="Agent in OnContextCondition Hand-offs must be in the agents list"):
+            ensure_handoff_agents_in_group([agent1, agent2])
+
+    def test_ensure_guardrail_agents_in_group(self, agent1: MagicMock, agent2: MagicMock) -> None:
         """Test validation of handoff targets."""
         # Valid case
         target = AgentTarget(agent=agent2)
@@ -467,17 +495,19 @@ class TestHelperFunctions:
         agent2: MagicMock,
         mock_tool_executor: MagicMock,
         mock_group_chat_manager: MagicMock,
+        user_proxy: MagicMock,
         context_vars: ContextVariables,
     ) -> None:
         """Test assigning the common context variables object."""
         agents = [agent1, agent2]
         typed_agents = cast(list[ConversableAgent], agents)
-        setup_context_variables(mock_tool_executor, typed_agents, mock_group_chat_manager, context_vars)
+        setup_context_variables(mock_tool_executor, typed_agents, mock_group_chat_manager, user_proxy, context_vars)
 
         assert agent1.context_variables is context_vars
         assert agent2.context_variables is context_vars
         assert mock_tool_executor.context_variables is context_vars
         assert mock_group_chat_manager.context_variables is context_vars
+        assert user_proxy.context_variables is context_vars
 
     def test_cleanup_temp_user_messages(self) -> None:
         """Test removing the temporary user name from messages."""
@@ -640,7 +670,7 @@ class TestHelperFunctions:
 
         # Case 6: After Work (Agent level - stay)
         mock_group_chat.messages = [{"role": "assistant", "name": "agent1", "content": "..."}]
-        agent1.handoffs.after_work = StayTarget()
+        agent1.handoffs.after_works = [OnContextCondition(target=StayTarget(), condition=None)]
         next_agent = determine_next_agent(
             agent1,
             mock_group_chat,
@@ -654,7 +684,7 @@ class TestHelperFunctions:
         assert next_agent == agent1
 
         # Case 7: After Work (Group level - terminate)
-        agent1.handoffs.after_work = None  # Remove agent level
+        agent1.handoffs.after_works = []  # Remove agent level
         group_after_work = TerminateTarget()
         next_agent = determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, group_after_work

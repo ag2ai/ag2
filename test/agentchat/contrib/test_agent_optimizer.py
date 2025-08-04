@@ -6,9 +6,12 @@
 # SPDX-License-Identifier: MIT
 import os
 
+import pytest
+
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.agent_optimizer import AgentOptimizer
 from autogen.import_utils import run_for_optional_imports
+from autogen.llm_config import LLMConfig
 
 from ...conftest import Credentials
 
@@ -99,3 +102,37 @@ def test_step(credentials_all: Credentials):
     print(assistant.llm_config)
     print("Updated user_proxy._function_map:")
     print(user_proxy._function_map)
+
+
+@run_for_optional_imports("openai", "openai")
+def test_llm_config_current_property(credentials_all: Credentials):
+    """Test that AgentOptimizer correctly uses LLMConfig.current property when llm_config is None."""
+    # Create a default LLMConfig
+    config_list = credentials_all.config_list
+    llm_config = LLMConfig(
+        config_list=config_list,
+        timeout=60,
+        cache_seed=42,
+    )
+
+    # Set it as the current LLMConfig
+    with llm_config:
+        # Create AgentOptimizer without passing llm_config
+        optimizer = AgentOptimizer(max_actions_per_step=3)
+
+        # Verify that the optimizer has the correct llm_config
+        assert optimizer.llm_config is not None
+        assert "config_list" in optimizer.llm_config
+        assert len(optimizer.llm_config["config_list"]) > 0
+
+        # Test that it works with record_one_conversation
+        conversation = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}]
+        optimizer.record_one_conversation(conversation, is_satisfied=True)
+        assert len(optimizer._trial_conversations_history) == 1
+
+
+def test_llm_config_without_context():
+    """Test that AgentOptimizer raises ValueError when no LLMConfig is provided and no context is set."""
+    # This should raise a ValueError because no current LLMConfig is set
+    with pytest.raises(ValueError, match="No current LLMConfig set"):
+        AgentOptimizer(max_actions_per_step=3)

@@ -1260,6 +1260,27 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
+def test_summarize_chat_with_dict_summary():
+    user = UserProxyAgent(name="user", human_input_mode="NEVER", default_auto_reply="Hello.", llm_config=False)
+    assistant = autogen.AssistantAgent(
+        name="assistant",
+        llm_config=False,
+        default_auto_reply="This is a test assistant.",
+    )
+
+    def my_summary(sender, recipient, summary_args):
+        return {"content": "This is a summary of the conversation."}
+
+    chat_res = user.initiate_chat(
+        assistant,
+        message="Hello, how are you?",
+        max_turns=1,
+        summary_method=my_summary,
+        summary_args={"summary_prompt": "Summarize the conversation."},
+    )
+    assert chat_res.summary == "This is a summary of the conversation."
+
+
 def test_process_before_send():
     print_mock = unittest.mock.MagicMock()
 
@@ -1876,7 +1897,9 @@ def test_create_or_get_executor(mock_credentials: Credentials):
             else:
                 assert executor_agent == executor
             assert isinstance(executor_agent, ConversableAgent)
+            # Runtime tools should be available to the LLM during execution
             assert agent.llm_config["tools"] == expected_tools
+            # And should be available for execution in the executor
             assert len(executor_agent.function_map.keys()) == 1
 
 
@@ -2001,6 +2024,43 @@ def test_unset_ui_tools(mock_credentials: Credentials):
 
     # Verify tool was removed from llm_config
     assert len(agent.llm_config.get("tools", [])) == 0
+
+
+def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
+    """Test that tools from agent's self._tools aren't double-registered for LLM in run method."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    def pre_registered_tool(message: str) -> str:
+        return f"Pre-registered: {message}"
+
+    def runtime_tool(message: str) -> str:
+        return f"Runtime: {message}"
+
+    # Create tools
+    pre_tool = Tool(name="pre_tool", description="Pre-registered tool", func_or_tool=pre_registered_tool)
+    runtime_tool_obj = Tool(name="runtime_tool", description="Runtime tool", func_or_tool=runtime_tool)
+
+    # Pre-register tool with agent (simulating functions parameter during init)
+    agent.register_for_llm()(pre_tool)
+    initial_tools_count = len(agent.llm_config.get("tools", []))
+    assert initial_tools_count == 1
+
+    # Create executor manually to test tool registration
+    with agent._create_or_get_executor(tools=[runtime_tool_obj]) as executor:
+        # Check that pre-registered tool is not double-registered
+        tools_after_executor = len(agent.llm_config.get("tools", []))
+        assert tools_after_executor == 2  # pre_tool + runtime_tool
+
+        # Verify tool names in LLM config
+        tool_names = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+        assert "pre_tool" in tool_names
+        assert "runtime_tool" in tool_names
+        assert tool_names.count("pre_tool") == 1  # Should not be duplicated
+
+        # Verify executor has both tools
+        assert len(executor.function_map) == 2
+        assert "pre_tool" in executor.function_map
+        assert "runtime_tool" in executor.function_map
 
 
 if __name__ == "__main__":

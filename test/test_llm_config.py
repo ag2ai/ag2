@@ -9,6 +9,7 @@ from copy import copy, deepcopy
 from typing import Any
 
 import pytest
+from pydantic import ValidationError  # Added import
 
 from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
@@ -77,6 +78,7 @@ class TestLLMConfigEntry:
             "model": "gpt-4o-mini",
             "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             "tags": [],
+            "stream": False,
         }
         assert actual == expected
 
@@ -487,6 +489,7 @@ class TestLLMConfig:
                             "temperature": 0.8,
                             "top_k": 40,
                             "top_p": 0.9,
+                            "native_tool_calls": False,
                         }
                     ]
                 },
@@ -559,6 +562,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
             "temperature": 0.5,
@@ -623,6 +627,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
             "temperature": 0.5,
@@ -650,6 +655,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "stream": False,
                 }
             ],
         ]
@@ -667,6 +673,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "base_url": "localhost:8080",
+                    "stream": False,
                     "tags": [],
                 }
             ],
@@ -763,15 +770,74 @@ class TestLLMConfig:
             openai_llm_config.where(api_type="invalid")
         assert str(e.value) == "No config found that satisfies the filter criteria: {'api_type': 'invalid'}"
 
-    def test_repr(self, openai_llm_config: LLMConfig) -> None:
-        actual = repr(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
-        assert actual == expected, actual
+    def test_repr(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        # Case 1: routing_method is None (default)
+        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        actual_repr_default = repr(config_default_routing)
+        assert config_default_routing.routing_method is None
+        assert "routing_method" not in actual_repr_default
 
-    def test_str(self, openai_llm_config: LLMConfig) -> None:
-        actual = str(openai_llm_config)
-        expected = "LLMConfig(temperature=0.5, check_every_ms=1000, cache_seed=42, config_list=[{'api_type': 'openai', 'model': 'gpt-4o-mini', 'api_key': '**********', 'tags': []}])"
-        assert actual == expected, actual
+        # Check for key components of the config_list item's dictionary representation
+        assert "config_list=[{" in actual_repr_default
+        assert f"'api_type': '{openai_llm_config_entry.api_type}'" in actual_repr_default
+        assert f"'model': '{openai_llm_config_entry.model}'" in actual_repr_default
+        assert "'api_key': '**********'" in actual_repr_default  # Redacted
+        assert f"'tags': {openai_llm_config_entry.tags!r}" in actual_repr_default
+        if openai_llm_config_entry.base_url:  # Should not be present if None due to exclude_none
+            assert f"'base_url': '{str(openai_llm_config_entry.base_url)}'" in actual_repr_default
+        else:
+            assert "'base_url'" not in actual_repr_default  # Ensure it's omitted
+
+        # Case 2: routing_method is explicitly set
+        config_custom_routing = LLMConfig(
+            config_list=[openai_llm_config_entry], routing_method="round_robin", temperature=0.77
+        )
+        actual_repr_custom = repr(config_custom_routing)
+        assert config_custom_routing.routing_method == "round_robin"
+        assert "routing_method='round_robin'" in actual_repr_custom
+        assert "config_list=[{" in actual_repr_custom  # Basic structure check
+        assert "'api_key': '**********'" in actual_repr_custom  # Redacted
+        assert "temperature=0.77" in actual_repr_custom
+
+    def test_str(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        # str calls repr, so logic is similar
+        # Case 1: routing_method is None (default)
+        config_default_routing = LLMConfig(config_list=[openai_llm_config_entry])
+        actual_str_default = str(config_default_routing)
+        assert config_default_routing.routing_method is None
+        assert "routing_method" not in actual_str_default
+        assert "config_list=[{" in actual_str_default
+        assert f"'api_type': '{openai_llm_config_entry.api_type}'" in actual_str_default
+        assert f"'model': '{openai_llm_config_entry.model}'" in actual_str_default
+        assert "'api_key': '**********'" in actual_str_default  # Redacted
+        assert f"'tags': {openai_llm_config_entry.tags!r}" in actual_str_default
+        if openai_llm_config_entry.base_url:
+            assert f"'base_url': '{str(openai_llm_config_entry.base_url)}'" in actual_str_default
+        else:
+            assert "'base_url'" not in actual_str_default
+
+        # Case 2: routing_method is explicitly set
+        config_custom_routing = LLMConfig(
+            config_list=[openai_llm_config_entry], routing_method="round_robin", temperature=0.77
+        )
+        actual_str_custom = str(config_custom_routing)
+        assert config_custom_routing.routing_method == "round_robin"
+        assert "routing_method='round_robin'" in actual_str_custom
+        assert "config_list=[{" in actual_str_custom
+        assert "'api_key': '**********'" in actual_str_custom  # Redacted
+        assert "temperature=0.77" in actual_str_custom
+
+    def test_routing_method_default(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        llm_config = LLMConfig(config_list=[openai_llm_config_entry])
+        assert llm_config.routing_method is None
+
+    def test_routing_method_custom(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        llm_config = LLMConfig(config_list=[openai_llm_config_entry], routing_method="round_robin")
+        assert llm_config.routing_method == "round_robin"
+
+    def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        with pytest.raises(ValidationError):  # Changed from ValueError to ValidationError
+            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)

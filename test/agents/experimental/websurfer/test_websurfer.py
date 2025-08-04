@@ -25,14 +25,17 @@ class WebSurferTestHelper:
         return False
 
     def test_init(
-        self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai"], expected: list[dict[str, Any]]
+        self,
+        credentials: Credentials,
+        web_tool: Literal["browser_use", "crawl4ai", "firecrawl"],
+        expected: list[dict[str, Any]],
     ) -> None:
         websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         assert websurfer.llm_config is not False, "llm_config should not be False"
         assert isinstance(websurfer.llm_config, (dict, LLMConfig)), "llm_config should be a dictionary or LLMConfig"
         assert websurfer.llm_config["tools"] == expected
 
-    def test_end2end(self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
+    def test_end2end(self, credentials: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]) -> None:
         websurfer = WebSurferAgent(name="WebSurfer", llm_config=credentials.llm_config, web_tool=web_tool)
         user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 
@@ -57,7 +60,7 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
         self,
         mock_credentials: Credentials,
         expected: list[dict[str, Any]],
-        web_tool: Literal["browser_use", "crawl4ai"],
+        web_tool: Literal["browser_use", "crawl4ai", "firecrawl"],
     ) -> None:
         expected = [
             {
@@ -83,7 +86,9 @@ class TestCrawl4AIWebSurfer(WebSurferTestHelper):
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.parametrize("web_tool", ["crawl4ai"])
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
+    def test_end2end(
+        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+    ) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "crawl4ai")
 
 
@@ -95,7 +100,7 @@ class TestBrowserUseWebSurfer(WebSurferTestHelper):
         self,
         mock_credentials: Credentials,
         expected: list[dict[str, Any]],
-        web_tool: Literal["browser_use", "crawl4ai"],
+        web_tool: Literal["browser_use", "crawl4ai", "firecrawl"],
     ) -> None:
         expected = [
             {
@@ -115,5 +120,99 @@ class TestBrowserUseWebSurfer(WebSurferTestHelper):
 
     @run_for_optional_imports("openai", "openai")
     @pytest.mark.parametrize("web_tool", ["browser_use"])
-    def test_end2end(self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai"]) -> None:
+    def test_end2end(
+        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+    ) -> None:
         super().test_end2end(credentials_gpt_4o_mini, "browser_use")
+
+
+@run_for_optional_imports(["firecrawl-py"], "firecrawl")
+class TestFirecrawlWebSurfer(WebSurferTestHelper):
+    @pytest.mark.parametrize("web_tool", ["firecrawl"])
+    @pytest.mark.skip(reason="This test requires API credentials")
+    def test_init(
+        self,
+        mock_credentials: Credentials,
+        expected: list[dict[str, Any]],
+        web_tool: Literal["browser_use", "crawl4ai", "firecrawl"],
+    ) -> None:
+        expected = [
+            {
+                "function": {
+                    "description": "Use the Firecrawl API to scrape content from a single URL.",
+                    "name": "firecrawl_scrape",
+                    "parameters": {
+                        "properties": {
+                            "url": {"description": "The URL to scrape.", "type": "string"},
+                            "formats": {
+                                "description": "Output formats (e.g., ['markdown', 'html'])",
+                                "items": {"type": "string"},
+                                "type": "array",
+                            },
+                            "include_tags": {
+                                "description": "HTML tags to include",
+                                "items": {"type": "string"},
+                                "type": "array",
+                            },
+                            "exclude_tags": {
+                                "description": "HTML tags to exclude",
+                                "items": {"type": "string"},
+                                "type": "array",
+                            },
+                            "headers": {
+                                "description": "HTTP headers to use",
+                                "type": "object",
+                            },
+                            "wait_for": {
+                                "description": "Time to wait for page load in milliseconds",
+                                "type": "integer",
+                            },
+                            "timeout": {
+                                "description": "Request timeout in milliseconds",
+                                "type": "integer",
+                            },
+                        },
+                        "required": ["url"],
+                        "type": "object",
+                    },
+                },
+                "type": "function",
+            }
+        ]
+        # Test with Firecrawl API key
+        websurfer = WebSurferAgent(
+            name="WebSurfer",
+            llm_config=mock_credentials.llm_config,
+            web_tool="firecrawl",
+            web_tool_kwargs={"firecrawl_api_key": "test_key"},
+        )
+        assert websurfer.llm_config is not False, "llm_config should not be False"
+        assert isinstance(websurfer.llm_config, (dict, LLMConfig)), "llm_config should be a dictionary or LLMConfig"
+        assert websurfer.llm_config["tools"] == expected
+
+    @run_for_optional_imports("openai", "openai")
+    @pytest.mark.parametrize("web_tool", ["firecrawl"])
+    @pytest.mark.skip(reason="This test requires API credentials")
+    def test_end2end(
+        self, credentials_gpt_4o_mini: Credentials, web_tool: Literal["browser_use", "crawl4ai", "firecrawl"]
+    ) -> None:
+        # Note: This test would require a valid Firecrawl API key
+        websurfer = WebSurferAgent(
+            name="WebSurfer",
+            llm_config=credentials_gpt_4o_mini.llm_config,
+            web_tool="firecrawl",
+            web_tool_kwargs={"firecrawl_api_key": "test_key"},
+        )
+        user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
+
+        websurfer_tools = websurfer.tools
+        for tool in websurfer_tools:
+            tool.register_for_execution(user_proxy)
+
+        result = user_proxy.initiate_chat(
+            recipient=websurfer,
+            message="Get info from https://docs.ag2.ai/docs/Home",
+            max_turns=2,
+        )
+
+        assert self._check_tool_called(result, "firecrawl_scrape")

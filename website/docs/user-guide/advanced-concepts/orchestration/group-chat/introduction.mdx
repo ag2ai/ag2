@@ -15,6 +15,7 @@ While two-agent chats work well for straightforward interactions and sequential 
 - **Specialized expertise**: Each agent can focus on what it does best, creating a team of specialists
 - **Dynamic collaboration**: Agents can interact with each other and respond to new information as it emerges
 - **Flexible handoffs**: Control can move between agents based on context, conversation state, or explicit directions
+- **Safety guardrails**: Built-in oversight mechanisms ensure agents stay within defined boundaries
 - **Shared context**: All agents work within the same conversation context, maintaining continuity
 - **Scalable complexity**: Easily add new capabilities by introducing specialized agents rather than making existing agents more complex
 
@@ -25,6 +26,7 @@ The below are the core components of a Group Chat orchestration:
 - **Agents**: Conversable agents that perform specific tasks in the workflow
 - **Patterns**: Define how agents take turns in the conversation and how they interact with each other.
 - **Handoffs**: Control how agents pass control to each other
+- **Guardrails**: Safety mechanisms that monitor agent behavior and enforce operational boundaries
 - **Context Variables**:  Shared state information accessible to all agents throughout the conversation
 
 ## Step-by-Step Guide: Creating a Simple Group Chat
@@ -271,6 +273,7 @@ Now that you understand the basics of Group Chat, the following sections will di
 - **Tools and Functions** – Understand how agents use functions to perform actions and return results, a foundation for creating interactive workflows
 - **Context Variables** – Learn how to share and maintain state across agents during conversations, providing a shared memory for your agent team
 - **Handoffs and Transitions** – Master how to control and customize transitions between agents, both implicitly (via context) and explicitly (via handoff mechanisms)
+- **Guardrails** - Implement safety controls and monitoring systems that keep agents within defined operational boundaries and escalate issues when necessary
 - **Patterns** – Explore various orchestration patterns available (AutoPattern, RoundRobinPattern, RandomPattern, ManualPattern) and how they influence agent behavior
 
 This sequence allows users to first understand how agents can perform actions through tools, then how they can share state with context variables, before moving on to how they can transition between each other with handoffs.

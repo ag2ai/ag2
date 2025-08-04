@@ -71,6 +71,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         auto_remove: bool = True,
         stop_container: bool = True,
         execution_policies: Optional[dict[str, bool]] = None,
+        *,
+        container_create_kwargs: Optional[dict[str, Any]] = None,
     ):
         """(Experimental) A code executor class that executes code through
         a command line environment in a Docker container.
@@ -98,6 +100,11 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
                 whether code in that language should be executed. True means code in that language
                 will be executed, False means it will only be saved to a file. This overrides the
                 default execution policies. Defaults to None.
+            container_create_kwargs: Optional dict forwarded verbatim to
+                "docker.client.containers.create". Use it to set advanced Docker
+                options (environment variables, GPU device_requests, port mappings, etc.).
+                Values here override the class defaults when keys collide. Defaults to None.
+
 
         Raises:
             ValueError: On argument error, or if the container fails to start.
@@ -128,16 +135,29 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
         if container_name is None:
             container_name = f"autogen-code-exec-{uuid.uuid4()}"
 
+        # build kwargs for docker.create
+        base_kwargs: dict[str, Any] = {
+            "image": image,
+            "name": container_name,
+            "entrypoint": "/bin/sh",
+            "tty": True,
+            "auto_remove": auto_remove,
+            "volumes": {str(bind_dir.resolve()): {"bind": "/workspace", "mode": "rw"}},
+            "working_dir": "/workspace",
+        }
+
+        if container_create_kwargs:
+            for k in ("entrypoint", "volumes", "working_dir", "tty"):
+                if k in container_create_kwargs:
+                    logging.warning(
+                        "DockerCommandLineCodeExecutor: overriding default %s=%s",
+                        k,
+                        container_create_kwargs[k],
+                    )
+            base_kwargs.update(container_create_kwargs)
+
         # Start a container from the image, read to exec commands later
-        self._container = client.containers.create(
-            image,
-            name=container_name,
-            entrypoint="/bin/sh",
-            tty=True,
-            auto_remove=auto_remove,
-            volumes={str(bind_dir.resolve()): {"bind": "/workspace", "mode": "rw"}},
-            working_dir="/workspace",
-        )
+        self._container = client.containers.create(**base_kwargs)
         self._container.start()
 
         _wait_for_ready(self._container)

@@ -54,7 +54,7 @@ def get_article_summary(title: str) -> Dict[str, str]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Wikipedia MCP Server")
-    parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode")
+    parser.add_argument("transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode")
     parser.add_argument("--storage-path", required=True, help="Path to store articles")
     args = parser.parse_args()
 

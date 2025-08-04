@@ -75,7 +75,7 @@ class TestHandoffs:
         handoffs = Handoffs()
         assert handoffs.context_conditions == []
         assert handoffs.llm_conditions == []
-        assert handoffs.after_work is None
+        assert handoffs.after_works == []
 
     def test_init_with_conditions(
         self,
@@ -87,11 +87,13 @@ class TestHandoffs:
         handoffs = Handoffs(
             context_conditions=[mock_on_context_condition],
             llm_conditions=[mock_on_condition],
-            after_work=mock_after_work,
+            after_works=[OnContextCondition(target=mock_after_work, condition=None)],
         )
         assert handoffs.context_conditions == [mock_on_context_condition]
         assert handoffs.llm_conditions == [mock_on_condition]
-        assert handoffs.after_work == mock_after_work
+        assert len(handoffs.after_works) == 1
+        assert handoffs.after_works[0].target == mock_after_work
+        assert handoffs.after_works[0].condition is None
 
     def test_add_context_condition(self, mock_on_context_condition: OnContextCondition) -> None:
         """Test adding a single context condition."""
@@ -176,7 +178,9 @@ class TestHandoffs:
         handoffs = Handoffs()
         result = handoffs.set_after_work(mock_after_work)
 
-        assert handoffs.after_work == mock_after_work
+        assert len(handoffs.after_works) == 1
+        assert handoffs.after_works[0].target == mock_after_work
+        assert handoffs.after_works[0].condition is None
         assert result == handoffs  # Method should return self for chaining
 
     def test_set_after_work_invalid_type(self) -> None:
@@ -200,7 +204,9 @@ class TestHandoffs:
         handoffs.set_after_work(mock_target2)
 
         # Only the second value should be kept
-        assert handoffs.after_work == mock_target2
+        assert len(handoffs.after_works) == 1
+        assert handoffs.after_works[0].target == mock_target2
+        assert handoffs.after_works[0].condition is None
 
     def test_add_on_context_condition(self, mock_on_context_condition: OnContextCondition) -> None:
         """Test adding an OnContextCondition using the generic add method."""
@@ -272,14 +278,14 @@ class TestHandoffs:
         handoffs = Handoffs(
             context_conditions=[mock_on_context_condition],
             llm_conditions=[mock_on_condition],
-            after_work=mock_after_work,
+            after_works=[OnContextCondition(target=mock_after_work, condition=None)],
         )
 
         result = handoffs.clear()
 
         assert handoffs.context_conditions == []
         assert handoffs.llm_conditions == []
-        assert handoffs.after_work is None
+        assert handoffs.after_works == []
         assert result == handoffs  # Method should return self for chaining
 
     def test_adding_after_clear(
@@ -308,7 +314,9 @@ class TestHandoffs:
 
         assert handoffs.context_conditions == [new_context_condition]
         assert handoffs.llm_conditions == [new_llm_condition]
-        assert handoffs.after_work == new_after_work
+        assert len(handoffs.after_works) == 1
+        assert handoffs.after_works[0].target == new_after_work
+        assert handoffs.after_works[0].condition is None
 
     def test_get_llm_conditions_by_target_type(
         self, mock_on_condition: OnCondition, mock_agent_target: AgentTarget
@@ -466,7 +474,9 @@ class TestHandoffs:
         # Verify the operations were applied
         assert handoffs.context_conditions == [mock_on_context_condition]
         assert handoffs.llm_conditions == [mock_on_condition]
-        assert handoffs.after_work == mock_after_work
+        assert len(handoffs.after_works) == 1
+        assert handoffs.after_works[0].target == mock_after_work
+        assert handoffs.after_works[0].condition is None
 
         # Verify the result is the handoffs instance for chaining
         assert result == handoffs

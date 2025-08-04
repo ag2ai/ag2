@@ -152,7 +152,13 @@ class Pattern(ABC):
         manager = create_group_manager(groupchat, self.group_manager_args, self.agents, self.group_after_work)
 
         # Point all agent's context variables to this function's context_variables
-        setup_context_variables(tool_executor, self.agents, manager, self.context_variables)
+        setup_context_variables(
+            tool_execution=tool_executor,
+            agents=self.agents,
+            manager=manager,
+            user_agent=self.user_agent,
+            context_variables=self.context_variables,
+        )
 
         # Link all agents with the GroupChatManager to allow access to the group chat
         link_agents_to_group_manager(groupchat.agents, manager)

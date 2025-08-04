@@ -144,6 +144,16 @@ def test_agentchat_groupchat_stateflow(save=False):
     run_notebook("agentchat_groupchat_stateflow.ipynb", save=save)
 
 
+@run_for_optional_imports("openai", "openai")
+@pytest.mark.skipif(
+    not sys.version.startswith("3.13"),
+    reason="do not run if py!=3.13",
+)
+@run_for_optional_imports(["openai"], "openai")
+def test_agentchat_grok_sbom_analysisw(save=False):
+    run_notebook("agentchat_grok_sbom_analysis.ipynb", save=save)
+
+
 if __name__ == "__main__":
     # test_agentchat_auto_feedback_from_code(save=True)
     # test_oai_chatgpt_gpt4(save=True)

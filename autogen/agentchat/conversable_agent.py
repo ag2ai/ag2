@@ -77,13 +77,13 @@ from .chat import (
     initiate_chats,
 )
 from .group.context_variables import ContextVariables
+from .group.guardrails import Guardrail
 from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
     from .group.on_condition import OnCondition
     from .group.on_context_condition import OnContextCondition
-
 __all__ = ("ConversableAgent",)
 
 logger = logging.getLogger(__name__)
@@ -224,6 +224,8 @@ class ConversableAgent(LLMAgent):
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
+        self.input_guardrails: list["Guardrail"] = []
+        self.output_guardrails: list["Guardrail"] = []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -1471,7 +1473,11 @@ class ConversableAgent(LLMAgent):
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
 
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationEvent(termination_reason=f"Maximum turns ({max_turns}) reached"))
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -1651,7 +1657,11 @@ class ConversableAgent(LLMAgent):
                     break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
-                iostream.send(TerminationEvent(termination_reason=f"Maximum turns ({max_turns}) reached"))
+                iostream.send(
+                    TerminationEvent(
+                        termination_reason=f"Maximum turns ({max_turns}) reached", sender=self, recipient=recipient
+                    )
+                )
         else:
             self._prepare_chat(recipient, clear_history)
             if isinstance(message, Callable):
@@ -1829,6 +1839,8 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
+        if isinstance(summary, dict):
+            summary = str(summary.get("content", ""))
         return summary
 
     @staticmethod
@@ -2587,7 +2599,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationEvent(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
@@ -2727,7 +2739,7 @@ class ConversableAgent(LLMAgent):
             self._consecutive_auto_reply_counter[sender] = 0
 
             if termination_reason:
-                iostream.send(TerminationEvent(termination_reason=termination_reason))
+                iostream.send(TerminationEvent(termination_reason=termination_reason, sender=self, recipient=sender))
 
             return True, None
 
@@ -3863,15 +3875,29 @@ class ConversableAgent(LLMAgent):
                     **executor_kwargs,
                 )
 
-            tools = [] if tools is None else tools
-            tools = [tools] if isinstance(tools, Tool) else tools
-            for tool in tools:
+            # Combine agent's existing tools with passed tools
+            agent_tools = self._tools.copy()  # Get agent's pre-registered tools
+            passed_tools = [] if tools is None else tools
+            passed_tools = [passed_tools] if isinstance(passed_tools, Tool) else passed_tools
+
+            # Combine both sets of tools (avoid duplicates)
+            all_tools = agent_tools.copy()
+            for tool in passed_tools:
+                if tool not in all_tools:
+                    all_tools.append(tool)
+
+            # Register all tools with the executor
+            for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
+
+            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered)
+            for tool in passed_tools:
                 tool.register_for_llm(self)
             yield self.run_executor
         finally:
-            if tools is not None:
-                for tool in tools:
+            # Clean up only newly passed tools (not agent's pre-existing tools)
+            if "passed_tools" in locals():
+                for tool in passed_tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
     def _deprecated_run(
@@ -3993,6 +4019,42 @@ class ConversableAgent(LLMAgent):
             conditions: List of conditions to add
         """
         self.handoffs.add_many(conditions)
+
+    def register_input_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for input validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.input_guardrails.append(guardrail)
+
+    def register_input_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for input validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.input_guardrails.extend(guardrails)
+
+    def register_output_guardrail(self, guardrail: "Guardrail") -> None:
+        """
+        Register a guardrail to be used for output validation.
+
+        Args:
+            guardrail: The guardrail to register.
+        """
+        self.output_guardrails.append(guardrail)
+
+    def register_output_guardrails(self, guardrails: list["Guardrail"]) -> None:
+        """
+        Register multiple guardrails to be used for output validation.
+
+        Args:
+            guardrails: List of guardrails to register.
+        """
+        self.output_guardrails.extend(guardrails)
 
 
 @export_module("autogen")

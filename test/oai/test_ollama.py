@@ -77,6 +77,7 @@ def test_ollama_llm_config_entry():
         "top_k": 40,
         "top_p": 0.9,
         "hide_tools": "never",
+        "native_tool_calls": False,
     }
     actual = ollama_llm_config.model_dump()
     assert actual == expected, actual

@@ -117,9 +117,8 @@ class MCPProxy:
 
         return q_params, path_params, body, security
 
-    @property
-    def mcp(self) -> "FastMCP":
-        mcp = FastMCP(title=self._title)
+    def get_mcp(self, **settings: Any) -> "FastMCP":
+        mcp = FastMCP(title=self._title, **settings)
 
         for func in self._registered_funcs:
             try:
@@ -130,12 +129,12 @@ class MCPProxy:
         return mcp
 
     def _process_params(
-        self, path: str, func: Callable[[Any], Any], **kwargs: Any
+        self, process_path: str, func: Callable[[Any], Any], **kwargs: Any
     ) -> tuple[str, dict[str, Any], dict[str, Any]]:
-        path = MCPProxy._convert_camel_case_within_braces_to_snake(path)
-        q_params, path_params, body, security = MCPProxy._get_params(path, func)
+        process_path = MCPProxy._convert_camel_case_within_braces_to_snake(process_path)
+        q_params, path_params, body, security = MCPProxy._get_params(process_path, func)
 
-        expanded_path = path.format(**{p: kwargs[p] for p in path_params})
+        expanded_path = process_path.format(**{p: kwargs[p] for p in path_params})
 
         url = self._servers[0]["url"] + expanded_path
 

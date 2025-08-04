@@ -51,6 +51,8 @@ if openai_result.is_successful:
     from openai.types.completion import Completion
     from openai.types.completion_usage import CompletionUsage
 
+    from autogen.oai.openai_responses import OpenAIResponsesClient
+
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
     ERROR = None
@@ -244,6 +246,12 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
+    stream: bool = False
+    #   The extra_body parameter flows from OpenAILLMConfigEntry to the LLM request through this path:
+    #   1. Config Definition: extra_body is defined in OpenAILLMConfigEntry (autogen/oai/client.py:248)
+    #   2. Parameter Classification: It's classified as an OpenAI client parameter (not AG2-specific) via the openai_kwargs property (autogen/oai/client.py:752-758)
+    #   3. Request Separation: In _separate_create_config() (autogen/oai/client.py:842), extra_body goes into create_config since it's not in the extra_kwargs set.
+    #   4. API Call: The create_config becomes params and gets passed directly to OpenAI's create() method via **params (autogen/oai/client.py:551,658)
     extra_body: Optional[dict[str, Any]] = (
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
@@ -260,6 +268,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
+    stream: bool = False
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
     # reasoning models - see:
@@ -278,6 +287,7 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
     base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
+    stream: bool = False
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
@@ -314,7 +324,7 @@ class ModelClient(Protocol):
     class ModelClientResponseProtocol(Protocol):
         class Choice(Protocol):
             class Message(Protocol):
-                content: Optional[str]
+                content: Optional[str] | Optional[dict[str, Any]]
 
             message: Message
 
@@ -804,17 +814,29 @@ class OpenAIWrapper:
         self._clients: list[ModelClient] = []
         self._config_list: list[dict[str, Any]] = []
 
+        # Determine routing_method from base_config only.
+        self.routing_method = base_config.get("routing_method") or "fixed_order"
+        self._round_robin_index = 0
+
+        # Remove routing_method from extra_kwargs after it has been used to set self.routing_method
+        # This ensures it's not part of the individual client configurations that are based on extra_kwargs.
+        extra_kwargs.pop("routing_method", None)
+
         if config_list:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
-            for config in config_list:
-                self._register_default_client(config, openai_config)  # could modify the config
-                self._config_list.append({
-                    **extra_kwargs,
-                    **{k: v for k, v in config.items() if k not in self.openai_kwargs},
-                })
+            for config_item in config_list:
+                self._register_default_client(config_item, openai_config)
+                # Construct current_config_extra_kwargs using the cleaned extra_kwargs
+                # (which doesn't have routing_method from base_config)
+                # and specific non-openai kwargs from config_item.
+                config_item_specific_extras = {k: v for k, v in config_item.items() if k not in self.openai_kwargs}
+                self._config_list.append({**extra_kwargs, **config_item_specific_extras})
         else:
+            # For a single config passed via base_config (already in extra_kwargs)
             self._register_default_client(extra_kwargs, openai_config)
+            # extra_kwargs has already had routing_method popped.
             self._config_list = [extra_kwargs]
+
         self.wrapper_id = id(self)
 
     def _separate_openai_config(self, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -952,6 +974,15 @@ class OpenAIWrapper:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
+            elif api_type is not None and api_type.startswith("responses"):
+                # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
+                @require_optional_import("openai>=1.66.2", "openai")
+                def create_responses_client() -> "OpenAI":
+                    client = OpenAI(**openai_config)
+                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))
+                    return client
+
+                client = create_responses_client()
             else:
 
                 @require_optional_import("openai>=1.66.2", "openai")
@@ -1063,7 +1094,16 @@ class OpenAIWrapper:
             raise RuntimeError(
                 f"Model client(s) {non_activated} are not activated. Please register the custom model clients using `register_model_client` or filter them out form the config list."
             )
-        for i, client in enumerate(self._clients):
+
+        ordered_clients_indices = list(range(len(self._clients)))
+        if self.routing_method == "round_robin" and len(self._clients) > 0:
+            ordered_clients_indices = (
+                ordered_clients_indices[self._round_robin_index :] + ordered_clients_indices[: self._round_robin_index]
+            )
+            self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
+
+        for i in ordered_clients_indices:
+            client = self._clients[i]
             # merge the input config with the i-th config in the config list
             full_config = {**config, **self._config_list[i]}
             # separate the config into create_config and extra_kwargs
@@ -1442,3 +1482,35 @@ class OpenAIWrapper:
             A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
         """
         return response.message_retrieval_function(response)
+
+
+# -----------------------------------------------------------------------------
+# New: Responses API config entry (OpenAI-hosted preview endpoint)
+# -----------------------------------------------------------------------------
+
+
+@register_llm_config
+class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
+
+    This reuses all the OpenAI fields but changes *api_type* so the wrapper can
+    route traffic to the `client.responses` endpoint instead of
+    `chat.completions`.  It inherits everything else – including reasoning
+    fields – from *OpenAILLMConfigEntry* so users can simply set
+
+    ```python
+    {
+        "api_type": "responses",  # <-- key differentiator
+        "model": "o3",  # reasoning model
+        "reasoning_effort": "medium",  # low / medium / high
+        "stream": True,
+    }
+    ```
+    """
+
+    api_type: Literal["responses"] = "responses"
+    tool_choice: Optional[Literal["none", "auto", "required"]] = "auto"
+    built_in_tools: Optional[list[str]] = None
+
+    def create_client(self) -> "ModelClient":  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")

@@ -55,7 +55,7 @@ def get_paper_info(arxiv_id: str) -> Dict[str, str]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="arXiv MCP Server")
-    parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode")
+    parser.add_argument("transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode")
     parser.add_argument("--storage-path", required=True, help="Path to store papers")
     args = parser.parse_args()
 

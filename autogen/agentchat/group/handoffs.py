@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional, Union, overload
+from typing import Union, overload
 
 from pydantic import BaseModel, Field
 
@@ -30,7 +30,7 @@ class Handoffs(BaseModel):
 
     context_conditions: list[OnContextCondition] = Field(default_factory=list)
     llm_conditions: list[OnCondition] = Field(default_factory=list)
-    after_work: Optional[TransitionTarget] = None
+    after_works: list[OnContextCondition] = Field(default_factory=list)
 
     def add_context_condition(self, condition: OnContextCondition) -> "Handoffs":
         """
@@ -102,7 +102,9 @@ class Handoffs(BaseModel):
 
     def set_after_work(self, target: TransitionTarget) -> "Handoffs":
         """
-        Set the after work target (only one allowed).
+        Set the after work target (replaces all after_works with single entry).
+
+        For backward compatibility, this creates an OnContextCondition with no condition (always true).
 
         Args:
             target: The after work TransitionTarget to set
@@ -113,7 +115,81 @@ class Handoffs(BaseModel):
         if not isinstance(target, TransitionTarget):
             raise TypeError(f"Expected a TransitionTarget instance, got {type(target).__name__}")
 
-        self.after_work = target
+        # Create OnContextCondition with no condition (always true)
+        after_work_condition = OnContextCondition(target=target, condition=None)
+        self.after_works = [after_work_condition]
+        return self
+
+    def add_after_work(self, condition: OnContextCondition) -> "Handoffs":
+        """
+        Add a single after-work condition.
+
+        If the condition has condition=None, it will replace any existing
+        condition=None entry and be placed at the end.
+
+        Args:
+            condition: The OnContextCondition to add
+
+        Returns:
+            Self for method chaining
+        """
+        if not isinstance(condition, OnContextCondition):
+            raise TypeError(f"Expected an OnContextCondition instance, got {type(condition).__name__}")
+
+        if condition.condition is None:
+            # Remove any existing condition=None entries
+            self.after_works = [c for c in self.after_works if c.condition is not None]
+            # Add the new one at the end
+            self.after_works.append(condition)
+        else:
+            # For regular conditions, check if we need to move condition=None to the end
+            none_conditions = [c for c in self.after_works if c.condition is None]
+            if none_conditions:
+                # Remove the None condition temporarily
+                self.after_works = [c for c in self.after_works if c.condition is not None]
+                # Add the new regular condition
+                self.after_works.append(condition)
+                # Re-add the None condition at the end
+                self.after_works.append(none_conditions[0])
+            else:
+                # No None condition exists, just append
+                self.after_works.append(condition)
+
+        return self
+
+    def add_after_works(self, conditions: list[OnContextCondition]) -> "Handoffs":
+        """
+        Add multiple after-work conditions.
+
+        Special handling for condition=None entries:
+        - Only one condition=None entry is allowed (the fallback)
+        - It will always be placed at the end of the list
+        - If multiple condition=None entries are provided, only the last one is kept
+
+        Args:
+            conditions: List of OnContextConditions to add
+
+        Returns:
+            Self for method chaining
+        """
+        # Validate that it is a list of OnContextConditions
+        if not all(isinstance(condition, OnContextCondition) for condition in conditions):
+            raise TypeError("All conditions must be of type OnContextCondition")
+
+        # Separate conditions with None and without None
+        none_conditions = [c for c in conditions if c.condition is None]
+        regular_conditions = [c for c in conditions if c.condition is not None]
+
+        # Remove any existing condition=None entries
+        self.after_works = [c for c in self.after_works if c.condition is not None]
+
+        # Add regular conditions
+        self.after_works.extend(regular_conditions)
+
+        # Add at most one None condition at the end
+        if none_conditions:
+            self.after_works.append(none_conditions[-1])  # Use the last one if multiple provided
+
         return self
 
     @overload
@@ -186,7 +262,7 @@ class Handoffs(BaseModel):
         """
         self.context_conditions.clear()
         self.llm_conditions.clear()
-        self.after_work = None
+        self.after_works.clear()
         return self
 
     def get_llm_conditions_by_target_type(self, target_type: type) -> list[OnCondition]:

@@ -5,7 +5,7 @@ name: Core tests with LLMs
 
 on:
   schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+    - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
   # pull_request_target:
   #   branches: ["main"]

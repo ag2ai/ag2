@@ -24,12 +24,12 @@ class OnContextCondition(BaseModel):  # noqa: N801
 
     Args:
         target (TransitionTarget): The transition (essentially an agent) to hand off to.
-        condition (ContextCondition): The context variable based condition for transitioning to the target agent.
+        condition (Optional[ContextCondition]): The context variable based condition for transitioning to the target agent. If None, the condition always evaluates to True.
         available (AvailableCondition): Optional condition to determine if this OnCondition is included for the LLM to evaluate based on context variables using classes like StringAvailableCondition and ContextExpressionAvailableCondition.
     """
 
     target: TransitionTarget
-    condition: ContextCondition
+    condition: Optional[ContextCondition] = None
     available: Optional[AvailableCondition] = None
 
     def has_target_type(self, target_type: type) -> bool:

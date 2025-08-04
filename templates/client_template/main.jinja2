@@ -1,6 +1,7 @@
 {{imports}}
 
 import argparse
+import json
 import os
 from typing import *
 
@@ -48,7 +49,7 @@ def {{operation.function_name}}({{operation.snake_case_arguments}}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Math Server")
-    parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode (stdio or sse)")
+    parser.add_argument("transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode (stdio, sse or streamable-http)")
     args = parser.parse_args()
 
     if "CONFIG_PATH" in os.environ:
@@ -66,4 +67,6 @@ if __name__ == "__main__":
 
         app.set_security_params(security_params)
 
-    app.mcp.run(transport=args.transport)
+    mcp_settings = json.loads(os.environ.get("MCP_SETTINGS", "{}"))
+
+    app.get_mcp(**mcp_settings).run(transport=args.transport)

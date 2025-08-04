@@ -647,7 +647,7 @@ class UsingAutoReplyMessage(BaseMessage):
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
 
-@deprecated_by(TerminationEvent)
+@deprecated_by(TerminationEvent, default_params={"sender": "system"})
 @wrap_message
 class TerminationMessage(BaseMessage):
     """When a workflow termination condition is met"""

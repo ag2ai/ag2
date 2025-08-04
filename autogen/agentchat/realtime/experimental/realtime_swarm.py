@@ -104,7 +104,7 @@ def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: 
     return oai_message
 
 
-class SwarmableAgent:
+class SwarmableAgent(Agent):
     """A class for an agent that can participate in a swarm chat."""
 
     def __init__(
@@ -239,7 +239,7 @@ class SwarmableAgent:
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> Union[str, dict[str, Any], None]:
-        raise NotImplementedError
+        return self.generate_reply(messages=messages, sender=sender, **kwargs)
 
     async def a_receive(
         self,
@@ -247,7 +247,7 @@ class SwarmableAgent:
         sender: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
-        raise NotImplementedError
+        self.receive(message, sender, request_reply)
 
     async def a_send(
         self,
@@ -255,7 +255,7 @@ class SwarmableAgent:
         recipient: "Agent",
         request_reply: Optional[bool] = None,
     ) -> None:
-        raise NotImplementedError
+        self.send(message, recipient, request_reply)
 
     @property
     def chat_messages(self) -> dict[Agent, list[dict[str, Any]]]:
@@ -291,6 +291,14 @@ class SwarmableAgent:
             recipient._prepare_chat(self, clear_history, False, reply_at_receive)  # type: ignore[arg-type]
 
     def _raise_exception_on_async_reply_functions(self) -> None:
+        pass
+
+    def set_ui_tools(self, tools: Optional[list] = None) -> None:
+        """Set UI tools for the agent."""
+        pass
+
+    def unset_ui_tools(self) -> None:
+        """Unset UI tools for the agent."""
         pass
 
     @staticmethod
@@ -351,6 +359,8 @@ class SwarmableRealtimeAgent(SwarmableAgent):
             description=None,
             silent=None,
         )
+        self.input_guardrails = []
+        self.output_guardrails = []
 
     def reset_answer(self) -> None:
         """Reset the answer event."""
