@@ -303,6 +303,12 @@ docs = [
 
 types = [
     "mypy==1.17.1",
+    "types-PyYAML",
+    "types-decorator",
+    "types-pycurl",
+    "types-python-dateutil",
+    "types-requests",
+    "types-ujson",
     "ag2[test, openai]",
 ]
 
