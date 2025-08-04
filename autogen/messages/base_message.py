@@ -5,7 +5,7 @@
 
 from abc import ABC
 from collections.abc import Callable
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, TypeVar, Union
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
@@ -100,7 +100,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
 @export_module("autogen.messages")
 def get_annotated_type_for_message_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
-    union_type = tuple(_message_classes.values())
+    union_type = Union[tuple(_message_classes.values())]  # type: ignore[valid-type]  # noqa: UP007
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 
