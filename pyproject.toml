@@ -455,7 +455,7 @@ select = [
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
-#    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
 extend-select = ["D417"]
