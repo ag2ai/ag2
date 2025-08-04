@@ -4,7 +4,8 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
@@ -18,11 +19,11 @@ __all__ = ["BaseEvent", "get_annotated_type_for_event_classes", "get_event_class
 class BaseEvent(BaseModel, ABC):
     uuid: UUID
 
-    def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+    def __init__(self, uuid: UUID | None = None, **kwargs: Any) -> None:
         uuid = uuid or uuid4()
         super().__init__(uuid=uuid, **kwargs)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         """Print event
 
         Args:
@@ -70,7 +71,7 @@ def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
                 else:
                     super().__init__(content=event_cls(*args, **data), **data)
 
-        def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        def print(self, f: Callable[..., Any] | None = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
     wrapper_cls = create_model(event_cls.__name__, __base__=WrapperBase)
@@ -91,7 +92,7 @@ def wrap_event(event_cls: type[BaseEvent]) -> type[BaseModel]:
 @export_module("autogen.events")
 def get_annotated_type_for_event_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
-    union_type = Union[tuple(_event_classes.values())]  # type: ignore[valid-type]
+    union_type = tuple(_event_classes.values())
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 

@@ -7,7 +7,7 @@
 import inspect
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
-from typing import Any, Union
+from typing import Any
 
 __all__ = ("get_current_ts", "to_dict")
 
@@ -22,7 +22,7 @@ def get_current_ts() -> str:
 
 
 def to_dict(
-    obj: Union[int, float, str, bool, dict[Any, Any], list[Any], tuple[Any, ...], Any],
+    obj: int | float | str | bool | dict[Any, Any] | list[Any] | tuple[Any, ...] | Any,
     exclude: tuple[str, ...] = (),
     no_recursive: tuple[Any, ...] = (),
 ) -> Any:

@@ -13,10 +13,10 @@ import subprocess
 import sys
 import time
 import venv
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from hashlib import md5
 from types import SimpleNamespace
-from typing import Callable, Optional, Union
 
 import docker
 
@@ -46,7 +46,7 @@ PYTHON_VARIANTS = ["python", "Python", "py"]
 logger = logging.getLogger(__name__)
 
 
-def content_str(content: Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]], None]) -> str:
+def content_str(content: str | list[UserMessageTextContentPart | UserMessageImageContentPart] | None) -> str:
     """Converts the `content` field of an OpenAI message into a string format.
 
     This function processes content that may be a string, a list of mixed text and image URLs, or None,
@@ -107,7 +107,7 @@ def infer_lang(code: str) -> str:
 # TODO: In the future move, to better support https://spec.commonmark.org/0.30/#fenced-code-blocks
 #       perhaps by using a full Markdown parser.
 def extract_code(
-    text: Union[str, list], pattern: str = CODE_BLOCK_PATTERN, detect_single_line_code: bool = False
+    text: str | list, pattern: str = CODE_BLOCK_PATTERN, detect_single_line_code: bool = False
 ) -> list[tuple[str, str]]:
     """Extract code from a text.
 
@@ -216,7 +216,7 @@ def in_docker_container() -> bool:
     return os.path.exists("/.dockerenv")
 
 
-def decide_use_docker(use_docker: Optional[bool]) -> Optional[bool]:
+def decide_use_docker(use_docker: bool | None) -> bool | None:
     if use_docker is None:
         env_var_use_docker = os.environ.get("AUTOGEN_USE_DOCKER", "True")
 
@@ -279,13 +279,13 @@ def _sanitize_filename_for_docker_tag(filename: str) -> str:
 
 
 def execute_code(
-    code: Optional[str] = None,
-    timeout: Optional[int] = None,
-    filename: Optional[str] = None,
-    work_dir: Optional[str] = None,
-    use_docker: Union[list[str], str, bool] = SENTINEL,
-    lang: Optional[str] = "python",
-) -> tuple[int, str, Optional[str]]:
+    code: str | None = None,
+    timeout: int | None = None,
+    filename: str | None = None,
+    work_dir: str | None = None,
+    use_docker: list[str] | str | bool = SENTINEL,
+    lang: str | None = "python",
+) -> tuple[int, str, str | None]:
     """Execute code in a docker container.
     This function is not tested on MacOS.
 
@@ -491,11 +491,11 @@ def _remove_check(response):
 def eval_function_completions(
     responses: list[str],
     definition: str,
-    test: Optional[str] = None,
-    entry_point: Optional[str] = None,
-    assertions: Optional[Union[str, Callable[[str], tuple[str, float]]]] = None,
-    timeout: Optional[float] = 3,
-    use_docker: Optional[bool] = True,
+    test: str | None = None,
+    entry_point: str | None = None,
+    assertions: str | Callable[[str], tuple[str, float]] | None = None,
+    timeout: float | None = 3,
+    use_docker: bool | None = True,
 ) -> dict:
     """`(openai<1)` Select a response from a list of responses for the function completion task (using generated assertions), and/or evaluate if the task is successful using a gold test.
 

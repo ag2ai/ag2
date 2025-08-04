@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 
@@ -33,7 +33,7 @@ class LLaVAAgent(MultimodalConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[tuple[str, list]] = DEFAULT_LLAVA_SYS_MSG,
+        system_message: tuple[str, list] | None = DEFAULT_LLAVA_SYS_MSG,
         *args,
         **kwargs: Any,
     ):
@@ -169,7 +169,7 @@ def llava_call_binary(
             continue
 
 
-def llava_call(prompt: str, llm_config: Union[LLMConfig, dict]) -> str:
+def llava_call(prompt: str, llm_config: LLMConfig | dict) -> str:
     """Makes a call to the LLaVA service to generate text based on a given prompt"""
     prompt, images = llava_formatter(prompt, order_image_tokens=False)
 

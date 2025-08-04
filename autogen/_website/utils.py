@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Literal, Optional, TypedDict, Union
+from typing import Literal, TypedDict, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 
@@ -51,7 +51,7 @@ def copy_files(src_dir: Path, dst_dir: Path, files_to_copy: list[Path]) -> None:
             shutil.copy2(file, dst)
 
 
-def copy_only_git_tracked_and_untracked_files(src_dir: Path, dst_dir: Path, ignore_dir: Optional[str] = None) -> None:
+def copy_only_git_tracked_and_untracked_files(src_dir: Path, dst_dir: Path, ignore_dir: str | None = None) -> None:
     """Copy only the files that are tracked by git or newly added from src_dir to dst_dir."""
     tracked_and_new_files = get_git_tracked_and_untracked_files_in_directory(src_dir)
 
@@ -120,6 +120,7 @@ def construct_authors_html(authors_list: list[str], authors_dict: dict[str, dict
         authors_list: list of author identifiers
         authors_dict: Dictionary containing author information keyed by author identifier
         build_system: The build system being used (mkdocs or mintlify)
+
     Returns:
         str: Formatted HTML string containing author cards
     """
@@ -204,6 +205,7 @@ def separate_front_matter_and_content(file_path: Path) -> tuple[str, str]:
 
 def ensure_edit_url(content: str, file_path: Path) -> str:
     """Ensure editUrl is present in the content.
+
     Args:
         content (str): Content of the file
         file_path (Path): Path to the file
@@ -223,7 +225,6 @@ def add_authors_and_social_preview(
     build_system: build_system = "mintlify",
 ) -> None:
     """Add authors info and social share image to mdx files in the target directory."""
-
     social_img_html = (
         """\n<div>
 <img noZoom className="social-share-img"
@@ -302,7 +303,7 @@ def render_gallery_html(gallery_file_path: Path) -> str:
     """
     try:
         # Load gallery items from YAML file
-        with open(gallery_file_path, "r") as file:
+        with open(gallery_file_path) as file:
             gallery_items = yaml.safe_load(file)
 
         # Ensure gallery_items is a list

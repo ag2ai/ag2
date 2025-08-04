@@ -4,7 +4,7 @@
 
 import os
 import tempfile
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -24,11 +24,10 @@ class PythonCodeExecutionTool(Tool):
         self,
         *,
         timeout: int = 30,
-        working_directory: Optional[WorkingDirectory] = None,
-        python_environment: Optional[PythonEnvironment] = None,
+        working_directory: WorkingDirectory | None = None,
+        python_environment: PythonEnvironment | None = None,
     ) -> None:
-        """
-        Initialize the PythonCodeExecutionTool.
+        """Initialize the PythonCodeExecutionTool.
 
         **CAUTION**: If provided a local environment, this tool will execute code in your local environment, which can be dangerous if the code is untrusted.
 
@@ -56,8 +55,7 @@ class PythonCodeExecutionTool(Tool):
         async def execute_python_code(
             code_execution_request: Annotated[CodeExecutionRequest, "Python code and the libraries required"],
         ) -> dict[str, Any]:
-            """
-            Executes Python code in the attached environment and returns the result.
+            """Executes Python code in the attached environment and returns the result.
 
             Args:
                 code_execution_request (CodeExecutionRequest): The Python code and libraries to execute

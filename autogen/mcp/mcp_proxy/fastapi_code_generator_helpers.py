@@ -4,7 +4,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Optional, Union
 
 from ...import_utils import optional_import_block
 
@@ -24,7 +23,7 @@ __all__ = ["SUCCESFUL_IMPORT", "patch_get_parameter_type"]
 @contextmanager
 def patch_get_parameter_type() -> Iterator[None]:
     class ArgumentWithDescription(Argument):  # type: ignore[misc]
-        description: Optional[str] = None
+        description: str | None = None
 
         @cached_property
         def argument(self) -> str:
@@ -43,10 +42,10 @@ def patch_get_parameter_type() -> Iterator[None]:
 
     def get_parameter_type(
         self: OpenAPIParser,
-        parameters: Union[ReferenceObject, ParameterObject],
+        parameters: ReferenceObject | ParameterObject,
         snake_case: bool,
         path: list[str],
-    ) -> Optional[Argument]:
+    ) -> Argument | None:
         # get the original argument
         argument = original_get_parameter_type(self, parameters, snake_case, path)
 

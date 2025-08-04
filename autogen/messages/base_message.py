@@ -4,7 +4,8 @@
 
 
 from abc import ABC
-from typing import Annotated, Any, Callable, Literal, Optional, TypeVar, Union
+from collections.abc import Callable
+from typing import Annotated, Any, Literal, TypeVar
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, create_model
@@ -20,7 +21,7 @@ __all__ = ["BaseMessage", "get_annotated_type_for_message_classes", "wrap_messag
 class BaseMessage(BaseModel, ABC):
     uuid: UUID
 
-    def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+    def __init__(self, uuid: UUID | None = None, **kwargs: Any) -> None:
         """Base message class
 
         Args:
@@ -30,7 +31,7 @@ class BaseMessage(BaseModel, ABC):
         uuid = uuid or uuid4()
         super().__init__(uuid=uuid, **kwargs)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         """Print message
 
         Args:
@@ -78,7 +79,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
                 else:
                     super().__init__(content=message_cls(*args, **data), **data)
 
-        def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        def print(self, f: Callable[..., Any] | None = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
     wrapper_cls = create_model(message_cls.__name__, __base__=WrapperBase)
@@ -99,7 +100,7 @@ def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
 @export_module("autogen.messages")
 def get_annotated_type_for_message_classes() -> type[Any]:
     # this is a dynamic type so we need to disable the type checker
-    union_type = Union[tuple(_message_classes.values())]  # type: ignore[valid-type]
+    union_type = tuple(_message_classes.values())
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 

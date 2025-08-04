@@ -12,9 +12,9 @@ import json
 import re
 import shutil
 import sys
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
-from typing import Sequence, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 from .notebook_processor import (
@@ -41,7 +41,7 @@ def notebooks_target_dir(website_build_directory: Path) -> Path:
 
 
 def add_front_matter_to_metadata_mdx(
-    front_matter: dict[str, Union[str, list[str], None]], website_build_directory: Path, rendered_mdx: Path
+    front_matter: dict[str, str | list[str] | None], website_build_directory: Path, rendered_mdx: Path
 ) -> None:
     source = front_matter.get("source_notebook")
     if isinstance(source, str) and source.startswith("/website/docs/"):
@@ -239,7 +239,7 @@ def extract_img_tag_from_figure_tag(content: str, img_rel_path: Path) -> str:
 def post_process_mdx(
     rendered_mdx: Path,
     source_notebooks: Path,
-    front_matter: dict[str, Union[str, list[str], None]],
+    front_matter: dict[str, str | list[str] | None],
     website_build_directory: Path,
 ) -> None:
     with open(rendered_mdx, encoding="utf-8") as f:
@@ -340,7 +340,7 @@ def get_sorted_files(input_dir: Path, prefix: str) -> list[str]:
     return [f"{prefix}/{f.parent.relative_to(input_dir)}/index".replace("\\", "/") for f in reversed_files]
 
 
-def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> dict[str, Union[str, list[str]]]:
+def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> dict[str, str | list[str]]:
     """Generate navigation group for a directory.
 
     Args:
@@ -381,15 +381,15 @@ def extract_example_group(metadata_path: Path) -> list[str]:
 
 
 def update_group_pages(
-    mint_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]],
+    mint_navigation: list[dict[str, str | list[str | dict[str, str | list[str]]]]],
     target_group: str,
-    new_value: Sequence[Union[str, dict[str, Union[str, Sequence[str]]]]],
-) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+    new_value: Sequence[str | dict[str, str | Sequence[str]]],
+) -> list[dict[str, str | list[str | dict[str, str | list[str]]]]]:
     """Update mint.json navigation group with new pages."""
     nav_copy = deepcopy(mint_navigation)
 
     def update_recursively(
-        items: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]],
+        items: list[dict[str, str | list[str | dict[str, str | list[str]]]]],
     ) -> None:
         for item in items:
             if isinstance(item, dict):
@@ -572,7 +572,7 @@ def get_files_path_from_navigation(navigation: list[NavigationGroup]) -> list[Pa
     """
     file_paths = []
 
-    def extract_paths(items: Union[Sequence[Union[str, NavigationGroup]]]) -> None:
+    def extract_paths(items: Sequence[str | NavigationGroup]) -> None:
         for item in items:
             if isinstance(item, str):
                 file_paths.append(Path(item))

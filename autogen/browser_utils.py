@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 from contextlib import suppress
-from typing import Any, Optional, Union
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from .import_utils import optional_import_block, require_optional_import
@@ -38,12 +38,12 @@ class SimpleTextBrowser:
 
     def __init__(
         self,
-        start_page: Optional[str] = None,
-        viewport_size: Optional[int] = 1024 * 8,
-        downloads_folder: Optional[Union[str, None]] = None,
+        start_page: str | None = None,
+        viewport_size: int | None = 1024 * 8,
+        downloads_folder: str | None | None = None,
         bing_base_url: str = "https://api.bing.microsoft.com/v7.0/search",
-        bing_api_key: Optional[Union[str, None]] = None,
-        request_kwargs: Optional[Union[dict[str, Any], None]] = None,
+        bing_api_key: str | None | None = None,
+        request_kwargs: dict[str, Any] | None | None = None,
     ):
         """Initialize the browser with the given parameters.
 
@@ -59,7 +59,7 @@ class SimpleTextBrowser:
         self.viewport_size = viewport_size  # Applies only to the standard uri types
         self.downloads_folder = downloads_folder
         self.history: list[str] = list()
-        self.page_title: Optional[str] = None
+        self.page_title: str | None = None
         self.viewport_current_page = 0
         self.viewport_pages: list[tuple[int, int]] = list()
         self.set_address(self.start_page)
@@ -152,7 +152,7 @@ class SimpleTextBrowser:
             self.viewport_pages.append((start_idx, end_idx))
             start_idx = end_idx
 
-    def _bing_api_call(self, query: str) -> dict[str, dict[str, list[dict[str, Union[str, dict[str, str]]]]]]:
+    def _bing_api_call(self, query: str) -> dict[str, dict[str, list[dict[str, str | dict[str, str]]]]]:
         # Make sure the key was set
         if self.bing_api_key is None:
             raise ValueError("Missing Bing API key.")

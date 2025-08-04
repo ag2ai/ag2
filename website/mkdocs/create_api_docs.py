@@ -6,7 +6,6 @@ import itertools
 import shutil
 from importlib import import_module
 from pathlib import Path
-from typing import List
 
 from autogen._website.generate_api_references import import_submodules
 from autogen.doc_utils import get_target_module
@@ -21,7 +20,7 @@ def _is_private(name: str) -> bool:
     return any(part.startswith("_") for part in parts)
 
 
-def _merge_lists(members: List[str], submodules: List[str]) -> List[str]:
+def _merge_lists(members: list[str], submodules: list[str]) -> list[str]:
     members_copy = members[:]
     for sm in submodules:
         for i, el in enumerate(members_copy):
@@ -31,8 +30,8 @@ def _merge_lists(members: List[str], submodules: List[str]) -> List[str]:
     return members_copy
 
 
-def _add_all_submodules(members: List[str]) -> List[str]:
-    def _f(x: str) -> List[str]:
+def _add_all_submodules(members: list[str]) -> list[str]:
+    def _f(x: str) -> list[str]:
         xs = x.split(".")
         return [".".join(xs[:i]) + "." for i in range(1, len(xs))]
 
@@ -57,7 +56,7 @@ def _get_api_summary_item(x: str) -> str:
         return f"{indent}- [{xs[-1]}](docs/api-reference/{'/'.join(xs)}.md)"
 
 
-def _get_api_summary(members: List[str]) -> str:
+def _get_api_summary(members: list[str]) -> str:
     return "\n".join([_get_api_summary_item(x) for x in members])
 
 
@@ -74,7 +73,7 @@ def _generate_api_doc(name: str, docs_path: Path) -> Path:
     return path
 
 
-def _generate_api_docs(members: List[str], docs_path: Path) -> List[Path]:
+def _generate_api_docs(members: list[str], docs_path: Path) -> list[Path]:
     return [_generate_api_doc(x, docs_path) for x in members if not x.endswith(".")]
 
 

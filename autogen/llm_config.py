@@ -6,10 +6,10 @@ import functools
 import json
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Mapping, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -89,11 +89,11 @@ class LLMConfig(metaclass=MetaLLMConfig):
         self._token = LLMConfig._current_llm_config.set(self)
         return self
 
-    def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: type[Exception], exc_val: Exception, exc_tb: Any) -> None:
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
-    def get_current_llm_config(cls, llm_config: "Optional[LLMConfig]" = None) -> "Optional[LLMConfig]":
+    def get_current_llm_config(cls, llm_config: "LLMConfig | None" = None) -> "LLMConfig | None":
         if llm_config is not None:
             return llm_config
         try:
@@ -114,9 +114,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
     def from_json(
         cls,
         *,
-        env: Optional[str] = None,
-        path: Optional[Union[str, Path]] = None,
-        file_location: Optional[str] = None,
+        env: str | None = None,
+        path: str | Path | None = None,
+        file_location: str | None = None,
         **kwargs: Any,
     ) -> "LLMConfig":
         from .oai.openai_utils import config_list_from_json
@@ -173,7 +173,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         val = getattr(o, name)
         return val
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         val = getattr(self._model, key, default)
         return val
 
@@ -218,13 +218,13 @@ class LLMConfig(metaclass=MetaLLMConfig):
     def __copy__(self) -> "LLMConfig":
         return LLMConfig(**self.model_dump())
 
-    def __deepcopy__(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> "LLMConfig":
         return self.__copy__()
 
     def copy(self) -> "LLMConfig":
         return self.__copy__()
 
-    def deepcopy(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+    def deepcopy(self, memo: dict[int, Any] | None = None) -> "LLMConfig":
         return self.__deepcopy__(memo)
 
     def __str__(self) -> str:
@@ -242,33 +242,33 @@ class LLMConfig(metaclass=MetaLLMConfig):
         d = self.model_dump()
         return d.values()
 
-    _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
+    _base_model_classes: dict[tuple[type["LLMConfigEntry"], ...], type[BaseModel]] = {}
 
     @classmethod
-    def _get_base_model_class(cls) -> Type["BaseModel"]:
-        def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry], ...]) -> Type[BaseModel]:
+    def _get_base_model_class(cls) -> type["BaseModel"]:
+        def _get_cls(llm_config_classes: tuple[type[LLMConfigEntry], ...]) -> type[BaseModel]:
             if llm_config_classes in LLMConfig._base_model_classes:
                 return LLMConfig._base_model_classes[llm_config_classes]
 
             class _LLMConfig(BaseModel):
-                temperature: Optional[float] = None
-                check_every_ms: Optional[int] = None
-                max_new_tokens: Optional[int] = None
-                seed: Optional[int] = None
-                allow_format_str_template: Optional[bool] = None
-                response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-                timeout: Optional[int] = None
-                cache_seed: Optional[int] = None
+                temperature: float | None = None
+                check_every_ms: int | None = None
+                max_new_tokens: int | None = None
+                seed: int | None = None
+                allow_format_str_template: bool | None = None
+                response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
+                timeout: int | None = None
+                cache_seed: int | None = None
 
                 tools: list[Any] = Field(default_factory=list)
                 functions: list[Any] = Field(default_factory=list)
-                parallel_tool_calls: Optional[bool] = None
+                parallel_tool_calls: bool | None = None
 
                 config_list: Annotated[  # type: ignore[valid-type]
-                    list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],
+                    list[Annotated[llm_config_classes, Field(discriminator="api_type")]],
                     Field(default_factory=list, min_length=1),
                 ]
-                routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
+                routing_method: Literal["fixed_order", "round_robin"] | None = None
 
                 # Following field is configuration for pydantic to disallow extra fields
                 model_config = ConfigDict(extra="forbid")
@@ -283,15 +283,15 @@ class LLMConfig(metaclass=MetaLLMConfig):
 class LLMConfigEntry(BaseModel, ABC):
     api_type: str
     model: str = Field(..., min_length=1)
-    api_key: Optional[SecretStr] = None
-    api_version: Optional[str] = None
-    max_tokens: Optional[int] = None
-    base_url: Optional[HttpUrl] = None
-    voice: Optional[str] = None
-    model_client_cls: Optional[str] = None
-    http_client: Optional[httpxClient] = None
-    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-    default_headers: Optional[Mapping[str, Any]] = None
+    api_key: SecretStr | None = None
+    api_version: str | None = None
+    max_tokens: int | None = None
+    base_url: HttpUrl | None = None
+    voice: str | None = None
+    model_client_cls: str | None = None
+    http_client: httpxClient | None = None
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
+    default_headers: Mapping[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
@@ -323,7 +323,7 @@ class LLMConfigEntry(BaseModel, ABC):
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         val = getattr(self, key, default)
         if isinstance(val, SecretStr):
             return val.get_secret_value()
@@ -374,10 +374,10 @@ class LLMConfigEntry(BaseModel, ABC):
         return repr(self)
 
 
-_llm_config_classes: list[Type[LLMConfigEntry]] = []
+_llm_config_classes: list[type[LLMConfigEntry]] = []
 
 
-def register_llm_config(cls: Type[LLMConfigEntry]) -> Type[LLMConfigEntry]:
+def register_llm_config(cls: type[LLMConfigEntry]) -> type[LLMConfigEntry]:
     if isinstance(cls, type) and issubclass(cls, LLMConfigEntry):
         _llm_config_classes.append(cls)
     else:

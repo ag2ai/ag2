@@ -5,7 +5,6 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List
 
 from autogen.import_utils import optional_import_block
 
@@ -58,11 +57,11 @@ GROUP_ASSIGNMENT_MESSAGE = (
 )
 
 
-def chunk_list(items: List, size: int) -> List[List]:
+def chunk_list(items: list, size: int) -> list[list]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
-def discover_groups(operations: List["Operation"], chunk_size: int = 30) -> Dict[str, str]:
+def discover_groups(operations: list["Operation"], chunk_size: int = 30) -> dict[str, str]:
     llm_config = LLMConfig.get_current_llm_config().copy()
 
     for config in llm_config.config_list:
@@ -130,13 +129,13 @@ def assign_operation_to_group(operation: "Operation", groups: dict[str, str]) ->
         return groups
 
 
-def refine_group_names(groups: Dict[str, str]) -> Dict[str, str]:
+def refine_group_names(groups: dict[str, str]) -> dict[str, str]:
     # Optional: normalize names, merge similar ones (e.g., using embeddings or string similarity)
     # Placeholder for now:
     return groups
 
 
-def custom_visitor(parser: "OpenAPIParser", model_path: Path) -> Dict[str, object]:
+def custom_visitor(parser: "OpenAPIParser", model_path: Path) -> dict[str, object]:
     operations = sorted(parser.operations.values(), key=lambda op: op.path)
 
     # ---- PASS 1: DISCOVER GROUPS ----

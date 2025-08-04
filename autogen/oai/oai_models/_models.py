@@ -4,10 +4,11 @@
 
 # Taken over from https://github.com/openai/openai-python/blob/main/src/openai/_models.py
 
+from typing import ClassVar
+
 import pydantic
 import pydantic.generics
 from pydantic import ConfigDict
-from typing_extensions import ClassVar
 
 __all__ = ["BaseModel"]
 

@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Protocol, Sequence, Union, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ....doc_utils import export_module
 
@@ -20,8 +21,8 @@ class RAGQueryEngine(Protocol):
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -45,8 +46,8 @@ class RAGQueryEngine(Protocol):
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -55,6 +56,7 @@ class RAGQueryEngine(Protocol):
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
         """Connect to the database.
+
         Args:
             *args: Any additional arguments
             **kwargs: Any additional keyword arguments

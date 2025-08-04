@@ -51,7 +51,7 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Literal, Optional, Type, Union
+from typing import Any, Literal
 
 import requests
 from pydantic import BaseModel, Field
@@ -103,16 +103,16 @@ logger = logging.getLogger(__name__)
 @register_llm_config
 class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
-    project_id: Optional[str] = None
-    location: Optional[str] = None
+    project_id: str | None = None
+    location: str | None = None
     # google_application_credentials points to the path of the JSON Keyfile
-    google_application_credentials: Optional[str] = None
+    google_application_credentials: str | None = None
     # credentials is a google.auth.credentials.Credentials object
-    credentials: Optional[Union[Any, str]] = None
+    credentials: Any | str | None = None
     stream: bool = False
-    safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    tool_config: Optional[ToolConfig] = None
+    safety_settings: list[dict[str, Any]] | dict[str, Any] | None = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    tool_config: ToolConfig | None = None
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -181,7 +181,7 @@ class GeminiClient:
         self.api_version = kwargs.get("api_version")
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -670,9 +670,7 @@ class GeminiClient:
 
     @staticmethod
     def _convert_type_null_to_nullable(schema: Any) -> Any:
-        """
-        Recursively converts all occurrences of {"type": "null"} to {"nullable": True} in a schema.
-        """
+        """Recursively converts all occurrences of {"type": "null"} to {"nullable": True} in a schema."""
         if isinstance(schema, dict):
             # If schema matches {"type": "null"}, replace it
             if schema == {"type": "null"}:

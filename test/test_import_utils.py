@@ -4,8 +4,9 @@
 
 import re
 import sys
+from collections.abc import Iterable, Iterator
 from types import ModuleType
-from typing import Any, Iterable, Iterator, Optional, Type, Union
+from typing import Any
 
 import pytest
 
@@ -154,7 +155,7 @@ class TestmoduleInfo:
             ),
         ],
     )
-    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: Optional[str]) -> None:
+    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: str | None) -> None:
         assert module_info.is_in_sys_modules() == expected
 
     @pytest.mark.parametrize(
@@ -168,7 +169,7 @@ class TestmoduleInfo:
         ],
     )
     def test_is_in_sys_modules_without_version(
-        self, mock_module_without_version: ModuleType, module_info: ModuleInfo, expected: Optional[str]
+        self, mock_module_without_version: ModuleType, module_info: ModuleInfo, expected: str | None
     ) -> None:
         assert module_info.is_in_sys_modules() == expected
 
@@ -215,7 +216,7 @@ Please install it using:
             dummy_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
-    def test_function_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_function_attributes(self, except_for: str | list[str] | None) -> None:
         def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
             pass
@@ -242,7 +243,7 @@ Please install it using:
             actual()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
-    def test_function_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_function_call(self, except_for: str | list[str] | None) -> None:
         @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
         def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
@@ -261,7 +262,7 @@ Please install it using:
             dummy_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_method", ["dummy_method"]])
-    def test_method_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_method_attributes(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             def dummy_method(self) -> None:
                 """Dummy method to test requires_optional_import"""
@@ -297,7 +298,7 @@ Please install it using:
             dummy.dummy_method()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_method", ["dummy_method"]])
-    def test_method_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_method_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
             def dummy_method(self) -> None:
@@ -319,7 +320,7 @@ Please install it using:
             dummy.dummy_method()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_static_function", ["dummy_static_function"]])
-    def test_static_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_static_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
             @staticmethod
@@ -342,7 +343,7 @@ Please install it using:
             dummy.dummy_static_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_property", ["dummy_property"]])
-    def test_property_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_property_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @property
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
@@ -368,7 +369,7 @@ Please install it using:
 
 class TestRequiresOptionalImportClasses:
     @pytest.fixture
-    def dummy_cls(self) -> Type[Any]:
+    def dummy_cls(self) -> type[Any]:
         @require_optional_import("some_optional_module", "optional_dep")
         class DummyClass:
             def dummy_method(self) -> None:
@@ -392,7 +393,7 @@ class TestRequiresOptionalImportClasses:
 
         return DummyClass
 
-    def test_class_init_call(self, dummy_cls: Type[Any]) -> None:
+    def test_class_init_call(self, dummy_cls: type[Any]) -> None:
         with pytest.raises(
             ImportError,
             match=re.escape("""A module needed for __init__ is missing:
@@ -444,7 +445,7 @@ class TestGetMissingImports:
         ],
     )
     def test_get_missing_imports(
-        self, mock_modules: dict[str, MockModule], modules: Union[str, Iterable[str]], expected_missing: dict[str, str]
+        self, mock_modules: dict[str, MockModule], modules: str | Iterable[str], expected_missing: dict[str, str]
     ) -> None:
         assert mock_modules
         missing = get_missing_imports(modules)

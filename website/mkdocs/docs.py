@@ -5,14 +5,13 @@ import subprocess
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from shutil import rmtree
-from typing import Optional
+from typing import Annotated
 
 import mkdocs.commands.build
 import mkdocs.commands.serve
 import typer
 from create_api_docs import create_api_docs
 from mkdocs.config import load_config
-from typing_extensions import Annotated
 
 from autogen._website.generate_mkdocs import main as generate_files_for_mkdocs
 
@@ -89,7 +88,7 @@ def preview():
 
 
 @app.command()
-def live(port: Annotated[Optional[str], typer.Argument()] = None):
+def live(port: Annotated[str | None, typer.Argument()] = None):
     dev_server = f"0.0.0.0:{port}" if port else DEV_SERVER
 
     typer.echo("Serving mkdocs with live reload")

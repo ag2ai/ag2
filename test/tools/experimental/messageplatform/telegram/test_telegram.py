@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable
 from unittest.mock import AsyncMock, Mock
 
 import pytest

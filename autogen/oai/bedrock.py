@@ -36,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import requests
 from pydantic import Field, SecretStr, field_serializer
@@ -55,22 +55,22 @@ with optional_import_block():
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
     aws_region: str
-    aws_access_key: Optional[SecretStr] = None
-    aws_secret_key: Optional[SecretStr] = None
-    aws_session_token: Optional[SecretStr] = None
-    aws_profile_name: Optional[str] = None
-    temperature: Optional[float] = None
-    topP: Optional[float] = None  # noqa: N815
-    maxTokens: Optional[int] = None  # noqa: N815
-    top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    k: Optional[int] = None
-    seed: Optional[int] = None
-    cache_seed: Optional[int] = None
+    aws_access_key: SecretStr | None = None
+    aws_secret_key: SecretStr | None = None
+    aws_session_token: SecretStr | None = None
+    aws_profile_name: str | None = None
+    temperature: float | None = None
+    topP: float | None = None  # noqa: N815
+    maxTokens: int | None = None  # noqa: N815
+    top_p: float | None = None
+    top_k: int | None = None
+    k: int | None = None
+    seed: int | None = None
+    cache_seed: int | None = None
     supports_system_prompts: bool = True
     stream: bool = False
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    timeout: Optional[int] = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    timeout: int | None = None
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:

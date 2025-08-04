@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Optional, Union
+from typing import Any
 
 from ... import OpenAIWrapper
 from ...import_utils import optional_import_block, require_optional_import
@@ -32,7 +32,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         self,
         name: str,
         llama_index_agent: "AgentRunner",
-        description: Optional[str] = None,
+        description: str | None = None,
         **kwargs: Any,
     ):
         """Args:
@@ -65,10 +65,10 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     def _generate_oai_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
@@ -80,10 +80,10 @@ class LLamaIndexConversableAgent(ConversableAgent):
 
     async def _a_generate_oai_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
         user_message, history = self._extract_message_and_history(messages=messages, sender=sender)
 
@@ -96,7 +96,7 @@ class LLamaIndexConversableAgent(ConversableAgent):
         return (True, extracted_response)
 
     def _extract_message_and_history(
-        self, messages: Optional[list[dict[str, Any]]] = None, sender: Optional[Agent] = None
+        self, messages: list[dict[str, Any]] | None = None, sender: Agent | None = None
     ) -> tuple[str, list["ChatMessage"]]:
         """Extract the message and history from the messages."""
         if not messages:

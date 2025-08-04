@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Generator, Iterable, Optional
+from collections.abc import Generator, Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -15,8 +16,7 @@ __CONTEXT_VARIABLES_PARAM_NAME__ = "context_variables"
 
 
 class ContextVariables(BaseModel):
-    """
-    Stores and manages context variables for agentic workflows.
+    """Stores and manages context variables for agentic workflows.
 
     Utilises a dictionary-like interface for setting, getting, and removing variables.
     """
@@ -24,7 +24,7 @@ class ContextVariables(BaseModel):
     # Internal storage for context variables
     data: dict[str, Any] = Field(default_factory=dict)
 
-    def __init__(self, data: Optional[dict[str, Any]] = None, **kwargs: Any) -> None:
+    def __init__(self, data: dict[str, Any] | None = None, **kwargs: Any) -> None:
         """Initialize with data dictionary as an optional positional parameter.
 
         Args:
@@ -34,9 +34,8 @@ class ContextVariables(BaseModel):
         init_data = data or {}
         super().__init__(data=init_data, **kwargs)
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
-        """
-        Get a value from the context by key.
+    def get(self, key: str, default: Any | None = None) -> Any | None:
+        """Get a value from the context by key.
 
         Args:
             key: The key to retrieve
@@ -48,8 +47,7 @@ class ContextVariables(BaseModel):
         return self.data.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set a value in the context by key.
+        """Set a value in the context by key.
 
         Args:
             key: The key to set
@@ -58,8 +56,7 @@ class ContextVariables(BaseModel):
         self.data[key] = value
 
     def remove(self, key: str) -> bool:
-        """
-        Remove a key from the context.
+        """Remove a key from the context.
 
         Args:
             key: The key to remove
@@ -73,8 +70,7 @@ class ContextVariables(BaseModel):
         return False
 
     def keys(self) -> Iterable[str]:
-        """
-        Get all keys in the context.
+        """Get all keys in the context.
 
         Returns:
             An iterable of all keys
@@ -82,8 +78,7 @@ class ContextVariables(BaseModel):
         return self.data.keys()
 
     def values(self) -> Iterable[Any]:
-        """
-        Get all values in the context.
+        """Get all values in the context.
 
         Returns:
             An iterable of all values
@@ -91,8 +86,7 @@ class ContextVariables(BaseModel):
         return self.data.values()
 
     def items(self) -> Iterable[tuple[str, Any]]:
-        """
-        Get all key-value pairs in the context.
+        """Get all key-value pairs in the context.
 
         Returns:
             An iterable of all key-value pairs
@@ -104,8 +98,7 @@ class ContextVariables(BaseModel):
         self.data.clear()
 
     def contains(self, key: str) -> bool:
-        """
-        Check if a key exists in the context.
+        """Check if a key exists in the context.
 
         Args:
             key: The key to check
@@ -116,8 +109,7 @@ class ContextVariables(BaseModel):
         return key in self.data
 
     def update(self, other: dict[str, Any]) -> None:
-        """
-        Update context with key-value pairs from another dictionary.
+        """Update context with key-value pairs from another dictionary.
 
         Args:
             other: Dictionary containing key-value pairs to add
@@ -125,8 +117,7 @@ class ContextVariables(BaseModel):
         self.data.update(other)
 
     def to_dict(self) -> dict[str, Any]:
-        """
-        Convert context variables to a dictionary.
+        """Convert context variables to a dictionary.
 
         Returns:
             Dictionary representation of all context variables
@@ -176,8 +167,7 @@ class ContextVariables(BaseModel):
     # Utility methods
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ContextVariables":
-        """
-        Create a new ContextVariables instance from a dictionary.
+        """Create a new ContextVariables instance from a dictionary.
 
         E.g.:
         my_context = {"user_id": "12345", "settings": {"theme": "dark"}}

@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import sys
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union, cast
+from typing import Annotated, Any, Literal, cast
 
 import anyio
 from mcp.client.session import ClientSession
@@ -47,29 +47,29 @@ class StdioConfig(BaseModel):
     """Configuration for a single stdio MCP server."""
 
     command: str = Field(..., description="Command to execute")
-    args: List[str] = Field(..., description="Arguments for the command")
+    args: list[str] = Field(..., description="Arguments for the command")
     transport: Literal["stdio"] = Field(default="stdio", description="Transport type")
     server_name: str = Field(..., description="Name of the server")
-    environment: Optional[Dict[str, str]] = Field(default=None, description="Environment variables")
-    working_dir: Optional[Union[str, Path]] = Field(default=None, description="Working directory")
+    environment: dict[str, str] | None = Field(default=None, description="Environment variables")
+    working_dir: str | Path | None = Field(default=None, description="Working directory")
     encoding: str = Field(default=DEFAULT_TEXT_ENCODING, description="Character encoding")
     encoding_error_handler: EncodingErrorHandlerType = Field(
         default=DEFAULT_TEXT_ENCODING_ERROR_HANDLER, description="How to handle encoding errors"
     )
-    session_options: Optional[Dict[str, Any]] = Field(default=None, description="Additional session options")
+    session_options: dict[str, Any] | None = Field(default=None, description="Additional session options")
 
 
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[StdioConfig] = Field(..., description="List of stdio server configurations")
+    servers: list[StdioConfig] = Field(..., description="List of stdio server configurations")
 
 
 class MCPClient:
     @staticmethod
     def _convert_call_tool_result(  # type: ignore[no-any-unimported]
         call_tool_result: "CallToolResult",  # type: ignore[no-any-unimported]
-    ) -> tuple[Union[str, list[str]], Any]:
+    ) -> tuple[str | list[str], Any]:
         text_contents: list[TextContent] = []  # type: ignore[no-any-unimported]
         non_text_contents = []
         for content in call_tool_result.content:
@@ -78,7 +78,7 @@ class MCPClient:
             else:
                 non_text_contents.append(content)
 
-        tool_content: Union[str, list[str]] = [content.text for content in text_contents]
+        tool_content: str | list[str] = [content.text for content in text_contents]
         if len(text_contents) == 1:
             tool_content = tool_content[0]
 
@@ -100,7 +100,7 @@ class MCPClient:
 
         async def call_tool(  # type: ignore[no-any-unimported]
             **arguments: dict[str, Any],
-        ) -> tuple[Union[str, list[str]], Any]:
+        ) -> tuple[str | list[str], Any]:
             call_tool_result = await session.call_tool(tool.name, arguments)
             return MCPClient._convert_call_tool_result(call_tool_result)
 
@@ -118,7 +118,7 @@ class MCPClient:
         cls,
         resource_template: Any,
         session: "ClientSession",
-        resource_download_folder: Optional[Path],
+        resource_download_folder: Path | None,
         **kwargs: Any,
     ) -> Tool:
         if not isinstance(resource_template, ResourceTemplate):
@@ -132,7 +132,7 @@ Here is the correct format for the URI template:
 {mcp_resource.uriTemplate}
 """
 
-        async def call_resource(uri: Annotated[str, uri_description]) -> Union[ReadResourceResult, ResultSaved]:  # type: ignore[no-any-unimported]
+        async def call_resource(uri: Annotated[str, uri_description]) -> ReadResourceResult | ResultSaved:  # type: ignore[no-any-unimported]
             result = await session.read_resource(uri)
 
             if not resource_download_folder:
@@ -166,7 +166,7 @@ Here is the correct format for the URI template:
         *,
         use_mcp_tools: bool,
         use_mcp_resources: bool,
-        resource_download_folder: Optional[Path],
+        resource_download_folder: Path | None,
     ) -> Toolkit:  # type: ignore[no-any-unimported]
         """Load all available MCP tools and convert them to AG2 Toolkit."""
         all_ag2_tools: list[Tool] = []
@@ -191,10 +191,7 @@ Here is the correct format for the URI template:
         return Toolkit(tools=all_ag2_tools)
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
-        if sys.version_info < (3, 10):
-            return "This submodule is only supported for Python versions 3.10 and above"
-
+    def get_unsupported_reason(cls) -> str | None:
         with optional_import_block() as result:
             import mcp  # noqa: F401
 
@@ -205,9 +202,7 @@ Here is the correct format for the URI template:
 
 
 class MCPClientSessionManager:
-    """
-    A class to manage MCP client sessions using stdio transport.
-    """
+    """A class to manage MCP client sessions using stdio transport."""
 
     def __init__(self):
         """Initialize the MCP client session manager."""
@@ -223,8 +218,7 @@ class MCPClientSessionManager:
         self,
         config: StdioConfig,
     ) -> AsyncIterator[ClientSession]:
-        """
-        Create a new session to an MCP server using stdio transport.
+        """Create a new session to an MCP server using stdio transport.
 
         Args:
             config: StdioConfig object containing stdio session parameters
@@ -232,7 +226,6 @@ class MCPClientSessionManager:
         Yields:
             ClientSession: The MCP client session
         """
-
         server_params = StdioServerParameters(
             command=config.command,
             args=config.args,
@@ -256,8 +249,7 @@ class MCPClientSessionManager:
         self,
         config: StdioConfig,
     ) -> AsyncIterator[ClientSession]:
-        """
-        Open a new session to an MCP server based on configuration.
+        """Open a new session to an MCP server based on configuration.
 
         Args:
             config: StdioConfig object containing session configuration
@@ -276,7 +268,7 @@ async def create_toolkit(
     *,
     use_mcp_tools: bool = True,
     use_mcp_resources: bool = True,
-    resource_download_folder: Optional[Union[Path, str]] = None,
+    resource_download_folder: Path | str | None = None,
 ) -> Toolkit:  # type: ignore[no-any-unimported]
     """Create a toolkit from the MCP client session.
 
@@ -285,6 +277,7 @@ async def create_toolkit(
         use_mcp_tools (bool): Whether to include MCP tools in the toolkit.
         use_mcp_resources (bool): Whether to include MCP resources in the toolkit.
         resource_download_folder (Optional[Union[Path, str]]): The folder to download files to.
+
     Returns:
         Toolkit: The toolkit containing the converted tools.
     """
