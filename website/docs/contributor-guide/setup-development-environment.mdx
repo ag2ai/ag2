@@ -76,40 +76,40 @@ To contribute to the AG2 project, AG2 provides three different methods to set up
 
 <Tabs>
   <Tab title="Dev Containers">
-    1. Setup the necessary LLM keys as mentioned above in your terminal.
-    2. Clone the AG2 repository and cd into the repository.
-    3. Open the project in Visual Studio Code by running the following command from the root of the repository:
-        ```bash
-        code .
-        ```
-    4. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
-    5. Select the desired python environment and wait for the container to build.
-    6. Once the container is built, you can start developing AG2.
+  1. Setup the necessary LLM keys as mentioned above in your terminal.
+  2. Clone the AG2 repository and cd into the repository.
+  3. Open the project in Visual Studio Code by running the following command from the root of the repository:
+    ```bash
+    code .
+    ```
+  4. Press `Ctrl+Shift+P` and select `Dev Containers: Reopen in Container`.
+  5. Select the desired python environment and wait for the container to build.
+  6. Once the container is built, you can start developing AG2.
   </Tab>
   <Tab title="Codespaces">
-    1. Open the AG2 repository on GitHub and fork the repository.
-    2. Navigate to Settings -> Secrets and variables -> Codespaces.
-    3. Add the necessary LLM keys as mentioned above by clicking on the `New repository secret` button.
-    4. Navigate back to the forked repository.
-    5. Click on the `Code` button and select `Open with Codespaces`.
-    6. Once the container is built, you can start developing AG2.
+  1. Open the AG2 repository on GitHub and fork the repository.
+  2. Navigate to Settings -> Secrets and variables -> Codespaces.
+  3. Add the necessary LLM keys as mentioned above by clicking on the `New repository secret` button.
+  4. Navigate back to the forked repository.
+  5. Click on the `Code` button and select `Open with Codespaces`.
+  6. Once the container is built, you can start developing AG2.
   </Tab>
   <Tab title="Virtual Environment">
-    1. Setup the necessary LLM keys as mentioned above in your terminal.
-    2. Fork the AG2 repository and clone the forked repository.
-    3. Create a virtual environment by running the following command from the root of the repository:
-        ```bash
-        python3 -m venv venv
-        ```
-    4. Activate the virtual environment by running the following command:
-        ```bash
-        source venv/bin/activate
-        ```
-    5. Install the required dependencies by running the following command:
-        ```bash
-        pip install -e ".[dev]" && pre-commit install
-        ```
-    6. Once the dependencies are installed, you can start developing AG2.
+  1. Setup the necessary LLM keys as mentioned above in your terminal.
+  2. Fork the AG2 repository and clone the forked repository.
+  3. Create a virtual environment by running the following command from the root of the repository:
+      ```bash
+      python3 -m venv venv
+      ```
+  4. Activate the virtual environment by running the following command:
+      ```bash
+      source venv/bin/activate
+      ```
+  5. Install the required dependencies by running the following command:
+      ```bash
+      pip install -e ".[dev]" && pre-commit install
+      ```
+  6. Once the dependencies are installed, you can start developing AG2.
   </Tab>
 </Tabs>
 
