@@ -61,7 +61,7 @@ class TestGeminiTypes:
         assert LocalTestEnum("TEST") == TestEnum("test")  # type: ignore[comparison-overlap]
         assert actual.value == "TEST"
         assert actual == "TEST"
-        assert actual != "test"
+        assert actual != "test"  # type: ignore[comparison-overlap]
 
         actual = LocalTestEnum("TEST_2")
 
@@ -70,7 +70,7 @@ class TestGeminiTypes:
         assert LocalTestEnum("test_2") == TestEnum("TEST_2")  # type: ignore[comparison-overlap]
         assert actual.value == "TEST_2"
         assert actual == "TEST_2"
-        assert actual != "test_2"
+        assert actual != "test_2"  # type: ignore[comparison-overlap]
 
     def test_CommonBaseModel(self) -> None:  # noqa: N802
         assert LocalCommonBaseModel.model_config == CommonBaseModel.model_config
