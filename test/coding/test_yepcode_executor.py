@@ -4,9 +4,9 @@
 """Unit tests for YepCodeCodeExecutor."""
 
 import os
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from typing import List
 
 from autogen.coding import CodeBlock, MarkdownCodeExtractor
 
@@ -89,9 +89,8 @@ class TestYepCodeCodeExecutor:
         mock_load_dotenv.return_value = None
 
         # Also clear any cached environment that might be loaded by dotenv
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="YepCode API token is required"):
-                YepCodeCodeExecutor()
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="YepCode API token is required"):
+            YepCodeCodeExecutor()
 
     def test_init_with_invalid_timeout(self):
         """Test initialization with invalid timeout raises ValueError."""

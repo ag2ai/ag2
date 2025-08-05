@@ -7,22 +7,24 @@
 """YepCode code executor implementation."""
 
 import os
-from typing import ClassVar, List, Optional
+from typing import Callable, ClassVar, List, Optional
 
 from pydantic import Field
 
 from ..doc_utils import export_module
-from .base import CodeBlock, CodeExtractor, CodeExecutor, CodeResult
+from .base import CodeBlock, CodeExecutor, CodeExtractor, CodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 
 try:
     from dotenv import load_dotenv
+
+    _load_dotenv: Optional[Callable[[], bool]] = load_dotenv
 except ImportError:
-    load_dotenv = None
+    _load_dotenv = None
 
 try:
-    from yepcode_run import YepCodeRun, YepCodeApiConfig
-except ImportError as e:
+    from yepcode_run import YepCodeApiConfig, YepCodeRun
+except ImportError:
     YepCodeRun = None
     YepCodeApiConfig = None
 
@@ -75,8 +77,8 @@ class YepCodeCodeExecutor(CodeExecutor):
             raise ValueError("Timeout must be greater than or equal to 1.")
 
         # Load environment variables from .env file if dotenv is available
-        if load_dotenv is not None:
-            load_dotenv()
+        if _load_dotenv is not None:
+            _load_dotenv()
 
         # Get API token from parameter or environment
         self._api_token = api_token or os.getenv("YEPCODE_API_TOKEN")
@@ -159,9 +161,9 @@ class YepCodeCodeExecutor(CodeExecutor):
                     logs_output = ""
                     # Get logs
                     if execution.logs:
-                        logs_output = "\n\nExecution logs:\n" + "\n".join(
-                            [f"{log.timestamp} - {log.level}: {log.message}" for log in execution.logs]
-                        )
+                        logs_output = "\n\nExecution logs:\n" + "\n".join([
+                            f"{log.timestamp} - {log.level}: {log.message}" for log in execution.logs
+                        ])
 
                     # Check if execution was successful
                     if execution.error:

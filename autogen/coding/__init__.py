@@ -10,13 +10,6 @@ from .factory import CodeExecutorFactory
 from .local_commandline_code_executor import LocalCommandLineCodeExecutor
 from .markdown_code_extractor import MarkdownCodeExtractor
 
-try:
-    from .yepcode_code_executor import YepCodeCodeExecutor, YepCodeCodeResult
-
-    _has_yepcode = True
-except ImportError:
-    _has_yepcode = False
-
 __all__ = [
     "CodeBlock",
     "CodeExecutor",
@@ -28,5 +21,10 @@ __all__ = [
     "MarkdownCodeExtractor",
 ]
 
-if _has_yepcode:
+# Try to import YepCode executor and add to __all__ if available
+try:
+    from .yepcode_code_executor import YepCodeCodeExecutor
+
     __all__.extend(["YepCodeCodeExecutor", "YepCodeCodeResult"])
+except ImportError:
+    pass

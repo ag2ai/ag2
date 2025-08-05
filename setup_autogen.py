@@ -70,6 +70,7 @@ setuptools.setup(
         "long-context": ["ag2[long-context]==" + __version__],
         "anthropic": ["ag2[anthropic]==" + __version__],
         "cerebras": ["ag2[cerebras]==" + __version__],
+        "yepcode": ["ag2[yepcode]==" + __version__],
         "mistral": ["ag2[mistral]==" + __version__],
         "groq": ["ag2[groq]==" + __version__],
         "cohere": ["ag2[cohere]==" + __version__],
