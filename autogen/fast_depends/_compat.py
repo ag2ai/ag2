@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 
 import sys
-from importlib.metadata import version as get_version
 from typing import Any, Dict, Optional, Tuple, Type
 
 from pydantic import BaseModel, create_model
@@ -69,12 +68,8 @@ else:
             arbitrary_types_allowed = True
 
 
-ANYIO_V3 = get_version("anyio").startswith("3.")
+if sys.version_info < (3, 11):
+    from exceptiongroup import ExceptionGroup as ExceptionGroup
 
-if ANYIO_V3:
-    from anyio import ExceptionGroup as ExceptionGroup  # type: ignore[attr-defined]
 else:
-    if sys.version_info < (3, 11):
-        from exceptiongroup import ExceptionGroup as ExceptionGroup
-    else:
-        ExceptionGroup = ExceptionGroup
+    ExceptionGroup = ExceptionGroup
