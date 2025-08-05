@@ -249,7 +249,7 @@ long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.23.1"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
 yepcode = [
-    "yepcode-run>=1.5.4",
+    "yepcode-run>=1.6.0",
     "python-dotenv",
 ]
 mistral = ["mistralai>=1.0.1"]
