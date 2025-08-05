@@ -23,7 +23,7 @@ __all__ = [
 
 # Try to import YepCode executor and add to __all__ if available
 try:
-    from .yepcode_code_executor import YepCodeCodeExecutor
+    from .yepcode_code_executor import YepCodeCodeExecutor  # noqa: F401
 
     __all__.extend(["YepCodeCodeExecutor", "YepCodeCodeResult"])
 except ImportError:
