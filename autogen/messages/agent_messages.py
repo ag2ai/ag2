@@ -5,7 +5,7 @@
 from abc import ABC
 from collections.abc import Callable
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
@@ -269,10 +269,7 @@ class TextMessage(BasePrintReceivedMessage):
 
 def create_received_message_model(
     *, uuid: UUID | None = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
-) -> FunctionResponseMessage | ToolResponseMessage | FunctionCallMessage | ToolCallMessage | TextMessage:
-    # print(f"{message=}")
-    # print(f"{sender=}")
-
+) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:  # noqa: UP007
     role = message.get("role")
     if role == "function":
         return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)

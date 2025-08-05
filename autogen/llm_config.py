@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -265,7 +265,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
                 parallel_tool_calls: bool | None = None
 
                 config_list: Annotated[  # type: ignore[valid-type]
-                    list[Annotated[llm_config_classes, Field(discriminator="api_type")]],
+                    list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],  # noqa: UP007
                     Field(default_factory=list, min_length=1),
                 ]
                 routing_method: Literal["fixed_order", "round_robin"] | None = None
