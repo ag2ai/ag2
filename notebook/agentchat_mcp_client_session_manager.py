@@ -106,7 +106,8 @@ async def run_mcp_agent_to_client(query: str, server_name: str) -> ReplyResult:
             max_turns=5,
         )
         res = await result.process()
-        return ReplyResult(message=str(res), target_agent=AgentTarget(research_assistant))
+        last_message = await res.last_message()
+        return ReplyResult(message=str(last_message['content'][-1]), target_agent=AgentTarget(research_assistant))
 
 
 research_assistant.run(

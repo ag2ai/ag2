@@ -7,7 +7,7 @@ import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union, cast
+from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Protocol, Union, cast
 
 import anyio
 from mcp.client.session import ClientSession
@@ -44,6 +44,15 @@ DEFAULT_STREAMABLE_HTTP_REQUEST_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_EVENT_READ_TIMEOUT = timedelta(seconds=60 * 5)
 
 
+class SessionConfigProtocol(Protocol):
+    """Protocol for session configuration classes that can create MCP sessions."""
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """Create a session using the given exit stack."""
+        ...
+
+
 class SseConfig(BaseModel):
     """Configuration for a single SSE MCP server."""
 
@@ -52,6 +61,29 @@ class SseConfig(BaseModel):
     timeout: float = Field(default=DEFAULT_HTTP_REQUEST_TIMEOUT, description="HTTP timeout")
     sse_read_timeout: float = Field(default=DEFAULT_SSE_EVENT_READ_TIMEOUT, description="SSE read timeout")
     server_name: str = Field(..., description="Name of the server")
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """
+        Create a new session to an MCP server using SSE transport.
+
+        Args:
+            exit_stack: AsyncExitStack for managing async resources
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        # Create and store the connection
+        sse_transport = await exit_stack.enter_async_context(
+            sse_client(self.url, self.headers, self.timeout, self.sse_read_timeout)
+        )
+        read, write = sse_transport
+        session = cast(
+            ClientSession,
+            await exit_stack.enter_async_context(ClientSession(read, write)),
+        )
+        await session.initialize()
+        yield session
 
 
 class StdioConfig(BaseModel):
@@ -68,6 +100,35 @@ class StdioConfig(BaseModel):
         default=DEFAULT_TEXT_ENCODING_ERROR_HANDLER, description="How to handle encoding errors"
     )
     session_options: Optional[Dict[str, Any]] = Field(default=None, description="Additional session options")
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """
+        Create a new session to an MCP server using stdio transport.
+
+        Args:
+            exit_stack: AsyncExitStack for managing async resources
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        server_params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            env=self.environment,
+            encoding=self.encoding,
+            encoding_error_handler=self.encoding_error_handler,
+        )
+
+        stdio_transport = await exit_stack.enter_async_context(stdio_client(server_params))
+        reader, writer = stdio_transport
+
+        session = cast(
+            ClientSession,
+            await exit_stack.enter_async_context(ClientSession(reader, writer)),
+        )
+        await session.initialize()
+        yield session
 
 
 class MCPConfig(BaseModel):
@@ -230,86 +291,22 @@ class MCPClientSessionManager:
         self.sessions[server_name] = session
 
     @asynccontextmanager
-    async def create_stdio_session(
-        self,
-        config: StdioConfig,
-    ) -> AsyncIterator[ClientSession]:
-        """
-        Create a new session to an MCP server using stdio transport.
-
-        Args:
-            config: StdioConfig object containing stdio session parameters
-
-        Yields:
-            ClientSession: The MCP client session
-        """
-
-        server_params = StdioServerParameters(
-            command=config.command,
-            args=config.args,
-            env=config.environment,
-            encoding=config.encoding,
-            encoding_error_handler=config.encoding_error_handler,
-        )
-
-        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        reader, writer = stdio_transport
-
-        session = cast(
-            ClientSession,
-            await self.exit_stack.enter_async_context(ClientSession(reader, writer)),
-        )
-        await self._initialize_session(config.server_name, session)
-        yield session
-
-    @asynccontextmanager
-    async def create_sse_session(
-        self,
-        config: SseConfig,
-    ) -> AsyncIterator[ClientSession]:
-        """
-        Establish a connection to an MCP server using SSE transport.
-
-        Args:
-            config: SseConfig object containing SSE session parameters
-
-        Yields:
-            ClientSession: The MCP client session
-        """
-        # Create and store the connection
-        sse_transport = await self.exit_stack.enter_async_context(
-            sse_client(config.url, config.headers, config.timeout, config.sse_read_timeout)
-        )
-        read, write = sse_transport
-        session = cast(
-            ClientSession,
-            await self.exit_stack.enter_async_context(ClientSession(read, write)),
-        )
-        await self._initialize_session(config.server_name, session)
-        yield session
-
-    @asynccontextmanager
     async def open_session(
         self,
-        config: List[StdioConfig | SseConfig],
+        config: SessionConfigProtocol,
     ) -> AsyncIterator[ClientSession]:
         """
         Open a new session to an MCP server based on configuration.
 
         Args:
-            config: StdioConfig object containing session configuration
+            config: SessionConfigProtocol object containing session configuration
 
         Yields:
             ClientSession: The MCP client session
         """
-        if isinstance(config, StdioConfig):
-            async with self.create_stdio_session(config) as session:
-                yield session
-        elif isinstance(config, SseConfig):
-            async with self.create_sse_session(config) as session:
-                yield session
-        else:
-            raise ValueError(f"Invalid configuration type: {type(config)}")
+        async with config.create_session(self.exit_stack) as session:
+            await self._initialize_session(config.server_name, session)
+            yield session
 
 
 @export_module("autogen.mcp")
