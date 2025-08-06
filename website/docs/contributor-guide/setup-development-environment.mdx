@@ -8,15 +8,16 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
 
 <Tabs>
   <Tab title="Using OAI_CONFIG_LIST">
-    AG2 uses an environment variable called `OAI_CONFIG_LIST` in JSON format to store the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains the following keys:
-        - `model`(required): The name of the OpenAI/LLM model.
-        - `api_key`(optional): The API key for the OpenAI/LLM model.
-        - `api_type`(optional): The type of the API key. It is used for non-OpenAI LLMs.
-        - `api_version`(optional): The version of the API key. It is used for Azure API.
-        - `base_url`(optional): The base URL for the OpenAI/LLM model.
-        - `tags`(optional): A list of tags for the OpenAI/LLM model which can be used for filtering.
+  AG2 uses an environment variable called `OAI_CONFIG_LIST` in JSON format to store the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains the following keys:
 
-    Following is an example of the `OAI_CONFIG_LIST` in JSON format which consists of two OpenAI models and a gemini model:
+  - `model`(required): The name of the OpenAI/LLM model.
+  - `api_key`(optional): The API key for the OpenAI/LLM model.
+  - `api_type`(optional): The type of the API key. It is used for non-OpenAI LLMs.
+  - `api_version`(optional): The version of the API key. It is used for Azure API.
+  - `base_url`(optional): The base URL for the OpenAI/LLM model.
+  - `tags`(optional): A list of tags for the OpenAI/LLM model which can be used for filtering.
+
+  Following is an example of the `OAI_CONFIG_LIST` in JSON format which consists of two OpenAI models and a gemini model:
     ```bash
     [
         {
@@ -37,29 +38,23 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
     ]
     ```
 
-    Further, this `OAI_CONFIG_LIST` can be set in two ways:
-    <Tabs>
-        <Tab title="As environment variable">
-            Simply set the `OAI_CONFIG_LIST` environment variable in your terminal:
-            ```bash
-            export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"api_type": "openai", "model": "gpt-4o-mini","api_key": "<your_api_key>","tags": ["gpt-4o-mini", "tool", "vision"]},{"api_type": "google", "model": "gemini-pro","api_key": "<your_gemini_api_key>",}]'
-            ```
-        </Tab>
-        <Tab title="As file">
-            Or you can save the `OAI_CONFIG_LIST` in a file and set the path of the file as an environment variable.
-            For example, let's say you have saved the `OAI_CONFIG_LIST` in a file called `OAI_CONFIG_LIST.json` at the root of the project. You can set the `OAI_CONFIG_LIST` environment variable as follows:
-            ```bash
-            export OAI_CONFIG_LIST="/path/to/OAI_CONFIG_LIST.json"
-            ```
-        </Tab>
-    </Tabs>
+  Further, this `OAI_CONFIG_LIST` can be set in two ways:
 
-    <div class="tip">
-        <Tip>
-            Learn more about OAI_CONFIG_LIST
-            [here](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
-        </Tip>
-    </div>
+  1. Simply set the `OAI_CONFIG_LIST` environment variable in your terminal:
+    ```bash
+    export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"api_type": "openai", "model": "gpt-4o-mini","api_key": "<your_api_key>","tags": ["gpt-4o-mini", "tool", "vision"]},{"api_type": "google", "model": "gemini-pro","api_key": "<your_gemini_api_key>",}]'
+    ```
+  2. Or you can save the `OAI_CONFIG_LIST` in a file and set the path of the file as an environment variable.
+  For example, let's say you have saved the `OAI_CONFIG_LIST` in a file called `OAI_CONFIG_LIST.json` at the root of the project. You can set the `OAI_CONFIG_LIST` environment variable as follows:
+    ```bash
+    export OAI_CONFIG_LIST="/path/to/OAI_CONFIG_LIST.json"
+    ```
+
+<Tip>
+Learn more about `OAI_CONFIG_LIST`
+[here](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
+</Tip>
+
   </Tab>
   <Tab title="Using LLM keys directly">
     Alternatively, you can set up the LLM keys directly as environment variables. Following is an example of setting up the Gemini api key as an environment variable:
