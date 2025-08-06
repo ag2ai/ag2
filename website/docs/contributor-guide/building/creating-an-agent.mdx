@@ -20,12 +20,14 @@ Creating a new agent in AG2 is easy and there are two main approaches you can ta
 ### Tools-based agents
 
 Pros:
+
 - Easier to implement
 - Can work well with a small distinct set of tools
 - Easy to add another tool
 - If you create tools, they can be used by other agents as well
 
 Cons:
+
 - Too many tools may confuse the LLM
 - Multiple tool calls can be triggered from one LLM response, this may produce undesired results if the sequence isn't right
 - Your agent must have an associated LLM as it needs to recommend tool calls
@@ -33,9 +35,11 @@ Cons:
 ### Reply-based agents
 
 Pros:
+
 - Most flexibility over how the agent works
 
 Cons:
+
 - More code required, more error handling, more tests
 - If using a tool or two is possible, this may be more complexity than necessary
 - Functionality encapsulated within the agent, can't be easily used by other agents
@@ -282,6 +286,7 @@ For tools tests, put them in a folder under [`test/tools/contrib`](https://githu
 ## Documentation
 
 As a way for other developers to learn about and understand how to use your agent, it is recommended to create a Jupyter notebook that:
+
 - Explains what the agent is
 - How to install AG2 for the agent (e.g. with extras)
 - Has sample codes, simple to advanced
