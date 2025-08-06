@@ -8,18 +8,28 @@ import os
 import signal
 import tempfile
 from asyncio.subprocess import PIPE, Process, create_subprocess_exec
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Optional
+from unittest.mock import AsyncMock, MagicMock
 
 import anyio
 import pytest
 from pydantic.networks import AnyUrl
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
-from autogen.mcp.mcp_client import ResultSaved, create_toolkit
+from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.mcp.mcp_client import (
+    DEFAULT_HTTP_REQUEST_TIMEOUT,
+    DEFAULT_SSE_EVENT_READ_TIMEOUT,
+    MCPClientSessionManager,
+    ResultSaved,
+    SessionConfigProtocol,
+    SseConfig,
+    StdioConfig,
+    create_toolkit,
+)
 
 from ..conftest import Credentials
 
@@ -70,13 +80,6 @@ async def run_sse_server(
                 process.kill()
 
 
-@skip_on_missing_imports(
-    [
-        "mcp.client.stdio",
-        "mcp.server.fastmcp",
-    ],
-    "mcp",
-)
 class TestMCPClient:
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
@@ -266,4 +269,179 @@ class TestMCPClient:
             assert "6912" in summary
 
 
+class MockClientSession:
+    def __init__(self, reader, writer):
+        pass
+
+    async def __aenter__(self):
+        mock_session = AsyncMock()
+        mock_session.initialize = AsyncMock()
+        return mock_session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+@pytest.fixture
+def mock_client_session():
+    return MockClientSession
+
+
+class TestSseConfig:
+    @pytest.fixture
+    def sse_config(self) -> "SseConfig":  # type: ignore[no-any-unimported]
+        return SseConfig(
+            url="http://localhost:8080/sse",
+            server_name="test_sse_server",
+            headers=None,
+            timeout=10.0,
+            sse_read_timeout=300.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_sse_config_creation(self) -> None:
+        config = SseConfig(
+            url="http://localhost:8080/sse",
+            server_name="test_sse_server",
+        )
+
+        assert config.url == "http://localhost:8080/sse"
+        assert config.server_name == "test_sse_server"
+        assert config.headers is None
+        assert config.timeout == DEFAULT_HTTP_REQUEST_TIMEOUT
+        assert config.sse_read_timeout == DEFAULT_SSE_EVENT_READ_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_create_session_mocked(
+        self, sse_config: "SseConfig", mock_client_session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:  # type: ignore[no-any-unimported]
+        mock_read = AsyncMock()
+        mock_write = AsyncMock()
+        mock_transport = (mock_read, mock_write)
+
+        mock_context_manager = MagicMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_transport)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+
+        mock_sse_client = MagicMock(return_value=mock_context_manager)
+
+        monkeypatch.setattr("autogen.mcp.mcp_client.sse_client", mock_sse_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", mock_client_session)
+
+        exit_stack = AsyncExitStack()
+
+        async with sse_config.create_session(exit_stack) as session:
+            mock_sse_client.assert_called_once_with(
+                sse_config.url, sse_config.headers, sse_config.timeout, sse_config.sse_read_timeout
+            )
+
+            # Now assert on the session that was actually used
+            session.initialize.assert_called_once()
+
+            assert hasattr(session, "initialize")
+
+
+class TestMCPStdioConfig:
+    @pytest.fixture
+    def stdio_config(self) -> "StdioConfig":  # type: ignore[no-any-unimported]
+        return StdioConfig(
+            command="python3",
+            args=["/path/to/server.py"],
+            server_name="test_stdio_server",
+            environment={"ENV_VAR": "test_value"},
+            working_dir="/tmp",
+            encoding="utf-8",
+            encoding_error_handler="strict",
+        )
+
+    @pytest.mark.asyncio
+    async def test_stdio_config_creation(self, stdio_config: "StdioConfig") -> None:  # type: ignore[no-any-unimported]
+        assert stdio_config.command == "python3"
+        assert stdio_config.args == ["/path/to/server.py"]
+        assert stdio_config.server_name == "test_stdio_server"
+        assert stdio_config.environment == {"ENV_VAR": "test_value"}
+        assert stdio_config.working_dir == "/tmp"
+        assert stdio_config.encoding == "utf-8"
+        assert stdio_config.encoding_error_handler == "strict"
+        assert stdio_config.transport == "stdio"
+
+    @pytest.mark.asyncio
+    async def test_create_session(
+        self, stdio_config: "StdioConfig", mock_client_session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:  # type: ignore[no-any-unimported]
+        mock_reader = AsyncMock()
+        mock_writer = AsyncMock()
+        mock_transport = (mock_reader, mock_writer)
+
+        mock_context_manager = MagicMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_transport)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+
+        mock_stdio_client = MagicMock(return_value=mock_context_manager)
+
+        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_stdio_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", mock_client_session)
+
+        exit_stack = AsyncExitStack()
+
+        async with stdio_config.create_session(exit_stack) as session:
+            mock_stdio_client.assert_called_once()
+            call_args = mock_stdio_client.call_args[0][0]
+            assert isinstance(call_args, StdioServerParameters)
+            assert call_args.command == stdio_config.command
+            assert call_args.args == stdio_config.args
+            assert call_args.env == stdio_config.environment
+            assert call_args.encoding == stdio_config.encoding
+            assert call_args.encoding_error_handler == stdio_config.encoding_error_handler
+
+            session.initialize.assert_called_once()
+
+            assert hasattr(session, "initialize")
+
+
 class TestMCPClientSessionManager:
+    @pytest.fixture
+    def session_manager(self) -> "MCPClientSessionManager":  # type: ignore[no-any-unimported]
+        return MCPClientSessionManager()
+
+    @pytest.fixture
+    def mock_config(self) -> "SessionConfigProtocol":  # type: ignore[no-any-unimported]
+        class MockConfig:
+            server_name = "test_server"
+
+            @asynccontextmanager
+            async def create_session(self, exit_stack):
+                mock_session = AsyncMock()
+                mock_session.initialize = AsyncMock()
+                yield mock_session
+
+        return MockConfig()
+
+    @pytest.mark.asyncio
+    async def test_session_manager_initialization(self, session_manager: "MCPClientSessionManager") -> None:  # type: ignore[no-any-unimported]
+        assert session_manager.exit_stack is not None
+        assert session_manager.sessions == {}
+        assert isinstance(session_manager.sessions, dict)
+
+    @pytest.mark.asyncio
+    async def test_open_session(
+        self, session_manager: "MCPClientSessionManager", mock_config: "SessionConfigProtocol"
+    ) -> None:  # type: ignore[no-any-unimported]
+        mock_session = AsyncMock()
+        mock_session.initialize = AsyncMock()
+
+        @asynccontextmanager
+        async def mock_create_session(exit_stack):
+            yield mock_session
+
+        mock_config.create_session = mock_create_session
+
+        async with session_manager.open_session(mock_config) as session:
+            mock_session.initialize.assert_called_once()
+
+            assert mock_config.server_name in session_manager.sessions
+            assert session_manager.sessions[mock_config.server_name] == mock_session
+
+            assert session == mock_session
+
+        assert mock_config.server_name in session_manager.sessions
