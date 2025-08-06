@@ -134,7 +134,7 @@ class StdioConfig(BaseModel):
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[StdioConfig | SseConfig] = Field(..., description="List of stdio server configurations")
+    servers: List[StdioConfig | SseConfig] = Field(..., description="List of stdio & sse server configurations")
 
 
 class MCPClient:
