@@ -95,7 +95,13 @@ class WebSearchPreviewTool(Tool):
                     input=query,
                     instructions=self.instructions,
                 )
-                return response.output_text
+                text = []
+                for output in response.output:
+                    if output.type == "message":
+                        for content in output.content:
+                            if content.type == "output_text":
+                                text.append(content.text)
+                return "\n".join(text)
 
             else:
                 response = client.responses.parse(
