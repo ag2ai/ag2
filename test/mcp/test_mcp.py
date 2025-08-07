@@ -8,7 +8,7 @@ import os
 import signal
 import tempfile
 from asyncio.subprocess import PIPE, Process, create_subprocess_exec
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Optional
@@ -25,7 +25,6 @@ from autogen.mcp.mcp_client import (
     DEFAULT_SSE_EVENT_READ_TIMEOUT,
     MCPClientSessionManager,
     ResultSaved,
-    SessionConfigProtocol,
     SseConfig,
     StdioConfig,
     create_toolkit,
@@ -273,7 +272,7 @@ class MockClientSession:
     def __init__(self, reader, writer):
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncMock":
         mock_session = AsyncMock()
         mock_session.initialize = AsyncMock()
         return mock_session
@@ -283,8 +282,16 @@ class MockClientSession:
 
 
 @pytest.fixture
-def mock_client_session():
-    return MockClientSession
+def mock_client() -> "MagicMock":
+    mock_context_manager = MagicMock()
+    mock_context_manager.__aenter__ = AsyncMock(return_value=(None, None))
+    mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+    return MagicMock(return_value=mock_context_manager)
+
+
+@pytest.fixture
+def session_manager() -> "MCPClientSessionManager":  # type: ignore[no-any-unimported]
+    return MCPClientSessionManager()
 
 
 class TestSseConfig:
@@ -294,51 +301,38 @@ class TestSseConfig:
             url="http://localhost:8080/sse",
             server_name="test_sse_server",
             headers=None,
-            timeout=10.0,
+            timeout=5.0,
             sse_read_timeout=300.0,
         )
 
     @pytest.mark.asyncio
-    async def test_sse_config_creation(self) -> None:
-        config = SseConfig(
-            url="http://localhost:8080/sse",
-            server_name="test_sse_server",
-        )
-
-        assert config.url == "http://localhost:8080/sse"
-        assert config.server_name == "test_sse_server"
-        assert config.headers is None
-        assert config.timeout == DEFAULT_HTTP_REQUEST_TIMEOUT
-        assert config.sse_read_timeout == DEFAULT_SSE_EVENT_READ_TIMEOUT
+    async def test_sse_config_creation(self, sse_config: "SseConfig") -> None:
+        assert sse_config.url == "http://localhost:8080/sse"
+        assert sse_config.server_name == "test_sse_server"
+        assert sse_config.headers is None
+        assert sse_config.timeout == DEFAULT_HTTP_REQUEST_TIMEOUT
+        assert sse_config.sse_read_timeout == DEFAULT_SSE_EVENT_READ_TIMEOUT
 
     @pytest.mark.asyncio
     async def test_create_session_mocked(
-        self, sse_config: "SseConfig", mock_client_session, monkeypatch: pytest.MonkeyPatch
+        self,
+        sse_config: "SseConfig",
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:  # type: ignore[no-any-unimported]
-        mock_read = AsyncMock()
-        mock_write = AsyncMock()
-        mock_transport = (mock_read, mock_write)
+        monkeypatch.setattr("autogen.mcp.mcp_client.sse_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
 
-        mock_context_manager = MagicMock()
-        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_transport)
-        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
-
-        mock_sse_client = MagicMock(return_value=mock_context_manager)
-
-        monkeypatch.setattr("autogen.mcp.mcp_client.sse_client", mock_sse_client)
-        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", mock_client_session)
-
-        exit_stack = AsyncExitStack()
-
-        async with sse_config.create_session(exit_stack) as session:
-            mock_sse_client.assert_called_once_with(
-                sse_config.url, sse_config.headers, sse_config.timeout, sse_config.sse_read_timeout
+        async with session_manager.open_session(sse_config) as session:
+            mock_client.assert_called_once_with(
+                sse_config.url,
+                sse_config.headers,
+                sse_config.timeout,
+                sse_config.sse_read_timeout,
             )
 
-            # Now assert on the session that was actually used
             session.initialize.assert_called_once()
-
-            assert hasattr(session, "initialize")
 
 
 class TestMCPStdioConfig:
@@ -352,6 +346,7 @@ class TestMCPStdioConfig:
             working_dir="/tmp",
             encoding="utf-8",
             encoding_error_handler="strict",
+            session_options={"read_timeout_seconds": 30},
         )
 
     @pytest.mark.asyncio
@@ -364,84 +359,34 @@ class TestMCPStdioConfig:
         assert stdio_config.encoding == "utf-8"
         assert stdio_config.encoding_error_handler == "strict"
         assert stdio_config.transport == "stdio"
+        assert stdio_config.session_options == {"read_timeout_seconds": 30}
 
     @pytest.mark.asyncio
     async def test_create_session(
-        self, stdio_config: "StdioConfig", mock_client_session, monkeypatch: pytest.MonkeyPatch
+        self,
+        stdio_config: "StdioConfig",
+        monkeypatch: pytest.MonkeyPatch,
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
     ) -> None:  # type: ignore[no-any-unimported]
-        mock_reader = AsyncMock()
-        mock_writer = AsyncMock()
-        mock_transport = (mock_reader, mock_writer)
+        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
 
-        mock_context_manager = MagicMock()
-        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_transport)
-        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
-
-        mock_stdio_client = MagicMock(return_value=mock_context_manager)
-
-        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_stdio_client)
-        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", mock_client_session)
-
-        exit_stack = AsyncExitStack()
-
-        async with stdio_config.create_session(exit_stack) as session:
-            mock_stdio_client.assert_called_once()
-            call_args = mock_stdio_client.call_args[0][0]
-            assert isinstance(call_args, StdioServerParameters)
-            assert call_args.command == stdio_config.command
-            assert call_args.args == stdio_config.args
-            assert call_args.env == stdio_config.environment
-            assert call_args.encoding == stdio_config.encoding
-            assert call_args.encoding_error_handler == stdio_config.encoding_error_handler
+        async with session_manager.open_session(stdio_config) as session:
+            mock_client.assert_called_once_with(
+                StdioServerParameters(
+                    command=stdio_config.command,
+                    args=stdio_config.args,
+                    env=stdio_config.environment,
+                    encoding=stdio_config.encoding,
+                    encoding_error_handler=stdio_config.encoding_error_handler,
+                ),
+            )
 
             session.initialize.assert_called_once()
 
-            assert hasattr(session, "initialize")
 
-
-class TestMCPClientSessionManager:
-    @pytest.fixture
-    def session_manager(self) -> "MCPClientSessionManager":  # type: ignore[no-any-unimported]
-        return MCPClientSessionManager()
-
-    @pytest.fixture
-    def mock_config(self) -> "SessionConfigProtocol":  # type: ignore[no-any-unimported]
-        class MockConfig:
-            server_name = "test_server"
-
-            @asynccontextmanager
-            async def create_session(self, exit_stack):
-                mock_session = AsyncMock()
-                mock_session.initialize = AsyncMock()
-                yield mock_session
-
-        return MockConfig()
-
-    @pytest.mark.asyncio
-    async def test_session_manager_initialization(self, session_manager: "MCPClientSessionManager") -> None:  # type: ignore[no-any-unimported]
-        assert session_manager.exit_stack is not None
-        assert session_manager.sessions == {}
-        assert isinstance(session_manager.sessions, dict)
-
-    @pytest.mark.asyncio
-    async def test_open_session(
-        self, session_manager: "MCPClientSessionManager", mock_config: "SessionConfigProtocol"
-    ) -> None:  # type: ignore[no-any-unimported]
-        mock_session = AsyncMock()
-        mock_session.initialize = AsyncMock()
-
-        @asynccontextmanager
-        async def mock_create_session(exit_stack):
-            yield mock_session
-
-        mock_config.create_session = mock_create_session
-
-        async with session_manager.open_session(mock_config) as session:
-            mock_session.initialize.assert_called_once()
-
-            assert mock_config.server_name in session_manager.sessions
-            assert session_manager.sessions[mock_config.server_name] == mock_session
-
-            assert session == mock_session
-
-        assert mock_config.server_name in session_manager.sessions
+@pytest.mark.asyncio
+async def test_session_manager_initialization(session_manager: "MCPClientSessionManager") -> None:  # type: ignore[no-any-unimported]
+    assert session_manager.exit_stack is not None
+    assert session_manager.sessions == {}

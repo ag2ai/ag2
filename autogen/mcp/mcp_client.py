@@ -153,7 +153,8 @@ class StdioConfig(BasicSessionConfig):
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[SessionConfigProtocol] = Field(..., description="List of stdio & sse server configurations")
+    # we should use final classes to allow pydantic to validate the type
+    servers: List[SseConfig | StdioConfig] = Field(..., description="List of stdio & sse server configurations")
 
 
 class MCPClient:
