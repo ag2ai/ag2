@@ -2,16 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import json
 import os
-import signal
 import tempfile
-from asyncio.subprocess import PIPE, Process, create_subprocess_exec
-from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
-from typing import AsyncGenerator, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import anyio
@@ -36,47 +31,6 @@ with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     from mcp.types import ReadResourceResult, TextResourceContents
-
-
-@asynccontextmanager
-async def run_sse_server(
-    *,
-    mcp_server_path: str,
-    storage_path: str,
-    env_vars: Optional[Dict[str, str]] = None,
-    startup_wait_secs: float = 3.0,
-) -> AsyncGenerator[Process, None]:
-    """
-    Async context manager to run a Python subprocess for SSE server with custom env vars.
-
-    Args:
-        mcp_server_path: Path to the Python script to run.
-        storage_path: Path for the server to store files.
-        env_vars: Environment variables to export to the subprocess.
-        startup_wait_secs: Time to wait for the server to start (in seconds).
-    Yields:
-        An asyncio.subprocess.Process object.
-    """
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
-
-    process = await create_subprocess_exec(
-        "python", mcp_server_path, "sse", "--storage-path", storage_path, env=env, stdout=PIPE, stderr=PIPE
-    )
-
-    # Optional startup delay to let the server initialize
-    await asyncio.sleep(startup_wait_secs)
-
-    try:
-        yield process
-    finally:
-        if process.returncode is None:
-            process.send_signal(signal.SIGINT)
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                process.kill()
 
 
 class TestMCPClient:
