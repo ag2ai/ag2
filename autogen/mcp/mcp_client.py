@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Protocol, Union, cast
 
 import anyio
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -20,15 +21,9 @@ from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
 with optional_import_block():
-    from mcp.types import (
-        CallToolResult,
-        ReadResourceResult,
-        ResourceTemplate,
-        TextContent,
-    )
-    from mcp.types import (
-        Tool as MCPTool,
-    )
+    from mcp.shared.message import SessionMessage
+    from mcp.types import CallToolResult, ReadResourceResult, ResourceTemplate, TextContent
+    from mcp.types import Tool as MCPTool
 
 __all__ = ["ResultSaved", "create_toolkit"]
 
@@ -52,6 +47,25 @@ class SessionConfigProtocol(Protocol):
         """Create a session using the given exit stack."""
         ...
 
+    async def initialize(
+        self,
+        client: AsyncIterator[
+            tuple[
+                MemoryObjectReceiveStream[SessionMessage | Exception],
+                MemoryObjectSendStream[SessionMessage],
+            ]
+        ],
+        exit_stack: AsyncExitStack,
+    ) -> ClientSession:
+        """Initialize the session."""
+        reader, writer = await exit_stack.enter_async_context(client)
+        session = cast(
+            ClientSession,
+            await exit_stack.enter_async_context(ClientSession(reader, writer)),
+        )
+        await session.initialize()
+        return session
+
 
 class SseConfig(BaseModel):
     """Configuration for a single SSE MCP server."""
@@ -74,16 +88,8 @@ class SseConfig(BaseModel):
             ClientSession: The MCP client session
         """
         # Create and store the connection
-        sse_transport = await exit_stack.enter_async_context(
-            sse_client(self.url, self.headers, self.timeout, self.sse_read_timeout)
-        )
-        read, write = sse_transport
-        session = cast(
-            ClientSession,
-            await exit_stack.enter_async_context(ClientSession(read, write)),
-        )
-        await session.initialize()
-        yield session
+        client = sse_client(self.url, self.headers, self.timeout, self.sse_read_timeout)
+        yield self.initialize(client, exit_stack)
 
 
 class StdioConfig(BaseModel):
@@ -112,29 +118,22 @@ class StdioConfig(BaseModel):
         Yields:
             ClientSession: The MCP client session
         """
-        server_params = StdioServerParameters(
-            command=self.command,
-            args=self.args,
-            env=self.environment,
-            encoding=self.encoding,
-            encoding_error_handler=self.encoding_error_handler,
+        client = stdio_client(
+            StdioServerParameters(
+                command=self.command,
+                args=self.args,
+                env=self.environment,
+                encoding=self.encoding,
+                encoding_error_handler=self.encoding_error_handler,
+            )
         )
-
-        stdio_transport = await exit_stack.enter_async_context(stdio_client(server_params))
-        reader, writer = stdio_transport
-
-        session = cast(
-            ClientSession,
-            await exit_stack.enter_async_context(ClientSession(reader, writer)),
-        )
-        await session.initialize()
-        yield session
+        yield self.initialize(client, exit_stack)
 
 
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[StdioConfig | SseConfig] = Field(..., description="List of stdio & sse server configurations")
+    servers: List[SessionConfigProtocol] = Field(..., description="List of stdio & sse server configurations")
 
 
 class MCPClient:
@@ -286,10 +285,6 @@ class MCPClientSessionManager:
         self.exit_stack = AsyncExitStack()
         self.sessions: dict[str, ClientSession] = {}
 
-    async def _initialize_session(self, server_name: str, session: ClientSession) -> None:
-        await session.initialize()
-        self.sessions[server_name] = session
-
     @asynccontextmanager
     async def open_session(
         self,
@@ -305,7 +300,7 @@ class MCPClientSessionManager:
             ClientSession: The MCP client session
         """
         async with config.create_session(self.exit_stack) as session:
-            await self._initialize_session(config.server_name, session)
+            self.sessions[config.server_name] = session
             yield session
 
 
