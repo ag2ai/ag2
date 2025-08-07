@@ -940,7 +940,7 @@ def post_process_func(
     rel_path = f"/{rendered_mdx.relative_to(website_build_directory.parents[0])}"
     content = transform_content_for_mkdocs(content, rel_path)
 
-    # Convert mdx image syntax to mintly image syntax
+    # Convert mdx image syntax to mintlify image syntax
     # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
 
     # ensure editUrl is present
