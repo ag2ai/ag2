@@ -13,8 +13,9 @@ from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
 
 if TYPE_CHECKING:
-    from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
     from openai.types.responses.response import Response
+
+    from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
 else:
     # Import at runtime to avoid circular import
     OpenAILLMConfigEntry = None
@@ -25,13 +26,16 @@ with optional_import_block() as _openai_result:
     try:  # best-effort import; we'll define a stub if this fails
         from openai.types.responses.response_output_item import ImageGenerationCall  # type: ignore
     except Exception:
-        ImageGenerationCall = None  # defined below if needed
+        ImageGenerationCall = None  # will be replaced with stub below
 
 # Fallback stub so references don't crash when openai isn't installed
-if "ImageGenerationCall" not in globals() or ImageGenerationCall is None:  # type: ignore[name-defined]
+if ImageGenerationCall is None:
+
     class ImageGenerationCall:  # type: ignore
         """Stub for CI/test environments without openai installed."""
+
         pass
+
 
 # Image Costs
 # Pricing per image (in USD)
@@ -58,7 +62,7 @@ VALID_SIZES = {
 
 def calculate_openai_image_cost(
     model: str = "gpt-image-1", size: str = "1024x1024", quality: str = "high"
-) -> Tuple[float, str]:
+) -> Tuple[float, str | None]:
     """
     Calculate the cost for a single image generation.
 
@@ -448,7 +452,7 @@ class OpenAIResponsesClient:
             # ------------------------------------------------------------------
             content.append(item)
 
-        return [
+        return [  # type: ignore[return-value]
             {
                 "role": "assistant",
                 "id": response.id,
