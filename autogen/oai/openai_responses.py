@@ -20,7 +20,7 @@ else:
     OpenAI = None
 
 with optional_import_block() as openai_result:
-    from openai.types.responses.response import Response
+    from openai.types.responses.response import Responfse
     from openai.types.responses.response_output_item import ImageGenerationCall
 
 # Image Costs
@@ -328,6 +328,14 @@ class OpenAIResponsesClient:
         if "verbosity" in params:
             verbosity = params.pop("verbosity")
             params["text"] = {"verbosity": verbosity}
+
+        # Map reasoning_effort → Responses API 'reasoning.effort'
+        if "reasoning_effort" in params:
+            effort = params.pop("reasoning_effort")
+            if effort is not None:
+                # merge with any existing 'reasoning' keys if present
+                params["reasoning"] = {**params.get("reasoning", {}), "effort": effort}
+
         response = self._oai_client.responses.create(**params)
         self.previous_response_id = response.id
 
@@ -335,7 +343,7 @@ class OpenAIResponsesClient:
         self._add_image_cost(response)
 
         return response
-
+    
     def message_retrieval(
         self, response
     ) -> Union[list[str], list["ModelClient.ModelClientResponseProtocol.Choice.Message"]]:

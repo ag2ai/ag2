@@ -294,6 +294,7 @@ class LLMConfigEntry(BaseModel, ABC):
     default_headers: Optional[Mapping[str, Any]] = None
     tags: list[str] = Field(default_factory=list)
     verbosity: Optional[Literal["low", "medium", "high"]] = None
+    reasoning_effort: Optional[Literal["minimal", "low", "medium", "high"]] = None
 
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)

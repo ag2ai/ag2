@@ -30,6 +30,7 @@
 |-----------------|------------------------------------------------------------|------------------------|-----------------------------------------|
 | Olaoluwa Ademola Salami * | [olaoluwasalami](https://github.com/olaoluwasalami)  | DevOps Engineer        |                                          |
 | Rajan Chari *    | [rajan-chari](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
+| Michael Barilla * | [BlocUnited](https://github.com/BlocUnited)               | BlocUnited LLC         | alt-models |
 
 **Past Maintainers list**
 | Name            | GitHub Handle                                              | Organization           | Features                                |

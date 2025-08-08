@@ -554,3 +554,56 @@ def test_add_image_cost_with_non_image_first(mocked_openai_client):
     # The bug will try to check output[0].model_extra on a dict, which will fail
     # So no image cost will be added
     assert client.image_costs == 0
+
+# -----------------------------------------------------------------------------
+# GPT Reasoning Tests
+# -----------------------------------------------------------------------------
+
+def test_reasoning_effort_added_to_payload(mocked_openai_client):
+    """When 'reasoning_effort' is provided, client must map it to 'reasoning.effort'."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "model": "gpt-5",
+        "reasoning_effort": "minimal",
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    assert "reasoning" in kwargs, f"Expected 'reasoning' in payload, got: {kwargs}"
+    assert kwargs["reasoning"]["effort"] == "minimal"
+
+
+def test_reasoning_and_verbosity_coexist(mocked_openai_client):
+    """Both 'reasoning_effort' and 'verbosity' should be mapped simultaneously."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "model": "gpt-5",
+        "reasoning_effort": "low",
+        "verbosity": "medium",
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # text.verbosity mapping
+    assert "text" in kwargs, f"Expected 'text' in payload, got: {kwargs}"
+    assert kwargs["text"]["verbosity"] == "medium"
+
+    # reasoning.effort mapping
+    assert "reasoning" in kwargs, f"Expected 'reasoning' in payload, got: {kwargs}"
+    assert kwargs["reasoning"]["effort"] == "low"
+
+
+def test_no_reasoning_or_verbosity_when_unset(mocked_openai_client):
+    """If neither setting is provided, payload should not include 'text' or 'reasoning'."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "model": "gpt-5",
+        # no verbosity, no reasoning_effort
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+    assert "text" not in kwargs
+    assert "reasoning" not in kwargs
