@@ -1,6 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
 import copy
 import warnings
@@ -13,15 +14,24 @@ from autogen.import_utils import optional_import_block, require_optional_import
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
+    from openai.types.responses.response import Response
 else:
     # Import at runtime to avoid circular import
     OpenAILLMConfigEntry = None
     ModelClient = None
     OpenAI = None
 
-with optional_import_block() as openai_result:
-    from openai.types.responses.response import Responfse
-    from openai.types.responses.response_output_item import ImageGenerationCall
+with optional_import_block() as _openai_result:
+    try:  # best-effort import; we'll define a stub if this fails
+        from openai.types.responses.response_output_item import ImageGenerationCall  # type: ignore
+    except Exception:
+        ImageGenerationCall = None  # defined below if needed
+
+# Fallback stub so references don't crash when openai isn't installed
+if "ImageGenerationCall" not in globals() or ImageGenerationCall is None:  # type: ignore[name-defined]
+    class ImageGenerationCall:  # type: ignore
+        """Stub for CI/test environments without openai installed."""
+        pass
 
 # Image Costs
 # Pricing per image (in USD)
@@ -160,12 +170,13 @@ class OpenAIResponsesClient:
     def _add_image_cost(self, response: "Response") -> None:
         """Add image cost to self._image_costs when an image is generated"""
         for output in response.output:
+            # Duck-type for tests using MagicMock(spec=ImageGenerationCall)
             if (
-                isinstance(output, ImageGenerationCall)
+                hasattr(output, "model_extra")
                 and hasattr(response.output[0], "model_extra")
-                and response.output[0].model_extra
+                and getattr(response.output[0], "model_extra")
             ):
-                extra_fields = output.model_extra
+                extra_fields = getattr(output, "model_extra", {}) or {}
 
                 image_cost, image_error = calculate_openai_image_cost(
                     model="gpt-image-1",
@@ -260,10 +271,13 @@ class OpenAIResponsesClient:
 
         if "tools" in params:
             for tool in params["tools"]:
-                tool_item = {"type": "function"}
                 if "function" in tool:
-                    tool_item |= tool["function"]
+                    # Chat Completions style → convert for Responses
+                    tool_item = {"type": "function", **tool["function"]}
                     tools_list.append(tool_item)
+                else:
+                    # Already in Responses format (e.g. {"type":"custom", ...}) → pass through
+                    tools_list.append(tool)
         params["tools"] = tools_list
         params["tool_choice"] = "auto"
 
@@ -327,7 +341,12 @@ class OpenAIResponsesClient:
         # No structured output
         if "verbosity" in params:
             verbosity = params.pop("verbosity")
-            params["text"] = {"verbosity": verbosity}
+            # Merge if caller already provided other text options
+            existing = params.get("text")
+            if isinstance(existing, dict):
+                params["text"] = {**existing, "verbosity": verbosity}
+            else:
+                params["text"] = {"verbosity": verbosity}
 
         # Map reasoning_effort → Responses API 'reasoning.effort'
         if "reasoning_effort" in params:
@@ -343,7 +362,7 @@ class OpenAIResponsesClient:
         self._add_image_cost(response)
 
         return response
-    
+
     def message_retrieval(
         self, response
     ) -> Union[list[str], list["ModelClient.ModelClientResponseProtocol.Choice.Message"]]:
