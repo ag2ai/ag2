@@ -555,9 +555,11 @@ def test_add_image_cost_with_non_image_first(mocked_openai_client):
     # So no image cost will be added
     assert client.image_costs == 0
 
+
 # -----------------------------------------------------------------------------
 # GPT Reasoning Tests
 # -----------------------------------------------------------------------------
+
 
 def test_reasoning_effort_added_to_payload(mocked_openai_client):
     """When 'reasoning_effort' is provided, client must map it to 'reasoning.effort'."""
