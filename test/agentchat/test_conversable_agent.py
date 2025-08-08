@@ -8,6 +8,7 @@
 
 import asyncio
 import copy
+import functools
 import inspect
 import os
 import threading
@@ -616,6 +617,47 @@ async def test_a_get_human_input_async_thread_stream() -> None:
 
     assert result == "async-thread-ok"
     assert agent._human_input[-1] == "async-thread-ok"
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_async_partial(monkeypatch, conversable_agent):
+    from autogen.io.base import IOStream
+    from autogen.io.console import IOConsole
+
+    async def aimpl(prefix: str, prompt: str) -> str:
+        await asyncio.sleep(0)
+        return f"{prefix}:{prompt}"
+
+    class PartialAsyncIOStream(IOConsole):
+        def __init__(self):
+            super().__init__()
+            self.input = functools.partial(aimpl, "partial_async")
+
+    with IOStream.set_default(PartialAsyncIOStream()):
+        out = await conversable_agent.a_get_human_input("hello")
+    assert out == "partial_async:hello"
+    assert conversable_agent._human_input[-1] == out
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_callable_object(conversable_agent):
+    from autogen.io.base import IOStream
+    from autogen.io.console import IOConsole
+
+    class AsyncCallableInput:
+        async def __call__(self, prompt: str) -> str:
+            await asyncio.sleep(0)
+            return f"callable_async:{prompt}"
+
+    class CallableObjectIOStream(IOConsole):
+        def __init__(self):
+            super().__init__()
+            self.input = AsyncCallableInput()
+
+    with IOStream.set_default(CallableObjectIOStream()):
+        out = await conversable_agent.a_get_human_input("hello")
+    assert out == "callable_async:hello"
+    assert conversable_agent._human_input[-1] == out
 
 
 def test_update_function_signature_and_register_functions(mock_credentials: Credentials) -> None:
