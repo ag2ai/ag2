@@ -58,6 +58,10 @@ OAI_PRICE1K = {
     # o3
     "o3": (0.0011, 0.0044),
     "o3-mini-2025-01-31": (0.0011, 0.0044),
+    # gpt-5
+    "gpt-5": (0.00125, 0.00125),
+    "gpt-5-mini": (0.00025, 0.00025),
+    "gpt-5-nano": (0.00005, 0.00005),
     # gpt-4o
     "gpt-4o": (0.005, 0.015),
     "gpt-4o-2024-05-13": (0.005, 0.015),
@@ -801,7 +805,8 @@ def config_list_from_dotenv(
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
             logging.warning(
-                f"API key not found or empty for model {model}. Please ensure path to .env file is correct."
+                f"API key not found or empty for model {model}. "  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
+                "Please ensure path to .env file is correct."
             )
             continue  # Skip this configuration and continue with the next
 

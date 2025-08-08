@@ -859,14 +859,15 @@ class GroupChat:
         Used by auto_select_speaker and a_auto_select_speaker.
         """
         # Validate the speaker name selected
-        select_name = messages[-1]["content"].strip()
-
-        mentions = self._mentioned_agents(select_name, agents)
+        if messages and (name := messages[-1].get("content")):
+            mentions = self._mentioned_agents(name.strip(), agents)
+        else:
+            mentions = []
+        no_of_mentions = len(mentions)
 
         # Output the query and requery results
         if self.select_speaker_auto_verbose:
             iostream = IOStream.get_default()
-            no_of_mentions = len(mentions)
             if no_of_mentions == 1:
                 # Success on retry, we have just one name mentioned
                 iostream.send(
@@ -896,14 +897,14 @@ class GroupChat:
                     )
                 )
 
-        if len(mentions) == 1:
+        if no_of_mentions == 1:
             # Success on retry, we have just one name mentioned
             selected_agent_name = next(iter(mentions))
 
             # Add the selected agent to the response so we can return it
             messages.append({"role": "user", "content": f"[AGENT SELECTED]{selected_agent_name}"})
 
-        elif len(mentions) > 1:
+        elif no_of_mentions > 1:
             # More than one name on requery so add additional reminder prompt for next retry
 
             if attempts_left:

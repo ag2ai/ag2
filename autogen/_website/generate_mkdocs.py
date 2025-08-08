@@ -512,8 +512,8 @@ def copy_assets(website_dir: Path) -> None:
     src_dir = website_dir / "static" / "img"
     dest_dir = website_dir / "mkdocs" / "docs" / "assets" / "img"
 
-    git_tracket_img_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "static" / "img")
-    copy_files(src_dir, dest_dir, git_tracket_img_files)
+    git_tracked_img_files = get_git_tracked_and_untracked_files_in_directory(website_dir / "static" / "img")
+    copy_files(src_dir, dest_dir, git_tracked_img_files)
 
 
 def add_excerpt_marker(content: str) -> str:
@@ -935,7 +935,7 @@ def post_process_func(
     rel_path = f"/{rendered_mdx.relative_to(website_build_directory.parents[0])}"
     content = transform_content_for_mkdocs(content, rel_path)
 
-    # Convert mdx image syntax to mintly image syntax
+    # Convert mdx image syntax to mintlify image syntax
     # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
 
     # ensure editUrl is present
