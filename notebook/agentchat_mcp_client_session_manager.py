@@ -8,7 +8,7 @@ from autogen.agentchat.group import AgentTarget
 from autogen.agentchat.group.llm_condition import StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
 from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.mcp.mcp_client import MCPClientSessionManager, MCPConfig, StdioConfig, create_toolkit
+from autogen.mcp.mcp_client import MCPClientSessionManager, MCPConfig, SseConfig, StdioConfig, create_toolkit
 from autogen.tools import tool
 
 load_dotenv()
@@ -23,20 +23,24 @@ ArxivServer = StdioConfig(
     transport="stdio",
     server_name="ArxivServer",
 )
-WikipediaServer = StdioConfig(
-    command="python3",
-    args=["mcp/mcp_wikipedia.py", "stdio", "--storage-path", "tmp/wikipedia_articles"],
-    transport="stdio",
+
+WikipediaServer = SseConfig(
+    url="http://127.0.0.1:8000/sse",
+    timeout=10,
+    sse_read_timeout=60,
     server_name="WikipediaServer",
 )
 
 mcp_config = MCPConfig(servers=[ArxivServer, WikipediaServer])
 
 
-def get_stdio_config(mcp_config: MCPConfig, server_name: str) -> StdioConfig:
-    existing_names = {server.server_name for server in mcp_config.servers}
+def get_server_config(mcp_config: MCPConfig, server_name: str) -> StdioConfig | SseConfig:
+    """
+    Return the server config (StdioConfig or SseConfig) matching the given server_name.
+    """
+    existing_names = {getattr(server, "server_name", None) for server in mcp_config.servers}
     for server in mcp_config.servers:
-        if server.server_name in server_name:
+        if getattr(server, "server_name", None) == server_name:
             return server
     raise KeyError(f"Server '{server_name}' not found in MCPConfig. Existing servers: {list(existing_names)}")
 
@@ -76,7 +80,7 @@ You have two mcp servers to use:
 
 @tool(description=TOOL_PROMPT)
 async def run_mcp_agent_to_client(query: str, server_name: str) -> ReplyResult:
-    server = get_stdio_config(mcp_config, server_name)
+    server = get_server_config(mcp_config, server_name)
     async with MCPClientSessionManager().open_session(server) as session:
         await session.initialize()
         agent_tool_prompt = await session.list_tools()
@@ -102,11 +106,12 @@ async def run_mcp_agent_to_client(query: str, server_name: str) -> ReplyResult:
             max_turns=5,
         )
         res = await result.process()
-        return ReplyResult(message=str(res), target_agent=AgentTarget(research_assistant))
+        last_message = await res.last_message()
+        return ReplyResult(message=str(last_message["content"][-1]), target_agent=AgentTarget(research_assistant))
 
 
 research_assistant.run(
-    message="give me the ids for latest papers on arXiv?",
+    message="Also give me the latest news from wikipedia",
     tools=[run_mcp_agent_to_client],
     max_turns=2,
 ).process()
