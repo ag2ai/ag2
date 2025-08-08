@@ -10,10 +10,11 @@ import asyncio
 import copy
 import inspect
 import os
+import threading
 import time
 import unittest
 from typing import Annotated, Any, Callable, List, Literal, Optional, Union
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel, Field
@@ -553,6 +554,68 @@ async def test_a_generate_reply_with_messages_and_sender_none(conversable_agent)
         pytest.fail(f"Unexpected AssertionError: {e}")
     except Exception as e:
         pytest.fail(f"Unexpected exception: {e}")
+
+
+@pytest.mark.asyncio
+@patch("builtins.input")
+async def test_a_get_human_input_console_io(mock_input) -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.console import IOConsole
+
+    mock_input.return_value = "test input"
+    with IOStream.set_default(IOConsole()):
+        agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+        assert agent.human_input_mode == "ALWAYS"
+        result = await agent.a_get_human_input("Please enter your input: ")
+        assert result == "test input"
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_thread_stream(monkeypatch) -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.thread_io_stream import ThreadIOStream
+
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+    ts = ThreadIOStream()
+
+    def responder():
+        _evt = ts.input_stream.get()
+        time.sleep(0.01)
+        (ts.output_stream if hasattr(ts, "output_stream") else ts._output_stream).put("thread-ok")
+
+    t = threading.Thread(target=responder, daemon=True)
+    t.start()
+
+    with IOStream.set_default(ts):
+        result = await agent.a_get_human_input("Enter:")
+    assert result == "thread-ok"
+    assert agent._human_input[-1] == "thread-ok"
+    t.join(timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_a_get_human_input_async_thread_stream() -> None:
+    from autogen.io.base import IOStream
+    from autogen.io.thread_io_stream import AsyncThreadIOStream
+
+    agent = ConversableAgent(name="agent", llm_config=False, human_input_mode="ALWAYS")
+    ats = AsyncThreadIOStream()
+
+    async def responder():
+        _evt = await ats.input_stream.get()
+        await asyncio.sleep(0)
+        outq = ats.output_stream if hasattr(ats, "output_stream") else ats._output_stream
+        await outq.put("async-thread-ok")
+
+    task = asyncio.create_task(responder())
+    try:
+        with IOStream.set_default(ats):
+            result = await agent.a_get_human_input("Enter:")
+    finally:
+        task.cancel()
+
+    assert result == "async-thread-ok"
+    assert agent._human_input[-1] == "async-thread-ok"
 
 
 def test_update_function_signature_and_register_functions(mock_credentials: Credentials) -> None:
