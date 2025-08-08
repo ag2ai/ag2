@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any
 
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
@@ -30,7 +31,7 @@ class GroupToolExecutor(ConversableAgent):
         )
 
         # Store the next target from a tool call
-        self._group_next_target: Optional[TransitionTarget] = None
+        self._group_next_target: TransitionTarget | None = None
 
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
@@ -91,7 +92,6 @@ class GroupToolExecutor(ConversableAgent):
         self, agent: ConversableAgent, current_tool: Tool, context_variables: ContextVariables
     ) -> None:
         """Checks for the context_variables parameter in the tool and updates it to use dependency injection."""
-
         # If the tool has a context_variables parameter, remove the tool and reregister it without the parameter
         if __CONTEXT_VARIABLES_PARAM_NAME__ in current_tool.tool_schema["function"]["parameters"]["properties"]:
             # We'll replace the tool, so start with getting the underlying function
@@ -129,17 +129,17 @@ class GroupToolExecutor(ConversableAgent):
     def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
         """Pre-processes and generates tool call replies.
 
         This function:
         1. Adds context_variables back to the tool call for the function, if necessary.
         2. Generates the tool calls reply.
-        3. Updates context_variables and next_agent based on the tool call response."""
-
+        3. Updates context_variables and next_agent based on the tool call response.
+        """
         if config is None:
             config = agent  # type: ignore[assignment]
         if messages is None:
@@ -150,7 +150,7 @@ class GroupToolExecutor(ConversableAgent):
             tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
-            next_target: Optional[TransitionTarget] = None
+            next_target: TransitionTarget | None = None
             tool_responses_inner = []
             contents = []
             for index in range(tool_call_count):

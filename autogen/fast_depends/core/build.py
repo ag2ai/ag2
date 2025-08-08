@@ -6,27 +6,11 @@
 # SPDX-License-Identifier: MIT
 
 import inspect
+from collections.abc import Awaitable, Callable, Sequence
 from copy import deepcopy
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Annotated, Any, TypeVar, get_args, get_origin
 
-from typing_extensions import (
-    Annotated,
-    ParamSpec,
-    get_args,
-    get_origin,
-)
+from typing_extensions import ParamSpec
 
 from .._compat import ConfigDict, create_model, get_config_base
 from ..dependencies import Depends
@@ -47,16 +31,13 @@ T = TypeVar("T")
 
 
 def build_call_model(
-    call: Union[
-        Callable[P, T],
-        Callable[P, Awaitable[T]],
-    ],
+    call: Callable[P, T] | Callable[P, Awaitable[T]],
     *,
     cast: bool = True,
     use_cache: bool = True,
-    is_sync: Optional[bool] = None,
+    is_sync: bool | None = None,
     extra_dependencies: Sequence[Depends] = (),
-    pydantic_config: Optional[ConfigDict] = None,
+    pydantic_config: ConfigDict | None = None,
 ) -> CallModel[P, T]:
     name = getattr(call, "__name__", type(call).__name__)
 
@@ -72,17 +53,17 @@ def build_call_model(
     ):
         return_annotation = return_args[0]
 
-    class_fields: Dict[str, Tuple[Any, Any]] = {}
-    dependencies: Dict[str, CallModel[..., Any]] = {}
-    custom_fields: Dict[str, CustomField] = {}
-    positional_args: List[str] = []
-    keyword_args: List[str] = []
-    var_positional_arg: Optional[str] = None
-    var_keyword_arg: Optional[str] = None
+    class_fields: dict[str, tuple[Any, Any]] = {}
+    dependencies: dict[str, CallModel[..., Any]] = {}
+    custom_fields: dict[str, CustomField] = {}
+    positional_args: list[str] = []
+    keyword_args: list[str] = []
+    var_positional_arg: str | None = None
+    var_keyword_arg: str | None = None
 
     for param_name, param in typed_params.parameters.items():
-        dep: Optional[Depends] = None
-        custom: Optional[CustomField] = None
+        dep: Depends | None = None
+        custom: CustomField | None = None
 
         if param.annotation is inspect.Parameter.empty:
             annotation = Any
@@ -173,7 +154,7 @@ def build_call_model(
                 class_fields[param_name] = (annotation, default)
 
             else:
-                class_fields[param_name] = class_fields.get(param_name, (Optional[annotation], None))
+                class_fields[param_name] = class_fields.get(param_name, (annotation | None, None))
 
             keyword_args.append(param_name)
 
@@ -189,7 +170,7 @@ def build_call_model(
         **class_fields,
     )
 
-    response_model: Optional[Type[ResponseModel[T]]] = None
+    response_model: type[ResponseModel[T]] | None = None
     if cast and return_annotation and return_annotation is not inspect.Parameter.empty:
         response_model = create_model(  # type: ignore[call-overload,assignment]
             "ResponseModel",

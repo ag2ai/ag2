@@ -5,7 +5,6 @@
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Type
 
 import pytest
 from pydantic import BaseModel
@@ -38,7 +37,7 @@ class TestCrewAIInteroperability:
         return FileReadTool()
 
     @pytest.fixture(scope="session")
-    def model_type(self, crewai_tool: "FileReadTool") -> Type[BaseModel]:  # type: ignore[no-any-unimported]
+    def model_type(self, crewai_tool: "FileReadTool") -> type[BaseModel]:  # type: ignore[no-any-unimported]
         return crewai_tool.args_schema  # type: ignore[no-any-return]
 
     @pytest.fixture(scope="session")
@@ -52,7 +51,7 @@ class TestCrewAIInteroperability:
         # runtime check
         assert isinstance(interop, Interoperable)
 
-    def test_convert_tool(self, tool: Tool, model_type: Type[BaseModel]) -> None:
+    def test_convert_tool(self, tool: Tool, model_type: type[BaseModel]) -> None:
         with TemporaryDirectory() as tmp_dir:
             file_path = f"{tmp_dir}/test.txt"
             with open(file_path, "w") as file:

@@ -9,7 +9,6 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Union
 
 import pytest
 
@@ -83,7 +82,7 @@ class TestCodeExecutor:
         assert isinstance(cls, CodeExecutor)
 
     def test_create_dict(self) -> None:
-        config: dict[str, Union[str, CodeExecutor]] = {"executor": "ipython-embedded"}
+        config: dict[str, str | CodeExecutor] = {"executor": "ipython-embedded"}
         executor = CodeExecutorFactory.create(config)
         assert isinstance(executor, EmbeddedIPythonCodeExecutor)
 

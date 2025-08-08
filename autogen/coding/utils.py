@@ -7,7 +7,6 @@
 # Will return the filename relative to the workspace path
 import re
 from pathlib import Path
-from typing import Optional
 
 filename_patterns = [
     re.compile(r"^<!-- (filename:)?(.+?) -->", re.DOTALL),
@@ -18,7 +17,7 @@ filename_patterns = [
 
 
 # Raises ValueError if the file is not in the workspace
-def _get_file_name_from_content(code: str, workspace_path: Path) -> Optional[str]:
+def _get_file_name_from_content(code: str, workspace_path: Path) -> str | None:
     first_line = code.split("\n")[0].strip()
     # TODO - support other languages
     for pattern in filename_patterns:

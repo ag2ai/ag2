@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, List, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ....agentchat.group.available_condition import AvailableCondition
 from .document_utils import Ingest, Query
@@ -40,9 +40,9 @@ class SummaryTaskAvailableCondition(AvailableCondition):
             True if all conditions are met (ready for summary), False otherwise
         """
         # Get variables from context with appropriate casting
-        documents_to_ingest: List[Ingest] = cast(List[Ingest], agent.context_variables.get(self.documents_var, []))
+        documents_to_ingest: list[Ingest] = cast(list[Ingest], agent.context_variables.get(self.documents_var, []))
 
-        queries_to_run: List[Query] = cast(List[Query], agent.context_variables.get(self.queries_var, []))
+        queries_to_run: list[Query] = cast(list[Query], agent.context_variables.get(self.queries_var, []))
 
         completed_task_count = bool(agent.context_variables.get(self.completed_var, 0))
 

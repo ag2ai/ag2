@@ -7,8 +7,9 @@
 # ruff: noqa: E722
 import copy
 import traceback
+from collections.abc import Callable
 from contextlib import suppress
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Literal
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
 from ...llm_config import LLMConfig
@@ -39,14 +40,14 @@ class SocietyOfMindAgent(ConversableAgent):
         self,
         name: str,
         chat_manager: GroupChatManager,
-        response_preparer: Optional[Union[str, Callable[..., Any]]] = None,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        response_preparer: str | Callable[..., Any] | None = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
+        function_map: dict[str, Callable[..., Any]] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = False,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = False,
+        default_auto_reply: str | dict[str, Any] | None = "",
         **kwargs: Any,
     ):
         super().__init__(
@@ -135,11 +136,11 @@ class SocietyOfMindAgent(ConversableAgent):
             return extracted_response
 
     @property
-    def chat_manager(self) -> Union[GroupChatManager, None]:
+    def chat_manager(self) -> GroupChatManager | None:
         """Return the group chat manager."""
         return self._chat_manager
 
-    def update_chat_manager(self, chat_manager: Union[GroupChatManager, None]):
+    def update_chat_manager(self, chat_manager: GroupChatManager | None):
         """Update the chat manager.
 
         Args:
@@ -158,10 +159,10 @@ class SocietyOfMindAgent(ConversableAgent):
 
     def generate_inner_monologue_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply by running the group chat"""
         if self.chat_manager is None:
             return False, None

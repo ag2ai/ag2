@@ -12,7 +12,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 from ...doc_utils import export_module
 
@@ -126,7 +126,7 @@ class JupyterKernelClient:
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()
 
@@ -154,7 +154,7 @@ class JupyterKernelClient:
         self._websocket.send_text(json.dumps(message))
         return message_id
 
-    def _receive_message(self, timeout_seconds: Optional[float]) -> Optional[dict[str, Any]]:
+    def _receive_message(self, timeout_seconds: float | None) -> dict[str, Any] | None:
         self._websocket.settimeout(timeout_seconds)
         try:
             data = self._websocket.recv()
@@ -164,7 +164,7 @@ class JupyterKernelClient:
         except websocket.WebSocketTimeoutException:
             return None
 
-    def wait_for_ready(self, timeout_seconds: Optional[float] = None) -> bool:
+    def wait_for_ready(self, timeout_seconds: float | None = None) -> bool:
         message_id = self._send_message(content={}, channel="shell", message_type="kernel_info_request")
         while True:
             message = self._receive_message(timeout_seconds)
@@ -177,7 +177,7 @@ class JupyterKernelClient:
             ):
                 return True
 
-    def execute(self, code: str, timeout_seconds: Optional[float] = None) -> ExecutionResult:
+    def execute(self, code: str, timeout_seconds: float | None = None) -> ExecutionResult:
         message_id = self._send_message(
             content={
                 "code": code,

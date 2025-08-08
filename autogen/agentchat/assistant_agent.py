@@ -4,7 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal
 
 from ..doc_utils import export_module
 from ..llm_config import LLMConfig
@@ -42,12 +43,12 @@ Reply "TERMINATE" in the end when everything is done.
     def __init__(
         self,
         name: str,
-        system_message: Optional[str] = DEFAULT_SYSTEM_MESSAGE,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        system_message: str | None = DEFAULT_SYSTEM_MESSAGE,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        description: Optional[str] = None,
+        description: str | None = None,
         **kwargs: Any,
     ):
         """Args:

@@ -6,7 +6,7 @@ import math
 import random
 import re
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional
 
 from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
@@ -112,10 +112,10 @@ class ThinkNode:
         """
         self.content: str = content
         self.value: float = 0.0
-        self.parent: Optional[ThinkNode] = parent
+        self.parent: ThinkNode | None = parent
         self.reflection: str = ""
         self.rating_details: str = ""
-        self.output: Optional[str] = None
+        self.output: str | None = None
         self.depth: int = parent.depth + 1 if parent is not None else 0
         self.children: list[ThinkNode] = []
         self.visits: int = 0
@@ -156,7 +156,7 @@ class ThinkNode:
         Args:
             reward (float): The reward to backpropagate up the tree.
         """
-        node: Optional[ThinkNode] = self
+        node: ThinkNode | None = self
         while node is not None:
             node.visits += 1
             node.value = (node.value * (node.visits - 1) + reward) / node.visits
@@ -343,14 +343,14 @@ class ReasoningAgent(AssistantAgent):
     def __init__(
         self,
         name: str,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        grader_llm_config: LLMConfig | dict[str, Any] | None = None,
         max_depth: int = 4,
         beam_size: int = 3,
         answer_approach: Literal["pool", "best"] = "pool",
-        reason_config: Optional[dict[str, Any]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        scope: Optional[str] = None,
+        reason_config: dict[str, Any] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = False,
+        scope: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a ReasoningAgent that uses tree-of-thought reasoning.
@@ -428,8 +428,8 @@ class ReasoningAgent(AssistantAgent):
             code_execution_config=code_execution_config,
             **kwargs,
         )
-        self._llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = llm_config
-        self._grader_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = (
+        self._llm_config: LLMConfig | dict[str, Any] | None = llm_config
+        self._grader_llm_config: LLMConfig | dict[str, Any] | None = (
             grader_llm_config if grader_llm_config else llm_config
         )
 
@@ -466,12 +466,12 @@ class ReasoningAgent(AssistantAgent):
         self._rating_scale: int = reason_config.get("rating_scale", 10)
         self._interim_execution: bool = reason_config.get("interim_execution", False)
 
-        self._root: Optional[ThinkNode] = None
+        self._root: ThinkNode | None = None
         self._lats_context: str = ""
         self.register_reply([Agent, None], ReasoningAgent.generate_forest_response)
 
         # Initialize llm agent for interim step execution
-        self._executor: Optional[AssistantAgent] = None
+        self._executor: AssistantAgent | None = None
         # Add scope if provided
         executor_msg = self._add_scope(EXECUTOR_MESSAGE)
         if self._interim_execution:
@@ -482,7 +482,7 @@ class ReasoningAgent(AssistantAgent):
         tot_msg = self._add_scope(TREEOFTHOUGHT_MESSAGE)
 
         # Initialize user proxy agent for code execution
-        self._user_proxy: Optional[UserProxyAgent] = None
+        self._user_proxy: UserProxyAgent | None = None
         if self._code_execution_config:
             # to execute code interim_execution should be True
             if not self._interim_execution:
@@ -525,9 +525,9 @@ class ReasoningAgent(AssistantAgent):
 
     def generate_forest_response(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[dict[str, Any]] = None,
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         """Generate a response using tree-of-thought reasoning.
 
@@ -574,12 +574,12 @@ Final Answer:
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[dict[str, Any]] = self.last_message(self)
+            last_msg: dict[str, Any] | None = self.last_message(self)
             if last_msg is None:
                 return True, ""
             return True, last_msg["content"].strip()
 
-    def rate_node(self, node: ThinkNode, ground_truth: Optional[str] = None, is_outcome: bool = False) -> float:
+    def rate_node(self, node: ThinkNode, ground_truth: str | None = None, is_outcome: bool = False) -> float:
         """Rate the quality of a reasoning path or the final answer using the grader agent.
 
         Args:
@@ -663,7 +663,7 @@ Please provide your rating along with a brief explanation of your assessment.
             silent=self.silent,
         )
         rating: str = ""
-        last_message: Optional[dict[str, Any]] = self._grader.last_message()
+        last_message: dict[str, Any] | None = self._grader.last_message()
         if last_message is not None:
             rating = last_message["content"].strip()
         node.rating_details = rating
@@ -675,7 +675,7 @@ Please provide your rating along with a brief explanation of your assessment.
             reward = 0.0  # Default reward if parsing fails
         return reward
 
-    def rate_batch_nodes(self, nodes: list[ThinkNode], ground_truth: Optional[str] = None) -> list[float]:
+    def rate_batch_nodes(self, nodes: list[ThinkNode], ground_truth: str | None = None) -> list[float]:
         """Rate a batch of nodes using a single call of the grader agent. All the nodes must have the same parent.
 
         This method evaluates all given nodes while considering the other available options.
@@ -745,7 +745,7 @@ Rating: <rating>
             silent=self.silent,
         )
         rating: str = ""
-        last_message: Optional[dict[str, Any]] = self._grader.last_message()
+        last_message: dict[str, Any] | None = self._grader.last_message()
         if last_message is not None:
             rating = last_message["content"].strip()
 
@@ -772,7 +772,7 @@ Rating: <rating>
             rewards.append((float(rating) - 1.0) / (self._rating_scale - 1.0))
         return rewards
 
-    def execute_node(self, node: ThinkNode) -> Optional[str]:
+    def execute_node(self, node: ThinkNode) -> str | None:
         """Execute the node's content to get the response.
 
         This method runs the node's content to get the response.
@@ -805,7 +805,7 @@ Rating: <rating>
                 request_reply=True,
                 silent=self.silent,
             )
-            user_proxy_last_msg: Optional[dict[str, Any]] = self._user_proxy.last_message(self)
+            user_proxy_last_msg: dict[str, Any] | None = self._user_proxy.last_message(self)
             user_proxy_last_msg_content: str = user_proxy_last_msg["content"] if user_proxy_last_msg is not None else ""
             return user_proxy_last_msg_content
 
@@ -822,7 +822,7 @@ Rating: <rating>
         )
 
         output = ""
-        last_message: Optional[dict[str, Any]] = self._executor.last_message()
+        last_message: dict[str, Any] | None = self._executor.last_message()
 
         # this agent is not supposed to write Python code, so if there is a need for that ask the thinker to do so
         if last_message is not None:
@@ -836,8 +836,8 @@ Rating: <rating>
         return output
 
     def _process_prompt(
-        self, messages: Optional[list[dict[str, Any]]], sender: Optional[Agent]
-    ) -> tuple[Optional[str], Optional[str]]:
+        self, messages: list[dict[str, Any]] | None, sender: Agent | None
+    ) -> tuple[str | None, str | None]:
         """Process the incoming messages to extract the prompt and ground truth.
 
         This method checks if the provided messages are None and identifies the prompt.
@@ -892,7 +892,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[dict[str, Any]] = self._prompt_rewriter.last_message()
+            last_msg: dict[str, Any] | None = self._prompt_rewriter.last_message()
             prompt = last_msg["content"].strip() if last_msg is not None else ""
 
         if not prompt:
@@ -900,7 +900,7 @@ CURRENT_QUESTION: *Write the current/last question to be addressed here. In case
 
         return prompt, ground_truth
 
-    def _beam_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
+    def _beam_reply(self, prompt: str, ground_truth: str | None = None) -> str:
         """Generate a response using tree-of-thought reasoning.
 
         Implements beam search through a tree of reasoning steps, using the thinker
@@ -993,11 +993,11 @@ Final Answer:
             request_reply=True,
             silent=self.silent,
         )
-        last_msg: Optional[dict[str, Any]] = self.last_message(self)
+        last_msg: dict[str, Any] | None = self.last_message(self)
         final_answer: str = last_msg["content"].strip() if last_msg is not None else ""
         return final_answer
 
-    def _mcts_reply(self, prompt: str, ground_truth: Optional[str] = None) -> str:
+    def _mcts_reply(self, prompt: str, ground_truth: str | None = None) -> str:
         """Generate a response using Monte Carlo Tree Search (MCTS) reasoning.
 
         Args:
@@ -1059,7 +1059,7 @@ Final Answer:
                 request_reply=True,
                 silent=self.silent,
             )
-            last_msg: Optional[dict[str, Any]] = self.last_message(self)
+            last_msg: dict[str, Any] | None = self.last_message(self)
             _answer: str = last_msg["content"].strip() if last_msg is not None else ""
             _ans_node = ThinkNode(content=_answer, parent=node)
             reward = self.rate_node(_ans_node, ground_truth, is_outcome=True)
@@ -1102,7 +1102,7 @@ Final Answer:
             request_reply=True,
             silent=self.silent,
         )
-        last_msg: Optional[dict[str, Any]] = self._thinker.last_message()
+        last_msg: dict[str, Any] | None = self._thinker.last_message()
         reply: str = last_msg["content"].strip() if last_msg is not None else ""
         reflection = re.findall(r"REFLECTION:\s*(.+?)(?=\*\*Possible Options:\*\*|Option \d+:|$)", reply, re.DOTALL)
         if reflection:

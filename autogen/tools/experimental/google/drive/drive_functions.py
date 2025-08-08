@@ -4,7 +4,7 @@
 
 import io
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .....import_utils import optional_import_block, require_optional_import
 from ..model import GoogleFileInfo
@@ -25,7 +25,7 @@ __all__ = [
     ],
     "google-api",
 )
-def list_files_and_folders(service: Any, page_size: int, folder_id: Optional[str]) -> list[GoogleFileInfo]:
+def list_files_and_folders(service: Any, page_size: int, folder_id: str | None) -> list[GoogleFileInfo]:
     kwargs = {
         "pageSize": page_size,
         "fields": "nextPageToken, files(id, name, mimeType)",
@@ -40,7 +40,7 @@ def list_files_and_folders(service: Any, page_size: int, folder_id: Optional[str
     return result
 
 
-def _get_file_extension(mime_type: str) -> Optional[str]:
+def _get_file_extension(mime_type: str) -> str | None:
     """Returns the correct file extension for a given MIME type."""
     mime_extensions = {
         "application/vnd.google-apps.document": "docx",  # Google Docs → Word
@@ -70,7 +70,7 @@ def download_file(
     file_name: str,
     mime_type: str,
     download_folder: Path,
-    subfolder_path: Optional[str] = None,
+    subfolder_path: str | None = None,
 ) -> str:
     """Download or export file based on its MIME type, optionally saving to a subfolder."""
     file_extension = _get_file_extension(mime_type)

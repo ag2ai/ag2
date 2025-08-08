@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Callable
+from collections.abc import Callable
+from typing import Annotated, Any
 from unittest.mock import patch
 
 from autogen.agentchat import AssistantAgent

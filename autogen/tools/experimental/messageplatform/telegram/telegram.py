@@ -92,8 +92,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
     """Sends a message to a Telegram channel, group, or user."""
 
     def __init__(self, *, api_id: str, api_hash: str, chat_id: str) -> None:
-        """
-        Initialize the TelegramSendTool.
+        """Initialize the TelegramSendTool.
 
         Args:
             api_id: Telegram API ID from https://my.telegram.org/apps.
@@ -106,8 +105,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
             message: Annotated[str, "Message to send to the chat."],
             chat_id: Annotated[str, Depends(on(chat_id))],
         ) -> Any:
-            """
-            Sends a message to a Telegram chat.
+            """Sends a message to a Telegram chat.
 
             Args:
                 message: The message to send.
@@ -124,7 +122,7 @@ class TelegramSendTool(BaseTelegramTool, Tool):
                             message[i : i + (MAX_MESSAGE_LENGTH - 1)]
                             for i in range(0, len(message), (MAX_MESSAGE_LENGTH - 1))
                         ]
-                        first_message: Union[Message, None] = None  # type: ignore[no-any-unimported]
+                        first_message: Message | None = None  # type: ignore[no-any-unimported]
 
                         for i, chunk in enumerate(chunks):
                             sent = await client.send_message(
@@ -163,8 +161,7 @@ class TelegramRetrieveTool(BaseTelegramTool, Tool):
     """Retrieves messages from a Telegram channel."""
 
     def __init__(self, *, api_id: str, api_hash: str, chat_id: str) -> None:
-        """
-        Initialize the TelegramRetrieveTool.
+        """Initialize the TelegramRetrieveTool.
 
         Args:
             api_id: Telegram API ID from https://my.telegram.org/apps.
@@ -177,16 +174,15 @@ class TelegramRetrieveTool(BaseTelegramTool, Tool):
         async def telegram_retrieve_messages(
             chat_id: Annotated[str, Depends(on(chat_id))],
             messages_since: Annotated[
-                Union[str, None],
+                str | None,
                 "Date to retrieve messages from (ISO format) OR message ID. If None, retrieves latest messages.",
             ] = None,
             maximum_messages: Annotated[
-                Union[int, None], "Maximum number of messages to retrieve. If None, retrieves all messages since date."
+                int | None, "Maximum number of messages to retrieve. If None, retrieves all messages since date."
             ] = None,
-            search: Annotated[Union[str, None], "Optional string to search for in messages."] = None,
+            search: Annotated[str | None, "Optional string to search for in messages."] = None,
         ) -> Any:
-            """
-            Retrieves messages from a Telegram chat.
+            """Retrieves messages from a Telegram chat.
 
             Args:
                 chat_id: The ID of the chat. (uses dependency injection)

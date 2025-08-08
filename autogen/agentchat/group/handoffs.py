@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Union, overload
+from typing import overload
 
 from pydantic import BaseModel, Field
 
@@ -14,8 +14,7 @@ __all__ = ["Handoffs"]
 
 
 class Handoffs(BaseModel):
-    """
-    Container for all handoff transition conditions of a ConversableAgent.
+    """Container for all handoff transition conditions of a ConversableAgent.
 
     Three types of conditions can be added, each with a different order and time of use:
     1. OnContextConditions (evaluated without an LLM)
@@ -33,8 +32,7 @@ class Handoffs(BaseModel):
     after_works: list[OnContextCondition] = Field(default_factory=list)
 
     def add_context_condition(self, condition: OnContextCondition) -> "Handoffs":
-        """
-        Add a single context condition.
+        """Add a single context condition.
 
         Args:
             condition: The OnContextCondition to add
@@ -50,8 +48,7 @@ class Handoffs(BaseModel):
         return self
 
     def add_context_conditions(self, conditions: list[OnContextCondition]) -> "Handoffs":
-        """
-        Add multiple context conditions.
+        """Add multiple context conditions.
 
         Args:
             conditions: List of OnContextConditions to add
@@ -67,8 +64,7 @@ class Handoffs(BaseModel):
         return self
 
     def add_llm_condition(self, condition: OnCondition) -> "Handoffs":
-        """
-        Add a single LLM condition.
+        """Add a single LLM condition.
 
         Args:
             condition: The OnCondition to add
@@ -84,8 +80,7 @@ class Handoffs(BaseModel):
         return self
 
     def add_llm_conditions(self, conditions: list[OnCondition]) -> "Handoffs":
-        """
-        Add multiple LLM conditions.
+        """Add multiple LLM conditions.
 
         Args:
             conditions: List of OnConditions to add
@@ -101,8 +96,7 @@ class Handoffs(BaseModel):
         return self
 
     def set_after_work(self, target: TransitionTarget) -> "Handoffs":
-        """
-        Set the after work target (replaces all after_works with single entry).
+        """Set the after work target (replaces all after_works with single entry).
 
         For backward compatibility, this creates an OnContextCondition with no condition (always true).
 
@@ -121,8 +115,7 @@ class Handoffs(BaseModel):
         return self
 
     def add_after_work(self, condition: OnContextCondition) -> "Handoffs":
-        """
-        Add a single after-work condition.
+        """Add a single after-work condition.
 
         If the condition has condition=None, it will replace any existing
         condition=None entry and be placed at the end.
@@ -158,8 +151,7 @@ class Handoffs(BaseModel):
         return self
 
     def add_after_works(self, conditions: list[OnContextCondition]) -> "Handoffs":
-        """
-        Add multiple after-work conditions.
+        """Add multiple after-work conditions.
 
         Special handling for condition=None entries:
         - Only one condition=None entry is allowed (the fallback)
@@ -198,9 +190,8 @@ class Handoffs(BaseModel):
     @overload
     def add(self, condition: OnCondition) -> "Handoffs": ...
 
-    def add(self, condition: Union[OnContextCondition, OnCondition]) -> "Handoffs":
-        """
-        Add a single condition (OnContextCondition or OnCondition).
+    def add(self, condition: OnContextCondition | OnCondition) -> "Handoffs":
+        """Add a single condition (OnContextCondition or OnCondition).
 
         Args:
             condition: The condition to add (OnContextCondition or OnCondition)
@@ -220,9 +211,8 @@ class Handoffs(BaseModel):
         else:
             raise TypeError(f"Unsupported condition type: {type(condition).__name__}")
 
-    def add_many(self, conditions: list[Union[OnContextCondition, OnCondition]]) -> "Handoffs":
-        """
-        Add multiple conditions of any supported types (OnContextCondition and OnCondition).
+    def add_many(self, conditions: list[OnContextCondition | OnCondition]) -> "Handoffs":
+        """Add multiple conditions of any supported types (OnContextCondition and OnCondition).
 
         Args:
             conditions: List of conditions to add
@@ -254,8 +244,7 @@ class Handoffs(BaseModel):
         return self
 
     def clear(self) -> "Handoffs":
-        """
-        Clear all handoff conditions.
+        """Clear all handoff conditions.
 
         Returns:
             Self for method chaining
@@ -266,8 +255,7 @@ class Handoffs(BaseModel):
         return self
 
     def get_llm_conditions_by_target_type(self, target_type: type) -> list[OnCondition]:
-        """
-        Get OnConditions for a specific target type.
+        """Get OnConditions for a specific target type.
 
         Args:
             target_type: The type of condition to retrieve
@@ -278,8 +266,7 @@ class Handoffs(BaseModel):
         return [on_condition for on_condition in self.llm_conditions if on_condition.has_target_type(target_type)]
 
     def get_context_conditions_by_target_type(self, target_type: type) -> list[OnContextCondition]:
-        """
-        Get OnContextConditions for a specific target type.
+        """Get OnContextConditions for a specific target type.
 
         Args:
             target_type: The type of condition to retrieve
@@ -294,8 +281,7 @@ class Handoffs(BaseModel):
         ]
 
     def get_llm_conditions_requiring_wrapping(self) -> list[OnCondition]:
-        """
-        Get LLM conditions that have targets that require wrapping.
+        """Get LLM conditions that have targets that require wrapping.
 
         Returns:
             List of LLM conditions that require wrapping
@@ -303,8 +289,7 @@ class Handoffs(BaseModel):
         return [condition for condition in self.llm_conditions if condition.target_requires_wrapping()]
 
     def get_context_conditions_requiring_wrapping(self) -> list[OnContextCondition]:
-        """
-        Get context conditions that have targets that require wrapping.
+        """Get context conditions that have targets that require wrapping.
 
         Returns:
             List of context conditions that require wrapping
@@ -312,9 +297,7 @@ class Handoffs(BaseModel):
         return [condition for condition in self.context_conditions if condition.target_requires_wrapping()]
 
     def set_llm_function_names(self) -> None:
-        """
-        Set the LLM function names for all LLM conditions, creating unique names for each function.
-        """
+        """Set the LLM function names for all LLM conditions, creating unique names for each function."""
         for i, condition in enumerate(self.llm_conditions):
             # Function names are made unique and allow multiple OnCondition's to the same agent
             condition.llm_function_name = f"transfer_to_{condition.target.normalized_name()}_{i + 1}"

@@ -5,7 +5,7 @@
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from ...doc_utils import export_module
 
@@ -19,9 +19,9 @@ class JupyterConnectionInfo:
     """`str` - Host of the Jupyter gateway server"""
     use_https: bool
     """`bool` - Whether to use HTTPS"""
-    port: Optional[int] = None
+    port: int | None = None
     """`Optional[int]` - Port of the Jupyter gateway server. If None, the default port is used"""
-    token: Optional[str] = None
+    token: str | None = None
     """`Optional[str]` - Token for authentication. If None, no token is used"""
 
 

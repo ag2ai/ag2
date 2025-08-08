@@ -18,8 +18,7 @@ class WorkingDirectory:
     _current_working_directory: ContextVar["WorkingDirectory"] = ContextVar("_current_working_directory")
 
     def __init__(self, path: str):
-        """
-        Initialize with a directory path.
+        """Initialize with a directory path.
 
         Args:
             path: The directory path to change to.

@@ -4,7 +4,8 @@
 import hashlib
 import json
 import os
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal
 
 from termcolor import colored
 
@@ -135,17 +136,17 @@ Note that the previous experts will forget everything after you obtain the respo
     def __init__(
         self,
         name: str,
-        system_message: Optional[str] = None,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
-        human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[dict[str, Any], Literal[False]]] = False,
-        nested_config: Optional[dict[str, Any]] = None,
-        agent_lib: Optional[str] = None,
-        tool_lib: Optional[str] = None,
-        agent_config_save_path: Optional[str] = None,
-        description: Optional[str] = DEFAULT_DESCRIPTION,
+        system_message: str | None = None,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
+        human_input_mode: str | None = "NEVER",
+        code_execution_config: dict[str, Any] | Literal[False] | None = False,
+        nested_config: dict[str, Any] | None = None,
+        agent_lib: str | None = None,
+        tool_lib: str | None = None,
+        agent_config_save_path: str | None = None,
+        description: str | None = DEFAULT_DESCRIPTION,
         **kwargs: Any,
     ):
         """Args:
@@ -227,7 +228,7 @@ Note that the previous experts will forget everything after you obtain the respo
         )
 
     @staticmethod
-    def _update_config(default_dict: dict[str, Any], update_dict: Optional[dict[str, Any]]) -> dict[str, Any]:
+    def _update_config(default_dict: dict[str, Any], update_dict: dict[str, Any] | None) -> dict[str, Any]:
         """Recursively updates the default_dict with values from update_dict."""
         if update_dict is None:
             return default_dict
@@ -297,14 +298,14 @@ Collect information from the general task, follow the suggestions from manager t
         name: str,
         nested_config: dict[str, Any],
         agent_config_save_path: str = None,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
-        human_input_mode: Optional[str] = "NEVER",
-        code_execution_config: Optional[Union[dict[str, Any], Literal[False]]] = None,
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = DEFAULT_AUTO_REPLY,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
-        system_message: Optional[Union[str, list]] = "",
-        description: Optional[str] = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
+        human_input_mode: str | None = "NEVER",
+        code_execution_config: dict[str, Any] | Literal[False] | None = None,
+        default_auto_reply: str | dict[str, Any] | None = DEFAULT_AUTO_REPLY,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = False,
+        system_message: str | list | None = "",
+        description: str | None = None,
     ):
         """Args:
         name (str): name of the agent.

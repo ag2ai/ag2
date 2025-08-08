@@ -7,7 +7,6 @@ import tempfile
 import textwrap
 from collections.abc import Generator
 from pathlib import Path
-from typing import Optional, Union
 
 import pytest
 
@@ -31,7 +30,7 @@ from autogen.import_utils import run_for_optional_imports
 
 class TestUpdateGroupPages:
     @pytest.fixture
-    def sample_navigation(self) -> list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]:
+    def sample_navigation(self) -> list[dict[str, str | list[str | dict[str, str | list[str]]]]]:
         return [
             {"group": "Home", "pages": ["docs/home/Home"]},
             {
@@ -54,7 +53,7 @@ class TestUpdateGroupPages:
         ]
 
     def test_update_top_level_group(
-        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+        self, sample_navigation: list[dict[str, str | list[str | dict[str, str | list[str]]]]]
     ) -> None:
         updated_pages = ["docs/use-cases/use-cases/customer-service"]
         target_grp = "Use Cases"
@@ -72,7 +71,7 @@ class TestUpdateGroupPages:
         assert sample_navigation != updated_navigation
 
     def test_update_nested_group(
-        self, sample_navigation: list[dict[str, Union[str, list[Union[str, dict[str, Union[str, list[str]]]]]]]]
+        self, sample_navigation: list[dict[str, str | list[str | dict[str, str | list[str]]]]]
     ) -> None:
         updated_pages = ["docs/use-cases/updated-notebook/index"]
         target_grp = "Notebooks"
@@ -147,7 +146,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
 
 class TestAddFrontMatterToMetadataMdx:
     def test_without_metadata_mdx(self) -> None:
-        front_matter_dict: dict[str, Union[str, Optional[Union[list[str]]]]] = {
+        front_matter_dict: dict[str, str | list[str] | None] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -197,7 +196,7 @@ export const notebooksMetadata = [
             ), actual
 
     def test_with_metadata_mdx(self) -> None:
-        front_matter_dict: dict[str, Optional[Union[str, Union[list[str]]]]] = {
+        front_matter_dict: dict[str, str | list[str] | None] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",

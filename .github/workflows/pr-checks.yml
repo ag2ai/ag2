@@ -23,7 +23,7 @@ jobs:
           lfs: true
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - name: Set $PY environment variable
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
       - uses: actions/cache@v4
@@ -45,7 +45,7 @@ jobs:
           version: "latest"
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - run: uv pip install --system ".[types]"
       # Any additional configuration for mypy should be defined in pyproject.toml under the [tool.mypy] section
       - run: |

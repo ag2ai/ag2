@@ -5,7 +5,7 @@
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -244,7 +244,7 @@ def _is_valid_extension_for_file_type(extension: str, file_type: InputFormat) ->
 
 
 @require_optional_import(["selenium", "webdriver_manager", "requests"], "rag")
-def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Path:
+def download_url(url: Any, output_dir: str | Path | None = None) -> Path:
     """Download the content of a URL and save it as a file.
 
     For direct file URLs (.md, .pdf, .docx, etc.), downloads the raw file.
@@ -296,7 +296,7 @@ def download_url(url: Any, output_dir: Optional[Union[str, Path]] = None) -> Pat
     return _download_binary_file(url=final_url, output_dir=output_dir)
 
 
-def list_files(directory: Union[Path, str]) -> list[Path]:
+def list_files(directory: Path | str) -> list[Path]:
     """Recursively list all files in a directory.
 
     This function will raise an exception if the directory does not exist.
@@ -310,9 +310,8 @@ def list_files(directory: Union[Path, str]) -> list[Path]:
 
 
 @export_module("autogen.agents.experimental.document_agent")
-def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = "./output") -> list[Path]:
+def handle_input(input_path: Path | str, output_dir: Path | str = "./output") -> list[Path]:
     """Process the input string and return the appropriate file paths"""
-
     output_dir = preprocess_path(str_or_path=output_dir, is_dir=True, mk_path=True)
     if isinstance(input_path, str) and is_url(input_path):
         _logger.info("Detected URL. Downloading content...")
@@ -336,9 +335,7 @@ def handle_input(input_path: Union[Path, str], output_dir: Union[Path, str] = ".
 
 
 @export_module("autogen.agents.experimental.document_agent")
-def preprocess_path(
-    str_or_path: Union[Path, str], mk_path: bool = False, is_file: bool = False, is_dir: bool = True
-) -> Path:
+def preprocess_path(str_or_path: Path | str, mk_path: bool = False, is_file: bool = False, is_dir: bool = True) -> Path:
     """Preprocess the path for file operations.
 
     Args:
@@ -350,7 +347,6 @@ def preprocess_path(
     Returns:
         Path: The preprocessed path.
     """
-
     # Convert the input to a Path object if it's a string
     temp_path = Path(str_or_path)
 

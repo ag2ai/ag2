@@ -14,7 +14,6 @@ import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
-from typing import Optional
 
 import docker
 
@@ -62,8 +61,8 @@ WORKDIR "${HOME}"
     def __init__(
         self,
         *,
-        custom_image_name: Optional[str] = None,
-        container_name: Optional[str] = None,
+        custom_image_name: str | None = None,
+        container_name: str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
         docker_env: dict[str, str] = {},
@@ -162,6 +161,6 @@ WORKDIR "${HOME}"
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

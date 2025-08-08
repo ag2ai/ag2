@@ -4,7 +4,8 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, TypeVar, Union
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from ...doc_utils import export_module
 from ...llm_config import LLMConfig
@@ -15,7 +16,7 @@ __all__ = ["LiteLLmConfigFactory"]
 T = TypeVar("T", bound="LiteLLmConfigFactory")
 
 
-def get_crawl4ai_version() -> Optional[str]:
+def get_crawl4ai_version() -> str | None:
     """Get the installed crawl4ai version."""
     try:
         import crawl4ai
@@ -46,9 +47,8 @@ class LiteLLmConfigFactory(ABC):
     _factories: set["LiteLLmConfigFactory"] = set()
 
     @classmethod
-    def create_lite_llm_config(cls, llm_config: Union[LLMConfig, dict[str, Any]]) -> dict[str, Any]:
-        """
-        Create a lite LLM config compatible with the installed crawl4ai version.
+    def create_lite_llm_config(cls, llm_config: LLMConfig | dict[str, Any]) -> dict[str, Any]:
+        """Create a lite LLM config compatible with the installed crawl4ai version.
 
         For crawl4ai >=0.5: Returns config with llmConfig parameter
         For crawl4ai <0.5: Returns config with provider parameter (legacy)
@@ -68,8 +68,7 @@ class LiteLLmConfigFactory(ABC):
 
     @classmethod
     def _adapt_for_crawl4ai_v05(cls, base_config: dict[str, Any]) -> dict[str, Any]:
-        """
-        Adapt the config for crawl4ai >=0.5 by moving deprecated parameters
+        """Adapt the config for crawl4ai >=0.5 by moving deprecated parameters
         into an llmConfig object.
         """
         adapted_config = base_config.copy()

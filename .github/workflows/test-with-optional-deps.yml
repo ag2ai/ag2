@@ -81,22 +81,14 @@ jobs:
           - "google-api"
           - "wikipedia-api"
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Run tests only for py versions 3.9, 3.10, 3.13
-        python-version: ["3.9", "3.10", "3.13"]
+        # Run tests only for py versions 3.10, 3.13
+        python-version: ["3.10", "3.13"]
         # add more if needed
         exclude:
-          # pdoc3 is failing in python 3.9 for some reason, we build docs with Python 3.10
-          - python-version: "3.9"
-            optional-dependencies: "docs"
-          # graphrag_sdk uses pipe(|) in signature which is unsupported in python 3.9
-          - python-version: "3.9"
-            optional-dependencies: "graph-rag-falkor-db"
           # Issues with installing retrievechat-qdrant in python 3.13
           - python-version: "3.13"
             optional-dependencies: "retrievechat-qdrant"
           # Browser use doesn't support below python 3.11
-          - python-version: "3.9"
-            optional-dependencies: "browser-use"
           - python-version: "3.10"
             optional-dependencies: "browser-use"
           # Skip if os is mac or windows, python version is 3.13 and optional-dependencies is starting with retrievechat

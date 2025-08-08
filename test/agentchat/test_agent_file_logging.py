@@ -9,7 +9,8 @@ import os
 import sys
 import tempfile
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 

@@ -20,7 +20,6 @@
   <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
     <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
   </a>
-
   <a href="https://discord.gg/pAbnFJrkgZ">
     <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
   </a>
@@ -78,7 +77,7 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 ### Installation
 
-AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
+AG2 requires **Python version >= 3.10, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
 
 ```bash
 pip install ag2[openai]

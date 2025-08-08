@@ -7,14 +7,14 @@
 import functools
 import inspect
 import json
+from collections.abc import Callable
 from logging import getLogger
-from typing import Annotated, Any, Callable, ForwardRef, Optional, TypeVar, Union
+from typing import Annotated, Any, ForwardRef, Literal, TypeVar, get_args, get_origin
 
 from packaging.version import parse
 from pydantic import BaseModel, Field, TypeAdapter
 from pydantic import __version__ as pydantic_version
 from pydantic.json_schema import JsonSchemaValue
-from typing_extensions import Literal, get_args, get_origin
 
 from ..doc_utils import export_module
 from .dependency_injection import Field as AG2Field
@@ -93,7 +93,7 @@ def get_typed_return_annotation(call: Callable[..., Any]) -> Any:
     return get_typed_annotation(annotation, globalns)
 
 
-def get_param_annotations(typed_signature: inspect.Signature) -> dict[str, Union[Annotated[type[Any], str], type[Any]]]:
+def get_param_annotations(typed_signature: inspect.Signature) -> dict[str, Annotated[type[Any], str] | type[Any]]:
     """Get the type annotations of the parameters of a function
 
     Args:
@@ -142,7 +142,7 @@ def get_parameter_json_schema(k: str, v: Any, default_values: dict[str, Any]) ->
         A Pydanitc model for the parameter
     """
 
-    def type2description(k: str, v: Union[Annotated[type[Any], str], type[Any]]) -> str:
+    def type2description(k: str, v: Annotated[type[Any], str] | type[Any]) -> str:
         if not hasattr(v, "__metadata__"):
             return k
 
@@ -189,7 +189,7 @@ def get_default_values(typed_signature: inspect.Signature) -> dict[str, Any]:
 
 def get_parameters(
     required: list[str],
-    param_annotations: dict[str, Union[Annotated[type[Any], str], type[Any]]],
+    param_annotations: dict[str, Annotated[type[Any], str] | type[Any]],
     default_values: dict[str, Any],
 ) -> Parameters:
     """Get the parameters of a function as defined by the OpenAI API
@@ -231,7 +231,7 @@ def get_missing_annotations(typed_signature: inspect.Signature, required: list[s
 
 
 @export_module("autogen.tools")
-def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, description: str) -> dict[str, Any]:
+def get_function_schema(f: Callable[..., Any], *, name: str | None = None, description: str) -> dict[str, Any]:
     """Get a JSON schema for a function as defined by the OpenAI API
 
     Args:
@@ -306,7 +306,7 @@ def get_function_schema(f: Callable[..., Any], *, name: Optional[str] = None, de
     return function.model_dump()
 
 
-def get_load_param_if_needed_function(t: Any) -> Optional[Callable[[dict[str, Any], type[BaseModel]], BaseModel]]:
+def get_load_param_if_needed_function(t: Any) -> Callable[[dict[str, Any], type[BaseModel]], BaseModel] | None:
     """Get a function to load a parameter if it is a Pydantic model
 
     Args:

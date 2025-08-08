@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import sys
 import warnings
+from collections.abc import Callable
 from functools import wraps
 from inspect import signature
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
@@ -55,7 +55,7 @@ class PydanticAIInteroperability:
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore[no-any-unimported]
+        ctx_typed: RunContext[Any] | None = ctx  # type: ignore[no-any-unimported]
         tool_typed: PydanticAITool[Any] = tool  # type: ignore[no-any-unimported]
 
         max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
@@ -155,10 +155,7 @@ class PydanticAIInteroperability:
         )
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
-        if sys.version_info < (3, 9):
-            return "This submodule is only supported for Python versions 3.9 and above"
-
+    def get_unsupported_reason(cls) -> str | None:
         with optional_import_block() as result:
             import pydantic_ai.tools  # noqa: F401
 

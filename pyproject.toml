@@ -24,7 +24,7 @@ keywords = [
     "agentic"
 ]
 
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<3.14"
 
 dynamic = ["version"]
 
@@ -35,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -190,7 +189,7 @@ twilio = [
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 mcp-proxy-gen = [
@@ -298,7 +297,7 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
     "nbclient==0.10.2",
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 types = [
@@ -414,7 +413,7 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 [tool.ruff]
 fix = true
 line-length = 120
-target-version = 'py39'
+target-version = 'py310'
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -456,7 +455,7 @@ select = [
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
-#    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
 extend-select = ["D417"]
@@ -485,7 +484,7 @@ convention = "google"
 
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",

@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC
+from collections.abc import Callable
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
@@ -83,11 +84,11 @@ MessageRole = Literal["assistant", "function", "tool"]
 
 
 class BasePrintReceivedMessage(BaseMessage, ABC):
-    content: Union[str, int, float, bool]
+    content: str | int | float | bool
     sender_name: str
     recipient_name: str
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         f(f"{colored(self.sender_name, 'yellow')} (to {self.recipient_name}):\n", flush=True)
 
@@ -95,11 +96,11 @@ class BasePrintReceivedMessage(BaseMessage, ABC):
 @deprecated_by(FunctionResponseEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class FunctionResponseMessage(BasePrintReceivedMessage):
-    name: Optional[str] = None
+    name: str | None = None
     role: MessageRole = "function"
-    content: Union[str, int, float, bool]
+    content: str | int | float | bool
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         super().print(f)
 
@@ -113,11 +114,11 @@ class FunctionResponseMessage(BasePrintReceivedMessage):
 
 
 class ToolResponse(BaseModel):
-    tool_call_id: Optional[str] = None
+    tool_call_id: str | None = None
     role: MessageRole = "tool"
-    content: Union[str, int, float, bool]
+    content: str | int | float | bool
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         id = self.tool_call_id or "No id found"
         tool_print = f"***** Response from calling {self.role} ({id}) *****"
@@ -131,9 +132,9 @@ class ToolResponse(BaseModel):
 class ToolResponseMessage(BasePrintReceivedMessage):
     role: MessageRole = "tool"
     tool_responses: list[ToolResponse]
-    content: Union[str, int, float, bool]
+    content: str | int | float | bool
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         super().print(f)
 
@@ -143,10 +144,10 @@ class ToolResponseMessage(BasePrintReceivedMessage):
 
 
 class FunctionCall(BaseModel):
-    name: Optional[str] = None
-    arguments: Optional[str] = None
+    name: str | None = None
+    arguments: str | None = None
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         name = self.name or "(No function name found)"
@@ -166,10 +167,10 @@ class FunctionCall(BaseModel):
 @deprecated_by(FunctionCallEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class FunctionCallMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
+    content: str | int | float | bool | None = None  # type: ignore [assignment]
     function_call: FunctionCall
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         super().print(f)
 
@@ -182,11 +183,11 @@ class FunctionCallMessage(BasePrintReceivedMessage):
 
 
 class ToolCall(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     function: FunctionCall
     type: str
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         id = self.id or "No tool call id found"
@@ -208,14 +209,14 @@ class ToolCall(BaseModel):
 @deprecated_by(ToolCallEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class ToolCallMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
-    refusal: Optional[str] = None
-    role: Optional[MessageRole] = None
-    audio: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
+    content: str | int | float | bool | None = None  # type: ignore [assignment]
+    refusal: str | None = None
+    role: MessageRole | None = None
+    audio: str | None = None
+    function_call: FunctionCall | None = None
     tool_calls: list[ToolCall]
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         super().print(f)
 
@@ -231,7 +232,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
 @deprecated_by(TextEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class TextMessage(BasePrintReceivedMessage):
-    content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
+    content: str | int | float | bool | list[dict[str, str | dict[str, Any]]] | None = None  # type: ignore [assignment]
 
     @classmethod
     @require_optional_import("PIL", "unknown")
@@ -242,8 +243,8 @@ class TextMessage(BasePrintReceivedMessage):
     @field_validator("content", mode="before")
     @classmethod
     def validate_and_encode_content(
-        cls, content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]
-    ) -> Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]]:
+        cls, content: str | int | float | bool | list[dict[str, str | dict[str, Any]]] | None
+    ) -> str | int | float | bool | list[dict[str, str | dict[str, Any]]] | None:
         if not IS_PIL_AVAILABLE:
             return content
 
@@ -256,7 +257,7 @@ class TextMessage(BasePrintReceivedMessage):
 
         return content
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
         super().print(f)
 
@@ -267,11 +268,8 @@ class TextMessage(BasePrintReceivedMessage):
 
 
 def create_received_message_model(
-    *, uuid: Optional[UUID] = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
-) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:
-    # print(f"{message=}")
-    # print(f"{sender=}")
-
+    *, uuid: UUID | None = None, message: dict[str, Any], sender: "Agent", recipient: "Agent"
+) -> Union[FunctionResponseMessage, ToolResponseMessage, FunctionCallMessage, ToolCallMessage, TextMessage]:  # noqa: UP007
     role = message.get("role")
     if role == "function":
         return FunctionResponseMessage(**message, sender_name=sender.name, recipient_name=recipient.name, uuid=uuid)
@@ -319,17 +317,17 @@ def create_received_message_model(
 @deprecated_by(PostCarryoverProcessingEvent, param_mapping={"sender_name": "sender", "recipient_name": "recipient"})
 @wrap_message
 class PostCarryoverProcessingMessage(BaseMessage):
-    carryover: Union[str, list[Union[str, dict[str, Any], Any]]]
+    carryover: str | list[str | dict[str, Any] | Any]
     message: str
     verbose: bool = False
 
     sender_name: str
     recipient_name: str
     summary_method: str
-    summary_args: Optional[dict[str, Any]] = None
-    max_turns: Optional[int] = None
+    summary_args: dict[str, Any] | None = None
+    max_turns: int | None = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, chat_info: dict[str, Any]):
+    def __init__(self, *, uuid: UUID | None = None, chat_info: dict[str, Any]):
         carryover = chat_info.get("carryover", "")
         message = chat_info.get("message")
         verbose = chat_info.get("verbose", False)
@@ -381,7 +379,7 @@ class PostCarryoverProcessingMessage(BaseMessage):
 
         return ("\n").join(print_carryover)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         print_carryover = self._process_carryover()
@@ -403,21 +401,21 @@ class PostCarryoverProcessingMessage(BaseMessage):
 @deprecated_by(ClearAgentsHistoryEvent, param_mapping={"nr_messages_to_preserve": "nr_events_to_preserve"})
 @wrap_message
 class ClearAgentsHistoryMessage(BaseMessage):
-    agent_name: Optional[str] = None
-    nr_messages_to_preserve: Optional[int] = None
+    agent_name: str | None = None
+    nr_messages_to_preserve: int | None = None
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         agent: Optional["Agent"] = None,
-        nr_messages_to_preserve: Optional[int] = None,
+        nr_messages_to_preserve: int | None = None,
     ):
         return super().__init__(
             uuid=uuid, agent_name=agent.name if agent else None, nr_messages_to_preserve=nr_messages_to_preserve
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         if self.agent_name:
@@ -439,16 +437,16 @@ class SpeakerAttemptSuccessfulMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
-    verbose: Optional[bool] = False
+    verbose: bool | None = False
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         mentions: dict[str, int],
         attempt: int,
         attempts_left: int,
-        select_speaker_auto_verbose: Optional[bool] = False,
+        select_speaker_auto_verbose: bool | None = False,
     ):
         super().__init__(
             uuid=uuid,
@@ -458,7 +456,7 @@ class SpeakerAttemptSuccessfulMessage(BaseMessage):
             verbose=select_speaker_auto_verbose,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         selected_agent_name = next(iter(self.mentions))
@@ -477,16 +475,16 @@ class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
-    verbose: Optional[bool] = False
+    verbose: bool | None = False
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         mentions: dict[str, int],
         attempt: int,
         attempts_left: int,
-        select_speaker_auto_verbose: Optional[bool] = False,
+        select_speaker_auto_verbose: bool | None = False,
     ):
         super().__init__(
             uuid=uuid,
@@ -496,7 +494,7 @@ class SpeakerAttemptFailedMultipleAgentsMessage(BaseMessage):
             verbose=select_speaker_auto_verbose,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -514,16 +512,16 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
     mentions: dict[str, int]
     attempt: int
     attempts_left: int
-    verbose: Optional[bool] = False
+    verbose: bool | None = False
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         mentions: dict[str, int],
         attempt: int,
         attempts_left: int,
-        select_speaker_auto_verbose: Optional[bool] = False,
+        select_speaker_auto_verbose: bool | None = False,
     ):
         super().__init__(
             uuid=uuid,
@@ -533,7 +531,7 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
             verbose=select_speaker_auto_verbose,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -550,19 +548,19 @@ class SpeakerAttemptFailedNoAgentsMessage(BaseMessage):
 class GroupChatResumeMessage(BaseMessage):
     last_speaker_name: str
     messages: list[LLMMessageType]
-    verbose: Optional[bool] = False
+    verbose: bool | None = False
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         last_speaker_name: str,
         messages: list["LLMMessageType"],
-        silent: Optional[bool] = False,
+        silent: bool | None = False,
     ):
         super().__init__(uuid=uuid, last_speaker_name=last_speaker_name, messages=messages, verbose=not silent)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -576,12 +574,12 @@ class GroupChatResumeMessage(BaseMessage):
 @wrap_message
 class GroupChatRunChatMessage(BaseMessage):
     speaker_name: str
-    verbose: Optional[bool] = False
+    verbose: bool | None = False
 
-    def __init__(self, *, uuid: Optional[UUID] = None, speaker: "Agent", silent: Optional[bool] = False):
+    def __init__(self, *, uuid: UUID | None = None, speaker: "Agent", silent: bool | None = False):
         super().__init__(uuid=uuid, speaker_name=speaker.name, verbose=not silent)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(colored(f"\nNext speaker: {self.speaker_name}\n", "green"), flush=True)
@@ -601,7 +599,7 @@ class TerminationAndHumanReplyNoInputMessage(BaseMessage):
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         no_human_input_msg: str,
         sender: Optional["Agent"] = None,
         recipient: "Agent",
@@ -613,7 +611,7 @@ class TerminationAndHumanReplyNoInputMessage(BaseMessage):
             recipient_name=recipient.name,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
@@ -629,7 +627,7 @@ class UsingAutoReplyMessage(BaseMessage):
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         human_input_mode: str,
         sender: Optional["Agent"] = None,
         recipient: "Agent",
@@ -641,7 +639,7 @@ class UsingAutoReplyMessage(BaseMessage):
             recipient_name=recipient.name,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
@@ -657,7 +655,7 @@ class TerminationMessage(BaseMessage):
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         termination_reason: str,
     ):
         super().__init__(
@@ -665,7 +663,7 @@ class TerminationMessage(BaseMessage):
             termination_reason=termination_reason,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(colored(f"\n>>>>>>>> TERMINATING RUN ({str(self.uuid)}): {self.termination_reason}", "red"), flush=True)
@@ -680,13 +678,13 @@ class ExecuteCodeBlockMessage(BaseMessage):
     recipient_name: str
 
     def __init__(
-        self, *, uuid: Optional[UUID] = None, code: str, language: str, code_block_count: int, recipient: "Agent"
+        self, *, uuid: UUID | None = None, code: str, language: str, code_block_count: int, recipient: "Agent"
     ):
         super().__init__(
             uuid=uuid, code=code, language=language, code_block_count=code_block_count, recipient_name=recipient.name
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -702,16 +700,16 @@ class ExecuteCodeBlockMessage(BaseMessage):
 @wrap_message
 class ExecuteFunctionMessage(BaseMessage):
     func_name: str
-    call_id: Optional[str] = None
+    call_id: str | None = None
     arguments: dict[str, Any]
     recipient_name: str
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         func_name: str,
-        call_id: Optional[str] = None,
+        call_id: str | None = None,
         arguments: dict[str, Any],
         recipient: "Agent",
     ):
@@ -719,7 +717,7 @@ class ExecuteFunctionMessage(BaseMessage):
             uuid=uuid, func_name=func_name, call_id=call_id, arguments=arguments, recipient_name=recipient.name
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -735,7 +733,7 @@ class ExecuteFunctionMessage(BaseMessage):
 @wrap_message
 class ExecutedFunctionMessage(BaseMessage):
     func_name: str
-    call_id: Optional[str] = None
+    call_id: str | None = None
     arguments: dict[str, Any]
     content: str
     recipient_name: str
@@ -743,9 +741,9 @@ class ExecutedFunctionMessage(BaseMessage):
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         func_name: str,
-        call_id: Optional[str] = None,
+        call_id: str | None = None,
         arguments: dict[str, Any],
         content: str,
         recipient: "Agent",
@@ -759,7 +757,7 @@ class ExecutedFunctionMessage(BaseMessage):
             recipient_name=recipient.name,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -774,13 +772,13 @@ class ExecutedFunctionMessage(BaseMessage):
 @deprecated_by(SelectSpeakerEvent)
 @wrap_message
 class SelectSpeakerMessage(BaseMessage):
-    agent_names: Optional[list[str]] = None
+    agent_names: list[str] | None = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
+    def __init__(self, *, uuid: UUID | None = None, agents: list["Agent"] | None = None):
         agent_names = [agent.name for agent in agents] if agents else None
         super().__init__(uuid=uuid, agent_names=agent_names)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f("Please select the next speaker from the following list:")
@@ -793,13 +791,13 @@ class SelectSpeakerMessage(BaseMessage):
 @wrap_message
 class SelectSpeakerTryCountExceededMessage(BaseMessage):
     try_count: int
-    agent_names: Optional[list[str]] = None
+    agent_names: list[str] | None = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, try_count: int, agents: Optional[list["Agent"]] = None):
+    def __init__(self, *, uuid: UUID | None = None, try_count: int, agents: list["Agent"] | None = None):
         agent_names = [agent.name for agent in agents] if agents else None
         super().__init__(uuid=uuid, try_count=try_count, agent_names=agent_names)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
@@ -808,13 +806,13 @@ class SelectSpeakerTryCountExceededMessage(BaseMessage):
 @deprecated_by(SelectSpeakerInvalidInputEvent)
 @wrap_message
 class SelectSpeakerInvalidInputMessage(BaseMessage):
-    agent_names: Optional[list[str]] = None
+    agent_names: list[str] | None = None
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agents: Optional[list["Agent"]] = None):
+    def __init__(self, *, uuid: UUID | None = None, agents: list["Agent"] | None = None):
         agent_names = [agent.name for agent in agents] if agents else None
         super().__init__(uuid=uuid, agent_names=agent_names)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(f"Invalid input. Please enter a number between 1 and {len(self.agent_names or [])}.")
@@ -830,7 +828,7 @@ class ClearConversableAgentHistoryMessage(BaseMessage):
     recipient_name: str
     no_messages_preserved: int
 
-    def __init__(self, *, uuid: Optional[UUID] = None, agent: "Agent", no_messages_preserved: Optional[int] = None):
+    def __init__(self, *, uuid: UUID | None = None, agent: "Agent", no_messages_preserved: int | None = None):
         super().__init__(
             uuid=uuid,
             agent_name=agent.name,
@@ -838,7 +836,7 @@ class ClearConversableAgentHistoryMessage(BaseMessage):
             no_messages_preserved=no_messages_preserved,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         for _ in range(self.no_messages_preserved):
@@ -853,13 +851,13 @@ class ClearConversableAgentHistoryMessage(BaseMessage):
 class ClearConversableAgentHistoryWarningMessage(BaseMessage):
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+    def __init__(self, *, uuid: UUID | None = None, recipient: "Agent"):
         super().__init__(
             uuid=uuid,
             recipient_name=recipient.name,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(
@@ -878,13 +876,13 @@ class ClearConversableAgentHistoryWarningMessage(BaseMessage):
 @wrap_message
 class GenerateCodeExecutionReplyMessage(BaseMessage):
     code_block_languages: list[str]
-    sender_name: Optional[str] = None
+    sender_name: str | None = None
     recipient_name: str
 
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
+        uuid: UUID | None = None,
         code_blocks: list["CodeBlock"],
         sender: Optional["Agent"] = None,
         recipient: "Agent",
@@ -898,7 +896,7 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
             recipient_name=recipient.name,
         )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         num_code_blocks = len(self.code_block_languages)
@@ -925,10 +923,10 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
 class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+    def __init__(self, *, uuid: UUID | None = None, recipient: "Agent"):
         super().__init__(uuid=uuid, recipient_name=recipient.name)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(f"No cost incurred from agent '{self.recipient_name}'.")
@@ -939,10 +937,10 @@ class ConversableAgentUsageSummaryNoCostIncurredMessage(BaseMessage):
 class ConversableAgentUsageSummaryMessage(BaseMessage):
     recipient_name: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, recipient: "Agent"):
+    def __init__(self, *, uuid: UUID | None = None, recipient: "Agent"):
         super().__init__(uuid=uuid, recipient_name=recipient.name)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(f"Agent '{self.recipient_name}':")

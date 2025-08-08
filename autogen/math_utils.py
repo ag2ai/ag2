@@ -4,10 +4,9 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Optional
 
 
-def remove_boxed(string: str) -> Optional[str]:
+def remove_boxed(string: str) -> str | None:
     """Source: https://github.com/hendrycks/math
     Extract the text within a \\boxed`{...}` environment.
 
@@ -28,7 +27,7 @@ def remove_boxed(string: str) -> Optional[str]:
         return None
 
 
-def last_boxed_only_string(string: str) -> Optional[str]:
+def last_boxed_only_string(string: str) -> str | None:
     """Source: https://github.com/hendrycks/math
     Extract the last \\boxed`{...}` or \\fbox`{...}` element from a string.
     """
@@ -239,7 +238,7 @@ def _strip_string(string: str) -> str:
     return string
 
 
-def get_answer(solution: Optional[str]) -> Optional[str]:
+def get_answer(solution: str | None) -> str | None:
     if solution is None:
         return None
     last_boxed = last_boxed_only_string(solution)
@@ -251,7 +250,7 @@ def get_answer(solution: Optional[str]) -> Optional[str]:
     return answer
 
 
-def is_equiv(str1: Optional[str], str2: Optional[str]) -> float:
+def is_equiv(str1: str | None, str2: str | None) -> float:
     """Returns (as a float) whether two strings containing math are equivalent up to differences of formatting in
     - units
     - fractions

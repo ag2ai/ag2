@@ -14,7 +14,6 @@ import traceback
 from hashlib import md5
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Optional, Union
 
 from .... import AssistantAgent, UserProxyAgent
 from ....coding import CodeExecutor, CodeExtractor, LocalCommandLineCodeExecutor, MarkdownCodeExtractor
@@ -76,7 +75,7 @@ You have access to the following functions. You can write python code to call th
         agent.update_system_message(sys_message)
         return
 
-    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: Union[str, list]):
+    def bind_user_proxy(self, agent: UserProxyAgent, tool_root: str | list):
         """Updates user proxy agent with a executor so that code executor can successfully execute function-related code.
         Returns an updated user proxy.
         """
@@ -164,7 +163,7 @@ class LocalExecutorWithTools(CodeExecutor):
         """(Experimental) Export a code extractor that can be used by an agent."""
         return MarkdownCodeExtractor()
 
-    def __init__(self, tools: Optional[list[Tool]] = None, work_dir: Union[Path, str] = Path()):
+    def __init__(self, tools: list[Tool] | None = None, work_dir: Path | str = Path()):
         self.tools = tools if tools is not None else []
         self.work_dir = work_dir
         if not os.path.exists(work_dir):

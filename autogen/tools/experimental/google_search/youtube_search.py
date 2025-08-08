@@ -4,7 +4,7 @@
 
 
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -48,7 +48,7 @@ def _execute_search_query(query: str, youtube_api_key: str, max_results: int) ->
     ["googleapiclient"],
     "google-search",
 )
-def _get_video_details(video_ids: List[str], youtube_api_key: str) -> Any:
+def _get_video_details(video_ids: list[str], youtube_api_key: str) -> Any:
     """Get detailed information about specific YouTube videos.
 
     Args:
@@ -79,7 +79,7 @@ def _youtube_search(
     youtube_api_key: str,
     max_results: int,
     include_video_details: bool = True,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Search YouTube videos based on a query.
 
     Args:
@@ -140,7 +140,7 @@ class YoutubeSearchTool(Tool):
     def __init__(
         self,
         *,
-        youtube_api_key: Optional[str] = None,
+        youtube_api_key: str | None = None,
     ):
         """Initialize a YouTube search tool.
 
@@ -157,7 +157,7 @@ class YoutubeSearchTool(Tool):
             youtube_api_key: Annotated[str, Depends(on(youtube_api_key))],
             max_results: Annotated[int, "The maximum number of results to return."] = 5,
             include_video_details: Annotated[bool, "Whether to include detailed video information."] = True,
-        ) -> List[Dict[str, Any]]:
+        ) -> list[dict[str, Any]]:
             """Search for YouTube videos based on a query.
 
             Args:

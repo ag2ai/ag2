@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Any
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -21,8 +21,8 @@ class DeepResearchAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        system_message: Optional[Union[str, list[str]]] = DEFAULT_PROMPT,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        system_message: str | list[str] | None = DEFAULT_PROMPT,
         max_web_steps: int = 30,
         **kwargs: Any,
     ) -> None:

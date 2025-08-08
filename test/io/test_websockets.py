@@ -5,9 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
+from collections.abc import Callable
 from pprint import pprint
 from tempfile import TemporaryDirectory
-from typing import Any, Callable, Optional
+from typing import Any
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -29,10 +30,10 @@ with optional_import_block() as result:
 class TestTextEvent(BaseEvent):
     text: str
 
-    def __init__(self, *, uuid: Optional[UUID] = None, text: str):
+    def __init__(self, *, uuid: UUID | None = None, text: str):
         super().__init__(uuid=uuid, text=text)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(self.text)

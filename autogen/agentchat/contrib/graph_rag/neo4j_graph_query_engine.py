@@ -2,13 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import os
-import sys
-from typing import Any, Optional, Union
-
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-else:
-    from typing_extensions import TypeAlias
+from typing import Any, Optional, TypeAlias
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
@@ -64,8 +58,8 @@ class Neo4jGraphQueryEngine:
         embedding: Optional["BaseEmbedding"] = None,
         entities: Optional["TypeAlias"] = None,
         relations: Optional["TypeAlias"] = None,
-        schema: Optional[Union[dict[str, str], list["Triple"]]] = None,
-        strict: Optional[bool] = False,
+        schema: dict[str, str] | list["Triple"] | None = None,
+        strict: bool | None = False,
     ):
         """Initialize a Neo4j Property graph.
         Please also refer to https://docs.llamaindex.ai/en/stable/examples/property_graph/graph_store/
@@ -96,7 +90,7 @@ class Neo4jGraphQueryEngine:
         self.schema = schema
         self.strict = strict
 
-    def init_db(self, input_doc: Optional[list[Document]] = None) -> None:
+    def init_db(self, input_doc: list[Document] | None = None) -> None:
         """Build the knowledge graph with input documents."""
         self.documents = self._load_doc(input_doc if input_doc is not None else [])
 
@@ -245,7 +239,7 @@ class Neo4jGraphQueryEngine:
         # To add more extractors, please refer to https://docs.llamaindex.ai/en/latest/module_guides/indexing/lpg_index_guide/#construction
         """
         #
-        kg_extractors: list["TransformComponent"] = [  # type: ignore[no-any-unimported]
+        kg_extractors: list[TransformComponent] = [  # type: ignore[no-any-unimported]
             SchemaLLMPathExtractor(
                 llm=self.llm,
                 possible_entities=self.entities,

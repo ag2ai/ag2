@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -101,7 +101,7 @@ class TestCrawl4aiCompatibility:
             (None, False),
         ],
     )
-    def test_is_crawl4ai_v05_or_higher(self, version: Optional[str], expected: bool) -> None:
+    def test_is_crawl4ai_v05_or_higher(self, version: str | None, expected: bool) -> None:
         """Test version comparison logic."""
         with patch("autogen.interop.litellm.litellm_config_factory.get_crawl4ai_version", return_value=version):
             result = is_crawl4ai_v05_or_higher()
@@ -157,7 +157,7 @@ class TestCrawl4aiCompatibility:
         ],
     )
     def test_config_adaptation_based_on_crawl4ai_version(
-        self, crawl4ai_version: Optional[str], config_list: list[dict[str, Any]], expected: dict[str, Any]
+        self, crawl4ai_version: str | None, config_list: list[dict[str, Any]], expected: dict[str, Any]
     ) -> None:
         """Test that config is properly adapted based on crawl4ai version."""
         with patch(

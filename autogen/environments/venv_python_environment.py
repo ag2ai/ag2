@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import Any, Optional
+from typing import Any
 
 from asyncer import asyncify
 
@@ -21,12 +21,11 @@ class VenvPythonEnvironment(PythonEnvironment):
 
     def __init__(
         self,
-        python_version: Optional[str] = None,
-        python_path: Optional[str] = None,
-        venv_path: Optional[str] = None,
+        python_version: str | None = None,
+        python_path: str | None = None,
+        venv_path: str | None = None,
     ):
-        """
-        Initialize a virtual environment for Python execution.
+        """Initialize a virtual environment for Python execution.
 
         If you pass in a venv_path the path will be checked for a valid venv. If the venv doesn't exist it will be created using the python_version or python_path provided.
 
@@ -87,8 +86,7 @@ class VenvPythonEnvironment(PythonEnvironment):
                 _ = subprocess.run(
                     [base_python, "-m", "venv", "--system-site-packages", self.venv_path],
                     check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                 )
 
@@ -175,8 +173,7 @@ class VenvPythonEnvironment(PythonEnvironment):
             pyenv_result = subprocess.run(
                 ["pyenv", "which", f"python{self.python_version}"],
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
             potential_executables.append(pyenv_result.stdout.strip())
@@ -207,8 +204,7 @@ class VenvPythonEnvironment(PythonEnvironment):
                     test_result = subprocess.run(
                         [path, "-m", "venv", "--help"],
                         check=False,  # Don't raise exception
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                         timeout=5,  # Add timeout for safety
                     )

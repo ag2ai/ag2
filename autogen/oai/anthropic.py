@@ -76,7 +76,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -112,20 +112,20 @@ ANTHROPIC_PRICING_1k = {
 @register_llm_config
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
-    timeout: Optional[int] = Field(default=None, ge=1)
+    timeout: int | None = Field(default=None, ge=1)
     temperature: float = Field(default=1.0, ge=0.0, le=1.0)
-    top_k: Optional[int] = Field(default=None, ge=1)
-    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    stop_sequences: Optional[list[str]] = None
+    top_k: int | None = Field(default=None, ge=1)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    stop_sequences: list[str] | None = None
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=1)
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    tool_choice: Optional[dict] = None
-    thinking: Optional[dict] = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    tool_choice: dict | None = None
+    thinking: dict | None = None
 
-    gcp_project_id: Optional[str] = None
-    gcp_region: Optional[str] = None
-    gcp_auth_token: Optional[str] = None
+    gcp_project_id: str | None = None
+    gcp_region: str | None = None
+    gcp_auth_token: str | None = None
 
     def create_client(self):
         raise NotImplementedError("AnthropicLLMConfigEntry.create_client is not implemented.")
@@ -201,7 +201,7 @@ class AnthropicClient:
         self._last_tooluse_status = {}
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""
@@ -406,8 +406,7 @@ class AnthropicClient:
 
     @staticmethod
     def convert_tools_to_functions(tools: list) -> list:
-        """
-        Convert tool definitions into Anthropic-compatible functions,
+        """Convert tool definitions into Anthropic-compatible functions,
         updating nested $ref paths in property schemas.
 
         Args:
@@ -550,7 +549,7 @@ def process_image_content(content_item: dict[str, Any]) -> dict[str, Any]:
         return content_item
 
 
-def process_message_content(message: dict[str, Any]) -> Union[str, list[dict[str, Any]]]:
+def process_message_content(message: dict[str, Any]) -> str | list[dict[str, Any]]:
     """Process message content, handling both string and list formats with images."""
     content = message.get("content", "")
 

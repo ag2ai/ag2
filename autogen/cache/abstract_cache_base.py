@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from ..doc_utils import export_module
 
@@ -23,7 +23,7 @@ class AbstractCache(Protocol):
     these methods to handle caching mechanisms.
     """
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the cache.
 
         Args:
@@ -61,9 +61,9 @@ class AbstractCache(Protocol):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """Exit the runtime context and close the cache.
 

@@ -2,7 +2,6 @@
 import argparse
 import os
 from pathlib import Path
-from typing import List
 
 from mcp.server.fastmcp import FastMCP
 
@@ -14,7 +13,7 @@ CONTEXT_PATH = None
 
 
 @mcp.tool()
-def list_files(relative_path: str = "") -> List[str]:
+def list_files(relative_path: str = "") -> list[str]:
     """
     List files and directories under CONTEXT_PATH/relative_path. Pass empty string to list root.
     """

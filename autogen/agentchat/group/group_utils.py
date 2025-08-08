@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+from collections.abc import Callable
 from functools import partial
 from types import MethodType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..agent import Agent
 from ..groupchat import GroupChat, GroupChatManager
@@ -86,7 +87,7 @@ def _evaluate_after_works_conditions(
     agent: "ConversableAgent",
     groupchat: GroupChat,
     user_agent: Optional["ConversableAgent"],
-) -> Optional[Union[Agent, str]]:
+) -> Agent | str | None:
     """Evaluate after_works context conditions for an agent.
 
     Args:
@@ -124,10 +125,10 @@ def _evaluate_after_works_conditions(
 
 def _run_oncontextconditions(
     agent: "ConversableAgent",
-    messages: Optional[list[dict[str, Any]]] = None,
-    sender: Optional[Agent] = None,
-    config: Optional[Any] = None,
-) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+    messages: list[dict[str, Any]] | None = None,
+    sender: Agent | None = None,
+    config: Any | None = None,
+) -> tuple[bool, str | dict[str, Any] | None]:
     """Run OnContextConditions for an agent before any other reply function."""
     for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
         is_available = (
@@ -267,7 +268,7 @@ def prepare_group_agents(
     tool_execution = GroupToolExecutor()
 
     # Wrap handoff targets in agents that need to be wrapped
-    wrapped_chat_agents: list["ConversableAgent"] = []
+    wrapped_chat_agents: list[ConversableAgent] = []
     for agent in agents:
         wrap_agent_handoff_targets(agent, wrapped_chat_agents)
 
@@ -318,7 +319,7 @@ def wrap_agent_handoff_targets(agent: "ConversableAgent", wrapped_agent_list: li
 
 
 def process_initial_messages(
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     user_agent: Optional["ConversableAgent"],
     agents: list["ConversableAgent"],
     wrapped_agents: list["ConversableAgent"],
@@ -346,8 +347,8 @@ def process_initial_messages(
 
     # If there's only one message and there's no identified group agent
     # Start with a user proxy agent, creating one if they haven't passed one in
-    last_agent: Optional[ConversableAgent]
-    temp_user_proxy: Optional[ConversableAgent] = None
+    last_agent: ConversableAgent | None
+    temp_user_proxy: ConversableAgent | None = None
     temp_user_list: list[Agent] = []
     if len(messages) == 1 and "name" not in messages[0] and not user_agent:
         temp_user_proxy = ConversableAgent(name="_User", code_execution_config=False, human_input_mode="ALWAYS")
@@ -425,7 +426,7 @@ def determine_next_agent(
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
     group_after_work: TransitionTarget,
-) -> Optional[Union[Agent, str]]:
+) -> Agent | str | None:
     """Determine the next agent in the conversation.
 
     Args:
@@ -441,7 +442,6 @@ def determine_next_agent(
     Returns:
         Optional[Union[Agent, str]]: The next agent or speaker selection method.
     """
-
     # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, TerminateTarget, StayTarget, RevertToUserTarget, GroupManagerTarget, etc.
     # 1. If it's the first response -> initial agent
     # 2. If the last message is a tool call -> tool execution agent
@@ -513,7 +513,7 @@ def create_group_transition(
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
     group_after_work: TransitionTarget,
-) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]:
+) -> Callable[["ConversableAgent", GroupChat], Agent | str | None]:
     """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
     Args:
@@ -530,7 +530,7 @@ def create_group_transition(
     # of group_transition
     state = {"use_initial_agent": True}
 
-    def group_transition(last_speaker: "ConversableAgent", groupchat: GroupChat) -> Optional[Union[Agent, str]]:
+    def group_transition(last_speaker: "ConversableAgent", groupchat: GroupChat) -> Agent | str | None:
         result = determine_next_agent(
             last_speaker=last_speaker,
             groupchat=groupchat,
@@ -549,7 +549,7 @@ def create_group_transition(
 
 def create_group_manager(
     groupchat: GroupChat,
-    group_manager_args: Optional[dict[str, Any]],
+    group_manager_args: dict[str, Any] | None,
     agents: list["ConversableAgent"],
     group_after_work: TransitionTarget,
 ) -> GroupChatManager:

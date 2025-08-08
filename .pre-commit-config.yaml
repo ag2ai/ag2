@@ -38,7 +38,6 @@ repos:
         name: build setup scripts
         entry: "scripts/pre-commit-build-setup-files.sh"
         language: python
-        #        language_version: python3.9
         types: [python]
         require_serial: true
         verbose: true
@@ -49,7 +48,6 @@ repos:
         name: linting and formatting
         entry: "scripts/pre-commit-lint.sh"
         language: python
-        #        language_version: python3.9
         types: [python]
         require_serial: true
         verbose: true
@@ -83,8 +81,6 @@ repos:
       name: mypy
       entry: "./scripts/pre-commit-mypy-run.sh"
       language: python
-      # use your preferred Python version
-      # language_version: python3.9
       additional_dependencies: []
       types: [python]
       # use require_serial so that script

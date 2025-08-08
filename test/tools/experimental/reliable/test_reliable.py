@@ -4,7 +4,8 @@
 
 import os
 import tempfile
-from typing import Annotated, Generator, List, Tuple
+from collections.abc import Generator
+from typing import Annotated
 
 import pytest
 
@@ -55,8 +56,8 @@ class TestReliableTool:
         should_bad_response = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> List[str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> list[str]:
             """
             Receives and returns a list of generated sub-questions.
             """
@@ -94,8 +95,8 @@ class TestReliableTool:
         should_error = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> List[str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> list[str]:
             """
             Receives and returns a list of generated sub-questions.
             """
@@ -133,8 +134,8 @@ class TestReliableTool:
         should_error = True
 
         def generate_sub_questions_list(
-            sub_questions: Annotated[List[str], "A list of sub-questions related to the main question."],
-        ) -> Tuple[List[str], str]:
+            sub_questions: Annotated[list[str], "A list of sub-questions related to the main question."],
+        ) -> tuple[list[str], str]:
             """
             Receives and returns a list of generated sub-questions.
             """

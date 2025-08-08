@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Literal, Optional, Protocol, Union
+from typing import Any, Literal, Optional, Protocol
 
 from .... import Agent, ConversableAgent, code_utils
 from ....cache import AbstractCache
@@ -78,7 +78,7 @@ class DalleImageGenerator:
 
     def __init__(
         self,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         resolution: Literal["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"] = "1024x1024",
         quality: Literal["standard", "hd"] = "standard",
         num_images: int = 1,
@@ -153,8 +153,8 @@ class ImageGeneration(AgentCapability):
     def __init__(
         self,
         image_generator: ImageGenerator,
-        cache: Optional[AbstractCache] = None,
-        text_analyzer_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        cache: AbstractCache | None = None,
+        text_analyzer_llm_config: LLMConfig | dict[str, Any] | None = None,
         text_analyzer_instructions: str = PROMPT_INSTRUCTIONS,
         verbosity: int = 0,
         register_reply_position: int = 2,
@@ -183,8 +183,8 @@ class ImageGeneration(AgentCapability):
         self._verbosity = verbosity
         self._register_reply_position = register_reply_position
 
-        self._agent: Optional[ConversableAgent] = None
-        self._text_analyzer: Optional[TextAnalyzerAgent] = None
+        self._agent: ConversableAgent | None = None
+        self._text_analyzer: TextAnalyzerAgent | None = None
 
     def add_to_agent(self, agent: ConversableAgent):
         """Adds the Image Generation capability to the specified ConversableAgent.
@@ -216,10 +216,10 @@ class ImageGeneration(AgentCapability):
     def _image_gen_reply(
         self,
         recipient: ConversableAgent,
-        messages: Optional[list[dict[str, Any]]],
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         if messages is None:
             return False, None
 
@@ -272,7 +272,7 @@ class ImageGeneration(AgentCapability):
             key = self._image_generator.cache_key(prompt)
             self._cache.set(key, img_utils.pil_to_data_uri(image))
 
-    def _extract_analysis(self, analysis: Optional[Union[str, dict[str, Any]]]) -> str:
+    def _extract_analysis(self, analysis: str | dict[str, Any] | None) -> str:
         if isinstance(analysis, dict):
             return code_utils.content_str(analysis["content"])
         else:

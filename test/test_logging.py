@@ -8,8 +8,9 @@ import json
 import os
 import sqlite3
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest

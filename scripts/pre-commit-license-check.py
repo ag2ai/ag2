@@ -8,7 +8,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 LICENCE = """# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
@@ -21,7 +20,7 @@ REQUIRED_ELEMENTS = [
 ]
 
 
-def get_github_pr_files() -> List[Path]:
+def get_github_pr_files() -> list[Path]:
     """Get list of Python files changed in a GitHub PR."""
     try:
         if os.getenv("GITHUB_EVENT_PATH"):
@@ -48,7 +47,7 @@ def get_github_pr_files() -> List[Path]:
     return []
 
 
-def get_staged_files() -> List[Path]:
+def get_staged_files() -> list[Path]:
     """Get list of staged Python files using git command."""
     try:
         result = subprocess.run(
@@ -103,7 +102,7 @@ def should_check_file(file_path: Path) -> bool:
     return file_path.exists()
 
 
-def check_file_header(file_path: Path) -> List[str]:
+def check_file_header(file_path: Path) -> list[str]:
     """Check if file has required license headers."""
     try:
         with open(file_path, encoding="utf-8") as f:
@@ -135,7 +134,7 @@ def check_file_header(file_path: Path) -> List[str]:
         return []
 
 
-def get_files_to_check() -> List[Path]:
+def get_files_to_check() -> list[Path]:
     """Determine which files to check based on environment."""
     return list(Path("autogen").rglob("*.py")) + list(Path("test").rglob("*.py"))
     # try:

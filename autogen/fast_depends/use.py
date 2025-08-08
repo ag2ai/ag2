@@ -5,18 +5,13 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial, wraps
 from typing import (
     Any,
-    AsyncIterator,
-    Callable,
-    Iterator,
-    Optional,
     Protocol,
-    Sequence,
     TypeVar,
-    Union,
     cast,
     overload,
 )
@@ -48,7 +43,7 @@ class _InjectWrapper(Protocol[P, T]):
     def __call__(
         self,
         func: Callable[P, T],
-        model: Optional[CallModel[P, T]] = None,
+        model: CallModel[P, T] | None = None,
     ) -> Callable[P, T]: ...
 
 
@@ -58,8 +53,8 @@ def inject(  # pragma: no cover
     *,
     cast: bool = True,
     extra_dependencies: Sequence[model.Depends] = (),
-    pydantic_config: Optional[ConfigDict] = None,
-    dependency_overrides_provider: Optional[Any] = dependency_provider,
+    pydantic_config: ConfigDict | None = None,
+    dependency_overrides_provider: Any | None = dependency_provider,
     wrap_model: Callable[[CallModel[P, T]], CallModel[P, T]] = lambda x: x,
 ) -> _InjectWrapper[P, T]: ...
 
@@ -70,24 +65,21 @@ def inject(  # pragma: no cover
     *,
     cast: bool = True,
     extra_dependencies: Sequence[model.Depends] = (),
-    pydantic_config: Optional[ConfigDict] = None,
-    dependency_overrides_provider: Optional[Any] = dependency_provider,
+    pydantic_config: ConfigDict | None = None,
+    dependency_overrides_provider: Any | None = dependency_provider,
     wrap_model: Callable[[CallModel[P, T]], CallModel[P, T]] = lambda x: x,
 ) -> Callable[P, T]: ...
 
 
 def inject(
-    func: Optional[Callable[P, T]] = None,
+    func: Callable[P, T] | None = None,
     *,
     cast: bool = True,
     extra_dependencies: Sequence[model.Depends] = (),
-    pydantic_config: Optional[ConfigDict] = None,
-    dependency_overrides_provider: Optional[Any] = dependency_provider,
+    pydantic_config: ConfigDict | None = None,
+    dependency_overrides_provider: Any | None = dependency_provider,
     wrap_model: Callable[[CallModel[P, T]], CallModel[P, T]] = lambda x: x,
-) -> Union[
-    Callable[P, T],
-    _InjectWrapper[P, T],
-]:
+) -> Callable[P, T] | _InjectWrapper[P, T]:
     decorator = _wrap_inject(
         dependency_overrides_provider=dependency_overrides_provider,
         wrap_model=wrap_model,
@@ -104,14 +96,14 @@ def inject(
 
 
 def _wrap_inject(
-    dependency_overrides_provider: Optional[Any],
+    dependency_overrides_provider: Any | None,
     wrap_model: Callable[
         [CallModel[P, T]],
         CallModel[P, T],
     ],
     extra_dependencies: Sequence[model.Depends],
     cast: bool,
-    pydantic_config: Optional[ConfigDict],
+    pydantic_config: ConfigDict | None,
 ) -> _InjectWrapper[P, T]:
     if (
         dependency_overrides_provider
@@ -123,7 +115,7 @@ def _wrap_inject(
 
     def func_wrapper(
         func: Callable[P, T],
-        model: Optional[CallModel[P, T]] = None,
+        model: CallModel[P, T] | None = None,
     ) -> Callable[P, T]:
         if model is None:
             real_model = wrap_model(
@@ -187,12 +179,12 @@ def _wrap_inject(
 
 
 class solve_async_gen:  # noqa: N801
-    _iter: Optional[AsyncIterator[Any]] = None
+    _iter: AsyncIterator[Any] | None = None
 
     def __init__(
         self,
         model: "CallModel[..., Any]",
-        overrides: Optional[Any],
+        overrides: Any | None,
         *args: Any,
         **kwargs: Any,
     ):
@@ -234,12 +226,12 @@ class solve_async_gen:  # noqa: N801
 
 
 class solve_gen:  # noqa: N801
-    _iter: Optional[Iterator[Any]] = None
+    _iter: Iterator[Any] | None = None
 
     def __init__(
         self,
         model: "CallModel[..., Any]",
-        overrides: Optional[Any],
+        overrides: Any | None,
         *args: Any,
         **kwargs: Any,
     ):

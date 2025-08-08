@@ -4,7 +4,7 @@
 
 from abc import ABC, abstractmethod
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from anyio import Event
 
@@ -24,14 +24,14 @@ global_logger = getLogger(__name__)
 class RealtimeObserver(ABC):
     """Observer for the OpenAI Realtime API."""
 
-    def __init__(self, *, logger: Optional[Logger] = None) -> None:
+    def __init__(self, *, logger: Logger | None = None) -> None:
         """Observer for the OpenAI Realtime API.
 
         Args:
             logger (Logger): The logger for the observer.
         """
         self._ready_event = Event()
-        self._agent: Optional[RealtimeAgent] = None
+        self._agent: RealtimeAgent | None = None
         self._logger = logger
 
     @property

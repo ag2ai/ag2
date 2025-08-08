@@ -1,13 +1,12 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""
-SearxNG Search Tool
+"""SearxNG Search Tool
 A simple tool to perform web searches using a SearxNG instance.
 """
 
 import logging
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any
 
 import requests
 
@@ -20,18 +19,19 @@ logger = logging.getLogger(__name__)
 def _execute_searxng_query(
     query: str,
     max_results: int = 5,
-    categories: Optional[List[str]] = None,
-    language: Optional[str] = None,
+    categories: list[str] | None = None,
+    language: str | None = None,
     base_url: str = "https://searxng.site/search",
 ) -> list[dict[str, Any]]:
-    """
-    Execute a search query using a SearxNG instance.
+    """Execute a search query using a SearxNG instance.
+
     Args:
         query (str): The search query string.
         max_results (int, optional): The maximum number of results to return. Defaults to 5.
         categories (Optional[List[str]]): List of categories to search in.
         language (Optional[str]): Language code.
         base_url (str): SearxNG instance URL.
+
     Returns:
         list[dict[str, Any]]: A list of search results from SearxNG.
     """
@@ -64,18 +64,19 @@ def _execute_searxng_query(
 def _searxng_search(
     query: str,
     max_results: int = 5,
-    categories: Optional[List[str]] = None,
-    language: Optional[str] = None,
+    categories: list[str] | None = None,
+    language: str | None = None,
     base_url: str = "https://searxng.site/search",
 ) -> list[dict[str, Any]]:
-    """
-    Perform a SearxNG search and format the results.
+    """Perform a SearxNG search and format the results.
+
     Args:
         query (str): The search query string.
         max_results (int, optional): The maximum number of results to return. Defaults to 5.
         categories (Optional[List[str]]): List of categories to search in.
         language (Optional[str]): Language code.
         base_url (str): SearxNG instance URL.
+
     Returns:
         list[dict[str, Any]]: A list of dictionaries with 'title', 'link', and 'snippet'.
     """
@@ -95,16 +96,15 @@ def _searxng_search(
 
 @export_module("autogen.tools.experimental")
 class SearxngSearchTool(Tool):
-    """
-    SearxngSearchTool is a tool that uses SearxNG to perform a search.
+    """SearxngSearchTool is a tool that uses SearxNG to perform a search.
 
     This tool allows agents to leverage the SearxNG search engine for information retrieval.
     SearxNG does not require an API key by default, making it easy to use.
     """
 
     def __init__(self, base_url: str = "https://searxng.site/search") -> None:
-        """
-        Initializes the SearxngSearchTool.
+        """Initializes the SearxngSearchTool.
+
         Args:
             base_url (str): The SearxNG instance URL.
         """
@@ -119,16 +119,17 @@ class SearxngSearchTool(Tool):
         self,
         query: Annotated[str, "The search query."],
         max_results: Annotated[int, "The number of results to return."] = 5,
-        categories: Annotated[Optional[List[str]], "List of categories to search in."] = None,
-        language: Annotated[Optional[str], "Language code (e.g., 'en-US')."] = None,
+        categories: Annotated[list[str] | None, "List of categories to search in."] = None,
+        language: Annotated[str | None, "Language code (e.g., 'en-US')."] = None,
     ) -> list[dict[str, Any]]:
-        """
-        Performs a search using the SearxNG API and returns formatted results.
+        """Performs a search using the SearxNG API and returns formatted results.
+
         Args:
             query: The search query string.
             max_results: The maximum number of results to return. Defaults to 5.
             categories: List of categories to search in.
             language: Language code.
+
         Returns:
             A list of dictionaries, each containing 'title', 'link', and 'snippet' of a search result.
         """

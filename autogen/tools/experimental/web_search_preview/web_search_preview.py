@@ -6,7 +6,7 @@
 import copy
 import logging
 import os
-from typing import Annotated, Any, Literal, Optional, Type, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
 
@@ -29,11 +29,11 @@ class WebSearchPreviewTool(Tool):
     def __init__(
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         search_context_size: Literal["low", "medium", "high"] = "medium",
-        user_location: Optional[dict[str, str]] = None,
-        instructions: Optional[str] = None,
-        text_format: Optional[Type[BaseModel]] = None,
+        user_location: dict[str, str] | None = None,
+        instructions: str | None = None,
+        text_format: type[BaseModel] | None = None,
     ):
         """Initialize the WebSearchPreviewTool.
 
@@ -85,7 +85,7 @@ class WebSearchPreviewTool(Tool):
 
         def web_search_preview(
             query: Annotated[str, "The search query. Add all relevant context to the query."],
-        ) -> Union[str, Optional[BaseModel]]:
+        ) -> str | BaseModel | None:
             client = OpenAI()
 
             if not self.text_format:

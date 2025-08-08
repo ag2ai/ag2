@@ -122,7 +122,7 @@ class TestDownloadUrl:
         url = "https://www.example.com/index.html"
         filepath = download_url(url, tmp_path.resolve())
         assert filepath.suffix == ".html"
-        with open(file=filepath, mode="r") as html_file:
+        with open(file=filepath) as html_file:
             content = html_file.read()
             assert content == mock_html_value
 
@@ -138,7 +138,7 @@ class TestDownloadUrl:
         url = "https://www.example.com/path"
         filepath = download_url(url, str(tmp_path))
         assert filepath.suffix == ".html"
-        with open(file=filepath, mode="r") as html_file:
+        with open(file=filepath) as html_file:
             content = html_file.read()
             assert content == mock_html_value
 

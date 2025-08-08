@@ -4,8 +4,8 @@
 // by running pre-commit command `pre-commit run --all-files`
 // or by manually running the script `./scripts/devcontainer/generate-devcontainers.sh`.
 {
-    "name": "python-3.9",
-    "image": "mcr.microsoft.com/devcontainers/python:3.9",
+    "name": "python-3.10",
+    "image": "mcr.microsoft.com/devcontainers/python:3.10",
     "secrets": {
         "OAI_CONFIG_LIST": {
             "description": "This key is optional and only needed if you are working on OpenAI-related code. Leave it blank if not required. You can always set it later as an environment variable in the codespace terminal."
@@ -36,7 +36,7 @@
     "workspaceFolder": "/workspaces/ag2",
     "runArgs": [
         "--name",
-        "python-3.9-ag2"
+        "python-3.10-ag2"
     ],
     "remoteEnv": {
         "OAI_CONFIG_LIST": "${localEnv:OAI_CONFIG_LIST}",

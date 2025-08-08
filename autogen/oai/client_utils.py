@@ -8,7 +8,7 @@
 
 import logging
 import warnings
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -24,8 +24,8 @@ def validate_parameter(
     allowed_types: tuple[Any, ...],
     allow_None: bool,  # noqa: N803
     default_value: Any,
-    numerical_bound: Optional[tuple[Optional[float], Optional[float]]],
-    allowed_values: Optional[list[Any]],
+    numerical_bound: tuple[float | None, float | None] | None,
+    allowed_values: list[Any] | None,
 ) -> Any:
     """Validates a given config parameter, checking its type, values, and setting defaults
     Parameters:

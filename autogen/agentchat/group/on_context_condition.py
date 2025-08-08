@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -29,12 +28,11 @@ class OnContextCondition(BaseModel):  # noqa: N801
     """
 
     target: TransitionTarget
-    condition: Optional[ContextCondition] = None
-    available: Optional[AvailableCondition] = None
+    condition: ContextCondition | None = None
+    available: AvailableCondition | None = None
 
     def has_target_type(self, target_type: type) -> bool:
-        """
-        Check if the target type matches the specified type.
+        """Check if the target type matches the specified type.
 
         Args:
             target_type (type): The target type to check against. Should be a subclass of TransitionTarget.
@@ -45,8 +43,7 @@ class OnContextCondition(BaseModel):  # noqa: N801
         return isinstance(self.target, target_type)
 
     def target_requires_wrapping(self) -> bool:
-        """
-        Check if the target requires wrapping in an agent.
+        """Check if the target requires wrapping in an agent.
 
         Returns:
             bool: True if the target requires wrapping, False otherwise

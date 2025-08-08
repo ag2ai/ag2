@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -89,7 +89,7 @@ class TestLangchainFactory:
         self,
         config_list: list[dict[str, str]],
         llm_class_name: str,
-        base_url: Optional[str],
+        base_url: str | None,
     ) -> None:
         llm = LangChainChatModelFactory.create_base_chat_model(llm_config={"config_list": config_list})
         assert llm.__class__.__name__ == llm_class_name

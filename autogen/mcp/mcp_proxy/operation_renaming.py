@@ -4,7 +4,6 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, List
 
 from autogen.import_utils import optional_import_block
 
@@ -28,9 +27,8 @@ SYSTEM_MESSAGE = (
 )
 
 
-def validate_function_name(name: str, taken_names: List[str]) -> str:
-    """
-    Validate the generated function name against length, format, and uniqueness constraints.
+def validate_function_name(name: str, taken_names: list[str]) -> str:
+    """Validate the generated function name against length, format, and uniqueness constraints.
 
     Returns:
         'exit' if the name is valid, or an error message string otherwise.
@@ -44,9 +42,8 @@ def validate_function_name(name: str, taken_names: List[str]) -> str:
     return "exit"
 
 
-def get_new_function_name(operation: "Operation", taken_names: List[str]) -> str:
-    """
-    Ask an AI agent to generate a new function name for a given OpenAPI operation.
+def get_new_function_name(operation: "Operation", taken_names: list[str]) -> str:
+    """Ask an AI agent to generate a new function name for a given OpenAPI operation.
 
     Args:
         operation: The OpenAPI operation that needs renaming.
@@ -88,9 +85,8 @@ def get_new_function_name(operation: "Operation", taken_names: List[str]) -> str
     return response.summary
 
 
-def custom_visitor(parser: "OpenAPIParser", model_path: Path) -> Dict[str, object]:
-    """
-    Visits and optionally renames operations in the OpenAPI parser.
+def custom_visitor(parser: "OpenAPIParser", model_path: Path) -> dict[str, object]:
+    """Visits and optionally renames operations in the OpenAPI parser.
 
     Args:
         parser: An OpenAPIParser instance containing API operations.

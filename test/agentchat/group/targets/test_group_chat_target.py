@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Generator, List, Optional
+from collections.abc import Generator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -289,10 +290,10 @@ class TestGroupChatTarget:
         # Create a mock reply function
         def mock_reply_func(
             agent: Any,
-            messages: Optional[List[dict[str, Any]]] = None,
-            sender: Optional[Any] = None,
-            config: Optional[Any] = None,
-        ) -> tuple[bool, Optional[dict[str, Any]]]:
+            messages: list[dict[str, Any]] | None = None,
+            sender: Any | None = None,
+            config: Any | None = None,
+        ) -> tuple[bool, dict[str, Any] | None]:
             if messages and messages[0].get("content") == "success":
                 # Success path
                 return True, {"content": "Chat summary"}

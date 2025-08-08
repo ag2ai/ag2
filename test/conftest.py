@@ -10,9 +10,10 @@ import inspect
 import os
 import re
 import time
+from collections.abc import Callable
 from json.decoder import JSONDecodeError
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 import pytest
 
@@ -139,8 +140,8 @@ patch_pytest_terminal_writer()
 
 
 def get_credentials(
-    filter_dict: Optional[dict[str, Any]] = None, temperature: float = 0.0, fail_if_empty: bool = True
-) -> Optional[Credentials]:
+    filter_dict: dict[str, Any] | None = None, temperature: float = 0.0, fail_if_empty: bool = True
+) -> Credentials | None:
     """Fixture to load the LLM config."""
     try:
         config_list = autogen.config_list_from_json(
@@ -168,7 +169,7 @@ def get_config_list_from_env(
     env_var_name: str,
     model: str,
     api_type: str,
-    filter_dict: Optional[dict[str, Any]] = None,
+    filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> list[dict[str, Any]]:
     if env_var_name in os.environ:
@@ -182,7 +183,7 @@ def get_llm_credentials(
     env_var_name: str,
     model: str,
     api_type: str,
-    filter_dict: Optional[dict[str, Any]] = None,
+    filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> Credentials:
     credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
@@ -424,7 +425,7 @@ def suppress(
     *,
     retries: int = 0,
     timeout: int = 60,
-    error_filter: Optional[Callable[[BaseException], bool]] = None,
+    error_filter: Callable[[BaseException], bool] | None = None,
 ) -> Callable[[T], T]:
     """Suppresses the specified exception and retries the function a specified number of times.
 
@@ -440,7 +441,7 @@ def suppress(
         exception: type[BaseException] = exception,
         retries: int = retries,
         timeout: int = timeout,
-        error_filter: Optional[Callable[[BaseException], bool]] = error_filter,
+        error_filter: Callable[[BaseException], bool] | None = error_filter,
     ) -> T:
         if inspect.iscoroutinefunction(func):
 

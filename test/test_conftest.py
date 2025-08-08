@@ -62,8 +62,7 @@ class TestSecrets:
                 "test/test_conftest.py::TestSecrets::test_raise_exception_with_secret",
             ],
             env={**os.environ, "RUN_SANITIZATION_TEST": "1"},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
 

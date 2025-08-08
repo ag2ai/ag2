@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional, Union
+from typing import Optional
 
 from ....import_utils import optional_import_block, require_optional_import
 from .document import Document, DocumentType
@@ -39,12 +39,12 @@ class Neo4jNativeGraphQueryEngine:
         username: str = "neo4j",
         password: str = "password",
         embeddings: Optional["Embedder"] = None,
-        embedding_dimension: Optional[int] = 3072,
+        embedding_dimension: int | None = 3072,
         llm: Optional["LLMInterface"] = None,
         query_llm: Optional["LLMInterface"] = None,
-        entities: Optional[List[str]] = None,
-        relations: Optional[List[str]] = None,
-        potential_schema: Optional[List[tuple[str, str, str]]] = None,
+        entities: list[str] | None = None,
+        relations: list[str] | None = None,
+        potential_schema: list[tuple[str, str, str]] | None = None,
     ):
         """Initialize a Neo4j graph query engine.
 
@@ -74,7 +74,7 @@ class Neo4jNativeGraphQueryEngine:
         self.relations = relations
         self.potential_schema = potential_schema
 
-    def init_db(self, input_doc: Optional[Union[list[Document]]] = None) -> None:
+    def init_db(self, input_doc: list[Document] | None = None) -> None:
         """Initialize the Neo4j graph database using the provided input doc.
         Currently this method only supports single document input (only reads the first doc).
 
@@ -189,7 +189,7 @@ class Neo4jNativeGraphQueryEngine:
             from_pdf=True,
         )
 
-    def _build_graph(self, input_doc: List[Document]) -> None:
+    def _build_graph(self, input_doc: list[Document]) -> None:
         """Build the knowledge graph using the provided input documents.
 
         Args:

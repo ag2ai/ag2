@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -32,11 +32,11 @@ class ExtractedContent(BaseModel):
     """
 
     content: str
-    url: Optional[str]
+    url: str | None
 
     @field_validator("url")
     @classmethod
-    def check_url(cls, v: str) -> Optional[str]:
+    def check_url(cls, v: str) -> str | None:
         """Check if the URL is about:blank and return None if it is.
 
         Args:
@@ -57,7 +57,7 @@ class BrowserUseResult(BaseModel):
     """
 
     extracted_content: list[ExtractedContent]
-    final_result: Optional[str]
+    final_result: str | None
 
 
 @require_optional_import(
@@ -78,10 +78,10 @@ class BrowserUseTool(Tool):
     def __init__(  # type: ignore[no-any-unimported]
         self,
         *,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
         browser: Optional["Browser"] = None,
-        agent_kwargs: Optional[dict[str, Any]] = None,
-        browser_config: Optional[dict[str, Any]] = None,
+        agent_kwargs: dict[str, Any] | None = None,
+        browser_config: dict[str, Any] | None = None,
     ):
         """Use the browser to perform a task.
 
@@ -104,8 +104,8 @@ class BrowserUseTool(Tool):
 
         async def browser_use(  # type: ignore[no-any-unimported]
             task: Annotated[str, "The task to perform."],
-            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
-            browser: Annotated[Optional[Browser], Depends(on(browser))],
+            llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
+            browser: Annotated[Browser | None, Depends(on(browser))],
             agent_kwargs: Annotated[dict[str, Any], Depends(on(agent_kwargs))],
             browser_config: Annotated[dict[str, Any], Depends(on(browser_config))],
         ) -> BrowserUseResult:
@@ -145,7 +145,7 @@ class BrowserUseTool(Tool):
         )
 
     @staticmethod
-    def _get_controller(llm_config: Union[LLMConfig, dict[str, Any]]) -> Any:
+    def _get_controller(llm_config: LLMConfig | dict[str, Any]) -> Any:
         response_format = (
             llm_config["config_list"][0].get("response_format", None)
             if "config_list" in llm_config

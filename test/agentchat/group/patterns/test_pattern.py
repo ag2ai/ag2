@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,8 +24,8 @@ class TestPatternImpl(Pattern):
     def prepare_group_chat(
         self,
         max_rounds: int,
-        messages: Union[list[dict[str, Any]], str],
-    ) -> Tuple[
+        messages: list[dict[str, Any]] | str,
+    ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
         Optional["ConversableAgent"],

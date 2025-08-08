@@ -71,7 +71,8 @@ class TransitionTarget(BaseModel):
     def activate_target(self, groupchat: "GroupChat") -> None:
         """Activate the target in the groupchat, setting the next target for GroupToolExecutor.
 
-        The Tool Executor's next target attribute will be picked up on the next iteration when _determine_next_agent is called"""
+        The Tool Executor's next target attribute will be picked up on the next iteration when _determine_next_agent is called
+        """
         for agent in groupchat.agents:  # type: ignore[attr-defined]
             # get the GroupToolExecutor agent
             if type(agent).__name__ == "GroupToolExecutor":

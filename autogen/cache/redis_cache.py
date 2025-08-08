@@ -7,7 +7,7 @@
 import pickle
 import sys
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Any
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -42,7 +42,7 @@ class RedisCache(AbstractCache):
         __exit__(self, exc_type, exc_value, traceback): Context management exit.
     """
 
-    def __init__(self, seed: Union[str, int], redis_url: str):
+    def __init__(self, seed: str | int, redis_url: str):
         """Initialize the RedisCache instance.
 
         Args:
@@ -64,7 +64,7 @@ class RedisCache(AbstractCache):
         """
         return f"autogen:{self.seed}:{key}"
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the Redis cache.
 
         Args:
@@ -109,7 +109,7 @@ class RedisCache(AbstractCache):
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """Exit the runtime context related to the object.
 

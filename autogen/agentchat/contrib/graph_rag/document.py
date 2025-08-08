@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
 __all__ = ["Document", "DocumentType"]
 
@@ -25,5 +25,5 @@ class Document:
     """A wrapper of graph store query results."""
 
     doctype: DocumentType
-    data: Optional[Any] = None
-    path_or_url: Optional[str] = field(default_factory=lambda: "")
+    data: Any | None = None
+    path_or_url: str | None = field(default_factory=lambda: "")

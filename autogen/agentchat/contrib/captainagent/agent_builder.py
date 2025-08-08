@@ -11,7 +11,7 @@ import logging
 import re
 import subprocess as sp
 import time
-from typing import Any, Optional, Union
+from typing import Any
 
 from termcolor import colored
 
@@ -184,14 +184,14 @@ Match roles in the role set to each expert in expert set.
 
     def __init__(
         self,
-        config_file_or_env: Optional[str] = "OAI_CONFIG_LIST",
-        config_file_location: Optional[str] = "",
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        builder_model: Optional[Union[str, list]] = [],
-        agent_model: Optional[Union[str, list]] = [],
-        builder_model_tags: Optional[list] = [],
-        agent_model_tags: Optional[list] = [],
-        max_agents: Optional[int] = 5,
+        config_file_or_env: str | None = "OAI_CONFIG_LIST",
+        config_file_location: str | None = "",
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        builder_model: str | list | None = [],
+        agent_model: str | list | None = [],
+        builder_model_tags: list | None = [],
+        agent_model_tags: list | None = [],
+        max_agents: int | None = 5,
     ):
         """(These APIs are experimental and may change in the future.)
 
@@ -259,8 +259,8 @@ Match roles in the role set to each expert in expert set.
         self,
         agent_config: dict[str, Any],
         member_name: list[str],
-        llm_config: Union[LLMConfig, dict[str, Any]],
-        use_oai_assistant: Optional[bool] = False,
+        llm_config: LLMConfig | dict[str, Any],
+        use_oai_assistant: bool | None = False,
     ) -> AssistantAgent:
         """Create a group chat participant agent.
 
@@ -357,7 +357,7 @@ Match roles in the role set to each expert in expert set.
         self.agent_procs_assign[agent_name] = (agent, server_id)
         return agent
 
-    def clear_agent(self, agent_name: str, recycle_endpoint: Optional[bool] = True):
+    def clear_agent(self, agent_name: str, recycle_endpoint: bool | None = True):
         """Clear a specific agent by name.
 
         Args:
@@ -378,7 +378,7 @@ Match roles in the role set to each expert in expert set.
                 self.open_ports.append(server_id.split("_")[-1])
         print(colored(f"Agent {agent_name} has been cleared.", "yellow"), flush=True)
 
-    def clear_all_agents(self, recycle_endpoint: Optional[bool] = True):
+    def clear_all_agents(self, recycle_endpoint: bool | None = True):
         """Clear all cached agents."""
         for agent_name in [agent_name for agent_name in self.agent_procs_assign]:
             self.clear_agent(agent_name, recycle_endpoint)
@@ -387,12 +387,12 @@ Match roles in the role set to each expert in expert set.
     def build(
         self,
         building_task: str,
-        default_llm_config: Union[LLMConfig, dict[str, Any]],
-        coding: Optional[bool] = None,
-        code_execution_config: Optional[dict[str, Any]] = None,
-        use_oai_assistant: Optional[bool] = False,
-        user_proxy: Optional[ConversableAgent] = None,
-        max_agents: Optional[int] = None,
+        default_llm_config: LLMConfig | dict[str, Any],
+        coding: bool | None = None,
+        code_execution_config: dict[str, Any] | None = None,
+        use_oai_assistant: bool | None = False,
+        user_proxy: ConversableAgent | None = None,
+        max_agents: int | None = None,
         **kwargs: Any,
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Auto build agents based on the building task.
@@ -515,13 +515,13 @@ Match roles in the role set to each expert in expert set.
         self,
         building_task: str,
         library_path_or_json: str,
-        default_llm_config: Union[LLMConfig, dict[str, Any]],
+        default_llm_config: LLMConfig | dict[str, Any],
         top_k: int = 3,
-        coding: Optional[bool] = None,
-        code_execution_config: Optional[dict[str, Any]] = None,
-        use_oai_assistant: Optional[bool] = False,
-        embedding_model: Optional[str] = "all-mpnet-base-v2",
-        user_proxy: Optional[ConversableAgent] = None,
+        coding: bool | None = None,
+        code_execution_config: dict[str, Any] | None = None,
+        use_oai_assistant: bool | None = False,
+        embedding_model: str | None = "all-mpnet-base-v2",
+        user_proxy: ConversableAgent | None = None,
         **kwargs: Any,
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Build agents from a library.
@@ -668,7 +668,7 @@ Match roles in the role set to each expert in expert set.
         return self._build_agents(use_oai_assistant, user_proxy=user_proxy, **kwargs)
 
     def _build_agents(
-        self, use_oai_assistant: Optional[bool] = False, user_proxy: Optional[ConversableAgent] = None, **kwargs
+        self, use_oai_assistant: bool | None = False, user_proxy: ConversableAgent | None = None, **kwargs
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Build agents with generated configs.
 
@@ -711,7 +711,7 @@ Match roles in the role set to each expert in expert set.
 
         return agent_list, self.cached_configs.copy()
 
-    def save(self, filepath: Optional[str] = None) -> str:
+    def save(self, filepath: str | None = None) -> str:
         """Save building configs. If the filepath is not specific, this function will create a filename by encrypt the
         building_task string by md5 with "save_config_" prefix, and save config to the local path.
 
@@ -731,9 +731,9 @@ Match roles in the role set to each expert in expert set.
 
     def load(
         self,
-        filepath: Optional[str] = None,
-        config_json: Optional[str] = None,
-        use_oai_assistant: Optional[bool] = False,
+        filepath: str | None = None,
+        config_json: str | None = None,
+        use_oai_assistant: bool | None = False,
         **kwargs: Any,
     ) -> tuple[list[ConversableAgent], dict[str, Any]]:
         """Load building configs and call the build function to complete building without calling online LLMs' api.

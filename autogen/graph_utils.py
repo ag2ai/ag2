@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-from typing import Optional
 
 from .agentchat import Agent
 from .import_utils import optional_import_block, require_optional_import
@@ -25,7 +24,6 @@ def has_self_loops(allowed_speaker_transitions: dict[str, list[Agent]]) -> bool:
     Returns:
         True if there are self loops in the allowed_speaker_transitions_Dict.
     """
-
     return any([key in value for key, value in allowed_speaker_transitions.items()])
 
 
@@ -144,7 +142,7 @@ def invert_disallowed_to_allowed(
 
 @require_optional_import(["matplotlib", "networkx"], "graph")
 def visualize_speaker_transitions_dict(
-    speaker_transitions_dict: dict[str, list[Agent]], agents: list[Agent], export_path: Optional[str] = None
+    speaker_transitions_dict: dict[str, list[Agent]], agents: list[Agent], export_path: str | None = None
 ) -> None:
     """Visualize the speaker_transitions_dict using networkx.
 
@@ -158,7 +156,6 @@ def visualize_speaker_transitions_dict(
 
 
     """
-
     g = nx.DiGraph()
 
     # Add nodes

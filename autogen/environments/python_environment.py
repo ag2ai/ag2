@@ -17,17 +17,14 @@ class PythonEnvironment(ABC):
     _current_python_environment: ContextVar["PythonEnvironment"] = ContextVar("_current_python_environment")
 
     def __init__(self):
-        """
-        Initialize the Python environment.
-        """
+        """Initialize the Python environment."""
         self._token = None
 
         # Set up the environment
         self._setup_environment()
 
     def __enter__(self):
-        """
-        Enter the environment context.
+        """Enter the environment context.
         Sets this environment as the current one.
         """
         # Set this as the current Python environment in the context
@@ -36,8 +33,7 @@ class PythonEnvironment(ABC):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Exit the environment context.
+        """Exit the environment context.
         Resets the current environment and performs cleanup.
         """
         # Reset the context variable if this was the active environment
@@ -60,8 +56,7 @@ class PythonEnvironment(ABC):
 
     @abstractmethod
     def get_executable(self) -> str:
-        """
-        Get the path to the Python executable in this environment.
+        """Get the path to the Python executable in this environment.
 
         Returns:
             The full path to the Python executable.
@@ -70,8 +65,7 @@ class PythonEnvironment(ABC):
 
     @abstractmethod
     async def execute_code(self, code: str, script_path: str, timeout: int = 30) -> dict[str, Any]:
-        """
-        Execute the given code in this environment.
+        """Execute the given code in this environment.
 
         Args:
             code: The Python code to execute.
@@ -85,8 +79,7 @@ class PythonEnvironment(ABC):
 
     # Utility method for subclasses to wrap (for async support)
     def _write_to_file(self, script_path: str, content: str) -> None:
-        """
-        Write content to a file (blocking operation).
+        """Write content to a file (blocking operation).
 
         This is a helper method for use with asyncify in async contexts.
 
@@ -99,8 +92,7 @@ class PythonEnvironment(ABC):
 
     # Utility method for subclasses to wrap (for async support)
     def _run_subprocess(self, cmd: list[str], timeout: int) -> subprocess.CompletedProcess:
-        """
-        Run a subprocess (blocking operation).
+        """Run a subprocess (blocking operation).
 
         This is a helper method for use with asyncify in async contexts.
 
@@ -117,8 +109,7 @@ class PythonEnvironment(ABC):
     def get_current_python_environment(
         cls, python_environment: Optional["PythonEnvironment"] = None
     ) -> Optional["PythonEnvironment"]:
-        """
-        Get the current Python environment or the specified one if provided.
+        """Get the current Python environment or the specified one if provided.
 
         Args:
             python_environment: Optional environment to return if specified.

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 from .....doc_utils import export_module
 from .....import_utils import optional_import_block
@@ -29,8 +29,8 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
         self,
         *,
         credentials: "Credentials",
-        download_folder: Union[Path, str],
-        exclude: Optional[list[Literal["list_drive_files_and_folders", "download_file_from_drive"]]] = None,
+        download_folder: Path | str,
+        exclude: list[Literal["list_drive_files_and_folders", "download_file_from_drive"]] | None = None,
         api_version: str = "v3",
     ) -> None:
         """Initialize the Google Drive tool map.
@@ -51,7 +51,7 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
         def list_drive_files_and_folders(
             page_size: Annotated[int, "The number of files to list per page."] = 10,
             folder_id: Annotated[
-                Optional[str],
+                str | None,
                 "The ID of the folder to list files from. If not provided, lists all files in the root folder.",
             ] = None,
         ) -> list[GoogleFileInfo]:
@@ -61,7 +61,7 @@ class GoogleDriveToolkit(Toolkit, GoogleToolkitProtocol):
         def download_file_from_drive(
             file_info: Annotated[GoogleFileInfo, "The file info to download."],
             subfolder_path: Annotated[
-                Optional[str],
+                str | None,
                 "The subfolder path to save the file in. If not provided, saves in the main download folder.",
             ] = None,
         ) -> str:

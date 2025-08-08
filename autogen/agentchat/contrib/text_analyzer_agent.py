@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from ...llm_config import LLMConfig
 from ..agent import Agent
@@ -22,9 +22,9 @@ class TextAnalyzerAgent(ConversableAgent):
     def __init__(
         self,
         name="analyzer",
-        system_message: Optional[str] = system_message,
+        system_message: str | None = system_message,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
+        llm_config: LLMConfig | dict[str, Any] | bool | None = None,
         **kwargs: Any,
     ):
         """Args:
@@ -48,10 +48,10 @@ class TextAnalyzerAgent(ConversableAgent):
 
     def _analyze_in_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Analyzes the given text as instructed, and returns the analysis as a message.
         Assumes exactly two messages containing the text to analyze and the analysis instructions.
         See Teachability.analyze for an example of how to use this method.

@@ -9,7 +9,8 @@ import hashlib
 import logging
 import os
 import re
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -158,11 +159,11 @@ def extract_text_from_pdf(file: str) -> str:
 
 
 def split_files_to_chunks(
-    files: list[Union[tuple[str, str], str]],
+    files: list[tuple[str, str] | str],
     max_tokens: int = 4000,
     chunk_mode: str = "multi_lines",
     must_break_at_empty_line: bool = True,
-    custom_text_split_function: Optional[Callable[[str], list[str]]] = None,
+    custom_text_split_function: Callable[[str], list[str]] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     """Split a list of files into chunks of max_tokens."""
     chunks = []
@@ -200,9 +201,7 @@ def split_files_to_chunks(
     return chunks, sources
 
 
-def get_files_from_dir(
-    dir_path: Union[str, list[str]], types: list[str] = TEXT_FORMATS, recursive: bool = True
-) -> list[Any]:
+def get_files_from_dir(dir_path: str | list[str], types: list[str] = TEXT_FORMATS, recursive: bool = True) -> list[Any]:
     """Return a list of all the files in a given directory, a url, a file path or a list of them."""
     if len(types) == 0:
         raise ValueError("types cannot be empty.")
@@ -343,7 +342,7 @@ def is_url(string: str):
 
 @require_optional_import("chromadb", "retrievechat")
 def create_vector_db_from_dir(
-    dir_path: Union[str, list[str]],
+    dir_path: str | list[str],
     max_tokens: int = 4000,
     client: "API" = None,
     db_path: str = "tmp/chromadb.db",

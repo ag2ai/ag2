@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Tuple
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -101,7 +101,7 @@ class TestGroupToolExecutor:
         """Test changing a tool's context_variables parameter to use dependency injection."""
 
         # Define a real function for the tool to use
-        def test_tool_func(arg1: str, context_variables: Optional[ContextVariables] = None) -> str:
+        def test_tool_func(arg1: str, context_variables: ContextVariables | None = None) -> str:
             return f"Result: {arg1}, {context_variables}"
 
         # Create a mock tool with context_variables in its schema
@@ -323,7 +323,7 @@ class TestGroupToolExecutor:
             "content": str(result2),
         }
 
-        def side_effect(messages: list[dict[str, Any]]) -> Tuple[bool, Optional[dict[str, Any]]]:
+        def side_effect(messages: list[dict[str, Any]]) -> tuple[bool, dict[str, Any] | None]:
             if len(messages) == 0:
                 return False, None
 

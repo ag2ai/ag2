@@ -9,13 +9,12 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
 
 @contextmanager
-def add_to_sys_path(path: Optional[Path]) -> Iterator[None]:
+def add_to_sys_path(path: Path | None) -> Iterator[None]:
     if path is None:
         yield
         return
@@ -30,7 +29,7 @@ def add_to_sys_path(path: Optional[Path]) -> Iterator[None]:
         sys.path.remove(str(path))
 
 
-def list_submodules(module_name: str, *, include_path: Optional[Path] = None, include_root: bool = True) -> list[str]:
+def list_submodules(module_name: str, *, include_path: Path | None = None, include_root: bool = True) -> list[str]:
     """List all submodules of a given module.
 
     Args:

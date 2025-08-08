@@ -4,7 +4,7 @@
 
 import logging
 import os
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -27,16 +27,15 @@ with optional_import_block():
 def _execute_firecrawl_scrape(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
-    formats: Optional[list[str]] = None,
-    include_tags: Optional[list[str]] = None,
-    exclude_tags: Optional[list[str]] = None,
-    headers: Optional[dict[str, str]] = None,
-    wait_for: Optional[int] = None,
-    timeout: Optional[int] = None,
+    firecrawl_api_url: str | None = None,
+    formats: list[str] | None = None,
+    include_tags: list[str] | None = None,
+    exclude_tags: list[str] | None = None,
+    headers: dict[str, str] | None = None,
+    wait_for: int | None = None,
+    timeout: int | None = None,
 ) -> dict[str, Any]:
-    """
-    Execute a scrape operation using the Firecrawl API.
+    """Execute a scrape operation using the Firecrawl API.
 
     Args:
         url (str): The URL to scrape.
@@ -78,17 +77,16 @@ def _execute_firecrawl_scrape(
 def _execute_firecrawl_crawl(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     limit: int = 5,
-    formats: Optional[list[str]] = None,
-    include_paths: Optional[list[str]] = None,
-    exclude_paths: Optional[list[str]] = None,
-    max_depth: Optional[int] = None,
+    formats: list[str] | None = None,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+    max_depth: int | None = None,
     allow_backward_crawling: bool = False,
     allow_external_content_links: bool = False,
 ) -> dict[str, Any]:
-    """
-    Execute a crawl operation using the Firecrawl API.
+    """Execute a crawl operation using the Firecrawl API.
 
     Args:
         url (str): The starting URL to crawl.
@@ -137,14 +135,13 @@ def _execute_firecrawl_crawl(
 def _execute_firecrawl_map(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
-    search: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
+    search: str | None = None,
     ignore_sitemap: bool = False,
     include_subdomains: bool = False,
     limit: int = 5000,
 ) -> dict[str, Any]:
-    """
-    Execute a map operation using the Firecrawl API to get URLs from a website.
+    """Execute a map operation using the Firecrawl API to get URLs from a website.
 
     Args:
         url (str): The website URL to map.
@@ -179,17 +176,16 @@ def _execute_firecrawl_map(
 def _execute_firecrawl_search(
     query: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     limit: int = 5,
-    tbs: Optional[str] = None,
-    filter: Optional[str] = None,
+    tbs: str | None = None,
+    filter: str | None = None,
     lang: str = "en",
     country: str = "us",
-    location: Optional[str] = None,
-    timeout: Optional[int] = None,
+    location: str | None = None,
+    timeout: int | None = None,
 ) -> dict[str, Any]:
-    """
-    Execute a search operation using the Firecrawl API.
+    """Execute a search operation using the Firecrawl API.
 
     Args:
         query (str): The search query string.
@@ -230,15 +226,14 @@ def _execute_firecrawl_search(
 def _execute_firecrawl_deep_research(
     query: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     max_depth: int = 7,
     time_limit: int = 270,
     max_urls: int = 20,
-    analysis_prompt: Optional[str] = None,
-    system_prompt: Optional[str] = None,
+    analysis_prompt: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Execute a deep research operation using the Firecrawl API.
+    """Execute a deep research operation using the Firecrawl API.
 
     Args:
         query (str): The research query or topic to investigate.
@@ -269,16 +264,15 @@ def _execute_firecrawl_deep_research(
 def _firecrawl_scrape(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
-    formats: Optional[list[str]] = None,
-    include_tags: Optional[list[str]] = None,
-    exclude_tags: Optional[list[str]] = None,
-    headers: Optional[dict[str, str]] = None,
-    wait_for: Optional[int] = None,
-    timeout: Optional[int] = None,
+    firecrawl_api_url: str | None = None,
+    formats: list[str] | None = None,
+    include_tags: list[str] | None = None,
+    exclude_tags: list[str] | None = None,
+    headers: dict[str, str] | None = None,
+    wait_for: int | None = None,
+    timeout: int | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a Firecrawl scrape and format the results.
+    """Perform a Firecrawl scrape and format the results.
 
     Args:
         url (str): The URL to scrape.
@@ -324,17 +318,16 @@ def _firecrawl_scrape(
 def _firecrawl_crawl(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     limit: int = 5,
-    formats: Optional[list[str]] = None,
-    include_paths: Optional[list[str]] = None,
-    exclude_paths: Optional[list[str]] = None,
-    max_depth: Optional[int] = None,
+    formats: list[str] | None = None,
+    include_paths: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+    max_depth: int | None = None,
     allow_backward_crawling: bool = False,
     allow_external_content_links: bool = False,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a Firecrawl crawl and format the results.
+    """Perform a Firecrawl crawl and format the results.
 
     Args:
         url (str): The starting URL to crawl.
@@ -387,14 +380,13 @@ def _firecrawl_crawl(
 def _firecrawl_map(
     url: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
-    search: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
+    search: str | None = None,
     ignore_sitemap: bool = False,
     include_subdomains: bool = False,
     limit: int = 5000,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a Firecrawl map operation and format the results.
+    """Perform a Firecrawl map operation and format the results.
 
     Args:
         url (str): The website URL to map.
@@ -440,17 +432,16 @@ def _firecrawl_map(
 def _firecrawl_search(
     query: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     limit: int = 5,
-    tbs: Optional[str] = None,
-    filter: Optional[str] = None,
+    tbs: str | None = None,
+    filter: str | None = None,
     lang: str = "en",
     country: str = "us",
-    location: Optional[str] = None,
-    timeout: Optional[int] = None,
+    location: str | None = None,
+    timeout: int | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a Firecrawl search and format the results.
+    """Perform a Firecrawl search and format the results.
 
     Args:
         query (str): The search query string.
@@ -504,15 +495,14 @@ def _firecrawl_search(
 def _firecrawl_deep_research(
     query: str,
     firecrawl_api_key: str,
-    firecrawl_api_url: Optional[str] = None,
+    firecrawl_api_url: str | None = None,
     max_depth: int = 7,
     time_limit: int = 270,
     max_urls: int = 20,
-    analysis_prompt: Optional[str] = None,
-    system_prompt: Optional[str] = None,
+    analysis_prompt: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Perform a Firecrawl deep research operation and format the results.
+    """Perform a Firecrawl deep research operation and format the results.
 
     Args:
         query (str): The research query or topic to investigate.
@@ -568,8 +558,7 @@ def _firecrawl_deep_research(
 
 @export_module("autogen.tools.experimental")
 class FirecrawlTool(Tool):
-    """
-    FirecrawlTool is a tool that uses the Firecrawl API to scrape, crawl, map, search, and research websites.
+    """FirecrawlTool is a tool that uses the Firecrawl API to scrape, crawl, map, search, and research websites.
 
     This tool allows agents to leverage Firecrawl for web content extraction, discovery, and research.
     It requires a Firecrawl API key, which can be provided during initialization or set as
@@ -590,12 +579,11 @@ class FirecrawlTool(Tool):
     def __init__(
         self,
         *,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        firecrawl_api_key: Optional[str] = None,
-        firecrawl_api_url: Optional[str] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        firecrawl_api_key: str | None = None,
+        firecrawl_api_url: str | None = None,
     ):
-        """
-        Initializes the FirecrawlTool.
+        """Initializes the FirecrawlTool.
 
         Args:
             llm_config (Optional[Union[LLMConfig, dict[str, Any]]]): LLM configuration. (Currently unused but kept for potential future integration).
@@ -618,17 +606,16 @@ class FirecrawlTool(Tool):
 
         def firecrawl_scrape(
             url: Annotated[str, "The URL to scrape."],
-            firecrawl_api_key: Annotated[Optional[str], Depends(on(self.firecrawl_api_key))],
-            firecrawl_api_url: Annotated[Optional[str], Depends(on(self.firecrawl_api_url))],
-            formats: Annotated[Optional[list[str]], "Output formats (e.g., ['markdown', 'html'])"] = None,
-            include_tags: Annotated[Optional[list[str]], "HTML tags to include"] = None,
-            exclude_tags: Annotated[Optional[list[str]], "HTML tags to exclude"] = None,
-            headers: Annotated[Optional[dict[str, str]], "HTTP headers to use"] = None,
-            wait_for: Annotated[Optional[int], "Time to wait for page load in milliseconds"] = None,
-            timeout: Annotated[Optional[int], "Request timeout in milliseconds"] = None,
+            firecrawl_api_key: Annotated[str | None, Depends(on(self.firecrawl_api_key))],
+            firecrawl_api_url: Annotated[str | None, Depends(on(self.firecrawl_api_url))],
+            formats: Annotated[list[str] | None, "Output formats (e.g., ['markdown', 'html'])"] = None,
+            include_tags: Annotated[list[str] | None, "HTML tags to include"] = None,
+            exclude_tags: Annotated[list[str] | None, "HTML tags to exclude"] = None,
+            headers: Annotated[dict[str, str] | None, "HTTP headers to use"] = None,
+            wait_for: Annotated[int | None, "Time to wait for page load in milliseconds"] = None,
+            timeout: Annotated[int | None, "Request timeout in milliseconds"] = None,
         ) -> list[dict[str, Any]]:
-            """
-            Scrapes a single URL and returns the content.
+            """Scrapes a single URL and returns the content.
 
             Args:
                 url: The URL to scrape.
@@ -663,18 +650,17 @@ class FirecrawlTool(Tool):
 
         def firecrawl_crawl(
             url: Annotated[str, "The starting URL to crawl."],
-            firecrawl_api_key: Annotated[Optional[str], Depends(on(self.firecrawl_api_key))],
-            firecrawl_api_url: Annotated[Optional[str], Depends(on(self.firecrawl_api_url))],
+            firecrawl_api_key: Annotated[str | None, Depends(on(self.firecrawl_api_key))],
+            firecrawl_api_url: Annotated[str | None, Depends(on(self.firecrawl_api_url))],
             limit: Annotated[int, "Maximum number of pages to crawl"] = 5,
-            formats: Annotated[Optional[list[str]], "Output formats (e.g., ['markdown', 'html'])"] = None,
-            include_paths: Annotated[Optional[list[str]], "URL patterns to include"] = None,
-            exclude_paths: Annotated[Optional[list[str]], "URL patterns to exclude"] = None,
-            max_depth: Annotated[Optional[int], "Maximum crawl depth"] = None,
-            allow_backward_crawling: Annotated[Optional[bool], "Allow crawling backward links"] = False,
-            allow_external_content_links: Annotated[Optional[bool], "Allow external links"] = False,
+            formats: Annotated[list[str] | None, "Output formats (e.g., ['markdown', 'html'])"] = None,
+            include_paths: Annotated[list[str] | None, "URL patterns to include"] = None,
+            exclude_paths: Annotated[list[str] | None, "URL patterns to exclude"] = None,
+            max_depth: Annotated[int | None, "Maximum crawl depth"] = None,
+            allow_backward_crawling: Annotated[bool | None, "Allow crawling backward links"] = False,
+            allow_external_content_links: Annotated[bool | None, "Allow external links"] = False,
         ) -> list[dict[str, Any]]:
-            """
-            Crawls a website starting from a URL and returns the content from multiple pages.
+            """Crawls a website starting from a URL and returns the content from multiple pages.
 
             Args:
                 url: The starting URL to crawl.
@@ -711,15 +697,14 @@ class FirecrawlTool(Tool):
 
         def firecrawl_map(
             url: Annotated[str, "The website URL to map."],
-            firecrawl_api_key: Annotated[Optional[str], Depends(on(self.firecrawl_api_key))],
-            firecrawl_api_url: Annotated[Optional[str], Depends(on(self.firecrawl_api_url))],
-            search: Annotated[Optional[str], "Search term to filter URLs"] = None,
-            ignore_sitemap: Annotated[Optional[bool], "Whether to ignore the sitemap"] = False,
-            include_subdomains: Annotated[Optional[bool], "Whether to include subdomains"] = False,
+            firecrawl_api_key: Annotated[str | None, Depends(on(self.firecrawl_api_key))],
+            firecrawl_api_url: Annotated[str | None, Depends(on(self.firecrawl_api_url))],
+            search: Annotated[str | None, "Search term to filter URLs"] = None,
+            ignore_sitemap: Annotated[bool | None, "Whether to ignore the sitemap"] = False,
+            include_subdomains: Annotated[bool | None, "Whether to include subdomains"] = False,
             limit: Annotated[int, "Maximum number of URLs to return"] = 5000,
         ) -> list[dict[str, Any]]:
-            """
-            Maps a website to discover URLs.
+            """Maps a website to discover URLs.
 
             Args:
                 url: The website URL to map.
@@ -750,18 +735,17 @@ class FirecrawlTool(Tool):
 
         def firecrawl_search(
             query: Annotated[str, "The search query string."],
-            firecrawl_api_key: Annotated[Optional[str], Depends(on(self.firecrawl_api_key))],
-            firecrawl_api_url: Annotated[Optional[str], Depends(on(self.firecrawl_api_url))],
+            firecrawl_api_key: Annotated[str | None, Depends(on(self.firecrawl_api_key))],
+            firecrawl_api_url: Annotated[str | None, Depends(on(self.firecrawl_api_url))],
             limit: Annotated[int, "Maximum number of results to return"] = 5,
-            tbs: Annotated[Optional[str], "Time filter (e.g., 'qdr:d' for past day)"] = None,
-            filter: Annotated[Optional[str], "Custom result filter"] = None,
-            lang: Annotated[Optional[str], "Language code"] = "en",
-            country: Annotated[Optional[str], "Country code"] = "us",
-            location: Annotated[Optional[str], "Geo-targeting location"] = None,
-            timeout: Annotated[Optional[int], "Request timeout in milliseconds"] = None,
+            tbs: Annotated[str | None, "Time filter (e.g., 'qdr:d' for past day)"] = None,
+            filter: Annotated[str | None, "Custom result filter"] = None,
+            lang: Annotated[str | None, "Language code"] = "en",
+            country: Annotated[str | None, "Country code"] = "us",
+            location: Annotated[str | None, "Geo-targeting location"] = None,
+            timeout: Annotated[int | None, "Request timeout in milliseconds"] = None,
         ) -> list[dict[str, Any]]:
-            """
-            Executes a search operation using the Firecrawl API.
+            """Executes a search operation using the Firecrawl API.
 
             Args:
                 query: The search query string.
@@ -798,16 +782,15 @@ class FirecrawlTool(Tool):
 
         def firecrawl_deep_research(
             query: Annotated[str, "The research query or topic to investigate."],
-            firecrawl_api_key: Annotated[Optional[str], Depends(on(self.firecrawl_api_key))],
-            firecrawl_api_url: Annotated[Optional[str], Depends(on(self.firecrawl_api_url))],
+            firecrawl_api_key: Annotated[str | None, Depends(on(self.firecrawl_api_key))],
+            firecrawl_api_url: Annotated[str | None, Depends(on(self.firecrawl_api_url))],
             max_depth: Annotated[int, "Maximum depth of research exploration"] = 7,
             time_limit: Annotated[int, "Time limit in seconds for research"] = 270,
             max_urls: Annotated[int, "Maximum number of URLs to process"] = 20,
-            analysis_prompt: Annotated[Optional[str], "Custom prompt for analysis"] = None,
-            system_prompt: Annotated[Optional[str], "Custom system prompt"] = None,
+            analysis_prompt: Annotated[str | None, "Custom prompt for analysis"] = None,
+            system_prompt: Annotated[str | None, "Custom system prompt"] = None,
         ) -> dict[str, Any]:
-            """
-            Executes a deep research operation using the Firecrawl API.
+            """Executes a deep research operation using the Firecrawl API.
 
             Args:
                 query: The research query or topic to investigate.

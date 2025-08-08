@@ -6,9 +6,8 @@
 
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import Any, Callable, List, Optional
-
-from typing_extensions import Literal
+from collections.abc import Callable
+from typing import Any, Literal
 
 from ._models import BaseModel
 from .chat_completion_message import ChatCompletionMessage
@@ -19,10 +18,10 @@ __all__ = ["ChatCompletion", "Choice", "ChoiceLogprobs"]
 
 
 class ChoiceLogprobs(BaseModel):
-    content: Optional[List[ChatCompletionTokenLogprob]] = None
+    content: list[ChatCompletionTokenLogprob] | None = None
     """A list of message content tokens with log probability information."""
 
-    refusal: Optional[List[ChatCompletionTokenLogprob]] = None
+    refusal: list[ChatCompletionTokenLogprob] | None = None
     """A list of message refusal tokens with log probability information."""
 
 
@@ -40,7 +39,7 @@ class Choice(BaseModel):
     index: int
     """The index of the choice in the list of choices."""
 
-    logprobs: Optional[ChoiceLogprobs] = None
+    logprobs: ChoiceLogprobs | None = None
     """Log probability information for the choice."""
 
     message: ChatCompletionMessage
@@ -51,7 +50,7 @@ class ChatCompletion(BaseModel):
     id: str
     """A unique identifier for the chat completion."""
 
-    choices: List[Choice]
+    choices: list[Choice]
     """A list of chat completion choices.
 
     Can be more than one if `n` is greater than 1.
@@ -66,22 +65,22 @@ class ChatCompletion(BaseModel):
     object: Literal["chat.completion"]
     """The object type, which is always `chat.completion`."""
 
-    service_tier: Optional[Literal["auto", "default", "flex", "scale"]] = None
+    service_tier: Literal["auto", "default", "flex", "scale"] | None = None
     """The service tier used for processing the request."""
 
-    system_fingerprint: Optional[str] = None
+    system_fingerprint: str | None = None
     """This fingerprint represents the backend configuration that the model runs with.
 
     Can be used in conjunction with the `seed` request parameter to understand when
     backend changes have been made that might impact determinism.
     """
 
-    usage: Optional[CompletionUsage] = None
+    usage: CompletionUsage | None = None
     """Usage statistics for the completion request."""
 
 
 class ChatCompletionExtended(ChatCompletion):
-    message_retrieval_function: Optional[Callable[[Any, "ChatCompletion"], list[ChatCompletionMessage]]] = None
-    config_id: Optional[str] = None
-    pass_filter: Optional[Callable[..., bool]] = None
-    cost: Optional[float] = None
+    message_retrieval_function: Callable[[Any, "ChatCompletion"], list[ChatCompletionMessage]] | None = None
+    config_id: str | None = None
+    pass_filter: Callable[..., bool] | None = None
+    cost: float | None = None

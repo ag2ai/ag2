@@ -4,11 +4,10 @@
 import base64
 import json
 import logging
-from typing import Any, ClassVar, Literal, Optional
+from typing import Any, ClassVar, Literal, TypeAlias
 
 import requests
 from pydantic import BaseModel, model_validator
-from typing_extensions import TypeAlias
 
 # Get the logger
 logger = logging.getLogger(__name__)
@@ -343,7 +342,7 @@ class OAuth2PasswordBearer(BaseSecurity):
 
         username: str = "USERNAME"
         password: str = "PASSWORD"
-        bearer_token: Optional[str] = None
+        bearer_token: str | None = None
         token_url: str = "TOKEN_URL"
 
         # @model_validator(mode="before")

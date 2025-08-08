@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ._compat import PYDANTIC_V2, create_model, model_schema
 from .core import CallModel
@@ -15,13 +15,13 @@ def get_schema(
     call: CallModel[Any, Any],
     embed: bool = False,
     resolve_refs: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     assert call.model, "Call should has a model"
     params_model = create_model(  # type: ignore[call-overload]
         call.model.__name__, **call.flat_params
     )
 
-    body: Dict[str, Any] = model_schema(params_model)
+    body: dict[str, Any] = model_schema(params_model)
 
     if not call.flat_params:
         body = {"title": body["title"], "type": "null"}
@@ -37,8 +37,8 @@ def get_schema(
     return body
 
 
-def _move_pydantic_refs(original: Any, key: str, refs: Optional[Dict[str, Any]] = None) -> Any:
-    if not isinstance(original, Dict):
+def _move_pydantic_refs(original: Any, key: str, refs: dict[str, Any] | None = None) -> Any:
+    if not isinstance(original, dict):
         return original
 
     data = original.copy()
@@ -47,7 +47,7 @@ def _move_pydantic_refs(original: Any, key: str, refs: Optional[Dict[str, Any]] 
         raw_refs = data.get(key, {})
         refs = _move_pydantic_refs(raw_refs, key, raw_refs)
 
-    name: Optional[str] = None
+    name: str | None = None
     for k in data:
         if k == "$ref":
             name = data[k].replace(f"#/{key}/", "")
@@ -55,7 +55,7 @@ def _move_pydantic_refs(original: Any, key: str, refs: Optional[Dict[str, Any]] 
         elif isinstance(data[k], dict):
             data[k] = _move_pydantic_refs(data[k], key, refs)
 
-        elif isinstance(data[k], List):
+        elif isinstance(data[k], list):
             for i in range(len(data[k])):
                 data[k][i] = _move_pydantic_refs(data[k][i], key, refs)
 

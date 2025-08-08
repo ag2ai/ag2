@@ -5,7 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import Any
 
 from .... import token_count_utils
 from ....cache.abstract_cache_base import AbstractCache
@@ -24,7 +24,7 @@ def cache_key(content: MessageContentType, *args: Hashable) -> str:
     return "".join(str_keys)
 
 
-def cache_content_get(cache: Optional[AbstractCache], key: str) -> Optional[tuple[MessageContentType, ...]]:
+def cache_content_get(cache: AbstractCache | None, key: str) -> tuple[MessageContentType, ...] | None:
     """Retrieves cached content from the cache.
 
     Args:
@@ -37,7 +37,7 @@ def cache_content_get(cache: Optional[AbstractCache], key: str) -> Optional[tupl
             return cached_value
 
 
-def cache_content_set(cache: Optional[AbstractCache], key: str, content: MessageContentType, *extra_values):
+def cache_content_set(cache: AbstractCache | None, key: str, content: MessageContentType, *extra_values):
     """Sets content into the cache.
 
     Args:
@@ -51,7 +51,7 @@ def cache_content_set(cache: Optional[AbstractCache], key: str, content: Message
         cache.set(key, cache_value)
 
 
-def min_tokens_reached(messages: list[dict[str, Any]], min_tokens: Optional[int]) -> bool:
+def min_tokens_reached(messages: list[dict[str, Any]], min_tokens: int | None) -> bool:
     """Returns True if the total number of tokens in the messages is greater than or equal to the specified value.
 
     Args:
@@ -108,7 +108,7 @@ def is_content_text_empty(content: MessageContentType) -> bool:
         return True
 
 
-def should_transform_message(message: dict[str, Any], filter_dict: Optional[dict[str, Any]], exclude: bool) -> bool:
+def should_transform_message(message: dict[str, Any], filter_dict: dict[str, Any] | None, exclude: bool) -> bool:
     """Validates whether the transform should be applied according to the filter dictionary.
 
     Args:

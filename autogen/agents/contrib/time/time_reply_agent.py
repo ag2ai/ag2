@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 from .... import Agent, ConversableAgent, OpenAIWrapper
 from ....doc_utils import export_module
@@ -16,7 +16,8 @@ class TimeReplyAgent(ConversableAgent):
 
     Use it is as a reference for creating new agents with a reply-based approach (as opposed to tool-based).
 
-    This agent will return the date and time whenever it needs to reply."""
+    This agent will return the date and time whenever it needs to reply.
+    """
 
     DEFAULT_SYSTEM_MESSAGE = "You are a calendar agent that just returns the date and time."
 
@@ -51,9 +52,9 @@ class TimeReplyAgent(ConversableAgent):
         # may even contain another AG2 workflow inside it
         def get_date_time_reply(
             agent: ConversableAgent,
-            messages: Optional[list[dict[str, Any]]] = None,
-            sender: Optional[Agent] = None,
-            config: Optional[OpenAIWrapper] = None,
+            messages: list[dict[str, Any]] | None = None,
+            sender: Agent | None = None,
+            config: OpenAIWrapper | None = None,
         ) -> tuple[bool, dict[str, Any]]:
             from datetime import datetime
 

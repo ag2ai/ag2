@@ -21,8 +21,7 @@ def _execute_duckduckgo_query(
     query: str,
     num_results: int = 5,
 ) -> list[dict[str, Any]]:
-    """
-    Execute a search query using the DuckDuckGo Search API.
+    """Execute a search query using the DuckDuckGo Search API.
 
     Args:
         query (str): The search query string.
@@ -45,8 +44,7 @@ def _duckduckgo_search(
     query: str,
     num_results: int = 5,
 ) -> list[dict[str, Any]]:
-    """
-    Perform a DuckDuckGo search and format the results.
+    """Perform a DuckDuckGo search and format the results.
 
     This function takes search parameters, executes the query using `_execute_duckduckgo_query`,
     and formats the results into a list of dictionaries containing title, link, and snippet.
@@ -71,24 +69,20 @@ def _duckduckgo_search(
 
 @export_module("autogen.tools.experimental")
 class DuckDuckGoSearchTool(Tool):
-    """
-    DuckDuckGoSearchTool is a tool that uses DuckDuckGo to perform a search.
+    """DuckDuckGoSearchTool is a tool that uses DuckDuckGo to perform a search.
 
     This tool allows agents to leverage the DuckDuckGo search engine for information retrieval.
     DuckDuckGo does not require an API key, making it easy to use.
     """
 
     def __init__(self) -> None:
-        """
-        Initializes the DuckDuckGoSearchTool.
-        """
+        """Initializes the DuckDuckGoSearchTool."""
 
         def duckduckgo_search(
             query: Annotated[str, "The search query."],
             num_results: Annotated[int, "The number of results to return."] = 5,
         ) -> list[dict[str, Any]]:
-            """
-            Performs a search using the DuckDuckGo Search API and returns formatted results.
+            """Performs a search using the DuckDuckGo Search API and returns formatted results.
 
             Args:
                 query: The search query string.

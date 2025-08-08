@@ -5,7 +5,8 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import copy
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 from ....code_utils import content_str
 from ....oai.client import OpenAIWrapper
@@ -47,7 +48,7 @@ class VisionCapability(AgentCapability):
     def __init__(
         self,
         lmm_config: dict[str, Any],
-        description_prompt: Optional[str] = DEFAULT_DESCRIPTION_PROMPT,
+        description_prompt: str | None = DEFAULT_DESCRIPTION_PROMPT,
         custom_caption_func: Callable = None,
     ) -> None:
         """Initializes a new instance, setting up the configuration for interacting with
@@ -101,7 +102,7 @@ class VisionCapability(AgentCapability):
         # Register a hook for processing the last message.
         agent.register_hook(hookable_method="process_last_received_message", hook=self.process_last_received_message)
 
-    def process_last_received_message(self, content: Union[str, list[dict[str, Any]]]) -> str:
+    def process_last_received_message(self, content: str | list[dict[str, Any]]) -> str:
         """Processes the last received message content by normalizing and augmenting it
         with descriptions of any included images. The function supports input content
         as either a string or a list of dictionaries, where each dictionary represents

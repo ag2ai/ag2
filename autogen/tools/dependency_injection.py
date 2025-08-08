@@ -6,8 +6,9 @@ import functools
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints
 
 from ..agentchat import Agent
 from ..doc_utils import export_module
@@ -67,7 +68,7 @@ class ChatContext(BaseContext):
         return self._agent.chat_messages
 
     @property
-    def last_message(self) -> Optional[dict[str, Any]]:
+    def last_message(self) -> dict[str, Any] | None:
         """The last message in the chat.
 
         Returns:
@@ -102,7 +103,7 @@ def Depends(x: Any) -> Any:  # noqa: N802
     return FastDepends(x)
 
 
-def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext]]) -> list[str]:
+def get_context_params(func: Callable[..., Any], subclass: type[BaseContext] | type[ChatContext]) -> list[str]:
     """Gets the names of the context parameters in a function signature.
 
     Args:
@@ -116,9 +117,7 @@ def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContex
     return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 
 
-def _is_context_param(
-    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext]] = BaseContext
-) -> bool:
+def _is_context_param(param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] = BaseContext) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
     try:

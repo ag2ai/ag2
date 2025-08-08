@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import inspect
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Union
 
 from ..doc_utils import export_module
 from ..tools.function_utils import get_function_schema
@@ -32,10 +33,10 @@ class Tool:
     def __init__(
         self,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
         func_or_tool: Union["Tool", Callable[..., Any]],
-        parameters_json_schema: Optional[dict[str, Any]] = None,
+        parameters_json_schema: dict[str, Any] | None = None,
     ) -> None:
         """Create a new Tool object.
 
@@ -169,7 +170,7 @@ class Tool:
 
 
 @export_module("autogen.tools")
-def tool(name: Optional[str] = None, description: Optional[str] = None) -> Callable[[Callable[..., Any]], Tool]:
+def tool(name: str | None = None, description: str | None = None) -> Callable[[Callable[..., Any]], Tool]:
     """Decorator to create a Tool from a function.
 
     Args:
