@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any, Tuple, Union, cast
 
 from pydantic import BaseModel
 
@@ -452,14 +452,17 @@ class OpenAIResponsesClient:
             # ------------------------------------------------------------------
             content.append(item)
 
-        return [  # type: ignore[return-value]
-            {
-                "role": "assistant",
-                "id": response.id,
-                "content": content if content else None,
-                "tool_calls": tool_calls,
-            }
-        ]
+        return cast(
+            Union[list[str], list["ModelClient.ModelClientResponseProtocol.Choice.Message"]],
+            [
+                {
+                    "role": "assistant",
+                    "id": response.id,
+                    "content": content if content else None,
+                    "tool_calls": tool_calls,
+                }
+            ],
+        )
 
     def cost(self, response):
         return self._usage_dict(response).get("cost", 0) + self.image_costs
