@@ -36,15 +36,19 @@ class Tool:
         description: Optional[str] = None,
         func_or_tool: Union["Tool", Callable[..., Any]],
         parameters_json_schema: Optional[dict[str, Any]] = None,
+        free_form: bool = False,
     ) -> None:
-        """Create a new Tool object.
+        """
+        Create a new Tool object.
 
         Args:
             name (str): The name of the tool.
             description (str): The description of the tool.
             func_or_tool (Union[Tool, Callable[..., Any]]): The function or Tool instance to create a Tool from.
             parameters_json_schema (Optional[dict[str, Any]]): A schema describing the parameters that the function accepts. If None, the schema will be generated from the function signature.
+            free_form (bool): Whether to allow the tool to be a free-form string.
         """
+        self._free_form: bool = free_form
         if isinstance(func_or_tool, Tool):
             self._name: str = name or func_or_tool.name
             self._description: str = description or func_or_tool.description
@@ -95,7 +99,7 @@ class Tool:
             agent (ConversableAgent): The agent to which the tool will be registered.
         """
         if self._func_schema:
-            agent.update_tool_signature(self._func_schema, is_remove=False)
+            agent.update_tool_signature(self._func_schema, is_remove=False, free_form=self._free_form)
         agent.register_for_llm()(self)
 
     def register_for_execution(self, agent: "ConversableAgent") -> None:
@@ -169,18 +173,26 @@ class Tool:
 
 
 @export_module("autogen.tools")
-def tool(name: Optional[str] = None, description: Optional[str] = None) -> Callable[[Callable[..., Any]], Tool]:
+def tool(
+    name: Optional[str] = None, description: Optional[str] = None, free_form: bool = False
+) -> Callable[[Callable[..., Any]], Tool]:
     """Decorator to create a Tool from a function.
 
     Args:
         name (str): The name of the tool.
         description (str): The description of the tool.
+        free_form (bool): Whether to allow the tool to be a free-form string.
 
     Returns:
         Callable[[Callable[..., Any]], Tool]: A decorator that creates a Tool from a function.
     """
 
     def decorator(func: Callable[..., Any]) -> Tool:
+        if free_form:
+            func_description = description or func.__doc__ or ""
+            schema = get_function_schema(func, name=name, description=func_description)
+            schema["type"] = "custom"
+            return Tool(name=name, description=func_description, func_or_tool=func, parameters_json_schema=schema)
         return Tool(name=name, description=description, func_or_tool=func)
 
     return decorator
