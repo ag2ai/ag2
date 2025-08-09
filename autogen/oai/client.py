@@ -212,6 +212,7 @@ OPENAI_FALLBACK_KWARGS = {
     "default_query",
     "http_client",
     "_strict_response_validation",
+    "webhook_secret",
 }
 
 AOPENAI_FALLBACK_KWARGS = {
@@ -231,6 +232,7 @@ AOPENAI_FALLBACK_KWARGS = {
     "_strict_response_validation",
     "base_url",
     "project",
+    "webhook_secret",
 }
 
 
@@ -247,6 +249,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
     stream: bool = False
+    verbosity: Optional[Literal["low", "medium", "high"]] = None
     #   The extra_body parameter flows from OpenAILLMConfigEntry to the LLM request through this path:
     #   1. Config Definition: extra_body is defined in OpenAILLMConfigEntry (autogen/oai/client.py:248)
     #   2. Parameter Classification: It's classified as an OpenAI client parameter (not AG2-specific) via the openai_kwargs property (autogen/oai/client.py:752-758)

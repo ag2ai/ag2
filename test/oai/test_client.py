@@ -632,7 +632,7 @@ def test_convert_system_role_to_user() -> None:
 
 def test_openai_llm_config_entry():
     openai_llm_config = OpenAILLMConfigEntry(
-        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly", verbosity="low"
     )
     assert openai_llm_config.api_type == "openai"
     assert openai_llm_config.model == "gpt-4o-mini"
@@ -644,6 +644,7 @@ def test_openai_llm_config_entry():
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "tags": [],
         "stream": False,
+        "verbosity": "low",
     }
     actual = openai_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"

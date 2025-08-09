@@ -554,3 +554,172 @@ def test_add_image_cost_with_non_image_first(mocked_openai_client):
     # The bug will try to check output[0].model_extra on a dict, which will fail
     # So no image cost will be added
     assert client.image_costs == 0
+
+
+# -----------------------------------------------------------------------------
+# Responses Client Tests
+# -----------------------------------------------------------------------------
+
+
+def test_parse_params_with_verbosity_high():
+    """Test _parse_params method transforms verbosity parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Test with verbosity parameter
+    params = {
+        "verbosity": "high",
+        "other_param": "value",
+        "api_key": "sk-xxx",
+        "organization": "org-yyy",
+        "project": "proj-zzz",
+        "base_url": "https://api.openai.com/v1",
+        "websocket_base_url": "wss://api.openai.com/v1",
+        "timeout": 30,
+        "max_retries": 2,
+        "default_headers": {"X-Test": "1"},
+        "default_query": {"foo": "bar"},
+        "http_client": None,
+        "_strict_response_validation": True,
+        "webhook_secret": "whsec-abc",
+    }
+    result = client._parse_params(params)
+
+    # Should transform verbosity into text format
+    assert "verbosity" not in params  # Original verbosity should be removed
+    assert "text" in params
+    assert params["text"]["verbosity"] == "high"
+    assert params["other_param"] == "value"  # Other params should remain unchanged
+    assert result == params
+
+
+def test_parse_params_with_verbosity_low():
+    """Test _parse_params method transforms verbosity parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Test with verbosity parameter
+    params = {
+        "verbosity": "low",
+        "other_param": "value",
+        "api_key": "sk-xxx",
+        "organization": "org-yyy",
+        "project": "proj-zzz",
+        "base_url": "https://api.openai.com/v1",
+        "websocket_base_url": "wss://api.openai.com/v1",
+        "timeout": 30,
+        "max_retries": 2,
+        "default_headers": {"X-Test": "1"},
+        "default_query": {"foo": "bar"},
+        "http_client": None,
+        "_strict_response_validation": True,
+        "webhook_secret": "whsec-abc",
+    }
+    result = client._parse_params(params)
+
+    # Should transform verbosity into text format
+    assert "verbosity" not in params  # Original verbosity should be removed
+    assert "text" in params
+    assert params["text"]["verbosity"] == "low"
+    assert params["other_param"] == "value"  # Other params should remain unchanged
+    assert result == params
+
+
+def test_parse_params_with_verbosity_medium():
+    """Test _parse_params method transforms verbosity parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Test with verbosity parameter
+    params = {
+        "verbosity": "medium",
+        "other_param": "value",
+        "api_key": "sk-xxx",
+        "organization": "org-yyy",
+        "project": "proj-zzz",
+        "base_url": "https://api.openai.com/v1",
+        "websocket_base_url": "wss://api.openai.com/v1",
+        "timeout": 30,
+        "max_retries": 2,
+        "default_headers": {"X-Test": "1"},
+        "default_query": {"foo": "bar"},
+        "http_client": None,
+        "_strict_response_validation": True,
+        "webhook_secret": "whsec-abc",
+    }
+    result = client._parse_params(params)
+
+    # Should transform verbosity into text format
+    assert "verbosity" not in params  # Original verbosity should be removed
+    assert "text" in params
+    assert params["text"]["verbosity"] == "medium"
+    assert params["other_param"] == "value"  # Other params should remain unchanged
+    assert result == params
+
+
+def test_message_retrieval_with_real_response_structure():
+    """Test message_retrieval method with realistic response structure including reasoning."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Create mock objects that mimic the real response structure
+    class MockReasoningItem:
+        def model_dump(self):
+            return {
+                "id": "rs_68969f552c488197a913a89ad1f323850cc7af4f09431b8a",
+                "summary": [],
+                "type": "reasoning",
+                "content": None,
+                "encrypted_content": None,
+                "status": None,
+            }
+
+    class MockOutputMessageMultipleBlocks:
+        def model_dump(self):
+            return {
+                "id": "msg_68969f57e34c8197b05c73b4335b57ac0cc7af4f09431b8a",
+                "content": [
+                    {
+                        "annotations": [],
+                        "text": "New York City: where 'rush hour' lasts all day",
+                        "type": "output_text",
+                        "logprobs": [],
+                    },
+                    {
+                        "annotations": [],
+                        "text": "and finding parking is a sport.",
+                        "type": "output_text",
+                        "logprobs": [],
+                    },
+                    {
+                        "annotations": [],
+                        "text": "TERMINATE",
+                        "type": "output_text",
+                        "logprobs": [],
+                    },
+                ],
+                "role": "assistant",
+                "status": "completed",
+                "type": "message",
+            }
+
+    # Create response with reasoning item (should be skipped) and message with multiple blocks
+    output = [MockReasoningItem(), MockOutputMessageMultipleBlocks()]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+
+    msg = msgs[0]
+    assert msg["role"] == "assistant"
+    assert msg["id"] == "fake-id"
+    assert len(msg["tool_calls"]) == 0
+
+    content = msg["content"]
+    assert len(content) == 1
+
+    text_item = content[0]
+    assert text_item["type"] == "text"
+    assert text_item["role"] == "assistant"
+    # Test that multiple blocks are joined with spaces
+    assert (
+        text_item["text"] == "New York City: where 'rush hour' lasts all day and finding parking is a sport. TERMINATE"
+    )
+    assert "content" not in text_item
