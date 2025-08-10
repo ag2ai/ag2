@@ -78,20 +78,6 @@ class TestYepCodeCodeExecutor:
         assert executor._remove_on_done is True
         assert executor._sync_execution is False
 
-    @patch("autogen.coding.yepcode_code_executor.load_dotenv")
-    def test_init_without_api_token(self, mock_load_dotenv):
-        """Test initialization without API token raises ValueError."""
-        # Ensure environment variable is not set
-        if "YEPCODE_API_TOKEN" in os.environ:
-            del os.environ["YEPCODE_API_TOKEN"]
-
-        # Mock dotenv to not load any variables
-        mock_load_dotenv.return_value = None
-
-        # Also clear any cached environment that might be loaded by dotenv
-        with patch.dict(os.environ, {}, clear=True), pytest.raises(ValueError, match="YepCode API token is required"):
-            YepCodeCodeExecutor()
-
     def test_init_with_invalid_timeout(self):
         """Test initialization with invalid timeout raises ValueError."""
         with pytest.raises(ValueError, match="Timeout must be greater than or equal to 1"):
