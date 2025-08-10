@@ -63,6 +63,9 @@ def get_max_token_limit(model: str = "gpt-3.5-turbo-0613") -> int:
         "gpt-4o-2024-11-20": 128000,
         "gpt-4o-mini": 128000,
         "gpt-4o-mini-2024-07-18": 128000,
+        "gpt-5": 128000,
+        "gpt-5-mini": 128000,
+        "gpt-5-nano": 128000,
     }
     return max_token_limit[model]
 
