@@ -194,6 +194,12 @@ class OpenAIResponsesClient:
             delta_messages.append(m)
         return delta_messages[::-1]
 
+    def _parse_params(self, params: dict[str, Any]) -> None:
+        if "verbosity" in params:
+            verbosity = params.pop("verbosity")
+            params["text"] = {"verbosity": verbosity}
+        return params
+
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
@@ -245,7 +251,14 @@ class OpenAIResponsesClient:
                         "output": content,
                     })
                     break
-            params["input"] = input_items[::-1]
+
+            # Ensure we have at least one valid input item
+            if input_items:
+                params["input"] = input_items[::-1]
+            else:
+                # If no valid input items were created, create a default one
+                # This prevents the API error about missing required parameters
+                params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
 
         # Initialize tools list
         tools_list = []
@@ -272,6 +285,11 @@ class OpenAIResponsesClient:
                 "Streaming a background response may introduce latency.",
                 UserWarning,
             )
+
+        # Validate that we have at least one of the required parameters
+        if not any(key in params for key in ["input", "previous_response_id", "prompt"]):
+            # If we still don't have any required parameters, create a minimal input
+            params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
 
         # ------------------------------------------------------------------
         # Structured output handling - mimic OpenAIClient behaviour
@@ -305,7 +323,6 @@ class OpenAIResponsesClient:
                     kwargs["text_format"] = type_to_response_format_param(rf)
                 if "response_format" in kwargs:
                     kwargs["text_format"] = kwargs.pop("response_format")
-
                 try:
                     return self._oai_client.responses.parse(**kwargs)
                 except TypeError as e:
@@ -324,20 +341,19 @@ class OpenAIResponsesClient:
             response = _create_or_parse(**params)
             self.previous_response_id = response.id
             return response
-
         # No structured output
+        params = self._parse_params(params)
         response = self._oai_client.responses.create(**params)
         self.previous_response_id = response.id
-
         # Accumulate image costs
         self._add_image_cost(response)
-
         return response
 
     def message_retrieval(self, response) -> list[str] | list["ModelClient.ModelClientResponseProtocol.Choice.Message"]:
         output = getattr(response, "output", [])
-        content = []  # list[dict[str, Union[str, dict[str, Any]]]]]
+        content = []
         tool_calls = []
+
         for item in output:
             # Convert pydantic objects to plain dicts for uniform handling
             if hasattr(item, "model_dump"):
@@ -345,16 +361,26 @@ class OpenAIResponsesClient:
 
             item_type = item.get("type")
 
-            # ------------------------------------------------------------------
-            # 1) Normal messages
-            # ------------------------------------------------------------------
+            # Skip reasoning items - they're not messages
+            if item_type == "reasoning":
+                continue
+
             if item_type == "message":
                 new_item = copy.deepcopy(item)
                 new_item["type"] = "text"
                 new_item["role"] = "assistant"
+
                 blocks = item.get("content", [])
                 if len(blocks) == 1 and blocks[0].get("type") == "output_text":
                     new_item["text"] = blocks[0]["text"]
+                elif len(blocks) > 0:
+                    # Handle multiple content blocks
+                    text_parts = []
+                    for block in blocks:
+                        if block.get("type") == "output_text":
+                            text_parts.append(block.get("text", ""))
+                    new_item["text"] = " ".join(text_parts)
+
                 if "content" in new_item:
                     del new_item["content"]
                 content.append(new_item)

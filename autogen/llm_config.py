@@ -293,7 +293,6 @@ class LLMConfigEntry(BaseModel, ABC):
     response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
     default_headers: Mapping[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
-
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
