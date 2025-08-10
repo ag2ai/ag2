@@ -257,7 +257,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
         None  # For VLLM - See here: https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#extra-parameters
     )
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None = None
     max_completion_tokens: int | None = None
 
     def create_client(self) -> ModelClient:
