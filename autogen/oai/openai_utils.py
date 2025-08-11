@@ -808,12 +808,10 @@ def config_list_from_dotenv(
         else:
             logging.warning(
                 "Unsupported configuration type encountered for a model. Please check your model_api_key_map."
-            )  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
+            )
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
-            logging.warning(
-                f"API key not found or empty for model {model}. Please ensure path to .env file is correct."
-            )  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
+            logging.warning("API key not found or empty for a model. Please ensure path to .env file is correct.")
             continue  # Skip this configuration and continue with the next
 
         # Add model to the configuration and append to the list

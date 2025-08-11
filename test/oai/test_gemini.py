@@ -457,31 +457,6 @@ class TestGeminiClient:
         ):
             gemini_client._convert_json_response(no_json_response)
 
-    def test_convert_type_null_to_nullable(self):
-        initial_schema = {
-            "type": "object",
-            "properties": {
-                "additional_notes": {
-                    "anyOf": [{"type": "string"}, {"type": "null"}],
-                    "default": None,
-                    "description": "Additional notes",
-                }
-            },
-            "required": [],
-        }
-
-        expected_schema = {
-            "properties": {
-                "additional_notes": {
-                    "anyOf": [{"type": "string"}, {"nullable": True}],
-                    "default": None,
-                    "description": "Additional notes",
-                }
-            },
-            "required": [],
-            "type": "object",
-        }
-
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)
 
