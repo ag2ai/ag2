@@ -807,7 +807,7 @@ def config_list_from_dotenv(
             config_dict = get_config(api_key=api_key, **config_without_key_var)
         else:
             logging.warning(
-                f"Unsupported type {type(config)} for model {model} configuration"
+                "Unsupported configuration type encountered for a model. Please check your model_api_key_map."
             )  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
