@@ -7,10 +7,9 @@
 import pydantic
 import pydantic.generics
 from pydantic import ConfigDict
-from typing_extensions import ClassVar
 
 __all__ = ["BaseModel"]
 
 
 class BaseModel(pydantic.BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow")

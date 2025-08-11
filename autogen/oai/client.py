@@ -516,7 +516,10 @@ class OpenAIClient:
                 if "stream" in kwargs:
                     kwargs.pop("stream")
 
-                if isinstance(kwargs["response_format"], dict):
+                if (
+                    isinstance(kwargs["response_format"], dict)
+                    and kwargs["response_format"].get("type") != "json_object"
+                ):
                     kwargs["response_format"] = {
                         "type": "json_schema",
                         "json_schema": {
