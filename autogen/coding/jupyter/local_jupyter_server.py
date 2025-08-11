@@ -53,9 +53,6 @@ class LocalJupyterServer(JupyterConnectable):
             log_max_bytes (int, optional): Max logfile size. Defaults to 1048576.
             log_backup_count (int, optional): Number of backups for rotating log. Defaults to 3.
         """
-        # Remove as soon as https://github.com/jupyter-server/kernel_gateway/issues/398 is fixed
-        if sys.platform == "win32":
-            raise ValueError("LocalJupyterServer is not supported on Windows due to kernelgateway bug.")
 
         # Check Jupyter gateway server is installed
         try:

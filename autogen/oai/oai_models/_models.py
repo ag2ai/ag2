@@ -4,7 +4,6 @@
 
 # Taken over from https://github.com/openai/openai-python/blob/main/src/openai/_models.py
 
-from typing import ClassVar
 
 import pydantic
 import pydantic.generics
@@ -14,4 +13,4 @@ __all__ = ["BaseModel"]
 
 
 class BaseModel(pydantic.BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow")

@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -17,20 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, Validatio
 if TYPE_CHECKING:
     from .oai.client import ModelClient
 
-    _KT = TypeVar("_KT")
-    _VT = TypeVar("_VT")
-
 __all__ = [
     "LLMConfig",
     "LLMConfigEntry",
     "register_llm_config",
 ]
-
-
-def _add_default_api_type(d: dict[str, Any]) -> dict[str, Any]:
-    if "api_type" not in d:
-        d["api_type"] = "openai"
-    return d
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -50,38 +41,123 @@ class MetaLLMConfig(type):
         return cls.current
 
 
+ConfigItem: TypeAlias = Union["LLMConfigEntry", dict[str, Any]]
+
+
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
-    def __init__(self, **kwargs: Any) -> None:
-        outside_properties = list((self._get_base_model_class()).model_json_schema()["properties"].keys())
-        outside_properties.remove("config_list")
+    def __init__(
+        self,
+        config_list: Iterable[ConfigItem] | dict[str, Any] = (),
+        temperature: float | None = None,
+        check_every_ms: int | None = None,
+        max_new_tokens: int | None = None,
+        allow_format_str_template: bool | None = None,
+        response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
+        timeout: int | None = None,
+        seed: int | None = None,
+        cache_seed: int | None = None,
+        parallel_tool_calls: bool | None = None,
+        tools: Iterable[Any] = (),
+        functions: Iterable[Any] = (),
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        routing_method: Literal["fixed_order", "round_robin"] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initializes the LLMConfig object.
 
-        if "config_list" in kwargs and isinstance(kwargs["config_list"], dict):
-            kwargs["config_list"] = [kwargs["config_list"]]
+        Args:
+            config_list: A list of LLM configuration entries or dictionaries.
+            temperature: The sampling temperature for LLM generation.
+            check_every_ms: The interval (in milliseconds) to check for updates.
+            max_new_tokens: The maximum number of new tokens to generate.
+            allow_format_str_template: Whether to allow format string templates.
+            response_format: The format of the response (e.g., JSON, text).
+            timeout: The timeout for LLM requests in seconds.
+            seed: The random seed for reproducible results.
+            cache_seed: The seed for caching LLM responses.
+            parallel_tool_calls: Whether to enable parallel tool calls.
+            tools: A list of tools available for the LLM.
+            functions: A list of functions available for the LLM.
+            max_tokens: The maximum number of tokens to generate.
+            top_p: The nucleus sampling probability.
+            routing_method: The method used to route requests (e.g., fixed_order, round_robin).
+            **kwargs: Additional keyword arguments for future extensions.
 
-        modified_kwargs = (
-            kwargs
-            if "config_list" in kwargs
-            else {
-                **{
-                    "config_list": [
-                        {k: v for k, v in kwargs.items() if k not in outside_properties},
-                    ]
-                },
-                **{k: v for k, v in kwargs.items() if k in outside_properties},
+        Examples:
+            ```python
+            # Example 1: create config from `kwargs` options
+            config = LLMConfig(
+                model="gpt-4o-mini",
+                api_key=os.environ["OPENAI_API_KEY"],
+            )
+
+            # Example 2: create config from `config_list` dictionary
+            config = LLMConfig(
+                config_list={
+                    "model": "gpt-4o-mini",
+                    "api_key": os.environ["OPENAI_API_KEY"],
+                }
+            )
+
+            # Example 3: create config from `config_list` list
+            config = LLMConfig(
+                config_list=[
+                    {
+                        "model": "gpt-4o-mini",
+                        "api_key": os.environ["OPENAI_API_KEY"],
+                    },
+                    {
+                        "model": "gpt-4",
+                        "api_key": os.environ["OPENAI_API_KEY"],
+                    },
+                ]
+            )
+            ```
+        """
+        final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
+
+        if isinstance(config_list, dict):
+            config_list = [config_list]
+
+        for c in (*config_list, kwargs):
+            if not c:
+                continue
+
+            if isinstance(c, LLMConfigEntry):
+                final_config_list.append(c)
+                continue
+
+            config_entity = {
+                "api_type": "openai",  # default api_type
+                **c,
             }
+
+            if max_tokens:
+                config_entity = {"max_tokens": max_tokens} | config_entity
+
+            if top_p:
+                config_entity = {"top_p": top_p} | config_entity
+
+            final_config_list.append(config_entity)
+
+        self._model = self._get_base_model_class()(
+            config_list=final_config_list,
+            temperature=temperature,
+            check_every_ms=check_every_ms,
+            max_new_tokens=max_new_tokens,
+            seed=seed,
+            allow_format_str_template=allow_format_str_template,
+            response_format=response_format,
+            timeout=timeout,
+            cache_seed=cache_seed,
+            tools=tools or [],
+            functions=functions or [],
+            parallel_tool_calls=parallel_tool_calls,
+            routing_method=routing_method,
         )
-
-        modified_kwargs["config_list"] = [
-            _add_default_api_type(v) if isinstance(v, dict) else v for v in modified_kwargs["config_list"]
-        ]
-        for x in ["max_tokens", "top_p"]:
-            if x in modified_kwargs:
-                modified_kwargs["config_list"] = [{**v, x: modified_kwargs[x]} for v in modified_kwargs["config_list"]]
-                modified_kwargs.pop(x)
-
-        self._model = self._get_base_model_class()(**modified_kwargs)
 
     # used by BaseModel to create instance variables
     def __enter__(self) -> "LLMConfig":
@@ -264,10 +340,13 @@ class LLMConfig(metaclass=MetaLLMConfig):
                 functions: list[Any] = Field(default_factory=list)
                 parallel_tool_calls: bool | None = None
 
-                config_list: Annotated[  # type: ignore[valid-type]
-                    list[Annotated[Union[llm_config_classes], Field(discriminator="api_type")]],  # noqa: UP007
-                    Field(default_factory=list, min_length=1),
-                ]
+                config_list: list[  # type: ignore[valid-type]
+                    Annotated[
+                        llm_config_classes,
+                        Field(discriminator="api_type"),
+                    ],
+                ] = Field(default_factory=list, min_length=1)
+
                 routing_method: Literal["fixed_order", "round_robin"] | None = None
 
                 # Following field is configuration for pydantic to disallow extra fields
