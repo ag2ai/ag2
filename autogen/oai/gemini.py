@@ -68,6 +68,7 @@ with optional_import_block():
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
+    from google.genai import types
     from google.genai.types import (
         Content,
         FinishReason,
@@ -113,6 +114,8 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     safety_settings: list[dict[str, Any]] | dict[str, Any] | None = None
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_config: ToolConfig | None = None
+    proxy: str | None = None
+    """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -179,6 +182,7 @@ class GeminiClient:
             )
 
         self.api_version = kwargs.get("api_version")
+        self.proxy = kwargs.get("proxy")
 
         # Store the response format, if provided (for structured outputs)
         self._response_format: type[BaseModel] | None = None
@@ -237,8 +241,14 @@ class GeminiClient:
                 "See this [LLM configuration tutorial](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/) for more details."
             )
 
-        params.get("api_type", "google")  # not used
-        http_options = {"api_version": self.api_version} if self.api_version else None
+        http_options = types.HttpOptions()
+        if self.proxy:
+            http_options.client_args = {"proxy": self.proxy}
+            http_options.async_client_args = {"proxy": self.proxy}
+
+        if self.api_version:
+            http_options.api_version = self.api_version
+
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
