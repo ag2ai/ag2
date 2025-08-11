@@ -351,7 +351,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
                 routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
 
                 # Following field is configuration for pydantic to disallow extra fields
-                model_config = {"extra": "forbid"}
+                model_config = ConfigDict(extra="forbid")
 
             LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
 
