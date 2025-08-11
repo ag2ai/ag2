@@ -148,17 +148,6 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
     assert wrapper._clients[1].call_count == 0
 
 
-@pytest.mark.parametrize(
-    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
-)
-def test_fixed_order_routing_successful_first_client(fixture_name: str, request: pytest.FixtureRequest):
-    wrapper = request.getfixturevalue(fixture_name)
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client1" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 0
-
-
 def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
     # First call
     response1 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 1"}])
