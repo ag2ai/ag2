@@ -493,7 +493,7 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
         assert all(config["model"] != "gpt-4" for config in config_list), (
             "gpt-4 configuration found, but was not expected"
         )
-        assert "API key not found or empty for model gpt-4" in caplog.text
+        assert "API key not found or empty for a model" in caplog.text
 
 
 def test_get_config_list():
