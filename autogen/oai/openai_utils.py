@@ -806,12 +806,14 @@ def config_list_from_dotenv(
             config_without_key_var = {k: v for k, v in config.items() if k != "api_key_env_var"}
             config_dict = get_config(api_key=api_key, **config_without_key_var)
         else:
-            logging.warning(f"Unsupported type {type(config)} for model {model} configuration")
+            logging.warning(
+                f"Unsupported type {type(config)} for model {model} configuration"
+            )  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
             logging.warning(
                 f"API key not found or empty for model {model}. Please ensure path to .env file is correct."
-            )
+            )  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak
             continue  # Skip this configuration and continue with the next
 
         # Add model to the configuration and append to the list

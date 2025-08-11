@@ -342,7 +342,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
                 config_list: list[  # type: ignore[valid-type]
                     Annotated[
-                        llm_config_classes,
+                        Union[llm_config_classes],  # noqa: UP007
                         Field(discriminator="api_type"),
                     ],
                 ] = Field(default_factory=list, min_length=1)
