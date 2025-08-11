@@ -898,6 +898,13 @@ class OpenAIWrapper:
             if key in config:
                 openai_config[key] = config[key]
 
+    def _configure_openai_config_for_gemini(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
+        """Update openai_config with additional gemini genai configs."""
+        optional_keys = ["proxy"]
+        for key in optional_keys:
+            if key in config:
+                openai_config[key] = config[key]
+
     def _register_default_client(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         """Create a client with the given config to override openai_config,
         after removing extra kwargs.
@@ -938,6 +945,7 @@ class OpenAIWrapper:
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
+                self._configure_openai_config_for_gemini(config, openai_config)
                 client = GeminiClient(response_format=response_format, **openai_config)
                 self._clients.append(client)
             elif api_type is not None and api_type.startswith("anthropic"):
