@@ -13,7 +13,7 @@ from functools import partial
 from types import MethodType
 from typing import Annotated, Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
@@ -1208,8 +1208,7 @@ class SwarmResult(BaseModel):
         if self.context_variables is None:
             self.context_variables = ContextVariables()
 
-    class Config:  # Add this inner class
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __str__(self) -> str:
         return self.values

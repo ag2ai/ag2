@@ -837,7 +837,7 @@ class TestLLMConfig:
 
     def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         with pytest.raises(ValidationError):  # Changed from ValueError to ValidationError
-            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")
+            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")  # type: ignore[arg-type]
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)
