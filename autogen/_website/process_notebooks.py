@@ -309,7 +309,7 @@ def post_process_mdx(
     # Convert callout blocks
     content = convert_callout_blocks(content)
 
-    # Convert mdx image syntax to mintly image syntax
+    # Convert mdx image syntax to mintlify image syntax
     content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
 
     # ensure editUrl is present
