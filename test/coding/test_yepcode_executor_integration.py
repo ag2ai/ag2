@@ -4,14 +4,16 @@
 """Integration tests for YepCodeCodeExecutor with real API calls."""
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 from autogen.coding import CodeBlock
 
 try:
-    from autogen.coding import YepCodeCodeExecutor
     import dotenv
+
+    from autogen.coding import YepCodeCodeExecutor
 
     _has_yepcode = True
 except ImportError:
