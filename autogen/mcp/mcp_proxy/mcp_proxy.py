@@ -116,12 +116,12 @@ class MCPProxy:
         q_params = set(params_names) - path_params - {body} - {"security"}
 
         return q_params, path_params, body, security
-    
+
     def get_mcp(self, **settings: Any) -> "FastMCP":
         # Try new signature first (name=). Fall back to old (title=).
         try:
-            mcp = FastMCP(name=self._title, **settings)   # newer mcp
-        except TypeError:
+            mcp = FastMCP(name=self._title, **settings)  # newer mcp
+        except TypeError:  # pragma: no cover
             mcp = FastMCP(title=self._title, **settings)  # older mcp
 
         for func in self._registered_funcs:
