@@ -6,7 +6,6 @@ on:
     types: [checks_requested]
   workflow_dispatch: # allows manual triggering of the workflow
 
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
@@ -74,6 +73,8 @@ jobs:
     needs: test-paths-filter
     if: needs.test-paths-filter.outputs.hasChanges == 'true'
     runs-on: ubuntu-latest
+    env:
+      YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

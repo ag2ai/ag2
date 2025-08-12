@@ -51,6 +51,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       AUTOGEN_USE_DOCKER: ${{ matrix.os != 'ubuntu-latest'  && 'False' }}
+      YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,7 +85,7 @@ jobs:
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
       - name: Install optional dependencies for code executors
         run: |
-          uv pip install --system -e ".[jupyter-executor]"
+          uv pip install --system -e ".[jupyter-executor,yepcode]"
           python -m ipykernel install --user --name python3
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
