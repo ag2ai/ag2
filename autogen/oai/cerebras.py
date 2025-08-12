@@ -57,6 +57,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
     top_p: Optional[float] = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    reasoning_effort: Optional[str] = None
 
     @field_validator("top_p", mode="before")
     @classmethod
@@ -89,7 +90,7 @@ class CerebrasClient:
         )
 
         if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Crebras, it will be ignored.", UserWarning)
+            warnings.warn("response_format is not supported for Cerebras, it will be ignored.", UserWarning)
 
     def message_retrieval(self, response: ChatCompletion) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -132,9 +133,11 @@ class CerebrasClient:
         cerebras_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
         cerebras_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
         cerebras_params["temperature"] = validate_parameter(
-            params, "temperature", (int, float), True, 1, (0, 1.5), None
+            params, "temperature", (int, float), True, 1.0, (0, 1.5), None
         )
-        cerebras_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+        cerebras_params["top_p"] = validate_parameter(
+            params, "top_p", (int, float), True, None, (0.0, 1.0), None
+        )
         cerebras_params["tool_choice"] = validate_parameter(
             params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
         )
