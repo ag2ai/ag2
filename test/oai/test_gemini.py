@@ -29,7 +29,11 @@ with optional_import_block() as result:
 
 def test_gemini_llm_config_entry():
     gemini_llm_config = GeminiLLMConfigEntry(
-        model="gemini-2.0-flash-lite", api_key="dummy_api_key", project_id="fake-project-id", location="us-west1"
+        model="gemini-2.0-flash-lite",
+        api_key="dummy_api_key",
+        project_id="fake-project-id",
+        location="us-west1",
+        proxy="http://mock-test-proxy:90/",
     )
     expected = {
         "api_type": "google",
@@ -39,6 +43,7 @@ def test_gemini_llm_config_entry():
         "location": "us-west1",
         "stream": False,
         "tags": [],
+        "proxy": "http://mock-test-proxy:90/",
     }
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual
@@ -476,50 +481,6 @@ class TestGeminiClient:
             "required": [],
             "type": "object",
         }
-        converted_schema = GeminiClient._convert_type_null_to_nullable(initial_schema)
-        assert converted_schema == expected_schema
-
-    @pytest.fixture
-    def nested_function_parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "$defs": {
-                        "Subquestion": {
-                            "properties": {
-                                "question": {
-                                    "description": "The original question.",
-                                    "title": "Question",
-                                    "type": "string",
-                                }
-                            },
-                            "required": ["question"],
-                            "title": "Subquestion",
-                            "type": "object",
-                        }
-                    },
-                    "properties": {
-                        "question": {
-                            "description": "The original question.",
-                            "title": "Question",
-                            "type": "string",
-                        },
-                        "subquestions": {
-                            "description": "The subquestions that need to be answered.",
-                            "items": {"$ref": "#/$defs/Subquestion"},
-                            "title": "Subquestions",
-                            "type": "array",
-                        },
-                    },
-                    "required": ["question", "subquestions"],
-                    "title": "Task",
-                    "type": "object",
-                    "description": "task",
-                }
-            },
-            "required": ["task"],
-        }
 
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)
@@ -557,6 +518,53 @@ class TestGeminiClient:
             "required": ["task"],
         }
         assert result == expected_result, result
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    def test_generation_config_with_proxy(self, mock_generate_content_config, mock_generative_client, gemini_client):
+        """Test that proxy parameter is properly set in Gemini LLM Config"""
+        # Mock setup
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Mock response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create with proxy parameter
+        gemini_client.create({
+            "model": "gemini-2.5-flash",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "proxy": "http://mock-test-proxy:90/",
+            "temperature": 0.7,
+            "max_tokens": 265,
+            "top_p": 0.5,
+            "top_k": 3,
+        })
+
+        # Verify GenerateContentConfig was called with correct parameters
+        mock_generate_content_config.assert_called_once()
+        call_kwargs = mock_generate_content_config.call_args.kwargs
+
+        # Check that generation config parameters are correctly mapped
+        assert call_kwargs["proxy"] == "http://mock-test-proxy:90/", "Proxy parameter should be set in the config"
+        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
+        assert call_kwargs["max_output_tokens"] == 265, "max_tokens should be mapped to max_output_tokens"
+        assert call_kwargs["top_p"] == 0.5, "top_p parameter should be passed to generation config"
+        assert call_kwargs["top_k"] == 3, "top_k parameter should be passed to generation config"
 
     def test_create_gemini_function_parameters_with_nested_parameters(
         self, nested_function_parameters: dict[str, Any]
