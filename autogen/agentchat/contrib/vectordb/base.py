@@ -4,20 +4,12 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from collections.abc import Mapping, Sequence
-from typing import (
-    Any,
-    Callable,
-    Optional,
-    Protocol,
-    TypedDict,
-    Union,
-    runtime_checkable,
-)
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Protocol, TypedDict, runtime_checkable
 
-Metadata = Union[Mapping[str, Any], None]
-Vector = Union[Sequence[float], Sequence[int]]
-ItemID = Union[str, int]  # chromadb doesn't support int ids, VikingDB does
+Metadata = Mapping[str, Any] | None
+Vector = Sequence[float] | Sequence[int]
+ItemID = str | int  # chromadb doesn't support int ids, VikingDB does
 
 
 class Document(TypedDict):
@@ -31,8 +23,8 @@ class Document(TypedDict):
 
     id: ItemID
     content: str
-    metadata: Optional[Metadata]
-    embedding: Optional[Vector]
+    metadata: Metadata | None
+    embedding: Vector | None
 
 
 """QueryResults is the response from the vector database for a query/queries.
@@ -63,7 +55,7 @@ class VectorDB(Protocol):
 
     active_collection: Any = None
     type: str = ""
-    embedding_function: Optional[Callable[[list[str]], list[list[float]]]] = (
+    embedding_function: Callable[[list[str]], list[list[float]]] | None = (
         None  # embeddings = embedding_function(sentences)
     )
 
@@ -172,7 +164,7 @@ class VectorDB(Protocol):
         ...
 
     def get_docs_by_ids(
-        self, ids: list[ItemID] = None, collection_name: str = None, include: Optional[list[str]] = None, **kwargs: Any
+        self, ids: list[ItemID] = None, collection_name: str = None, include: list[str] | None = None, **kwargs: Any
     ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids.
 

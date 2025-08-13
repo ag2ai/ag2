@@ -28,7 +28,7 @@ import math
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import Field, ValidationInfo, field_validator
 
@@ -50,14 +50,14 @@ CEREBRAS_PRICING_1K = {
 @register_llm_config
 class CerebrasLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cerebras"] = "cerebras"
-    max_tokens: Optional[int] = None
-    seed: Optional[int] = None
+    max_tokens: int | None = None
+    seed: int | None = None
     stream: bool = False
     temperature: float = Field(default=1.0, ge=0.0, le=1.5)
-    top_p: Optional[float] = None
+    top_p: float | None = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "required"]] = None
-    reasoning_effort: Optional[str] = None
+    tool_choice: Literal["none", "auto", "required"] | None = None
+    reasoning_effort: str | None = None
 
     @field_validator("top_p", mode="before")
     @classmethod

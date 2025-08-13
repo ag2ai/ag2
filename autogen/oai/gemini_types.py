@@ -4,7 +4,7 @@
 
 import enum
 import warnings
-from typing import Any, Optional, Type, TypeVar, Union, get_args, get_origin
+from typing import Any, Optional, TypeVar, Union, get_args, get_origin
 
 from pydantic import BaseModel as BaseModel
 from pydantic import ConfigDict, Field, alias_generators
@@ -15,7 +15,6 @@ def _remove_extra_fields(model: Any, response: dict[str, object]) -> None:
 
     Mutates the response in place.
     """
-
     key_values = list(response.items())
 
     for key, value in key_values:
@@ -64,7 +63,7 @@ class CommonBaseModel(BaseModel):
     )
 
     @classmethod
-    def _from_response(cls: Type[T], *, response: dict[str, object], kwargs: dict[str, object]) -> T:
+    def _from_response(cls: type[T], *, response: dict[str, object], kwargs: dict[str, object]) -> T:
         # To maintain forward compatibility, we need to remove extra fields from
         # the response.
         # We will provide another mechanism to allow users to access these fields.
@@ -91,7 +90,7 @@ class CaseInSensitiveEnum(str, enum.Enum):
                 try:
                     # Creating a enum instance based on the value
                     # We need to use super() to avoid infinite recursion.
-                    unknown_enum_val = super(CaseInSensitiveEnum, cls).__new__(cls, value)
+                    unknown_enum_val = super().__new__(cls, value)
                     unknown_enum_val._name_ = str(value)  # pylint: disable=protected-access
                     unknown_enum_val._value_ = value  # pylint: disable=protected-access
                     return unknown_enum_val
@@ -117,11 +116,11 @@ class LatLng(CommonBaseModel):
     WGS84 standard</a>. Values must be within normalized ranges.
     """
 
-    latitude: Optional[float] = Field(
+    latitude: float | None = Field(
         default=None,
         description="""The latitude in degrees. It must be in the range [-90.0, +90.0].""",
     )
-    longitude: Optional[float] = Field(
+    longitude: float | None = Field(
         default=None,
         description="""The longitude in degrees. It must be in the range [-180.0, +180.0]""",
     )
@@ -130,8 +129,8 @@ class LatLng(CommonBaseModel):
 class FunctionCallingConfig(CommonBaseModel):
     """Function calling config."""
 
-    mode: Optional[FunctionCallingConfigMode] = Field(default=None, description="""Optional. Function calling mode.""")
-    allowed_function_names: Optional[list[str]] = Field(
+    mode: FunctionCallingConfigMode | None = Field(default=None, description="""Optional. Function calling mode.""")
+    allowed_function_names: list[str] | None = Field(
         default=None,
         description="""Optional. Function names to call. Only set when the Mode is ANY. Function names should match [FunctionDeclaration.name]. With mode set to ANY, model will predict a function call from the set of function names provided.""",
     )
@@ -140,8 +139,8 @@ class FunctionCallingConfig(CommonBaseModel):
 class RetrievalConfig(CommonBaseModel):
     """Retrieval config."""
 
-    lat_lng: Optional[LatLng] = Field(default=None, description="""Optional. The location of the user.""")
-    language_code: Optional[str] = Field(default=None, description="""The language code of the user.""")
+    lat_lng: LatLng | None = Field(default=None, description="""Optional. The location of the user.""")
+    language_code: str | None = Field(default=None, description="""The language code of the user.""")
 
 
 class ToolConfig(CommonBaseModel):
@@ -150,7 +149,7 @@ class ToolConfig(CommonBaseModel):
     This config is shared for all tools provided in the request.
     """
 
-    function_calling_config: Optional[FunctionCallingConfig] = Field(
+    function_calling_config: FunctionCallingConfig | None = Field(
         default=None, description="""Optional. Function calling config."""
     )
-    retrieval_config: Optional[RetrievalConfig] = Field(default=None, description="""Optional. Retrieval config.""")
+    retrieval_config: RetrievalConfig | None = Field(default=None, description="""Optional. Retrieval config.""")

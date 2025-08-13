@@ -28,8 +28,8 @@ class FalkorGraphQueryEngine:
         name: str,
         host: str = "127.0.0.1",
         port: int = 6379,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        username: str | None = None,
+        password: str | None = None,
         model: Optional["GenerativeModel"] = None,
         ontology: Optional["Ontology"] = None,
     ):
@@ -57,7 +57,7 @@ class FalkorGraphQueryEngine:
         self.model = model or OpenAiGenerativeModel("gpt-4o")
         self.model_config = KnowledgeGraphModelConfig.with_model(model)
         self.ontology = ontology
-        self.knowledge_graph: Optional["KnowledgeGraph"] = None  # type: ignore[no-any-unimported]
+        self.knowledge_graph: KnowledgeGraph | None = None  # type: ignore[no-any-unimported]
         self.falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
 
     def connect_db(self) -> None:

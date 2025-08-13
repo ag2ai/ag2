@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -25,10 +25,11 @@ __all__ = ["GroupChatConfig", "GroupChatTarget"]
 class GroupChatConfig(BaseModel):
     """Configuration for a group chat transition target.
 
-    Note: If context_variables are not passed in, the outer context variables will be passed in"""
+    Note: If context_variables are not passed in, the outer context variables will be passed in
+    """
 
     pattern: "Pattern"
-    messages: Union[list[dict[str, Any]], str]
+    messages: list[dict[str, Any]] | str
     max_rounds: int = 20
 
 
@@ -88,10 +89,10 @@ class GroupChatTarget(TransitionTarget):
         # Define the reply function that will run the group chat
         def group_chat_reply(
             agent: "ConversableAgent",
-            messages: Optional[list[dict[str, Any]]] = None,
+            messages: list[dict[str, Any]] | None = None,
             sender: Optional["Agent"] = None,
-            config: Optional[Any] = None,
-        ) -> tuple[bool, Optional[dict[str, Any]]]:
+            config: Any | None = None,
+        ) -> tuple[bool, dict[str, Any] | None]:
             """Run the inner group chat and return its results as a reply."""
             # Get the configuration stored directly on the agent
             group_config = agent._group_chat_config  # type: ignore[attr-defined]

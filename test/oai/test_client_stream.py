@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
-from typing import Any, Optional, Union
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -49,7 +49,7 @@ def test_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
 def test__update_dict_from_chunk() -> None:
     # dictionaries and lists are not supported
     mock = MagicMock()
-    empty_collections: list[Union[list[Any], dict[str, Any]]] = [{}, []]
+    empty_collections: list[list[Any] | dict[str, Any]] = [{}, []]
     for c in empty_collections:
         mock.c = c
         with pytest.raises(NotImplementedError):
@@ -169,7 +169,7 @@ def test__update_tool_calls_from_chunk() -> None:
         ),
     ]
 
-    full_tool_calls: list[Optional[dict[str, Any]]] = [None, None]
+    full_tool_calls: list[dict[str, Any] | None] = [None, None]
     completion_tokens = 0
     for tool_calls_chunk in tool_calls_chunks:
         index = tool_calls_chunk.index

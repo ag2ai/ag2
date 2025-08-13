@@ -4,7 +4,8 @@
 
 import inspect
 import sys
-from typing import Annotated, Any, Callable, Optional, get_type_hints
+from collections.abc import Callable
+from typing import Annotated, Any, get_type_hints
 
 import pytest
 from pydantic import BaseModel
@@ -194,14 +195,14 @@ class TestHelperFunctions:
     def f_sync(  # type: ignore[misc]
         a: int,  # noqa: N805
         b: Annotated[int, "b description"],
-        c: Annotated[Optional[int], "c description"] = None,
+        c: Annotated[int | None, "c description"] = None,
     ) -> int:
         return a + b
 
     def f_async(  # type: ignore[misc]
         a: int,  # noqa: N805
         b: Annotated[int, "b description"],
-        c: Annotated[Optional[int], "c description"] = None,
+        c: Annotated[int | None, "c description"] = None,
     ) -> int:
         return a + b
 

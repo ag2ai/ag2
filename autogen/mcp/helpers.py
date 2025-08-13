@@ -5,21 +5,21 @@ import asyncio
 import os
 import signal
 from asyncio.subprocess import PIPE, Process, create_subprocess_exec
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Dict, Optional
 
 
 @asynccontextmanager
 async def run_streamable_http_client(
-    *, mcp_server_path: str, env_vars: Optional[Dict[str, str]] = None, startup_wait_secs: float = 5.0
+    *, mcp_server_path: str, env_vars: dict[str, str] | None = None, startup_wait_secs: float = 5.0
 ) -> AsyncGenerator[Process, None]:
-    """
-    Async context manager to run a Python subprocess for streamable-http with custom env vars.
+    """Async context manager to run a Python subprocess for streamable-http with custom env vars.
 
     Args:
         mcp_server_path: Path to the Python script to run.
         env_vars: Environment variables to export to the subprocess.
         startup_wait_secs: Time to wait for the server to start (in seconds).
+
     Yields:
         An asyncio.subprocess.Process object.
     """

@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 from unittest.mock import MagicMock
 
 from anyio import Event
@@ -46,7 +47,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def trace(
-    mock: MagicMock, *, precall_event: Optional[Event] = None, postcall_event: Optional[Event] = None
+    mock: MagicMock, *, precall_event: Event | None = None, postcall_event: Event | None = None
 ) -> Callable[[F], F]:
     """Decorator to trace a function
 

@@ -27,7 +27,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -59,7 +59,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
     temperature: float = Field(default=1, ge=0, le=2)
     top_p: float = Field(default=None)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    tool_choice: Literal["none", "auto", "required"] | None = None
 
     def create_client(self):
         raise NotImplementedError("GroqLLMConfigEntry.create_client is not implemented.")

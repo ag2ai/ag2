@@ -4,6 +4,7 @@
 
 # Taken over from https://github.com/openai/openai-python/blob/main/src/openai/_models.py
 
+
 import pydantic
 import pydantic.generics
 from pydantic import ConfigDict

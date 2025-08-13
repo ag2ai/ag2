@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import json
-from typing import Any, Optional, Union
+from typing import Any
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
@@ -176,8 +176,8 @@ class AgentOptimizer:
     def __init__(
         self,
         max_actions_per_step: int,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        optimizer_model: Optional[str] = "gpt-4-1106-preview",
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        optimizer_model: str | None = "gpt-4-1106-preview",
     ):
         """(These APIs are experimental and may change in the future.)
 

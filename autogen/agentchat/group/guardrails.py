@@ -5,7 +5,7 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -46,7 +46,7 @@ class Guardrail(ABC):
     """Abstract base class for guardrails."""
 
     def __init__(
-        self, name: str, condition: str, target: "TransitionTarget", activation_message: Optional[str] = None
+        self, name: str, condition: str, target: "TransitionTarget", activation_message: str | None = None
     ) -> None:
         self.name = name
         self.condition = condition
@@ -58,7 +58,7 @@ class Guardrail(ABC):
     @abstractmethod
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
+        context: str | list[dict[str, Any]],
     ) -> GuardrailResult:
         """Checks the text against the guardrail and returns a GuardrailResult.
 
@@ -80,7 +80,7 @@ class LLMGuardrail(Guardrail):
         condition: str,
         target: "TransitionTarget",
         llm_config: "LLMConfig",
-        activation_message: Optional[str] = None,
+        activation_message: str | None = None,
     ) -> None:
         super().__init__(name, condition, target, activation_message)
 
@@ -98,7 +98,7 @@ You will activate the guardrail only if the condition is met.
 
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
+        context: str | list[dict[str, Any]],
     ) -> GuardrailResult:
         """Checks the context against the guardrail using an LLM.
 
@@ -131,7 +131,7 @@ class RegexGuardrail(Guardrail):
         name: str,
         condition: str,
         target: "TransitionTarget",
-        activation_message: Optional[str] = None,
+        activation_message: str | None = None,
     ) -> None:
         super().__init__(name, condition, target, activation_message)
         # Compile the regular expression condition
@@ -142,7 +142,7 @@ class RegexGuardrail(Guardrail):
 
     def check(
         self,
-        context: Union[str, list[dict[str, Any]]],
+        context: str | list[dict[str, Any]],
     ) -> GuardrailResult:
         """Checks the context against the guardrail using a regular expression.
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import tempfile
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 

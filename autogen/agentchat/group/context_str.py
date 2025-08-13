@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -20,7 +19,7 @@ class ContextStr(BaseModel):
     """The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders and that string format will be able to replace all values."""
     template: str
 
-    def format(self, context_variables: ContextVariables) -> Optional[str]:
+    def format(self, context_variables: ContextVariables) -> str | None:
         """Substitute context variables into the string.
 
         Args:
@@ -29,7 +28,6 @@ class ContextStr(BaseModel):
         Returns:
             Optional[str]: The formatted string with context variables substituted.
         """
-
         context = context_variables.to_dict()
 
         if not context:

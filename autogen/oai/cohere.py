@@ -34,7 +34,7 @@ import os
 import sys
 import time
 import warnings
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -70,16 +70,16 @@ COHERE_PRICING_1K = {
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
     temperature: float = Field(default=0.3, ge=0)
-    max_tokens: Optional[int] = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=None, ge=0)
     k: int = Field(default=0, ge=0, le=500)
     p: float = Field(default=0.75, ge=0.01, le=0.99)
-    seed: Optional[int] = None
+    seed: int | None = None
     frequency_penalty: float = Field(default=0, ge=0, le=1)
     presence_penalty: float = Field(default=0, ge=0, le=1)
-    client_name: Optional[str] = None
+    client_name: str | None = None
     strict_tools: bool = False
     stream: bool = False
-    tool_choice: Optional[Literal["NONE", "REQUIRED"]] = None
+    tool_choice: Literal["NONE", "REQUIRED"] | None = None
 
     def create_client(self):
         raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
@@ -104,7 +104,7 @@ class CohereClient:
         )
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -402,8 +402,10 @@ class CohereClient:
 
     def _convert_json_response(self, response: str) -> Any:
         """Extract and validate JSON response from the output for structured outputs.
+
         Args:
             response (str): The response from the API.
+
         Returns:
             Any: The parsed JSON response.
         """

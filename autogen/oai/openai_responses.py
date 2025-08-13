@@ -4,7 +4,7 @@
 
 import copy
 import warnings
-from typing import TYPE_CHECKING, Any, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -48,9 +48,8 @@ VALID_SIZES = {
 
 def calculate_openai_image_cost(
     model: str = "gpt-image-1", size: str = "1024x1024", quality: str = "high"
-) -> Tuple[float, str]:
-    """
-    Calculate the cost for a single image generation.
+) -> tuple[float, str]:
+    """Calculate the cost for a single image generation.
 
     Args:
         model: Model name ("gpt-image-1", "dall-e-3" or "dall-e-2")
@@ -114,7 +113,7 @@ class OpenAIResponsesClient:
     def __init__(
         self,
         client: "OpenAI",
-        response_format: Union[BaseModel, dict[str, Any], None] = None,
+        response_format: BaseModel | dict[str, Any] | None = None,
     ):
         self._oai_client = client  # plain openai.OpenAI instance
         self.response_format = response_format  # kept for parity but unused for now
@@ -350,9 +349,7 @@ class OpenAIResponsesClient:
         self._add_image_cost(response)
         return response
 
-    def message_retrieval(
-        self, response
-    ) -> Union[list[str], list["ModelClient.ModelClientResponseProtocol.Choice.Message"]]:
+    def message_retrieval(self, response) -> list[str] | list["ModelClient.ModelClientResponseProtocol.Choice.Message"]:
         output = getattr(response, "output", [])
         content = []
         tool_calls = []

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -28,12 +28,12 @@ class WebSurferAgent(ConversableAgent):
     def __init__(
         self,
         *,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        web_tool_llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        web_tool_llm_config: LLMConfig | dict[str, Any] | None = None,
         web_tool: Literal[
             "browser_use", "crawl4ai", "duckduckgo", "firecrawl", "perplexity", "tavily", "searxng"
         ] = "browser_use",
-        web_tool_kwargs: Optional[dict[str, Any]] = None,
+        web_tool_kwargs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the WebSurferAgent.

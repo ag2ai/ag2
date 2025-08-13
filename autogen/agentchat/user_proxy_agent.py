@@ -4,7 +4,8 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal
 
 from ..doc_utils import export_module
 from ..llm_config import LLMConfig
@@ -35,15 +36,15 @@ class UserProxyAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "TERMINATE", "NEVER"] = "ALWAYS",
-        function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = {},
-        default_auto_reply: Optional[Union[str, dict[str, Any]]] = "",
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = False,
-        system_message: Optional[Union[str, list[str]]] = "",
-        description: Optional[str] = None,
+        function_map: dict[str, Callable[..., Any]] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = {},
+        default_auto_reply: str | dict[str, Any] | None = "",
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = False,
+        system_message: str | list[str] | None = "",
+        description: str | None = None,
         **kwargs: Any,
     ):
         """Args:

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -24,7 +24,7 @@ __all__ = ["GroupManagerTarget"]
 def prepare_groupchat_auto_speaker(
     groupchat: "GroupChat",
     last_group_agent: "ConversableAgent",
-    group_chat_manager_selection_msg: Optional[Any],
+    group_chat_manager_selection_msg: Any | None,
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
@@ -88,7 +88,7 @@ class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
     # We will replace {agentlist} with another term and return it later for use with the internal group chat auto speaker selection
     # Otherwise our format will fail
     @field_validator("context_str_template", mode="before")
-    def _replace_agentlist_placeholder(cls: Type["GroupManagerSelectionMessageContextStr"], v: Any) -> Union[str, Any]:  # noqa: N805
+    def _replace_agentlist_placeholder(cls: type["GroupManagerSelectionMessageContextStr"], v: Any) -> str | Any:  # noqa: N805
         """Replace {agentlist} placeholder before validation/assignment."""
         if isinstance(v, str):
             if "{agentlist}" in v:
@@ -112,7 +112,7 @@ class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
 class GroupManagerTarget(TransitionTarget):
     """Target that represents an agent by name."""
 
-    selection_message: Optional[GroupManagerSelectionMessage] = None
+    selection_message: GroupManagerSelectionMessage | None = None
 
     def can_resolve_for_speaker_selection(self) -> bool:
         """Check if the target can resolve for speaker selection."""

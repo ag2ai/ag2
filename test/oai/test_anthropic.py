@@ -16,8 +16,9 @@ with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
+from typing import Literal
+
 from pydantic import BaseModel
-from typing_extensions import Literal
 
 
 @pytest.fixture

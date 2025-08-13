@@ -6,25 +6,15 @@
 # SPDX-License-Identifier: MIT
 
 from collections import namedtuple
+from collections.abc import Awaitable, Callable, Generator, Iterable, Sequence
 from contextlib import AsyncExitStack, ExitStack
 from functools import partial
 from inspect import Parameter, unwrap
 from itertools import chain
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Generator,
     Generic,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
 )
 
 import anyio
@@ -54,26 +44,23 @@ class ResponseModel(BaseModel, Generic[T]):
 
 
 class CallModel(Generic[P, T]):
-    call: Union[
-        Callable[P, T],
-        Callable[P, Awaitable[T]],
-    ]
+    call: Callable[P, T] | Callable[P, Awaitable[T]]
     is_async: bool
     is_generator: bool
-    model: Optional[Type[BaseModel]]
-    response_model: Optional[Type[ResponseModel[T]]]
+    model: type[BaseModel] | None
+    response_model: type[ResponseModel[T]] | None
 
-    params: Dict[str, Tuple[Any, Any]]
-    alias_arguments: Tuple[str, ...]
+    params: dict[str, tuple[Any, Any]]
+    alias_arguments: tuple[str, ...]
 
-    dependencies: Dict[str, "CallModel[..., Any]"]
+    dependencies: dict[str, "CallModel[..., Any]"]
     extra_dependencies: Iterable["CallModel[..., Any]"]
-    sorted_dependencies: Tuple[Tuple["CallModel[..., Any]", int], ...]
-    custom_fields: Dict[str, CustomField]
-    keyword_args: Tuple[str, ...]
-    positional_args: Tuple[str, ...]
-    var_positional_arg: Optional[str]
-    var_keyword_arg: Optional[str]
+    sorted_dependencies: tuple[tuple["CallModel[..., Any]", int], ...]
+    custom_fields: dict[str, CustomField]
+    keyword_args: tuple[str, ...]
+    positional_args: tuple[str, ...]
+    var_positional_arg: str | None
+    var_keyword_arg: str | None
 
     # Dependencies and custom fields
     use_cache: bool
@@ -105,7 +92,7 @@ class CallModel(Generic[P, T]):
         return getattr(call, "__name__", type(call).__name__)
 
     @property
-    def flat_params(self) -> Dict[str, Tuple[Any, Any]]:
+    def flat_params(self) -> dict[str, tuple[Any, Any]]:
         params = self.params
         for d in (*self.dependencies.values(), *self.extra_dependencies):
             params.update(d.flat_params)
@@ -114,18 +101,18 @@ class CallModel(Generic[P, T]):
     @property
     def flat_dependencies(
         self,
-    ) -> Dict[
+    ) -> dict[
         Callable[..., Any],
-        Tuple[
+        tuple[
             "CallModel[..., Any]",
-            Tuple[Callable[..., Any], ...],
+            tuple[Callable[..., Any], ...],
         ],
     ]:
-        flat: Dict[
+        flat: dict[
             Callable[..., Any],
-            Tuple[
+            tuple[
                 CallModel[..., Any],
-                Tuple[Callable[..., Any], ...],
+                tuple[Callable[..., Any], ...],
             ],
         ] = {}
 
@@ -144,24 +131,21 @@ class CallModel(Generic[P, T]):
     def __init__(
         self,
         /,
-        call: Union[
-            Callable[P, T],
-            Callable[P, Awaitable[T]],
-        ],
-        model: Optional[Type[BaseModel]],
-        params: Dict[str, Tuple[Any, Any]],
-        response_model: Optional[Type[ResponseModel[T]]] = None,
+        call: Callable[P, T] | Callable[P, Awaitable[T]],
+        model: type[BaseModel] | None,
+        params: dict[str, tuple[Any, Any]],
+        response_model: type[ResponseModel[T]] | None = None,
         use_cache: bool = True,
         cast: bool = True,
         is_async: bool = False,
         is_generator: bool = False,
-        dependencies: Optional[Dict[str, "CallModel[..., Any]"]] = None,
-        extra_dependencies: Optional[Iterable["CallModel[..., Any]"]] = None,
-        keyword_args: Optional[List[str]] = None,
-        positional_args: Optional[List[str]] = None,
-        var_positional_arg: Optional[str] = None,
-        var_keyword_arg: Optional[str] = None,
-        custom_fields: Optional[Dict[str, CustomField]] = None,
+        dependencies: dict[str, "CallModel[..., Any]"] | None = None,
+        extra_dependencies: Iterable["CallModel[..., Any]"] | None = None,
+        keyword_args: list[str] | None = None,
+        positional_args: list[str] | None = None,
+        var_positional_arg: str | None = None,
+        var_keyword_arg: str | None = None,
+        custom_fields: dict[str, CustomField] | None = None,
     ):
         self.call = call
         self.model = model
@@ -185,7 +169,7 @@ class CallModel(Generic[P, T]):
         self.extra_dependencies = extra_dependencies or ()
         self.custom_fields = custom_fields or {}
 
-        sorted_dep: List[CallModel[..., Any]] = []
+        sorted_dep: list[CallModel[..., Any]] = []
         flat = self.flat_dependencies
         for calls in flat.values():
             _sort_dep(sorted_dep, calls, flat)
@@ -198,31 +182,20 @@ class CallModel(Generic[P, T]):
     def _solve(
         self,
         /,
-        *args: Tuple[Any, ...],
-        cache_dependencies: Dict[
-            Union[
-                Callable[P, T],
-                Callable[P, Awaitable[T]],
-            ],
+        *args: tuple[Any, ...],
+        cache_dependencies: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]],
             T,
         ],
-        dependency_overrides: Optional[
-            Dict[
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-            ]
-        ] = None,
-        **kwargs: Dict[str, Any],
+        dependency_overrides: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]], Callable[P, T] | Callable[P, Awaitable[T]]
+        ]
+        | None = None,
+        **kwargs: dict[str, Any],
     ) -> Generator[
-        Tuple[
+        tuple[
             Sequence[Any],
-            Dict[str, Any],
+            dict[str, Any],
             Callable[..., Any],
         ],
         Any,
@@ -240,7 +213,7 @@ class CallModel(Generic[P, T]):
         if self.use_cache and call in cache_dependencies:
             return cache_dependencies[call]
 
-        kw: Dict[str, Any] = {}
+        kw: dict[str, Any] = {}
 
         for arg in self.keyword_args:
             if (v := kwargs.pop(arg, Parameter.empty)) is not Parameter.empty:
@@ -274,7 +247,7 @@ class CallModel(Generic[P, T]):
                 if arg not in self.dependencies:
                     kw[arg], args = args[0], args[1:]
 
-        solved_kw: Dict[str, Any]
+        solved_kw: dict[str, Any]
         solved_kw = yield args, kw, call
 
         args_: Sequence[Any]
@@ -319,25 +292,14 @@ class CallModel(Generic[P, T]):
         /,
         *args: Any,
         stack: ExitStack,
-        cache_dependencies: Dict[
-            Union[
-                Callable[P, T],
-                Callable[P, Awaitable[T]],
-            ],
+        cache_dependencies: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]],
             T,
         ],
-        dependency_overrides: Optional[
-            Dict[
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-            ]
-        ] = None,
+        dependency_overrides: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]], Callable[P, T] | Callable[P, Awaitable[T]]
+        ]
+        | None = None,
         nested: bool = False,
         **kwargs: Any,
     ) -> T:
@@ -421,25 +383,14 @@ class CallModel(Generic[P, T]):
         /,
         *args: Any,
         stack: AsyncExitStack,
-        cache_dependencies: Dict[
-            Union[
-                Callable[P, T],
-                Callable[P, Awaitable[T]],
-            ],
+        cache_dependencies: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]],
             T,
         ],
-        dependency_overrides: Optional[
-            Dict[
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-                Union[
-                    Callable[P, T],
-                    Callable[P, Awaitable[T]],
-                ],
-            ]
-        ] = None,
+        dependency_overrides: dict[
+            Callable[P, T] | Callable[P, Awaitable[T]], Callable[P, T] | Callable[P, Awaitable[T]]
+        ]
+        | None = None,
         nested: bool = False,
         **kwargs: Any,
     ) -> T:
@@ -456,7 +407,7 @@ class CallModel(Generic[P, T]):
             return cached_value
 
         # Heat cache and solve extra dependencies
-        dep_to_solve: List[Callable[..., Awaitable[Any]]] = []
+        dep_to_solve: list[Callable[..., Awaitable[Any]]] = []
         try:
             async with anyio.create_task_group() as tg:
                 for dep, subdep in self.sorted_dependencies:
@@ -500,7 +451,7 @@ class CallModel(Generic[P, T]):
                 **kwargs,
             )
 
-        custom_to_solve: List[CustomField] = []
+        custom_to_solve: list[CustomField] = []
 
         try:
             async with anyio.create_task_group() as tg:
@@ -544,16 +495,16 @@ class CallModel(Generic[P, T]):
 
 
 def _sort_dep(
-    collector: List["CallModel[..., Any]"],
-    items: Tuple[
+    collector: list["CallModel[..., Any]"],
+    items: tuple[
         "CallModel[..., Any]",
-        Tuple[Callable[..., Any], ...],
+        tuple[Callable[..., Any], ...],
     ],
-    flat: Dict[
+    flat: dict[
         Callable[..., Any],
-        Tuple[
+        tuple[
             "CallModel[..., Any]",
-            Tuple[Callable[..., Any], ...],
+            tuple[Callable[..., Any], ...],
         ],
     ],
 ) -> None:
