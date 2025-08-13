@@ -504,7 +504,7 @@ files = [
     "autogen/interop",
     "autogen/io",
     "autogen/json_utils.py",
-    "autogen/llm_config.py",
+    "autogen/llm_config",
     "autogen/logger",
     "autogen/messages",
     "autogen/oai/gemini_types.py",

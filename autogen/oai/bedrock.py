@@ -60,15 +60,12 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     aws_session_token: Optional[SecretStr]
     aws_profile_name: Optional[str]
     temperature: Optional[float]
-    topP: Optional[float]  # noqa: N815
-    maxTokens: Optional[int]  # noqa: N815
-    top_p: Optional[float]  # double?
+    top_p: Optional[float]
     top_k: Optional[int]
     k: Optional[int]
     seed: Optional[int]
     cache_seed: Optional[int]
     supports_system_prompts: bool
-    stream: bool
     price: Optional[list[float]]
     timeout: Optional[int]
 
@@ -81,15 +78,12 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
     aws_session_token: Optional[SecretStr] = None
     aws_profile_name: Optional[str] = None
     temperature: Optional[float] = None
-    topP: Optional[float] = None  # noqa: N815
-    maxTokens: Optional[int] = None  # noqa: N815
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     k: Optional[int] = None
     seed: Optional[int] = None
     cache_seed: Optional[int] = None
     supports_system_prompts: bool = True
-    stream: bool = False
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     timeout: Optional[int] = None
 
@@ -168,13 +162,10 @@ class BedrockClient:
         # This is required because not all models support a system prompt (e.g. Mistral Instruct).
         self._supports_system_prompts = params.get("supports_system_prompts", True)
 
-    def parse_params(self, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def parse_params(self, params: BedrockEntryDict | dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Loads the valid parameters required to invoke Bedrock Converse
         Returns a tuple of (base_params, additional_params)
         """
-        base_params = {}
-        additional_params = {}
-
         # Amazon Bedrock  base model IDs are here:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
         self._model_id = params.get("model")
@@ -199,38 +190,42 @@ class BedrockClient:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-mistral-chat-completion.html
 
         # Here are the possible "base" parameters and their suitable types
-        base_parameters = [["temperature", (float, int)], ["topP", (float, int)], ["maxTokens", (int)]]
+        base_params = {}
 
-        for param_name, suitable_types in base_parameters:
-            if param_name in params:
-                base_params[param_name] = validate_parameter(
-                    params, param_name, suitable_types, False, None, None, None
-                )
+        if "temperature" in params:
+            base_params["temperature"] = validate_parameter(
+                params, "temperature", (float, int), False, None, None, None
+            )
+
+        if "top_p" in params:
+            base_params["topP"] = validate_parameter(
+                params, "top_p", (float, int), False, None, None, None
+            )
+
+        if "max_tokens" in params:
+            base_params["maxTokens"] = validate_parameter(
+                params, "max_tokens", (int,), False, None, None, None
+            )
 
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
-        additional_parameters = [
-            ["top_p", (float, int)],
-            ["top_k", (int)],
-            ["k", (int)],
-            ["seed", (int)],
-        ]
+        additional_params = {}
 
-        for param_name, suitable_types in additional_parameters:
+        for param_name, suitable_types in (
+            ("top_k", (int,)),
+            ("k", (int,)),
+            ("seed", (int,)),
+        ):
             if param_name in params:
                 additional_params[param_name] = validate_parameter(
                     params, param_name, suitable_types, False, None, None, None
                 )
 
-        # Streaming
-        self._streaming = params.get("stream", False)
-
         # For this release we will not support streaming as many models do not support streaming with tool use
-        if self._streaming:
+        if params.get("stream", False):
             warnings.warn(
                 "Streaming is not currently supported, streaming will be disabled.",
                 UserWarning,
             )
-            self._streaming = False
 
         return base_params, additional_params
 

@@ -46,8 +46,7 @@ def test_bedrock_llm_config_entry():
         aws_secret_key="test_secret_access_key",
         aws_session_token="test_session_token",
         temperature=0.8,
-        topP=0.6,
-        stream=False,
+        top_p=0.6,
     )
     expected = {
         "api_type": "bedrock",
@@ -57,8 +56,7 @@ def test_bedrock_llm_config_entry():
         "aws_secret_key": "test_secret_access_key",
         "aws_session_token": "test_session_token",
         "temperature": 0.8,
-        "topP": 0.6,
-        "stream": False,
+        "top_p": 0.6,
         "tags": [],
         "supports_system_prompts": True,
     }
@@ -90,7 +88,7 @@ def test_bedrock_llm_config_entry_repr():
     )
 
     actual = repr(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
 
     assert actual == expected, actual
 
@@ -106,7 +104,7 @@ def test_bedrock_llm_config_entry_str():
     )
 
     actual = str(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True, stream=False)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
 
     assert actual == expected, actual
 
@@ -120,79 +118,57 @@ def test_initialization():
 
 # Test parameters
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_parsing_params(bedrock_client):
+def test_parsing_params(bedrock_client: BedrockClient):
     # All parameters (with default values)
-    params = {
-        # "aws_region_name": "us-east-1",
-        # "aws_access_key_id": "test_access_key_id",
-        # "aws_secret_access_key": "test_secret_access_key",
-        # "aws_session_token": "test_session_token",
-        # "aws_profile_name": "test_profile_name",
+    assert bedrock_client.parse_params({
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
         "temperature": 0.8,
-        "topP": 0.6,
-        "maxTokens": 250,
+        "top_p": 0.6,
+        "max_tokens": 250,
         "seed": 42,
-        "stream": False,
-    }
-    expected_base_params = {
+        "stream": False
+    }) == ({
         "temperature": 0.8,
         "topP": 0.6,
         "maxTokens": 250,
-    }
-    expected_additional_params = {
+    }, {
         "seed": 42,
-    }
-    base_result, additional_result = bedrock_client.parse_params(params)
-    assert base_result == expected_base_params
-    assert additional_result == expected_additional_params
+    })
 
     # Incorrect types, defaults should be set, will show warnings but not trigger assertions
-    params = {
+    with pytest.warns(UserWarning, match=r"Config error - .*"):
+        assert bedrock_client.parse_params({
+            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+            "temperature": "0.5",
+            "top_p": "0.6",
+            "max_tokens": "250",
+            "seed": "42",
+        }) == ({
+            "temperature": None,
+            "topP": None,
+            "maxTokens": None,
+        }, {
+            "seed": None,
+        })
+
+    with pytest.warns(UserWarning, match="Streaming is not currently supported, streaming will be disabled"):
+        bedrock_client.parse_params({
+            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+            "stream": True,
+        })
+
+    assert bedrock_client.parse_params({
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "temperature": "0.5",
-        "topP": "0.6",
-        "maxTokens": "250",
-        "seed": "42",
-        "stream": "False",
-    }
-    expected_base_params = {
-        "temperature": None,
-        "topP": None,
-        "maxTokens": None,
-    }
-    expected_additional_params = {
-        "seed": None,
-    }
-    base_result, additional_result = bedrock_client.parse_params(params)
-    assert base_result == expected_base_params
-    assert additional_result == expected_additional_params
+    }) == ({}, {})
 
-    # Only model, others set as defaults if they are mandatory
-    params = {
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-    }
-    expected_base_params = {}
-    expected_additional_params = {}
-    base_result, additional_result = bedrock_client.parse_params(params)
-    assert base_result == expected_base_params
-    assert additional_result == expected_additional_params
-
-    # No model
-    params = {
-        "temperature": 0.8,
-    }
-
-    with pytest.raises(AssertionError) as assertinfo:
-        bedrock_client.parse_params(params)
-
-    assert "Please provide the 'model` in the config_list to use Amazon Bedrock" in str(assertinfo.value)
+    with pytest.raises(AssertionError, match="Please provide the 'model` in the config_list to use Amazon Bedrock" ):
+        bedrock_client.parse_params({})
 
 
 # Test text generation
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
-def test_create_response(mock_chat, bedrock_client):
+def test_create_response(mock_chat, bedrock_client: BedrockClient):
     # Mock BedrockClient.chat response
     mock_bedrock_response = MagicMock()
     mock_bedrock_response.choices = [
@@ -228,7 +204,7 @@ def test_create_response(mock_chat, bedrock_client):
 # Test functions/tools
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 @patch("autogen.oai.bedrock.BedrockClient.create")
-def test_create_response_with_tool_call(mock_chat, bedrock_client):
+def test_create_response_with_tool_call(mock_chat, bedrock_client: BedrockClient):
     # Mock BedrockClient.chat response
     mock_function = MagicMock(name="currency_calculator")
     mock_function.name = "currency_calculator"
@@ -293,7 +269,7 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client):
 
 # Test message conversion from OpenAI to Bedrock format
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-def test_oai_messages_to_bedrock_messages(bedrock_client):
+def test_oai_messages_to_bedrock_messages(bedrock_client: BedrockClient):
     # Test that the "name" key is removed and system messages converted to user message
     test_messages = [
         {"role": "system", "content": "You are a helpful AI bot."},
