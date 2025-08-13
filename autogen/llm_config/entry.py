@@ -44,6 +44,13 @@ class ApplicationConfig(BaseModel):
             raise ValueError("temperature and top_p cannot be set at the same time.")
         return v
 
+    @field_validator("temperature", mode="before")
+    @classmethod
+    def check_temperature(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+        if v is not None and info.data.get("top_p") is not None:
+            raise ValueError("temperature and top_p cannot be set at the same time.")
+        return v
+
 
 class LLMConfigEntry(ApplicationConfig, ABC):
     api_type: str

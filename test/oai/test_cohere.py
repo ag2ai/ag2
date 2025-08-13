@@ -31,7 +31,7 @@ def test_cohere_llm_config_entry():
         "api_key": "dummy_api_key",
         "frequency_penalty": 0,
         "k": 0,
-        "p": 0.75,
+        "top_p": 0.75,
         "presence_penalty": 0,
         "strict_tools": False,
         "stream": False,
