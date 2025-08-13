@@ -283,7 +283,6 @@ class TestLLMConfig:
                             "api_key": "dummy_api_key",
                             "stream": False,
                             "temperature": 1.0,
-                            "top_p": 0.8,
                             "max_tokens": 100,
                             "tags": [],
                         }
@@ -296,7 +295,6 @@ class TestLLMConfig:
                             api_key="dummy_api_key",
                             stream=False,
                             temperature=1.0,
-                            top_p=0.8,
                             max_tokens=100,
                         )
                     ],
@@ -314,7 +312,6 @@ class TestLLMConfig:
                             "aws_secret_key": "test_secret_access_key",
                             "aws_session_token": "test_session_token",
                             "temperature": 0.8,
-                            "top_p": 0.6,
                             "tags": [],
                             "supports_system_prompts": True,
                         }
@@ -329,7 +326,6 @@ class TestLLMConfig:
                             aws_secret_key="test_secret_access_key",
                             aws_session_token="test_session_token",
                             temperature=0.8,
-                            top_p=0.6,
                         )
                     ]
                 ),
@@ -377,7 +373,6 @@ class TestLLMConfig:
                             "presence_penalty": 0,
                             "strict_tools": False,
                             "tags": [],
-                            "temperature": 0.3,
                         }
                     ]
                 },
@@ -411,6 +406,7 @@ class TestLLMConfig:
                         DeepSeekLLMConfigEntry(
                             api_key="fake_api_key",
                             model="deepseek-chat",
+                            temperature=0.5,
                         )
                     ]
                 ),
@@ -457,7 +453,11 @@ class TestLLMConfig:
                 },
                 LLMConfig(
                     config_list=[
-                        GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192"),
+                        GroqLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="llama3-8b-8192",
+                            temperature=1.0,
+                        ),
                     ]
                 ),
                 id="groq llama3-8b-8192 from list with default llm extras",
@@ -481,6 +481,7 @@ class TestLLMConfig:
                         MistralLLMConfigEntry(
                             model="mistral-small-latest",
                             api_key="fake_api_key",
+                            temperature=0.7,
                         )
                     ]
                 ),
@@ -500,14 +501,13 @@ class TestLLMConfig:
                             "tags": [],
                             "temperature": 0.8,
                             "top_k": 40,
-                            "top_p": 0.9,
                             "native_tool_calls": False,
                         }
                     ]
                 },
                 LLMConfig(
                     config_list=[
-                        OllamaLLMConfigEntry(model="llama3.1:8b"),
+                        OllamaLLMConfigEntry(model="llama3.1:8b", temperature=0.8),
                     ]
                 ),
                 id="ollama llama3.1:8b from list with default llm extras",

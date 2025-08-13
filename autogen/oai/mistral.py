@@ -31,7 +31,6 @@ import time
 import warnings
 from typing import Any, Literal, Optional, Union
 
-from pydantic import Field
 from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -66,8 +65,6 @@ class MistralEntryDict(LLMConfigEntryDict, total=False):
 
 class MistralLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["mistral"] = "mistral"
-
-    temperature: float = Field(default=0.7, ge=0)
 
     safe_prompt: bool = False
     random_seed: Optional[int] = None

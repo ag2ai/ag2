@@ -59,11 +59,7 @@ class OllamaEntryDict(LLMConfigEntryDict, total=False):
 
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
-
-    temperature: float = Field(default=0.8)
-    top_p: float = Field(default=0.9)
     # TODO: max_tokens
-
     client_host: Optional[HttpUrl] = None
     stream: bool = False
     num_predict: int = Field(

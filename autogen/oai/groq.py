@@ -63,10 +63,6 @@ class GroqEntryDict(LLMConfigEntryDict, total=False):
 class GroqLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["groq"] = "groq"
 
-    max_tokens: Optional[int] = Field(default=None, ge=0)
-    temperature: float = Field(default=1, ge=0, le=2)
-    top_p: Optional[float] = Field(default=None)
-
     frequency_penalty: float = Field(default=None, ge=-2, le=2)
     presence_penalty: float = Field(default=None, ge=-2, le=2)
     seed: int = Field(default=None)

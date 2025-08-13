@@ -83,9 +83,7 @@ class CohereEntryDict(LLMConfigEntryDict, total=False):
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
 
-    temperature: float = Field(default=0.3, ge=0)
-    max_tokens: Optional[int] = Field(default=None, ge=0)
-    top_p: float = Field(default=0.75, ge=0.01, le=0.99)
+    top_p: Optional[float] = Field(default=None, ge=0.01, le=0.99)
 
     k: int = Field(default=0, ge=0, le=500)
     seed: Optional[int] = None

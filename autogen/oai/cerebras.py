@@ -60,7 +60,7 @@ class CerebrasEntryDict(LLMConfigEntryDict, total=False):
 class CerebrasLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cerebras"] = "cerebras"
 
-    temperature: float = Field(default=1.0, ge=0.0, le=1.5)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.5)
 
     seed: Optional[int] = None
     stream: bool = False

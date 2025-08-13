@@ -35,7 +35,7 @@ class LLMConfigEntryDict(TypedDict, total=False):
 class ApplicationConfig(BaseModel):
     max_tokens: Optional[int] = Field(default=None, ge=0)
     top_p: Optional[float] = Field(default=None, ge=0)
-    temperature: Optional[float] = None
+    temperature: Optional[float] = Field(default=None, ge=0)
 
     @field_validator("top_p", mode="before")
     @classmethod
