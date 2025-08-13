@@ -1343,7 +1343,18 @@ class ConversableAgent(LLMAgent):
 
             raise RuntimeError(msg)
 
-    def _terminate_chat(self, recipient: "ConversableAgent", message: dict[str, Any]) -> bool:
+    def _should_terminate_chat(self, recipient: "ConversableAgent", message: dict[str, Any]) -> bool:
+        """
+        Determines whether the chat should be terminated based on the message content
+        and the recipient's termination condition.
+
+        Args:
+            recipient (ConversableAgent): The agent to check for termination condition.
+            message (dict[str, Any]): The message dictionary to evaluate for termination.
+
+        Returns:
+            bool: True if the chat should be terminated, False otherwise.
+        """
         return (
             isinstance(recipient, ConversableAgent)
             and isinstance(message.get("content"), str)
@@ -1477,7 +1488,7 @@ class ConversableAgent(LLMAgent):
                         msg2send = self.generate_init_message(message, **kwargs)
                 else:
                     last_message = self.chat_messages[recipient][-1]
-                    if self._terminate_chat(recipient, last_message):
+                    if self._should_terminate_chat(recipient, last_message):
                         break
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
                 if msg2send is None:
@@ -1665,10 +1676,11 @@ class ConversableAgent(LLMAgent):
                         msg2send = await self.a_generate_init_message(message, **kwargs)
                 else:
                     last_message = self.chat_messages[recipient][-1]
+                    if self._should_terminate_chat(recipient, last_message):
+                        break
                     msg2send = await self.a_generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                    is_termination = self._terminate_chat(recipient, last_message)
-                if is_termination or msg2send is None:
-                    break
+                    if msg2send is None:
+                        break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(

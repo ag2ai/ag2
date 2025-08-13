@@ -503,7 +503,7 @@ def test_terminate_chat_true():
         is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
     )
     message = {"content": "TERMINATE"}
-    assert agent._terminate_chat(recipient, message) is True
+    assert agent._should_terminate_chat(recipient, message) is True
 
 
 def test_terminate_chat_false_non_termination_content():
@@ -515,7 +515,7 @@ def test_terminate_chat_false_non_termination_content():
         is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
     )
     message = {"content": "Hello"}
-    assert agent._terminate_chat(recipient, message) is False
+    assert agent._should_terminate_chat(recipient, message) is False
 
 
 def test_terminate_chat_false_non_string_content():
@@ -527,7 +527,7 @@ def test_terminate_chat_false_non_string_content():
         is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
     )
     message = {"content": None}
-    assert agent._terminate_chat(recipient, message) is False
+    assert agent._should_terminate_chat(recipient, message) is False
 
 
 @pytest.mark.asyncio
