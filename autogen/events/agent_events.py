@@ -4,7 +4,7 @@
 
 from abc import ABC
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator, model_serializer
@@ -116,12 +116,13 @@ class ToolResponseEvent(BasePrintReceivedEvent):
 class FunctionCall(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
+    input: Optional[str] = None  # Add input field for custom tools
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
 
         name = self.name or "(No function name found)"
-        arguments = self.arguments or "(No arguments found)"
+        arguments = self.input or self.arguments or "(No arguments found)"
 
         func_print = f"***** Suggested function call: {name} *****"
         f(colored(func_print, "green"), flush=True)
@@ -152,8 +153,19 @@ class FunctionCallEvent(BasePrintReceivedEvent):
 
 
 class ToolCall(BaseModel):
+    """
+    Represents a tool call, which can be a function or a custom tool.
+
+    Params:
+        id (Optional[str]): The unique identifier for the tool call.
+        function (Optional[FunctionCall]): The function call details if type is 'function'.
+        custom (Optional[Dict[str, Any]]): The custom tool details if type is 'custom'.
+        type (str): The type of tool call, e.g., 'function' or 'custom'.
+    """
+
     id: Optional[str] = None
-    function: FunctionCall
+    function: Optional[FunctionCall] = None
+    custom: Optional[Dict[str, Any]] = None
     type: str
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
@@ -161,8 +173,15 @@ class ToolCall(BaseModel):
 
         id = self.id or "No tool call id found"
 
-        name = self.function.name or "(No function name found)"
-        arguments = self.function.arguments or "(No arguments found)"
+        if self.type == "function" and self.function:
+            name = self.function.name or "(No function name found)"
+            arguments = self.function.arguments or "(No arguments found)"
+        elif self.type == "custom" and self.custom:
+            name = self.custom.get("name", "(No custom tool name found)")
+            arguments = self.custom.get("input", "(No input found)")
+        else:
+            name = "(Unknown tool type)"
+            arguments = "(No arguments found)"
 
         func_print = f"***** Suggested tool call ({id}): {name} *****"
         f(colored(func_print, "green"), flush=True)
@@ -254,6 +273,7 @@ def create_received_event_model(
         )
 
     if event.get("tool_calls"):
+        print("event", event)
         return ToolCallEvent(
             **event,
             sender=sender.name,

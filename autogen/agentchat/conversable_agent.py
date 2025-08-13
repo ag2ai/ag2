@@ -1289,7 +1289,7 @@ class ConversableAgent(LLMAgent):
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
-                4. "role": role of the message, can be "assistant", "user", "function".
+                4. "role": role of the message, can be "assistant", "user", "function", "tool".
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
@@ -2201,7 +2201,11 @@ class ConversableAgent(LLMAgent):
                     extracted_response["function_call"]["name"]
                 )
             for tool_call in extracted_response.get("tool_calls") or []:
-                tool_call["function"]["name"] = self._normalize_name(tool_call["function"]["name"])
+                if tool_call.get("type") == "custom":
+                    tool_call["custom"]["name"] = self._normalize_name(tool_call["custom"]["name"])
+                else:
+                    tool_call["function"]["name"] = self._normalize_name(tool_call["function"]["name"])
+
                 # Remove id and type if they are not present.
                 # This is to make the tool call object compatible with Mistral API.
                 if tool_call.get("id") is None:
@@ -2422,8 +2426,17 @@ class ConversableAgent(LLMAgent):
         message = messages[-1]
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
-            function_call = tool_call.get("function", {})
             tool_call_id = tool_call.get("id", None)
+
+            # Handle custom tool calls
+            if tool_call.get("type") == "custom" and "custom" in tool_call:
+                function_call = {
+                    "name": tool_call["custom"].get("name"),
+                    "arguments": tool_call["custom"].get("input", "{}"),
+                }
+            else:
+                function_call = tool_call.get("function", {})
+
             func = self._function_map.get(function_call.get("name", None), None)
             if inspect.iscoroutinefunction(func):
                 coro = self.a_execute_function(function_call, call_id=tool_call_id)
@@ -2458,7 +2471,17 @@ class ConversableAgent(LLMAgent):
 
     async def _a_execute_tool_call(self, tool_call):
         tool_call_id = tool_call["id"]
-        function_call = tool_call.get("function", {})
+
+        # Handle custom tool calls
+        if tool_call.get("type") == "custom" and "custom" in tool_call:
+            function_call = {
+                "name": tool_call["custom"].get("name"),
+                "arguments": tool_call["custom"].get("input", "{}"),
+            }
+        else:
+            # Handle standard function tool calls
+            function_call = tool_call.get("function", {})
+
         _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
         return {
             "tool_call_id": tool_call_id,
@@ -3346,7 +3369,11 @@ class ConversableAgent(LLMAgent):
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
     def update_function_signature(
-        self, func_sig: Union[str, dict[str, Any]], is_remove: None, silent_override: bool = False
+        self,
+        func_sig: Union[str, dict[str, Any]],
+        is_remove: None,
+        silent_override: bool = False,
+        free_form: bool = False,
     ):
         """Update a function_signature in the LLM configuration for function_call.
 
@@ -3354,6 +3381,7 @@ class ConversableAgent(LLMAgent):
             func_sig (str or dict): description/name of the function to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat/create-functions
             is_remove: whether removing the function from llm_config with name 'func_sig'
             silent_override: whether to print warnings when overriding functions.
+            free_form: allow the function to take free-form inputs.
 
         Deprecated as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-function_call
@@ -3396,10 +3424,19 @@ class ConversableAgent(LLMAgent):
         if len(self.llm_config["functions"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["functions"]
 
+        if free_form:
+            func_sig["type"] = "custom"
+            if "function" in func_sig:
+                func_sig["custom"] = func_sig.pop("function")
+
         self.client = OpenAIWrapper(**self.llm_config)
 
     def update_tool_signature(
-        self, tool_sig: Union[str, dict[str, Any]], is_remove: bool, silent_override: bool = False
+        self,
+        tool_sig: Union[str, dict[str, Any]],
+        is_remove: bool,
+        silent_override: bool = False,
+        free_form: bool = False,
     ):
         """Update a tool_signature in the LLM configuration for tool_call.
 
@@ -3407,6 +3444,7 @@ class ConversableAgent(LLMAgent):
             tool_sig (str or dict): description/name of the tool to update/remove to the model. See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tools
             is_remove: whether removing the tool from llm_config with name 'tool_sig'
             silent_override: whether to print warnings when overriding functions.
+            free_form: allow the tool to take free-form inputs.
         """
         if not self.llm_config:
             error_msg = "To update a tool signature, agent must have an llm_config"
@@ -3455,6 +3493,10 @@ class ConversableAgent(LLMAgent):
         # Do this only if llm_config is a dict. If llm_config is LLMConfig, LLMConfig will handle this.
         if len(self.llm_config["tools"]) == 0 and isinstance(self.llm_config, dict):
             del self.llm_config["tools"]
+        if free_form:
+            tool_sig["type"] = "custom"
+            if "function" in tool_sig:
+                tool_sig["custom"] = tool_sig.pop("function")
 
         self.client = OpenAIWrapper(**self.llm_config)
 
@@ -3510,15 +3552,16 @@ class ConversableAgent(LLMAgent):
         func_or_tool: Union[F, Tool],
         name: Optional[str],
         description: Optional[str],
+        free_form: bool = False,
     ) -> Tool:
         if isinstance(func_or_tool, Tool):
             tool: Tool = func_or_tool
-            # create new tool object if name or description is not None
-            if name or description:
-                tool = Tool(func_or_tool=tool, name=name, description=description)
+            # create new tool object if name, description, or free_form is specified
+            if free_form or name or description:
+                tool = Tool(func_or_tool=tool, name=name, description=description, free_form=free_form)
         elif inspect.isfunction(func_or_tool):
             function: Callable[..., Any] = func_or_tool
-            tool = Tool(func_or_tool=function, name=name, description=description)
+            tool = Tool(func_or_tool=function, name=name, description=description, free_form=free_form)
         else:
             raise TypeError(f"'func_or_tool' must be a function or a Tool object, got '{type(func_or_tool)}' instead.")
         return tool
@@ -3530,6 +3573,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         api_style: Literal["function", "tool"] = "tool",
         silent_override: bool = False,
+        free_form: bool = False,
     ) -> Callable[[Union[F, Tool]], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
@@ -3548,6 +3592,7 @@ class ConversableAgent(LLMAgent):
                 `"function"` if `"tool"` doesn't work.
                 See [Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/function-calling?tabs=python) for details.
             silent_override (bool): whether to suppress any override warning messages.
+            free_form (bool): allow the function to take free-form inputs.
 
         Returns:
             The decorator for registering a function to be used by an agent.
@@ -3591,7 +3636,7 @@ class ConversableAgent(LLMAgent):
             """
             tool = self._create_tool_if_needed(func_or_tool, name, description)
 
-            self._register_for_llm(tool, api_style, silent_override=silent_override)
+            self._register_for_llm(tool, api_style, silent_override=silent_override, free_form=free_form)
             if tool not in self._tools:
                 self._tools.append(tool)
 
@@ -3600,7 +3645,12 @@ class ConversableAgent(LLMAgent):
         return _decorator
 
     def _register_for_llm(
-        self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False, silent_override: bool = False
+        self,
+        tool: Tool,
+        api_style: Literal["tool", "function"],
+        is_remove: bool = False,
+        silent_override: bool = False,
+        free_form: bool = False,
     ) -> None:
         """
         Register a tool for LLM.
@@ -3610,6 +3660,7 @@ class ConversableAgent(LLMAgent):
             api_style: the API style for function call ("tool" or "function").
             is_remove: whether to remove the function or tool.
             silent_override: whether to suppress any override warning messages.
+            free_form: allow the tool to take free-form inputs.
 
         Returns:
             None
@@ -3619,9 +3670,13 @@ class ConversableAgent(LLMAgent):
             raise RuntimeError("LLM config must be setup before registering a function for LLM.")
 
         if api_style == "function":
-            self.update_function_signature(tool.function_schema, is_remove=is_remove, silent_override=silent_override)
+            self.update_function_signature(
+                tool.function_schema, is_remove=is_remove, silent_override=silent_override, free_form=free_form
+            )
         elif api_style == "tool":
-            self.update_tool_signature(tool.tool_schema, is_remove=is_remove, silent_override=silent_override)
+            self.update_tool_signature(
+                tool.tool_schema, is_remove=is_remove, silent_override=silent_override, free_form=free_form
+            )
         else:
             raise ValueError(f"Unsupported API style: {api_style}")
 
@@ -4065,6 +4120,7 @@ def register_function(
     executor: ConversableAgent,
     name: Optional[str] = None,
     description: str,
+    free_form: bool = False,
 ) -> None:
     """Register a function to be proposed by an agent and executed for an executor.
 
@@ -4079,7 +4135,8 @@ def register_function(
         description: description of the function. The description is used by LLM to decode whether the function
             is called. Make sure the description is properly describing what the function does or it might not be
             called by LLM when needed.
+        free_form: allow the function to take free-form inputs.
 
     """
-    f = caller.register_for_llm(name=name, description=description)(f)
+    f = caller.register_for_llm(name=name, description=description, free_form=free_form)(f)
     executor.register_for_execution(name=name)(f)

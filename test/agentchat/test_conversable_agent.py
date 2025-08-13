@@ -761,33 +761,40 @@ def test_register_for_llm(mock_credentials: Credentials) -> None:
     assert agent2.llm_config["tools"] == expected2
     assert agent3.llm_config["tools"] == expected3
 
-    @agent3.register_for_llm()
-    @agent2.register_for_llm()
-    @agent1.register_for_llm(name="sh", description="run a shell script and return the execution result.")
-    async def exec_sh(script: Annotated[str, "Valid shell script to execute."]) -> str:
+
+def test_register_for_llm_with_free_form_tool_call(mock_credentials: Credentials) -> None:
+    agent3 = ConversableAgent(name="agent3", llm_config=mock_credentials.llm_config)
+    agent2 = ConversableAgent(name="agent2", llm_config=mock_credentials.llm_config)
+    agent1 = ConversableAgent(name="agent1", llm_config=mock_credentials.llm_config)
+
+    @agent3.register_for_llm(free_form=True)
+    @agent2.register_for_llm(name="python", free_form=True)
+    @agent1.register_for_llm(description="run cell in ipython and return the execution result.", free_form=True)
+    def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
         pass
 
-    expected1 = expected1 + [
+    expected1 = [
         {
-            "type": "function",
-            "function": {
-                "name": "sh",
-                "description": "run a shell script and return the execution result.",
+            "type": "custom",
+            "custom": {
+                "description": "run cell in ipython and return the execution result.",
+                "name": "exec_python",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "script": {
+                        "cell": {
                             "type": "string",
-                            "description": "Valid shell script to execute.",
+                            "description": "Valid Python cell to execute.",
                         }
                     },
-                    "required": ["script"],
+                    "required": ["cell"],
                 },
             },
         }
     ]
-    expected2 = expected2 + [expected1[1]]
-    expected3 = expected3 + [expected1[1]]
+    expected2 = copy.deepcopy(expected1)
+    expected2[0]["custom"]["name"] = "python"
+    expected3 = expected2
 
     assert agent1.llm_config["tools"] == expected1
     assert agent2.llm_config["tools"] == expected2
@@ -982,6 +989,46 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
+def test_register_functions_with_free_form(mock_credentials: Credentials):
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    user_proxy = UserProxyAgent(name="user_proxy")
+
+    def exec_python(cell: Annotated[str, "Valid Python cell to execute."]) -> str:
+        pass
+
+    register_function(
+        exec_python,
+        caller=agent,
+        executor=user_proxy,
+        description="run cell in ipython and return the execution result.",
+        free_form=True,
+    )
+
+    expected_function_map = {"exec_python": exec_python}
+    assert get_origin(user_proxy.function_map).keys() == expected_function_map.keys()
+
+    expected = [
+        {
+            "type": "custom",
+            "custom": {
+                "description": "run cell in ipython and return the execution result.",
+                "name": "exec_python",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cell": {
+                            "type": "string",
+                            "description": "Valid Python cell to execute.",
+                        }
+                    },
+                    "required": ["cell"],
+                },
+            },
+        }
+    ]
+    assert agent.llm_config["tools"] == expected
+
+
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
@@ -1079,7 +1126,9 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
         timer_mock(num_seconds=num_seconds)
         return "Timer is done!"
 
-    register_function(timer, caller=coder, executor=user_proxy, description="create a timer for N seconds")
+    register_function(
+        timer, caller=coder, executor=user_proxy, description="create a timer for N seconds", free_form=True
+    )
 
     # An example sync function registered using decorators
     @user_proxy.register_for_execution()
