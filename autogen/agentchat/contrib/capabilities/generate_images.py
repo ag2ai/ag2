@@ -10,7 +10,7 @@ from typing import Any, Literal, Optional, Protocol, Union
 from .... import Agent, ConversableAgent, code_utils
 from ....cache import AbstractCache
 from ....import_utils import optional_import_block, require_optional_import
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from .. import img_utils
 from ..capabilities.agent_capability import AgentCapability
 from ..text_analyzer_agent import TextAnalyzerAgent

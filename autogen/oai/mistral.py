@@ -56,9 +56,7 @@ with optional_import_block():
 
 class MistralEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["mistral"]
-    temperature: float
-    top_p: Optional[float]
-    max_tokens: Optional[int]
+
     safe_prompt: bool
     random_seed: Optional[int]
     stream: bool
@@ -68,9 +66,9 @@ class MistralEntryDict(LLMConfigEntryDict, total=False):
 
 class MistralLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["mistral"] = "mistral"
-    temperature: float = Field(default=0.7)
-    top_p: Optional[float] = None
-    max_tokens: Optional[int] = Field(default=None, ge=0)
+
+    temperature: float = Field(default=0.7, ge=0)
+
     safe_prompt: bool = False
     random_seed: Optional[int] = None
     stream: bool = False

@@ -7,7 +7,7 @@
 from typing import Any, Callable, Literal, Optional, Union
 
 from ..doc_utils import export_module
-from ..llm_config.config import LLMConfig
+from ..llm_config import LLMConfig
 from ..runtime_logging import log_new_agent, logging_enabled
 from .conversable_agent import ConversableAgent
 

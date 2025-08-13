@@ -30,7 +30,7 @@ import time
 import warnings
 from typing import Any, Literal, Optional
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field
 from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -50,31 +50,22 @@ CEREBRAS_PRICING_1K = {
 
 class CerebrasEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["cerebras"]
-    max_tokens: Optional[int]
+
     seed: Optional[int]
     stream: bool
-    temperature: float
-    top_p: Optional[float]
     hide_tools: Literal["if_all_run", "if_any_run", "never"]
     tool_choice: Optional[Literal["none", "auto", "required"]]
 
 
 class CerebrasLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cerebras"] = "cerebras"
-    max_tokens: Optional[int] = None
+
+    temperature: float = Field(default=1.0, ge=0.0, le=1.5)
+
     seed: Optional[int] = None
     stream: bool = False
-    temperature: float = Field(default=1.0, ge=0.0, le=1.5)
-    top_p: Optional[float] = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
-
-    @field_validator("top_p", mode="before")
-    @classmethod
-    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
-        if v is not None and info.data.get("temperature") is not None:
-            raise ValueError("temperature and top_p cannot be set at the same time.")
-        return v
 
     def create_client(self):
         raise NotImplementedError("CerebrasLLMConfigEntry.create_client is not implemented.")
@@ -138,12 +129,14 @@ class CerebrasClient:
         # Validate allowed Cerebras parameters
         # https://inference-docs.cerebras.ai/api-reference/chat-completions
         cerebras_params["max_tokens"] = validate_parameter(params, "max_tokens", int, True, None, (0, None), None)
-        cerebras_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
-        cerebras_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
         cerebras_params["temperature"] = validate_parameter(
             params, "temperature", (int, float), True, 1, (0, 1.5), None
         )
         cerebras_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+
+        cerebras_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
+        cerebras_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
+
         cerebras_params["tool_choice"] = validate_parameter(
             params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
         )

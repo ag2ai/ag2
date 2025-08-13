@@ -11,7 +11,7 @@ from contextlib import suppress
 from typing import Any, Callable, Literal, Optional, Union
 
 from ... import Agent, ConversableAgent, GroupChat, GroupChatManager, OpenAIWrapper
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 
 
 class SocietyOfMindAgent(ConversableAgent):

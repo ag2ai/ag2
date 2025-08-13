@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.oai.cerebras import CerebrasClient, CerebrasLLMConfigEntry, calculate_cerebras_cost
 
 

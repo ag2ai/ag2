@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 
 
@@ -126,14 +126,17 @@ def test_parsing_params(bedrock_client: BedrockClient):
         "top_p": 0.6,
         "max_tokens": 250,
         "seed": 42,
-        "stream": False
-    }) == ({
-        "temperature": 0.8,
-        "topP": 0.6,
-        "maxTokens": 250,
-    }, {
-        "seed": 42,
-    })
+        "stream": False,
+    }) == (
+        {
+            "temperature": 0.8,
+            "topP": 0.6,
+            "maxTokens": 250,
+        },
+        {
+            "seed": 42,
+        },
+    )
 
     # Incorrect types, defaults should be set, will show warnings but not trigger assertions
     with pytest.warns(UserWarning, match=r"Config error - .*"):
@@ -143,13 +146,16 @@ def test_parsing_params(bedrock_client: BedrockClient):
             "top_p": "0.6",
             "max_tokens": "250",
             "seed": "42",
-        }) == ({
-            "temperature": None,
-            "topP": None,
-            "maxTokens": None,
-        }, {
-            "seed": None,
-        })
+        }) == (
+            {
+                "temperature": None,
+                "topP": None,
+                "maxTokens": None,
+            },
+            {
+                "seed": None,
+            },
+        )
 
     with pytest.warns(UserWarning, match="Streaming is not currently supported, streaming will be disabled"):
         bedrock_client.parse_params({
@@ -161,7 +167,7 @@ def test_parsing_params(bedrock_client: BedrockClient):
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
     }) == ({}, {})
 
-    with pytest.raises(AssertionError, match="Please provide the 'model` in the config_list to use Amazon Bedrock" ):
+    with pytest.raises(AssertionError, match="Please provide the 'model` in the config_list to use Amazon Bedrock"):
         bedrock_client.parse_params({})
 
 

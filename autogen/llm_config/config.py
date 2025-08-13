@@ -32,7 +32,7 @@ from autogen.oai.ollama import OllamaEntryDict, OllamaLLMConfigEntry
 from autogen.oai.together import TogetherEntryDict, TogetherLLMConfigEntry
 
 from ..doc_utils import export_module
-from .entry import LLMConfigEntry
+from .entry import ApplicationConfig, LLMConfigEntry
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -76,10 +76,12 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     def __init__(
         self,
-        config_list: Union[Iterable[ConfigItem], Dict[str, Any]] = (),
+        *,
+        top_p: Optional[float] = None,
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        config_list: Union[Iterable[ConfigItem], Dict[str, Any]] = (),
         check_every_ms: Optional[int] = None,
-        max_new_tokens: Optional[int] = None,
         allow_format_str_template: Optional[bool] = None,
         response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None,
         timeout: Optional[int] = None,
@@ -88,8 +90,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
         parallel_tool_calls: Optional[bool] = None,
         tools: Iterable[Any] = (),
         functions: Iterable[Any] = (),
-        max_tokens: Optional[int] = None,
-        top_p: Optional[float] = None,
         routing_method: Optional[Literal["fixed_order", "round_robin"]] = None,
         **kwargs: Any,
     ) -> None:
@@ -98,8 +98,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         Args:
             config_list: A list of LLM configuration entries or dictionaries.
             temperature: The sampling temperature for LLM generation.
-            check_every_ms: The interval (in milliseconds) to check for updates.
-            max_new_tokens: The maximum number of new tokens to generate.
+            check_every_ms: The interval (in milliseconds) to check for updates
             allow_format_str_template: Whether to allow format string templates.
             response_format: The format of the response (e.g., JSON, text).
             timeout: The timeout for LLM requests in seconds.
@@ -144,37 +143,35 @@ class LLMConfig(metaclass=MetaLLMConfig):
             )
             ```
         """
+        app_config = ApplicationConfig(
+            max_tokens=max_tokens,
+            top_p=top_p,
+            temperature=temperature,
+        )
+
+        application_level_options = app_config.model_dump(exclude_none=True)
+
         final_config_list: List[Union[LLMConfigEntry, Dict[str, Any]]] = []
 
         if isinstance(config_list, dict):
             config_list = [config_list]
 
-        for c in (*config_list, kwargs):
-            if not c:
-                continue
-
+        for c in filter(bool, (*config_list, kwargs)):
             if isinstance(c, LLMConfigEntry):
-                final_config_list.append(c)
+                final_config_list.append(c.apply_application_config(app_config))
                 continue
 
-            config_entity = {
-                "api_type": "openai",  # default api_type
-                **c,
-            }
-
-            if max_tokens:
-                config_entity = {"max_tokens": max_tokens} | config_entity
-
-            if top_p:
-                config_entity = {"top_p": top_p} | config_entity
-
-            final_config_list.append(config_entity)
+            else:
+                final_config_list.append({
+                    "api_type": "openai",  # default api_type
+                    **application_level_options,
+                    **c,
+                })
 
         self._model = _LLMConfig(
+            **application_level_options,
             config_list=final_config_list,
-            temperature=temperature,
             check_every_ms=check_every_ms,
-            max_new_tokens=max_new_tokens,
             seed=seed,
             allow_format_str_template=allow_format_str_template,
             response_format=response_format,
@@ -350,19 +347,17 @@ class LLMConfig(metaclass=MetaLLMConfig):
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
 
 
-class _LLMConfig(BaseModel):
-    temperature: Optional[float] = None
-    check_every_ms: Optional[int] = None
-    max_new_tokens: Optional[int] = None
-    seed: Optional[int] = None
-    allow_format_str_template: Optional[bool] = None
-    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-    timeout: Optional[int] = None
-    cache_seed: Optional[int] = None
+class _LLMConfig(ApplicationConfig):
+    check_every_ms: Optional[int]
+    seed: Optional[int]
+    allow_format_str_template: Optional[bool]
+    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]]
+    timeout: Optional[int]
+    cache_seed: Optional[int]
+    parallel_tool_calls: Optional[bool]
 
-    tools: list[Any] = Field(default_factory=list)
-    functions: list[Any] = Field(default_factory=list)
-    parallel_tool_calls: Optional[bool] = None
+    tools: list[Any]
+    functions: list[Any]
 
     config_list: List[  # type: ignore[valid-type]
         Annotated[
@@ -382,9 +377,9 @@ class _LLMConfig(BaseModel):
             ],
             Field(discriminator="api_type"),
         ],
-    ] = Field(default_factory=list, min_length=1)
+    ] = Field(..., min_length=1)
 
-    routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
+    routing_method: Optional[Literal["fixed_order", "round_robin"]]
 
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid")

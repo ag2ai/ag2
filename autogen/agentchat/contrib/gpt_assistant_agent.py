@@ -12,7 +12,7 @@ from collections import defaultdict
 from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 from ...oai.openai_utils import create_gpt_assistant, retrieve_assistants_by_name, update_gpt_assistant
 from ...runtime_logging import log_new_agent, logging_enabled
 from ..agent import Agent

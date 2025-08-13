@@ -12,7 +12,7 @@ from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.targets.transition_target import AgentNameTarget
 from ....doc_utils import export_module
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs
 from .chroma_query_engine import VectorChromaQueryEngine
 from .document_utils import preprocess_path

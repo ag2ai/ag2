@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
 from ....interop import LiteLLmConfigFactory
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ... import Tool
 from ...dependency_injection import Depends, on
 

@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.oai.client import (
     AOPENAI_FALLBACK_KWARGS,
     LEGACY_CACHE_DIR,

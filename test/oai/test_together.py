@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.oai.together import TogetherClient, TogetherLLMConfigEntry, calculate_together_cost
 
 

@@ -16,7 +16,7 @@ import warnings
 from functools import lru_cache
 from typing import Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, HttpUrl, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
@@ -244,7 +244,7 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
 
 class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["openai"]
-    top_p: Optional[float]
+
     price: Optional[list[float]]
     tool_choice: Optional[Literal["none", "auto", "required"]]
     user: Optional[str]
@@ -257,7 +257,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
 
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
-    top_p: Optional[float] = None
+
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
     user: Optional[str] = None
@@ -281,7 +281,7 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
 
 class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["azure"]
-    top_p: Optional[float]
+
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]]
     stream: bool
     tool_choice: Optional[Literal["none", "auto", "required"]]
@@ -292,7 +292,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
 
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
-    top_p: Optional[float] = None
+
     azure_ad_token_provider: Optional[Union[str, Callable[[], str]]] = None
     stream: bool = False
     tool_choice: Optional[Literal["none", "auto", "required"]] = None
@@ -309,29 +309,22 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 
 class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
     api_type: Literal["deepseek"]
+
     base_url: HttpUrl
-    temperature: float
-    max_tokens: int
     stream: bool
-    top_p: Optional[float]
     tool_choice: Optional[Literal["none", "auto", "required"]]
 
 
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
-    base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
+
     temperature: float = Field(0.5, ge=0.0, le=1.0)
     max_tokens: int = Field(8192, ge=1, le=8192)
-    stream: bool = False
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
-    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
-    @field_validator("top_p", mode="before")
-    @classmethod
-    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
-        if v is not None and info.data.get("temperature") is not None:
-            raise ValueError("temperature and top_p cannot be set at the same time.")
-        return v
+    base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
+    stream: bool = False
+    tool_choice: Optional[Literal["none", "auto", "required"]] = None
 
     def create_client(self) -> None:  # type: ignore [override]
         raise NotImplementedError("DeepSeekLLMConfigEntry.create_client is not implemented.")
@@ -669,9 +662,9 @@ class OpenAIClient:
         # Unsupported parameters
         unsupported_params = [
             "temperature",
+            "top_p",
             "frequency_penalty",
             "presence_penalty",
-            "top_p",
             "logprobs",
             "top_logprobs",
             "logit_bias",

@@ -8,7 +8,7 @@ from pydantic import BaseModel, field_validator
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
 

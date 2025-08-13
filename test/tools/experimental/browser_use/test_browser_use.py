@@ -9,7 +9,7 @@ import pytest
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool, ExtractedContent
 
 from ....conftest import Credentials, credentials_browser_use

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ... import Tool
 
 with optional_import_block():

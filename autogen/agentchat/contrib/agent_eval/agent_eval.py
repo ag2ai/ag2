@@ -7,7 +7,7 @@
 from typing import Any, Literal, Optional, Union
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from .criterion import Criterion
 from .critic_agent import CriticAgent
 from .quantifier_agent import QuantifierAgent

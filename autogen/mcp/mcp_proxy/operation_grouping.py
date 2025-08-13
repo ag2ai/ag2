@@ -16,7 +16,7 @@ with optional_import_block() as result:
 from pydantic import BaseModel
 
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 
 
 class Group(BaseModel):

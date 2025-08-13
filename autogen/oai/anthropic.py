@@ -113,12 +113,8 @@ ANTHROPIC_PRICING_1k = {
 class AnthropicEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["anthropic"]
     timeout: Optional[int]
-    temperature: float
-    top_k: Optional[int]
-    top_p: Optional[float]
     stop_sequences: Optional[list[str]]
     stream: bool
-    max_tokens: int
     price: Optional[list[float]]
     tool_choice: Optional[dict]
     thinking: Optional[dict]
@@ -129,13 +125,17 @@ class AnthropicEntryDict(LLMConfigEntryDict, total=False):
 
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
-    timeout: Optional[int] = Field(default=None, ge=1)
+
+    # Basic options
+    max_tokens: int = Field(default=4096, ge=1)
     temperature: float = Field(default=1.0, ge=0.0, le=1.0)
-    top_k: Optional[int] = Field(default=None, ge=1)
     top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    # Anthropic-specific options
+    timeout: Optional[int] = Field(default=None, ge=1)
+    top_k: Optional[int] = Field(default=None, ge=1)
     stop_sequences: Optional[list[str]] = None
     stream: bool = False
-    max_tokens: int = Field(default=4096, ge=1)
     price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
     tool_choice: Optional[dict] = None
     thinking: Optional[dict] = None
@@ -183,7 +183,7 @@ class AnthropicClient:
             self._client = Anthropic(**client_kwargs)
         elif self._gcp_region is not None:
             kw = {}
-            for i, p in enumerate(inspect.signature(AnthropicVertex).parameters):
+            for p in inspect.signature(AnthropicVertex).parameters:
                 if hasattr(self, f"_gcp_{p}"):
                     kw[p] = getattr(self, f"_gcp_{p}")
             if self._base_url:

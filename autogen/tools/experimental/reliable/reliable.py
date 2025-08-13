@@ -25,7 +25,7 @@ from ....agentchat.group import AgentTarget, ReplyResult, TerminateTarget
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.patterns import DefaultPattern
 from ....doc_utils import export_module
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ....tools.dependency_injection import Field as AG2Field
 from ....tools.tool import Tool
 

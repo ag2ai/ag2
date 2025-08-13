@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ...oai.client import OpenAIWrapper
 
 if TYPE_CHECKING:
-    from ...llm_config.config import LLMConfig
+    from ...llm_config import LLMConfig
     from .targets.transition_target import TransitionTarget
 
 

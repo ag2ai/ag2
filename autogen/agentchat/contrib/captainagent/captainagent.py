@@ -10,7 +10,7 @@ from termcolor import colored
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
 from ....doc_utils import export_module
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 from ...conversable_agent import ConversableAgent
 from .agent_builder import AgentBuilder
 from .tool_retriever import ToolBuilder, format_ag2_tool, get_full_tool_description

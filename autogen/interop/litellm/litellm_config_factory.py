@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TypeVar, Union
 
 from ...doc_utils import export_module
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
 
 __all__ = ["LiteLLmConfigFactory"]

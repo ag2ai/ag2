@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 import json
 import logging
+import warnings
 from typing import Any, Optional, Union
 
 import requests
@@ -13,7 +14,7 @@ import requests
 from ...code_utils import content_str
 from ...formatting_utils import colored
 from ...import_utils import optional_import_block, require_optional_import
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 from ..agent import Agent
 from .img_utils import get_image_data, llava_formatter
 from .multimodal_conversable_agent import MultimodalConversableAgent
@@ -84,12 +85,25 @@ class LLaVAAgent(MultimodalConversableAgent):
         retry = 10
         while len(out) == 0 and retry > 0:
             # image names will be inferred automatically from llava_call
+            if "max_new_tokens" in self.llm_config:
+                warnings.warn(
+                    (
+                        "`max_new_tokens` is deprecated in `llm_config` for llava agents. "
+                        "Use `max_tokens` instead. "
+                        "Scheduled for removal in 0.10.0 version."
+                    ),
+                    DeprecationWarning,
+                )
+                max_tokens = self.llm_config["max_new_tokens"]
+            else:
+                max_tokens = self.llm_config.get("max_tokens")
+
             out = llava_call_binary(
                 prompt=prompt,
                 images=images,
                 config_list=self.llm_config["config_list"],
                 temperature=self.llm_config.get("temperature", 0.5),
-                max_new_tokens=self.llm_config.get("max_new_tokens", 2000),
+                max_new_tokens=max_tokens or 2000,
             )
             retry -= 1
 

@@ -104,6 +104,7 @@ logger = logging.getLogger(__name__)
 
 class GeminiEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["google"]
+
     project_id: Optional[str]
     location: Optional[str]
     google_application_credentials: Optional[str]

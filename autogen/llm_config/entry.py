@@ -17,8 +17,11 @@ from .client import ModelClient
 class LLMConfigEntryDict(TypedDict, total=False):
     api_type: Required[str]
     model: str
-    api_key: Optional[SecretStr]
     max_tokens: Optional[int]
+    top_p: Optional[float]
+    temperature: Optional[float]
+
+    api_key: Optional[SecretStr]
     api_version: Optional[str]
     base_url: Optional[HttpUrl]
     voice: Optional[str]
@@ -29,12 +32,25 @@ class LLMConfigEntryDict(TypedDict, total=False):
     tags: List[str]
 
 
-class LLMConfigEntry(BaseModel, ABC):
+class ApplicationConfig(BaseModel):
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    top_p: Optional[float] = Field(default=None, ge=0)
+    temperature: Optional[float] = None
+
+    @field_validator("top_p", mode="before")
+    @classmethod
+    def check_top_p(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+        if v is not None and info.data.get("temperature") is not None:
+            raise ValueError("temperature and top_p cannot be set at the same time.")
+        return v
+
+
+class LLMConfigEntry(ApplicationConfig, ABC):
     api_type: str
     model: str = Field(..., min_length=1)
+
     api_key: Optional[SecretStr] = None
     api_version: Optional[str] = None
-    max_tokens: Optional[int] = None
     base_url: Optional[HttpUrl] = None
     voice: Optional[str] = None
     model_client_cls: Optional[str] = None
@@ -44,26 +60,34 @@ class LLMConfigEntry(BaseModel, ABC):
     tags: List[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    def apply_application_config(self, application_config: ApplicationConfig) -> "LLMConfigEntry":
+        """Apply application level configurations."""
+        # TODO: should create a new instance instead of mutating current one
+        self.max_tokens = self.max_tokens or application_config.max_tokens
+        self.top_p = self.top_p or application_config.top_p
+        self.temperature = self.temperature or application_config.temperature
+        return self
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...
 
     @field_validator("base_url", mode="before")
     @classmethod
-    def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
+    def check_base_url(cls, v: Union[HttpUrl, str, None], info: ValidationInfo) -> Optional[str]:
         if v is None:  # Handle None case explicitly
             return None
         if not str(v).startswith("https://") and not str(v).startswith("http://"):
-            v = f"http://{str(v)}"
-        return v
+            return f"http://{str(v)}"
+        return str(v)
 
     @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
-    def serialize_base_url(self, v: Any) -> Any:
+    def serialize_base_url(self, v: Optional[HttpUrl]) -> Optional[str]:
         return str(v) if v is not None else None
 
     @field_serializer("api_key", when_used="unless-none")
-    def serialize_api_key(self, v: SecretStr) -> Any:
+    def serialize_api_key(self, v: SecretStr) -> str:
         return v.get_secret_value()
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:

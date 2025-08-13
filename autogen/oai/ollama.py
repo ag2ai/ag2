@@ -52,15 +52,18 @@ class OllamaEntryDict(LLMConfigEntryDict, total=False):
     num_ctx: int
     repeat_penalty: float
     seed: int
-    temperature: float
     top_k: int
-    top_p: float
     hide_tools: Literal["if_all_run", "if_any_run", "never"]
     native_tool_calls: bool
 
 
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
+
+    temperature: float = Field(default=0.8)
+    top_p: float = Field(default=0.9)
+    # TODO: max_tokens
+
     client_host: Optional[HttpUrl] = None
     stream: bool = False
     num_predict: int = Field(
@@ -70,9 +73,7 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
     seed: int = Field(default=0)
-    temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
-    top_p: float = Field(default=0.9)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     native_tool_calls: bool = False
 

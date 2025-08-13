@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.beta.assistant import Assistant
 
-    from ..llm_config.config import LLMConfig
+    from ..llm_config import LLMConfig
 
 from ..doc_utils import export_module
 

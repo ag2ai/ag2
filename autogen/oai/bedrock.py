@@ -59,8 +59,6 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     aws_secret_key: Optional[SecretStr]
     aws_session_token: Optional[SecretStr]
     aws_profile_name: Optional[str]
-    temperature: Optional[float]
-    top_p: Optional[float]
     top_k: Optional[int]
     k: Optional[int]
     seed: Optional[int]
@@ -72,13 +70,13 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
+
+    # Bedrock-specific options
     aws_region: str
     aws_access_key: Optional[SecretStr] = None
     aws_secret_key: Optional[SecretStr] = None
     aws_session_token: Optional[SecretStr] = None
     aws_profile_name: Optional[str] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
     top_k: Optional[int] = None
     k: Optional[int] = None
     seed: Optional[int] = None
@@ -198,14 +196,23 @@ class BedrockClient:
             )
 
         if "top_p" in params:
-            base_params["topP"] = validate_parameter(
-                params, "top_p", (float, int), False, None, None, None
+            base_params["topP"] = validate_parameter(params, "top_p", (float, int), False, None, None, None)
+
+        if "topP" in params:
+            warnings.warn(
+                ("topP is deprecated, use top_p instead. Scheduled for removal in 0.10.0 version."), DeprecationWarning
             )
+            base_params["topP"] = validate_parameter(params, "topP", (float, int), False, None, None, None)
 
         if "max_tokens" in params:
-            base_params["maxTokens"] = validate_parameter(
-                params, "max_tokens", (int,), False, None, None, None
+            base_params["maxTokens"] = validate_parameter(params, "max_tokens", (int,), False, None, None, None)
+
+        if "maxTokens" in params:
+            warnings.warn(
+                ("maxTokens is deprecated, use max_tokens instead. Scheduled for removal in 0.10.0 version."),
+                DeprecationWarning,
             )
+            base_params["maxTokens"] = validate_parameter(params, "maxTokens", (int,), False, None, None, None)
 
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
         additional_params = {}

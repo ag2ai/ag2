@@ -12,7 +12,7 @@ from typing import Annotated, Any, Callable, Literal, Optional, Union
 
 from ... import Agent, AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ...browser_utils import SimpleTextBrowser
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 from ...oai.openai_utils import filter_config
 from ...token_count_utils import count_token, get_max_token_limit
 

@@ -7,7 +7,7 @@ from typing import Any, Callable, TypeVar, Union
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 from ...oai import get_first_llm_config
 
 with optional_import_block():

@@ -14,7 +14,7 @@ from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.io.run_response import AsyncRunResponseProtocol, Cost
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from test.conftest import Credentials
 
 

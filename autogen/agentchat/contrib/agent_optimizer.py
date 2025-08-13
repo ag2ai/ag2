@@ -10,7 +10,7 @@ from typing import Any, Optional, Union
 
 from ... import OpenAIWrapper, filter_config
 from ...code_utils import execute_code
-from ...llm_config.config import LLMConfig
+from ...llm_config import LLMConfig
 
 ADD_FUNC = {
     "type": "function",

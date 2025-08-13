@@ -49,10 +49,8 @@ with optional_import_block():
 
 class TogetherEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["together"]
-    max_tokens: int
+
     stream: bool
-    temperature: Optional[float]
-    top_p: Optional[float]
     top_k: Optional[int]
     repetition_penalty: Optional[float]
     presence_penalty: Optional[float]
@@ -66,10 +64,10 @@ class TogetherEntryDict(LLMConfigEntryDict, total=False):
 
 class TogetherLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["together"] = "together"
+
     max_tokens: int = Field(default=512, ge=0)
+
     stream: bool = False
-    temperature: Optional[float] = Field(default=None)
-    top_p: Optional[float] = Field(default=None)
     top_k: Optional[int] = Field(default=None)
     repetition_penalty: Optional[float] = Field(default=None)
     presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)

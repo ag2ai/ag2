@@ -69,10 +69,8 @@ COHERE_PRICING_1K = {
 
 class CohereEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["cohere"]
-    temperature: float
-    max_tokens: Optional[int]
+
     k: int
-    p: float
     seed: Optional[int]
     frequency_penalty: float
     presence_penalty: float
@@ -84,10 +82,12 @@ class CohereEntryDict(LLMConfigEntryDict, total=False):
 
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
+
     temperature: float = Field(default=0.3, ge=0)
     max_tokens: Optional[int] = Field(default=None, ge=0)
+    top_p: float = Field(default=0.75, ge=0.01, le=0.99)
+
     k: int = Field(default=0, ge=0, le=500)
-    p: float = Field(default=0.75, ge=0.01, le=0.99)
     seed: Optional[int] = None
     frequency_penalty: float = Field(default=0, ge=0, le=1)
     presence_penalty: float = Field(default=0, ge=0, le=1)
@@ -218,7 +218,17 @@ class CohereClient:
         if "k" in params:
             cohere_params["k"] = validate_parameter(params, "k", int, False, 0, (0, 500), None)
 
+        if "top_p" in params:
+            cohere_params["p"] = validate_parameter(params, "top_p", (int, float), False, 0.75, (0.01, 0.99), None)
+
         if "p" in params:
+            warnings.warn(
+                (
+                    "parameter 'p' is deprecated, use 'top_p' instead for consistency with OpenAI API spec. "
+                    "Scheduled for removal in 0.10.0 version."
+                ),
+                DeprecationWarning,
+            )
             cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
 
         if "seed" in params:

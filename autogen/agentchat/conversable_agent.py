@@ -64,8 +64,8 @@ from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
+from ..llm_config import LLMConfig
 from ..llm_config.client import ModelClient
-from ..llm_config.config import LLMConfig
 from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str

@@ -13,7 +13,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config.config import LLMConfig
+from autogen.llm_config import LLMConfig
 from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:

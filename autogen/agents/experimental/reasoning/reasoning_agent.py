@@ -11,7 +11,7 @@ from typing import Any, Literal, Optional, Union
 from .... import Agent, AssistantAgent, UserProxyAgent
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block
-from ....llm_config.config import LLMConfig
+from ....llm_config import LLMConfig
 
 __all__ = ["ReasoningAgent", "ThinkNode"]
 
