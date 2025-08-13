@@ -135,9 +135,7 @@ class CerebrasClient:
         cerebras_params["temperature"] = validate_parameter(
             params, "temperature", (int, float), True, 1.0, (0, 1.5), None
         )
-        cerebras_params["top_p"] = validate_parameter(
-            params, "top_p", (int, float), True, None, (0.0, 1.0), None
-        )
+        cerebras_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, (0.0, 1.0), None)
         cerebras_params["tool_choice"] = validate_parameter(
             params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
         )
