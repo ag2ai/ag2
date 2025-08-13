@@ -55,7 +55,6 @@ def test_anthropic_llm_config_entry():
         api_key="dummy_api_key",
         stream=False,
         temperature=1.0,
-        top_p=0.8,
         max_tokens=100,
     )
     expected = {
@@ -64,7 +63,6 @@ def test_anthropic_llm_config_entry():
         "api_key": "dummy_api_key",
         "stream": False,
         "temperature": 1.0,
-        "top_p": 0.8,
         "max_tokens": 100,
         "tags": [],
     }

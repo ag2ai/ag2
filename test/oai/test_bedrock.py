@@ -46,7 +46,6 @@ def test_bedrock_llm_config_entry():
         aws_secret_key="test_secret_access_key",
         aws_session_token="test_session_token",
         temperature=0.8,
-        top_p=0.6,
     )
     expected = {
         "api_type": "bedrock",
@@ -56,7 +55,6 @@ def test_bedrock_llm_config_entry():
         "aws_secret_key": "test_secret_access_key",
         "aws_session_token": "test_session_token",
         "temperature": 0.8,
-        "top_p": 0.6,
         "tags": [],
         "supports_system_prompts": True,
     }
