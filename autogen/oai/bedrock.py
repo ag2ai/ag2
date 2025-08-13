@@ -40,15 +40,37 @@ from typing import Any, Literal, Optional
 
 import requests
 from pydantic import Field, SecretStr, field_serializer
+from typing_extensions import Required, Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import boto3
     from botocore.config import Config
+
+
+class BedrockEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["bedrock"]
+    aws_region: Required[str]
+    aws_access_key: Optional[SecretStr]
+    aws_secret_key: Optional[SecretStr]
+    aws_session_token: Optional[SecretStr]
+    aws_profile_name: Optional[str]
+    temperature: Optional[float]
+    topP: Optional[float]  # noqa: N815
+    maxTokens: Optional[int]  # noqa: N815
+    top_p: Optional[float]  # double?
+    top_k: Optional[int]
+    k: Optional[int]
+    seed: Optional[int]
+    cache_seed: Optional[int]
+    supports_system_prompts: bool
+    stream: bool
+    price: Optional[list[float]]
+    timeout: Optional[int]
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -85,26 +107,14 @@ class BedrockClient:
 
     _retries = 5
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Unpack[BedrockEntryDict]):
         """Initialises BedrockClient for Amazon's Bedrock Converse API"""
-        self._aws_access_key = kwargs.get("aws_access_key")
-        self._aws_secret_key = kwargs.get("aws_secret_key")
-        self._aws_session_token = kwargs.get("aws_session_token")
-        self._aws_region = kwargs.get("aws_region")
+        self._aws_access_key = kwargs.get("aws_access_key") or os.getenv("AWS_ACCESS_KEY")
+        self._aws_secret_key = kwargs.get("aws_secret_key") or os.getenv("AWS_SECRET_KEY")
+        self._aws_session_token = kwargs.get("aws_session_token") or os.getenv("AWS_SESSION_TOKEN")
+        self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._aws_profile_name = kwargs.get("aws_profile_name")
         self._timeout = kwargs.get("timeout")
-
-        if not self._aws_access_key:
-            self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
-
-        if not self._aws_secret_key:
-            self._aws_secret_key = os.getenv("AWS_SECRET_KEY")
-
-        if not self._aws_session_token:
-            self._aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-
-        if not self._aws_region:
-            self._aws_region = os.getenv("AWS_REGION")
 
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")

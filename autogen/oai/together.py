@@ -36,14 +36,32 @@ import warnings
 from typing import Any, Literal, Optional, Union
 
 from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     from together import Together
+
+
+class TogetherEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["together"]
+    max_tokens: int
+    stream: bool
+    temperature: Optional[float]
+    top_p: Optional[float]
+    top_k: Optional[int]
+    repetition_penalty: Optional[float]
+    presence_penalty: Optional[float]
+    frequency_penalty: Optional[float]
+    min_p: Optional[float]
+    safety_model: Optional[str]
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    price: Optional[list[float]]
+    tool_choice: Optional[Union[str, dict[str, Union[str, dict[str, str]]]]]
 
 
 class TogetherLLMConfigEntry(LLMConfigEntry):
@@ -71,7 +89,7 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
 class TogetherClient:
     """Client for Together.AI's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[TogetherEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:

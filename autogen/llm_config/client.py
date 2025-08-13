@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Optional, Protocol, Union
+from typing import Any, Dict, List, Protocol, Union
 
 from ..doc_utils import export_module
 
@@ -26,19 +26,19 @@ class ModelClient(Protocol):
     The message_retrieval method must be implemented to return a list of str or a list of messages from the response.
     """
 
-    RESPONSE_USAGE_KEYS = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+    RESPONSE_USAGE_KEYS: List[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
 
     class ModelClientResponseProtocol(Protocol):
         class Choice(Protocol):
             class Message(Protocol):
-                content: Optional[str] | Optional[dict[str, Any]]
+                content: Union[str, Dict[str, Any]]
 
             message: Message
 
         choices: list[Choice]
         model: str
 
-    def create(self, params: dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
+    def create(self, params: Dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
 
     def message_retrieval(
         self, response: ModelClientResponseProtocol
@@ -53,6 +53,6 @@ class ModelClient(Protocol):
     def cost(self, response: ModelClientResponseProtocol) -> float: ...  # pragma: no cover
 
     @staticmethod
-    def get_usage(response: ModelClientResponseProtocol) -> dict:
+    def get_usage(response: ModelClientResponseProtocol) -> Dict[str, Any]:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         ...  # pragma: no cover

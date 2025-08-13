@@ -34,7 +34,7 @@ from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -42,6 +42,21 @@ with optional_import_block():
     import ollama
     from fix_busted_json import repair_json
     from ollama import Client
+
+
+class OllamaEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["ollama"]
+    client_host: Optional[HttpUrl]
+    stream: bool
+    num_predict: int
+    num_ctx: int
+    repeat_penalty: float
+    seed: int
+    temperature: float
+    top_k: int
+    top_p: float
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    native_tool_calls: bool
 
 
 class OllamaLLMConfigEntry(LLMConfigEntry):

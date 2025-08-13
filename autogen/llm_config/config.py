@@ -13,20 +13,23 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import TypeAlias
 
-from autogen.oai import (
-    AnthropicLLMConfigEntry,
+from autogen.oai.anthropic import AnthropicEntryDict, AnthropicLLMConfigEntry
+from autogen.oai.bedrock import BedrockEntryDict, BedrockLLMConfigEntry
+from autogen.oai.cerebras import CerebrasEntryDict, CerebrasLLMConfigEntry
+from autogen.oai.client import (
+    AzureOpenAIEntryDict,
     AzureOpenAILLMConfigEntry,
-    BedrockLLMConfigEntry,
-    CerebrasLLMConfigEntry,
-    CohereLLMConfigEntry,
+    DeepSeekEntyDict,
     DeepSeekLLMConfigEntry,
-    GeminiLLMConfigEntry,
-    GroqLLMConfigEntry,
-    MistralLLMConfigEntry,
-    OllamaLLMConfigEntry,
+    OpenAIEntryDict,
     OpenAILLMConfigEntry,
-    TogetherLLMConfigEntry,
 )
+from autogen.oai.cohere import CohereEntryDict, CohereLLMConfigEntry
+from autogen.oai.gemini import GeminiEntryDict, GeminiLLMConfigEntry
+from autogen.oai.groq import GroqEntryDict, GroqLLMConfigEntry
+from autogen.oai.mistral import MistralEntryDict, MistralLLMConfigEntry
+from autogen.oai.ollama import OllamaEntryDict, OllamaLLMConfigEntry
+from autogen.oai.together import TogetherEntryDict, TogetherLLMConfigEntry
 
 from ..doc_utils import export_module
 from .entry import LLMConfigEntry
@@ -49,7 +52,22 @@ class MetaLLMConfig(type):
         return cls.current
 
 
-ConfigItem: TypeAlias = Union["LLMConfigEntry", Dict[str, Any]]
+ConfigItem: TypeAlias = Union[
+    LLMConfigEntry,
+    AnthropicEntryDict,
+    BedrockEntryDict,
+    CerebrasEntryDict,
+    CohereEntryDict,
+    AzureOpenAIEntryDict,
+    OpenAIEntryDict,
+    DeepSeekEntyDict,
+    MistralEntryDict,
+    GroqEntryDict,
+    OllamaEntryDict,
+    GeminiEntryDict,
+    TogetherEntryDict,
+    Dict[str, Any],
+]
 
 
 @export_module("autogen")
@@ -252,6 +270,8 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return self._model.model_validate_strings(*args, **kwargs)
 
     def __eq__(self, value: Any) -> bool:
+        if not isinstance(value, LLMConfig):
+            return NotImplemented
         return self._model == value._model
 
     def _getattr(self, o: object, name: str) -> Any:

@@ -30,9 +30,10 @@ import warnings
 from typing import Any, Literal, Optional
 
 from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -46,6 +47,19 @@ GROQ_PRICING_1K = {
     "llama3-8b-8192": (0.00005, 0.00008),
     "gemma-7b-it": (0.00007, 0.00007),
 }
+
+
+class GroqEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["groq"]
+    frequency_penalty: float
+    max_tokens: int
+    presence_penalty: float
+    seed: int
+    stream: bool
+    temperature: float
+    top_p: float
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Optional[Literal["none", "auto", "required"]]
 
 
 class GroqLLMConfigEntry(LLMConfigEntry):
@@ -67,7 +81,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
 class GroqClient:
     """Client for Groq's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[GroqEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:

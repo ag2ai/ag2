@@ -32,9 +32,10 @@ import warnings
 from typing import Any, Literal, Optional, Union
 
 from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -51,6 +52,18 @@ with optional_import_block():
         ToolMessage,
         UserMessage,
     )
+
+
+class MistralEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["mistral"]
+    temperature: float
+    top_p: Optional[float]
+    max_tokens: Optional[int]
+    safe_prompt: bool
+    random_seed: Optional[int]
+    stream: bool
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Optional[Literal["none", "auto", "any"]]
 
 
 class MistralLLMConfigEntry(LLMConfigEntry):
@@ -72,7 +85,7 @@ class MistralLLMConfigEntry(LLMConfigEntry):
 class MistralAIClient:
     """Client for Mistral.AI's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[MistralEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:

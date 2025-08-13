@@ -9,8 +9,24 @@ from typing import Any, List, Mapping, Optional, Type, Union
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
+from typing_extensions import Required, TypedDict
 
 from .client import ModelClient
+
+
+class LLMConfigEntryDict(TypedDict, total=False):
+    api_type: Required[str]
+    model: str
+    api_key: Optional[SecretStr]
+    max_tokens: Optional[int]
+    api_version: Optional[str]
+    base_url: Optional[HttpUrl]
+    voice: Optional[str]
+    http_client: Optional[httpxClient]
+    model_client_cls: Optional[str]
+    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]]
+    default_headers: Optional[Mapping[str, Any]]
+    tags: List[str]
 
 
 class LLMConfigEntry(BaseModel, ABC):

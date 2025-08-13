@@ -25,8 +25,8 @@ from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
-from ..llm_config.client import ModelClient
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config import ModelClient
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
@@ -242,6 +242,19 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
     logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
+class OpenAIEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["openai"]
+    top_p: Optional[float]
+    price: Optional[list[float]]
+    tool_choice: Optional[Literal["none", "auto", "required"]]
+    user: Optional[str]
+    stream: bool
+    verbosity: Optional[Literal["low", "medium", "high"]]
+    extra_body: Optional[dict[str, Any]]
+    reasoning_effort: Optional[Literal["low", "minimal", "medium", "high"]]
+    max_completion_tokens: Optional[int]
+
+
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
     top_p: Optional[float] = None
@@ -266,6 +279,17 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("create_client method must be implemented in the derived class.")
 
 
+class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["azure"]
+    top_p: Optional[float]
+    azure_ad_token_provider: Optional[Union[str, Callable[[], str]]]
+    stream: bool
+    tool_choice: Optional[Literal["none", "auto", "required"]]
+    user: Optional[str]
+    reasoning_effort: Optional[Literal["low", "medium", "high"]]
+    max_completion_tokens: Optional[int]
+
+
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
@@ -281,6 +305,16 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
 
     def create_client(self) -> "ModelClient":
         raise NotImplementedError
+
+
+class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["deepseek"]
+    base_url: HttpUrl
+    temperature: float
+    max_tokens: int
+    stream: bool
+    top_p: Optional[float]
+    tool_choice: Optional[Literal["none", "auto", "required"]]
 
 
 class DeepSeekLLMConfigEntry(LLMConfigEntry):

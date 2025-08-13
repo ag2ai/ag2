@@ -37,11 +37,12 @@ import warnings
 from typing import Any, Literal, Optional, Type
 
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -66,6 +67,21 @@ COHERE_PRICING_1K = {
 }
 
 
+class CohereEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["cohere"]
+    temperature: float
+    max_tokens: Optional[int]
+    k: int
+    p: float
+    seed: Optional[int]
+    frequency_penalty: float
+    presence_penalty: float
+    client_name: Optional[str]
+    strict_tools: bool
+    stream: bool
+    tool_choice: Optional[Literal["NONE", "REQUIRED"]]
+
+
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
     temperature: float = Field(default=0.3, ge=0)
@@ -87,7 +103,7 @@ class CohereLLMConfigEntry(LLMConfigEntry):
 class CohereClient:
     """Client for Cohere's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[CohereEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:

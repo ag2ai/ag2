@@ -79,9 +79,10 @@ import warnings
 from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -109,6 +110,23 @@ ANTHROPIC_PRICING_1k = {
 }
 
 
+class AnthropicEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["anthropic"]
+    timeout: Optional[int]
+    temperature: float
+    top_k: Optional[int]
+    top_p: Optional[float]
+    stop_sequences: Optional[list[str]]
+    stream: bool
+    max_tokens: int
+    price: Optional[list[float]]
+    tool_choice: Optional[dict]
+    thinking: Optional[dict]
+    gcp_project_id: Optional[str]
+    gcp_region: Optional[str]
+    gcp_auth_token: Optional[str]
+
+
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
     timeout: Optional[int] = Field(default=None, ge=1)
@@ -132,7 +150,7 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
 
 @require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Unpack[AnthropicEntryDict]):
         """Initialize the Anthropic API client.
 
         Args:

@@ -55,10 +55,11 @@ from typing import Any, Literal, Optional, Type, Union
 
 import requests
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
@@ -101,6 +102,19 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
+class GeminiEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["google"]
+    project_id: Optional[str]
+    location: Optional[str]
+    google_application_credentials: Optional[str]
+    credentials: Optional[Union[Any, str]]
+    stream: bool
+    safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]]
+    price: Optional[list[float]]
+    tool_config: Optional[ToolConfig]
+    proxy: Optional[str]
+
+
 class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
     project_id: Optional[str] = None
@@ -136,7 +150,7 @@ class GeminiClient:
         "max_output_tokens": "max_output_tokens",
     }
 
-    def _initialize_vertexai(self, **params):
+    def _initialize_vertexai(self, **params: Unpack[GeminiEntryDict]):
         if "google_application_credentials" in params:
             # Path to JSON Keyfile
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = params["google_application_credentials"]

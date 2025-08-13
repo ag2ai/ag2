@@ -31,9 +31,10 @@ import warnings
 from typing import Any, Literal, Optional
 
 from pydantic import Field, ValidationInfo, field_validator
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config.entry import LLMConfigEntry
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -45,6 +46,17 @@ CEREBRAS_PRICING_1K = {
     "llama3.1-8b": (0.10 / 1000, 0.10 / 1000),
     "llama-3.3-70b": (0.85 / 1000, 1.20 / 1000),
 }
+
+
+class CerebrasEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["cerebras"]
+    max_tokens: Optional[int]
+    seed: Optional[int]
+    stream: bool
+    temperature: float
+    top_p: Optional[float]
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Optional[Literal["none", "auto", "required"]]
 
 
 class CerebrasLLMConfigEntry(LLMConfigEntry):
@@ -71,7 +83,7 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
 class CerebrasClient:
     """Client for Cerebras's API."""
 
-    def __init__(self, api_key=None, **kwargs):
+    def __init__(self, api_key=None, **kwargs: Unpack[CerebrasEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -79,9 +91,7 @@ class CerebrasClient:
             **kwargs: Additional keyword arguments to pass to the Cerebras client
         """
         # Ensure we have the api_key upon instantiation
-        self.api_key = api_key
-        if not self.api_key:
-            self.api_key = os.getenv("CEREBRAS_API_KEY")
+        self.api_key = api_key or os.getenv("CEREBRAS_API_KEY")
 
         assert self.api_key, (
             "Please include the api_key in your config list entry for Cerebras or set the CEREBRAS_API_KEY env variable."
