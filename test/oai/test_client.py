@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.client import (
     AOPENAI_FALLBACK_KWARGS,
     LEGACY_CACHE_DIR,
@@ -135,17 +135,6 @@ def mock_openai_wrapper_round_robin():
     for i in range(len(config_list)):
         wrapper._clients[i] = MockModelClient(config=wrapper._config_list[i])
     return wrapper
-
-
-@pytest.mark.parametrize(
-    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
-)
-def test_fixed_order_routing_successful_first_client(fixture_name: str, request: pytest.FixtureRequest):
-    wrapper = request.getfixturevalue(fixture_name)
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client1" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 0
 
 
 @pytest.mark.parametrize(

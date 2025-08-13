@@ -18,7 +18,7 @@ from termcolor import colored
 from .... import AssistantAgent, ConversableAgent, OpenAIWrapper, UserProxyAgent
 from ....code_utils import CODE_BLOCK_PATTERN
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 
 __all__ = ["AgentBuilder"]
 

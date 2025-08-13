@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError  # Added import
 
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
@@ -117,10 +117,24 @@ class TestLLMConfig:
         return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
 
     @pytest.mark.parametrize(
-        "llm_config, expected",
+        (
+            "llm_config",
+            "expected",
+        ),
         [
-            (
-                # todo add more test cases
+            pytest.param(
+                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+                id="gpt-4o-mini from options",
+            ),
+            pytest.param(
                 {
                     "config_list": [
                         {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
@@ -134,19 +148,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="gpt-4o-mini from config-list",
             ),
-            (
-                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ]
-                ),
-            ),
-            (
+            pytest.param(
                 {
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
@@ -161,25 +165,9 @@ class TestLLMConfig:
                     ],
                     cache_seed=42,
                 ),
+                id="gpt-4o-mini from options with config extras",
             ),
-            (
-                {
-                    "config_list": [
-                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
-                    ],
-                    "max_tokens": 1024,
-                },
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            max_tokens=1024,
-                        )
-                    ]
-                ),
-            ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -200,8 +188,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="o3 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -211,6 +200,7 @@ class TestLLMConfig:
                         }
                     ],
                     "temperature": 0.5,
+                    "max_tokens": 1024,
                     "check_every_ms": 1000,
                     "cache_seed": 42,
                 },
@@ -219,14 +209,16 @@ class TestLLMConfig:
                         OpenAILLMConfigEntry(
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            max_tokens=1024,
                         )
                     ],
                     temperature=0.5,
                     check_every_ms=1000,
                     cache_seed=42,
                 ),
+                id="gpt-4o-mini from list with config extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -246,8 +238,9 @@ class TestLLMConfig:
                         )
                     ],
                 ),
+                id="azure gpt-4o-mini from list",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -271,8 +264,9 @@ class TestLLMConfig:
                         )
                     ],
                 ),
+                id="azure o3 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -299,8 +293,9 @@ class TestLLMConfig:
                         )
                     ],
                 ),
+                id="anthropic claude-3-5-sonnet-latest from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -332,8 +327,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="bedrock claude-3-sonnet from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -356,12 +352,13 @@ class TestLLMConfig:
                             max_tokens=1000,
                             seed=42,
                             stream=False,
-                            temperature=1,
+                            temperature=1.0,
                         )
                     ]
                 ),
+                id="cerebras llama3.1-8b from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -383,12 +380,12 @@ class TestLLMConfig:
                         CohereLLMConfigEntry(
                             model="command-r-plus",
                             api_key="dummy_api_key",
-                            stream=False,
                         )
                     ]
                 ),
+                id="cohere command-r-plus from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -410,8 +407,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="deepseek deepseek-chat from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -435,23 +433,29 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="google gemini-2.0-flash-lite from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
                             "api_type": "groq",
                             "model": "llama3-8b-8192",
                             "api_key": "fake_api_key",
-                            "temperature": 1,
+                            "temperature": 1.0,
                             "stream": False,
                             "tags": [],
                         }
                     ]
                 },
-                LLMConfig(config_list=[GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")]),
+                LLMConfig(
+                    config_list=[
+                        GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192"),
+                    ]
+                ),
+                id="groq llama3-8b-8192 from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -473,8 +477,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="mistral mistral-small-latest from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -493,9 +498,14 @@ class TestLLMConfig:
                         }
                     ]
                 },
-                LLMConfig(config_list=[OllamaLLMConfigEntry(model="llama3.1:8b")]),
+                LLMConfig(
+                    config_list=[
+                        OllamaLLMConfigEntry(model="llama3.1:8b"),
+                    ]
+                ),
+                id="ollama llama3.1:8b from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -518,8 +528,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="together mistralai/Mixtral-8x7B-Instruct-v0.1 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "model": "gpt-4o-realtime-preview",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
@@ -532,6 +543,7 @@ class TestLLMConfig:
                     voice="alloy",
                     tags=["gpt-4o-realtime", "realtime"],
                 ),
+                id="gpt-4o-realtime-preview from options with llm extras",
             ),
         ],
     )

@@ -32,7 +32,7 @@ from typing import Any, Literal, Optional
 from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -48,7 +48,6 @@ GROQ_PRICING_1K = {
 }
 
 
-@register_llm_config
 class GroqLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["groq"] = "groq"
     frequency_penalty: float = Field(default=None, ge=-2, le=2)

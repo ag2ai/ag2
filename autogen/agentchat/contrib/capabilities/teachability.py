@@ -10,7 +10,7 @@ from typing import Any, Optional, Union
 
 from ....formatting_utils import colored
 from ....import_utils import optional_import_block, require_optional_import
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 from ...assistant_agent import ConversableAgent
 from ..text_analyzer_agent import TextAnalyzerAgent
 from .agent_capability import AgentCapability

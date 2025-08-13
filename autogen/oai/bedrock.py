@@ -42,7 +42,7 @@ import requests
 from pydantic import Field, SecretStr, field_serializer
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -51,7 +51,6 @@ with optional_import_block():
     from botocore.config import Config
 
 
-@register_llm_config
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
     aws_region: str

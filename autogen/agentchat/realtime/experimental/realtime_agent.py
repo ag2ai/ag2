@@ -10,7 +10,7 @@ from anyio import lowlevel
 from asyncer import create_task_group
 
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 from ....tools import Tool
 from .clients.realtime_client import RealtimeClientProtocol, get_client
 from .function_observer import FunctionObserver

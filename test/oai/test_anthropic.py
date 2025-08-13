@@ -9,7 +9,7 @@
 import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.anthropic import AnthropicClient, AnthropicLLMConfigEntry, _calculate_cost
 
 with optional_import_block() as result:

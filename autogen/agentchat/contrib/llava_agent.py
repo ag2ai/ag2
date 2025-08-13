@@ -13,7 +13,7 @@ import requests
 from ...code_utils import content_str
 from ...formatting_utils import colored
 from ...import_utils import optional_import_block, require_optional_import
-from ...llm_config import LLMConfig
+from ...llm_config.config import LLMConfig
 from ..agent import Agent
 from .img_utils import get_image_data, llava_formatter
 from .multimodal_conversable_agent import MultimodalConversableAgent

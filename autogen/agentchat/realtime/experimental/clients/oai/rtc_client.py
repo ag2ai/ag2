@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from autogen.import_utils import optional_import_block, require_optional_import
 
 from ......doc_utils import export_module
-from ......llm_config import LLMConfig
+from ......llm_config.config import LLMConfig
 from ...realtime_events import RealtimeEvent
 from ..realtime_client import RealtimeClientBase, Role, register_realtime_client
 from .utils import parse_oai_message

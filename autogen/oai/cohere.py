@@ -41,7 +41,7 @@ from pydantic import BaseModel, Field
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -66,7 +66,6 @@ COHERE_PRICING_1K = {
 }
 
 
-@register_llm_config
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
     temperature: float = Field(default=0.3, ge=0)

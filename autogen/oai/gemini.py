@@ -58,7 +58,7 @@ from pydantic import BaseModel, Field
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
@@ -101,7 +101,6 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@register_llm_config
 class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
     project_id: Optional[str] = None

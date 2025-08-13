@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from ....agentchat import ConversableAgent
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 from ... import Depends, Tool
 from ...dependency_injection import on
 

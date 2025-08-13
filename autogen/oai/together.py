@@ -38,7 +38,7 @@ from typing import Any, Literal, Optional, Union
 from pydantic import Field
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -46,7 +46,6 @@ with optional_import_block():
     from together import Together
 
 
-@register_llm_config
 class TogetherLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["together"] = "together"
     max_tokens: int = Field(default=512, ge=0)

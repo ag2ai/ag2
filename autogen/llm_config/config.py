@@ -5,24 +5,31 @@
 import functools
 import json
 import re
-from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Dict, List, Literal, Mapping, Optional, Type, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
 
-from httpx import Client as httpxClient
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import TypeAlias
 
-if TYPE_CHECKING:
-    from .oai.client import ModelClient
+from autogen.oai import (
+    AnthropicLLMConfigEntry,
+    AzureOpenAILLMConfigEntry,
+    BedrockLLMConfigEntry,
+    CerebrasLLMConfigEntry,
+    CohereLLMConfigEntry,
+    DeepSeekLLMConfigEntry,
+    GeminiLLMConfigEntry,
+    GroqLLMConfigEntry,
+    MistralLLMConfigEntry,
+    OllamaLLMConfigEntry,
+    OpenAILLMConfigEntry,
+    TogetherLLMConfigEntry,
+)
 
-__all__ = [
-    "LLMConfig",
-    "LLMConfigEntry",
-    "register_llm_config",
-]
+from ..doc_utils import export_module
+from .entry import LLMConfigEntry
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -45,6 +52,7 @@ class MetaLLMConfig(type):
 ConfigItem: TypeAlias = Union["LLMConfigEntry", Dict[str, Any]]
 
 
+@export_module("autogen")
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
@@ -144,7 +152,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
             final_config_list.append(config_entity)
 
-        self._model = self._get_base_model_class()(
+        self._model = _LLMConfig(
             config_list=final_config_list,
             temperature=temperature,
             check_every_ms=check_every_ms,
@@ -196,7 +204,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         file_location: Optional[str] = None,
         **kwargs: Any,
     ) -> "LLMConfig":
-        from .oai.openai_utils import config_list_from_json
+        from autogen.oai.openai_utils import config_list_from_json
 
         if env is None and path is None:
             raise ValueError("Either 'env' or 'path' must be provided")
@@ -209,7 +217,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return LLMConfig(config_list=config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
-        from .oai.openai_utils import filter_config
+        from autogen.oai.openai_utils import filter_config
 
         filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
         if len(filtered_config_list) == 0:
@@ -244,7 +252,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return self._model.model_validate_strings(*args, **kwargs)
 
     def __eq__(self, value: Any) -> bool:
-        return hasattr(value, "_model") and self._model == value._model
+        return self._model == value._model
 
     def _getattr(self, o: object, name: str) -> Any:
         val = getattr(o, name)
@@ -321,145 +329,42 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
 
-    @classmethod
-    def _get_base_model_class(cls) -> Type["BaseModel"]:
-        def _get_cls(llm_config_classes: tuple[Type[LLMConfigEntry], ...]) -> Type[BaseModel]:
-            if llm_config_classes in LLMConfig._base_model_classes:
-                return LLMConfig._base_model_classes[llm_config_classes]
 
-            class _LLMConfig(BaseModel):
-                temperature: Optional[float] = None
-                check_every_ms: Optional[int] = None
-                max_new_tokens: Optional[int] = None
-                seed: Optional[int] = None
-                allow_format_str_template: Optional[bool] = None
-                response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-                timeout: Optional[int] = None
-                cache_seed: Optional[int] = None
-
-                tools: list[Any] = Field(default_factory=list)
-                functions: list[Any] = Field(default_factory=list)
-                parallel_tool_calls: Optional[bool] = None
-
-                config_list: List[  # type: ignore[valid-type]
-                    Annotated[
-                        Union[llm_config_classes],
-                        Field(discriminator="api_type"),
-                    ],
-                ] = Field(default_factory=list, min_length=1)
-
-                routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
-
-                # Following field is configuration for pydantic to disallow extra fields
-                model_config = ConfigDict(extra="forbid")
-
-            LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
-
-            return _LLMConfig
-
-        return _get_cls(tuple(_llm_config_classes))
-
-
-class LLMConfigEntry(BaseModel, ABC):
-    api_type: str
-    model: str = Field(..., min_length=1)
-    api_key: Optional[SecretStr] = None
-    api_version: Optional[str] = None
-    max_tokens: Optional[int] = None
-    base_url: Optional[HttpUrl] = None
-    voice: Optional[str] = None
-    model_client_cls: Optional[str] = None
-    http_client: Optional[httpxClient] = None
+class _LLMConfig(BaseModel):
+    temperature: Optional[float] = None
+    check_every_ms: Optional[int] = None
+    max_new_tokens: Optional[int] = None
+    seed: Optional[int] = None
+    allow_format_str_template: Optional[bool] = None
     response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-    default_headers: Optional[Mapping[str, Any]] = None
-    tags: List[str] = Field(default_factory=list)
+    timeout: Optional[int] = None
+    cache_seed: Optional[int] = None
+
+    tools: list[Any] = Field(default_factory=list)
+    functions: list[Any] = Field(default_factory=list)
+    parallel_tool_calls: Optional[bool] = None
+
+    config_list: List[  # type: ignore[valid-type]
+        Annotated[
+            Union[
+                AnthropicLLMConfigEntry,
+                CerebrasLLMConfigEntry,
+                BedrockLLMConfigEntry,
+                AzureOpenAILLMConfigEntry,
+                DeepSeekLLMConfigEntry,
+                OpenAILLMConfigEntry,
+                CohereLLMConfigEntry,
+                GeminiLLMConfigEntry,
+                GroqLLMConfigEntry,
+                MistralLLMConfigEntry,
+                OllamaLLMConfigEntry,
+                TogetherLLMConfigEntry,
+            ],
+            Field(discriminator="api_type"),
+        ],
+    ] = Field(default_factory=list, min_length=1)
+
+    routing_method: Optional[Literal["fixed_order", "round_robin"]] = None
 
     # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
-
-    @abstractmethod
-    def create_client(self) -> "ModelClient": ...
-
-    @field_validator("base_url", mode="before")
-    @classmethod
-    def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
-        if v is None:  # Handle None case explicitly
-            return None
-        if not str(v).startswith("https://") and not str(v).startswith("http://"):
-            v = f"http://{str(v)}"
-        return v
-
-    @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
-    def serialize_base_url(self, v: Any) -> Any:
-        return str(v) if v is not None else None
-
-    @field_serializer("api_key", when_used="unless-none")
-    def serialize_api_key(self, v: SecretStr) -> Any:
-        return v.get_secret_value()
-
-    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
-
-    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
-
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
-        val = getattr(self, key, default)
-        if isinstance(val, SecretStr):
-            return val.get_secret_value()
-        return val
-
-    def __getitem__(self, key: str) -> Any:
-        try:
-            val = getattr(self, key)
-            if isinstance(val, SecretStr):
-                return val.get_secret_value()
-            return val
-        except AttributeError:
-            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        setattr(self, key, value)
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)
-
-    def items(self) -> Iterable[tuple[str, Any]]:
-        d = self.model_dump()
-        return d.items()
-
-    def keys(self) -> Iterable[str]:
-        d = self.model_dump()
-        return d.keys()
-
-    def values(self) -> Iterable[Any]:
-        d = self.model_dump()
-        return d.values()
-
-    def __repr__(self) -> str:
-        # Override to eliminate none values from the repr
-        d = self.model_dump()
-        r = [f"{k}={repr(v)}" for k, v in d.items()]
-
-        s = f"{self.__class__.__name__}({', '.join(r)})"
-
-        # Replace any keys ending with '_key' or '_token' values with stars for security
-        # This regex will match any key ending with '_key' or '_token' and its value, and replace the value with stars
-        # It also captures the type of quote used (single or double) and reuses it in the replacement
-        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s, flags=re.IGNORECASE)
-
-        return s
-
-    def __str__(self) -> str:
-        return repr(self)
-
-
-_llm_config_classes: list[Type[LLMConfigEntry]] = []
-
-
-def register_llm_config(cls: Type[LLMConfigEntry]) -> Type[LLMConfigEntry]:
-    if isinstance(cls, type) and issubclass(cls, LLMConfigEntry):
-        _llm_config_classes.append(cls)
-    else:
-        raise TypeError(f"Expected a subclass of LLMConfigEntry, got {cls}")
-    return cls
+    model_config = ConfigDict(extra="forbid")

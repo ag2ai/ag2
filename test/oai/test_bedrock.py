@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 
 

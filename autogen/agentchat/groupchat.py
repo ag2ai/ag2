@@ -30,8 +30,7 @@ from ..events.agent_events import (
 from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, UndefinedNextAgentError
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
-from ..llm_config import LLMConfig
-from ..oai.client import ModelClient
+from ..llm_config import LLMConfig, ModelClient
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
 from .contrib.capabilities import transform_messages

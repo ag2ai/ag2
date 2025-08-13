@@ -13,7 +13,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:
@@ -456,31 +456,6 @@ class TestGeminiClient:
             match="Failed to parse response as valid JSON matching the schema for Structured Output: Expecting value:",
         ):
             gemini_client._convert_json_response(no_json_response)
-
-    def test_convert_type_null_to_nullable(self):
-        initial_schema = {
-            "type": "object",
-            "properties": {
-                "additional_notes": {
-                    "anyOf": [{"type": "string"}, {"type": "null"}],
-                    "default": None,
-                    "description": "Additional notes",
-                }
-            },
-            "required": [],
-        }
-
-        expected_schema = {
-            "properties": {
-                "additional_notes": {
-                    "anyOf": [{"type": "string"}, {"nullable": True}],
-                    "default": None,
-                    "description": "Additional notes",
-                }
-            },
-            "required": [],
-            "type": "object",
-        }
 
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)

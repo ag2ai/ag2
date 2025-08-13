@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Literal, Optional, Union
 
-from ...llm_config import LLMConfig
+from ...llm_config.config import LLMConfig
 from ..agent import Agent
 from ..assistant_agent import ConversableAgent
 

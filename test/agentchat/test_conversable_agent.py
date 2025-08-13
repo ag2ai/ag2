@@ -25,7 +25,7 @@ from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
 

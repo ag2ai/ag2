@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional, Union
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 from ....tools import Tool
 from ....tools.experimental import (
     BrowserUseTool,

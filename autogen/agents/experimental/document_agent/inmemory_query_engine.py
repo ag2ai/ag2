@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from .... import ConversableAgent
 from ....agentchat.contrib.rag import RAGQueryEngine
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 
 __all__ = ["InMemoryQueryEngine"]
 

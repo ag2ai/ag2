@@ -10,7 +10,7 @@
 import pytest
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 from autogen.oai.cohere import CohereClient, CohereLLMConfigEntry, calculate_cohere_cost
 
 

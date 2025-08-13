@@ -11,7 +11,7 @@ import pytest
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.agentchat.contrib.agent_optimizer import AgentOptimizer
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config.config import LLMConfig
 
 from ...conftest import Credentials
 

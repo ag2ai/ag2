@@ -10,7 +10,7 @@ from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protoc
 from asyncer import create_task_group
 
 from .....doc_utils import export_module
-from .....llm_config import LLMConfig
+from .....llm_config.config import LLMConfig
 from ..realtime_events import InputAudioBufferDelta, RealtimeEvent
 
 __all__ = ["RealtimeClientProtocol", "Role", "get_client", "register_realtime_client"]

@@ -14,7 +14,7 @@ import sys
 import uuid
 import warnings
 from functools import lru_cache
-from typing import Any, Callable, Literal, Optional, Protocol, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl, ValidationInfo, field_validator
 from pydantic.type_adapter import TypeAdapter
@@ -25,7 +25,8 @@ from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.client import ModelClient
+from ..llm_config.entry import LLMConfigEntry
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
@@ -241,7 +242,6 @@ def log_cache_seed_value(cache_seed_value: Union[str, int], client: "ModelClient
     logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
-@register_llm_config
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
     top_p: Optional[float] = None
@@ -266,7 +266,6 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("create_client method must be implemented in the derived class.")
 
 
-@register_llm_config
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
     top_p: Optional[float] = None
@@ -284,7 +283,6 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-@register_llm_config
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
     base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
@@ -303,55 +301,6 @@ class DeepSeekLLMConfigEntry(LLMConfigEntry):
 
     def create_client(self) -> None:  # type: ignore [override]
         raise NotImplementedError("DeepSeekLLMConfigEntry.create_client is not implemented.")
-
-
-@export_module("autogen")
-class ModelClient(Protocol):
-    """A client class must implement the following methods:
-    - create must return a response object that implements the ModelClientResponseProtocol
-    - cost must return the cost of the response
-    - get_usage must return a dict with the following keys:
-        - prompt_tokens
-        - completion_tokens
-        - total_tokens
-        - cost
-        - model
-
-    This class is used to create a client that can be used by OpenAIWrapper.
-    The response returned from create must adhere to the ModelClientResponseProtocol but can be extended however needed.
-    The message_retrieval method must be implemented to return a list of str or a list of messages from the response.
-    """
-
-    RESPONSE_USAGE_KEYS = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
-
-    class ModelClientResponseProtocol(Protocol):
-        class Choice(Protocol):
-            class Message(Protocol):
-                content: Optional[str] | Optional[dict[str, Any]]
-
-            message: Message
-
-        choices: list[Choice]
-        model: str
-
-    def create(self, params: dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
-
-    def message_retrieval(
-        self, response: ModelClientResponseProtocol
-    ) -> Union[list[str], list[ModelClient.ModelClientResponseProtocol.Choice.Message]]:
-        """Retrieve and return a list of strings or a list of Choice.Message from the response.
-
-        NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
-        since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
-        """
-        ...  # pragma: no cover
-
-    def cost(self, response: ModelClientResponseProtocol) -> float: ...  # pragma: no cover
-
-    @staticmethod
-    def get_usage(response: ModelClientResponseProtocol) -> dict:
-        """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
-        ...  # pragma: no cover
 
 
 class PlaceHolderClient:
@@ -859,6 +808,17 @@ class OpenAIWrapper:
 
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         openai_config["azure_deployment"] = openai_config.get("azure_deployment", config.get("model"))
+        if openai_config["azure_deployment"] is not None:
+            # Preserve dots for specific model versions that require them
+            deployment_name = openai_config["azure_deployment"]
+            if deployment_name in [
+                "gpt-4.1"
+            ]:  # Add more as needed, Whitelist approach so as to not break existing deployments
+                # Keep the deployment name as-is for these specific models
+                pass
+            else:
+                # Remove dots for all other models (maintain existing behavior)
+                openai_config["azure_deployment"] = deployment_name.replace(".", "")
         openai_config["azure_endpoint"] = openai_config.get("azure_endpoint", openai_config.pop("base_url", None))
 
         # Create a default Azure token provider if requested
@@ -1111,6 +1071,9 @@ class OpenAIWrapper:
             full_config = {**config, **self._config_list[i]}
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
+            api_type = extra_kwargs.get("api_type")
+            if api_type and api_type.startswith("azure") and "model" in create_config:
+                create_config["model"] = create_config["model"].replace(".", "")
             # construct the create params
             params = self._construct_create_params(create_config, extra_kwargs)
             # get the cache_seed, filter_func and context
@@ -1489,7 +1452,6 @@ class OpenAIWrapper:
 # -----------------------------------------------------------------------------
 
 
-@register_llm_config
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
 

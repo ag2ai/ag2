@@ -22,7 +22,7 @@ from ....agentchat.group.patterns.pattern import DefaultPattern
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.targets.transition_target import AgentNameTarget, AgentTarget, StayTarget, TerminateTarget
 from ....doc_utils import export_module
-from ....llm_config import LLMConfig
+from ....llm_config.config import LLMConfig
 from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
 from .docling_doc_ingest_agent import DoclingDocIngestAgent

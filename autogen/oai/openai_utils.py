@@ -27,8 +27,9 @@ if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.beta.assistant import Assistant
 
+    from ..llm_config.config import LLMConfig
+
 from ..doc_utils import export_module
-from ..llm_config import LLMConfig
 
 NON_CACHE_KEY = [
     "api_key",
@@ -217,7 +218,7 @@ def get_config_list(
 
 @export_module("autogen")
 def get_first_llm_config(
-    llm_config: Union[LLMConfig, dict[str, Any]],
+    llm_config: Union["LLMConfig", dict[str, Any]],
 ) -> dict[str, Any]:
     """Get the first LLM config from the given LLM config.
 
