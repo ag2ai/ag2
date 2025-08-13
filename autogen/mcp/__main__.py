@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import logging
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from .. import __version__
 from ..import_utils import optional_import_block, require_optional_import
@@ -27,7 +27,7 @@ def create_typer_app() -> "typer.Typer":
     @app.callback()
     def callback(
         version: Annotated[
-            Optional[bool],
+            bool | None,
             typer.Option("--version", help="Show the version and exit.", callback=version_callback),
         ] = None,
     ) -> None:
@@ -41,19 +41,19 @@ def create_typer_app() -> "typer.Typer":
     @app.command()
     def create(
         openapi_specification: Annotated[
-            Optional[str],
+            str | None,
             "Specification of the OpenAPI to use for the proxy generation.",
         ] = None,
         openapi_url: Annotated[
-            Optional[str],
+            str | None,
             "URL to the OpenAPI specification to use for the proxy generation.",
         ] = None,
         client_source_path: Annotated[
-            Optional[str],
+            str | None,
             "Path to the generated proxy client source code.",
         ] = None,
         server_url: Annotated[
-            Optional[str],
+            str | None,
             "Comma-separated list of server URLs to use for the proxy generation.",
         ] = None,
         configuration_type: Annotated[

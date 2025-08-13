@@ -8,10 +8,11 @@
 import functools
 import importlib
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib.abc import SourceLoader
 from textwrap import dedent, indent
-from typing import Any, Callable, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 from typing_extensions import ParamSpec
 
@@ -39,10 +40,10 @@ class Alias:
 @dataclass
 class ImportFromModule:
     module: str
-    imports: list[Union[str, Alias]]
+    imports: list[str | Alias]
 
 
-Import = Union[str, ImportFromModule, Alias]
+Import = str | ImportFromModule | Alias
 
 
 def _import_to_str(im: Import) -> str:
@@ -52,7 +53,7 @@ def _import_to_str(im: Import) -> str:
         return f"import {im.name} as {im.alias}"
     else:
 
-        def to_str(i: Union[str, Alias]) -> str:
+        def to_str(i: str | Alias) -> str:
             if isinstance(i, str):
                 return i
             else:
@@ -161,7 +162,7 @@ def with_requirements(
 
 
 def _build_python_functions_file(
-    funcs: list[Union[FunctionWithRequirements[Any, P], Callable[..., Any], FunctionWithRequirementsStr]],
+    funcs: list[FunctionWithRequirements[Any, P] | Callable[..., Any] | FunctionWithRequirementsStr],
 ) -> str:
     # First collect all global imports
     global_imports: set[str] = set()
@@ -177,7 +178,7 @@ def _build_python_functions_file(
     return content
 
 
-def to_stub(func: Union[Callable[..., Any], FunctionWithRequirementsStr]) -> str:
+def to_stub(func: Callable[..., Any] | FunctionWithRequirementsStr) -> str:
     """Generate a stub for a function as a string
 
     Args:

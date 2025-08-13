@@ -6,13 +6,13 @@
 # SPDX-License-Identifier: MIT
 
 from abc import ABC
-from typing import Any, Dict, Optional, TypeVar
+from typing import Any, TypeVar
 
 Cls = TypeVar("Cls", bound="CustomField")
 
 
 class CustomField(ABC):
-    param_name: Optional[str]
+    param_name: str | None
     cast: bool
     required: bool
 
@@ -38,9 +38,9 @@ class CustomField(ABC):
         self.param_name = name
         return self
 
-    def use(self, /, **kwargs: Any) -> Dict[str, Any]:
+    def use(self, /, **kwargs: Any) -> dict[str, Any]:
         assert self.param_name, "You should specify `param_name` before using"
         return kwargs
 
-    def use_field(self, kwargs: Dict[str, Any]) -> None:
+    def use_field(self, kwargs: dict[str, Any]) -> None:
         raise NotImplementedError("You should implement `use_field` method.")

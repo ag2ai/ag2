@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, runtime_checkable
 
 from ..doc_utils import export_module
 
@@ -40,9 +40,9 @@ class Agent(Protocol):
 
     def send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         """Send a message to another agent.
 
@@ -56,9 +56,9 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         """(Async) Send a message to another agent.
 
@@ -72,9 +72,9 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         """Receive a message from another agent.
 
@@ -87,9 +87,9 @@ class Agent(Protocol):
 
     async def a_receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         """(Async) Receive a message from another agent.
 
@@ -103,10 +103,10 @@ class Agent(Protocol):
 
     def generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, dict[str, Any], None]:
+    ) -> str | dict[str, Any] | None:
         """Generate a reply based on the received messages.
 
         Args:
@@ -122,10 +122,10 @@ class Agent(Protocol):
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, dict[str, Any], None]:
+    ) -> str | dict[str, Any] | None:
         """(Async) Generate a reply based on the received messages.
 
         Args:

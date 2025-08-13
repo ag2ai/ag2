@@ -33,7 +33,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -51,17 +51,17 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["together"] = "together"
     max_tokens: int = Field(default=512, ge=0)
     stream: bool = False
-    temperature: Optional[float] = Field(default=None)
-    top_p: Optional[float] = Field(default=None)
-    top_k: Optional[int] = Field(default=None)
-    repetition_penalty: Optional[float] = Field(default=None)
-    presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
-    frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
-    min_p: Optional[float] = Field(default=None, ge=0, le=1)
-    safety_model: Optional[str] = None
+    temperature: float | None = Field(default=None)
+    top_p: float | None = Field(default=None)
+    top_k: int | None = Field(default=None)
+    repetition_penalty: float | None = Field(default=None)
+    presence_penalty: float | None = Field(default=None, ge=-2, le=2)
+    frequency_penalty: float | None = Field(default=None, ge=-2, le=2)
+    min_p: float | None = Field(default=None, ge=0, le=1)
+    safety_model: str | None = None
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    tool_choice: Optional[Union[str, dict[str, Union[str, dict[str, str]]]]] = (
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    tool_choice: str | dict[str, str | dict[str, str]] | None = (
         None  # dict is the tool to call: {"type": "function", "function": {"name": "my_function"}}
     )
 

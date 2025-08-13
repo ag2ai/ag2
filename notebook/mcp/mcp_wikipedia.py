@@ -1,6 +1,5 @@
 import argparse
 from pathlib import Path
-from typing import Dict, List
 
 import wikipedia
 from mcp.server.fastmcp import FastMCP
@@ -17,7 +16,7 @@ STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
 
 @mcp.tool()
-def search_wikipedia(query: str, max_results: int = 3) -> List[str]:
+def search_wikipedia(query: str, max_results: int = 3) -> list[str]:
     """Search Wikipedia and return titles of top articles."""
     return wikipedia.search(query, results=max_results)
 
@@ -37,13 +36,13 @@ def download_article(title: str) -> str:
 
 
 @mcp.tool()
-def list_articles() -> List[str]:
+def list_articles() -> list[str]:
     """List downloaded Wikipedia articles."""
     return [f.name for f in STORAGE_PATH.glob("*.txt")]
 
 
 @mcp.tool()
-def get_article_summary(title: str) -> Dict[str, str]:
+def get_article_summary(title: str) -> dict[str, str]:
     """Extract and return the title and summary of a Wikipedia article."""
     try:
         summary = wikipedia.summary(title)

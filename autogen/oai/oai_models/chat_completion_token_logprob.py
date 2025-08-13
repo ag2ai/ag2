@@ -6,7 +6,6 @@
 
 # File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
-from typing import List, Optional
 
 from ._models import BaseModel
 
@@ -17,7 +16,7 @@ class TopLogprob(BaseModel):
     token: str
     """The token."""
 
-    bytes: Optional[List[int]] = None
+    bytes: list[int] | None = None
     """A list of integers representing the UTF-8 bytes representation of the token.
 
     Useful in instances where characters are represented by multiple tokens and
@@ -38,7 +37,7 @@ class ChatCompletionTokenLogprob(BaseModel):
     token: str
     """The token."""
 
-    bytes: Optional[List[int]] = None
+    bytes: list[int] | None = None
     """A list of integers representing the UTF-8 bytes representation of the token.
 
     Useful in instances where characters are represented by multiple tokens and
@@ -54,7 +53,7 @@ class ChatCompletionTokenLogprob(BaseModel):
     unlikely.
     """
 
-    top_logprobs: List[TopLogprob]
+    top_logprobs: list[TopLogprob]
     """List of the most likely tokens and their log probability, at this token
     position.
 

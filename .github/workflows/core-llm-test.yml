@@ -29,7 +29,7 @@ jobs:
     strategy:
       matrix:
         llm: ["openai", "openai-realtime", "gemini", "gemini-realtime", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
-        python-version: ["3.9"]
+        python-version: ["3.10"]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -58,7 +58,7 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: astral-sh/setup-uv@v6

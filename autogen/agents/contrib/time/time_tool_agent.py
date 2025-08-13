@@ -17,7 +17,8 @@ class TimeToolAgent(ConversableAgent):
 
     Use it is as a reference for creating new agents with a tool-based approach (as opposed to reply-based).
 
-    This agent will call the TimeTool and return the date and time whenever it needs to reply."""
+    This agent will call the TimeTool and return the date and time whenever it needs to reply.
+    """
 
     DEFAULT_SYSTEM_MESSAGE = (
         "You are a calendar agent that uses tools to return the date and time. "

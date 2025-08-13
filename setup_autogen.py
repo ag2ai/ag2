@@ -11,7 +11,7 @@ import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-with open("README.md", "r", encoding="UTF-8") as fh:
+with open("README.md", encoding="UTF-8") as fh:
     long_description = fh.read()
 
 # Get the code version
@@ -97,5 +97,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.9,<3.14",
+    python_requires=">=3.10,<3.14",
 )

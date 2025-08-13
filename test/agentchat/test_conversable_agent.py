@@ -13,7 +13,8 @@ import os
 import threading
 import time
 import unittest
-from typing import Annotated, Any, Callable, List, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -737,7 +738,7 @@ class TestWrapFunction:
         agent = ConversableAgent(name="agent", llm_config=False)
 
         @agent._wrap_function
-        def f(xs: list[tuple[float, float]], ys: List[Point]) -> List[Point]:
+        def f(xs: list[tuple[float, float]], ys: list[Point]) -> list[Point]:
             return [Point(x=x, y=y) for (x, y) in xs] + ys
 
         assert f([(1.0, 2.0), (3.0, 4.0)], [Point(x=5.0, y=6.0)]) == [
@@ -1716,7 +1717,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     @user_proxy.register_for_execution()
     @agent.register_for_llm(description="Login function")
     def login(
-        additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+        additional_notes: Annotated[str | None, "Additional notes"] = None,
     ) -> str:
         mock()
         return "Login successful."
@@ -1985,7 +1986,7 @@ def test_create_or_get_executor(mock_credentials: Credentials):
     ],
 )
 def test_validate_llm_config(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]], expected: Union[LLMConfig, Literal[False]]
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None, expected: LLMConfig | Literal[False]
 ):
     actual = ConversableAgent._validate_llm_config(llm_config)
     assert actual == expected, f"{actual} != {expected}"

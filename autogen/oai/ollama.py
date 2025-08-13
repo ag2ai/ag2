@@ -29,7 +29,7 @@ import random
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -47,7 +47,7 @@ with optional_import_block():
 @register_llm_config
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
-    client_host: Optional[HttpUrl] = None
+    client_host: HttpUrl | None = None
     stream: bool = False
     num_predict: int = Field(
         default=-1,
@@ -101,11 +101,10 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]] = None, **kwargs):
+    def __init__(self, response_format: BaseModel | dict[str, Any] | None = None, **kwargs):
         """Note that no api_key or environment variable is required for Ollama."""
-
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Union[BaseModel, dict[str, Any]]] = response_format
+        self._response_format: BaseModel | dict[str, Any] | None = response_format
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.

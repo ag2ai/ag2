@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from typing import Any, Optional, Union
+from typing import Any
 
 from ... import OpenAIWrapper
 from ...llm_config import LLMConfig
@@ -31,9 +31,9 @@ class GPTAssistantAgent(ConversableAgent):
     def __init__(
         self,
         name="GPT Assistant",
-        instructions: Optional[str] = None,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], bool]] = None,
-        assistant_config: Optional[dict[str, Any]] = None,
+        instructions: str | None = None,
+        llm_config: LLMConfig | dict[str, Any] | bool | None = None,
+        assistant_config: dict[str, Any] | None = None,
         overwrite_instructions: bool = False,
         overwrite_tools: bool = False,
         **kwargs: Any,
@@ -182,10 +182,10 @@ class GPTAssistantAgent(ConversableAgent):
 
     def _invoke_assistant(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Invokes the OpenAI assistant to generate a reply based on the given messages.
 
         Args:
@@ -392,7 +392,7 @@ class GPTAssistantAgent(ConversableAgent):
         # Clear the record of unread messages
         self._unread_index.clear()
 
-    def clear_history(self, agent: Optional[Agent] = None):
+    def clear_history(self, agent: Agent | None = None):
         """Clear the chat history of the agent.
 
         Args:

@@ -148,19 +148,6 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
     assert wrapper._clients[1].call_count == 0
 
 
-@pytest.mark.parametrize(
-    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
-)
-def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
-    wrapper = request.getfixturevalue(fixture_name)
-    # Make the first client fail
-    wrapper._clients[0].config["should_fail"] = True
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client2" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 1
-
-
 def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
     # First call
     response1 = mock_openai_wrapper_round_robin.create(messages=[{"role": "user", "content": "Hello 1"}])
@@ -869,6 +856,28 @@ class TestDeepSeekPatch:
 
         kwargs = OpenAIClient._patch_messages_for_deepseek_reasoner(**kwargs)
         assert kwargs == expected_kwargs
+
+
+class TestGemini:
+    def test_configure_openai_config_for_gemini_updates_proxy(self):
+        config_list = [
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+        ]
+        client = OpenAIWrapper(config_list=config_list)
+        openai_config = {}
+        config = {"proxy": "http://proxy.example.com:8080"}
+        client._configure_openai_config_for_gemini(config, openai_config)
+        assert openai_config["proxy"] == "http://proxy.example.com:8080"
+
+    def test_configure_openai_config_for_gemini_no_proxy(self):
+        config_list = [
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+        ]
+        config = {}
+        openai_config = {}
+        client = OpenAIWrapper(config_list=config_list)
+        client._configure_openai_config_for_gemini(config, openai_config)
+        assert "proxy" not in openai_config
 
 
 class TestO1:

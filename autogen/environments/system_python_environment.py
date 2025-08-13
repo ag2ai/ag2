@@ -6,7 +6,7 @@ import logging
 import os
 import subprocess
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from asyncer import asyncify
 
@@ -20,10 +20,9 @@ class SystemPythonEnvironment(PythonEnvironment):
 
     def __init__(
         self,
-        executable: Optional[str] = None,
+        executable: str | None = None,
     ):
-        """
-        Initialize a system Python environment.
+        """Initialize a system Python environment.
 
         Args:
             executable: Optional path to a specific Python executable. If None, uses the current Python executable.
