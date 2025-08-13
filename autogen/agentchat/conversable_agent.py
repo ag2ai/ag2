@@ -61,6 +61,7 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -2981,15 +2982,10 @@ class ConversableAgent(LLMAgent):
             str: human input.
         """
 
-        def _is_async_callable(fn) -> bool:
-            if isinstance(fn, functools.partial):
-                return inspect.iscoroutinefunction(fn.func)
-            return inspect.iscoroutinefunction(fn) or inspect.iscoroutinefunction(getattr(fn, "__call__", None))
-
         iostream = IOStream.get_default()
         input_func = iostream.input
 
-        if _is_async_callable(input_func):
+        if is_coroutine_callable(input_func):
             reply = await input_func(prompt)
         else:
             reply = await asyncio.to_thread(input_func, prompt)
