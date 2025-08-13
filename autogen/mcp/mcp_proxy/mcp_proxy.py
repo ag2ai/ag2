@@ -115,11 +115,11 @@ class MCPProxy:
         return q_params, path_params, body, security
 
     def get_mcp(self, **settings: Any) -> "FastMCP":
-        mcp = FastMCP(title=self._title, **settings)
+        mcp = FastMCP(name=self._title, **settings)  # newer mcp
 
         for func in self._registered_funcs:
             try:
-                mcp.tool()(func)  # type: ignore [no-untyped-call]
+                mcp.tool()(func)
             except PydanticInvalidForJsonSchema as e:
                 logger.warning("Could not register function %s: %s", func.__name__, e)
 
