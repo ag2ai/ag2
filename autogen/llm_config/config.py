@@ -8,10 +8,9 @@ import re
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing_extensions import TypeAlias
 
 from autogen.oai.anthropic import AnthropicEntryDict, AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockEntryDict, BedrockLLMConfigEntry
@@ -52,22 +51,22 @@ class MetaLLMConfig(type):
         return cls.current
 
 
-ConfigItem: TypeAlias = Union[
-    LLMConfigEntry,
-    AnthropicEntryDict,
-    BedrockEntryDict,
-    CerebrasEntryDict,
-    CohereEntryDict,
-    AzureOpenAIEntryDict,
-    OpenAIEntryDict,
-    DeepSeekEntyDict,
-    MistralEntryDict,
-    GroqEntryDict,
-    OllamaEntryDict,
-    GeminiEntryDict,
-    TogetherEntryDict,
-    Dict[str, Any],
-]
+ConfigItem: TypeAlias = (
+    LLMConfigEntry
+    | AnthropicEntryDict
+    | BedrockEntryDict
+    | CerebrasEntryDict
+    | CohereEntryDict
+    | AzureOpenAIEntryDict
+    | OpenAIEntryDict
+    | DeepSeekEntyDict
+    | MistralEntryDict
+    | GroqEntryDict
+    | OllamaEntryDict
+    | GeminiEntryDict
+    | TogetherEntryDict
+    | dict[str, Any]
+)
 
 
 @export_module("autogen")
@@ -77,20 +76,20 @@ class LLMConfig(metaclass=MetaLLMConfig):
     def __init__(
         self,
         *,
-        top_p: Optional[float] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        config_list: Union[Iterable[ConfigItem], Dict[str, Any]] = (),
-        check_every_ms: Optional[int] = None,
-        allow_format_str_template: Optional[bool] = None,
-        response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None,
-        timeout: Optional[int] = None,
-        seed: Optional[int] = None,
-        cache_seed: Optional[int] = None,
-        parallel_tool_calls: Optional[bool] = None,
+        top_p: float | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        config_list: Iterable[ConfigItem] | dict[str, Any] = (),
+        check_every_ms: int | None = None,
+        allow_format_str_template: bool | None = None,
+        response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
+        timeout: int | None = None,
+        seed: int | None = None,
+        cache_seed: int | None = None,
+        parallel_tool_calls: bool | None = None,
         tools: Iterable[Any] = (),
         functions: Iterable[Any] = (),
-        routing_method: Optional[Literal["fixed_order", "round_robin"]] = None,
+        routing_method: Literal["fixed_order", "round_robin"] | None = None,
         **kwargs: Any,
     ) -> None:
         """Initializes the LLMConfig object.
@@ -151,7 +150,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
         application_level_options = app_config.model_dump(exclude_none=True)
 
-        final_config_list: List[Union[LLMConfigEntry, Dict[str, Any]]] = []
+        final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
 
         if isinstance(config_list, dict):
             config_list = [config_list]
@@ -189,11 +188,11 @@ class LLMConfig(metaclass=MetaLLMConfig):
         self._token = LLMConfig._current_llm_config.set(self)
         return self
 
-    def __exit__(self, exc_type: Type[Exception], exc_val: Exception, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: type[Exception], exc_val: Exception, exc_tb: Any) -> None:
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
-    def get_current_llm_config(cls, llm_config: "Optional[LLMConfig]" = None) -> "Optional[LLMConfig]":
+    def get_current_llm_config(cls, llm_config: "LLMConfig | None" = None) -> "LLMConfig | None":
         if llm_config is not None:
             return llm_config
         try:
@@ -214,9 +213,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
     def from_json(
         cls,
         *,
-        env: Optional[str] = None,
-        path: Optional[Union[str, Path]] = None,
-        file_location: Optional[str] = None,
+        env: str | None = None,
+        path: str | Path | None = None,
+        file_location: str | None = None,
         **kwargs: Any,
     ) -> "LLMConfig":
         from autogen.oai.openai_utils import config_list_from_json
@@ -275,7 +274,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         val = getattr(o, name)
         return val
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         val = getattr(self._model, key, default)
         return val
 
@@ -320,13 +319,13 @@ class LLMConfig(metaclass=MetaLLMConfig):
     def __copy__(self) -> "LLMConfig":
         return LLMConfig(**self.model_dump())
 
-    def __deepcopy__(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> "LLMConfig":
         return self.__copy__()
 
     def copy(self) -> "LLMConfig":
         return self.__copy__()
 
-    def deepcopy(self, memo: Optional[dict[int, Any]] = None) -> "LLMConfig":
+    def deepcopy(self, memo: dict[int, Any] | None = None) -> "LLMConfig":
         return self.__deepcopy__(memo)
 
     def __str__(self) -> str:
@@ -344,42 +343,40 @@ class LLMConfig(metaclass=MetaLLMConfig):
         d = self.model_dump()
         return d.values()
 
-    _base_model_classes: dict[tuple[Type["LLMConfigEntry"], ...], Type[BaseModel]] = {}
+    _base_model_classes: dict[tuple[type["LLMConfigEntry"], ...], type[BaseModel]] = {}
 
 
 class _LLMConfig(ApplicationConfig):
-    check_every_ms: Optional[int]
-    seed: Optional[int]
-    allow_format_str_template: Optional[bool]
-    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]]
-    timeout: Optional[int]
-    cache_seed: Optional[int]
-    parallel_tool_calls: Optional[bool]
+    check_every_ms: int | None
+    seed: int | None
+    allow_format_str_template: bool | None
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None
+    timeout: int | None
+    cache_seed: int | None
+    parallel_tool_calls: bool | None
 
     tools: list[Any]
     functions: list[Any]
 
-    config_list: List[  # type: ignore[valid-type]
+    config_list: list[  # type: ignore[valid-type]
         Annotated[
-            Union[
-                AnthropicLLMConfigEntry,
-                CerebrasLLMConfigEntry,
-                BedrockLLMConfigEntry,
-                AzureOpenAILLMConfigEntry,
-                DeepSeekLLMConfigEntry,
-                OpenAILLMConfigEntry,
-                CohereLLMConfigEntry,
-                GeminiLLMConfigEntry,
-                GroqLLMConfigEntry,
-                MistralLLMConfigEntry,
-                OllamaLLMConfigEntry,
-                TogetherLLMConfigEntry,
-            ],
+            AnthropicLLMConfigEntry
+            | CerebrasLLMConfigEntry
+            | BedrockLLMConfigEntry
+            | AzureOpenAILLMConfigEntry
+            | DeepSeekLLMConfigEntry
+            | OpenAILLMConfigEntry
+            | CohereLLMConfigEntry
+            | GeminiLLMConfigEntry
+            | GroqLLMConfigEntry
+            | MistralLLMConfigEntry
+            | OllamaLLMConfigEntry
+            | TogetherLLMConfigEntry,
             Field(discriminator="api_type"),
         ],
     ] = Field(..., min_length=1)
 
-    routing_method: Optional[Literal["fixed_order", "round_robin"]]
+    routing_method: Literal["fixed_order", "round_robin"] | None
 
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="forbid")

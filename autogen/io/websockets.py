@@ -7,10 +7,11 @@
 import logging
 import ssl
 import threading
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import partial
 from time import sleep
-from typing import Any, Callable, Iterable, Iterator, Optional, Protocol, Union
+from typing import Any, Protocol
 
 from ..doc_utils import export_module
 from ..events.base_event import BaseEvent
@@ -30,11 +31,11 @@ logger.setLevel(logging.INFO)
 
 # The following type and protocols are used to define the ServerConnection and WebSocketServer classes
 # if websockets is not installed, they would be untyped
-Data = Union[str, bytes]
+Data = str | bytes
 
 
 class ServerConnection(Protocol):
-    def send(self, message: Union[Data, Iterable[Data]]) -> None:
+    def send(self, message: Data | Iterable[Data]) -> None:
         """Send a message to the client.
 
         Args:
@@ -43,7 +44,7 @@ class ServerConnection(Protocol):
         """
         ...  # pragma: no cover
 
-    def recv(self, timeout: Optional[float] = None) -> Data:
+    def recv(self, timeout: float | None = None) -> Data:
         """Receive a message from the client.
 
         Args:
@@ -114,7 +115,7 @@ class IOWebsockets(IOStream):
         host: str = "127.0.0.1",
         port: int = 8765,
         on_connect: Callable[["IOWebsockets"], None],
-        ssl_context: Optional[ssl.SSLContext] = None,
+        ssl_context: ssl.SSLContext | None = None,
         **kwargs: Any,
     ) -> Iterator[str]:
         """Factory function to create a websocket input/output stream.

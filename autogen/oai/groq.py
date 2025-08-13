@@ -27,7 +27,7 @@ import copy
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import Field
 from typing_extensions import Unpack
@@ -57,7 +57,7 @@ class GroqEntryDict(LLMConfigEntryDict, total=False):
     seed: int
     stream: bool
     hide_tools: Literal["if_all_run", "if_any_run", "never"]
-    tool_choice: Optional[Literal["none", "auto", "required"]]
+    tool_choice: Literal["none", "auto", "required"] | None
 
 
 class GroqLLMConfigEntry(LLMConfigEntry):
@@ -68,7 +68,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
     seed: int = Field(default=None)
     stream: bool = Field(default=False)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "required"]] = None
+    tool_choice: Literal["none", "auto", "required"] | None = None
 
     def create_client(self):
         raise NotImplementedError("GroqLLMConfigEntry.create_client is not implemented.")

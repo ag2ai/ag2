@@ -4,7 +4,7 @@
 
 import re
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
@@ -75,7 +75,7 @@ class CrewAIInteroperability:
         )
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
+    def get_unsupported_reason(cls) -> str | None:
         if sys.version_info < (3, 10) or sys.version_info >= (3, 13):
             return "This submodule is only supported for Python versions 3.10, 3.11, and 3.12"
 

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal, Optional
+from typing import Literal
 
 from .import_utils import optional_import_block
 
@@ -70,12 +70,12 @@ if not result.is_successful:
 
     def colored(
         text: object,
-        color: Optional[Color] = None,
-        on_color: Optional[Highlight] = None,
-        attrs: Optional[Iterable[Attribute]] = None,
+        color: Color | None = None,
+        on_color: Highlight | None = None,
+        attrs: Iterable[Attribute] | None = None,
         *,
-        no_color: Optional[bool] = None,
-        force_color: Optional[bool] = None,
+        no_color: bool | None = None,
+        force_color: bool | None = None,
     ) -> str:
         return str(text)
 

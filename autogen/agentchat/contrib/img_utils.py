@@ -194,7 +194,7 @@ def convert_base64_to_data_uri(base64_image):
 
 
 @require_optional_import("PIL", "unknown")
-def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[Union[str, dict[str, Any]]]:
+def gpt4v_formatter(prompt: str, img_format: str = "uri") -> list[str | dict[str, Any]]:
     """Formats the input prompt by replacing image tags and returns a list of text and images.
 
     Args:

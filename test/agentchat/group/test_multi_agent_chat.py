@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,7 +17,7 @@ from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 
 # Helper function to create a mock agent
-def create_mock_agent(name: str, handoffs: Optional[Handoffs] = None) -> MagicMock:
+def create_mock_agent(name: str, handoffs: Handoffs | None = None) -> MagicMock:
     agent = MagicMock(spec=ConversableAgent)
     agent.name = name
     agent.context_variables = ContextVariables()

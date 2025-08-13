@@ -5,7 +5,8 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class Depends:

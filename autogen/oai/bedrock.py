@@ -36,7 +36,7 @@ import os
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import requests
 from pydantic import Field, SecretStr, field_serializer
@@ -55,17 +55,17 @@ with optional_import_block():
 class BedrockEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["bedrock"]
     aws_region: Required[str]
-    aws_access_key: Optional[SecretStr]
-    aws_secret_key: Optional[SecretStr]
-    aws_session_token: Optional[SecretStr]
-    aws_profile_name: Optional[str]
-    top_k: Optional[int]
-    k: Optional[int]
-    seed: Optional[int]
-    cache_seed: Optional[int]
+    aws_access_key: SecretStr | None
+    aws_secret_key: SecretStr | None
+    aws_session_token: SecretStr | None
+    aws_profile_name: str | None
+    top_k: int | None
+    k: int | None
+    seed: int | None
+    cache_seed: int | None
     supports_system_prompts: bool
-    price: Optional[list[float]]
-    timeout: Optional[int]
+    price: list[float] | None
+    timeout: int | None
 
 
 class BedrockLLMConfigEntry(LLMConfigEntry):
@@ -73,17 +73,17 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
 
     # Bedrock-specific options
     aws_region: str
-    aws_access_key: Optional[SecretStr] = None
-    aws_secret_key: Optional[SecretStr] = None
-    aws_session_token: Optional[SecretStr] = None
-    aws_profile_name: Optional[str] = None
-    top_k: Optional[int] = None
-    k: Optional[int] = None
-    seed: Optional[int] = None
-    cache_seed: Optional[int] = None
+    aws_access_key: SecretStr | None = None
+    aws_secret_key: SecretStr | None = None
+    aws_session_token: SecretStr | None = None
+    aws_profile_name: str | None = None
+    top_k: int | None = None
+    k: int | None = None
+    seed: int | None = None
+    cache_seed: int | None = None
     supports_system_prompts: bool = True
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    timeout: Optional[int] = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    timeout: int | None = None
 
     @field_serializer("aws_access_key", "aws_secret_key", "aws_session_token", when_used="unless-none")
     def serialize_aws_secrets(self, v: SecretStr) -> str:

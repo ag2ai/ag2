@@ -34,7 +34,7 @@ import os
 import sys
 import time
 import warnings
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
@@ -71,28 +71,26 @@ class CohereEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["cohere"]
 
     k: int
-    seed: Optional[int]
+    seed: int | None
     frequency_penalty: float
     presence_penalty: float
-    client_name: Optional[str]
+    client_name: str | None
     strict_tools: bool
     stream: bool
-    tool_choice: Optional[Literal["NONE", "REQUIRED"]]
+    tool_choice: Literal["NONE", "REQUIRED"] | None
 
 
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
 
-    top_p: Optional[float] = Field(default=None, ge=0.01, le=0.99)
-
     k: int = Field(default=0, ge=0, le=500)
-    seed: Optional[int] = None
+    seed: int | None = None
     frequency_penalty: float = Field(default=0, ge=0, le=1)
     presence_penalty: float = Field(default=0, ge=0, le=1)
-    client_name: Optional[str] = None
+    client_name: str | None = None
     strict_tools: bool = False
     stream: bool = False
-    tool_choice: Optional[Literal["NONE", "REQUIRED"]] = None
+    tool_choice: Literal["NONE", "REQUIRED"] | None = None
 
     def create_client(self):
         raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
@@ -117,7 +115,7 @@ class CohereClient:
         )
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -425,8 +423,10 @@ class CohereClient:
 
     def _convert_json_response(self, response: str) -> Any:
         """Extract and validate JSON response from the output for structured outputs.
+
         Args:
             response (str): The response from the API.
+
         Returns:
             Any: The parsed JSON response.
         """

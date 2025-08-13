@@ -29,7 +29,7 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from typing_extensions import Unpack
 
@@ -57,20 +57,19 @@ class MistralEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["mistral"]
 
     safe_prompt: bool
-    random_seed: Optional[int]
+    random_seed: int | None
     stream: bool
     hide_tools: Literal["if_all_run", "if_any_run", "never"]
-    tool_choice: Optional[Literal["none", "auto", "any"]]
+    tool_choice: Literal["none", "auto", "any"] | None
 
 
 class MistralLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["mistral"] = "mistral"
-
     safe_prompt: bool = False
-    random_seed: Optional[int] = None
+    random_seed: int | None = None
     stream: bool = False
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "any"]] = None
+    tool_choice: Literal["none", "auto", "any"] | None = None
 
     def create_client(self):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
@@ -100,7 +99,7 @@ class MistralAIClient:
 
         self._client = Mistral(api_key=self.api_key)
 
-    def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
+    def message_retrieval(self, response: ChatCompletion) -> list[str] | list[ChatCompletionMessage]:
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
 

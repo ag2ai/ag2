@@ -7,7 +7,8 @@
 
 import queue
 from asyncio import Queue as AsyncQueue
-from typing import Any, AsyncIterable, Dict, Iterable, Optional, Protocol, Sequence, Union
+from collections.abc import AsyncIterable, Iterable, Sequence
+from typing import Any, Optional, Protocol
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -46,7 +47,7 @@ class Usage(BaseModel):
 
 class CostBreakdown(BaseModel):
     total_cost: float
-    models: Dict[str, Usage] = Field(default_factory=dict)
+    models: dict[str, Usage] = Field(default_factory=dict)
 
     @classmethod
     def from_raw(cls, data: dict[str, Any]) -> "CostBreakdown":
@@ -79,18 +80,18 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def messages(self) -> Iterable[Message]: ...
 
     @property
-    def summary(self) -> Optional[str]: ...
+    def summary(self) -> str | None: ...
 
     @property
-    def context_variables(self) -> Optional[ContextVariables]: ...
+    def context_variables(self) -> ContextVariables | None: ...
 
     @property
-    def last_speaker(self) -> Optional[str]: ...
+    def last_speaker(self) -> str | None: ...
 
     @property
-    def cost(self) -> Optional[Cost]: ...
+    def cost(self) -> Cost | None: ...
 
-    def process(self, processor: Optional[EventProcessorProtocol] = None) -> None: ...
+    def process(self, processor: EventProcessorProtocol | None = None) -> None: ...
 
     def set_ui_tools(self, tools: list[Tool]) -> None: ...
 
@@ -103,18 +104,18 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     async def messages(self) -> Iterable[Message]: ...
 
     @property
-    async def summary(self) -> Optional[str]: ...
+    async def summary(self) -> str | None: ...
 
     @property
-    async def context_variables(self) -> Optional[ContextVariables]: ...
+    async def context_variables(self) -> ContextVariables | None: ...
 
     @property
-    async def last_speaker(self) -> Optional[str]: ...
+    async def last_speaker(self) -> str | None: ...
 
     @property
-    async def cost(self) -> Optional[Cost]: ...
+    async def cost(self) -> Cost | None: ...
 
-    async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None: ...
+    async def process(self, processor: AsyncEventProcessorProtocol | None = None) -> None: ...
 
     def set_ui_tools(self, tools: list[Tool]) -> None: ...
 
@@ -123,12 +124,12 @@ class RunResponse:
     def __init__(self, iostream: ThreadIOStream, agents: list[Agent]):
         self.iostream = iostream
         self.agents = agents
-        self._summary: Optional[str] = None
+        self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
-        self._context_variables: Optional[ContextVariables] = None
-        self._last_speaker: Optional[str] = None
-        self._cost: Optional[Cost] = None
+        self._context_variables: ContextVariables | None = None
+        self._last_speaker: str | None = None
+        self._cost: Cost | None = None
 
     def _queue_generator(self, q: queue.Queue) -> Iterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
@@ -164,7 +165,7 @@ class RunResponse:
         return self._messages
 
     @property
-    def summary(self) -> Optional[str]:
+    def summary(self) -> str | None:
         return self._summary
 
     @property
@@ -176,25 +177,25 @@ class RunResponse:
         return self._uuid
 
     @property
-    def context_variables(self) -> Optional[ContextVariables]:
+    def context_variables(self) -> ContextVariables | None:
         return self._context_variables
 
     @property
-    def last_speaker(self) -> Optional[str]:
+    def last_speaker(self) -> str | None:
         return self._last_speaker
 
     @property
-    def cost(self) -> Optional[Cost]:
+    def cost(self) -> Cost | None:
         return self._cost
 
     @cost.setter
-    def cost(self, value: Union[Cost, dict[str, Any]]) -> None:
+    def cost(self, value: Cost | dict[str, Any]) -> None:
         if isinstance(value, dict):
             self._cost = Cost.from_raw(value)
         else:
             self._cost = value
 
-    def process(self, processor: Optional[EventProcessorProtocol] = None) -> None:
+    def process(self, processor: EventProcessorProtocol | None = None) -> None:
         processor = processor or ConsoleEventProcessor()
         processor.process(self)
 
@@ -208,12 +209,12 @@ class AsyncRunResponse:
     def __init__(self, iostream: AsyncThreadIOStream, agents: list[Agent]):
         self.iostream = iostream
         self.agents = agents
-        self._summary: Optional[str] = None
+        self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
-        self._context_variables: Optional[ContextVariables] = None
-        self._last_speaker: Optional[str] = None
-        self._cost: Optional[Cost] = None
+        self._context_variables: ContextVariables | None = None
+        self._last_speaker: str | None = None
+        self._cost: Cost | None = None
 
     async def _queue_generator(self, q: AsyncQueue[Any]) -> AsyncIterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
@@ -253,7 +254,7 @@ class AsyncRunResponse:
         return self._messages
 
     @property
-    async def summary(self) -> Optional[str]:
+    async def summary(self) -> str | None:
         return self._summary
 
     @property
@@ -265,25 +266,25 @@ class AsyncRunResponse:
         return self._uuid
 
     @property
-    async def context_variables(self) -> Optional[ContextVariables]:
+    async def context_variables(self) -> ContextVariables | None:
         return self._context_variables
 
     @property
-    async def last_speaker(self) -> Optional[str]:
+    async def last_speaker(self) -> str | None:
         return self._last_speaker
 
     @property
-    async def cost(self) -> Optional[Cost]:
+    async def cost(self) -> Cost | None:
         return self._cost
 
     @cost.setter
-    def cost(self, value: Union[Cost, dict[str, Any]]) -> None:
+    def cost(self, value: Cost | dict[str, Any]) -> None:
         if isinstance(value, dict):
             self._cost = Cost.from_raw(value)
         else:
             self._cost = value
 
-    async def process(self, processor: Optional[AsyncEventProcessorProtocol] = None) -> None:
+    async def process(self, processor: AsyncEventProcessorProtocol | None = None) -> None:
         processor = processor or AsyncConsoleEventProcessor()
         await processor.process(self)
 

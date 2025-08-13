@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import sys
 from types import TracebackType
-from typing import Any, Optional, Union
+from typing import Any
 
 import diskcache
 
@@ -36,7 +36,7 @@ class DiskCache(AbstractCache):
         __exit__(self, exc_type, exc_value, traceback): Context management exit.
     """
 
-    def __init__(self, seed: Union[str, int]):
+    def __init__(self, seed: str | int):
         """Initialize the DiskCache instance.
 
         Args:
@@ -46,7 +46,7 @@ class DiskCache(AbstractCache):
         """
         self.cache = diskcache.Cache(seed)
 
-    def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    def get(self, key: str, default: Any | None = None) -> Any | None:
         """Retrieve an item from the cache.
 
         Args:
@@ -86,9 +86,9 @@ class DiskCache(AbstractCache):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """Exit the runtime context related to the object.
 

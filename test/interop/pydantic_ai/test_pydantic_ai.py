@@ -4,7 +4,7 @@
 
 import random
 from inspect import signature
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -138,7 +138,7 @@ class TestPydanticAIInteroperabilityWithContext:
             name: str
             age: int
 
-        def get_player(ctx: RunContext[Player], additional_info: Optional[str] = None) -> str:  # type: ignore[valid-type,no-any-unimported]
+        def get_player(ctx: RunContext[Player], additional_info: str | None = None) -> str:  # type: ignore[valid-type,no-any-unimported]
             """Get the player's name.
 
             Args:

@@ -28,7 +28,7 @@ import math
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import Field
 from typing_extensions import Unpack
@@ -51,22 +51,22 @@ CEREBRAS_PRICING_1K = {
 class CerebrasEntryDict(LLMConfigEntryDict, total=False):
     api_type: Literal["cerebras"]
 
-    seed: Optional[int]
+    seed: int | None
     stream: bool
     hide_tools: Literal["if_all_run", "if_any_run", "never"]
-    tool_choice: Optional[Literal["none", "auto", "required"]]
+    tool_choice: Literal["none", "auto", "required"] | None
 
 
 class CerebrasLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cerebras"] = "cerebras"
 
-    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.5)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.5)
 
-    seed: Optional[int] = None
+    seed: int | None = None
     stream: bool = False
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "required"]] = None
-    reasoning_effort: Optional[str] = None
+    tool_choice: Literal["none", "auto", "required"] | None = None
+    reasoning_effort: str | None = None
 
     def create_client(self):
         raise NotImplementedError("CerebrasLLMConfigEntry.create_client is not implemented.")

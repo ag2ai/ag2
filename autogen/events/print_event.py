@@ -4,7 +4,8 @@
 
 
 import json
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 from uuid import UUID
 
 from .base_event import BaseEvent, wrap_event
@@ -21,9 +22,7 @@ class PrintEvent(BaseEvent):
     end: str
     """End of the print"""
 
-    def __init__(
-        self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False, uuid: Optional[UUID] = None
-    ):
+    def __init__(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False, uuid: UUID | None = None):
         objects_as_string = [self._to_json(x) for x in objects]
 
         super().__init__(uuid=uuid, objects=objects_as_string, sep=sep, end=end)
@@ -40,7 +39,7 @@ class PrintEvent(BaseEvent):
             return str(obj)
             # return repr(obj)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         f(*self.objects, sep=self.sep, end=self.end, flush=True)

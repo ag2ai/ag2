@@ -1,5 +1,4 @@
-"""
-Module: perplexity_search_tool
+"""Module: perplexity_search_tool
 Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 SPDX-License-Identifier: Apache-2.0
 
@@ -9,7 +8,7 @@ It defines data models for responses and a tool for executing web and conversati
 
 import json
 import os
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 from pydantic import BaseModel, ValidationError
@@ -18,8 +17,7 @@ from autogen.tools import Tool
 
 
 class Message(BaseModel):
-    """
-    Represents a message in the chat conversation.
+    """Represents a message in the chat conversation.
 
     Attributes:
         role (str): The role of the message sender (e.g., "system", "user").
@@ -31,8 +29,7 @@ class Message(BaseModel):
 
 
 class Usage(BaseModel):
-    """
-    Model representing token usage details.
+    """Model representing token usage details.
 
     Attributes:
         prompt_tokens (int): The number of tokens used for the prompt.
@@ -48,8 +45,7 @@ class Usage(BaseModel):
 
 
 class Choice(BaseModel):
-    """
-    Represents one choice in the response from the Perplexity API.
+    """Represents one choice in the response from the Perplexity API.
 
     Attributes:
         index (int): The index of this choice.
@@ -63,8 +59,7 @@ class Choice(BaseModel):
 
 
 class PerplexityChatCompletionResponse(BaseModel):
-    """
-    Represents the full chat completion response from the Perplexity API.
+    """Represents the full chat completion response from the Perplexity API.
 
     Attributes:
         id (str): Unique identifier for the response.
@@ -86,8 +81,7 @@ class PerplexityChatCompletionResponse(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    """
-    Represents the response from a search query.
+    """Represents the response from a search query.
 
     Attributes:
         content (Optional[str]): The textual content returned from the search.
@@ -95,14 +89,13 @@ class SearchResponse(BaseModel):
         error (Optional[str]): An error message if the search failed.
     """
 
-    content: Union[str, None]
-    citations: Union[list[str], None]
-    error: Union[str, None]
+    content: str | None
+    citations: list[str] | None
+    error: str | None
 
 
 class PerplexitySearchTool(Tool):
-    """
-    Tool for interacting with the Perplexity AI search API.
+    """Tool for interacting with the Perplexity AI search API.
 
     This tool uses the Perplexity API to perform web search, news search,
     and conversational search, returning concise and precise responses.
@@ -118,12 +111,11 @@ class PerplexitySearchTool(Tool):
     def __init__(
         self,
         model: str = "sonar",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         max_tokens: int = 1000,
-        search_domain_filter: Optional[list[str]] = None,
+        search_domain_filter: list[str] | None = None,
     ):
-        """
-        Initializes a new instance of the PerplexitySearchTool.
+        """Initializes a new instance of the PerplexitySearchTool.
 
         Args:
             model (str, optional): The model to use. Defaults to "sonar".
@@ -150,10 +142,9 @@ class PerplexitySearchTool(Tool):
 
     @staticmethod
     def _validate_tool_config(
-        model: str, api_key: Union[str, None], max_tokens: int, search_domain_filter: Union[list[str], None]
+        model: str, api_key: str | None, max_tokens: int, search_domain_filter: list[str] | None
     ) -> None:
-        """
-        Validates the configuration parameters for the search tool.
+        """Validates the configuration parameters for the search tool.
 
         Args:
             model (str): The model to use.
@@ -175,8 +166,7 @@ class PerplexitySearchTool(Tool):
             raise ValueError("search_domain_filter must be a list")
 
     def _execute_query(self, payload: dict[str, Any]) -> "PerplexityChatCompletionResponse":
-        """
-        Executes a query by sending a POST request to the Perplexity API.
+        """Executes a query by sending a POST request to the Perplexity API.
 
         Args:
             payload (dict[str, Any]): The payload to send in the API request.
@@ -223,8 +213,7 @@ class PerplexitySearchTool(Tool):
         return perp_resp
 
     def search(self, query: str) -> "SearchResponse":
-        """
-        Perform a search query using the Perplexity AI API.
+        """Perform a search query using the Perplexity AI API.
 
         Constructs the payload, executes the query, and parses the response to return
         a concise search result along with any provided citations.

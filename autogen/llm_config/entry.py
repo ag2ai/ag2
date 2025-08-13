@@ -4,8 +4,8 @@
 
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from typing import Any, List, Mapping, Optional, Type, Union
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
@@ -17,36 +17,36 @@ from .client import ModelClient
 class LLMConfigEntryDict(TypedDict, total=False):
     api_type: Required[str]
     model: str
-    max_tokens: Optional[int]
-    top_p: Optional[float]
-    temperature: Optional[float]
+    max_tokens: int | None
+    top_p: float | None
+    temperature: float | None
 
-    api_key: Optional[SecretStr]
-    api_version: Optional[str]
-    base_url: Optional[HttpUrl]
-    voice: Optional[str]
-    http_client: Optional[httpxClient]
-    model_client_cls: Optional[str]
-    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]]
-    default_headers: Optional[Mapping[str, Any]]
-    tags: List[str]
+    api_key: SecretStr | None
+    api_version: str | None
+    base_url: HttpUrl | None
+    voice: str | None
+    http_client: httpxClient | None
+    model_client_cls: str | None
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None
+    default_headers: Mapping[str, Any] | None
+    tags: list[str]
 
 
 class ApplicationConfig(BaseModel):
-    max_tokens: Optional[int] = Field(default=None, ge=0)
-    top_p: Optional[float] = Field(default=None, ge=0)
-    temperature: Optional[float] = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=None, ge=0)
+    top_p: float | None = Field(default=None, gt=0, lt=1)
+    temperature: float | None = Field(default=None, ge=0, le=1)
 
     @field_validator("top_p", mode="before")
     @classmethod
-    def check_top_p(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+    def check_top_p(cls, v: float | None, info: ValidationInfo) -> float | None:
         if v is not None and info.data.get("temperature") is not None:
             raise ValueError("temperature and top_p cannot be set at the same time.")
         return v
 
     @field_validator("temperature", mode="before")
     @classmethod
-    def check_temperature(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+    def check_temperature(cls, v: float | None, info: ValidationInfo) -> float | None:
         if v is not None and info.data.get("top_p") is not None:
             raise ValueError("temperature and top_p cannot be set at the same time.")
         return v
@@ -56,15 +56,15 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     api_type: str
     model: str = Field(..., min_length=1)
 
-    api_key: Optional[SecretStr] = None
-    api_version: Optional[str] = None
-    base_url: Optional[HttpUrl] = None
-    voice: Optional[str] = None
-    model_client_cls: Optional[str] = None
-    http_client: Optional[httpxClient] = None
-    response_format: Optional[Union[str, dict[str, Any], BaseModel, Type[BaseModel]]] = None
-    default_headers: Optional[Mapping[str, Any]] = None
-    tags: List[str] = Field(default_factory=list)
+    api_key: SecretStr | None = None
+    api_version: str | None = None
+    base_url: HttpUrl | None = None
+    voice: str | None = None
+    model_client_cls: str | None = None
+    http_client: httpxClient | None = None
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
+    default_headers: Mapping[str, Any] | None = None
+    tags: list[str] = Field(default_factory=list)
 
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
@@ -82,7 +82,7 @@ class LLMConfigEntry(ApplicationConfig, ABC):
 
     @field_validator("base_url", mode="before")
     @classmethod
-    def check_base_url(cls, v: Union[HttpUrl, str, None], info: ValidationInfo) -> Optional[str]:
+    def check_base_url(cls, v: HttpUrl | str | None, info: ValidationInfo) -> str | None:
         if v is None:  # Handle None case explicitly
             return None
         if not str(v).startswith("https://") and not str(v).startswith("http://"):
@@ -90,7 +90,7 @@ class LLMConfigEntry(ApplicationConfig, ABC):
         return str(v)
 
     @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
-    def serialize_base_url(self, v: Optional[HttpUrl]) -> Optional[str]:
+    def serialize_base_url(self, v: HttpUrl | None) -> str | None:
         return str(v) if v is not None else None
 
     @field_serializer("api_key", when_used="unless-none")
@@ -103,7 +103,7 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         val = getattr(self, key, default)
         if isinstance(val, SecretStr):
             return val.get_secret_value()

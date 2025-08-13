@@ -14,8 +14,7 @@ __all__ = ["resolve_json_references"]
 
 @require_optional_import("jsonschema", "gemini")
 def resolve_json_references(schema: dict[str, Any]) -> dict[str, Any]:
-    """
-    Resolve JSON references in the given schema.
+    """Resolve JSON references in the given schema.
 
     Args:
         schema (dict): The JSON schema with references.

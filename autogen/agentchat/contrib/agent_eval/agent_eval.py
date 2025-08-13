@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from .... import GroupChat, GroupChatManager, UserProxyAgent
 from ....llm_config import LLMConfig
@@ -16,7 +16,7 @@ from .task import Task
 
 
 def generate_criteria(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
     task: Task = None,
     additional_instructions: str = "",
     max_round=2,
@@ -67,7 +67,7 @@ def generate_criteria(
 
 
 def quantify_criteria(
-    llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
+    llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
     criteria: list[Criterion] = None,
     task: Task = None,
     test_case: str = "",

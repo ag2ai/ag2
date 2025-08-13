@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from ......doc_utils import export_module
 from ......import_utils import optional_import_block, require_optional_import
@@ -41,8 +41,8 @@ class GeminiRealtimeClient(RealtimeClientBase):
     def __init__(
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any]],
-        logger: Optional[Logger] = None,
+        llm_config: LLMConfig | dict[str, Any],
+        logger: Logger | None = None,
     ) -> None:
         """(Experimental) Client for Gemini Realtime API.
 
@@ -54,7 +54,7 @@ class GeminiRealtimeClient(RealtimeClientBase):
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional["ClientConnection"] = None
+        self._connection: ClientConnection | None = None
         config = llm_config["config_list"][0]
 
         self._model: str = config["model"]
@@ -252,8 +252,8 @@ class GeminiRealtimeClient(RealtimeClientBase):
 
     @classmethod
     def get_factory(
-        cls, llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any
-    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        cls, llm_config: LLMConfig | dict[str, Any], logger: Logger, **kwargs: Any
+    ) -> Callable[[], "RealtimeClientProtocol"] | None:
         """Create a Realtime API client.
 
         Args:
