@@ -457,6 +457,48 @@ class TestGeminiClient:
         ):
             gemini_client._convert_json_response(no_json_response)
 
+    @pytest.fixture
+    def nested_function_parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "$defs": {
+                        "Subquestion": {
+                            "properties": {
+                                "question": {
+                                    "description": "The original question.",
+                                    "title": "Question",
+                                    "type": "string",
+                                }
+                            },
+                            "required": ["question"],
+                            "title": "Subquestion",
+                            "type": "object",
+                        }
+                    },
+                    "properties": {
+                        "question": {
+                            "description": "The original question.",
+                            "title": "Question",
+                            "type": "string",
+                        },
+                        "subquestions": {
+                            "description": "The subquestions that need to be answered.",
+                            "items": {"$ref": "#/$defs/Subquestion"},
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)
 
