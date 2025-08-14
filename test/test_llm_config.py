@@ -9,7 +9,8 @@ from copy import copy, deepcopy
 from typing import Any
 
 import pytest
-from pydantic import ValidationError  # Added import
+from dirty_equals import IsList
+from pydantic import ValidationError
 
 from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
@@ -62,13 +63,13 @@ def openai_llm_config_entry() -> OpenAILLMConfigEntry:
 
 class TestLLMConfigEntry:
     def test_extra_fields(self) -> None:
-        with pytest.raises(ValueError) as e:
-            # Intentionally passing extra field to raise an error
-            OpenAILLMConfigEntry(  # type: ignore [call-arg]
-                model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly", extra="extra"
-            )
-        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
-            e.value
+        assert (
+            OpenAILLMConfigEntry(  # type: ignore [attr-defined]
+                model="gpt-4o-mini",
+                api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                extra="extra",
+            ).extra
+            == "extra"
         )
 
     def test_serialization(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
@@ -114,13 +115,32 @@ class TestLLMConfigEntry:
 class TestLLMConfig:
     @pytest.fixture
     def openai_llm_config(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> LLMConfig:
-        return LLMConfig(config_list=[openai_llm_config_entry], temperature=0.5, check_every_ms=1000, cache_seed=42)
+        return LLMConfig(
+            config_list=[openai_llm_config_entry],
+            temperature=0.5,
+            check_every_ms=1000,
+            cache_seed=42,
+        )
 
     @pytest.mark.parametrize(
-        "llm_config, expected",
+        (
+            "llm_config",
+            "expected",
+        ),
         [
-            (
-                # todo add more test cases
+            pytest.param(
+                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
+                LLMConfig(
+                    config_list=[
+                        OpenAILLMConfigEntry(
+                            model="gpt-4o-mini",
+                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                        )
+                    ]
+                ),
+                id="gpt-4o-mini from options",
+            ),
+            pytest.param(
                 {
                     "config_list": [
                         {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
@@ -134,19 +154,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="gpt-4o-mini from config-list",
             ),
-            (
-                {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"},
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                        )
-                    ]
-                ),
-            ),
-            (
+            pytest.param(
                 {
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
@@ -161,25 +171,9 @@ class TestLLMConfig:
                     ],
                     cache_seed=42,
                 ),
+                id="gpt-4o-mini from options with config extras",
             ),
-            (
-                {
-                    "config_list": [
-                        {"model": "gpt-4o-mini", "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"}
-                    ],
-                    "max_tokens": 1024,
-                },
-                LLMConfig(
-                    config_list=[
-                        OpenAILLMConfigEntry(
-                            model="gpt-4o-mini",
-                            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
-                            max_tokens=1024,
-                        )
-                    ]
-                ),
-            ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -200,8 +194,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="o3 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -211,6 +206,7 @@ class TestLLMConfig:
                         }
                     ],
                     "temperature": 0.5,
+                    "max_tokens": 1024,
                     "check_every_ms": 1000,
                     "cache_seed": 42,
                 },
@@ -219,14 +215,18 @@ class TestLLMConfig:
                         OpenAILLMConfigEntry(
                             model="gpt-4o-mini",
                             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+                            temperature=0.5,
+                            max_tokens=1024,
                         )
                     ],
                     temperature=0.5,
+                    max_tokens=1024,
                     check_every_ms=1000,
                     cache_seed=42,
                 ),
+                id="gpt-4o-mini from list with config extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -246,8 +246,9 @@ class TestLLMConfig:
                         )
                     ],
                 ),
+                id="azure gpt-4o-mini from list",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -271,8 +272,9 @@ class TestLLMConfig:
                         )
                     ],
                 ),
+                id="azure o3 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -281,7 +283,6 @@ class TestLLMConfig:
                             "api_key": "dummy_api_key",
                             "stream": False,
                             "temperature": 1.0,
-                            "top_p": 0.8,
                             "max_tokens": 100,
                             "tags": [],
                         }
@@ -294,13 +295,13 @@ class TestLLMConfig:
                             api_key="dummy_api_key",
                             stream=False,
                             temperature=1.0,
-                            top_p=0.8,
                             max_tokens=100,
                         )
                     ],
                 ),
+                id="anthropic claude-3-5-sonnet-latest from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -311,8 +312,6 @@ class TestLLMConfig:
                             "aws_secret_key": "test_secret_access_key",
                             "aws_session_token": "test_session_token",
                             "temperature": 0.8,
-                            "topP": 0.6,
-                            "stream": False,
                             "tags": [],
                             "supports_system_prompts": True,
                         }
@@ -327,13 +326,12 @@ class TestLLMConfig:
                             aws_secret_key="test_secret_access_key",
                             aws_session_token="test_session_token",
                             temperature=0.8,
-                            topP=0.6,
-                            stream=False,
                         )
                     ]
                 ),
+                id="bedrock claude-3-sonnet from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -356,12 +354,13 @@ class TestLLMConfig:
                             max_tokens=1000,
                             seed=42,
                             stream=False,
-                            temperature=1,
+                            temperature=1.0,
                         )
                     ]
                 ),
+                id="cerebras llama3.1-8b from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -374,7 +373,6 @@ class TestLLMConfig:
                             "presence_penalty": 0,
                             "strict_tools": False,
                             "tags": [],
-                            "temperature": 0.3,
                         }
                     ]
                 },
@@ -383,12 +381,13 @@ class TestLLMConfig:
                         CohereLLMConfigEntry(
                             model="command-r-plus",
                             api_key="dummy_api_key",
-                            stream=False,
+                            p=0.75,  # deprecated option
                         )
                     ]
                 ),
+                id="cohere command-r-plus from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -407,11 +406,13 @@ class TestLLMConfig:
                         DeepSeekLLMConfigEntry(
                             api_key="fake_api_key",
                             model="deepseek-chat",
+                            temperature=0.5,
                         )
                     ]
                 ),
+                id="deepseek deepseek-chat from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -435,23 +436,33 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="google gemini-2.0-flash-lite from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
                             "api_type": "groq",
                             "model": "llama3-8b-8192",
                             "api_key": "fake_api_key",
-                            "temperature": 1,
+                            "temperature": 1.0,
                             "stream": False,
                             "tags": [],
                         }
                     ]
                 },
-                LLMConfig(config_list=[GroqLLMConfigEntry(api_key="fake_api_key", model="llama3-8b-8192")]),
+                LLMConfig(
+                    config_list=[
+                        GroqLLMConfigEntry(
+                            api_key="fake_api_key",
+                            model="llama3-8b-8192",
+                            temperature=1.0,
+                        ),
+                    ]
+                ),
+                id="groq llama3-8b-8192 from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -470,11 +481,13 @@ class TestLLMConfig:
                         MistralLLMConfigEntry(
                             model="mistral-small-latest",
                             api_key="fake_api_key",
+                            temperature=0.7,
                         )
                     ]
                 ),
+                id="mistral mistral-small-latest from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -488,14 +501,18 @@ class TestLLMConfig:
                             "tags": [],
                             "temperature": 0.8,
                             "top_k": 40,
-                            "top_p": 0.9,
                             "native_tool_calls": False,
                         }
                     ]
                 },
-                LLMConfig(config_list=[OllamaLLMConfigEntry(model="llama3.1:8b")]),
+                LLMConfig(
+                    config_list=[
+                        OllamaLLMConfigEntry(model="llama3.1:8b", temperature=0.8),
+                    ]
+                ),
+                id="ollama llama3.1:8b from list with default llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "config_list": [
                         {
@@ -518,8 +535,9 @@ class TestLLMConfig:
                         )
                     ]
                 ),
+                id="together mistralai/Mixtral-8x7B-Instruct-v0.1 from list with llm extras",
             ),
-            (
+            pytest.param(
                 {
                     "model": "gpt-4o-realtime-preview",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
@@ -532,26 +550,13 @@ class TestLLMConfig:
                     voice="alloy",
                     tags=["gpt-4o-realtime", "realtime"],
                 ),
+                id="gpt-4o-realtime-preview from options with llm extras",
             ),
         ],
     )
     def test_init(self, llm_config: dict[str, Any], expected: LLMConfig) -> None:
         actual = LLMConfig(**llm_config)
         assert actual == expected, actual
-
-    def test_extra_fields(self) -> None:
-        with pytest.raises(ValueError) as e:
-            LLMConfig(
-                config_list=[
-                    OpenAILLMConfigEntry(
-                        model="gpt-4o-mini", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
-                    )
-                ],
-                extra="extra",
-            )
-        assert "Extra inputs are not permitted [type=extra_forbidden, input_value='extra', input_type=str]" in str(
-            e.value
-        )
 
     def test_serialization(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.model_dump()
@@ -562,6 +567,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "temperature": 0.5,
                     "stream": False,
                 }
             ],
@@ -627,6 +633,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
+                    "temperature": 0.5,
                     "stream": False,
                 }
             ],
@@ -656,6 +663,7 @@ class TestLLMConfig:
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "tags": [],
                     "stream": False,
+                    "temperature": 0.5,
                 }
             ],
         ]
@@ -673,6 +681,7 @@ class TestLLMConfig:
                     "model": "gpt-4o-mini",
                     "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
                     "base_url": "localhost:8080",
+                    "temperature": 0.5,
                     "stream": False,
                     "tags": [],
                 }
@@ -760,7 +769,13 @@ class TestLLMConfig:
 
         actual = openai_llm_config.where(**filter_dict, exclude=exclude)
         assert isinstance(actual, LLMConfig)
-        assert actual.config_list == LLMConfig(config_list=expected).config_list
+
+        expected_configs = []
+        for c in LLMConfig(config_list=expected).config_list:
+            c.apply_application_config(openai_llm_config)
+            expected_configs.append(c)
+
+        assert actual.config_list == IsList(*expected_configs, check_order=False)
         assert actual.temperature == 0.1
 
     def test_where_invalid_filter(self) -> None:
@@ -837,7 +852,7 @@ class TestLLMConfig:
 
     def test_routing_method_invalid(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
         with pytest.raises(ValidationError):  # Changed from ValueError to ValidationError
-            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")
+            LLMConfig(config_list=[openai_llm_config_entry], routing_method="invalid_method")  # type: ignore[arg-type]
 
     def test_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONFIG", JSON_SAMPLE)

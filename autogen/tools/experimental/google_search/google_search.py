@@ -4,7 +4,7 @@
 
 
 import logging
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -49,8 +49,8 @@ class GoogleSearchTool(Tool):
     def __init__(
         self,
         *,
-        search_api_key: Optional[str] = None,
-        search_engine_id: Optional[str] = None,
+        search_api_key: str | None = None,
+        search_engine_id: str | None = None,
         use_internal_llm_tool_if_available: bool = True,
     ):
         """GoogleSearchTool is a tool that uses the Google Search API to perform a search.
@@ -74,8 +74,8 @@ class GoogleSearchTool(Tool):
 
         def google_search(
             query: Annotated[str, "The search query."],
-            search_api_key: Annotated[Optional[str], Depends(on(search_api_key))],
-            search_engine_id: Annotated[Optional[str], Depends(on(search_engine_id))],
+            search_api_key: Annotated[str | None, Depends(on(search_api_key))],
+            search_engine_id: Annotated[str | None, Depends(on(search_engine_id))],
             num_results: Annotated[int, "The number of results to return."] = 10,
         ) -> list[dict[str, Any]]:
             if search_api_key is None or search_engine_id is None:

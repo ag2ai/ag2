@@ -4,7 +4,7 @@
 
 import logging
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 from .... import ConversableAgent
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
@@ -30,22 +30,19 @@ You are an expert in parsing and understanding text. You can use {DOCLING_PARSE_
 
 @export_module("autogen.agents.experimental")
 class DoclingDocIngestAgent(ConversableAgent):
-    """
-    A DoclingDocIngestAgent is a swarm agent that ingests documents using the docling_parse_docs tool.
-    """
+    """A DoclingDocIngestAgent is a swarm agent that ingests documents using the docling_parse_docs tool."""
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        llm_config: Optional[Union[LLMConfig, dict, Literal[False]]] = None,  # type: ignore[type-arg]
-        parsed_docs_path: Optional[Union[Path, str]] = None,
-        query_engine: Optional[RAGQueryEngine] = None,
+        name: str | None = None,
+        llm_config: LLMConfig | dict | Literal[False] | None = None,  # type: ignore[type-arg]
+        parsed_docs_path: Path | str | None = None,
+        query_engine: RAGQueryEngine | None = None,
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "ErrorManagerAgent",
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
     ):
-        """
-        Initialize the DoclingDocIngestAgent.
+        """Initialize the DoclingDocIngestAgent.
 
         Args:
             name: The name of the DoclingDocIngestAgent.
@@ -64,8 +61,7 @@ class DoclingDocIngestAgent(ConversableAgent):
         self._query_engine = query_engine or VectorChromaQueryEngine(collection_name=collection_name)
 
         def data_ingest_task(context_variables: ContextVariables) -> ReplyResult:
-            """
-            A tool for Swarm agent to ingests documents using the docling_parse_docs to parse documents to markdown
+            """A tool for Swarm agent to ingests documents using the docling_parse_docs to parse documents to markdown
             and add them to the docling_query_engine.
 
             Args:
@@ -74,7 +70,6 @@ class DoclingDocIngestAgent(ConversableAgent):
             Returns:
             ReplyResult: The result of the task.
             """
-
             try:
                 input_file_path = ""
                 tasks = context_variables.get("DocumentsToIngest", [])

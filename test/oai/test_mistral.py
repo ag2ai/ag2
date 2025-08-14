@@ -36,6 +36,7 @@ def test_mistral_llm_config_entry():
     mistral_llm_config = MistralLLMConfigEntry(
         model="mistral-small-latest",
         api_key="fake_api_key",
+        temperature=0.7,
     )
     expected = {
         "api_type": "mistral",

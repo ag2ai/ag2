@@ -3,31 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import sys
-from contextlib import AsyncExitStack, asynccontextmanager
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, AsyncIterator, Dict, List, Literal, Optional, Union, cast
+from typing import Annotated, Any, Literal, Protocol, cast
 
 import anyio
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from mcp.client.session import ClientSession
+from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
-from pydantic import BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field
 
 from ..doc_utils import export_module
 from ..import_utils import optional_import_block, require_optional_import
 from ..tools import Tool, Toolkit
 
 with optional_import_block():
-    from mcp.types import (
-        CallToolResult,
-        ReadResourceResult,
-        ResourceTemplate,
-        TextContent,
-    )
-    from mcp.types import (
-        Tool as MCPTool,
-    )
+    from mcp.shared.message import SessionMessage
+    from mcp.types import CallToolResult, ReadResourceResult, ResourceTemplate, TextContent
+    from mcp.types import Tool as MCPTool
 
 __all__ = ["ResultSaved", "create_toolkit"]
 
@@ -43,33 +39,117 @@ DEFAULT_STREAMABLE_HTTP_REQUEST_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_EVENT_READ_TIMEOUT = timedelta(seconds=60 * 5)
 
 
-class StdioConfig(BaseModel):
+class SessionConfigProtocol(Protocol):
+    """Protocol for session configuration classes that can create MCP sessions."""
+
+    server_name: str
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """Create a session using the given exit stack."""
+        try:
+            yield cast(ClientSession, None)  # placeholder yield to satisfy AsyncIterator type
+        except Exception:
+            raise NotImplementedError
+
+
+class BasicSessionConfig(BaseModel):
+    """Basic session configuration."""
+
+    server_name: str = Field(..., description="Name of the server")
+
+    async def initialize(
+        self,
+        client: AbstractAsyncContextManager[
+            tuple[
+                MemoryObjectReceiveStream[SessionMessage | Exception],
+                MemoryObjectSendStream[SessionMessage],
+            ]
+        ],
+        exit_stack: AsyncExitStack,
+    ) -> ClientSession:
+        """Initialize the session."""
+        reader, writer = await exit_stack.enter_async_context(client)
+        session = cast(
+            ClientSession,
+            await exit_stack.enter_async_context(ClientSession(reader, writer)),
+        )
+        return session
+
+
+class SseConfig(BasicSessionConfig):
+    """Configuration for a single SSE MCP server."""
+
+    url: str = Field(..., description="URL of the SSE server")
+    headers: dict[str, Any] | None = Field(default=None, description="HTTP headers to send to the SSE endpoint")
+    timeout: float = Field(default=DEFAULT_HTTP_REQUEST_TIMEOUT, description="HTTP timeout")
+    sse_read_timeout: float = Field(default=DEFAULT_SSE_EVENT_READ_TIMEOUT, description="SSE read timeout")
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """
+        Create a new session to an MCP server using SSE transport.
+
+        Args:
+            exit_stack: AsyncExitStack for managing async resources
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        # Create and store the connection
+        client = sse_client(self.url, self.headers, self.timeout, self.sse_read_timeout)
+        yield await self.initialize(client, exit_stack)
+
+
+class StdioConfig(BasicSessionConfig):
     """Configuration for a single stdio MCP server."""
 
     command: str = Field(..., description="Command to execute")
-    args: List[str] = Field(..., description="Arguments for the command")
+    args: list[str] = Field(..., description="Arguments for the command")
     transport: Literal["stdio"] = Field(default="stdio", description="Transport type")
-    server_name: str = Field(..., description="Name of the server")
-    environment: Optional[Dict[str, str]] = Field(default=None, description="Environment variables")
-    working_dir: Optional[Union[str, Path]] = Field(default=None, description="Working directory")
+    environment: dict[str, str] | None = Field(default=None, description="Environment variables")
+    working_dir: str | Path | None = Field(default=None, description="Working directory")
     encoding: str = Field(default=DEFAULT_TEXT_ENCODING, description="Character encoding")
     encoding_error_handler: EncodingErrorHandlerType = Field(
         default=DEFAULT_TEXT_ENCODING_ERROR_HANDLER, description="How to handle encoding errors"
     )
-    session_options: Optional[Dict[str, Any]] = Field(default=None, description="Additional session options")
+    session_options: dict[str, Any] | None = Field(default=None, description="Additional session options")
+
+    @asynccontextmanager
+    async def create_session(self, exit_stack: AsyncExitStack) -> AsyncIterator[ClientSession]:
+        """
+        Create a new session to an MCP server using stdio transport.
+
+        Args:
+            exit_stack: AsyncExitStack for managing async resources
+
+        Yields:
+            ClientSession: The MCP client session
+        """
+        client = stdio_client(
+            StdioServerParameters(
+                command=self.command,
+                args=self.args,
+                env=self.environment,
+                encoding=self.encoding,
+                encoding_error_handler=self.encoding_error_handler,
+            )
+        )
+        yield await self.initialize(client, exit_stack)
 
 
 class MCPConfig(BaseModel):
     """Configuration for multiple MCP sessions using stdio transport."""
 
-    servers: List[StdioConfig] = Field(..., description="List of stdio server configurations")
+    # we should use final classes to allow pydantic to validate the type
+    servers: list[SseConfig | StdioConfig] = Field(..., description="List of stdio & sse server configurations")
 
 
 class MCPClient:
     @staticmethod
     def _convert_call_tool_result(  # type: ignore[no-any-unimported]
         call_tool_result: "CallToolResult",  # type: ignore[no-any-unimported]
-    ) -> tuple[Union[str, list[str]], Any]:
+    ) -> tuple[str | list[str], Any]:
         text_contents: list[TextContent] = []  # type: ignore[no-any-unimported]
         non_text_contents = []
         for content in call_tool_result.content:
@@ -78,7 +158,7 @@ class MCPClient:
             else:
                 non_text_contents.append(content)
 
-        tool_content: Union[str, list[str]] = [content.text for content in text_contents]
+        tool_content: str | list[str] = [content.text for content in text_contents]
         if len(text_contents) == 1:
             tool_content = tool_content[0]
 
@@ -100,7 +180,7 @@ class MCPClient:
 
         async def call_tool(  # type: ignore[no-any-unimported]
             **arguments: dict[str, Any],
-        ) -> tuple[Union[str, list[str]], Any]:
+        ) -> tuple[str | list[str], Any]:
             call_tool_result = await session.call_tool(tool.name, arguments)
             return MCPClient._convert_call_tool_result(call_tool_result)
 
@@ -118,7 +198,7 @@ class MCPClient:
         cls,
         resource_template: Any,
         session: "ClientSession",
-        resource_download_folder: Optional[Path],
+        resource_download_folder: Path | None,
         **kwargs: Any,
     ) -> Tool:
         if not isinstance(resource_template, ResourceTemplate):
@@ -132,8 +212,8 @@ Here is the correct format for the URI template:
 {mcp_resource.uriTemplate}
 """
 
-        async def call_resource(uri: Annotated[str, uri_description]) -> Union[ReadResourceResult, ResultSaved]:  # type: ignore[no-any-unimported]
-            result = await session.read_resource(uri)
+        async def call_resource(uri: Annotated[str, uri_description]) -> ReadResourceResult | ResultSaved:  # type: ignore[no-any-unimported]
+            result = await session.read_resource(AnyUrl(uri))
 
             if not resource_download_folder:
                 return result
@@ -166,7 +246,7 @@ Here is the correct format for the URI template:
         *,
         use_mcp_tools: bool,
         use_mcp_resources: bool,
-        resource_download_folder: Optional[Path],
+        resource_download_folder: Path | None,
     ) -> Toolkit:  # type: ignore[no-any-unimported]
         """Load all available MCP tools and convert them to AG2 Toolkit."""
         all_ag2_tools: list[Tool] = []
@@ -191,10 +271,7 @@ Here is the correct format for the URI template:
         return Toolkit(tools=all_ag2_tools)
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
-        if sys.version_info < (3, 10):
-            return "This submodule is only supported for Python versions 3.10 and above"
-
+    def get_unsupported_reason(cls) -> str | None:
         with optional_import_block() as result:
             import mcp  # noqa: F401
 
@@ -206,68 +283,31 @@ Here is the correct format for the URI template:
 
 class MCPClientSessionManager:
     """
-    A class to manage MCP client sessions using stdio transport.
+    A class to manage MCP client sessions.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the MCP client session manager."""
         self.exit_stack = AsyncExitStack()
         self.sessions: dict[str, ClientSession] = {}
 
-    async def _initialize_session(self, server_name: str, session: ClientSession) -> None:
-        await session.initialize()
-        self.sessions[server_name] = session
-
-    @asynccontextmanager
-    async def create_stdio_session(
-        self,
-        config: StdioConfig,
-    ) -> AsyncIterator[ClientSession]:
-        """
-        Create a new session to an MCP server using stdio transport.
-
-        Args:
-            config: StdioConfig object containing stdio session parameters
-
-        Yields:
-            ClientSession: The MCP client session
-        """
-
-        server_params = StdioServerParameters(
-            command=config.command,
-            args=config.args,
-            env=config.environment,
-            encoding=config.encoding,
-            encoding_error_handler=config.encoding_error_handler,
-        )
-
-        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        reader, writer = stdio_transport
-
-        session = cast(
-            ClientSession,
-            await self.exit_stack.enter_async_context(ClientSession(reader, writer)),
-        )
-        await self._initialize_session(config.server_name, session)
-        yield session
-
     @asynccontextmanager
     async def open_session(
         self,
-        config: StdioConfig,
+        config: SessionConfigProtocol,
     ) -> AsyncIterator[ClientSession]:
-        """
-        Open a new session to an MCP server based on configuration.
+        """Open a new session to an MCP server based on configuration.
 
         Args:
-            config: StdioConfig object containing session configuration
+            config: SessionConfigProtocol object containing session configuration
 
         Yields:
             ClientSession: The MCP client session
         """
-        if isinstance(config, StdioConfig):
-            async with self.create_stdio_session(config) as session:
-                yield session
+        async with config.create_session(self.exit_stack) as session:
+            await session.initialize()
+            self.sessions[config.server_name] = session
+            yield session
 
 
 @export_module("autogen.mcp")
@@ -276,7 +316,7 @@ async def create_toolkit(
     *,
     use_mcp_tools: bool = True,
     use_mcp_resources: bool = True,
-    resource_download_folder: Optional[Union[Path, str]] = None,
+    resource_download_folder: Path | str | None = None,
 ) -> Toolkit:  # type: ignore[no-any-unimported]
     """Create a toolkit from the MCP client session.
 
@@ -285,12 +325,12 @@ async def create_toolkit(
         use_mcp_tools (bool): Whether to include MCP tools in the toolkit.
         use_mcp_resources (bool): Whether to include MCP resources in the toolkit.
         resource_download_folder (Optional[Union[Path, str]]): The folder to download files to.
+
     Returns:
         Toolkit: The toolkit containing the converted tools.
     """
-    if resource_download_folder:
-        if isinstance(resource_download_folder, str):
-            resource_download_folder = Path(resource_download_folder)
+    if resource_download_folder is not None:
+        resource_download_folder = Path(resource_download_folder)
         await anyio.to_thread.run_sync(lambda: resource_download_folder.mkdir(parents=True, exist_ok=True))
 
     return await MCPClient.load_mcp_toolkit(

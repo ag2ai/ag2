@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Optional, Union
 
 from ..import_utils import optional_import_block, require_optional_import
 from .notebook_processor import (
@@ -231,7 +230,6 @@ def fix_internal_links(source_path: str, content: str) -> str:
     Returns:
         Content with internal links converted to relative paths
     """
-
     # Define regex patterns for HTML and Markdown links
     html_link_pattern = r'href="(/docs/[^"]*)"'
     html_img_src_pattern = r'src="(/snippets/[^"]+)"'
@@ -427,7 +425,7 @@ def format_navigation(
     nav: list[NavigationGroup],
     mkdocs_docs_dir: Path = mkdocs_docs_dir,
     depth: int = 0,
-    keywords: Optional[dict[str, str]] = None,
+    keywords: dict[str, str] | None = None,
 ) -> str:
     """Recursively format navigation structure into markdown-style nested list.
 
@@ -527,7 +525,6 @@ def add_excerpt_marker(content: str) -> str:
     Returns:
         str: Modified body content with <!-- more --> added
     """
-
     if "<!-- more -->" in content:
         return content.replace(r"\<!-- more -->", "<!-- more -->")
 
@@ -625,7 +622,7 @@ def fix_snippet_imports(content: str, snippets_dir: Path = mkdocs_output_dir.par
         file_path = snippets_dir / relative_path
 
         # Read the file content
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             file_content = f.read()
 
         # Replace the import statement with the file content
@@ -675,7 +672,7 @@ _is_first_notebook = True
 
 
 def add_front_matter_to_metadata_yml(
-    front_matter: dict[str, Union[str, list[str], None]], website_build_directory: Path, rendered_mdx: Path
+    front_matter: dict[str, str | list[str] | None], website_build_directory: Path, rendered_mdx: Path
 ) -> None:
     """Add notebook metadata to a YAML file containing metadata for all notebooks."""
     global _is_first_notebook
@@ -749,7 +746,6 @@ def transform_admonition_blocks(content: str) -> str:
     Returns:
         String with Material for MkDocs admonition blocks
     """
-
     tag_mappings = {
         "Tip": "tip",
         "Warning": "warning",
@@ -871,7 +867,6 @@ def remove_mdx_code_blocks(content: str) -> str:
     Returns:
         String with mdx-code-block markers removed
     """
-
     # Pattern to match mdx-code-block sections
     # Captures everything between ````mdx-code-block and ````
     pattern = re.compile(r"````mdx-code-block\n(.*?)\n````", re.DOTALL)
@@ -886,7 +881,7 @@ def remove_mdx_code_blocks(content: str) -> str:
 def post_process_func(
     rendered_mdx: Path,
     source_notebooks: Path,
-    front_matter: dict[str, Union[str, list[str], None]],
+    front_matter: dict[str, str | list[str] | None],
     website_build_directory: Path,
 ) -> None:
     with open(rendered_mdx, encoding="utf-8") as f:
@@ -940,7 +935,7 @@ def post_process_func(
     rel_path = f"/{rendered_mdx.relative_to(website_build_directory.parents[0])}"
     content = transform_content_for_mkdocs(content, rel_path)
 
-    # Convert mdx image syntax to mintly image syntax
+    # Convert mdx image syntax to mintlify image syntax
     # content = convert_mdx_image_blocks(content, rendered_mdx, website_build_directory)
 
     # ensure editUrl is present
@@ -999,7 +994,7 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
         metadata_yml_path: Path to the notebooks metadata YAML file
     """
     # Read the metadata file to get notebook items
-    with open(metadata_yml_path, "r") as file:
+    with open(metadata_yml_path) as file:
         items = yaml.safe_load(file)
 
     # Create navigation list entries for each notebook
@@ -1009,7 +1004,7 @@ def add_notebooks_nav(mkdocs_nav_path: Path, metadata_yml_path: Path) -> None:
         nav_list.append(f"        - [{item['title']}]({_link})\n")
 
     # Read the summary file
-    with open(mkdocs_nav_path, "r") as file:
+    with open(mkdocs_nav_path) as file:
         lines = file.readlines()
 
     # Find where to insert the notebook entries
@@ -1036,7 +1031,6 @@ def _generate_navigation_entries(dir_path: Path, mkdocs_output_dir: Path) -> lis
     Returns:
         str: Formatted navigation entries.
     """
-
     # Read all user story files and sort them by date (newest first)
     files = sorted(dir_path.glob("**/*.md"), key=sort_files_by_date, reverse=True)
 

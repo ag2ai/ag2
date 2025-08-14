@@ -12,10 +12,10 @@ import pkgutil
 import re
 import shutil
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator, Optional
+from typing import Any
 
 from ..doc_utils import get_target_module
 from ..import_utils import optional_import_block, require_optional_import
@@ -127,7 +127,6 @@ def generate(target_dir: Path, template_dir: Path) -> None:
 
 def fix_api_reference_links(content: str) -> str:
     """Fix the API reference links in the content."""
-
     # Define a pattern that matches API reference links
     pattern = r"(/docs/api-reference/[^#\)]+#)autogen\.([^\)]+)"
 
@@ -176,13 +175,13 @@ def get_mdx_files(directory: Path) -> list[str]:
     return [f"{p.relative_to(directory).with_suffix('')!s}".replace("\\", "/") for p in directory.rglob("*.mdx")]
 
 
-def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
+def add_prefix(path: str, parent_groups: list[str] | None = None) -> str:
     """Create full path with prefix and parent groups."""
     groups = parent_groups or []
     return f"docs/api-reference/{'/'.join(groups + [path])}"
 
 
-def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
+def create_nav_structure(paths: list[str], parent_groups: list[str] | None = None) -> list[Any]:
     """Convert list of file paths into nested navigation structure."""
     groups: dict[str, list[str]] = {}
     pages = []

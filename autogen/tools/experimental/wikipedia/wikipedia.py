@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 from pydantic import BaseModel
@@ -102,7 +102,7 @@ class WikipediaClient:
         search_data = data.get("query", {}).get("search", [])
         return search_data
 
-    def get_page(self, title: str) -> Optional[Any]:
+    def get_page(self, title: str) -> Any | None:
         """Retrieve a WikipediaPage object by title.
 
         Args:
@@ -158,7 +158,7 @@ class WikipediaQueryRunTool(Tool):
             func_or_tool=self.query_run,
         )
 
-    def query_run(self, query: str) -> Union[list[str], str]:
+    def query_run(self, query: str) -> list[str] | str:
         """Search Wikipedia and return formatted page summaries.
 
         Truncates `query` to MAX_QUERY_LENGTH before searching.
@@ -194,8 +194,7 @@ class WikipediaQueryRunTool(Tool):
 
 @require_optional_import(["wikipediaapi"], "wikipedia")
 class WikipediaPageLoadTool(Tool):
-    """
-    A tool to load up to N characters of Wikipedia page content along with metadata.
+    """A tool to load up to N characters of Wikipedia page content along with metadata.
 
     This tool uses a language-specific Wikipedia client to search for relevant articles
     and returns a list of Document objects containing truncated page content and metadata
@@ -212,8 +211,7 @@ class WikipediaPageLoadTool(Tool):
     """
 
     def __init__(self, language: str = "en", top_k: int = 3, truncate: int = 4000, verbose: bool = False) -> None:
-        """
-        Initializes the WikipediaPageLoadTool with configurable language, result count, and content length.
+        """Initializes the WikipediaPageLoadTool with configurable language, result count, and content length.
 
         Args:
             language (str): The language code for the Wikipedia edition (default is "en").
@@ -240,9 +238,8 @@ class WikipediaPageLoadTool(Tool):
             func_or_tool=self.content_search,
         )
 
-    def content_search(self, query: str) -> Union[list[Document], str]:
-        """
-        Executes a Wikipedia search and returns page content plus metadata.
+    def content_search(self, query: str) -> list[Document] | str:
+        """Executes a Wikipedia search and returns page content plus metadata.
 
         Args:
             query (str): The search term to query Wikipedia.

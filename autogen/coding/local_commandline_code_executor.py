@@ -10,11 +10,12 @@ import re
 import subprocess
 import sys
 import warnings
+from collections.abc import Callable
 from hashlib import md5
 from pathlib import Path
 from string import Template
 from types import SimpleNamespace
-from typing import Any, Callable, ClassVar, Optional, Union
+from typing import Any, ClassVar
 
 from typing_extensions import ParamSpec
 
@@ -73,11 +74,11 @@ $functions"""
     def __init__(
         self,
         timeout: int = 60,
-        virtual_env_context: Optional[SimpleNamespace] = None,
-        work_dir: Union[Path, str] = Path(),
-        functions: list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
+        virtual_env_context: SimpleNamespace | None = None,
+        work_dir: Path | str = Path(),
+        functions: list[FunctionWithRequirements[Any, A] | Callable[..., Any] | FunctionWithRequirementsStr] = [],
         functions_module: str = "functions",
-        execution_policies: Optional[dict[str, bool]] = None,
+        execution_policies: dict[str, bool] | None = None,
     ):
         """(Experimental) A code executor class that executes or saves LLM generated code a local command line
         environment.
@@ -128,7 +129,7 @@ $functions"""
 
         self._timeout = timeout
         self._work_dir: Path = work_dir
-        self._virtual_env_context: Optional[SimpleNamespace] = virtual_env_context
+        self._virtual_env_context: SimpleNamespace | None = virtual_env_context
 
         self._functions = functions
         # Setup could take some time so we intentionally wait for the first code block to do it.
@@ -168,7 +169,7 @@ $functions"""
     @property
     def functions(
         self,
-    ) -> list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]]:
+    ) -> list[FunctionWithRequirements[Any, A] | Callable[..., Any] | FunctionWithRequirementsStr]:
         """(Experimental) The functions that are available to the code executor."""
         return self._functions
 

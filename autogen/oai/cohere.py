@@ -34,14 +34,15 @@ import os
 import sys
 import time
 import warnings
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -66,20 +67,30 @@ COHERE_PRICING_1K = {
 }
 
 
-@register_llm_config
+class CohereEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["cohere"]
+
+    k: int
+    seed: int | None
+    frequency_penalty: float
+    presence_penalty: float
+    client_name: str | None
+    strict_tools: bool
+    stream: bool
+    tool_choice: Literal["NONE", "REQUIRED"] | None
+
+
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
-    temperature: float = Field(default=0.3, ge=0)
-    max_tokens: Optional[int] = Field(default=None, ge=0)
+
     k: int = Field(default=0, ge=0, le=500)
-    p: float = Field(default=0.75, ge=0.01, le=0.99)
-    seed: Optional[int] = None
+    seed: int | None = None
     frequency_penalty: float = Field(default=0, ge=0, le=1)
     presence_penalty: float = Field(default=0, ge=0, le=1)
-    client_name: Optional[str] = None
+    client_name: str | None = None
     strict_tools: bool = False
     stream: bool = False
-    tool_choice: Optional[Literal["NONE", "REQUIRED"]] = None
+    tool_choice: Literal["NONE", "REQUIRED"] | None = None
 
     def create_client(self):
         raise NotImplementedError("CohereLLMConfigEntry.create_client is not implemented.")
@@ -88,7 +99,7 @@ class CohereLLMConfigEntry(LLMConfigEntry):
 class CohereClient:
     """Client for Cohere's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[CohereEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -104,7 +115,7 @@ class CohereClient:
         )
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -203,7 +214,17 @@ class CohereClient:
         if "k" in params:
             cohere_params["k"] = validate_parameter(params, "k", int, False, 0, (0, 500), None)
 
+        if "top_p" in params:
+            cohere_params["p"] = validate_parameter(params, "top_p", (int, float), False, 0.75, (0.01, 0.99), None)
+
         if "p" in params:
+            warnings.warn(
+                (
+                    "parameter 'p' is deprecated, use 'top_p' instead for consistency with OpenAI API spec. "
+                    "Scheduled for removal in 0.10.0 version."
+                ),
+                DeprecationWarning,
+            )
             cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
 
         if "seed" in params:
@@ -402,8 +423,10 @@ class CohereClient:
 
     def _convert_json_response(self, response: str) -> Any:
         """Extract and validate JSON response from the output for structured outputs.
+
         Args:
             response (str): The response from the API.
+
         Returns:
             Any: The parsed JSON response.
         """

@@ -40,14 +40,14 @@ Breakdown of the **first turn**:
 
 6. The agent generates a reply given the message(s) received. This is a critical step in the process, see [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply) for an in-depth look at this step.
 
-  - Evaluate our "update_agent_state", "process_last_received_message", and "process_all_messages_before_reply" hooks (see [Hooks](/docs/contributor-guide/how-ag2-works/hooks)). These allow agent and message state to be updated before the following reply functions are evaluated.
+    - Evaluate our "update_agent_state", "process_last_received_message", and "process_all_messages_before_reply" hooks (see [Hooks](/docs/contributor-guide/how-ag2-works/hooks)). These allow agent and message state to be updated before the following reply functions are evaluated.
 
-  - Evaluate the agent's reply functions, this is where the actual reply from an agent is generated.
+    - Evaluate the agent's reply functions, this is where the actual reply from an agent is generated.
 
-    - Check termination and human reply
-    - Run function and tool calls
-    - Execute code blocks
-    - Generate LLM response
+        - Check termination and human reply
+        - Run function and tool calls
+        - Execute code blocks
+        - Generate LLM response
 
 7. If no reply is generated, we finish this turn
 

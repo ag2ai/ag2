@@ -25,7 +25,7 @@ class GoogleCredentialsLocalProvider(GoogleCredentialsProvider):
         self,
         client_secret_file: str,
         scopes: list[str],  # e.g. ['https://www.googleapis.com/auth/drive/readonly']
-        token_file: Optional[str] = None,
+        token_file: str | None = None,
         port: int = 8080,
     ) -> None:
         """A Google credentials provider that gets the credentials locally.

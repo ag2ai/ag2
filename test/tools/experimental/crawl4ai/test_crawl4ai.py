@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -126,7 +126,7 @@ class TestCrawl4AITool:
         ],
     )
     def test_validate_llm_strategy_kwargs(
-        self, llm_strategy_kwargs: Optional[dict[str, Any]], llm_config_provided: bool, expected_error: Optional[str]
+        self, llm_strategy_kwargs: dict[str, Any] | None, llm_config_provided: bool, expected_error: str | None
     ) -> None:
         if expected_error is None:
             Crawl4AITool._validate_llm_strategy_kwargs(

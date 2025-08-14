@@ -4,8 +4,9 @@
 
 import logging
 import os
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from autogen.agentchat.contrib.vectordb.base import VectorDBFactory
 from autogen.agentchat.contrib.vectordb.mongodb import MongoDBAtlasVectorDB
@@ -37,8 +38,7 @@ logger = logging.getLogger(__name__)
 @require_optional_import(["pymongo", "llama_index", "sentence_transformers"], "rag")
 @export_module("autogen.agentchat.contrib.rag")
 class MongoDBQueryEngine:
-    """
-    A query engine backed by MongoDB Atlas that supports document insertion and querying.
+    """A query engine backed by MongoDB Atlas that supports document insertion and querying.
 
     This engine initializes a vector database, builds an index from input documents,
     and allows querying using the chat engine interface.
@@ -54,13 +54,12 @@ class MongoDBQueryEngine:
         self,
         connection_string: str,
         llm: Optional["LLM"] = None,
-        database_name: Optional[str] = None,
-        embedding_function: Optional[Union["BaseEmbedding", Callable[..., Any]]] = None,  # type: ignore[type-arg]
-        embedding_model: Optional[Union["BaseEmbedding", str]] = None,
-        collection_name: Optional[str] = None,
+        database_name: str | None = None,
+        embedding_function: Union["BaseEmbedding", Callable[..., Any]] | None = None,  # type: ignore[type-arg]
+        embedding_model: Union["BaseEmbedding", str] | None = None,
+        collection_name: str | None = None,
     ):
-        """
-        Initializes a MongoDBQueryEngine instance.
+        """Initializes a MongoDBQueryEngine instance.
 
         Args:
             connection_string (str): Connection string used to connect to MongoDB.
@@ -89,14 +88,13 @@ class MongoDBQueryEngine:
         self.embedding_function = embedding_function or SentenceTransformer("all-MiniLM-L6-v2").encode  # type: ignore[call-overload]
 
         # These will be initialized later.
-        self.vector_db: Optional[MongoDBAtlasVectorDB] = None
-        self.vector_search_engine: Optional["MongoDBAtlasVectorSearch"] = None  # type: ignore[no-any-unimported]
-        self.storage_context: Optional["StorageContext"] = None  # type: ignore[no-any-unimported]
-        self.index: Optional[VectorStoreIndex] = None  # type: ignore[no-any-unimported]
+        self.vector_db: MongoDBAtlasVectorDB | None = None
+        self.vector_search_engine: MongoDBAtlasVectorSearch | None = None  # type: ignore[no-any-unimported]
+        self.storage_context: StorageContext | None = None  # type: ignore[no-any-unimported]
+        self.index: VectorStoreIndex | None = None  # type: ignore[no-any-unimported]
 
     def _set_up(self, overwrite: bool) -> None:
-        """
-        Sets up the MongoDB vector database, search engine, and storage context.
+        """Sets up the MongoDB vector database, search engine, and storage context.
 
         This method initializes the vector database using the provided connection details,
         creates a vector search engine instance, and sets the storage context for indexing.
@@ -123,19 +121,17 @@ class MongoDBQueryEngine:
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_search_engine)
 
     def _check_existing_collection(self) -> bool:
-        """
-        Checks if the specified collection exists in the MongoDB database.
+        """Checks if the specified collection exists in the MongoDB database.
 
         Returns:
             bool: True if the collection exists; False otherwise.
         """
-        client: "MongoClient[Any]" = MongoClient(self.connection_string)  # type: ignore[no-any-unimported]
+        client: MongoClient[Any] = MongoClient(self.connection_string)  # type: ignore[no-any-unimported]
         db = client[self.database_name]  # type: ignore[index]
         return self.collection_name in db.list_collection_names()
 
     def connect_db(self, *args: Any, **kwargs: Any) -> bool:
-        """
-        Connects to the MongoDB database and initializes the query index from the existing collection.
+        """Connects to the MongoDB database and initializes the query index from the existing collection.
 
         This method verifies the existence of the collection, sets up the database connection,
         builds the vector store index, and pings the MongoDB server.
@@ -168,13 +164,12 @@ class MongoDBQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
-        """
-        Initializes the MongoDB database by creating or overwriting the collection and indexing documents.
+        """Initializes the MongoDB database by creating or overwriting the collection and indexing documents.
 
         This method loads documents from a directory or provided file paths, sets up the database (optionally
         overwriting any existing collection), builds the vector store index, and inserts the documents.
@@ -215,8 +210,7 @@ class MongoDBQueryEngine:
             return False
 
     def _validate_query_index(self) -> None:
-        """
-        Validates that the query index is initialized.
+        """Validates that the query index is initialized.
 
         Raises:
             Exception: If the query index is not initialized.
@@ -225,10 +219,9 @@ class MongoDBQueryEngine:
             raise Exception("Query index is not initialized. Please call init_db or connect_db first.")
 
     def _load_doc(  # type: ignore[no-any-unimported]
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+        self, input_dir: Path | str | None, input_docs: Sequence[Path | str] | None
     ) -> Sequence["LlamaDocument"]:
-        """
-        Loads documents from a directory or a list of file paths.
+        """Loads documents from a directory or a list of file paths.
 
         Args:
             input_dir (Optional[Union[Path, str]]): Directory from which to load documents.
@@ -260,13 +253,12 @@ class MongoDBQueryEngine:
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        """
-        Adds new documents to the existing vector store index.
+        """Adds new documents to the existing vector store index.
 
         This method validates that the index exists, loads documents from the specified directory or file paths,
         and inserts them into the vector store index.
@@ -283,8 +275,7 @@ class MongoDBQueryEngine:
             self.index.insert(doc)  # type: ignore[union-attr]
 
     def query(self, question: str, *args: Any, **kwargs: Any) -> Any:  # type: ignore[no-any-unimported, type-arg]
-        """
-        Queries the indexed documents using the provided question.
+        """Queries the indexed documents using the provided question.
 
         This method validates that the query index is initialized, creates a query engine from the vector store index,
         and executes the query. If the response is empty, a default reply is returned.
@@ -307,8 +298,7 @@ class MongoDBQueryEngine:
         return str(response)
 
     def get_collection_name(self) -> str:
-        """
-        Retrieves the name of the MongoDB collection.
+        """Retrieves the name of the MongoDB collection.
 
         Returns:
             str: The collection name.

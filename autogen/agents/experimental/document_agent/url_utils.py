@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import Any, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 from ....import_utils import optional_import_block, require_optional_import
@@ -84,9 +84,7 @@ ExtensionToFormat = {
 
 
 class URLAnalyzer:
-    """
-    A class that analyzes URLs to determine if they point to web pages or files.
-    """
+    """A class that analyzes URLs to determine if they point to web pages or files."""
 
     # Mapping of input formats to their corresponding MIME types
     FormatToMimeType: dict[InputFormat, list[str]] = {
@@ -125,22 +123,20 @@ class URLAnalyzer:
                 MimeTypeToFormat[mime_type] = format_type
 
     def __init__(self, url: str):
-        """
-        Initialize the URLAnalyzer with a URL.
+        """Initialize the URLAnalyzer with a URL.
 
         Args:
             url (str): The URL to analyze
         """
         self.url = url
-        self.analysis_result: Optional[dict[str, Any]] = None
-        self.final_url: Optional[str] = None
+        self.analysis_result: dict[str, Any] | None = None
+        self.final_url: str | None = None
         self.redirect_chain: list[str] = []
 
     def analyze(
         self, test_url: bool = False, follow_redirects: bool = True, prioritize_extension: bool = True
     ) -> dict[str, Any]:
-        """
-        Analyze the URL to determine if it points to a web page or a file.
+        """Analyze the URL to determine if it points to a web page or a file.
 
         Args:
             test_url (bool): Whether to test the URL by making a request
@@ -213,8 +209,7 @@ class URLAnalyzer:
         return result
 
     def _analyze_by_extension(self, url: str) -> dict[str, Any]:
-        """
-        Analyze URL based on its file extension.
+        """Analyze URL based on its file extension.
 
         Args:
             url (str): The URL to analyze
@@ -247,9 +242,8 @@ class URLAnalyzer:
         }
 
     @require_optional_import(["requests"], "rag")
-    def _analyze_by_request(self, follow_redirects: bool = True) -> Optional[dict[str, Any]]:
-        """
-        Analyze URL by making a HEAD request to check Content-Type.
+    def _analyze_by_request(self, follow_redirects: bool = True) -> dict[str, Any] | None:
+        """Analyze URL by making a HEAD request to check Content-Type.
 
         Args:
             follow_redirects (bool): Whether to follow redirects
@@ -346,9 +340,8 @@ class URLAnalyzer:
             # If the request fails for any other reason
             return {"is_file": False, "file_type": InputFormat.INVALID, "mime_type": None, "error": str(e)}
 
-    def get_result(self) -> Optional[dict[str, Any]]:
-        """
-        Get the last analysis result, or None if the URL hasn't been analyzed yet.
+    def get_result(self) -> dict[str, Any] | None:
+        """Get the last analysis result, or None if the URL hasn't been analyzed yet.
 
         Returns:
             Optional[dict]: The analysis result or None
@@ -356,8 +349,7 @@ class URLAnalyzer:
         return self.analysis_result
 
     def get_redirect_info(self) -> dict[str, Any]:
-        """
-        Get information about redirects that occurred during the last request.
+        """Get information about redirects that occurred during the last request.
 
         Returns:
             dict: Information about redirects
@@ -380,9 +372,8 @@ class URLAnalyzer:
         }
 
     @require_optional_import(["requests"], "rag")
-    def follow_redirects(self) -> Tuple[str, list[str]]:
-        """
-        Follow redirects for the URL without analyzing content types.
+    def follow_redirects(self) -> tuple[str, list[str]]:
+        """Follow redirects for the URL without analyzing content types.
 
         Returns:
             Tuple[str, list[str]]: The final URL and the redirect chain

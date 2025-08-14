@@ -17,7 +17,7 @@ import time
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from dotenv import find_dotenv, load_dotenv
 from packaging.version import parse
@@ -27,8 +27,9 @@ if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.beta.assistant import Assistant
 
+    from ..llm_config import LLMConfig
+
 from ..doc_utils import export_module
-from ..llm_config import LLMConfig
 
 NON_CACHE_KEY = [
     "api_key",
@@ -58,6 +59,15 @@ OAI_PRICE1K = {
     # o3
     "o3": (0.0011, 0.0044),
     "o3-mini-2025-01-31": (0.0011, 0.0044),
+    # gpt-5
+    "gpt-5": (0.00125, 0.00125),
+    "gpt-5-2025-08-07": (0.00125, 0.00125),
+    # gpt-5-mini
+    "gpt-5-mini": (0.00025, 0.00025),
+    "gpt-5-mini-2025-08-07": (0.00025, 0.00025),
+    # gpt-5-nano
+    "gpt-5-nano": (0.00005, 0.00005),
+    "gpt-5-nano-2025-08-07": (0.00005, 0.00005),
     # gpt-4o
     "gpt-4o": (0.005, 0.015),
     "gpt-4o-2024-05-13": (0.005, 0.015),
@@ -157,9 +167,9 @@ def is_valid_api_key(api_key: str) -> bool:
 @export_module("autogen")
 def get_config_list(
     api_keys: list[str],
-    base_urls: Optional[list[str]] = None,
-    api_type: Optional[str] = None,
-    api_version: Optional[str] = None,
+    base_urls: list[str] | None = None,
+    api_type: str | None = None,
+    api_version: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client.
 
@@ -208,7 +218,7 @@ def get_config_list(
 
 @export_module("autogen")
 def get_first_llm_config(
-    llm_config: Union[LLMConfig, dict[str, Any]],
+    llm_config: Union["LLMConfig", dict[str, Any]],
 ) -> dict[str, Any]:
     """Get the first LLM config from the given LLM config.
 
@@ -236,12 +246,12 @@ def get_first_llm_config(
 
 @export_module("autogen")
 def config_list_openai_aoai(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    openai_api_base_file: Optional[str] = "base_openai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    openai_api_base_file: str | None = "base_openai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for OpenAI API client (including Azure or local model deployments that support OpenAI's chat completion API).
 
@@ -366,12 +376,12 @@ def config_list_openai_aoai(
 
 @export_module("autogen")
 def config_list_from_models(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
-    model_list: Optional[list[str]] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
+    model_list: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for API calls with models specified in the model list.
 
@@ -433,11 +443,11 @@ def config_list_from_models(
 
 @export_module("autogen")
 def config_list_gpt4_gpt35(
-    key_file_path: Optional[str] = ".",
-    openai_api_key_file: Optional[str] = "key_openai.txt",
-    aoai_api_key_file: Optional[str] = "key_aoai.txt",
-    aoai_api_base_file: Optional[str] = "base_aoai.txt",
-    exclude: Optional[str] = None,
+    key_file_path: str | None = ".",
+    openai_api_key_file: str | None = "key_openai.txt",
+    aoai_api_key_file: str | None = "key_aoai.txt",
+    aoai_api_base_file: str | None = "base_aoai.txt",
+    exclude: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get a list of configs for 'gpt-4' followed by 'gpt-3.5-turbo' API calls.
 
@@ -464,7 +474,7 @@ def config_list_gpt4_gpt35(
 @export_module("autogen")
 def filter_config(
     config_list: list[dict[str, Any]],
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]],
+    filter_dict: dict[str, list[str | None] | set[str | None]] | None,
     exclude: bool = False,
 ) -> list[dict[str, Any]]:
     """Filter configuration dictionaries based on specified criteria.
@@ -621,8 +631,8 @@ def _satisfies_criteria(config_value: Any, criteria_values: Any) -> bool:
 @export_module("autogen")
 def config_list_from_json(
     env_or_file: str,
-    file_location: Optional[str] = "",
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
+    file_location: str | None = "",
+    filter_dict: dict[str, list[str | None] | set[str | None]] | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieves a list of API configurations from a JSON stored in an environment variable or a file.
 
@@ -690,10 +700,10 @@ def config_list_from_json(
 
 
 def get_config(
-    api_key: Optional[str],
-    base_url: Optional[str] = None,
-    api_type: Optional[str] = None,
-    api_version: Optional[str] = None,
+    api_key: str | None,
+    base_url: str | None = None,
+    api_type: str | None = None,
+    api_version: str | None = None,
 ) -> dict[str, Any]:
     """Constructs a configuration dictionary for a single model with the provided API configurations.
 
@@ -729,10 +739,10 @@ def get_config(
 
 @export_module("autogen")
 def config_list_from_dotenv(
-    dotenv_file_path: Optional[str] = None,
-    model_api_key_map: Optional[dict[str, Any]] = None,
-    filter_dict: Optional[dict[str, Union[list[Union[str, None]], set[Union[str, None]]]]] = None,
-) -> list[dict[str, Union[str, set[str]]]]:
+    dotenv_file_path: str | None = None,
+    model_api_key_map: dict[str, Any] | None = None,
+    filter_dict: dict[str, list[str | None] | set[str | None]] | None = None,
+) -> list[dict[str, str | set[str]]]:
     """Load API configurations from a specified .env file or environment variables and construct a list of configurations.
 
     This function will:
@@ -797,12 +807,12 @@ def config_list_from_dotenv(
             config_without_key_var = {k: v for k, v in config.items() if k != "api_key_env_var"}
             config_dict = get_config(api_key=api_key, **config_without_key_var)
         else:
-            logging.warning(f"Unsupported type {type(config)} for model {model} configuration")
+            logging.warning(
+                "Unsupported configuration type encountered for a model. Please check your model_api_key_map."
+            )
 
         if not config_dict["api_key"] or config_dict["api_key"].strip() == "":
-            logging.warning(
-                f"API key not found or empty for model {model}. Please ensure path to .env file is correct."
-            )
+            logging.warning("API key not found or empty for a model. Please ensure path to .env file is correct.")
             continue  # Skip this configuration and continue with the next
 
         # Add model to the configuration and append to the list

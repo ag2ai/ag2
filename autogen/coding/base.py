@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Literal, Optional, Protocol, TypedDict, Union, runtime_checkable
+from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -40,7 +40,7 @@ class CodeExtractor(Protocol):
     """(Experimental) A code extractor class that extracts code blocks from a message."""
 
     def extract_code_blocks(
-        self, message: Optional[Union[str, list[Union[UserMessageTextContentPart, UserMessageImageContentPart]]]]
+        self, message: str | list[UserMessageTextContentPart | UserMessageImageContentPart] | None
     ) -> list[CodeBlock]:
         """(Experimental) Extract code blocks from a message.
 
@@ -98,10 +98,10 @@ class IPythonCodeResult(CodeResult):
 CodeExecutionConfig = TypedDict(
     "CodeExecutionConfig",
     {
-        "executor": Union[Literal["ipython-embedded", "commandline-local", "yepcode"], CodeExecutor],
-        "last_n_messages": Union[int, Literal["auto"]],
+        "executor": Literal["ipython-embedded", "commandline-local", "yepcode"] | CodeExecutor,
+        "last_n_messages": int | Literal["auto"],
         "timeout": int,
-        "use_docker": Union[bool, str, list[str]],
+        "use_docker": bool | str | list[str],
         "work_dir": str,
         "ipython-embedded": Mapping[str, Any],
         "commandline-local": Mapping[str, Any],
@@ -114,7 +114,7 @@ CodeExecutionConfig = TypedDict(
 class CommandLineCodeResult(CodeResult):
     """(Experimental) A code result class for command line code executor."""
 
-    code_file: Optional[str] = Field(
+    code_file: str | None = Field(
         default=None,
         description="The file that the executed code block was saved to.",
     )

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional, Union
+from typing import Any
 from unittest.mock import MagicMock, _Call, call
 from uuid import UUID
 
@@ -335,7 +335,7 @@ class TestToolCallEvent:
         ["assistant", None],
     )
     def test_print(
-        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: Optional[EventRole]
+        self, uuid: UUID, sender: ConversableAgent, recipient: ConversableAgent, role: EventRole | None
     ) -> None:
         self.event["role"] = role
 
@@ -647,7 +647,7 @@ class TestPostCarryoverProcessingEvent:
     )
     def test__process_carryover(
         self,
-        carryover: Union[str, list[Union[str, dict[str, Any], Any]]],
+        carryover: str | list[str | dict[str, Any] | Any],
         expected: str,
         uuid: UUID,
         sender: ConversableAgent,
@@ -709,7 +709,7 @@ class TestClearAgentsHistoryEvent:
         ],
     )
     def test_print(
-        self, agent: Optional[ConversableAgent], nr_events_to_preserve: Optional[int], expected: str, uuid: UUID
+        self, agent: ConversableAgent | None, nr_events_to_preserve: int | None, expected: str, uuid: UUID
     ) -> None:
         actual = ClearAgentsHistoryEvent(uuid=uuid, agent=agent, nr_events_to_preserve=nr_events_to_preserve)
         assert isinstance(actual, ClearAgentsHistoryEvent)

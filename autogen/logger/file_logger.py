@@ -11,7 +11,8 @@ import logging
 import os
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig

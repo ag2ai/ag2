@@ -51,14 +51,15 @@ import re
 import time
 import warnings
 from io import BytesIO
-from typing import Any, Literal, Optional, Type, Union
+from typing import Any, Literal
 
 import requests
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
@@ -68,6 +69,7 @@ with optional_import_block():
     import vertexai
     from PIL import Image
     from google.auth.credentials import Credentials
+    from google.genai import types
     from google.genai.types import (
         Content,
         FinishReason,
@@ -100,19 +102,34 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@register_llm_config
+class GeminiEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["google"]
+
+    project_id: str | None
+    location: str | None
+    google_application_credentials: str | None
+    credentials: Any | str | None
+    stream: bool
+    safety_settings: list[dict[str, Any]] | dict[str, Any] | None
+    price: list[float] | None
+    tool_config: ToolConfig | None
+    proxy: str | None
+
+
 class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
-    project_id: Optional[str] = None
-    location: Optional[str] = None
+    project_id: str | None = None
+    location: str | None = None
     # google_application_credentials points to the path of the JSON Keyfile
-    google_application_credentials: Optional[str] = None
+    google_application_credentials: str | None = None
     # credentials is a google.auth.credentials.Credentials object
-    credentials: Optional[Union[Any, str]] = None
+    credentials: Any | str | None = None
     stream: bool = False
-    safety_settings: Optional[Union[list[dict[str, Any]], dict[str, Any]]] = None
-    price: Optional[list[float]] = Field(default=None, min_length=2, max_length=2)
-    tool_config: Optional[ToolConfig] = None
+    safety_settings: list[dict[str, Any]] | dict[str, Any] | None = None
+    price: list[float] | None = Field(default=None, min_length=2, max_length=2)
+    tool_config: ToolConfig | None = None
+    proxy: str | None = None
+    """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
         raise NotImplementedError("GeminiLLMConfigEntry.create_client() is not implemented.")
@@ -134,7 +151,7 @@ class GeminiClient:
         "max_output_tokens": "max_output_tokens",
     }
 
-    def _initialize_vertexai(self, **params):
+    def _initialize_vertexai(self, **params: Unpack[GeminiEntryDict]):
         if "google_application_credentials" in params:
             # Path to JSON Keyfile
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = params["google_application_credentials"]
@@ -179,9 +196,10 @@ class GeminiClient:
             )
 
         self.api_version = kwargs.get("api_version")
+        self.proxy = kwargs.get("proxy")
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[type[BaseModel]] = None
+        self._response_format: type[BaseModel] | None = None
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -237,8 +255,14 @@ class GeminiClient:
                 "See this [LLM configuration tutorial](https://docs.ag2.ai/latest/docs/user-guide/basic-concepts/llm-configuration/) for more details."
             )
 
-        params.get("api_type", "google")  # not used
-        http_options = {"api_version": self.api_version} if self.api_version else None
+        http_options = types.HttpOptions()
+        if self.proxy:
+            http_options.client_args = {"proxy": self.proxy}
+            http_options.async_client_args = {"proxy": self.proxy}
+
+        if self.api_version:
+            http_options.api_version = self.api_version
+
         messages = params.get("messages", [])
         stream = params.get("stream", False)
         n_response = params.get("n", 1)
@@ -670,9 +694,7 @@ class GeminiClient:
 
     @staticmethod
     def _convert_type_null_to_nullable(schema: Any) -> Any:
-        """
-        Recursively converts all occurrences of {"type": "null"} to {"nullable": True} in a schema.
-        """
+        """Recursively converts all occurrences of {"type": "null"} to {"nullable": True} in a schema."""
         if isinstance(schema, dict):
             # If schema matches {"type": "null"}, replace it
             if schema == {"type": "null"}:

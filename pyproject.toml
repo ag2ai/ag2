@@ -24,7 +24,7 @@ keywords = [
     "agentic"
 ]
 
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.10,<3.14"
 
 dynamic = ["version"]
 
@@ -35,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -76,7 +75,7 @@ flaml = [
 # public distributions
 
 openai = [
-    "openai>=1.87.0",
+    "openai>=1.99.3",
 ]
 
 openai-realtime = [
@@ -94,8 +93,8 @@ jupyter-executor = [
 
 retrievechat = [
     "protobuf==6.31.1",
-    "chromadb==0.6.3",
-    "sentence_transformers<=5.0.0",
+    "chromadb==1.0.16",
+    "sentence_transformers<=5.1.0",
     "pypdf",
     "ipython",
     "beautifulsoup4",
@@ -190,7 +189,7 @@ twilio = [
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 mcp-proxy-gen = [
@@ -205,18 +204,18 @@ interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
     # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.74.12",
+    "litellm<=1.75.5.post1",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.4.10"]
+interop-pydantic-ai = ["pydantic-ai==0.6.2"]
 interop =[
     "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
 
 autobuild = [
     "chromadb",
-    "sentence_transformers<=5.0.0",
+    "sentence_transformers<=5.1.0",
     "huggingface-hub"
 ]
 
@@ -270,7 +269,7 @@ tavily = ["tavily-python>=0.7.4"]
 
 # test dependencies
 test = [
-    "ipykernel==6.30.0",
+    "ipykernel==6.30.1",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
     "pytest-cov==6.2.1",
@@ -302,7 +301,7 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
     "nbclient==0.10.2",
-    "mcp>=1.9.4; python_version>='3.10'",
+    "mcp>=1.9.4",
 ]
 
 types = [
@@ -317,7 +316,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.12.7",
+    "ruff==0.12.8",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -325,9 +324,9 @@ lint = [
 dev = [
     "toml==0.10.2",
     "ag2[lint,test,types,docs]",
-    "pre-commit==4.2.0",
+    "pre-commit==4.3.0",
     "detect-secrets==1.5.0",
-    "uv==0.8.4",
+    "uv==0.8.8",
 ]
 
 
@@ -418,7 +417,7 @@ exclude = "(.eggs|.git|.hg|.mypy_cache|.venv|_build|buck-out|build|dist)"
 [tool.ruff]
 fix = true
 line-length = 120
-target-version = 'py39'
+target-version = 'py310'
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".eggs",
@@ -460,7 +459,7 @@ select = [
 #    "RUF",   # Ruff-specific rules    https://docs.astral.sh/ruff/rules/#ruff-specific-rules-ruf
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
-#    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
 ]
 
 extend-select = ["D417"]
@@ -489,7 +488,7 @@ convention = "google"
 
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",
@@ -508,7 +507,7 @@ files = [
     "autogen/interop",
     "autogen/io",
     "autogen/json_utils.py",
-    "autogen/llm_config.py",
+    "autogen/llm_config",
     "autogen/logger",
     "autogen/messages",
     "autogen/oai/gemini_types.py",

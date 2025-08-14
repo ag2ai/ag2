@@ -63,7 +63,10 @@ def ollama_client_maths_format():
 
 
 def test_ollama_llm_config_entry():
-    ollama_llm_config = OllamaLLMConfigEntry(model="llama3.1:8b")
+    ollama_llm_config = OllamaLLMConfigEntry(
+        model="llama3.1:8b",
+        temperature=0.8,
+    )
     expected = {
         "api_type": "ollama",
         "model": "llama3.1:8b",
@@ -75,7 +78,6 @@ def test_ollama_llm_config_entry():
         "tags": [],
         "temperature": 0.8,
         "top_k": 40,
-        "top_p": 0.9,
         "hide_tools": "never",
         "native_tool_calls": False,
     }

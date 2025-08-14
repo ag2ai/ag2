@@ -6,12 +6,13 @@ import inspect
 import re
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
+from typing import Any, Generic, Optional, TypeVar
 
 __all__ = [
     "optional_import_block",
@@ -27,12 +28,12 @@ logger = getLogger(__name__)
 @dataclass
 class ModuleInfo:
     name: str
-    min_version: Optional[str] = None
-    max_version: Optional[str] = None
+    min_version: str | None = None
+    max_version: str | None = None
     min_inclusive: bool = False
     max_inclusive: bool = False
 
-    def is_in_sys_modules(self) -> Optional[str]:
+    def is_in_sys_modules(self) -> str | None:
         """Check if the module is installed and satisfies the version constraints
 
         Returns:
@@ -95,7 +96,6 @@ class ModuleInfo:
         Raises:
             ValueError: If the module information is invalid
         """
-
         pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
         match = pattern.match(module_info.strip())
 
@@ -140,7 +140,7 @@ class ModuleInfo:
 
 class Result:
     def __init__(self) -> None:
-        self._failed: Optional[bool] = None
+        self._failed: bool | None = None
 
     @property
     def is_successful(self) -> bool:
@@ -173,7 +173,7 @@ def optional_import_block() -> Generator[Result, None, None]:
         result._failed = True
 
 
-def get_missing_imports(modules: Union[str, Iterable[str]]) -> dict[str, str]:
+def get_missing_imports(modules: str | Iterable[str]) -> dict[str, str]:
     """Get missing modules from a list of module names
 
     Args:
@@ -191,7 +191,7 @@ def get_missing_imports(modules: Union[str, Iterable[str]]) -> dict[str, str]:
 
 
 T = TypeVar("T")
-G = TypeVar("G", bound=Union[Callable[..., Any], type])
+G = TypeVar("G", bound=Callable[..., Any] | type)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -401,7 +401,7 @@ def patch_object(
     missing_modules: dict[str, str],
     dep_target: str,
     fail_if_not_patchable: bool = True,
-    except_for: Optional[Union[str, Iterable[str]]] = None,
+    except_for: str | Iterable[str] | None = None,
 ) -> T:
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
@@ -414,10 +414,10 @@ def patch_object(
 
 
 def require_optional_import(
-    modules: Union[str, Iterable[str]],
+    modules: str | Iterable[str],
     dep_target: str,
     *,
-    except_for: Optional[Union[str, Iterable[str]]] = None,
+    except_for: str | Iterable[str] | None = None,
 ) -> Callable[[T], T]:
     """Decorator to handle optional module dependencies
 
@@ -453,7 +453,7 @@ def _mark_object(o: T, dep_target: str) -> T:
     return pytest_mark_o  # type: ignore[no-any-return]
 
 
-def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[G], G]:
+def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[G], G]:
     """Decorator to run a test if and only if optional modules are installed
 
     Args:
@@ -497,7 +497,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
     return decorator
 
 
-def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def skip_on_missing_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[T], T]:
     """Decorator to skip a test if an optional module is missing
 
     Args:

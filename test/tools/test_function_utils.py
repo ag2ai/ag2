@@ -7,8 +7,9 @@
 
 import inspect
 import unittest.mock
+from collections.abc import Callable
 from enum import Enum
-from typing import Annotated, Any, Callable, Literal, Optional, Set, Tuple, Union
+from typing import Annotated, Any, Literal
 
 import pytest
 from pydantic import BaseModel, Field
@@ -40,7 +41,7 @@ def g(  # type: ignore[empty-body]
     b: int = 2,
     c: Annotated[float, AG2Field(description="Parameter c")] = 0.1,
     *,
-    d: dict[str, tuple[Optional[int], list[float]]],
+    d: dict[str, tuple[int | None, list[float]]],
 ) -> str:
     pass
 
@@ -50,7 +51,7 @@ async def a_g(  # type: ignore[empty-body]
     b: int = 2,
     c: Annotated[float, AG2Field(description="Parameter c")] = 0.1,
     *,
-    d: dict[str, tuple[Optional[int], list[float]]],
+    d: dict[str, tuple[int | None, list[float]]],
 ) -> str:
     pass
 
@@ -84,9 +85,7 @@ def test_get_parameter_json_schema() -> None:
         "description": "parameter a",
         "default": "3.14",
     }
-    assert get_parameter_json_schema(
-        "d", Annotated[Optional[str], AG2Field(description="parameter d")], {"d": None}
-    ) == {
+    assert get_parameter_json_schema("d", Annotated[str | None, AG2Field(description="parameter d")], {"d": None}) == {
         "anyOf": [{"type": "string"}, {"type": "null"}],
         "default": None,
         "description": "parameter d",
@@ -402,12 +401,12 @@ def test_get_load_param_if_needed_function_generic_aliases_fixed() -> None:
 def test_get_load_param_if_needed_function_other_typing_constructs() -> None:
     """Tests other constructs from the typing module."""
     assert get_load_param_if_needed_function(Any) is None
-    assert get_load_param_if_needed_function(Union[str, int]) is None
-    assert get_load_param_if_needed_function(Optional[str]) is None  # Equivalent to Union[str, None]
-    assert get_load_param_if_needed_function(Optional[Currency]) is None  # Optional BaseModel
+    assert get_load_param_if_needed_function(str | int) is None
+    assert get_load_param_if_needed_function(str | None) is None  # Equivalent to Union[str, None]
+    assert get_load_param_if_needed_function(Currency | None) is None  # Optional BaseModel
     assert get_load_param_if_needed_function(Callable[[], str]) is None
-    assert get_load_param_if_needed_function(Tuple[int, str]) is None
-    assert get_load_param_if_needed_function(Set[float]) is None
+    assert get_load_param_if_needed_function(tuple[int, str]) is None
+    assert get_load_param_if_needed_function(set[float]) is None
     assert get_load_param_if_needed_function(list) is None  # The raw list type
     assert get_load_param_if_needed_function(dict) is None  # The raw dict type
 

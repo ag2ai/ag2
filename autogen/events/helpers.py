@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable
 
 from pydantic import BaseModel
 
