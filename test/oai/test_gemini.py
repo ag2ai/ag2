@@ -10,7 +10,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -574,20 +573,24 @@ class TestGeminiClient:
         })
 
         # Verify Client was called with correct parameters
-        assert mock_generative_client.call_args.kwargs == IsPartialDict({
-            "http_options": HttpOptions(
-                client_args={"proxy": "http://mock-test-proxy:90/"},
-                async_client_args={"proxy": "http://mock-test-proxy:90/"},
-            )
-        })
+        client_kwargs = mock_generative_client.call_args.kwargs
+        assert "http_options" in client_kwargs
+        http_options = client_kwargs["http_options"]
+        assert isinstance(http_options, HttpOptions)
+        assert http_options.client_args == {"proxy": "http://mock-test-proxy:90/"}
+        assert http_options.async_client_args == {"proxy": "http://mock-test-proxy:90/"}
 
         # Verify GenerateContentConfig was called with correct parameters
-        assert mock_generate_content_config.call_args.kwargs == IsPartialDict({
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        expected_config = {
             "temperature": 0.7,
             "max_output_tokens": 265,
             "top_p": 0.5,
             "top_k": 3,
-        })
+        }
+        for key, expected_value in expected_config.items():
+            assert key in config_kwargs, f"Expected key '{key}' not found in config kwargs"
+            assert config_kwargs[key] == expected_value, f"Expected {key}={expected_value}, got {config_kwargs[key]}"
 
     def test_create_gemini_function_parameters_with_nested_parameters(
         self, nested_function_parameters: dict[str, Any]
