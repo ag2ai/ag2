@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -20,7 +21,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.genai.types import GenerateContentResponse, GoogleSearch, Tool
+    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Tool
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -572,16 +573,21 @@ class TestGeminiClient:
             "top_k": 3,
         })
 
-        # Verify GenerateContentConfig was called with correct parameters
-        mock_generate_content_config.assert_called_once()
-        call_kwargs = mock_generate_content_config.call_args.kwargs
+        # Verify Client was called with correct parameters
+        assert mock_generative_client.call_args.kwargs == IsPartialDict({
+            "http_options": HttpOptions(
+                client_args={"proxy": "http://mock-test-proxy:90/"},
+                async_client_args={"proxy": "http://mock-test-proxy:90/"},
+            )
+        })
 
-        # Check that generation config parameters are correctly mapped
-        assert call_kwargs["proxy"] == "http://mock-test-proxy:90/", "Proxy parameter should be set in the config"
-        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
-        assert call_kwargs["max_output_tokens"] == 265, "max_tokens should be mapped to max_output_tokens"
-        assert call_kwargs["top_p"] == 0.5, "top_p parameter should be passed to generation config"
-        assert call_kwargs["top_k"] == 3, "top_k parameter should be passed to generation config"
+        # Verify GenerateContentConfig was called with correct parameters
+        assert mock_generate_content_config.call_args.kwargs == IsPartialDict({
+            "temperature": 0.7,
+            "max_output_tokens": 265,
+            "top_p": 0.5,
+            "top_k": 3,
+        })
 
     def test_create_gemini_function_parameters_with_nested_parameters(
         self, nested_function_parameters: dict[str, Any]
