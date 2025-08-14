@@ -22,6 +22,7 @@ from autogen.oai.client import (
     DeepSeekLLMConfigEntry,
     OpenAIEntryDict,
     OpenAILLMConfigEntry,
+    OpenAIResponsesLLMConfigEntry,
 )
 from autogen.oai.cohere import CohereEntryDict, CohereLLMConfigEntry
 from autogen.oai.gemini import GeminiEntryDict, GeminiLLMConfigEntry
@@ -366,6 +367,7 @@ class _LLMConfig(ApplicationConfig):
             | AzureOpenAILLMConfigEntry
             | DeepSeekLLMConfigEntry
             | OpenAILLMConfigEntry
+            | OpenAIResponsesLLMConfigEntry
             | CohereLLMConfigEntry
             | GeminiLLMConfigEntry
             | GroqLLMConfigEntry
