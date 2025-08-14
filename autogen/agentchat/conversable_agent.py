@@ -59,6 +59,7 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
@@ -3005,26 +3006,16 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: human input.
         """
-        iostream = IOStream.get_default()
 
-        reply = await iostream.input(prompt)
+        iostream = IOStream.get_default()
+        input_func = iostream.input
+
+        if is_coroutine_callable(input_func):
+            reply = await input_func(prompt)
+        else:
+            reply = await asyncio.to_thread(input_func, prompt)
         self._human_input.append(reply)
         return reply
-
-        # def _get_human_input(
-        #     self, iostream: IOStream, prompt: str,
-        # ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
-        #     with IOStream.set_default(iostream):
-        #         print("!"*100)
-        #         print("Getting human input...")
-        #         return self.get_human_input(prompt)
-
-        # return await asyncio.get_event_loop().run_in_executor(
-        #     None,
-        #     functools.partial(
-        #         _get_human_input, self=self, iostream=iostream, prompt=prompt,
-        #     ),
-        # )
 
     def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, str | None]:
         """Run the code and return the result.
