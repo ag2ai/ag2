@@ -687,6 +687,8 @@ def test_deepseek_llm_config_entry() -> None:
     deepseek_llm_config = DeepSeekLLMConfigEntry(
         api_key="fake_api_key",
         model="deepseek-chat",
+        max_tokens=8192,
+        temperature=0.5,
     )
 
     expected = {
@@ -709,13 +711,12 @@ def test_deepseek_llm_config_entry() -> None:
         "config_list": [expected],
     }
 
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(ValidationError, match="Value error, temperature and top_p cannot be set at the same time"):
         deepseek_llm_config = DeepSeekLLMConfigEntry(
             model="deepseek-chat",
             temperature=1,
             top_p=0.8,
         )
-    assert "Value error, temperature and top_p cannot be set at the same time" in str(e.value)
 
 
 class TestOpenAIClientBadRequestsError:

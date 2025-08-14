@@ -15,9 +15,9 @@ import uuid
 import warnings
 from collections.abc import Callable
 from functools import lru_cache
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
@@ -26,7 +26,8 @@ from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
 from ..import_utils import optional_import_block, require_optional_import
 from ..io.base import IOStream
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config import ModelClient
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
@@ -242,10 +243,22 @@ def log_cache_seed_value(cache_seed_value: str | int, client: ModelClient) -> No
     logger.debug(f"Using cache with seed value {cache_seed_value} for client {client.__class__.__name__}")
 
 
-@register_llm_config
+class OpenAIEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["openai"]
+
+    price: list[float] | None
+    tool_choice: Literal["none", "auto", "required"] | None
+    user: str | None
+    stream: bool
+    verbosity: Literal["low", "medium", "high"] | None
+    extra_body: dict[str, Any] | None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
+    max_completion_tokens: int | None
+
+
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
-    top_p: float | None = None
+
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_choice: Literal["none", "auto", "required"] | None = None
     user: str | None = None
@@ -267,10 +280,20 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError("create_client method must be implemented in the derived class.")
 
 
-@register_llm_config
+class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["azure"]
+
+    azure_ad_token_provider: str | Callable[[], str] | None
+    stream: bool
+    tool_choice: Literal["none", "auto", "required"] | None
+    user: str | None
+    reasoning_effort: Literal["low", "medium", "high"] | None
+    max_completion_tokens: int | None
+
+
 class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["azure"] = "azure"
-    top_p: float | None = None
+
     azure_ad_token_provider: str | Callable[[], str] | None = None
     stream: bool = False
     tool_choice: Literal["none", "auto", "required"] | None = None
@@ -285,74 +308,27 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
         raise NotImplementedError
 
 
-@register_llm_config
+class DeepSeekEntyDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["deepseek"]
+
+    base_url: HttpUrl
+    stream: bool
+    tool_choice: Literal["none", "auto", "required"] | None
+
+
 class DeepSeekLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["deepseek"] = "deepseek"
-    base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
-    temperature: float = Field(0.5, ge=0.0, le=1.0)
-    max_tokens: int = Field(8192, ge=1, le=8192)
-    stream: bool = False
-    top_p: float | None = Field(None, ge=0.0, le=1.0)
-    tool_choice: Literal["none", "auto", "required"] | None = None
 
-    @field_validator("top_p", mode="before")
-    @classmethod
-    def check_top_p(cls, v: Any, info: ValidationInfo) -> Any:
-        if v is not None and info.data.get("temperature") is not None:
-            raise ValueError("temperature and top_p cannot be set at the same time.")
-        return v
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_p: float | None = Field(None, ge=0.0, le=1.0)
+    max_tokens: int = Field(8192, ge=1, le=8192)
+
+    base_url: HttpUrl = HttpUrl("https://api.deepseek.com/v1")
+    stream: bool = False
+    tool_choice: Literal["none", "auto", "required"] | None = None
 
     def create_client(self) -> None:  # type: ignore [override]
         raise NotImplementedError("DeepSeekLLMConfigEntry.create_client is not implemented.")
-
-
-@export_module("autogen")
-class ModelClient(Protocol):
-    """A client class must implement the following methods:
-    - create must return a response object that implements the ModelClientResponseProtocol
-    - cost must return the cost of the response
-    - get_usage must return a dict with the following keys:
-        - prompt_tokens
-        - completion_tokens
-        - total_tokens
-        - cost
-        - model
-
-    This class is used to create a client that can be used by OpenAIWrapper.
-    The response returned from create must adhere to the ModelClientResponseProtocol but can be extended however needed.
-    The message_retrieval method must be implemented to return a list of str or a list of messages from the response.
-    """
-
-    RESPONSE_USAGE_KEYS = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
-
-    class ModelClientResponseProtocol(Protocol):
-        class Choice(Protocol):
-            class Message(Protocol):
-                content: str | None | dict[str, Any] | None
-
-            message: Message
-
-        choices: list[Choice]
-        model: str
-
-    def create(self, params: dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
-
-    def message_retrieval(
-        self, response: ModelClientResponseProtocol
-    ) -> list[str] | list[ModelClient.ModelClientResponseProtocol.Choice.Message]:
-        """Retrieve and return a list of strings or a list of Choice.Message from the response.
-
-        NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
-        since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
-        """
-        ...  # pragma: no cover
-
-    def cost(self, response: ModelClientResponseProtocol) -> float: ...  # pragma: no cover
-
-    @staticmethod
-    def get_usage(response: ModelClientResponseProtocol) -> dict:
-        """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
-        ...  # pragma: no cover
 
 
 class PlaceHolderClient:
@@ -683,9 +659,9 @@ class OpenAIClient:
         # Unsupported parameters
         unsupported_params = [
             "temperature",
+            "top_p",
             "frequency_penalty",
             "presence_penalty",
-            "top_p",
             "logprobs",
             "top_logprobs",
             "logit_bias",
@@ -1486,7 +1462,6 @@ class OpenAIWrapper:
 # -----------------------------------------------------------------------------
 
 
-@register_llm_config
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
 

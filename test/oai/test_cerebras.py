@@ -65,13 +65,12 @@ def test_cerebras_llm_config_entry():
         "config_list": [expected],
     }
 
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(ValidationError, match="Value error, temperature and top_p cannot be set at the same time"):
         cerebras_llm_config = CerebrasLLMConfigEntry(
             model="llama3.1-8b",
             temperature=1,
             top_p=0.8,
         )
-    assert "Value error, temperature and top_p cannot be set at the same time" in str(e.value)
 
 
 # Test initialization and configuration

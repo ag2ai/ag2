@@ -64,7 +64,8 @@ from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
-from ..oai.client import ModelClient, OpenAIWrapper
+from ..llm_config.client import ModelClient
+from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
@@ -1342,6 +1343,25 @@ class ConversableAgent(LLMAgent):
 
             raise RuntimeError(msg)
 
+    def _should_terminate_chat(self, recipient: "ConversableAgent", message: dict[str, Any]) -> bool:
+        """
+        Determines whether the chat should be terminated based on the message content
+        and the recipient's termination condition.
+
+        Args:
+            recipient (ConversableAgent): The agent to check for termination condition.
+            message (dict[str, Any]): The message dictionary to evaluate for termination.
+
+        Returns:
+            bool: True if the chat should be terminated, False otherwise.
+        """
+        return (
+            isinstance(recipient, ConversableAgent)
+            and isinstance(message.get("content"), str)
+            and hasattr(recipient, "_is_termination_msg")
+            and recipient._is_termination_msg(message)
+        )
+
     def initiate_chat(
         self,
         recipient: "ConversableAgent",
@@ -1456,6 +1476,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            is_termination = False
             for i in range(max_turns):
                 # check recipient max consecutive auto reply limit
                 if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
@@ -1466,11 +1487,13 @@ class ConversableAgent(LLMAgent):
                     else:
                         msg2send = self.generate_init_message(message, **kwargs)
                 else:
+                    last_message = self.chat_messages[recipient][-1]
+                    if self._should_terminate_chat(recipient, last_message):
+                        break
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
                 if msg2send is None:
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
-
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
                     TerminationEvent(
@@ -1644,6 +1667,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            is_termination = False
             for _ in range(max_turns):
                 if _ == 0:
                     if isinstance(message, Callable):
@@ -1651,9 +1675,12 @@ class ConversableAgent(LLMAgent):
                     else:
                         msg2send = await self.a_generate_init_message(message, **kwargs)
                 else:
+                    last_message = self.chat_messages[recipient][-1]
+                    if self._should_terminate_chat(recipient, last_message):
+                        break
                     msg2send = await self.a_generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                if msg2send is None:
-                    break
+                    if msg2send is None:
+                        break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
