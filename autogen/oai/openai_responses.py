@@ -115,6 +115,11 @@ class OpenAIResponsesClient:
         client: "OpenAI",
         response_format: BaseModel | dict[str, Any] | None = None,
     ):
+        # Validate client configuration using standardized utility
+        from .client_utils import validate_openai_client
+
+        validate_openai_client(client, "OpenAI Responses API")
+
         self._oai_client = client  # plain openai.OpenAI instance
         self.response_format = response_format  # kept for parity but unused for now
 
@@ -130,6 +135,65 @@ class OpenAIResponsesClient:
 
         # Image costs are calculated manually (rather than off returned information)
         self.image_costs = 0
+
+    def _handle_response_id(self, response, params):
+        """Handle response ID extraction for both streaming and non-streaming responses."""
+        is_streaming = params.get("stream", False)
+
+        if not is_streaming:
+            # For non-streaming responses, we have immediate access to the ID
+            if hasattr(response, "id"):
+                self.previous_response_id = response.id
+            else:
+                self.previous_response_id = None
+        # For streaming responses, _consume_streaming_response will handle the ID
+
+    def _consume_streaming_response(self, stream):
+        """Consume a streaming response and extract the final content."""
+        assembled_text = ""
+        response_id = None
+        tool_calls = []
+
+        try:
+            for event in stream:
+                # Extract response ID from any event that has it
+                if hasattr(event, "response") and hasattr(event.response, "id"):
+                    response_id = event.response.id
+                    # Update previous_response_id for conversation continuity
+                    if self.previous_response_id is None:
+                        self.previous_response_id = response_id
+
+                # Handle different event types
+                event_type = getattr(event, "type", "")
+
+                if event_type == "response.output_text.delta":
+                    # Accumulate text deltas
+                    delta = getattr(event, "delta", "")
+                    assembled_text += delta
+                elif event_type == "response.function_call_arguments.delta":
+                    # Handle function call streaming (if needed)
+                    pass
+                elif event_type == "response.completed":
+                    # Stream is complete
+                    break
+                elif event_type == "error":
+                    # Handle streaming errors
+                    error_message = getattr(event, "message", "Streaming error occurred")
+                    assembled_text = f"Error: {error_message}"
+                    break
+        except Exception as e:
+            # Fallback if stream consumption fails
+            assembled_text = f"Streaming error: {str(e)}"
+
+        # Return the assembled response in expected format
+        return [
+            {
+                "role": "assistant",
+                "id": response_id or "streaming_response",
+                "content": [{"type": "text", "text": assembled_text, "role": "assistant"}] if assembled_text else [],
+                "tool_calls": tool_calls,
+            }
+        ]
 
     # ------------------------------------------------------------------ helpers
     # responses objects embed usage similarly to chat completions
@@ -220,6 +284,9 @@ class OpenAIResponsesClient:
             input_items = []
             for m in msgs[::-1]:  # reverse the list to get the last item first
                 role = m.get("role", "user")
+                # Skip assistant messages - they shouldn't be sent as input to Responses API
+                if role == "assistant":
+                    continue
                 # First, we need to convert the content to the Responses API format
                 content = m.get("content")
                 blocks = []
@@ -339,17 +406,31 @@ class OpenAIResponsesClient:
                         return self._oai_client.responses.create(**kwargs)
 
             response = _create_or_parse(**params)
-            self.previous_response_id = response.id
+            self._handle_response_id(response, params)
             return response
         # No structured output
         params = self._parse_params(params)
-        response = self._oai_client.responses.create(**params)
-        self.previous_response_id = response.id
-        # Accumulate image costs
-        self._add_image_cost(response)
-        return response
+
+        try:
+            response = self._oai_client.responses.create(**params)
+            self._handle_response_id(response, params)
+            # Accumulate image costs
+            if hasattr(response, "output"):  # Only for non-streaming responses
+                self._add_image_cost(response)
+            return response
+        except Exception as e:
+            # Use standardized error handling
+            from .client_utils import standardize_api_error
+
+            model_name = params.get("model", "unknown")
+            raise standardize_api_error(e, "OpenAI Responses API", model_name)
 
     def message_retrieval(self, response) -> list[str] | list["ModelClient.ModelClientResponseProtocol.Choice.Message"]:
+        # Handle streaming responses - they don't have direct 'output' attribute
+        if hasattr(response, "__iter__") and not hasattr(response, "output"):
+            # This is a streaming response - consume the stream to get the final result
+            return self._consume_streaming_response(response)
+
         output = getattr(response, "output", [])
         content = []
         tool_calls = []
