@@ -36,9 +36,10 @@ import warnings
 from typing import Any, Literal
 
 from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -46,13 +47,27 @@ with optional_import_block():
     from together import Together
 
 
-@register_llm_config
+class TogetherEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["together"]
+
+    stream: bool
+    top_k: int | None
+    repetition_penalty: float | None
+    presence_penalty: float | None
+    frequency_penalty: float | None
+    min_p: float | None
+    safety_model: str | None
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    price: list[float] | None
+    tool_choice: str | dict[str, str | dict[str, str]] | None
+
+
 class TogetherLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["together"] = "together"
+
     max_tokens: int = Field(default=512, ge=0)
+
     stream: bool = False
-    temperature: float | None = Field(default=None)
-    top_p: float | None = Field(default=None)
     top_k: int | None = Field(default=None)
     repetition_penalty: float | None = Field(default=None)
     presence_penalty: float | None = Field(default=None, ge=-2, le=2)
@@ -72,7 +87,7 @@ class TogetherLLMConfigEntry(LLMConfigEntry):
 class TogetherClient:
     """Client for Together.AI's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[TogetherEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:

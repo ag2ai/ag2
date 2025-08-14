@@ -5,23 +5,34 @@
 import functools
 import json
 import re
-from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, Union
+from typing import Annotated, Any, Literal, TypeAlias
 
-from httpx import Client as httpxClient
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-if TYPE_CHECKING:
-    from .oai.client import ModelClient
+from autogen.oai.anthropic import AnthropicEntryDict, AnthropicLLMConfigEntry
+from autogen.oai.bedrock import BedrockEntryDict, BedrockLLMConfigEntry
+from autogen.oai.cerebras import CerebrasEntryDict, CerebrasLLMConfigEntry
+from autogen.oai.client import (
+    AzureOpenAIEntryDict,
+    AzureOpenAILLMConfigEntry,
+    DeepSeekEntyDict,
+    DeepSeekLLMConfigEntry,
+    OpenAIEntryDict,
+    OpenAILLMConfigEntry,
+    OpenAIResponsesLLMConfigEntry,
+)
+from autogen.oai.cohere import CohereEntryDict, CohereLLMConfigEntry
+from autogen.oai.gemini import GeminiEntryDict, GeminiLLMConfigEntry
+from autogen.oai.groq import GroqEntryDict, GroqLLMConfigEntry
+from autogen.oai.mistral import MistralEntryDict, MistralLLMConfigEntry
+from autogen.oai.ollama import OllamaEntryDict, OllamaLLMConfigEntry
+from autogen.oai.together import TogetherEntryDict, TogetherLLMConfigEntry
 
-__all__ = [
-    "LLMConfig",
-    "LLMConfigEntry",
-    "register_llm_config",
-]
+from ..doc_utils import export_module
+from .entry import ApplicationConfig, LLMConfigEntry
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -41,18 +52,36 @@ class MetaLLMConfig(type):
         return cls.current
 
 
-ConfigItem: TypeAlias = Union["LLMConfigEntry", dict[str, Any]]
+ConfigItem: TypeAlias = (
+    LLMConfigEntry
+    | AnthropicEntryDict
+    | BedrockEntryDict
+    | CerebrasEntryDict
+    | CohereEntryDict
+    | AzureOpenAIEntryDict
+    | OpenAIEntryDict
+    | DeepSeekEntyDict
+    | MistralEntryDict
+    | GroqEntryDict
+    | OllamaEntryDict
+    | GeminiEntryDict
+    | TogetherEntryDict
+    | dict[str, Any]
+)
 
 
+@export_module("autogen")
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
 
     def __init__(
         self,
-        config_list: Iterable[ConfigItem] | dict[str, Any] = (),
+        *,
+        top_p: float | None = None,
         temperature: float | None = None,
+        max_tokens: int | None = None,
+        config_list: Iterable[ConfigItem] | dict[str, Any] = (),
         check_every_ms: int | None = None,
-        max_new_tokens: int | None = None,
         allow_format_str_template: bool | None = None,
         response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
         timeout: int | None = None,
@@ -61,8 +90,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
         parallel_tool_calls: bool | None = None,
         tools: Iterable[Any] = (),
         functions: Iterable[Any] = (),
-        max_tokens: int | None = None,
-        top_p: float | None = None,
         routing_method: Literal["fixed_order", "round_robin"] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -71,8 +98,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         Args:
             config_list: A list of LLM configuration entries or dictionaries.
             temperature: The sampling temperature for LLM generation.
-            check_every_ms: The interval (in milliseconds) to check for updates.
-            max_new_tokens: The maximum number of new tokens to generate.
+            check_every_ms: The interval (in milliseconds) to check for updates
             allow_format_str_template: Whether to allow format string templates.
             response_format: The format of the response (e.g., JSON, text).
             timeout: The timeout for LLM requests in seconds.
@@ -117,37 +143,35 @@ class LLMConfig(metaclass=MetaLLMConfig):
             )
             ```
         """
+        app_config = ApplicationConfig(
+            max_tokens=max_tokens,
+            top_p=top_p,
+            temperature=temperature,
+        )
+
+        application_level_options = app_config.model_dump(exclude_none=True)
+
         final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
 
         if isinstance(config_list, dict):
             config_list = [config_list]
 
-        for c in (*config_list, kwargs):
-            if not c:
-                continue
-
+        for c in filter(bool, (*config_list, kwargs)):
             if isinstance(c, LLMConfigEntry):
-                final_config_list.append(c)
+                final_config_list.append(c.apply_application_config(app_config))
                 continue
 
-            config_entity = {
-                "api_type": "openai",  # default api_type
-                **c,
-            }
+            else:
+                final_config_list.append({
+                    "api_type": "openai",  # default api_type
+                    **application_level_options,
+                    **c,
+                })
 
-            if max_tokens:
-                config_entity = {"max_tokens": max_tokens} | config_entity
-
-            if top_p:
-                config_entity = {"top_p": top_p} | config_entity
-
-            final_config_list.append(config_entity)
-
-        self._model = self._get_base_model_class()(
+        self._model = _LLMConfig(
+            **application_level_options,
             config_list=final_config_list,
-            temperature=temperature,
             check_every_ms=check_every_ms,
-            max_new_tokens=max_new_tokens,
             seed=seed,
             allow_format_str_template=allow_format_str_template,
             response_format=response_format,
@@ -195,7 +219,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         file_location: str | None = None,
         **kwargs: Any,
     ) -> "LLMConfig":
-        from .oai.openai_utils import config_list_from_json
+        from autogen.oai.openai_utils import config_list_from_json
 
         if env is None and path is None:
             raise ValueError("Either 'env' or 'path' must be provided")
@@ -208,7 +232,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return LLMConfig(config_list=config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
-        from .oai.openai_utils import filter_config
+        from autogen.oai.openai_utils import filter_config
 
         filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
         if len(filtered_config_list) == 0:
@@ -243,7 +267,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return self._model.model_validate_strings(*args, **kwargs)
 
     def __eq__(self, value: Any) -> bool:
-        return hasattr(value, "_model") and self._model == value._model
+        if not isinstance(value, LLMConfig):
+            return NotImplemented
+        return self._model == value._model
 
     def _getattr(self, o: object, name: str) -> Any:
         val = getattr(o, name)
@@ -320,145 +346,39 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
     _base_model_classes: dict[tuple[type["LLMConfigEntry"], ...], type[BaseModel]] = {}
 
-    @classmethod
-    def _get_base_model_class(cls) -> type["BaseModel"]:
-        def _get_cls(llm_config_classes: tuple[type[LLMConfigEntry], ...]) -> type[BaseModel]:
-            if llm_config_classes in LLMConfig._base_model_classes:
-                return LLMConfig._base_model_classes[llm_config_classes]
 
-            class _LLMConfig(BaseModel):
-                temperature: float | None = None
-                check_every_ms: int | None = None
-                max_new_tokens: int | None = None
-                seed: int | None = None
-                allow_format_str_template: bool | None = None
-                response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
-                timeout: int | None = None
-                cache_seed: int | None = None
+class _LLMConfig(ApplicationConfig):
+    check_every_ms: int | None
+    seed: int | None
+    allow_format_str_template: bool | None
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None
+    timeout: int | None
+    cache_seed: int | None
+    parallel_tool_calls: bool | None
 
-                tools: list[Any] = Field(default_factory=list)
-                functions: list[Any] = Field(default_factory=list)
-                parallel_tool_calls: bool | None = None
+    tools: list[Any]
+    functions: list[Any]
 
-                config_list: list[  # type: ignore[valid-type]
-                    Annotated[
-                        Union[llm_config_classes],  # noqa: UP007
-                        Field(discriminator="api_type"),
-                    ],
-                ] = Field(default_factory=list, min_length=1)
+    config_list: list[  # type: ignore[valid-type]
+        Annotated[
+            AnthropicLLMConfigEntry
+            | CerebrasLLMConfigEntry
+            | BedrockLLMConfigEntry
+            | AzureOpenAILLMConfigEntry
+            | DeepSeekLLMConfigEntry
+            | OpenAILLMConfigEntry
+            | OpenAIResponsesLLMConfigEntry
+            | CohereLLMConfigEntry
+            | GeminiLLMConfigEntry
+            | GroqLLMConfigEntry
+            | MistralLLMConfigEntry
+            | OllamaLLMConfigEntry
+            | TogetherLLMConfigEntry,
+            Field(discriminator="api_type"),
+        ],
+    ] = Field(..., min_length=1)
 
-                routing_method: Literal["fixed_order", "round_robin"] | None = None
-
-                # Following field is configuration for pydantic to disallow extra fields
-                model_config = ConfigDict(extra="forbid")
-
-            LLMConfig._base_model_classes[llm_config_classes] = _LLMConfig
-
-            return _LLMConfig
-
-        return _get_cls(tuple(_llm_config_classes))
-
-
-class LLMConfigEntry(BaseModel, ABC):
-    api_type: str
-    model: str = Field(..., min_length=1)
-    api_key: SecretStr | None = None
-    api_version: str | None = None
-    max_tokens: int | None = None
-    base_url: HttpUrl | None = None
-    voice: str | None = None
-    model_client_cls: str | None = None
-    http_client: httpxClient | None = None
-    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
-    default_headers: Mapping[str, Any] | None = None
-    tags: list[str] = Field(default_factory=list)
+    routing_method: Literal["fixed_order", "round_robin"] | None
 
     # Following field is configuration for pydantic to disallow extra fields
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
-
-    @abstractmethod
-    def create_client(self) -> "ModelClient": ...
-
-    @field_validator("base_url", mode="before")
-    @classmethod
-    def check_base_url(cls, v: Any, info: ValidationInfo) -> Any:
-        if v is None:  # Handle None case explicitly
-            return None
-        if not str(v).startswith("https://") and not str(v).startswith("http://"):
-            v = f"http://{str(v)}"
-        return v
-
-    @field_serializer("base_url", when_used="unless-none")  # Ensure serializer also respects None
-    def serialize_base_url(self, v: Any) -> Any:
-        return str(v) if v is not None else None
-
-    @field_serializer("api_key", when_used="unless-none")
-    def serialize_api_key(self, v: SecretStr) -> Any:
-        return v.get_secret_value()
-
-    def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
-        return BaseModel.model_dump(self, exclude_none=exclude_none, *args, **kwargs)
-
-    def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
-        return BaseModel.model_dump_json(self, exclude_none=exclude_none, *args, **kwargs)
-
-    def get(self, key: str, default: Any | None = None) -> Any:
-        val = getattr(self, key, default)
-        if isinstance(val, SecretStr):
-            return val.get_secret_value()
-        return val
-
-    def __getitem__(self, key: str) -> Any:
-        try:
-            val = getattr(self, key)
-            if isinstance(val, SecretStr):
-                return val.get_secret_value()
-            return val
-        except AttributeError:
-            raise KeyError(f"Key '{key}' not found in {self.__class__.__name__}")
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        setattr(self, key, value)
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)
-
-    def items(self) -> Iterable[tuple[str, Any]]:
-        d = self.model_dump()
-        return d.items()
-
-    def keys(self) -> Iterable[str]:
-        d = self.model_dump()
-        return d.keys()
-
-    def values(self) -> Iterable[Any]:
-        d = self.model_dump()
-        return d.values()
-
-    def __repr__(self) -> str:
-        # Override to eliminate none values from the repr
-        d = self.model_dump()
-        r = [f"{k}={repr(v)}" for k, v in d.items()]
-
-        s = f"{self.__class__.__name__}({', '.join(r)})"
-
-        # Replace any keys ending with '_key' or '_token' values with stars for security
-        # This regex will match any key ending with '_key' or '_token' and its value, and replace the value with stars
-        # It also captures the type of quote used (single or double) and reuses it in the replacement
-        s = re.sub(r'(\w+_(key|token)\s*=\s*)([\'"]).*?\3', r"\1\3**********\3", s, flags=re.IGNORECASE)
-
-        return s
-
-    def __str__(self) -> str:
-        return repr(self)
-
-
-_llm_config_classes: list[type[LLMConfigEntry]] = []
-
-
-def register_llm_config(cls: type[LLMConfigEntry]) -> type[LLMConfigEntry]:
-    if isinstance(cls, type) and issubclass(cls, LLMConfigEntry):
-        _llm_config_classes.append(cls)
-    else:
-        raise TypeError(f"Expected a subclass of LLMConfigEntry, got {cls}")
-    return cls
+    model_config = ConfigDict(extra="forbid")

@@ -30,9 +30,10 @@ import warnings
 from typing import Any, Literal
 
 from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -48,16 +49,24 @@ GROQ_PRICING_1K = {
 }
 
 
-@register_llm_config
+class GroqEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["groq"]
+
+    frequency_penalty: float
+    presence_penalty: float
+    seed: int
+    stream: bool
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Literal["none", "auto", "required"] | None
+
+
 class GroqLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["groq"] = "groq"
+
     frequency_penalty: float = Field(default=None, ge=-2, le=2)
-    max_tokens: int = Field(default=None, ge=0)
     presence_penalty: float = Field(default=None, ge=-2, le=2)
     seed: int = Field(default=None)
     stream: bool = Field(default=False)
-    temperature: float = Field(default=1, ge=0, le=2)
-    top_p: float = Field(default=None)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     tool_choice: Literal["none", "auto", "required"] | None = None
 
@@ -68,7 +77,7 @@ class GroqLLMConfigEntry(LLMConfigEntry):
 class GroqClient:
     """Client for Groq's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[GroqEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -126,14 +135,17 @@ class GroqClient:
         groq_params["frequency_penalty"] = validate_parameter(
             params, "frequency_penalty", (int, float), True, None, (-2, 2), None
         )
+
         groq_params["max_tokens"] = validate_parameter(params, "max_tokens", int, True, None, (0, None), None)
+        groq_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 1, (0, 2), None)
+        groq_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+
         groq_params["presence_penalty"] = validate_parameter(
             params, "presence_penalty", (int, float), True, None, (-2, 2), None
         )
         groq_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
         groq_params["stream"] = validate_parameter(params, "stream", bool, True, False, None, None)
-        groq_params["temperature"] = validate_parameter(params, "temperature", (int, float), True, 1, (0, 2), None)
-        groq_params["top_p"] = validate_parameter(params, "top_p", (int, float), True, None, None, None)
+
         if "tool_choice" in params:
             groq_params["tool_choice"] = validate_parameter(
                 params, "tool_choice", str, True, None, None, ["none", "auto", "required"]
