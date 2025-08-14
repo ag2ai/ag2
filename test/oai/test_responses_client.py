@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from autogen.import_utils import run_for_optional_imports
 from autogen.oai.openai_responses import OpenAIResponsesClient, calculate_openai_image_cost
 
 # Try to import ImageGenerationCall for proper mocking
@@ -723,3 +724,139 @@ def test_message_retrieval_with_real_response_structure():
         text_item["text"] == "New York City: where 'rush hour' lasts all day and finding parking is a sport. TERMINATE"
     )
     assert "content" not in text_item
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_handle_response_id():
+    """Test the _handle_response_id method for both streaming and non-streaming responses."""
+
+    # Create a valid client
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    client = OpenAIResponsesClient(mock_client)
+
+    # Test non-streaming response with ID
+    mock_response = MagicMock()
+    mock_response.id = "resp_12345"
+    params = {"stream": False}
+
+    client._handle_response_id(mock_response, params)
+    assert client.previous_response_id == "resp_12345"
+
+    # Test non-streaming response without ID
+    mock_response_no_id = MagicMock()
+    del mock_response_no_id.id  # Remove id attribute
+
+    client._handle_response_id(mock_response_no_id, params)
+    assert client.previous_response_id is None
+
+    # Test streaming response - should preserve existing previous_response_id
+    # Set an initial response ID first
+    client.previous_response_id = "existing_id"
+    mock_stream = MagicMock()
+    params = {"stream": True}
+
+    client._handle_response_id(mock_stream, params)
+    # Streaming responses should preserve the existing previous_response_id
+    # The actual ID extraction happens in _consume_streaming_response
+    assert client.previous_response_id == "existing_id"
+
+    # Test streaming response starting from None - should remain None until _consume_streaming_response sets it
+    client.previous_response_id = None
+    client._handle_response_id(mock_stream, params)
+    assert client.previous_response_id is None
+
+    # Test streaming response without stream parameter (defaults to False)
+    mock_response.id = "resp_67890"
+    params = {}
+
+    client._handle_response_id(mock_response, params)
+    assert client.previous_response_id == "resp_67890"
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_consume_streaming_response():
+    """Test the _consume_streaming_response method with various event types."""
+
+    # Create a valid client
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    client = OpenAIResponsesClient(mock_client)
+
+    # Test successful streaming with text deltas
+    class MockEvent:
+        def __init__(self, event_type, response_id=None, delta=None, message=None):
+            self.type = event_type
+            if response_id:
+                self.response = MagicMock()
+                self.response.id = response_id
+            self.delta = delta
+            self.message = message
+
+    # Create a mock stream with various event types
+    mock_events = [
+        MockEvent("response.output_text.delta", response_id="resp_stream_123", delta="Hello "),
+        MockEvent("response.output_text.delta", delta="world!"),
+        MockEvent("response.function_call_arguments.delta"),  # Should be handled gracefully
+        MockEvent("response.completed"),
+    ]
+
+    result = client._consume_streaming_response(mock_events)
+
+    assert len(result) == 1
+    message = result[0]
+    assert message["role"] == "assistant"
+    assert message["id"] == "resp_stream_123"
+    assert len(message["content"]) == 1
+    assert message["content"][0]["type"] == "text"
+    assert message["content"][0]["text"] == "Hello world!"
+    assert message["content"][0]["role"] == "assistant"
+    assert message["tool_calls"] == []
+    assert client.previous_response_id == "resp_stream_123"
+
+    # Test streaming with error event
+    mock_error_events = [
+        MockEvent("response.output_text.delta", delta="Starting..."),
+        MockEvent("error", message="API quota exceeded"),
+    ]
+
+    result = client._consume_streaming_response(mock_error_events)
+
+    assert len(result) == 1
+    message = result[0]
+    assert "Error: API quota exceeded" in message["content"][0]["text"]
+
+    # Test streaming with no events (empty stream)
+    empty_stream = []
+
+    result = client._consume_streaming_response(empty_stream)
+
+    assert len(result) == 1
+    message = result[0]
+    assert message["role"] == "assistant"
+    assert message["id"] == "streaming_response"  # Default ID
+    assert message["content"] == []  # No content
+    assert message["tool_calls"] == []
+
+    # Test streaming with exception during iteration
+    def failing_stream():
+        yield MockEvent("response.output_text.delta", delta="Start")
+        raise Exception("Stream connection lost")
+
+    result = client._consume_streaming_response(failing_stream())
+
+    assert len(result) == 1
+    message = result[0]
+    assert "Streaming error: Stream connection lost" in message["content"][0]["text"]
+
+    # Test streaming with no response ID (uses default)
+    mock_events_no_id = [
+        MockEvent("response.output_text.delta", delta="No ID response"),
+        MockEvent("response.completed"),
+    ]
+
+    result = client._consume_streaming_response(mock_events_no_id)
+
+    assert len(result) == 1
+    message = result[0]
+    assert message["id"] == "streaming_response"  # Default ID when no response ID found
