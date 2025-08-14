@@ -163,6 +163,91 @@ def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]
         )
 
 
+def validate_openai_client(client, client_type: str = "OpenAI") -> None:
+    """Validates an OpenAI-compatible client instance.
+
+    This function provides standardized validation for OpenAI and OpenAI-compatible
+    clients across all AG2 client implementations.
+
+    Args:
+        client: The client instance to validate
+        client_type: Name of the client type for error messages (default: "OpenAI")
+
+    Raises:
+        ValueError: If the client is invalid or misconfigured
+
+    Example Usage:
+    ```python
+    from autogen.oai.client_utils import validate_openai_client
+
+    # Validate OpenAI client
+    validate_openai_client(openai_client, "OpenAI")
+
+    # Validate custom client
+    validate_openai_client(custom_client, "CustomAPI")
+    ```
+    """
+    if client is None:
+        raise ValueError(f"{client_type} client cannot be None")
+
+    # Validate API key is present
+    if not hasattr(client, "api_key") or not client.api_key:
+        raise ValueError(f"{client_type} client must have a valid API key")
+
+    # Test basic client functionality with validation call if available
+    try:
+        # This will fail immediately if API key is invalid or client is malformed
+        # We don't actually make the call, just validate the client can be configured
+        if hasattr(client, "_validate") and callable(client._validate):
+            client._validate()
+    except Exception as e:
+        raise ValueError(f"Invalid {client_type} client configuration: {str(e)}")
+
+
+def standardize_api_error(error: Exception, client_type: str = "API", model_name: str = "unknown") -> ValueError:
+    """Standardizes API error messages across different client implementations.
+
+    This function provides consistent error handling and messaging for common API
+    errors encountered across different LLM providers.
+
+    Args:
+        error: The original exception raised by the API
+        client_type: Name of the client/API for error messages (default: "API")
+        model_name: Name of the model being used (default: "unknown")
+
+    Returns:
+        ValueError: Standardized error with consistent messaging
+
+    Example Usage:
+    ```python
+    from autogen.oai.client_utils import standardize_api_error
+
+    try:
+        response = client.create(**params)
+    except Exception as e:
+        raise standardize_api_error(e, "OpenAI Responses API", "gpt-4o")
+    ```
+    """
+    error_message = str(error).lower()
+
+    # Standardize common error patterns
+    if "api key" in error_message or "unauthorized" in error_message:
+        return ValueError(f"Invalid API key for {client_type}: {str(error)}")
+    elif "model" in error_message and ("not found" in error_message or "does not exist" in error_message):
+        return ValueError(f"Model '{model_name}' not found or not supported by {client_type}: {str(error)}")
+    elif "rate limit" in error_message:
+        return ValueError(f"API rate limit exceeded for {client_type}: {str(error)}")
+    elif "insufficient" in error_message and "quota" in error_message:
+        return ValueError(f"Insufficient API quota for {client_type}: {str(error)}")
+    elif "timeout" in error_message:
+        return ValueError(f"API request timeout for {client_type}: {str(error)}")
+    elif "connection" in error_message or "network" in error_message:
+        return ValueError(f"Network connection error for {client_type}: {str(error)}")
+    else:
+        # Generic error with context
+        return ValueError(f"{client_type} error: {str(error)}")
+
+
 # Logging format (originally from FLAML)
 logging_formatter = logging.Formatter(
     "[%(name)s: %(asctime)s] {%(lineno)d} %(levelname)s - %(message)s", "%m-%d %H:%M:%S"
