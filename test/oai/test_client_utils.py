@@ -6,9 +6,17 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from autogen.oai.client_utils import should_hide_tools, validate_parameter
+from autogen.import_utils import run_for_optional_imports
+from autogen.oai.client_utils import (
+    should_hide_tools,
+    standardize_api_error,
+    validate_openai_client,
+    validate_parameter,
+)
 
 
 def test_validate_parameter():
@@ -313,6 +321,122 @@ def test_should_hide_tools():
         assert not should_hide_tools(one_tool_called_messages, all_tools, "not_a_valid_value")
 
 
+@run_for_optional_imports(["openai"], "openai")
+def test_validate_openai_client():
+    """Test the validate_openai_client function."""
+
+    # Test with None client
+    with pytest.raises(ValueError, match="OpenAI client cannot be None"):
+        validate_openai_client(None)
+
+    # Test with custom client type
+    with pytest.raises(ValueError, match="CustomAPI client cannot be None"):
+        validate_openai_client(None, "CustomAPI")
+
+    # Test with client missing api_key attribute
+    mock_client = MagicMock()
+    del mock_client.api_key  # Remove api_key attribute
+    with pytest.raises(ValueError, match="OpenAI client must have a valid API key"):
+        validate_openai_client(mock_client)
+
+    # Test with client with None api_key
+    mock_client = MagicMock()
+    mock_client.api_key = None
+    with pytest.raises(ValueError, match="OpenAI client must have a valid API key"):
+        validate_openai_client(mock_client)
+
+    # Test with client with empty api_key
+    mock_client = MagicMock()
+    mock_client.api_key = ""
+    with pytest.raises(ValueError, match="OpenAI client must have a valid API key"):
+        validate_openai_client(mock_client)
+
+    # Test with valid client (no _validate method)
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    # Should not raise any exception
+    validate_openai_client(mock_client)
+
+    # Test with valid client that has _validate method
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    mock_client._validate = MagicMock()
+    # Should not raise any exception and call _validate
+    validate_openai_client(mock_client)
+    mock_client._validate.assert_called_once()
+
+    # Test with client that has _validate method that raises
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    mock_client._validate = MagicMock(side_effect=Exception("Validation failed"))
+    with pytest.raises(ValueError, match="Invalid OpenAI client configuration: Validation failed"):
+        validate_openai_client(mock_client)
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_standardize_api_error():
+    """Test the standardize_api_error function."""
+
+    # Test API key errors
+    api_key_error = Exception("Invalid API key provided")
+    result = standardize_api_error(api_key_error, "TestAPI", "test-model")
+    assert "Invalid API key for TestAPI" in str(result)
+
+    unauthorized_error = Exception("Unauthorized access")
+    result = standardize_api_error(unauthorized_error, "TestAPI", "test-model")
+    assert "Invalid API key for TestAPI" in str(result)
+
+    # Test model not found errors
+    model_error = Exception("Model gpt-5 not found")
+    result = standardize_api_error(model_error, "TestAPI", "gpt-5")
+    assert "Model 'gpt-5' not found or not supported by TestAPI" in str(result)
+
+    model_error2 = Exception("Model does not exist")
+    result = standardize_api_error(model_error2, "TestAPI", "test-model")
+    assert "Model 'test-model' not found or not supported by TestAPI" in str(result)
+
+    # Test rate limit errors
+    rate_limit_error = Exception("Rate limit exceeded")
+    result = standardize_api_error(rate_limit_error, "TestAPI", "test-model")
+    assert "API rate limit exceeded for TestAPI" in str(result)
+
+    # Test quota errors
+    quota_error = Exception("Insufficient quota available")
+    result = standardize_api_error(quota_error, "TestAPI", "test-model")
+    assert "Insufficient API quota for TestAPI" in str(result)
+
+    # Test timeout errors
+    timeout_error = Exception("Request timeout occurred")
+    result = standardize_api_error(timeout_error, "TestAPI", "test-model")
+    assert "API request timeout for TestAPI" in str(result)
+
+    # Test connection errors
+    connection_error = Exception("Connection error to server")
+    result = standardize_api_error(connection_error, "TestAPI", "test-model")
+    assert "Network connection error for TestAPI" in str(result)
+
+    network_error = Exception("Network is unreachable")
+    result = standardize_api_error(network_error, "TestAPI", "test-model")
+    assert "Network connection error for TestAPI" in str(result)
+
+    # Test generic error
+    generic_error = Exception("Some unexpected error")
+    result = standardize_api_error(generic_error, "TestAPI", "test-model")
+    assert "TestAPI error: Some unexpected error" in str(result)
+
+    # Test default parameters
+    generic_error = Exception("Default test")
+    result = standardize_api_error(generic_error)
+    assert "API error: Default test" in str(result)
+
+    # Test case sensitivity (errors should be detected regardless of case)
+    mixed_case_error = Exception("API KEY is Invalid")
+    result = standardize_api_error(mixed_case_error, "TestAPI", "test-model")
+    assert "Invalid API key for TestAPI" in str(result)
+
+
 if __name__ == "__main__":
     # test_validate_parameter()
     test_should_hide_tools()
+    test_validate_openai_client()
+    test_standardize_api_error()
