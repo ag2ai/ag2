@@ -59,11 +59,13 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
-from ..oai.client import ModelClient, OpenAIWrapper
+from ..llm_config.client import ModelClient
+from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
@@ -3004,26 +3006,16 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: human input.
         """
-        iostream = IOStream.get_default()
 
-        reply = await iostream.input(prompt)
+        iostream = IOStream.get_default()
+        input_func = iostream.input
+
+        if is_coroutine_callable(input_func):
+            reply = await input_func(prompt)
+        else:
+            reply = await asyncio.to_thread(input_func, prompt)
         self._human_input.append(reply)
         return reply
-
-        # def _get_human_input(
-        #     self, iostream: IOStream, prompt: str,
-        # ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
-        #     with IOStream.set_default(iostream):
-        #         print("!"*100)
-        #         print("Getting human input...")
-        #         return self.get_human_input(prompt)
-
-        # return await asyncio.get_event_loop().run_in_executor(
-        #     None,
-        #     functools.partial(
-        #         _get_human_input, self=self, iostream=iostream, prompt=prompt,
-        #     ),
-        # )
 
     def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, str | None]:
         """Run the code and return the result.
@@ -3367,7 +3359,9 @@ class ConversableAgent(LLMAgent):
         self._function_map.update(function_map)
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
-    def update_function_signature(self, func_sig: str | dict[str, Any], is_remove: None, silent_override: bool = False):
+    def update_function_signature(
+        self, func_sig: str | dict[str, Any], is_remove: bool = False, silent_override: bool = False
+    ):
         """Update a function_signature in the LLM configuration for function_call.
 
         Args:

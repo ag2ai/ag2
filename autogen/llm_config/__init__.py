@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .client import ModelClient
+from .config import LLMConfig
 
-__version__ = "0.9.8.post1"
+__all__ = (
+    "LLMConfig",
+    "ModelClient",
+)

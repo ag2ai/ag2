@@ -79,9 +79,10 @@ import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -109,16 +110,32 @@ ANTHROPIC_PRICING_1k = {
 }
 
 
-@register_llm_config
+class AnthropicEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["anthropic"]
+    timeout: int | None
+    stop_sequences: list[str] | None
+    stream: bool
+    price: list[float] | None
+    tool_choice: dict | None
+    thinking: dict | None
+    gcp_project_id: str | None
+    gcp_region: str | None
+    gcp_auth_token: str | None
+
+
 class AnthropicLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["anthropic"] = "anthropic"
-    timeout: int | None = Field(default=None, ge=1)
-    temperature: float = Field(default=1.0, ge=0.0, le=1.0)
-    top_k: int | None = Field(default=None, ge=1)
+
+    # Basic options
+    max_tokens: int = Field(default=4096, ge=1)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    # Anthropic-specific options
+    timeout: int | None = Field(default=None, ge=1)
+    top_k: int | None = Field(default=None, ge=1)
     stop_sequences: list[str] | None = None
     stream: bool = False
-    max_tokens: int = Field(default=4096, ge=1)
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_choice: dict | None = None
     thinking: dict | None = None
@@ -133,36 +150,21 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
 
 @require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Unpack[AnthropicEntryDict]):
         """Initialize the Anthropic API client.
 
         Args:
             **kwargs: The configuration parameters for the client.
         """
-        self._api_key = kwargs.get("api_key")
-        self._aws_access_key = kwargs.get("aws_access_key")
-        self._aws_secret_key = kwargs.get("aws_secret_key")
+        self._api_key = kwargs.get("api_key") or os.getenv("ANTHROPIC_API_KEY")
+        self._aws_access_key = kwargs.get("aws_access_key") or os.getenv("AWS_ACCESS_KEY")
+        self._aws_secret_key = kwargs.get("aws_secret_key") or os.getenv("AWS_SECRET_KEY")
         self._aws_session_token = kwargs.get("aws_session_token")
-        self._aws_region = kwargs.get("aws_region")
+        self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._gcp_project_id = kwargs.get("gcp_project_id")
-        self._gcp_region = kwargs.get("gcp_region")
+        self._gcp_region = kwargs.get("gcp_region") or os.getenv("GCP_REGION")
         self._gcp_auth_token = kwargs.get("gcp_auth_token")
         self._base_url = kwargs.get("base_url")
-
-        if not self._api_key:
-            self._api_key = os.getenv("ANTHROPIC_API_KEY")
-
-        if not self._aws_access_key:
-            self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
-
-        if not self._aws_secret_key:
-            self._aws_secret_key = os.getenv("AWS_SECRET_KEY")
-
-        if not self._aws_region:
-            self._aws_region = os.getenv("AWS_REGION")
-
-        if not self._gcp_region:
-            self._gcp_region = os.getenv("GCP_REGION")
 
         if self._api_key is None:
             if self._aws_region:
@@ -181,7 +183,7 @@ class AnthropicClient:
             self._client = Anthropic(**client_kwargs)
         elif self._gcp_region is not None:
             kw = {}
-            for i, p in enumerate(inspect.signature(AnthropicVertex).parameters):
+            for p in inspect.signature(AnthropicVertex).parameters:
                 if hasattr(self, f"_gcp_{p}"):
                     kw[p] = getattr(self, f"_gcp_{p}")
             if self._base_url:

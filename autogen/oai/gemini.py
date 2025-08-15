@@ -55,10 +55,11 @@ from typing import Any, Literal
 
 import requests
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol
 from .gemini_types import ToolConfig
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
@@ -101,7 +102,20 @@ with optional_import_block():
 logger = logging.getLogger(__name__)
 
 
-@register_llm_config
+class GeminiEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["google"]
+
+    project_id: str | None
+    location: str | None
+    google_application_credentials: str | None
+    credentials: Any | str | None
+    stream: bool
+    safety_settings: list[dict[str, Any]] | dict[str, Any] | None
+    price: list[float] | None
+    tool_config: ToolConfig | None
+    proxy: str | None
+
+
 class GeminiLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["google"] = "google"
     project_id: str | None = None
@@ -137,7 +151,7 @@ class GeminiClient:
         "max_output_tokens": "max_output_tokens",
     }
 
-    def _initialize_vertexai(self, **params):
+    def _initialize_vertexai(self, **params: Unpack[GeminiEntryDict]):
         if "google_application_credentials" in params:
             # Path to JSON Keyfile
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = params["google_application_credentials"]
@@ -242,9 +256,9 @@ class GeminiClient:
             )
 
         http_options = types.HttpOptions()
-        if self.proxy:
-            http_options.client_args = {"proxy": self.proxy}
-            http_options.async_client_args = {"proxy": self.proxy}
+        if proxy := params.get("proxy", self.proxy):
+            http_options.client_args = {"proxy": proxy}
+            http_options.async_client_args = {"proxy": proxy}
 
         if self.api_version:
             http_options.api_version = self.api_version

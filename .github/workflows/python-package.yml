@@ -53,15 +53,15 @@ jobs:
         shell: pwsh
         run: |
           python setup_autogen.py sdist bdist_wheel
-      - name: Publish autogen to PyPI
-        env:
-          TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
-        shell: pwsh
-        run: twine upload dist/autogen*
       - name: Publish ag2 to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
         shell: pwsh
         run: twine upload dist/ag2*
+      - name: Publish autogen to PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.AUTOGEN_PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.AUTOGEN_PYPI_PASSWORD }}
+        shell: pwsh
+        run: twine upload dist/autogen*

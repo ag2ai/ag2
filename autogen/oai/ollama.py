@@ -34,7 +34,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -44,9 +44,22 @@ with optional_import_block():
     from ollama import Client
 
 
-@register_llm_config
+class OllamaEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["ollama"]
+    client_host: HttpUrl | None
+    stream: bool
+    num_predict: int
+    num_ctx: int
+    repeat_penalty: float
+    seed: int
+    top_k: int
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    native_tool_calls: bool
+
+
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
+    # TODO: max_tokens
     client_host: HttpUrl | None = None
     stream: bool = False
     num_predict: int = Field(
@@ -56,9 +69,7 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
     seed: int = Field(default=0)
-    temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
-    top_p: float = Field(default=0.9)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
     native_tool_calls: bool = False
 

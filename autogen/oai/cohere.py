@@ -37,11 +37,12 @@ import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from typing_extensions import Unpack
 
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
@@ -66,13 +67,23 @@ COHERE_PRICING_1K = {
 }
 
 
-@register_llm_config
+class CohereEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["cohere"]
+
+    k: int
+    seed: int | None
+    frequency_penalty: float
+    presence_penalty: float
+    client_name: str | None
+    strict_tools: bool
+    stream: bool
+    tool_choice: Literal["NONE", "REQUIRED"] | None
+
+
 class CohereLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["cohere"] = "cohere"
-    temperature: float = Field(default=0.3, ge=0)
-    max_tokens: int | None = Field(default=None, ge=0)
+
     k: int = Field(default=0, ge=0, le=500)
-    p: float = Field(default=0.75, ge=0.01, le=0.99)
     seed: int | None = None
     frequency_penalty: float = Field(default=0, ge=0, le=1)
     presence_penalty: float = Field(default=0, ge=0, le=1)
@@ -88,7 +99,7 @@ class CohereLLMConfigEntry(LLMConfigEntry):
 class CohereClient:
     """Client for Cohere's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[CohereEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -203,7 +214,17 @@ class CohereClient:
         if "k" in params:
             cohere_params["k"] = validate_parameter(params, "k", int, False, 0, (0, 500), None)
 
+        if "top_p" in params:
+            cohere_params["p"] = validate_parameter(params, "top_p", (int, float), False, 0.75, (0.01, 0.99), None)
+
         if "p" in params:
+            warnings.warn(
+                (
+                    "parameter 'p' is deprecated, use 'top_p' instead for consistency with OpenAI API spec. "
+                    "Scheduled for removal in 0.10.0 version."
+                ),
+                DeprecationWarning,
+            )
             cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
 
         if "seed" in params:

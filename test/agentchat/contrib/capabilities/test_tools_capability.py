@@ -35,9 +35,11 @@ class TestToolsCapability:
     def test_add_capability(self, add_tools, test_agent) -> None:
         # Arrange
         tools_capability = ToolsCapability(tool_list=[add_tools])
-        assert "tools" not in test_agent.llm_config
+        initial_tools_count = len(test_agent.llm_config.get("tools", []))
+
         # Act
         tools_capability.add_to_agent(agent=test_agent)
+
         # Assert that the tool was added for LLM and Execution
-        assert len(test_agent.llm_config["tools"]) == 1  # LLM
+        assert len(test_agent.llm_config["tools"]) == initial_tools_count + 1  # LLM
         assert len(test_agent.function_map) == 1  # Execution

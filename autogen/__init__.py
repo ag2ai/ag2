@@ -31,10 +31,9 @@ from .exception_utils import (
     SenderRequiredError,
     UndefinedNextAgentError,
 )
-from .llm_config import LLMConfig
+from .llm_config import LLMConfig, ModelClient
 from .oai import (
     Cache,
-    ModelClient,
     OpenAIWrapper,
     config_list_from_dotenv,
     config_list_from_json,

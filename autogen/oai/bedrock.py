@@ -40,9 +40,10 @@ from typing import Any, Literal
 
 import requests
 from pydantic import Field, SecretStr, field_serializer
+from typing_extensions import Required, Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -51,24 +52,36 @@ with optional_import_block():
     from botocore.config import Config
 
 
-@register_llm_config
+class BedrockEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["bedrock"]
+    aws_region: Required[str]
+    aws_access_key: SecretStr | None
+    aws_secret_key: SecretStr | None
+    aws_session_token: SecretStr | None
+    aws_profile_name: str | None
+    top_k: int | None
+    k: int | None
+    seed: int | None
+    cache_seed: int | None
+    supports_system_prompts: bool
+    price: list[float] | None
+    timeout: int | None
+
+
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
+
+    # Bedrock-specific options
     aws_region: str
     aws_access_key: SecretStr | None = None
     aws_secret_key: SecretStr | None = None
     aws_session_token: SecretStr | None = None
     aws_profile_name: str | None = None
-    temperature: float | None = None
-    topP: float | None = None  # noqa: N815
-    maxTokens: int | None = None  # noqa: N815
-    top_p: float | None = None
     top_k: int | None = None
     k: int | None = None
     seed: int | None = None
     cache_seed: int | None = None
     supports_system_prompts: bool = True
-    stream: bool = False
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     timeout: int | None = None
 
@@ -86,26 +99,14 @@ class BedrockClient:
 
     _retries = 5
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, **kwargs: Unpack[BedrockEntryDict]):
         """Initialises BedrockClient for Amazon's Bedrock Converse API"""
-        self._aws_access_key = kwargs.get("aws_access_key")
-        self._aws_secret_key = kwargs.get("aws_secret_key")
-        self._aws_session_token = kwargs.get("aws_session_token")
-        self._aws_region = kwargs.get("aws_region")
+        self._aws_access_key = kwargs.get("aws_access_key") or os.getenv("AWS_ACCESS_KEY")
+        self._aws_secret_key = kwargs.get("aws_secret_key") or os.getenv("AWS_SECRET_KEY")
+        self._aws_session_token = kwargs.get("aws_session_token") or os.getenv("AWS_SESSION_TOKEN")
+        self._aws_region = kwargs.get("aws_region") or os.getenv("AWS_REGION")
         self._aws_profile_name = kwargs.get("aws_profile_name")
         self._timeout = kwargs.get("timeout")
-
-        if not self._aws_access_key:
-            self._aws_access_key = os.getenv("AWS_ACCESS_KEY")
-
-        if not self._aws_secret_key:
-            self._aws_secret_key = os.getenv("AWS_SECRET_KEY")
-
-        if not self._aws_session_token:
-            self._aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-
-        if not self._aws_region:
-            self._aws_region = os.getenv("AWS_REGION")
 
         if self._aws_region is None:
             raise ValueError("Region is required to use the Amazon Bedrock API.")
@@ -159,13 +160,10 @@ class BedrockClient:
         # This is required because not all models support a system prompt (e.g. Mistral Instruct).
         self._supports_system_prompts = params.get("supports_system_prompts", True)
 
-    def parse_params(self, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def parse_params(self, params: BedrockEntryDict | dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Loads the valid parameters required to invoke Bedrock Converse
         Returns a tuple of (base_params, additional_params)
         """
-        base_params = {}
-        additional_params = {}
-
         # Amazon Bedrock  base model IDs are here:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
         self._model_id = params.get("model")
@@ -190,38 +188,51 @@ class BedrockClient:
         # https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-mistral-chat-completion.html
 
         # Here are the possible "base" parameters and their suitable types
-        base_parameters = [["temperature", (float, int)], ["topP", (float, int)], ["maxTokens", (int)]]
+        base_params = {}
 
-        for param_name, suitable_types in base_parameters:
-            if param_name in params:
-                base_params[param_name] = validate_parameter(
-                    params, param_name, suitable_types, False, None, None, None
-                )
+        if "temperature" in params:
+            base_params["temperature"] = validate_parameter(
+                params, "temperature", (float, int), False, None, None, None
+            )
+
+        if "top_p" in params:
+            base_params["topP"] = validate_parameter(params, "top_p", (float, int), False, None, None, None)
+
+        if "topP" in params:
+            warnings.warn(
+                ("topP is deprecated, use top_p instead. Scheduled for removal in 0.10.0 version."), DeprecationWarning
+            )
+            base_params["topP"] = validate_parameter(params, "topP", (float, int), False, None, None, None)
+
+        if "max_tokens" in params:
+            base_params["maxTokens"] = validate_parameter(params, "max_tokens", (int,), False, None, None, None)
+
+        if "maxTokens" in params:
+            warnings.warn(
+                ("maxTokens is deprecated, use max_tokens instead. Scheduled for removal in 0.10.0 version."),
+                DeprecationWarning,
+            )
+            base_params["maxTokens"] = validate_parameter(params, "maxTokens", (int,), False, None, None, None)
 
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
-        additional_parameters = [
-            ["top_p", (float, int)],
-            ["top_k", (int)],
-            ["k", (int)],
-            ["seed", (int)],
-        ]
+        additional_params = {}
 
-        for param_name, suitable_types in additional_parameters:
+        for param_name, suitable_types in (
+            ("top_k", (int,)),
+            ("k", (int,)),
+            ("seed", (int,)),
+        ):
             if param_name in params:
                 additional_params[param_name] = validate_parameter(
                     params, param_name, suitable_types, False, None, None, None
                 )
 
-        # Streaming
-        self._streaming = params.get("stream", False)
-
         # For this release we will not support streaming as many models do not support streaming with tool use
-        if self._streaming:
+        if params.get("stream", False):
             warnings.warn(
                 "Streaming is not currently supported, streaming will be disabled.",
                 UserWarning,
             )
-            self._streaming = False
 
         return base_params, additional_params
 

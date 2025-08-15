@@ -8,7 +8,7 @@ from ..cache.cache import Cache
 from .anthropic import AnthropicLLMConfigEntry
 from .bedrock import BedrockLLMConfigEntry
 from .cerebras import CerebrasLLMConfigEntry
-from .client import AzureOpenAILLMConfigEntry, DeepSeekLLMConfigEntry, ModelClient, OpenAILLMConfigEntry, OpenAIWrapper
+from .client import AzureOpenAILLMConfigEntry, DeepSeekLLMConfigEntry, OpenAILLMConfigEntry, OpenAIWrapper
 from .cohere import CohereLLMConfigEntry
 from .gemini import GeminiLLMConfigEntry
 from .groq import GroqLLMConfigEntry
@@ -37,7 +37,6 @@ __all__ = [
     "GeminiLLMConfigEntry",
     "GroqLLMConfigEntry",
     "MistralLLMConfigEntry",
-    "ModelClient",
     "OllamaLLMConfigEntry",
     "OpenAILLMConfigEntry",
     "OpenAIWrapper",
