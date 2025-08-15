@@ -32,6 +32,7 @@ from .targets.transition_target import (
     RevertToUserTarget,
     StayTarget,
     TerminateTarget,
+    FunctionTarget,
 )
 
 __all__ = [
@@ -61,4 +62,5 @@ __all__ = [
     "StringContextCondition",
     "StringLLMCondition",
     "TerminateTarget",
+    "FunctionTarget",
 ]
