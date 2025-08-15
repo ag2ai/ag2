@@ -41,10 +41,7 @@ from .conversable_agent import ConversableAgent
 logger = logging.getLogger(__name__)
 
 SELECT_SPEAKER_PROMPT_TEMPLATE = (
-    "Read the above conversation. Then select the next role from {agentlist} to play. "
-    "Choose a different speaker than the last one to ensure all participants contribute. "
-    "Consider who would be most relevant to respond based on the conversation context. "
-    "Only return the role name."
+    "Read the above conversation. Then select the next role from {agentlist} to play. Only return the role."
 )
 
 
@@ -375,7 +372,7 @@ class GroupChat:
         return_msg = self.select_speaker_message_template.format(roles=roles, agentlist=agentlist)
         return return_msg
 
-    def select_speaker_prompt(self, agents: list[Agent] | None = None, last_speaker_name: str = None) -> str:
+    def select_speaker_prompt(self, agents: list[Agent] | None = None) -> str:
         """Return the floating system prompt selecting the next speaker.
         This is always the *last* message in the context.
         Will return None if the select_speaker_prompt_template is None.
@@ -388,12 +385,7 @@ class GroupChat:
 
         agentlist = f"{[agent.name for agent in agents]}"
 
-        # Enhance prompt with last speaker info for better selection
-        enhanced_template = self.select_speaker_prompt_template
-        if last_speaker_name and last_speaker_name != "Unknown":
-            enhanced_template += f" The last speaker was {last_speaker_name}, so choose someone different."
-
-        return_prompt = enhanced_template.replace("{agentlist}", agentlist)
+        return_prompt = f"{self.select_speaker_prompt_template}".replace("{agentlist}", agentlist)
         return return_prompt
 
     def introductions_msg(self, agents: list[Agent] | None = None) -> str:
@@ -761,7 +753,7 @@ class GroupChat:
         # Create the starting message
         if self.select_speaker_prompt_template is not None:
             start_message = {
-                "content": self.select_speaker_prompt(agents, last_speaker.name),
+                "content": self.select_speaker_prompt(agents),
                 "name": "checking_agent",
                 "override_role": self.role_for_select_speaker_messages,
             }
@@ -843,7 +835,7 @@ class GroupChat:
         # Create the starting message
         if self.select_speaker_prompt_template is not None:
             start_message = {
-                "content": self.select_speaker_prompt(agents, last_speaker.name),
+                "content": self.select_speaker_prompt(agents),
                 "override_role": self.role_for_select_speaker_messages,
             }
         else:

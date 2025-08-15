@@ -26,7 +26,9 @@ class TestPrepareGroupchatAutoSpeaker:
     def mock_groupchat(self) -> MagicMock:
         """Create a mock GroupChat for testing."""
         groupchat = MagicMock(spec=GroupChat)
-        groupchat.select_speaker_prompt.return_value = SELECT_SPEAKER_PROMPT_TEMPLATE
+        groupchat.select_speaker_prompt.return_value = (
+            "Read the above conversation. Then select the next role from {agentlist} to play. Only return the role."
+        )
         return groupchat
 
     @pytest.fixture
