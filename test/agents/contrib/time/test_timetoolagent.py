@@ -41,7 +41,7 @@ class TestTimeToolAgent:
             },
         ]
 
-        assert set(tool.name for tool in time_agent.tools) == {"date_time"}
+        assert {tool.name for tool in time_agent.tools} == {"date_time"}
         assert time_agent.llm_config["tools"] == expected_tools  # type: ignore[index]
         assert time_agent.system_message == (
             "You are a calendar agent that uses tools to return the date and time. "

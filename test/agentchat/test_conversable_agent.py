@@ -1108,24 +1108,24 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = LLMConfig(credentials_gpt_4o_mini.llm_config)
 
-    with llm_config:
-        coder = autogen.AssistantAgent(
-            name="chatbot",
-            system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-            # llm_config=credentials_gpt_4o_mini.llm_config,
-        )
+    coder = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+        llm_config=llm_config,
+    )
 
-        # create a UserProxyAgent instance named "user_proxy"
-        user_proxy = autogen.UserProxyAgent(
-            name="user_proxy",
-            system_message="A proxy for the user for executing code.",
-            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-            human_input_mode="NEVER",
-            max_consecutive_auto_reply=10,
-            code_execution_config={"work_dir": "coding"},
-        )
+    # create a UserProxyAgent instance named "user_proxy"
+    user_proxy = autogen.UserProxyAgent(
+        name="user_proxy",
+        system_message="A proxy for the user for executing code.",
+        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=10,
+        code_execution_config={"work_dir": "coding"},
+        llm_config=llm_config,
+    )
 
     # define functions according to the function description
     timer_mock = unittest.mock.MagicMock()
@@ -1433,15 +1433,15 @@ def test_messages_with_carryover():
         llm_config=False,
         default_auto_reply="This is alice speaking.",
     )
-    context = dict(message="hello", carryover="Testing carryover.")
+    context = {"message": "hello", "carryover": "Testing carryover."}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=["Testing carryover.", "This should pass"])
+    context = {"message": "hello", "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=3)
+    context = {"message": "hello", "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
@@ -1455,26 +1455,26 @@ def test_messages_with_carryover():
         },
     ]
     mm_message = {"content": mm_content}
-    context = dict(
-        message=mm_message,
-        carryover="Testing carryover.",
-    )
+    context = {
+        "message": mm_message,
+        "carryover": "Testing carryover.",
+    }
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=["Testing carryover.", "This should pass"])
+    context = {"message": mm_message, "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=3)
+    context = {"message": mm_message, "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test without carryover
     print(mm_message)
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 3
@@ -1484,7 +1484,7 @@ def test_messages_with_carryover():
         {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
     ]
     mm_message = {"content": mm_content}
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 1
@@ -2034,14 +2034,20 @@ def test_create_or_get_executor(mock_credentials: Credentials):
         (False, False),
         pytest.param(
             {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format with config_list",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
         ),
-        (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        pytest.param(
+            {"model": "gpt-3", "api_key": "whatever"},
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+        ),
+        pytest.param(
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            id="LLMConfig passed",
         ),
     ],
 )

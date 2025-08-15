@@ -44,7 +44,7 @@ class TestHelpers:
 class TestGraphUtilCheckGraphValidity:
     def test_valid_structure(self):
         agents = [FakeAgent("agent1"), FakeAgent("agent2"), FakeAgent("agent3")]
-        valid_speaker_transitions_dict = {agent: [other_agent for other_agent in agents] for agent in agents}
+        valid_speaker_transitions_dict = {agent: list(agents) for agent in agents}
         gru.check_graph_validity(allowed_speaker_transitions_dict=valid_speaker_transitions_dict, agents=agents)
 
     def test_graph_with_invalid_structure(self):

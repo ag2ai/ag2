@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
-from typing_extensions import Required, TypedDict
+from typing_extensions import Required, Self, TypedDict
 
 from .client import ModelClient
 
@@ -21,9 +21,9 @@ class LLMConfigEntryDict(TypedDict, total=False):
     top_p: float | None
     temperature: float | None
 
-    api_key: SecretStr | None
+    api_key: SecretStr | str | None
     api_version: str | None
-    base_url: HttpUrl | None
+    base_url: HttpUrl | str | None
     voice: str | None
     http_client: httpxClient | None
     model_client_cls: str | None
@@ -69,13 +69,13 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    def apply_application_config(self, application_config: ApplicationConfig) -> "LLMConfigEntry":
+    def apply_application_config(self, application_config: ApplicationConfig) -> Self:
         """Apply application level configurations."""
-        # TODO: should create a new instance instead of mutating current one
-        self.max_tokens = self.max_tokens or application_config.max_tokens
-        self.top_p = self.top_p or application_config.top_p
-        self.temperature = self.temperature or application_config.temperature
-        return self
+        new_entry = self.model_copy()
+        new_entry.max_tokens = new_entry.max_tokens or application_config.max_tokens
+        new_entry.top_p = new_entry.top_p or application_config.top_p
+        new_entry.temperature = new_entry.temperature or application_config.temperature
+        return new_entry
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...

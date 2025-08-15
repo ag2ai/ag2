@@ -380,7 +380,7 @@ Match roles in the role set to each expert in expert set.
 
     def clear_all_agents(self, recycle_endpoint: bool | None = True):
         """Clear all cached agents."""
-        for agent_name in [agent_name for agent_name in self.agent_procs_assign]:
+        for agent_name in list(self.agent_procs_assign):
             self.clear_agent(agent_name, recycle_endpoint)
         print(colored("All agents have been cleared.", "yellow"), flush=True)
 

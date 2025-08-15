@@ -318,7 +318,7 @@ def render_gallery_html(gallery_file_path: Path) -> str:
 
             if "tags" in item and item["tags"]:
                 all_tags.extend(item["tags"])
-        all_tags = sorted(list(set(all_tags)))
+        all_tags = sorted(set(all_tags))
 
         # Generate HTML directly
         html = '<div class="examples-gallery-container">'

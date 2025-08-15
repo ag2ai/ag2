@@ -49,12 +49,9 @@ def test_together_llm_config_entry():
         "hide_tools": "never",
     }
     actual = together_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[together_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(together_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

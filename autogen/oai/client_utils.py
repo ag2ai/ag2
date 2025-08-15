@@ -131,7 +131,7 @@ def should_hide_tools(messages: list[dict[str, Any]], tools: list[dict[str, Any]
         return False
     elif hide_tools_param == "if_any_run":
         # Return True if any tool_call_id exists, indicating a tool call has been executed. False otherwise.
-        return any(["tool_call_id" in dictionary for dictionary in messages])
+        return any("tool_call_id" in dictionary for dictionary in messages)
     elif hide_tools_param == "if_all_run":
         # Return True if all tools have been executed at least once. False otherwise.
 

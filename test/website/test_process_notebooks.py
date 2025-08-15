@@ -612,8 +612,8 @@ class TestAddAuthorsAndSocialImgToBlogPosts:
         blog_dir = test_dir / "docs" / "_blogs"
 
         # Verify directory structure matches
-        blog_files = set(p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx"))
-        generated_files = set(p.relative_to(generated_blog_dir) for p in generated_blog_dir.glob("**/*.mdx"))
+        blog_files = {p.relative_to(blog_dir) for p in blog_dir.glob("**/*.mdx")}
+        generated_files = {p.relative_to(generated_blog_dir) for p in generated_blog_dir.glob("**/*.mdx")}
         assert blog_files == generated_files
 
         # Verify number of files matches

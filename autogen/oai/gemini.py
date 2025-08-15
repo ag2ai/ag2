@@ -385,9 +385,7 @@ class GeminiClient:
                             function={
                                 "name": fn_call.name,
                                 "arguments": (
-                                    json.dumps({key: val for key, val in fn_call.args.items()})
-                                    if fn_call.args is not None
-                                    else ""
+                                    json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""
                                 ),
                             },
                             type="function",
@@ -857,10 +855,10 @@ class GeminiClient:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
-        if isinstance(safety_settings, list) and all([
+        if isinstance(safety_settings, list) and all(
             isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
             for safety_setting in safety_settings
-        ]):
+        ):
             vertexai_safety_settings = []
             for safety_setting in safety_settings:
                 if safety_setting["category"] not in VertexAIHarmCategory.__members__:

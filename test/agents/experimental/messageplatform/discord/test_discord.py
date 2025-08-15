@@ -54,7 +54,7 @@ class TestDiscordAgent:
             },
         ]
 
-        assert set(tool.name for tool in discord_agent.tools) == {"discord_send", "discord_retrieve"}
+        assert {tool.name for tool in discord_agent.tools} == {"discord_send", "discord_retrieve"}
         assert isinstance(discord_agent.llm_config, (dict, LLMConfig)), "llm_config should be a dictionary or LLMConfig"
         assert discord_agent.llm_config["tools"] == expected_tools
         assert discord_agent.system_message == (

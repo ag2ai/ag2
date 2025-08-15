@@ -59,6 +59,9 @@ class ModuleInfo:
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
+        if installed_version is None and (self.min_version or self.max_version):
+            return f"'{self.name}' is not installed, but the version is not available."
+
         if self.min_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
             if not self.min_inclusive and installed_version == self.min_version:

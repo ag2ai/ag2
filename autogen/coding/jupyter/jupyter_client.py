@@ -8,23 +8,16 @@ from __future__ import annotations
 
 import datetime
 import json
-import sys
 import uuid
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, cast
 
-from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
-
 import requests
 from requests.adapters import HTTPAdapter, Retry
+from typing_extensions import Self
 
+from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
 from .base import JupyterConnectionInfo
 

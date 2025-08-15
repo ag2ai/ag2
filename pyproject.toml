@@ -442,7 +442,7 @@ select = [
     "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
     "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
     "ASYNC", # flake8-async           https://docs.astral.sh/ruff/rules/#flake8-async-async
-#    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
+    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
 #    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
 #    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20

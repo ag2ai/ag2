@@ -911,7 +911,7 @@ class GenerateCodeExecutionReplyMessage(BaseMessage):
         else:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_block_languages])}])...",
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join(list(self.code_block_languages))}])...",
                     "red",
                 ),
                 flush=True,

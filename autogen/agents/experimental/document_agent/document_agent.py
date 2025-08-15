@@ -396,7 +396,7 @@ class DocAgent(ConversableAgent):
             else:
                 # First time initialization - no deduplication needed
                 context_variables["DocumentsToIngest"] = ingestions
-                context_variables["QueriesToRun"] = [query for query in queries]
+                context_variables["QueriesToRun"] = list(queries)
                 context_variables["TaskInitiated"] = True
                 response_message = "Updated context variables with task decisions"
 

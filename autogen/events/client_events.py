@@ -62,7 +62,7 @@ def _change_usage_summary_format(
         usage_summary_altered_format: dict[str, list[dict[str, Any]]] = {"usages": []}
         for k, v in usage_summary.items():
             if isinstance(k, str) and isinstance(v, dict):
-                current_usage = {key: value for key, value in v.items()}
+                current_usage = dict(v.items())
                 current_usage["model"] = k
                 usage_summary_altered_format["usages"].append(current_usage)
             else:

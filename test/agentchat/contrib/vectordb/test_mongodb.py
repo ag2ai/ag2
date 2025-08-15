@@ -223,7 +223,7 @@ def test_insert_docs(db, collection_name, example_documents):
     found = list(collection.find({}))
     assert len(found) == len(example_documents)
     # Check that documents have correct fields, including "_id" and "embedding" but not "id"
-    assert all([set(doc.keys()) == {"_id", "content", "metadata", "embedding"} for doc in found])
+    assert all(set(doc.keys()) == {"_id", "content", "metadata", "embedding"} for doc in found)
     # Check ids
     assert {doc["_id"] for doc in found} == {1, "1", 2, "2"}
     # Check embedding lengths
@@ -241,9 +241,9 @@ def test_update_docs(db_with_indexed_clxn, example_documents):
     assert collection.count_documents({}) == len(example_documents)
     found = list(collection.find({}))
     # Check that documents have correct fields, including "_id" and "embedding" but not "id"
-    assert all([set(doc.keys()) == {"_id", "content", "metadata", "embedding"} for doc in found])
-    assert all([isinstance(doc["embedding"][0], float) for doc in found])
-    assert all([len(doc["embedding"]) == db.dimensions for doc in found])
+    assert all(set(doc.keys()) == {"_id", "content", "metadata", "embedding"} for doc in found)
+    assert all(isinstance(doc["embedding"][0], float) for doc in found)
+    assert all(len(doc["embedding"]) == db.dimensions for doc in found)
     # Check ids
     assert {doc["_id"] for doc in found} == {1, "1", 2, "2"}
 
@@ -289,7 +289,7 @@ def test_get_docs_by_ids(db_with_indexed_clxn, example_documents):
     # Test without setting "include" kwarg
     docs = db.get_docs_by_ids(ids=[2, "2"], collection_name=clxn.name)
     assert len(docs) == 2
-    assert all([doc["id"] in [2, "2"] for doc in docs])
+    assert all(doc["id"] in [2, "2"] for doc in docs)
     assert set(docs[0].keys()) == {"id", "content", "metadata"}
 
     # Test with include
@@ -345,7 +345,7 @@ def test_retrieve_docs(db_with_indexed_clxn, example_documents):
 
     results = db.retrieve_docs(queries=["Cats"], collection_name=clxn.name, n_results=n_results)
     assert {doc[0]["id"] for doc in results[0]} == {1, 2}
-    assert all(["embedding" not in doc[0] for doc in results[0]])
+    assert all("embedding" not in doc[0] for doc in results[0])
 
 
 @pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
@@ -370,7 +370,7 @@ def test_retrieve_docs_with_embedding(db_with_indexed_clxn, example_documents):
 
     results = db.retrieve_docs(queries=["Cats"], collection_name=clxn.name, n_results=n_results, include_embedding=True)
     assert {doc[0]["id"] for doc in results[0]} == {1, 2}
-    assert all(["embedding" in doc[0] for doc in results[0]])
+    assert all("embedding" in doc[0] for doc in results[0])
 
 
 @pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)
@@ -385,14 +385,14 @@ def test_retrieve_docs_multiple_queries(db_with_indexed_clxn, example_documents)
 
     def results_ready():
         results = db.retrieve_docs(queries=queries, collection_name=clxn.name, n_results=n_results)
-        return all([len(res) == n_results for res in results])
+        return all(len(res) == n_results for res in results)
 
     _wait_for_predicate(results_ready, f"Failed to retrieve docs after waiting {TIMEOUT} seconds after each.")
 
     results = db.retrieve_docs(queries=queries, collection_name=clxn.name, n_results=2)
 
     assert len(results) == len(queries)
-    assert all([len(res) == n_results for res in results])
+    assert all(len(res) == n_results for res in results)
     assert {doc[0]["id"] for doc in results[0]} == {1, 2}
     assert {doc[0]["id"] for doc in results[1]} == {"1", "2"}
 
@@ -417,7 +417,7 @@ def test_retrieve_docs_with_threshold(db_with_indexed_clxn, example_documents):
     # only one result should be that value
     results = db.retrieve_docs(queries=queries, collection_name=clxn.name, n_results=n_results, distance_threshold=0.3)
     assert len(results[0]) == 1
-    assert all([doc[1] >= 0.7 for doc in results[0]])
+    assert all(doc[1] >= 0.7 for doc in results[0])
 
 
 @pytest.mark.skipif(sys.platform in ["darwin", "win32"] or not is_mongodb_accessible(), reason=reason)

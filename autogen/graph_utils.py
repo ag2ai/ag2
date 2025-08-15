@@ -24,7 +24,7 @@ def has_self_loops(allowed_speaker_transitions: dict[str, list[Agent]]) -> bool:
     Returns:
         True if there are self loops in the allowed_speaker_transitions_Dict.
     """
-    return any([key in value for key, value in allowed_speaker_transitions.items()])
+    return any(key in value for key, value in allowed_speaker_transitions.items())
 
 
 def check_graph_validity(
@@ -58,17 +58,15 @@ def check_graph_validity(
         raise ValueError("allowed_speaker_transitions_dict must be a dictionary.")
 
     # All values must be lists of Agent or empty
-    if not all([isinstance(value, list) for value in allowed_speaker_transitions_dict.values()]):
+    if not all(isinstance(value, list) for value in allowed_speaker_transitions_dict.values()):
         raise ValueError("allowed_speaker_transitions_dict must be a dictionary with lists as values.")
 
     # Check 2. Every key exists in agents
-    if not all([key in agents for key in allowed_speaker_transitions_dict]):
+    if not all(key in agents for key in allowed_speaker_transitions_dict):
         raise ValueError("allowed_speaker_transitions_dict has keys not in agents.")
 
     # Check 3. Every value is a list of Agents or empty list (not string).
-    if not all([
-        all([isinstance(agent, Agent) for agent in value]) for value in allowed_speaker_transitions_dict.values()
-    ]):
+    if not all(all(isinstance(agent, Agent) for agent in value) for value in allowed_speaker_transitions_dict.values()):
         raise ValueError("allowed_speaker_transitions_dict has values that are not lists of Agents.")
 
     # Warnings
@@ -129,7 +127,7 @@ def invert_disallowed_to_allowed(
         allowed_speaker_transitions_dict: A dictionary of keys and list as values. The keys are the names of the agents, and the values are the names of the agents that the key agent can transition to.
     """
     # Create a fully connected allowed_speaker_transitions_dict of all agents
-    allowed_speaker_transitions_dict = {agent: [other_agent for other_agent in agents] for agent in agents}
+    allowed_speaker_transitions_dict = {agent: list(agents) for agent in agents}
 
     # Remove edges from allowed_speaker_transitions_dict according to the disallowed_speaker_transitions_dict
     for key, value in disallowed_speaker_transitions_dict.items():
