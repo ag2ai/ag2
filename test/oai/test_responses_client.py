@@ -860,3 +860,173 @@ def test_consume_streaming_response():
     assert len(result) == 1
     message = result[0]
     assert message["id"] == "streaming_response"  # Default ID when no response ID found
+
+
+@run_for_optional_imports(["openai"], "openai")
+def test_create_error_handling():
+    """Test error handling in create() method."""
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+
+    # Mock the responses.create method to raise an exception
+    mock_client.responses.create.side_effect = Exception("API Error")
+
+    client = OpenAIResponsesClient(mock_client)
+
+    # Should raise standardized API error
+    with pytest.raises(Exception) as exc_info:
+        client.create({"messages": [{"role": "user", "content": "test"}]})
+
+    # The error should be processed by standardize_api_error
+    assert "API Error" in str(exc_info.value)
+
+
+def test_assistant_message_filtering(mocked_openai_client):
+    """Test that assistant messages are filtered out during input conversion."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages_param = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},  # Should be filtered out
+        {"role": "user", "content": "How are you?"},
+    ]
+
+    client.create({"messages": messages_param})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Should only have user messages in input
+    assert len(kwargs["input"]) == 2
+    assert all(item["role"] == "user" for item in kwargs["input"])
+    assert kwargs["input"][0]["content"][0]["text"] == "Hello"
+    assert kwargs["input"][1]["content"][0]["text"] == "How are you?"
+
+
+def test_message_retrieval_streaming_detection(mocked_openai_client):
+    """Test that message_retrieval detects streaming responses correctly."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Create a mock streaming response (has __iter__ but no output attribute)
+    class MockStreamingResponse:
+        def __iter__(self):
+            yield {"type": "response.output_text.delta", "delta": "Hello"}
+            yield {"type": "response.completed"}
+
+    mock_stream = MockStreamingResponse()
+
+    # This should call _consume_streaming_response
+    result = client.message_retrieval(mock_stream)
+
+    assert len(result) == 1
+    assert result[0]["role"] == "assistant"
+
+
+def test_create_with_stream_and_background_warning(mocked_openai_client):
+    """Test warning when both stream and background are enabled."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    with pytest.warns(UserWarning, match="Streaming a background response may introduce latency"):
+        client.create({"messages": [{"role": "user", "content": "test"}], "stream": True, "background": True})
+
+
+def test_create_with_missing_required_params_fallback(mocked_openai_client):
+    """Test fallback when no required parameters are provided."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Create call with no input, previous_response_id, or prompt
+    client.create({})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Should fallback to default input
+    assert "input" in kwargs
+    assert kwargs["input"][0]["role"] == "user"
+    assert kwargs["input"][0]["content"][0]["text"] == "Hello"
+
+
+def test_structured_output_fallback_on_text_format_error(mocked_openai_client):
+    """Test fallback when text_format is not supported."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Mock parse to raise TypeError about text_format
+    mocked_openai_client.responses.parse.side_effect = TypeError("unexpected keyword argument 'text_format'")
+
+    response_format_schema = {"type": "object", "properties": {"a": {"type": "string"}}}
+
+    with pytest.warns(UserWarning, match="doesn't support.*response_format.*Falling back"):
+        client.create({"messages": [{"role": "user", "content": "test"}], "response_format": response_format_schema})
+
+    # Should fall back to create method
+    assert mocked_openai_client.responses.create.called
+
+
+def test_message_retrieval_with_multiple_content_blocks():
+    """Test message_retrieval handles multiple content blocks correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Create response with message having multiple content blocks
+    output = [
+        {
+            "type": "message",
+            "content": [
+                {"type": "output_text", "text": "First part"},
+                {"type": "output_text", "text": "Second part"},
+                {"type": "output_text", "text": "Third part"},
+            ],
+        }
+    ]
+
+    resp = _FakeResponse(output=output)
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    content = msgs[0]["content"]
+    assert len(content) == 1
+    # Multiple blocks should be joined with spaces
+    assert content[0]["text"] == "First part Second part Third part"
+
+
+def test_create_with_tool_role_handling(mocked_openai_client):
+    """Test handling of tool role messages in input conversion."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages_param = [
+        {"role": "user", "content": "Call function"},
+        {"role": "tool", "content": "Function result", "tool_call_id": "call_123"},
+    ]
+
+    client.create({"messages": messages_param})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Should have function_call_output in input
+    assert "input" in kwargs
+    function_output = kwargs["input"][0]
+    assert function_output["type"] == "function_call_output"
+    assert function_output["call_id"] == "call_123"
+    assert "Function result" in function_output["output"]
+
+
+def test_create_with_image_params_in_content(mocked_openai_client):
+    """Test handling of image_params in message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages_param = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Generate an image"},
+                {"type": "image_params", "image_params": {"quality": "high", "size": "1024x1024"}},
+            ],
+        }
+    ]
+
+    client.create({"messages": messages_param, "built_in_tools": ["image_generation"]})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Image params should be added to image_generation tool
+    tools = kwargs["tools"]
+    image_tool = next(t for t in tools if t["type"] == "image_generation")
+    assert image_tool["quality"] == "high"
+    assert image_tool["size"] == "1024x1024"

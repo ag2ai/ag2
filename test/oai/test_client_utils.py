@@ -435,8 +435,116 @@ def test_standardize_api_error():
     assert "Invalid API key for TestAPI" in str(result)
 
 
+def test_validate_parameter_edge_cases():
+    """Test additional edge cases for validate_parameter to improve coverage."""
+
+    # Test when param_value is None and allow_None is False (line 72-73)
+    params = {"test_param": None}
+    result = validate_parameter(params, "test_param", str, False, "default", None, None)
+    assert result == "default"
+
+    # Test tuple type formatting vs single type (line 76-80)
+    params = {"test_param": 123}
+    # Single type - should format as just the type name
+    result = validate_parameter(params, "test_param", str, False, "default", None, None)
+    assert result == "default"
+
+    # Test numerical bounds with both lower and upper bounds (lines 88-96)
+    params = {"test_param": 5}
+    result = validate_parameter(params, "test_param", int, True, 10, (1, 3), None)
+    assert result == 10  # Should use default due to being out of bounds
+
+    # Test numerical bounds with only upper bound (line 90-94)
+    params = {"test_param": 10}
+    result = validate_parameter(params, "test_param", int, False, 5, (None, 8), None)
+    assert result == 5  # Should use default due to exceeding upper bound
+
+    # Test numerical bounds with allow_None (line 94-95)
+    params = {"test_param": 10}
+    result = validate_parameter(params, "test_param", int, True, None, (1, 5), None)
+    assert result is None  # Should use default None
+
+    # Test allowed_values with allow_None and param_value is None (line 99)
+    params = {"test_param": None}
+    result = validate_parameter(params, "test_param", str, True, "default", None, ["a", "b"])
+    assert result is None  # None should be allowed
+
+    # Test allowed_values when param not in allowed values (line 99-100)
+    params = {"test_param": "c"}
+    result = validate_parameter(params, "test_param", str, True, "default", None, ["a", "b"])
+    assert result == "default"
+
+
+def test_should_hide_tools_none_tools():
+    """Test should_hide_tools with None tools parameter."""
+    messages = [{"content": "test", "role": "user"}]
+
+    # Test with None tools (line 130)
+    result = should_hide_tools(messages, None, "if_all_run")
+    assert result is False
+
+    # Test with empty tools list (line 130)
+    result = should_hide_tools(messages, [], "if_any_run")
+    assert result is False
+
+
+def test_validate_openai_client_edge_cases():
+    """Test additional edge cases for validate_openai_client."""
+
+    # Test client without _validate method but with api_key (lines 201-202)
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    # Remove _validate method entirely
+    if hasattr(mock_client, "_validate"):
+        del mock_client._validate
+
+    # Should pass without calling _validate
+    validate_openai_client(mock_client, "TestClient")
+
+    # Test client with _validate method that is not callable (line 201)
+    mock_client = MagicMock()
+    mock_client.api_key = "valid_key"
+    mock_client._validate = "not_callable"  # Not a callable
+
+    # Should pass without calling _validate since it's not callable
+    validate_openai_client(mock_client, "TestClient")
+
+
+def test_standardize_api_error_edge_cases():
+    """Test additional edge cases for standardize_api_error."""
+
+    # Test model error with both "model" and "not found" (line 236)
+    model_error = Exception("The model xyz not found in our system")
+    result = standardize_api_error(model_error, "TestAPI", "xyz")
+    assert "Model 'xyz' not found or not supported by TestAPI" in str(result)
+
+    # Test model error with both "model" and "does not exist" (line 236)
+    model_error2 = Exception("model abc does not exist")
+    result = standardize_api_error(model_error2, "TestAPI", "abc")
+    assert "Model 'abc' not found or not supported by TestAPI" in str(result)
+
+    # Test insufficient quota error (line 240-241)
+    quota_error = Exception("insufficient quota remaining")
+    result = standardize_api_error(quota_error, "TestAPI", "test-model")
+    assert "Insufficient API quota for TestAPI" in str(result)
+
+    # Test connection error (line 244-245)
+    connection_error = Exception("connection refused by server")
+    result = standardize_api_error(connection_error, "TestAPI", "test-model")
+    assert "Network connection error for TestAPI" in str(result)
+
+    # Test network error (line 244-245)
+    network_error = Exception("network connection failed")
+    result = standardize_api_error(network_error, "TestAPI", "test-model")
+    assert "Network connection error for TestAPI" in str(result)
+
+
 if __name__ == "__main__":
     # test_validate_parameter()
     test_should_hide_tools()
     test_validate_openai_client()
     test_standardize_api_error()
+    test_validate_parameter_edge_cases()
+    test_should_hide_tools_none_tools()
+    test_validate_openai_client_edge_cases()
+    test_standardize_api_error_edge_cases()
