@@ -3359,7 +3359,9 @@ class ConversableAgent(LLMAgent):
         self._function_map.update(function_map)
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
-    def update_function_signature(self, func_sig: str | dict[str, Any], is_remove: None, silent_override: bool = False):
+    def update_function_signature(
+        self, func_sig: str | dict[str, Any], is_remove: bool = False, silent_override: bool = False
+    ):
         """Update a function_signature in the LLM configuration for function_call.
 
         Args:
