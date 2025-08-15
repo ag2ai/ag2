@@ -256,9 +256,9 @@ class GeminiClient:
             )
 
         http_options = types.HttpOptions()
-        if self.proxy:
-            http_options.client_args = {"proxy": self.proxy}
-            http_options.async_client_args = {"proxy": self.proxy}
+        if proxy := params.get("proxy", self.proxy):
+            http_options.client_args = {"proxy": proxy}
+            http_options.async_client_args = {"proxy": proxy}
 
         if self.api_version:
             http_options.api_version = self.api_version
