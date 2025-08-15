@@ -10,7 +10,7 @@ from .factory import CodeExecutorFactory
 from .local_commandline_code_executor import LocalCommandLineCodeExecutor
 from .markdown_code_extractor import MarkdownCodeExtractor
 
-__all__ = (
+__all__ = [
     "CodeBlock",
     "CodeExecutor",
     "CodeExecutorFactory",
@@ -19,4 +19,12 @@ __all__ = (
     "DockerCommandLineCodeExecutor",
     "LocalCommandLineCodeExecutor",
     "MarkdownCodeExtractor",
-)
+]
+
+# Try to import YepCode executor and add to __all__ if available
+try:
+    from .yepcode_code_executor import YepCodeCodeExecutor, YepCodeCodeResult  # noqa: F401
+
+    __all__.extend(["YepCodeCodeExecutor", "YepCodeCodeResult"])
+except ImportError:
+    pass
