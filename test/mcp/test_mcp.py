@@ -75,13 +75,11 @@ class TestMCPClient:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "arguments": {
-                                    "type": "object",
-                                    "description": "arguments",
-                                    "additionalProperties": True,
-                                }
+                                "a": {"title": "A", "type": "integer"},
+                                "b": {"title": "B", "type": "integer"},
                             },
-                            "required": ["arguments"],
+                            "required": ["a", "b"],
+                            "title": "addArguments",
                         },
                     },
                 },
@@ -93,13 +91,11 @@ class TestMCPClient:
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "arguments": {
-                                    "type": "object",
-                                    "description": "arguments",
-                                    "additionalProperties": True,
-                                }
+                                "a": {"title": "A", "type": "integer"},
+                                "b": {"title": "B", "type": "integer"},
                             },
-                            "required": ["arguments"],
+                            "required": ["a", "b"],
+                            "title": "multiplyArguments",
                         },
                     },
                 },

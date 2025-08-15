@@ -8,7 +8,6 @@
 
 import asyncio
 import json
-import sys
 
 import pytest
 
@@ -16,7 +15,7 @@ import autogen
 from autogen.import_utils import run_for_optional_imports
 from autogen.math_utils import eval_math_responses
 
-from ..conftest import Credentials, reason
+from ..conftest import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
@@ -214,10 +213,10 @@ async def test_a_execute_function():
 
 
 @run_for_optional_imports("openai", "openai")
-@pytest.mark.skipif(
-    not sys.version.startswith("3.10"),
-    reason=reason,
-)
+# @pytest.mark.skipif(
+#     not sys.version.startswith("3.10"),
+#     reason=reason,
+# )
 @run_for_optional_imports(["openai"], "openai")
 def test_update_function(credentials_gpt_4o_mini: Credentials):
     llm_config = {
@@ -248,7 +247,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     )
     res1 = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message="What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
         summary_method="reflection_with_llm",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
@@ -257,7 +256,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     assistant.update_function_signature("greet_user", is_remove=True)
     res2 = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message="What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]
