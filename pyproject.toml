@@ -346,8 +346,6 @@ exclude = ["/test", "/notebook"]
 packages = ["autogen"]
 only-include = [
     "autogen",
-    # not sure about this, probably is not needed
-    "autogen/agentchat/contrib/captainagent/tools",
     # need for generation of MCP Servers from OpenAPI specification
     "templates",
 ]
@@ -357,7 +355,6 @@ exclude = ["test", "notebook"]
 
 [tool.hatch.build.targets.wheel.sources]
 "autogen" = "autogen"
-"autogen/agentchat/contrib/captainagent/tools" = "autogen/agentchat/contrib/captainagent/tools"
 
 [tool.pytest.ini_options]
 addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
