@@ -575,6 +575,7 @@ class GroupChat:
             return self.next_agent(last_speaker)
 
         # auto speaker selection with 2-agent chat
+        messages = self.messages.copy() if messages is None else messages
         return self._auto_select_speaker(last_speaker, selector, messages, agents)
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
@@ -587,6 +588,7 @@ class GroupChat:
             return self.next_agent(last_speaker)
 
         # auto speaker selection with 2-agent chat
+        messages = self.messages.copy() if messages is None else messages
         return await self.a_auto_select_speaker(last_speaker, selector, messages, agents)
 
     def _finalize_speaker(self, last_speaker: Agent, final: bool, name: str, agents: list[Agent] | None) -> Agent:
