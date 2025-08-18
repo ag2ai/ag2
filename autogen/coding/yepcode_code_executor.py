@@ -7,7 +7,8 @@
 """YepCode code executor implementation."""
 
 import os
-from typing import Callable, ClassVar, List, Optional
+from collections.abc import Callable
+from typing import ClassVar
 
 from pydantic import Field
 
@@ -18,7 +19,7 @@ from .markdown_code_extractor import MarkdownCodeExtractor
 try:
     from dotenv import load_dotenv
 
-    _load_dotenv: Optional[Callable[[], bool]] = load_dotenv
+    _load_dotenv: Callable[[], bool] | None = load_dotenv
 except ImportError:
     _load_dotenv = None
 
@@ -33,7 +34,7 @@ except ImportError:
 class YepCodeCodeResult(CodeResult):
     """A code result class for YepCode executor."""
 
-    execution_id: Optional[str] = Field(default=None, description="The YepCode execution ID for this result.")
+    execution_id: str | None = Field(default=None, description="The YepCode execution ID for this result.")
 
 
 @export_module("autogen.coding")
@@ -59,11 +60,11 @@ class YepCodeCodeExecutor(CodeExecutor):
         RuntimeError: If YepCode runner initialization fails.
     """
 
-    SUPPORTED_LANGUAGES: ClassVar[List[str]] = ["python", "javascript"]
+    SUPPORTED_LANGUAGES: ClassVar[list[str]] = ["python", "javascript"]
 
     def __init__(
         self,
-        api_token: Optional[str] = None,
+        api_token: str | None = None,
         timeout: int = 60,
         remove_on_done: bool = False,
         sync_execution: bool = True,
@@ -117,7 +118,7 @@ class YepCodeCodeExecutor(CodeExecutor):
         else:
             return lang
 
-    def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> YepCodeCodeResult:
+    def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> YepCodeCodeResult:
         """Execute the code blocks and return the result.
 
         Args:
@@ -129,8 +130,8 @@ class YepCodeCodeExecutor(CodeExecutor):
         if not code_blocks:
             return YepCodeCodeResult(exit_code=0, output="")
 
-        outputs: List[str] = []
-        last_execution_id: Optional[str] = None
+        outputs: list[str] = []
+        last_execution_id: str | None = None
 
         for code_block in code_blocks:
             lang = self._normalize_language(code_block.language)
