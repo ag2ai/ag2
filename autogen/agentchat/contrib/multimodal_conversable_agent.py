@@ -116,11 +116,9 @@ class MultimodalConversableAgent(ConversableAgent):
         # Fix tool response format for OpenAI API
         fixed_messages = []
         for msg in messages_with_b64_img:
-            print(f"msg: {msg}")
             if isinstance(msg, dict) and msg.get("role") == "tool" and "tool_responses" in msg:
                 # Unpack tool_responses to individual tool messages with tool_call_id
                 for tool_response in msg["tool_responses"]:
-                    print(f"tool_response: {tool_response}")
                     fixed_messages.append(tool_response)
             else:
                 fixed_messages.append(msg)
