@@ -112,10 +112,22 @@ class MultimodalConversableAgent(ConversableAgent):
             messages = self._oai_messages[sender]
 
         messages_with_b64_img = message_formatter_pil_to_b64(self._oai_system_message + messages)
+                
+        # Fix tool response format for OpenAI API
+        fixed_messages = []
+        for msg in messages_with_b64_img:
+            print(f"msg: {msg}")
+            if isinstance(msg, dict) and msg.get("role") == "tool" and "tool_responses" in msg:
+                # Unpack tool_responses to individual tool messages with tool_call_id
+                for tool_response in msg["tool_responses"]:
+                    print(f"tool_response: {tool_response}")
+                    fixed_messages.append(tool_response)
+            else:
+                fixed_messages.append(msg)
 
         # TODO: #1143 handle token limit exceeded error
         response = client.create(
-            context=messages[-1].pop("context", None), messages=messages_with_b64_img, agent=self.name
+            context=messages[-1].pop("context", None) if messages else None, messages=fixed_messages, agent=self.name
         )
 
         # TODO: line 301, line 271 is converting messages to dict. Can be removed after ChatCompletionMessage_to_dict is merged.
