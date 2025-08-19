@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from packaging.version import Version
+from packaging.version import Version, InvalidVersion
 from typing import Any, Generic, Optional, TypeVar
 
 __all__ = [
@@ -60,18 +60,36 @@ class ModuleInfo:
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
+        # Parse installed version once; if invalid, report gracefully
+        installed_version_v: Version | None = None
+        if installed_version is not None:
+            try:
+                installed_version_v = Version(str(installed_version))
+            except InvalidVersion:
+                return f"'{self.name}' is installed, but the installed version {installed_version} is not a valid version."
+
         if self.min_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-            if not self.min_inclusive and Version(installed_version) == Version(self.min_version):
+            try:
+                min_v = Version(str(self.min_version))
+            except InvalidVersion:
+                return f"Invalid minimum version constraint for '{self.name}': {self.min_version}"
+            # strictly greater than
+            if not self.min_inclusive and installed_version_v == min_v:
                 return msg
-            if self.min_inclusive and Version(installed_version) < Version(self.min_version):  # type: ignore[operator]
+            if installed_version_v is not None and installed_version_v < min_v:  # type: ignore[operator]
                 return msg
 
         if self.max_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and Version(installed_version) == Version(self.max_version):
+            try:
+                max_v = Version(str(self.max_version))
+            except InvalidVersion:
+                return f"Invalid maximum version constraint for '{self.name}': {self.max_version}"
+            # strictly less than
+            if not self.max_inclusive and installed_version_v == max_v:
                 return msg
-            if self.max_inclusive and Version(installed_version) > Version(self.max_version):  # type: ignore[operator]
+            if installed_version_v is not None and installed_version_v > max_v:  # type: ignore[operator]
                 return msg
 
         return None
