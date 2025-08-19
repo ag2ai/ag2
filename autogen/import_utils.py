@@ -55,9 +55,12 @@ class ModuleInfo:
                     # Aka similarly named module in the autogen or test directory
                     return f"'{self.name}' is not installed."
 
-        installed_version = (
+        # Ensure that the retrieved version is a string. Some packages might unexpectedly
+        # have a __version__ attribute that is not a string (e.g., a module).
+        raw_version_attr = (
             sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
         )
+        installed_version = raw_version_attr if isinstance(raw_version_attr, str) else None
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
