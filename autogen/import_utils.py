@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
+from packaging.version import Version
 from typing import Any, Generic, Optional, TypeVar
 
 __all__ = [
@@ -61,16 +62,16 @@ class ModuleInfo:
 
         if self.min_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-            if not self.min_inclusive and installed_version == self.min_version:
+            if not self.min_inclusive and Version(installed_version) == Version(self.min_version):
                 return msg
-            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
+            if self.min_inclusive and Version(installed_version) < Version(self.min_version):  # type: ignore[operator]
                 return msg
 
         if self.max_version:
             msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and installed_version == self.max_version:
+            if not self.max_inclusive and Version(installed_version) == Version(self.max_version):
                 return msg
-            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
+            if self.max_inclusive and Version(installed_version) > Version(self.max_version):  # type: ignore[operator]
                 return msg
 
         return None
