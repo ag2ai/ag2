@@ -538,6 +538,7 @@ class TestVersionAsModule:
         when version constraints are present.
         """
         # Import the mock package
+        import problem_package  # noqa: F401
 
         # Create a ModuleInfo instance with a version constraint
         module_info = ModuleInfo.from_str("problem_package>=1.0")
@@ -555,6 +556,7 @@ class TestVersionAsModule:
         even if the version attribute is not a string.
         """
         # Import the mock package
+        import problem_package  # noqa: F401
 
         # Create a ModuleInfo instance without version constraints
         module_info = ModuleInfo.from_str("problem_package")
