@@ -14,6 +14,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
+from packaging import version
+
 __all__ = [
     "optional_import_block",
     "patch_object",
@@ -59,19 +61,25 @@ class ModuleInfo:
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
-        if self.min_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-            if not self.min_inclusive and installed_version == self.min_version:
-                return msg
-            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
-                return msg
+        if installed_version:
+            # Convert to version object for comparison
+            installed_ver = version.parse(installed_version)
 
-        if self.max_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and installed_version == self.max_version:
-                return msg
-            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
-                return msg
+            if self.min_version:
+                min_ver = version.parse(self.min_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
+                if not self.min_inclusive and installed_ver == min_ver:
+                    return msg
+                if self.min_inclusive and installed_ver < min_ver:
+                    return msg
+
+            if self.max_version:
+                max_ver = version.parse(self.max_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
+                if not self.max_inclusive and installed_ver == max_ver:
+                    return msg
+                if self.max_inclusive and installed_ver > max_ver:
+                    return msg
 
         return None
 
