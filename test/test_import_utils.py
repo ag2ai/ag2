@@ -4,11 +4,13 @@
 
 import re
 import sys
+import types
 from collections.abc import Iterable, Iterator
 from types import ModuleType
 from typing import Any
 
 import pytest
+from pytest import MonkeyPatch
 
 from autogen.import_utils import ModuleInfo, get_missing_imports, optional_import_block, require_optional_import
 
@@ -450,3 +452,30 @@ class TestGetMissingImports:
         assert mock_modules
         missing = get_missing_imports(modules)
         assert missing == expected_missing
+
+
+def test_openai_version_higher_than_min(monkeypatch: MonkeyPatch) -> None:
+    # Simulate 'openai' module with version 1.100.1 (should satisfy >=1.66.2)
+    fake_openai = types.SimpleNamespace(
+        __version__="1.100.1", __file__="/usr/lib/python3.11/site-packages/openai/__init__.py"
+    )
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    modinfo = ModuleInfo.from_str("openai>=1.66.2")
+    result = modinfo.is_in_sys_modules()
+
+    # Should be None, meaning the version is sufficient
+    assert result is None
+
+
+def test_openai_version_too_low(monkeypatch: MonkeyPatch) -> None:
+    # Simulate 'openai' module with version 1.0.0 (should NOT satisfy >=1.66.2)
+    fake_openai = types.SimpleNamespace(
+        __version__="1.0.0", __file__="/usr/lib/python3.11/site-packages/openai/__init__.py"
+    )
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    modinfo = ModuleInfo.from_str("openai>=1.66.2")
+    result = modinfo.is_in_sys_modules()
+
+    assert result == "'openai' is installed, but the installed version 1.0.0 is too low (required 'openai>=1.66.2')."
