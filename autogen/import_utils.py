@@ -48,7 +48,7 @@ class ModuleInfo:
             if hasattr(sys.modules[self.name], "__file__") and sys.modules[self.name].__file__ is not None:
                 autogen_path = (Path(__file__).parent).resolve()
                 test_path = (Path(__file__).parent.parent / "test").resolve()
-                module_path = Path(sys.modules[self.name].__file__).resolve()
+                module_path = Path(sys.modules[self.name].__file__).resolve()  # type: ignore[arg-type]
 
                 if str(autogen_path) in str(module_path) or str(test_path) in str(module_path):
                     # The module is in the autogen or test directory
