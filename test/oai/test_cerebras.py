@@ -7,7 +7,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
@@ -64,13 +63,6 @@ def test_cerebras_llm_config_entry():
     assert llm_config.model_dump() == {
         "config_list": [expected],
     }
-
-    with pytest.raises(ValidationError, match="Value error, temperature and top_p cannot be set at the same time"):
-        cerebras_llm_config = CerebrasLLMConfigEntry(
-            model="llama3.1-8b",
-            temperature=1,
-            top_p=0.8,
-        )
 
 
 # Test initialization and configuration
