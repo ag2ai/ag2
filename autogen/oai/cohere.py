@@ -260,7 +260,7 @@ class CohereClient:
         cohere_params["messages"] = messages
 
         if "tools" in params:
-            cohere_tool_names = set([tool["function"]["name"] for tool in params["tools"]])
+            cohere_tool_names = {tool["function"]["name"] for tool in params["tools"]}
             cohere_params["tools"] = params["tools"]
 
         # Strip out name
@@ -285,9 +285,9 @@ class CohereClient:
                     ) not in cohere_tool_names:
                         message["role"] = "assistant"
                         message["content"] = f"{message.pop('tool_plan', '')}{str(message['tool_calls'])}"
-                        tool_calls_modified_ids = tool_calls_modified_ids.union(
-                            set([tool_call.get("id") for tool_call in message["tool_calls"]])
-                        )
+                        tool_calls_modified_ids = tool_calls_modified_ids.union({
+                            tool_call.get("id") for tool_call in message["tool_calls"]
+                        })
                         del message["tool_calls"]
                         break
 

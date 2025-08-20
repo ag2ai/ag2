@@ -58,10 +58,10 @@ class SimpleTextBrowser:
         self.start_page: str = start_page if start_page else "about:blank"
         self.viewport_size = viewport_size  # Applies only to the standard uri types
         self.downloads_folder = downloads_folder
-        self.history: list[str] = list()
+        self.history: list[str] = []
         self.page_title: str | None = None
         self.viewport_current_page = 0
-        self.viewport_pages: list[tuple[int, int]] = list()
+        self.viewport_pages: list[tuple[int, int]] = []
         self.set_address(self.start_page)
         self.bing_base_url = bing_base_url
         self.bing_api_key = bing_api_key
@@ -182,7 +182,7 @@ class SimpleTextBrowser:
     def _bing_search(self, query: str) -> None:
         results = self._bing_api_call(query)
 
-        web_snippets: list[str] = list()
+        web_snippets: list[str] = []
         idx = 0
         for page in results["webPages"]["value"]:
             idx += 1
@@ -194,7 +194,7 @@ class SimpleTextBrowser:
                         f"{idx}. [{dl['name']}]({dl['url']})\n{dl.get('snippet', '')}"  # type: ignore[index]
                     )
 
-        news_snippets = list()
+        news_snippets = []
         if "news" in results:
             for page in results["news"]["value"]:
                 idx += 1

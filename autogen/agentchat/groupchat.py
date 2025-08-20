@@ -1000,7 +1000,7 @@ class GroupChat:
             message_content = message_content["content"]
         message_content = content_str(message_content)
 
-        mentions = dict()
+        mentions = {}
         for agent in agents:
             # Finds agent mentions, taking word boundaries into account,
             # accommodates escaping underscores and underscores as spaces
