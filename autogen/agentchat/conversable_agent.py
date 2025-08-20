@@ -496,7 +496,7 @@ class ConversableAgent(LLMAgent):
         else:
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
 
-        return LLMConfig(**llm_config)
+        return llm_config
 
     @classmethod
     def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:
