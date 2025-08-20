@@ -483,11 +483,6 @@ class ConversableAgent(LLMAgent):
     def _validate_llm_config(
         cls, llm_config: LLMConfig | dict[str, Any] | Literal[False] | None
     ) -> LLMConfig | Literal[False]:
-        # if not(llm_config in (None, False) or isinstance(llm_config, [dict, LLMConfig])):
-        #     raise ValueError(
-        #         "llm_config must be a dict or False or None."
-        #     )
-
         if llm_config is None:
             llm_config = LLMConfig.get_current_llm_config()
             if llm_config is None:
@@ -501,7 +496,7 @@ class ConversableAgent(LLMAgent):
         else:
             raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
 
-        return llm_config
+        return LLMConfig(**llm_config)
 
     @classmethod
     def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:
