@@ -92,7 +92,7 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==6.32.0",
+    "protobuf==6.31.1",
     "chromadb==1.0.17",
     "sentence_transformers<=5.1.0",
     "pypdf",
