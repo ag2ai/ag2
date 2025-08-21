@@ -437,7 +437,7 @@ class MongoDBAtlasVectorDB(VectorDB):
         if include is None:
             include_fields = {"_id": 1, "content": 1, "metadata": 1}
         else:
-            include_fields = {k: 1 for k in set(include).union({"_id"})}
+            include_fields = dict.fromkeys(set(include).union({"_id"}), 1)
         collection = self.get_collection(collection_name)
         if ids is not None:
             docs = collection.find({"_id": {"$in": ids}}, include_fields)

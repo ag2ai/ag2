@@ -7,18 +7,13 @@
 import base64
 import json
 import os
-import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
 
+from typing_extensions import Self
+
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from ..base import CodeBlock, CodeExecutor, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 from ..utils import silence_pip

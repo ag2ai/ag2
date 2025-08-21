@@ -14,7 +14,7 @@ class ToolsCapability:
     """
 
     def __init__(self, tool_list: list[Tool]):
-        self.tools = [tool for tool in tool_list]
+        self.tools = list(tool_list)
 
     def add_to_agent(self, agent: ConversableAgent):
         """Add tools to the given agent."""

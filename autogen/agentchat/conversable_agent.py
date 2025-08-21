@@ -379,9 +379,7 @@ class ConversableAgent(LLMAgent):
         if not self.llm_config:
             return
 
-        if any([
-            entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)
-        ]):
+        if any(entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
 
     def _get_display_name(self):
@@ -485,11 +483,6 @@ class ConversableAgent(LLMAgent):
     def _validate_llm_config(
         cls, llm_config: LLMConfig | dict[str, Any] | Literal[False] | None
     ) -> LLMConfig | Literal[False]:
-        # if not(llm_config in (None, False) or isinstance(llm_config, [dict, LLMConfig])):
-        #     raise ValueError(
-        #         "llm_config must be a dict or False or None."
-        #     )
-
         if llm_config is None:
             llm_config = LLMConfig.get_current_llm_config()
             if llm_config is None:
@@ -3473,7 +3466,7 @@ class ConversableAgent(LLMAgent):
     def can_execute_function(self, name: list[str] | str) -> bool:
         """Whether the agent can execute the function."""
         names = name if isinstance(name, list) else [name]
-        return all([n in self._function_map for n in names])
+        return all(n in self._function_map for n in names)
 
     @property
     def function_map(self) -> dict[str, Callable[..., Any]]:
@@ -3727,7 +3720,7 @@ class ConversableAgent(LLMAgent):
             """
             tool = self._create_tool_if_needed(func_or_tool, name, description)
             chat_context = ChatContext(self)
-            chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
+            chat_context_params = dict.fromkeys(tool._chat_context_param_names, chat_context)
 
             self.register_function(
                 {tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)},

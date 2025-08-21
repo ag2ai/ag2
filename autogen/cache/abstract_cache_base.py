@@ -4,16 +4,12 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import sys
 from types import TracebackType
 from typing import Any, Protocol
 
-from ..doc_utils import export_module
+from typing_extensions import Self
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from ..doc_utils import export_module
 
 
 @export_module("autogen.cache")

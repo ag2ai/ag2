@@ -14,13 +14,9 @@ import subprocess
 import sys
 from types import TracebackType
 
+from typing_extensions import Self
+
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .import_utils import require_jupyter_kernel_gateway_installed
 from .jupyter_client import JupyterClient
