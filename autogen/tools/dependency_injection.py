@@ -140,10 +140,7 @@ def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iter
 
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
-    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
-    if sys.version_info >= (3, 9) and isinstance(func, staticmethod) and hasattr(func, "__func__"):
-        func = _fix_staticmethod(func)
-
+    func = _fix_staticmethod(func)
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     remove_params(func, sig, params_to_remove)
@@ -242,9 +239,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
         The modified function with injected dependencies and updated signature.
     """
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
-    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
-        f = _fix_staticmethod(f)
-
+    f = _fix_staticmethod(f)
     f = _string_metadata_to_description_field(f)
     f = _set_return_annotation_to_any(f)
     f = inject(f)

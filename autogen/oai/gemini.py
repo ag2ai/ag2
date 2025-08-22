@@ -256,9 +256,9 @@ class GeminiClient:
             )
 
         http_options = types.HttpOptions()
-        if self.proxy:
-            http_options.client_args = {"proxy": self.proxy}
-            http_options.async_client_args = {"proxy": self.proxy}
+        if proxy := params.get("proxy", self.proxy):
+            http_options.client_args = {"proxy": proxy}
+            http_options.async_client_args = {"proxy": proxy}
 
         if self.api_version:
             http_options.api_version = self.api_version
@@ -385,9 +385,7 @@ class GeminiClient:
                             function={
                                 "name": fn_call.name,
                                 "arguments": (
-                                    json.dumps({key: val for key, val in fn_call.args.items()})
-                                    if fn_call.args is not None
-                                    else ""
+                                    json.dumps(dict(fn_call.args.items())) if fn_call.args is not None else ""
                                 ),
                             },
                             type="function",
@@ -857,10 +855,10 @@ class GeminiClient:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
-        if isinstance(safety_settings, list) and all([
+        if isinstance(safety_settings, list) and all(
             isinstance(safety_setting, dict) and not isinstance(safety_setting, VertexAISafetySetting)
             for safety_setting in safety_settings
-        ]):
+        ):
             vertexai_safety_settings = []
             for safety_setting in safety_settings:
                 if safety_setting["category"] not in VertexAIHarmCategory.__members__:

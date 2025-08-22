@@ -139,7 +139,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> str | None | dict[str, Any]:
         return "description is not in front matter"
 
     # Make sure tags is a list of strings
-    if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
+    if front_matter["tags"] is not None and not all(isinstance(tag, str) for tag in front_matter["tags"]):
         return "tags must be a list of strings"
 
     # Make sure description is a string
