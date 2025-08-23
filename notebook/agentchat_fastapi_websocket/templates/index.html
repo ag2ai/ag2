@@ -45,7 +45,7 @@
         .typing-dot { animation: pulse-dot 1.4s infinite ease-in-out; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        
+
         /* Custom scrollbar for messages */
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
@@ -60,7 +60,7 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: rgba(0, 0, 0, 0.5);
         }
-        
+
         /* Dark mode scrollbar */
         .dark .custom-scrollbar::-webkit-scrollbar-track {
             background: rgba(255, 255, 255, 0.1);
@@ -221,10 +221,10 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search Term:</label>
-                        <input type="text" id="advancedSearchTerm" placeholder="Enter search term..." 
+                        <input type="text" id="advancedSearchTerm" placeholder="Enter search term..."
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     </div>
-                    
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message Type:</label>
@@ -236,7 +236,7 @@
                                 <option value="error">Errors only</option>
                             </select>
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Source:</label>
                             <select id="advancedSearchSource" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500">
@@ -246,7 +246,7 @@
                             </select>
                         </div>
                     </div>
-                    
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range:</label>
                         <div class="grid grid-cols-2 gap-2">
@@ -254,13 +254,13 @@
                             <input type="datetime-local" id="searchEndDate" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
                         </div>
                     </div>
-                    
+
                     <div class="flex gap-2 pt-4">
                         <button onclick="performAdvancedSearch()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">Search</button>
                         <button onclick="clearAdvancedSearch()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Clear</button>
                         <button onclick="hideAdvancedSearch()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancel</button>
                     </div>
-                    
+
                     <div id="advancedSearchResults" class="hidden max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md"></div>
                 </div>
             </div>
@@ -302,7 +302,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="space-y-2">
                         <label class="flex items-center">
                             <input type="checkbox" id="exportApplyFilters" class="mr-2">
@@ -313,7 +313,7 @@
                             <span class="text-gray-700 dark:text-gray-300">Include statistics</span>
                         </label>
                     </div>
-                    
+
                     <div class="flex gap-2 pt-4">
                         <button onclick="performExport()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors disabled:bg-gray-400" id="exportButton" disabled>Export</button>
                         <button onclick="hideExportModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancel</button>
@@ -350,7 +350,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Main Layout -->
         <div class="flex flex-1 min-h-0">
             <!-- Left Panel - Controls -->
@@ -361,7 +361,7 @@
                         <span id="leftCollapseIcon">◀</span>
                     </button>
                 </div>
-                
+
                 <div class="flex-1 overflow-y-auto custom-scrollbar p-5">
                     <!-- Create New Chat Section -->
                     <div class="mb-6">
@@ -372,12 +372,12 @@
                             </div>
                             <span class="collapse-indicator text-gray-500">▼</span>
                         </div>
-                        
+
                         <div class="section-content mt-3 space-y-3">
                             <button id="newChatBtn" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-2 px-4 rounded transition-all transform hover:-translate-y-0.5 hover:shadow-lg">Create New Chat</button>
-                            
+
                             <div id="chatCreationStatus" class="hidden p-3 rounded-lg border"></div>
-                            
+
                             <div id="recentChats" class="hidden">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recent Chat IDs:</label>
                                 <div id="chatHistory" class="space-y-2"></div>
@@ -394,17 +394,17 @@
                             </div>
                             <span class="collapse-indicator text-gray-500">▼</span>
                         </div>
-                        
+
                         <div class="section-content mt-3 space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Client UUID:</label>
                                 <div class="flex gap-2">
-                                    <input id="clientId" value="3b3c6993-ccdb-47d2-a568-d0f7e91d3f2f" placeholder="Enter your client UUID" 
+                                    <input id="clientId" value="3b3c6993-ccdb-47d2-a568-d0f7e91d3f2f" placeholder="Enter your client UUID"
                                            class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                                     <button class="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors" onclick="copyClientId()" title="Copy UUID">📋</button>
                                 </div>
                             </div>
-                            
+
                             <div id="status" class="p-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700">
                                 <div class="flex items-center gap-2">
                                     <span class="status-icon">❌</span>
@@ -415,7 +415,7 @@
                                     <span>Reconnecting in <span id="reconnectTimer">5</span>s...</span>
                                 </div>
                             </div>
-                            
+
                             <div class="flex gap-2">
                                 <button id="connectBtn" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-2 px-4 rounded transition-all">Connect</button>
                                 <button id="disconnectBtn" class="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2 px-4 rounded transition-all disabled:bg-gray-400" disabled>Disconnect</button>
@@ -432,7 +432,7 @@
                             </div>
                             <span class="collapse-indicator text-gray-500">▼</span>
                         </div>
-                        
+
                         <div class="section-content mt-3 space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quick JSON Templates:</label>
@@ -441,11 +441,11 @@
                                     <button class="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-2 px-3 rounded text-sm transition-all" onclick="fillManualVerification()">User Input</button>
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">JSON Message:</label>
                                 <div class="relative">
-                                    <textarea id="jsonInput" placeholder='{"type": "start","task": "Your Query Here!","files": []}' 
+                                    <textarea id="jsonInput" placeholder='{"type": "start","task": "Your Query Here!","files": []}'
                                               class="w-full h-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y">{"type": "start","task": "Your Query Here!","files": []}</textarea>
                                     <div class="absolute top-2 right-2 flex gap-1">
                                         <button class="w-7 h-7 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex items-center justify-center" onclick="autoSaveDraft()" title="Save draft">💾</button>
@@ -453,7 +453,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="flex gap-2">
                                 <button id="sendBtn" class="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-2 px-4 rounded transition-all disabled:bg-gray-400" disabled>Send Message</button>
                                 <button id="formatBtn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Format JSON</button>
@@ -470,14 +470,14 @@
                             </div>
                             <span class="collapse-indicator text-gray-500">▼</span>
                         </div>
-                        
+
                         <div class="section-content mt-3 space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search messages:</label>
-                                <input id="searchInput" type="text" placeholder="Search content..." 
+                                <input id="searchInput" type="text" placeholder="Search content..."
                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                             </div>
-                            
+
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filter by type:</label>
                                 <select id="filterType" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500">
@@ -488,7 +488,7 @@
                                     <option value="error">Errors only</option>
                                 </select>
                             </div>
-                            
+
                             <div class="flex gap-2">
                                 <button id="clearSearchBtn" class="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-3 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Clear</button>
                                 <button id="advancedSearchBtn" class="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-3 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Advanced</button>
@@ -516,7 +516,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <div id="typingIndicator" class="hidden flex items-center gap-3 p-3 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm">
                     <div class="flex gap-1">
                         <span class="w-2 h-2 bg-blue-500 rounded-full typing-dot"></span>
@@ -525,7 +525,7 @@
                     </div>
                     <span>System is processing...</span>
                 </div>
-                
+
                 <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-gray-900 text-gray-100 font-mono text-sm" id="messages">
                     <div class="flex flex-col items-center justify-center h-full text-center text-gray-500" id="emptyState">
                         <div class="text-5xl mb-4 opacity-50">💬</div>
@@ -533,7 +533,7 @@
                         <p class="text-gray-500">Connect and start sending messages to see them here</p>
                     </div>
                 </div>
-                
+
                 <!-- Stats -->
                 <div class="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 flex justify-around flex-shrink-0">
                     <div class="text-center">
@@ -606,31 +606,31 @@
         function showToast(message, type = 'info', duration = 3000) {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
-            
+
             const typeClasses = {
                 'success': 'bg-green-100 border-green-300 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-300',
                 'error': 'bg-red-100 border-red-300 text-red-800 dark:bg-red-900 dark:border-red-700 dark:text-red-300',
                 'warning': 'bg-yellow-100 border-yellow-300 text-yellow-800 dark:bg-yellow-900 dark:border-yellow-700 dark:text-yellow-300',
                 'info': 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-300'
             };
-            
+
             const icons = {
                 'success': '✅',
                 'error': '❌',
                 'warning': '⚠️',
                 'info': 'ℹ️'
             };
-            
+
             toast.className = `toast-show flex items-center gap-3 p-3 border-l-4 rounded-lg shadow-lg min-w-80 max-w-md pointer-events-auto ${typeClasses[type] || typeClasses.info}`;
-            
+
             toast.innerHTML = `
                 <span class="text-lg">${icons[type] || 'ℹ️'}</span>
                 <span class="flex-1">${message}</span>
                 <button class="text-lg hover:bg-black hover:bg-opacity-10 rounded-full w-6 h-6 flex items-center justify-center transition-colors" onclick="closeToast(this.parentElement)">&times;</button>
             `;
-            
+
             container.appendChild(toast);
-            
+
             setTimeout(() => {
                 if (toast.parentElement) {
                     closeToast(toast);
@@ -682,14 +682,14 @@
             const currentIndex = sizes.indexOf(currentFontSize);
             currentFontSize = sizes[(currentIndex + 1) % sizes.length];
             localStorage.setItem('fontSize', currentFontSize);
-            
+
             // Apply font size classes to messages container
             const messages = document.getElementById('messages');
             messages.classList.remove('text-xs', 'text-sm', 'text-base');
             if (currentFontSize === 'small') messages.classList.add('text-xs');
             else if (currentFontSize === 'medium') messages.classList.add('text-sm');
             else messages.classList.add('text-base');
-            
+
             showToast(`Font size: ${currentFontSize}`, 'info', 2000);
         }
 
@@ -720,7 +720,7 @@
             updatePerformanceMetrics();
             const modal = document.getElementById('performanceModal');
             const content = document.getElementById('performanceContent');
-            
+
             content.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
@@ -740,7 +740,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="bg-green-50 dark:bg-green-900 p-4 rounded-lg">
                         <h4 class="font-semibold text-green-800 dark:text-green-200 mb-2">Message Stats</h4>
                         <div class="space-y-2">
@@ -758,7 +758,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="bg-purple-50 dark:bg-purple-900 p-4 rounded-lg">
                         <h4 class="font-semibold text-purple-800 dark:text-purple-200 mb-2">Memory Usage</h4>
                         <div class="space-y-2">
@@ -776,7 +776,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="bg-orange-50 dark:bg-orange-900 p-4 rounded-lg">
                         <h4 class="font-semibold text-orange-800 dark:text-orange-200 mb-2">Session Info</h4>
                         <div class="space-y-2">
@@ -795,17 +795,17 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <h4 class="font-semibold text-gray-800 dark:text-gray-200 mb-2">Recent Activity</h4>
                     <div class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                        ${performanceMetrics.connectionEvents.slice(-5).map(event => 
+                        ${performanceMetrics.connectionEvents.slice(-5).map(event =>
                             `<div>• ${event.time}: ${event.event}</div>`
                         ).join('')}
                     </div>
                 </div>
             `;
-            
+
             modal.classList.remove('hidden');
         }
 
@@ -816,12 +816,12 @@
         // WebSocket ping/pong functionality
         function startPing() {
             if (pingInterval) clearInterval(pingInterval);
-            
+
             pingInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     const pingTime = Date.now();
                     ws.send(JSON.stringify({ type: 'ping', timestamp: pingTime }));
-                    
+
                     // Check if we haven't received a pong in a while
                     if (lastPongTime && Date.now() - lastPongTime > 10000) {
                         connectionQuality = Math.max(0, connectionQuality - 10);
@@ -841,13 +841,13 @@
             const now = Date.now();
             lastPongTime = now;
             const latency = now - timestamp;
-            
+
             performanceMetrics.latencyHistory.push(latency);
-            
+
             // Update connection quality based on latency
             if (latency < 100) connectionQuality = Math.min(100, connectionQuality + 1);
             else if (latency > 500) connectionQuality = Math.max(0, connectionQuality - 5);
-            
+
             document.getElementById('qualityIndicator').textContent = connectionQuality + '%';
         }
 
@@ -885,7 +885,7 @@
 
         function selectExportFormat(format) {
             selectedExportFormat = format;
-            
+
             // Update UI
             document.querySelectorAll('.export-format-card').forEach(card => {
                 card.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900');
@@ -902,11 +902,11 @@
             const panel = document.getElementById(side === 'left' ? 'leftPanel' : 'rightPanel');
             const collapseIcon = document.getElementById(side === 'left' ? 'leftCollapseIcon' : 'rightCollapseIcon');
             const toggleButton = document.getElementById(side === 'left' ? 'leftPanelToggle' : 'rightPanelToggle');
-            
+
             if (!panel) return;
-            
+
             const isCollapsed = side === 'left' ? leftPanelCollapsed : rightPanelCollapsed;
-            
+
             if (isCollapsed) {
                 // Expand panel
                 panel.classList.remove('w-0', 'overflow-hidden');
@@ -940,7 +940,7 @@
         function toggleSection(titleElement) {
             const content = titleElement.parentElement.querySelector('.section-content');
             const indicator = titleElement.querySelector('.collapse-indicator');
-            
+
             if (content && indicator) {
                 const isHidden = content.classList.contains('hidden');
                 if (isHidden) {
@@ -961,9 +961,9 @@
                 'connecting': 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900 dark:border-yellow-700',
                 'disconnected': 'border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700'
             };
-            
+
             status.className = `p-3 rounded-lg border ${statusClasses[type] || statusClasses.disconnected}`;
-            
+
             const statusIndicator = status.querySelector('.status-indicator') || status.querySelector('div');
             if (statusIndicator) {
                 const textColors = {
@@ -979,11 +979,11 @@
             const connectBtn = document.getElementById("connectBtn");
             const disconnectBtn = document.getElementById("disconnectBtn");
             const sendBtn = document.getElementById("sendBtn");
-            
+
             connectBtn.disabled = !connectEnabled;
             disconnectBtn.disabled = !disconnectEnabled;
             sendBtn.disabled = !sendEnabled;
-            
+
             // Update button classes based on state
             if (connectEnabled) {
                 connectBtn.classList.remove('bg-gray-400');
@@ -992,7 +992,7 @@
                 connectBtn.classList.add('bg-gray-400');
                 connectBtn.classList.remove('bg-gradient-to-r', 'from-green-500', 'to-green-600', 'hover:from-green-600', 'hover:to-green-700');
             }
-            
+
             if (sendEnabled) {
                 sendBtn.classList.remove('bg-gray-400');
                 sendBtn.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-600', 'hover:from-blue-600', 'hover:to-blue-700');
@@ -1019,16 +1019,16 @@
 
         function updateUptime() {
             if (!connectionStartTime) return;
-            
+
             const elapsed = Date.now() - connectionStartTime;
             const seconds = Math.floor(elapsed / 1000) % 60;
             const minutes = Math.floor(elapsed / 60000) % 60;
             const hours = Math.floor(elapsed / 3600000);
-            
-            const uptime = hours > 0 
+
+            const uptime = hours > 0
                 ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
                 : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
+
             document.getElementById('connectionTime').textContent = uptime;
         }
 
@@ -1071,13 +1071,13 @@
             ws.onmessage = function(event) {
                 try {
                     const data = JSON.parse(event.data);
-                    
+
                     // Handle ping/pong
                     if (data.type === 'pong') {
                         handlePong(data.timestamp);
                         return;
                     }
-                    
+
                     receivedCount++;
                     performanceMetrics.messageHistory.push(Date.now());
                     updateStats();
@@ -1139,7 +1139,7 @@
             try {
                 const parsed = JSON.parse(raw);
                 const jsonText = JSON.stringify(parsed);
-                
+
                 ws.send(jsonText);
                 sentCount++;
                 performanceMetrics.messageHistory.push(Date.now());
@@ -1167,13 +1167,13 @@
         function showMessage(type, data, className) {
             const messages = document.getElementById("messages");
             const timestamp = new Date().toLocaleTimeString();
-            
+
             // Remove empty state if it exists
             const emptyState = document.getElementById('emptyState');
             if (emptyState) {
                 emptyState.remove();
             }
-            
+
             let messageData = data;
             if (typeof data === 'string') {
                 try {
@@ -1182,34 +1182,34 @@
                     // Keep as string if not valid JSON
                 }
             }
-            
+
             const div = document.createElement("div");
             div.className = "mb-6 p-4 rounded-xl border-2 shadow-lg";
-            
+
             // Determine source, name, and icon with updated mappings
             let source = type || 'System';
             let displayName = source;
             let icon = '⚙️';
             let messageContent = '';
-            
+
             if (messageData && messageData.data && messageData.data.source) {
                 source = messageData.data.source;
                 const sourceMap = {
                     'user': { name: 'You', icon: '👤' },
                     'AgentChat': { name: 'AGENT Assistant', icon: '🤖' },
                 };
-                
+
                 if (sourceMap[source]) {
                     displayName = sourceMap[source].name;
                     icon = sourceMap[source].icon;
                 }
-                
+
                 // Extract display name from content if available
                 const contentName = extractDisplayName(messageData, displayName);
                 if (contentName && contentName !== displayName) {
                     displayName = `${displayName} (${contentName})`;
                 }
-                
+
                 // Extract actual content from the nested structure
                 if (messageData.data.content) {
                     messageContent = extractMessageContent(messageData.data.content);
@@ -1219,7 +1219,7 @@
             } else {
                 messageContent = messageData;
             }
-            
+
             // Apply message-specific styling based on type
             if (className.includes('user-message')) {
                 div.classList.add('bg-gradient-to-br', 'from-blue-900', 'to-blue-800', 'border-blue-400', 'ml-8', 'text-blue-50');
@@ -1230,13 +1230,13 @@
             } else {
                 div.classList.add('bg-gradient-to-br', 'from-purple-900', 'to-purple-800', 'border-purple-400', 'text-purple-50');
             }
-            
+
             // Create formatted content
             const formattedContent = formatMessageContent(messageContent);
-            
+
             // Generate unique ID for this message
             const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            
+
             div.innerHTML = `
                 <!-- Name Header -->
                 <div class="text-center mb-4 pb-2 border-b border-opacity-30 border-gray-300">
@@ -1246,12 +1246,12 @@
                     </div>
                     <span class="text-xs opacity-75">${timestamp}</span>
                 </div>
-                
+
                 <!-- Message Content -->
                 <div class="message-content space-y-3">
                     ${formattedContent}
                 </div>
-                
+
                 <!-- Action Bar -->
                 <div class="mt-4 pt-3 border-t border-opacity-30 border-gray-300 flex justify-end">
                     <button class="copy-btn text-sm px-3 py-1 rounded-full bg-black bg-opacity-20 hover:bg-opacity-30 transition-colors flex items-center gap-2" data-message-id="${messageId}" title="Copy message">
@@ -1259,13 +1259,13 @@
                     </button>
                 </div>
             `;
-            
+
             // Store the message data as a data attribute for copying
             div.setAttribute('data-message', JSON.stringify(messageData));
             div.setAttribute('id', messageId);
-            
+
             messages.appendChild(div);
-            
+
             // Add event listener for copy button
             const copyBtn = div.querySelector('.copy-btn');
             if (copyBtn) {
@@ -1284,12 +1284,12 @@
                     }
                 });
             });
-            
+
             // Auto-scroll if enabled
             if (autoScroll) {
                 messages.scrollTop = messages.scrollHeight;
             }
-            
+
             // Store in allMessages array for export
             allMessages.push({
                 timestamp: Date.now(),
@@ -1308,7 +1308,7 @@
                     return content;
                 }
             }
-            
+
             // If it's an object, check for common content fields
             if (content && typeof content === 'object') {
                 // Check for nested content field first
@@ -1333,7 +1333,7 @@
                     }
                 }
             }
-            
+
             return content;
         }
 
@@ -1355,12 +1355,12 @@
         // Format message content based on type with markdown support
         function formatMessageContent(content) {
             if (!content) return '<div class="text-gray-400 italic">No content</div>';
-            
+
             // If it's a simple string, check for markdown and format accordingly
             if (typeof content === 'string') {
                 return formatMarkdownContent(content);
             }
-            
+
             // If it's an object, format as a table
             if (typeof content === 'object' && content !== null) {
                 if (Array.isArray(content)) {
@@ -1369,7 +1369,7 @@
                     return formatObjectAsTable(content);
                 }
             }
-            
+
             return `<div class="text-base">${escapeHtml(String(content))}</div>`;
         }
 
@@ -1377,36 +1377,36 @@
         function formatMarkdownContent(text) {
             // Handle code blocks first with a much simpler approach
             let html = text;
-            
+
             // Find and replace code blocks directly without placeholders
             html = html.replace(/```(\w+)?\s*\n?([\s\S]*?)```/g, (match, language, code) => {
                 const lang = language || 'text';
                 const codeId = 'code_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 return createCodeBlockHtml(code.trim(), lang.toLowerCase(), codeId);
             });
-            
+
             // Handle inline code (`code`)
             html = html.replace(/`([^`]+)`/g, '<code class="px-2 py-1 bg-black bg-opacity-30 rounded text-sm font-mono">$1</code>');
-            
+
             // Handle bold (**text** or __text__)
             html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
             html = html.replace(/__(.*?)__/g, '<strong class="font-bold">$1</strong>');
-            
+
             // Handle italic (*text* or _text_)
             html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
             html = html.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
-            
+
             // Handle headers (# ## ###)
             html = html.replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>');
             html = html.replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>');
             html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
-            
+
             // Handle links [text](url)
             html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-300 hover:text-blue-200 underline" target="_blank">$1</a>');
-            
+
             // Handle line breaks LAST
             html = html.replace(/\n/g, '<br>');
-            
+
             return `<div class="text-base leading-relaxed">${html}</div>`;
         }
 
@@ -1415,7 +1415,7 @@
             const languageLabels = {
                 'python': 'Python',
                 'javascript': 'JavaScript',
-                'js': 'JavaScript', 
+                'js': 'JavaScript',
                 'typescript': 'TypeScript',
                 'ts': 'TypeScript',
                 'html': 'HTML',
@@ -1432,14 +1432,14 @@
                 'md': 'Markdown',
                 'text': 'Text'
             };
-            
+
             const displayLang = languageLabels[language] || language.toUpperCase();
             const languageIcon = getLanguageIcon(language);
-            
+
             // Store the code in a global map for copy functionality
             window.codeMap = window.codeMap || {};
             window.codeMap[codeId] = code;
-            
+
             return `<div class="code-block-container my-6 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
                 <div class="relative">
                 <code class="language-${language}">${escapeHtml(code)}</code>
@@ -1483,7 +1483,7 @@
                 'md': '📝',
                 'text': '📄'
             };
-            
+
             return icons[language] || '📄';
         }
 
@@ -1492,11 +1492,11 @@
             const indent = level * 20;
             let html = '<div class="overflow-x-auto">';
             html += '<table class="w-full border border-opacity-30 border-gray-300 rounded-lg overflow-hidden">';
-            
+
             for (const [key, value] of Object.entries(obj)) {
                 html += '<tr class="border-b border-opacity-20 border-gray-300">';
                 html += `<td class="px-4 py-2 font-semibold bg-black bg-opacity-20 text-sm" style="margin-left: ${indent}px">${escapeHtml(key)}</td>`;
-                
+
                 if (typeof value === 'object' && value !== null) {
                     if (Array.isArray(value)) {
                         html += `<td class="px-4 py-2">${formatArrayAsCards(value, level + 1)}</td>`;
@@ -1509,7 +1509,7 @@
                 }
                 html += '</tr>';
             }
-            
+
             html += '</table></div>';
             return html;
         }
@@ -1519,22 +1519,22 @@
             if (arr.length === 0) {
                 return '<div class="text-gray-400 italic text-sm">Empty array</div>';
             }
-            
+
             let html = '<div class="space-y-2">';
-            
+
             arr.forEach((item, index) => {
                 html += `<div class="bg-black bg-opacity-10 rounded-lg p-3 border border-opacity-20 border-gray-300">`;
                 html += `<div class="text-xs font-semibold mb-2 text-gray-300">Item ${index + 1}</div>`;
-                
+
                 if (typeof item === 'object' && item !== null) {
                     html += formatObjectAsTable(item, level + 1);
                 } else {
                     html += `<div class="text-sm">${escapeHtml(String(item))}</div>`;
                 }
-                
+
                 html += '</div>';
             });
-            
+
             html += '</div>';
             return html;
         }
@@ -1562,7 +1562,7 @@
         function copyCodeFromMap(codeId) {
             const code = window.codeMap[codeId];
             if (!code) return;
-            
+
             navigator.clipboard.writeText(code).then(() => {
                 showToast('Code copied to clipboard', 'success', 2000);
             }).catch(err => {
@@ -1576,7 +1576,7 @@
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = codeData;
             const actualCode = tempDiv.textContent || tempDiv.innerText || '';
-            
+
             navigator.clipboard.writeText(actualCode).then(() => {
                 showToast('Code copied to clipboard', 'success', 2000);
             }).catch(err => {
@@ -1597,13 +1597,13 @@
                 });
                 return;
             }
-            
+
             // Fallback: try to get from DOM element
             const codeElement = document.getElementById(codeId);
             if (!codeElement) return;
-            
+
             const codeText = codeElement.textContent;
-            
+
             navigator.clipboard.writeText(codeText).then(() => {
                 showToast('Code copied to clipboard', 'success', 2000);
             }).catch(err => {
@@ -1615,16 +1615,16 @@
         function copyMessage(button) {
             const messageDiv = button.closest('.mb-6');
             const messageData = messageDiv.getAttribute('data-message');
-            
+
             let textToCopy = '';
-            
+
             try {
                 const parsed = JSON.parse(messageData);
                 textToCopy = JSON.stringify(parsed, null, 2);
             } catch (e) {
                 textToCopy = messageData;
             }
-            
+
             navigator.clipboard.writeText(textToCopy).then(() => {
                 showToast('Message copied to clipboard', 'success', 2000);
             }).catch(err => {
@@ -1636,18 +1636,18 @@
         function copyMessageById(messageId) {
             const messageDiv = document.getElementById(messageId);
             if (!messageDiv) return;
-            
+
             const messageData = messageDiv.getAttribute('data-message');
-            
+
             let textToCopy = '';
-            
+
             try {
                 const parsed = JSON.parse(messageData);
                 textToCopy = JSON.stringify(parsed, null, 2);
             } catch (e) {
                 textToCopy = messageData;
             }
-            
+
             navigator.clipboard.writeText(textToCopy).then(() => {
                 showToast('Message copied to clipboard', 'success', 2000);
             }).catch(err => {
@@ -1704,7 +1704,7 @@
         async function createNewChat() {
             const statusDiv = document.getElementById("chatCreationStatus");
             const newChatBtn = document.getElementById("newChatBtn");
-            
+
             statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300";
             statusDiv.classList.remove('hidden');
             statusDiv.innerHTML = '<div class="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full spinner"></div> Creating new chat...';
@@ -1725,16 +1725,16 @@
 
                 const data = await response.json();
                 const chatId = data.chat_id;
-                
+
                 currentChatId = chatId;
                 document.getElementById("clientId").value = chatId;
-                
+
                 statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900 dark:border-green-700 text-green-700 dark:text-green-300";
                 statusDiv.innerHTML = `✅ New chat created successfully! Chat ID: <strong>${chatId}</strong>`;
-                
+
                 addToChatHistory(chatId);
                 showToast(`New chat created: ${chatId}`, 'success');
-                
+
                 setTimeout(() => {
                     statusDiv.classList.add('hidden');
                 }, 3000);
@@ -1744,7 +1744,7 @@
                 statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700 text-red-700 dark:text-red-300";
                 statusDiv.innerHTML = `❌ Failed to create chat: ${error.message}`;
                 showToast(`Failed to create chat: ${error.message}`, 'error');
-                
+
                 setTimeout(() => {
                     statusDiv.classList.add('hidden');
                 }, 5000);
@@ -1757,7 +1757,7 @@
             chatHistory = chatHistory.filter(id => id !== chatId);
             chatHistory.unshift(chatId);
             chatHistory = chatHistory.slice(0, 5);
-            
+
             localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
             displayChatHistory();
         }
@@ -1765,17 +1765,17 @@
         function displayChatHistory() {
             const historyContainer = document.getElementById("recentChats");
             const historyDiv = document.getElementById("chatHistory");
-            
+
             if (!historyContainer || !historyDiv) return;
-            
+
             if (chatHistory.length === 0) {
                 historyContainer.classList.add('hidden');
                 return;
             }
-            
+
             historyContainer.classList.remove('hidden');
             historyDiv.innerHTML = "";
-            
+
             chatHistory.forEach(chatId => {
                 const chatItem = document.createElement("div");
                 chatItem.className = "flex items-center justify-between p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded font-mono text-xs transition-colors hover:bg-gray-50 dark:hover:bg-gray-600";
@@ -1842,14 +1842,14 @@
         function performBasicSearch() {
             const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
             const filterType = document.getElementById('filterType')?.value || 'all';
-            
+
             const messageElements = document.querySelectorAll('#messages > div:not(#emptyState)');
             let visibleCount = 0;
-            
+
             messageElements.forEach(element => {
                 const messageText = element.textContent.toLowerCase();
                 const matchesSearch = !searchTerm || messageText.includes(searchTerm);
-                
+
                 let matchesFilter = true;
                 if (filterType !== 'all') {
                     switch (filterType) {
@@ -1867,12 +1867,12 @@
                             break;
                     }
                 }
-                
+
                 const isVisible = matchesSearch && matchesFilter;
                 element.classList.toggle('hidden', !isVisible);
                 if (isVisible) visibleCount++;
             });
-            
+
             if (searchTerm && visibleCount >= 0) {
                 showToast(`Found ${visibleCount} messages`, 'info', 2000);
             }
@@ -1900,7 +1900,7 @@
             const timestamp = new Date().toISOString().split('T')[0];
             const filename = `chat_history_${timestamp}.${selectedExportFormat}`;
             downloadFile(content, filename, getContentType(selectedExportFormat));
-            
+
             showToast(`Chat history exported as ${selectedExportFormat.toUpperCase()}`, 'success');
             hideExportModal();
         }
@@ -1939,7 +1939,7 @@
                     }
                     if (!e.ctrlKey) return;
                 }
-                
+
                 if (e.ctrlKey) {
                     switch (e.key) {
                         case 'Enter':
@@ -1976,7 +1976,7 @@
                             togglePanel('right');
                             break;
                     }
-                    
+
                     // Advanced shortcuts with Alt
                     if (e.altKey) {
                         switch (e.key) {
@@ -1998,7 +1998,7 @@
                         }
                     }
                 }
-                
+
                 if (e.key === 'Escape') {
                     hideShortcuts();
                     hideAdvancedSearch();
@@ -2012,7 +2012,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize theme
             initTheme();
-            
+
             // Setup event listeners
             const newChatBtn = document.getElementById("newChatBtn");
             const connectBtn = document.getElementById("connectBtn");
@@ -2045,10 +2045,10 @@
             // Setup search functionality
             const searchInput = document.getElementById('searchInput');
             const filterType = document.getElementById('filterType');
-            
+
             if (searchInput) searchInput.addEventListener('input', performBasicSearch);
             if (filterType) filterType.addEventListener('change', performBasicSearch);
-            
+
             const clearSearchBtn = document.getElementById('clearSearchBtn');
             if (clearSearchBtn) {
                 clearSearchBtn.addEventListener('click', () => {
@@ -2060,7 +2060,7 @@
 
             // Setup keyboard shortcuts
             setupKeyboardShortcuts();
-            
+
             // Restore panel states and show/hide toggle buttons accordingly
             if (leftPanelCollapsed) {
                 document.getElementById('leftPanel').classList.add('w-0', 'overflow-hidden');
@@ -2072,29 +2072,29 @@
                 document.getElementById('rightCollapseIcon').textContent = '◀';
                 document.getElementById('rightPanelToggle').classList.remove('hidden');
             }
-            
+
             // Load chat history
             displayChatHistory();
-            
+
             // Auto-save drafts while typing
             document.getElementById("jsonInput").addEventListener("input", () => {
                 clearTimeout(window.autoSaveTimeout);
                 window.autoSaveTimeout = setTimeout(autoSaveDraft, 2000);
             });
-            
+
             // Load draft on startup
             const savedDraft = localStorage.getItem('messageDraft');
             if (savedDraft && savedDraft !== '{ "hello": "world" }') {
                 document.getElementById("jsonInput").value = savedDraft;
             }
-            
+
             // Apply initial font size
             cycleFontSize();
             cycleFontSize(); // Reset to medium
-            
+
             // Initialize performance tracking
             setInterval(updatePerformanceMetrics, 1000);
-            
+
             showToast('Enhanced Ravian AI loaded successfully', 'success', 2000);
         });
     </script>

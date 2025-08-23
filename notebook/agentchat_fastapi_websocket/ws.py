@@ -1,15 +1,15 @@
 # api/ws.py
 import asyncio
 import json
-from datetime import datetime, date
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from datetime import datetime
+
 from dependencies import get_websocket_manager
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from managers.connection import WebSocketManager
 from managers.groupchat import AgentChat
-import os
-from fastapi import HTTPException, Depends, status
 
 router = APIRouter()
+
 
 @router.websocket("/chat/{chat_id}")
 async def run_websocket(
@@ -36,15 +36,15 @@ async def run_websocket(
                 if message.get("type") == "start":
                     # Handle start message
                     if message.get("task"):
-                        asyncio.create_task(ws_manager.start_chat_stream(session_id=chat_id,initial_message=message,chat=chat))
-                    else:
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "error": "Invalid start message format",
-                                "timestamp": datetime.utcnow().isoformat(),
-                            }
+                        asyncio.create_task(
+                            ws_manager.start_chat_stream(session_id=chat_id, initial_message=message, chat=chat)
                         )
+                    else:
+                        await websocket.send_json({
+                            "type": "error",
+                            "error": "Invalid start message format",
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
 
                 elif message.get("type") == "stop":
                     reason = message.get("reason") or "User requested stop/cancellation"
@@ -52,9 +52,7 @@ async def run_websocket(
                     # break
 
                 elif message.get("type") == "ping":
-                    await websocket.send_json(
-                        {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
-                    )
+                    await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
 
                 elif message.get("type") == "input_response":
                     # Handle input response from client
@@ -62,17 +60,15 @@ async def run_websocket(
                     if response is not None:
                         await ws_manager.handle_input_response(chat_id, response)
             except json.JSONDecodeError:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "error": "Invalid message format",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    }
-                )
+                await websocket.send_json({
+                    "type": "error",
+                    "error": "Invalid message format",
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
 
     except WebSocketDisconnect:
         raise
-    except Exception as e:
+    except Exception:
         raise
     finally:
         await ws_manager.disconnect(chat_id)

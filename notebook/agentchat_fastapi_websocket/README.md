@@ -52,19 +52,19 @@ This repository includes:
 
 While working with WebSocket-based agent systems using AG2AI/Autogen, we encountered several major bottlenecks that affected productivity and developer experience:
 
-- **Postman and raw WebSocket clients are not interactive**  
+- **Postman and raw WebSocket clients are not interactive**
   These tools make it hard to follow multi-agent conversations. They lack formatting, which slows down debugging and understanding the data flow.
 
-- **Reading agent messages is time-consuming**  
+- **Reading agent messages is time-consuming**
   When working with multiple agents, reviewing each step (especially during prompt tuning or alignment) becomes tedious and error-prone.
 
-- **Lack of message formatting**  
+- **Lack of message formatting**
   JSON responses from agents are dumped as raw strings, making them hard to read and troubleshoot — especially when nested or streamed.
 
-- **Frontend development was not feasible**  
+- **Frontend development was not feasible**
   Building a fully custom UI in frameworks like React or Vue would add significant overhead and distract from core system development.
 
-- **No streamlined session management**  
+- **No streamlined session management**
   Keeping track of WebSocket sessions and switching between different chats was a manual and error-prone task.
 
 ---
@@ -75,19 +75,19 @@ To overcome these challenges, we built a minimal yet powerful **interactive WebS
 
 Key benefits:
 
-- **Clean, interactive WebSocket communication**  
+- **Clean, interactive WebSocket communication**
   Live messages stream directly to the browser with proper formatting and role-based separation.
 
-- **Well-structured message display**  
+- **Well-structured message display**
   All messages are styled in blocks and automatically formatted as JSON, making it easy to inspect agent responses.
 
-- **Faster prompt tuning & agent alignment**  
+- **Faster prompt tuning & agent alignment**
   Developers can instantly see how agents respond, helping fine-tune prompts with clarity and speed.
 
-- **Quick session switching**  
+- **Quick session switching**
   Chat sessions can be created and reused easily, improving workflow efficiency during development and testing.
 
-- **Minimal development effort**  
+- **Minimal development effort**
   A lightweight HTML/JS UI replaces the need for building a full-fledged frontend framework — saving time while still improving UX significantly.
 
 ---

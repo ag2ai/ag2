@@ -13,25 +13,25 @@ This guide explains how to use the interactive WebSocket UI to send and receive 
 ## 🚶‍♂️ Step-by-Step Instructions
 
 ### 1️⃣ Create a New Chat Session
-Click on the **`Create New Chat`** button to generate a unique `chat_id`.  
+Click on the **`Create New Chat`** button to generate a unique `chat_id`.
 This will be used to manage your session across messages.
 
 ---
 
 ### 2️⃣ Use the Chat ID
-After creating a chat, click **`Use`** next to the desired `chat_id`.  
+After creating a chat, click **`Use`** next to the desired `chat_id`.
 This tells the system which session you're actively working in.
 
 ---
 
 ### 3️⃣ Connect to WebSocket
-Click the **`Connect`** button to establish a WebSocket connection with the backend server.  
+Click the **`Connect`** button to establish a WebSocket connection with the backend server.
 Once connected, messages can be sent and received in real time.
 
 ---
 
 ### 4️⃣ Load a Query Template
-Click **`User Query`** to auto-fill a JSON template into the input box.  
+Click **`User Query`** to auto-fill a JSON template into the input box.
 This template follows the format expected by the backend.
 
 ---

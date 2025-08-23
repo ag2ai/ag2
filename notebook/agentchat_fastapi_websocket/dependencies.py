@@ -1,12 +1,9 @@
-from typing import Any, Dict, Optional
-from pathlib import Path
 from fastapi import HTTPException, status
 from managers.connection import WebSocketManager
 
-_websocket_manager: Optional[WebSocketManager] = None
+_websocket_manager: WebSocketManager | None = None
 
 # Singleton instance of MongoDB service
-
 
 
 async def get_websocket_manager() -> WebSocketManager:
@@ -28,7 +25,7 @@ async def init_managers() -> None:
         # Initialize connection manager
         _websocket_manager = WebSocketManager()
 
-    except Exception as e:
+    except Exception:
         await cleanup_managers()  # Cleanup any partially initialized managers
         raise
 
@@ -43,7 +40,7 @@ async def cleanup_managers() -> None:
             await _websocket_manager.cleanup()
         except Exception as e:
             print(e)
-            raise 
+            raise
         finally:
             _websocket_manager = None
 
