@@ -10,20 +10,14 @@ import atexit
 import io
 import logging
 import secrets
-import sys
 import uuid
 from pathlib import Path
 from types import TracebackType
 
 import docker
+from typing_extensions import Self
 
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from ..docker_commandline_code_executor import _wait_for_ready
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .import_utils import require_jupyter_kernel_gateway_installed

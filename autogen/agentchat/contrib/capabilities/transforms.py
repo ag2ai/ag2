@@ -337,7 +337,7 @@ class TextMessageCompressor:
         self,
         text_compressor: TextCompressor | None = None,
         min_tokens: int | None = None,
-        compression_params: dict = dict(),
+        compression_params: dict = {},
         cache: AbstractCache | None = None,
         filter_dict: dict[str, Any] | None = None,
         exclude_filter: bool = True,

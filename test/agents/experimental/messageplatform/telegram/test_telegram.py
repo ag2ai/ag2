@@ -59,7 +59,7 @@ class TestTelegramAgent:
             },
         ]
 
-        assert set(tool.name for tool in telegram_agent.tools) == {"telegram_send", "telegram_retrieve"}
+        assert {tool.name for tool in telegram_agent.tools} == {"telegram_send", "telegram_retrieve"}
         assert isinstance(telegram_agent.llm_config, (dict, LLMConfig)), (
             "llm_config should be a dictionary or LLMConfig"
         )

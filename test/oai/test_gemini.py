@@ -237,9 +237,7 @@ class TestGeminiClient:
         }
         converted_safety_settings = GeminiClient._to_vertexai_safety_settings(safety_settings)
 
-        expected_safety_settings = {
-            category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings
-        }
+        expected_safety_settings = dict.fromkeys(safety_settings, VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH)
 
         def compare_safety_settings(converted_safety_settings, expected_safety_settings):
             for expected_setting_key in expected_safety_settings:

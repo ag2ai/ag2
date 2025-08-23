@@ -575,7 +575,7 @@ class GroupChat:
             return self.next_agent(last_speaker)
 
         # auto speaker selection with 2-agent chat
-        return self._auto_select_speaker(last_speaker, selector, messages, agents)
+        return self._auto_select_speaker(last_speaker, selector, messages if messages else self.messages, agents)
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
         """Select the next speaker (with requery), asynchronously."""
@@ -587,7 +587,7 @@ class GroupChat:
             return self.next_agent(last_speaker)
 
         # auto speaker selection with 2-agent chat
-        return await self.a_auto_select_speaker(last_speaker, selector, messages, agents)
+        return await self.a_auto_select_speaker(last_speaker, selector, messages if messages else self.messages, agents)
 
     def _finalize_speaker(self, last_speaker: Agent, final: bool, name: str, agents: list[Agent] | None) -> Agent:
         if not final:
@@ -1000,7 +1000,7 @@ class GroupChat:
             message_content = message_content["content"]
         message_content = content_str(message_content)
 
-        mentions = dict()
+        mentions = {}
         for agent in agents:
             # Finds agent mentions, taking word boundaries into account,
             # accommodates escaping underscores and underscores as spaces
