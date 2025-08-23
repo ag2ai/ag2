@@ -220,7 +220,7 @@ async def _dependent_chat_future(
     finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
         "finished_chat_indexes_to_exclude_from_carryover", []
     )
-    finished_chats = dict()
+    finished_chats = {}
     for chat in prerequisite_chat_futures:
         chat_future = prerequisite_chat_futures[chat]
         if chat_future.cancelled():
@@ -291,18 +291,18 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
     num_chats = chat_book.keys()
     prerequisites = __create_async_prerequisites(chat_queue)
     chat_order_by_id = __find_async_chat_order(num_chats, prerequisites)
-    finished_chat_futures = dict()
+    finished_chat_futures = {}
     for chat_id in chat_order_by_id:
         chat_info = chat_book[chat_id]
         prerequisite_chat_ids = chat_info.get("prerequisites", [])
-        pre_chat_futures = dict()
+        pre_chat_futures = {}
         for pre_chat_id in prerequisite_chat_ids:
             pre_chat_future = finished_chat_futures[pre_chat_id]
             pre_chat_futures[pre_chat_id] = pre_chat_future
         current_chat_future = await _dependent_chat_future(chat_id, chat_info, pre_chat_futures)
         finished_chat_futures[chat_id] = current_chat_future
     await asyncio.gather(*list(finished_chat_futures.values()))
-    finished_chats = dict()
+    finished_chats = {}
     for chat in finished_chat_futures:
         chat_result = finished_chat_futures[chat].result()
         finished_chats[chat] = chat_result

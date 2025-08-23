@@ -14,6 +14,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
+from packaging import version
+
 __all__ = [
     "optional_import_block",
     "patch_object",
@@ -53,25 +55,34 @@ class ModuleInfo:
                     # Aka similarly named module in the autogen or test directory
                     return f"'{self.name}' is not installed."
 
-        installed_version = (
+        # Ensure that the retrieved version is a string. Some packages might unexpectedly
+        # have a __version__ attribute that is not a string (e.g., a module).
+        raw_version_attr = (
             sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
         )
+        installed_version = raw_version_attr if isinstance(raw_version_attr, str) else None
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
-        if self.min_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-            if not self.min_inclusive and installed_version == self.min_version:
-                return msg
-            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
-                return msg
+        if installed_version:
+            # Convert to version object for comparison
+            installed_ver = version.parse(installed_version)
 
-        if self.max_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and installed_version == self.max_version:
-                return msg
-            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
-                return msg
+            if self.min_version:
+                min_ver = version.parse(self.min_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
+                if not self.min_inclusive and installed_ver == min_ver:
+                    return msg
+                if self.min_inclusive and installed_ver < min_ver:
+                    return msg
+
+            if self.max_version:
+                max_ver = version.parse(self.max_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
+                if not self.max_inclusive and installed_ver == max_ver:
+                    return msg
+                if self.max_inclusive and installed_ver > max_ver:
+                    return msg
 
         return None
 

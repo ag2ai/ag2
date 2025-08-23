@@ -279,7 +279,7 @@ class CouchbaseVectorDB(VectorDB):
 
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
-            docs_to_upsert = dict()
+            docs_to_upsert = {}
             for doc in batch:
                 doc_id = doc["id"]
                 embedding = self.embedding_function([

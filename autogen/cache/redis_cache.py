@@ -5,14 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import pickle
-import sys
 from types import TracebackType
 from typing import Any
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing_extensions import Self
 
 from ..import_utils import optional_import_block, require_optional_import
 from .abstract_cache_base import AbstractCache

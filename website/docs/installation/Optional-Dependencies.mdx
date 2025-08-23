@@ -3,17 +3,17 @@
 AG2 installs OpenAI package by default. To use LLMs by other providers, you can install the following packages:
 
 ```bash
-pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install ag2[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 
 <Tip>
 If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
 ```bash
-pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install -U autogen[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 or
 ```bash
-pip install -U ag2[openai,gemini,anthropic,mistral,together,groq,cohere]
+pip install -U ag2[openai,gemini,anthropic,mistral,together,groq,cohere,yepcode]
 ```
 as `autogen` and `ag2` are aliases for the same PyPI package.
 </Tip>
@@ -48,6 +48,51 @@ from autogen import UserProxyAgent
 
 proxy = UserProxyAgent(name="proxy", code_execution_config={"executor": "ipython-embedded"})
 ```
+
+## YepCode Serverless Code Executor
+
+To use YepCode's serverless code execution platform, install AG2 with the `yepcode` option:
+
+```bash
+pip install "ag2[yepcode]"
+```
+
+YepCode provides secure, production-grade serverless code execution with automatic dependency management for both Python and JavaScript. Get your API token from [yepcode.io](https://yepcode.io).
+
+To use the YepCode executor:
+
+```python
+from autogen.coding import YepCodeCodeExecutor
+from autogen import ConversableAgent
+
+# Set your API token as environment variable
+# export YEPCODE_API_TOKEN=your_token
+
+executor = YepCodeCodeExecutor(
+    timeout=120,
+    sync_execution=True
+)
+
+agent = ConversableAgent(
+    "agent",
+    llm_config=False,
+    code_execution_config={"executor": executor},
+    human_input_mode="NEVER"
+)
+```
+
+Alternatively, use the factory pattern:
+
+```python
+from autogen.coding import CodeExecutorFactory
+
+executor = CodeExecutorFactory.create({
+    "executor": "yepcode",
+    "yepcode": {"timeout": 120}
+})
+```
+
+Example notebook: [YepCode Executor](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
 
 ## retrievechat
 

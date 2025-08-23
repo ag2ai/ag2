@@ -140,7 +140,7 @@ class RealtimeClientBase:
         Args:
             audio (str): The audio.
         """
-        await self.add_event(InputAudioBufferDelta(delta=audio, item_id=None, raw_message=dict()))
+        await self.add_event(InputAudioBufferDelta(delta=audio, item_id=None, raw_message={}))
 
 
 _realtime_client_classes: dict[str, type[RealtimeClientProtocol]] = {}
