@@ -10,8 +10,6 @@ import tempfile
 import uuid
 from typing import Any
 
-from asyncer import asyncify
-
 from .python_environment import PythonEnvironment
 
 __all__ = ["DockerPythonEnvironment"]
@@ -320,7 +318,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                 os.makedirs(script_dir, exist_ok=True)
 
             # Write the code to the script file on the host
-            await asyncify(self._write_to_file)(host_script_path, code)
+            await anyio.to_thread.run_sync(self._write_to_file)(host_script_path, code)
 
             # Path to the script in the container
             container_script_path = f"/workspace/{rel_path}"
@@ -329,7 +327,7 @@ class DockerPythonEnvironment(PythonEnvironment):
             exec_cmd = ["docker", "exec", self._container_name, "python", container_script_path]
 
             # Run the command with a timeout
-            result = await asyncify(self._run_subprocess_with_timeout)(exec_cmd, timeout)
+            result = await anyio.to_thread.run_sync(self._run_subprocess_with_timeout)(exec_cmd, timeout)
 
             return {
                 "success": result[0],
