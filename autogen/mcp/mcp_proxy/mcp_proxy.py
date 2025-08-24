@@ -14,7 +14,11 @@ from functools import wraps
 from logging import getLogger
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+)
 
 import requests
 from pydantic import PydanticInvalidForJsonSchema
@@ -31,6 +35,7 @@ with optional_import_block() as result:
     from fastapi_code_generator.__main__ import generate_code
     from jinja2 import Environment, FileSystemLoader
     from mcp.server.fastmcp import FastMCP
+
 
 if TYPE_CHECKING:
     from autogen.agentchat import ConversableAgent

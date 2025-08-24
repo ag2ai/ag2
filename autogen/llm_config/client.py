@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 from typing import Any, Protocol
 
-from autogen.doc_utils import export_module
+from ..doc_utils import export_module
 
 
 @export_module("autogen")

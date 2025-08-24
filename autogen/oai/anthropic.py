@@ -81,9 +81,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
-from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
-
+from ..import_utils import optional_import_block, require_optional_import
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
