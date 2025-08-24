@@ -140,7 +140,6 @@ def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iter
 
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
-    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
     func = _fix_staticmethod(func)
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
