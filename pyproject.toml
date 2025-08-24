@@ -458,16 +458,17 @@ select = [
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
     "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "D417",   # undocumented-param     https://docs.astral.sh/ruff/rules/undocumented-param/
 ]
 
-extend-select = ["D417"]
-
-ignore = ["E501", "F403", "C901",
+ignore = [
+    "E501",
+    "F403",
+    "C901",
     "E402",
     "E721",
     "ASYNC109",
     "E501",  # line too long, handled by formatter later
-    "D100", "D101", "D102", "D103", "D104",
     "C901",  # too complex
 ]
 
@@ -484,6 +485,8 @@ docstring-code-format = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.per-file-ignores]
+"notebook/agentchat_webscraping_with_oxylabs.ipynb" = ["E226", "E303", "F811", "F821", "F706"]
 
 [tool.mypy]
 python_version = "3.10"
