@@ -142,14 +142,14 @@ class LLMConfig(metaclass=MetaLLMConfig):
             ```python
             # Example 1: create config from one model dictionary
             config = LLMConfig({
-                "model": "gpt-4o-mini",
+                "model": "gpt-5-mini",
                 "api_key": os.environ["OPENAI_API_KEY"],
             })
 
             # Example 2: create config from list of dictionaries
             config = LLMConfig(
                 {
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-5-mini",
                     "api_key": os.environ["OPENAI_API_KEY"],
                 },
                 {
@@ -160,14 +160,14 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
             # Example 3 (deprecated): create config from `kwargs` options
             config = LLMConfig(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",
                 api_key=os.environ["OPENAI_API_KEY"],
             )
 
             # Example 4 (deprecated): create config from `config_list` dictionary
             config = LLMConfig(
                 config_list={
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-5-mini",
                     "api_key": os.environ["OPENAI_API_KEY"],
                 }
             )
@@ -176,11 +176,11 @@ class LLMConfig(metaclass=MetaLLMConfig):
             config = LLMConfig(
                 config_list=[
                     {
-                        "model": "gpt-4o-mini",
+                        "model": "gpt-5-mini",
                         "api_key": os.environ["OPENAI_API_KEY"],
                     },
                     {
-                        "model": "gpt-4",
+                        "model": "gpt-5",
                         "api_key": os.environ["OPENAI_API_KEY"],
                     },
                 ]

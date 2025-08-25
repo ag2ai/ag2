@@ -94,7 +94,7 @@ You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
 ```json
 [
   {
-    "model": "gpt-4o",
+    "model": "gpt-5",
     "api_key": "<your OpenAI API key here>"
   }
 ]
@@ -150,7 +150,7 @@ from autogen import ConversableAgent, LLMConfig
 #    uses the OPENAI_API_KEY environment variable
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-mini",
 })
 
 # 3. Create our LLM agent
@@ -195,7 +195,7 @@ from autogen import ConversableAgent, UserProxyAgent, LLMConfig
 #    uses the OPENAI_API_KEY environment variable
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-mini",
 })
 
 # 3. Create our LLM agent
@@ -241,7 +241,7 @@ from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 # Put your key in the OPENAI_API_KEY environment variable
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-mini",
 })
 
 planner_message = """You are a classroom lesson agent.
@@ -332,7 +332,7 @@ from autogen import ConversableAgent, register_function, LLMConfig
 # Put your key in the OPENAI_API_KEY environment variable
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-mini",
 })
 
 # 1. Our tool, returns the day of the week for a given date

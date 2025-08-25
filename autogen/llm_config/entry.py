@@ -33,9 +33,35 @@ class LLMConfigEntryDict(TypedDict, total=False):
 
 
 class ApplicationConfig(BaseModel):
-    max_tokens: int | None = Field(default=None, ge=0)
-    top_p: float | None = Field(default=None, ge=0, le=1)
-    temperature: float | None = Field(default=None, ge=0, le=1)
+    max_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="The maximum number of tokens to generate before stopping.",
+    )
+
+    top_p: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "An alternative to sampling with temperature, called nucleus sampling, "
+            "where the model considers the results of the tokens with top_p probability mass."
+            "So 0.1 means only the tokens comprising the top 10% probability mass are considered."
+            "You should either alter `temperature` or `top_p`, but not both."
+        ),
+    )
+
+    temperature: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "Amount of randomness injected into the response. "
+            "Use `temperature` closer to `0.0` for analytical / multiple choice, and closer to a model's "
+            "maximum `temperature` for creative and generative tasks. "
+            "Note that even with `temperature` of `0.0`, the results will not be fully deterministic."
+        ),
+    )
 
 
 class LLMConfigEntry(ApplicationConfig, ABC):
