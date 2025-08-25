@@ -488,7 +488,6 @@ docstring-code-format = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-
 [tool.mypy]
 python_version = "3.10"
 

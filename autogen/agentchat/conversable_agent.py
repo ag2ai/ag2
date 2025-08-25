@@ -1307,6 +1307,7 @@ class ConversableAgent(LLMAgent):
     def _prepare_chat(
         self,
         recipient: "ConversableAgent",
+        chat_id: int,
         clear_history: bool,
         prepare_recipient: bool = True,
         reply_at_receive: bool = True,
@@ -1317,7 +1318,7 @@ class ConversableAgent(LLMAgent):
             self.clear_history(recipient)
             self._human_input = []
         if prepare_recipient:
-            recipient._prepare_chat(self, clear_history, False, reply_at_receive)
+            recipient._prepare_chat(self, chat_id, clear_history, False, reply_at_receive)
 
     def _raise_exception_on_async_reply_functions(self) -> None:
         """Raise an exception if any async reply functions are registered.
@@ -1475,7 +1476,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
 
         if isinstance(max_turns, int):
-            self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            self._prepare_chat(recipient, chat_id, clear_history, reply_at_receive=False)
             for i in range(max_turns):
                 # check recipient max consecutive auto reply limit
                 if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
@@ -1497,7 +1498,7 @@ class ConversableAgent(LLMAgent):
                     )
                 )
         else:
-            self._prepare_chat(recipient, clear_history)
+            self._prepare_chat(recipient, chat_id, clear_history)
             self.send(initial_msg, recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
@@ -1653,7 +1654,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
 
         if max_turns:
-            self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            self._prepare_chat(recipient, chat_id, clear_history, reply_at_receive=False)
             for turn in range(max_turns):
                 # check recipient max consecutive auto reply limit
                 if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
@@ -1675,7 +1676,7 @@ class ConversableAgent(LLMAgent):
                     )
                 )
         else:
-            self._prepare_chat(recipient, clear_history)
+            self._prepare_chat(recipient, chat_id, clear_history)
             await self.a_send(initial_msg, recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,

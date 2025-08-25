@@ -22,7 +22,7 @@ code_agent = ConversableAgent(
     name="code",
     system_message=PYTHON_CODER_PROMPT,
     llm_config=config,
-    is_termination_msg=lambda x: "LGTM" in x.get("content", ""),
+    is_termination_msg=lambda x: "LGTM" in (x.get("content", "") if isinstance(x, dict) else x),
     human_input_mode="NEVER",
     silent=True,
 )
