@@ -63,19 +63,22 @@ class PydanticAIInteroperability:
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if tool_typed.current_retry >= max_retries:
+            current_retry = 0 if ctx_typed is None else ctx_typed.retries.get(tool_typed.name, 0)
+
+            if current_retry >= max_retries:
                 raise ValueError(f"{tool_typed.name} failed after {max_retries} retries")
 
             try:
                 if ctx_typed is not None:
                     kwargs.pop("ctx", None)
-                    ctx_typed.retry = tool_typed.current_retry
+                    ctx_typed.retry = current_retry
                     result = f(**kwargs, ctx=ctx_typed)  # type: ignore[call-arg]
+                    ctx_typed.retries[tool_typed.name] = 0
                 else:
                     result = f(**kwargs)  # type: ignore[call-arg]
-                tool_typed.current_retry = 0
             except Exception as e:
-                tool_typed.current_retry += 1
+                if ctx_typed is not None:
+                    ctx_typed.retries[tool_typed.name] += 1
                 raise e
 
             return result
@@ -151,7 +154,7 @@ class PydanticAIInteroperability:
             name=pydantic_ai_tool.name,
             description=pydantic_ai_tool.description,
             func_or_tool=func,
-            parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
+            parameters_json_schema=pydantic_ai_tool.function_schema.json_schema,
         )
 
     @classmethod
