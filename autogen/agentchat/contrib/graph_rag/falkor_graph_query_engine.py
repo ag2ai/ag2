@@ -55,7 +55,7 @@ class FalkorGraphQueryEngine:
         self.username = username
         self.password = password
         self.model = model or OpenAiGenerativeModel("gpt-4o")
-        self.model_config = KnowledgeGraphModelConfig.with_model(model)
+        self.model_config = KnowledgeGraphModelConfig.with_model(self.model)
         self.ontology = ontology
         self.knowledge_graph: KnowledgeGraph | None = None  # type: ignore[no-any-unimported]
         self.falkordb = FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
@@ -139,9 +139,6 @@ class FalkorGraphQueryEngine:
 
         response = self._chat_session.send_message(question)
 
-        # History will be considered when querying by setting the last_answer
-        self._chat_session.last_answer = response["response"]
-
         return GraphStoreQueryResult(answer=response["response"], results=[])
 
     def delete(self) -> bool:
@@ -167,4 +164,4 @@ class FalkorGraphQueryEngine:
         if self.ontology_table_name not in self.falkordb.list_graphs():
             raise ValueError(f"Knowledge graph {self.name} has not been created.")
         graph = self.__get_ontology_storage_graph()
-        return Ontology.from_graph(graph)
+        return Ontology.from_schema_graph(graph)
