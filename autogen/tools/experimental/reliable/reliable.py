@@ -26,6 +26,7 @@ from ....agentchat.group import AgentTarget, ReplyResult, TerminateTarget
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.patterns import DefaultPattern
 from ....doc_utils import export_module
+from ....fast_depends.utils import is_coroutine_callable
 from ....llm_config import LLMConfig
 from ....tools.dependency_injection import Field as AG2Field
 from ....tools.tool import Tool
@@ -375,7 +376,7 @@ def reliable_function_wrapper(
     Adds 'hypothesis' and 'context_variables' keyword-only arguments.
     Returns a ReplyResult targeting the validator.
     """
-    is_original_func_async = inspect.iscoroutinefunction(tool_function)
+    is_original_func_async = is_coroutine_callable(tool_function)
     tool_sig = inspect.signature(tool_function)
     wrapper_func: Callable[..., Any]  # Declare type for wrapper_func
 
@@ -653,7 +654,7 @@ class ReliableTool(Tool):
                 Example: `ground_truth=["The API rate limit is 10 requests per minute.", "User preference: only show results from the last 7 days."]`
         """
         self._original_func, original_name, original_description = self._extract_func_details(func_or_tool)
-        self._is_original_func_async = inspect.iscoroutinefunction(self._original_func)
+        self._is_original_func_async = is_coroutine_callable(self._original_func)
 
         self._runner_llm_config = ConversableAgent._validate_llm_config(runner_llm_config)
         if self._runner_llm_config is False:
