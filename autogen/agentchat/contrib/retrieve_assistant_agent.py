@@ -7,10 +7,13 @@
 import warnings
 from typing import Any
 
+from typing_extensions import deprecated
+
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
 
+@deprecated("The RetrieveAssistantAgent is deprecated. Please use the AssistantAgent instead.")
 class RetrieveAssistantAgent(AssistantAgent):
     """(Experimental) Retrieve Assistant agent, designed to solve a task with LLM.
 

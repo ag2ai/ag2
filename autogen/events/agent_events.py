@@ -955,7 +955,7 @@ class GenerateCodeExecutionReplyEvent(BaseEvent):
         else:
             f(
                 colored(
-                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join([x for x in self.code_blocks])}])...",
+                    f"\n>>>>>>>> EXECUTING {num_code_blocks} CODE BLOCKS (inferred languages are [{', '.join(list(self.code_blocks))}])...",
                     "red",
                 ),
                 flush=True,

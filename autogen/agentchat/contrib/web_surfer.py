@@ -277,7 +277,7 @@ class WebSurferAgent(ConversableAgent):
         self._assistant.reset()  # type: ignore[no-untyped-call]
 
         # Clone the messages to give context
-        self._assistant.chat_messages[self._user_proxy] = list()
+        self._assistant.chat_messages[self._user_proxy] = []
         history = messages[0 : len(messages) - 1]
         for message in history:
             self._assistant.chat_messages[self._user_proxy].append(message)

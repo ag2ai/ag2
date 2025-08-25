@@ -1433,15 +1433,15 @@ def test_messages_with_carryover():
         llm_config=False,
         default_auto_reply="This is alice speaking.",
     )
-    context = dict(message="hello", carryover="Testing carryover.")
+    context = {"message": "hello", "carryover": "Testing carryover."}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=["Testing carryover.", "This should pass"])
+    context = {"message": "hello", "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, str)
 
-    context = dict(message="hello", carryover=3)
+    context = {"message": "hello", "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
@@ -1455,26 +1455,26 @@ def test_messages_with_carryover():
         },
     ]
     mm_message = {"content": mm_content}
-    context = dict(
-        message=mm_message,
-        carryover="Testing carryover.",
-    )
+    context = {
+        "message": mm_message,
+        "carryover": "Testing carryover.",
+    }
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=["Testing carryover.", "This should pass"])
+    context = {"message": mm_message, "carryover": ["Testing carryover.", "This should pass"]}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 4
 
-    context = dict(message=mm_message, carryover=3)
+    context = {"message": mm_message, "carryover": 3}
     with pytest.raises(InvalidCarryOverTypeError):
         agent1.generate_init_message(**context)
 
     # Test without carryover
     print(mm_message)
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 3
@@ -1484,7 +1484,7 @@ def test_messages_with_carryover():
         {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
     ]
     mm_message = {"content": mm_content}
-    context = dict(message=mm_message)
+    context = {"message": mm_message}
     generated_message = agent1.generate_init_message(**context)
     assert isinstance(generated_message, dict)
     assert len(generated_message["content"]) == 1

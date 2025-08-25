@@ -106,7 +106,7 @@ def transform_tab_component(content: str) -> str:
 
             # Find minimum common indentation for non-empty lines
             non_empty_lines = [line for line in lines if line.strip()]
-            min_indent = min([len(line) - len(line.lstrip()) for line in non_empty_lines]) if non_empty_lines else 0
+            min_indent = min(len(line) - len(line.lstrip()) for line in non_empty_lines) if non_empty_lines else 0
 
             # Remove common indentation and add 4-space indent
             processed_lines = []
@@ -187,7 +187,7 @@ def fix_internal_references(abs_file_url: str, mkdocs_docs_dir: Path = mkdocs_do
         return abs_file_url
 
     # Find the first .md file in the directory
-    md_files = sorted(list(full_path.glob("*.md")))
+    md_files = sorted(full_path.glob("*.md"))
     return f"{abs_file_url}/{md_files[0].stem}"
 
 
@@ -305,7 +305,7 @@ def transform_content_for_mkdocs(content: str, rel_file_path: str) -> str:
             lines = inner_content.split("\n")
 
             non_empty_lines = [line for line in lines if line.strip()]
-            min_indent = min([len(line) - len(line.lstrip()) for line in non_empty_lines]) if non_empty_lines else 0
+            min_indent = min(len(line) - len(line.lstrip()) for line in non_empty_lines) if non_empty_lines else 0
 
             # Process each line
             processed_lines = []

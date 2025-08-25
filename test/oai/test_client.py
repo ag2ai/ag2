@@ -16,7 +16,6 @@ from typing import Any  # Added import for Any
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import ValidationError
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
@@ -710,13 +709,6 @@ def test_deepseek_llm_config_entry() -> None:
     assert llm_config.model_dump() == {
         "config_list": [expected],
     }
-
-    with pytest.raises(ValidationError, match="Value error, temperature and top_p cannot be set at the same time"):
-        deepseek_llm_config = DeepSeekLLMConfigEntry(
-            model="deepseek-chat",
-            temperature=1,
-            top_p=0.8,
-        )
 
 
 class TestOpenAIClientBadRequestsError:
