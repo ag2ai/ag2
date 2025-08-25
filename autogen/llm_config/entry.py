@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import Client as httpxClient
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, ValidationInfo, field_serializer, field_validator
-from typing_extensions import Required, TypedDict
+from typing_extensions import Required, Self, TypedDict
 
 from .client import ModelClient
 
@@ -21,9 +21,9 @@ class LLMConfigEntryDict(TypedDict, total=False):
     top_p: float | None
     temperature: float | None
 
-    api_key: SecretStr | None
+    api_key: SecretStr | str | None
     api_version: str | None
-    base_url: HttpUrl | None
+    base_url: HttpUrl | str | None
     voice: str | None
     http_client: httpxClient | None
     model_client_cls: str | None
@@ -33,9 +33,35 @@ class LLMConfigEntryDict(TypedDict, total=False):
 
 
 class ApplicationConfig(BaseModel):
-    max_tokens: int | None = Field(default=None, ge=0)
-    top_p: float | None = Field(default=None, gt=0, lt=1)
-    temperature: float | None = Field(default=None, ge=0, le=1)
+    max_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="The maximum number of tokens to generate before stopping.",
+    )
+
+    top_p: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "An alternative to sampling with temperature, called nucleus sampling, "
+            "where the model considers the results of the tokens with top_p probability mass."
+            "So 0.1 means only the tokens comprising the top 10% probability mass are considered."
+            "You should either alter `temperature` or `top_p`, but not both."
+        ),
+    )
+
+    temperature: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "Amount of randomness injected into the response. "
+            "Use `temperature` closer to `0.0` for analytical / multiple choice, and closer to a model's "
+            "maximum `temperature` for creative and generative tasks. "
+            "Note that even with `temperature` of `0.0`, the results will not be fully deterministic."
+        ),
+    )
 
 
 class LLMConfigEntry(ApplicationConfig, ABC):
@@ -55,13 +81,13 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     # Following field is configuration for pydantic to disallow extra fields
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    def apply_application_config(self, application_config: ApplicationConfig) -> "LLMConfigEntry":
+    def apply_application_config(self, application_config: ApplicationConfig) -> Self:
         """Apply application level configurations."""
-        # TODO: should create a new instance instead of mutating current one
-        self.max_tokens = self.max_tokens or application_config.max_tokens
-        self.top_p = self.top_p or application_config.top_p
-        self.temperature = self.temperature or application_config.temperature
-        return self
+        new_entry = self.model_copy()
+        new_entry.max_tokens = new_entry.max_tokens or application_config.max_tokens
+        new_entry.top_p = new_entry.top_p or application_config.top_p
+        new_entry.temperature = new_entry.temperature or application_config.temperature
+        return new_entry
 
     @abstractmethod
     def create_client(self) -> "ModelClient": ...

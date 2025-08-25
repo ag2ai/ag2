@@ -87,16 +87,16 @@ llm_config_gemini = LLMConfig.from_json(
     seed=seed,
 ).where(model="gemini-2.0-flash-lite")
 
-with llm_config_gemini:
-    assistant = AssistantAgent(
-        name="assistant",
-        system_message=(
-        "You are a helpful coding assistant. "
-        "After your code has been executed and you have a code execution result, say 'ALL DONE'. "
-        "Do not say 'ALL DONE' in the same response as code."
-        ),
-        max_consecutive_auto_reply=3
-    )
+assistant = AssistantAgent(
+    name="assistant",
+    system_message=(
+    "You are a helpful coding assistant. "
+    "After your code has been executed and you have a code execution result, say 'ALL DONE'. "
+    "Do not say 'ALL DONE' in the same response as code."
+    ),
+    max_consecutive_auto_reply=3,
+    llm_config=llm_config_gemini,
+)
 
 user_proxy = UserProxyAgent(
     "user_proxy",
@@ -170,11 +170,11 @@ llm_config_gemini_vision = LLMConfig.from_json(
     seed=seed,
 ).where(model="gemini-2.0-flash")
 
-with llm_config_gemini_vision:
-    image_agent = MultimodalConversableAgent(
-        "Gemini Vision",
-        max_consecutive_auto_reply=1
-    )
+image_agent = MultimodalConversableAgent(
+    "Gemini Vision",
+    max_consecutive_auto_reply=1,
+    llm_config=llm_config_gemini_vision,
+)
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
 

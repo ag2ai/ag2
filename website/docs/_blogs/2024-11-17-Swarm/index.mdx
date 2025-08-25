@@ -123,35 +123,38 @@ def process_refund_payment(context_variables: dict) -> str:
     return SwarmResult(values="Payment processed successfully", context_variables=context_variables)
 
 # Swarm Agents, similar to ConversableAgent, but with functions and hand offs (specified later)
-with llm_config:
-    customer_service = ConversableAgent(
-        name="CustomerServiceRep",
-        system_message="""You are a customer service representative.
-        First verify the customer's identity by asking for the customer's passport number,
-        then calling the verify_customer_identity function,
-        finally, transfer the case to the refund specialist.""",
-        functions=[verify_customer_identity],
-    )
+customer_service = ConversableAgent(
+    name="CustomerServiceRep",
+    system_message="""You are a customer service representative.
+    First verify the customer's identity by asking for the customer's passport number,
+    then calling the verify_customer_identity function,
+    finally, transfer the case to the refund specialist.""",
+    functions=[verify_customer_identity],
+    llm_config=llm_config,
+)
 
-    refund_specialist = ConversableAgent(
-        name="RefundSpecialist",
-        system_message="""You are a refund specialist.
-        Review the case and approve the refund, then transfer to the payment processor.""",
-        functions=[approve_refund_and_transfer],
-    )
+refund_specialist = ConversableAgent(
+    name="RefundSpecialist",
+    system_message="""You are a refund specialist.
+    Review the case and approve the refund, then transfer to the payment processor.""",
+    functions=[approve_refund_and_transfer],
+    llm_config=llm_config,
+)
 
-    payment_processor = ConversableAgent(
-        name="PaymentProcessor",
-        system_message="""You are a payment processor.
-        Process the refund payment and provide a confirmation message to the customer.""",
-        functions=[process_refund_payment],
-    )
+payment_processor = ConversableAgent(
+    name="PaymentProcessor",
+    system_message="""You are a payment processor.
+    Process the refund payment and provide a confirmation message to the customer.""",
+    functions=[process_refund_payment],
+    llm_config=llm_config,
+)
 
-    satisfaction_surveyor = ConversableAgent(
-        name="SatisfactionSurveyor",
-        system_message="""You are a customer satisfaction specialist.
-        Ask the customer to rate their experience with the refund process.""",
-    )
+satisfaction_surveyor = ConversableAgent(
+    name="SatisfactionSurveyor",
+    system_message="""You are a customer satisfaction specialist.
+    Ask the customer to rate their experience with the refund process.""",
+    llm_config=llm_config,
+)
 
 # Conditional and After work hand offs
 

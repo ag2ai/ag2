@@ -88,11 +88,11 @@ Refer to the [doc](https://docs.ag2.ai/latest/docs/api-reference/autogen/agentch
 for more information on the detailed configurations.
 
 ```python
-with llm_config:
-    assistant = AssistantAgent(
-        name="assistant",
-        system_message="You are a helpful assistant.",
-    )
+assistant = AssistantAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config,
+)
 
 ragproxyagent = RetrieveUserProxyAgent(
     name="ragproxyagent",
@@ -239,24 +239,26 @@ boss_aid = RetrieveUserProxyAgent(
     code_execution_config=False,  # we don't want to execute code in this case.
 )
 
-with llm_config:
-    coder = autogen.AssistantAgent(
-        name="Senior_Python_Engineer",
-        is_termination_msg=termination_msg,
-        system_message="You are a senior python engineer. Reply `TERMINATE` in the end when everything is done.",
-    )
+coder = autogen.AssistantAgent(
+    name="Senior_Python_Engineer",
+    is_termination_msg=termination_msg,
+    system_message="You are a senior python engineer. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+)
 
-    pm = autogen.AssistantAgent(
-        name="Product_Manager",
-        is_termination_msg=termination_msg,
-        system_message="You are a product manager. Reply `TERMINATE` in the end when everything is done.",
-    )
+pm = autogen.AssistantAgent(
+    name="Product_Manager",
+    is_termination_msg=termination_msg,
+    system_message="You are a product manager. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+)
 
-    reviewer = autogen.AssistantAgent(
-        name="Code_Reviewer",
-        is_termination_msg=termination_msg,
-        system_message="You are a code reviewer. Reply `TERMINATE` in the end when everything is done.",
-    )
+reviewer = autogen.AssistantAgent(
+    name="Code_Reviewer",
+    is_termination_msg=termination_msg,
+    system_message="You are a code reviewer. Reply `TERMINATE` in the end when everything is done.",
+    llm_config=llm_config,
+)
 
 def retrieve_content(
     message: Annotated[
