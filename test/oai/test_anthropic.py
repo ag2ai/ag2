@@ -68,12 +68,9 @@ def test_anthropic_llm_config_entry():
         "tags": [],
     }
     actual = anthropic_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[anthropic_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(anthropic_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
