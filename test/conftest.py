@@ -6,7 +6,6 @@
 # SPDX-License-Identifier: MIT
 import asyncio
 import functools
-import inspect
 import os
 import re
 import time
@@ -19,6 +18,7 @@ import pytest
 
 import autogen
 from autogen import UserProxyAgent
+from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import optional_import_block
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
@@ -443,7 +443,7 @@ def suppress(
         timeout: int = timeout,
         error_filter: Callable[[BaseException], bool] | None = error_filter,
     ) -> T:
-        if inspect.iscoroutinefunction(func):
+        if is_coroutine_callable(func):
 
             @functools.wraps(func)
             async def wrapper(

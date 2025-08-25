@@ -7,11 +7,12 @@
 import asyncio
 import datetime
 import logging
+import uuid
 import warnings
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
-from typing import Any
+from typing import Any, TypedDict
 
 from ..doc_utils import export_module
 from ..events.agent_events import PostCarryoverProcessingEvent
@@ -24,26 +25,38 @@ Prerequisite = tuple[int, int]
 __all__ = ["ChatResult", "a_initiate_chats", "initiate_chats"]
 
 
+class CostDict(TypedDict):
+    usage_including_cached_inference: dict[str, Any]
+    usage_excluding_cached_inference: dict[str, Any]
+
+
 @dataclass
 @export_module("autogen")
 class ChatResult:
     """(Experimental) The result of a chat. Almost certain to be changed."""
 
-    chat_id: int = None
+    chat_id: int = field(default_factory=lambda: uuid.uuid4().int)
     """chat id"""
-    chat_history: list[dict[str, Any]] = None
+
+    chat_history: list[dict[str, Any]] = field(default_factory=list)
     """The chat history."""
-    summary: str = None
+
+    summary: str = ""
     """A summary obtained from the chat."""
-    cost: dict[str, dict[str, Any]] = (
-        None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
+
+    cost: CostDict = field(
+        default_factory=lambda: {
+            "usage_including_cached_inference": {},
+            "usage_excluding_cached_inference": {},
+        }
     )
     """The cost of the chat.
        The value for each usage type is a dictionary containing cost information for that specific type.
            - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.
            - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
     """
-    human_input: list[str] = None
+
+    human_input: list[str] = field(default_factory=list)
     """A list of human input solicited during the chat."""
 
 

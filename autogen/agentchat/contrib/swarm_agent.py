@@ -1163,8 +1163,9 @@ async def a_run_swarm(
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
-    asyncio.create_task(stream_run())
-
+    task = asyncio.create_task(stream_run())
+    # prevent the task from being garbage collected
+    response._task_ref = task  # type: ignore[attr-defined]
     return response
 
 

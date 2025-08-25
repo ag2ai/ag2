@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
@@ -211,6 +212,7 @@ class SwarmableAgent(Agent):
         summary_args: dict[str, Any] | None = {},
         **kwargs: dict[str, Any],
     ) -> ChatResult:
+        chat_id = uuid.uuid4().int
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -226,6 +228,7 @@ class SwarmableAgent(Agent):
         recipient.previous_cache = None  # type: ignore[attr-defined]
 
         chat_result = ChatResult(
+            chat_id=chat_id,
             chat_history=self.chat_messages[recipient],
             summary=summary,
             cost=gather_usage_summary([self, recipient]),  # type: ignore[arg-type]

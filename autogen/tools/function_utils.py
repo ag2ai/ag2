@@ -17,6 +17,7 @@ from pydantic import __version__ as pydantic_version
 from pydantic.json_schema import JsonSchemaValue
 
 from ..doc_utils import export_module
+from ..fast_depends.utils import is_coroutine_callable
 from .dependency_injection import Field as AG2Field
 
 if parse(pydantic_version) < parse("2.10.2"):
@@ -381,7 +382,7 @@ def load_basemodels_if_needed(func: Callable[..., Any]) -> Callable[..., Any]:
         # call the original function
         return await func(*args, **kwargs)
 
-    if inspect.iscoroutinefunction(func):
+    if is_coroutine_callable(func):
         return _a_load_parameters_if_needed
     else:
         return _load_parameters_if_needed

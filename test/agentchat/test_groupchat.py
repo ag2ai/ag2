@@ -1565,7 +1565,6 @@ def test_speaker_selection_auto_process_result():
     groupchat = autogen.GroupChat(agents=agent_list, messages=[], max_round=3)
 
     chat_result = autogen.ChatResult(
-        chat_id=None,
         chat_history=[
             {
                 "content": "Let's get this meeting started. First the Product_Manager will create 3 new product ideas.",

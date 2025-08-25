@@ -15,6 +15,7 @@ from ..doc_utils import export_module
 from ..fast_depends import Depends as FastDepends
 from ..fast_depends import inject
 from ..fast_depends.dependencies import model
+from ..fast_depends.utils import is_coroutine_callable
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -202,7 +203,7 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _set_return_annotation_to_any(f: Callable[..., Any]) -> Callable[..., Any]:
-    if inspect.iscoroutinefunction(f):
+    if is_coroutine_callable(f):
 
         @functools.wraps(f)
         async def _a_wrapped_func(*args: Any, **kwargs: Any) -> Any:

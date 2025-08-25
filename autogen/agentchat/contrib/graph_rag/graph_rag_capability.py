@@ -41,7 +41,7 @@ class GraphRagCapability(AgentCapability):
     user_proxy.initiate_chat(graph_rag_agent, message="Name a few actors who've played in 'The Matrix'")
 
     # ChatResult(
-        # chat_id=None,
+        # chat_id=uuid.uuid4().int,
         # chat_history=[
             # {'content': 'Name a few actors who've played in \'The Matrix\'', 'role': 'graph_rag_agent'},
             # {'content': 'A few actors who have played in The Matrix are:

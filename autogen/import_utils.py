@@ -16,6 +16,8 @@ from typing import Any, Generic, Optional, TypeVar
 
 from packaging import version
 
+from .fast_depends.utils import is_coroutine_callable
+
 __all__ = [
     "optional_import_block",
     "patch_object",
@@ -481,7 +483,7 @@ def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> C
         if isinstance(o, type):
             wrapped = require_optional_import(modules, dep_target)(o)
         else:
-            if inspect.iscoroutinefunction(o):
+            if is_coroutine_callable(o):
 
                 @wraps(o)
                 async def wrapped(*args: Any, **kwargs: Any) -> Any:
