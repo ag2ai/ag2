@@ -44,7 +44,7 @@ def create_mock_agent(name: str, handoffs: Handoffs | None = None) -> MagicMock:
         agent.handoffs.set_llm_function_names = MagicMock()
 
     # Mock initiate_chat to return a dummy ChatResult
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     agent.initiate_chat = MagicMock(return_value=chat_result)
 
     return agent
@@ -72,7 +72,7 @@ def user_proxy() -> MagicMock:
     agent.context_variables = ContextVariables()
     agent._group_manager = None
     # Mock initiate_chat
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     agent.initiate_chat = MagicMock(return_value=chat_result)
     return agent
 
@@ -101,7 +101,7 @@ def mock_group_chat_manager() -> MagicMock:
     manager.groupchat.agents = []
     manager.llm_config = {"config_list": [{"model": "test-model"}]}
     # Mock initiate_chat for manager as well
-    chat_result = ChatResult(chat_history=[], cost={"cost": {}}, summary="", human_input=[])
+    chat_result = ChatResult()
     manager.initiate_chat = MagicMock(return_value=chat_result)
     manager.resume = MagicMock(return_value=(None, None))  # Default resume mock
     manager.last_speaker = None
