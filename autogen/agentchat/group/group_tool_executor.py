@@ -146,13 +146,14 @@ class GroupToolExecutor(ConversableAgent):
             messages = agent._oai_messages[sender]
 
         message = messages[-1]
-        if "tool_calls" in message:
+        if message.get("tool_calls"):
             tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
             next_target: TransitionTarget | None = None
             tool_responses_inner = []
             contents = []
+            tool_message: dict[str, Any] | None = None
             for index in range(tool_call_count):
                 message_copy = deepcopy(message)
 

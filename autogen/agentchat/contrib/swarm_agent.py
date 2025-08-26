@@ -662,7 +662,7 @@ def _determine_next_agent(
     if use_initial_agent:
         return initial_agent
 
-    if "tool_calls" in groupchat.messages[-1]:
+    if groupchat.messages[-1].get("tool_calls"):
         return tool_execution
 
     after_work_condition = None
@@ -1330,7 +1330,7 @@ def _generate_swarm_tool_reply(
         messages = agent._oai_messages[sender]
 
     message = messages[-1]
-    if "tool_calls" in message:
+    if message.get("tool_calls"):
         tool_call_count = len(message["tool_calls"])
 
         # Loop through tool calls individually (so context can be updated after each function call)

@@ -3,7 +3,7 @@ import os
 from autogen import ConversableAgent, LLMConfig
 from autogen.remote import RemoteAgent
 
-config = LLMConfig(
+llm_config = LLMConfig(
     model="gpt-4o-mini",
     api_key=os.getenv("OPENAI_API_KEY"),
 )
@@ -13,7 +13,6 @@ PYTHON_REVIEW_PROMPT = (
     "You are code reviewer. Analyze provided code and suggest your changes.\n"
     "Do not generate any code, only suggest improvements.\n"
     "Format suggestions as a task list with the following format:\n"
-    "- [ ] Add unit tests for `foo` function\n"
     "- [ ] Fix bug in `bar` function\n"
     "- [ ] Refactor `baz` class\n"
     "Mark issues as completed when they are addressed.\n"
@@ -29,11 +28,11 @@ review_agent = ConversableAgent(
     name="reviewer",
     system_message=PYTHON_REVIEW_PROMPT,
     human_input_mode="NEVER",
-    llm_config=config,
+    llm_config=llm_config,
 )
 
 
-code_agent = RemoteAgent(url="http://localhost:8000")
+code_agent = RemoteAgent(url="http://localhost:8000", name="coder")
 
 
 def generate_code(prompt: str) -> str:
