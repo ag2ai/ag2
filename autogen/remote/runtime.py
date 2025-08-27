@@ -36,6 +36,7 @@ class HTTPAgentBus:
 def make_remote_call_processor(
     agents: dict[AgentName, Agent],
 ) -> Callable[[], Awaitable[AgentBusMessage | None]]:
+    # TODO: stream remote job status to the client
     async def remote_call_processor(
         history: AgentBusMessage,
         agent_name: Annotated[str, Path()],
@@ -46,13 +47,14 @@ def make_remote_call_processor(
             raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
 
         # TODO: support input guardrails
-        reply = agent.generate_reply(
+        reply = await agent.a_generate_reply(
             history.messages,
             None,
             exclude={
-                ConversableAgent.generate_function_call_reply,
-                ConversableAgent.generate_tool_calls_reply,
+                ConversableAgent.a_generate_function_call_reply,
+                ConversableAgent.a_generate_tool_calls_reply,
                 ConversableAgent.generate_code_execution_reply,
+                ConversableAgent._generate_code_execution_reply_using_executor,
             },
         )
 
