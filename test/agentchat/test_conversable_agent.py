@@ -8,7 +8,6 @@
 
 import asyncio
 import copy
-import inspect
 import os
 import threading
 import time
@@ -26,6 +25,7 @@ from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
@@ -787,7 +787,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert not inspect.iscoroutinefunction(currency_calculator)
+        assert not is_coroutine_callable(currency_calculator)
 
     @pytest.mark.skip(reason="Not implemented yet")
     def test__wrap_function_list(self) -> None:
@@ -840,7 +840,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert inspect.iscoroutinefunction(currency_calculator)
+        assert is_coroutine_callable(currency_calculator)
 
 
 def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
