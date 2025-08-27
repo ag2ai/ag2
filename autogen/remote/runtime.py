@@ -3,94 +3,70 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from collections import defaultdict
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from typing import Annotated, Any, TypeAlias
-from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Request
+from fastapi import FastAPI, HTTPException, Path, Response, status
 
 from autogen.agentchat import Agent, ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
 
-from .protocol import (
-    AgentBusEvent,
-    ProtocolEvents,
-    SendEvent,
-    StopEvent,
-    serialize_event,
-)
+from .protocol import AgentBusMessage
 
-ChatId: TypeAlias = int
 AgentName: TypeAlias = str
 
 
 class AgentBus:
     def __init__(self, agents: Iterable[Agent]) -> None:
         self.agents: dict[AgentName, Agent] = {agent.name: agent for agent in agents}
-        self.chats_history: defaultdict[ChatId, list[dict[str | Any] | str | None]] = defaultdict(list)
 
         self.app = FastAPI()
-        self.app.post("/{agent_name}")(make_handler(self.chats_history, self.agents))
+        self.app.post("/{agent_name}")(make_remote_call_processor(self.agents))
+
+    async def __call__(
+        self,
+        scope: MutableMapping[str, Any],
+        receive: Callable[[], Awaitable[MutableMapping[str, Any]]],
+        send: Callable[[MutableMapping[str, Any]], Awaitable[None]],
+    ) -> None:
+        """ASGI interface."""
+        await self.app(scope, receive, send)
 
 
-async def _serialize_request_to_event(request: Request) -> AgentBusEvent:
-    return serialize_event(await request.json())
-
-
-def _chat_id(request: Request) -> ChatId:
-    if "X-Chat-Id" in request.headers:
-        return int(request.headers["X-Chat-Id"])
-
-    return uuid4().int
-
-
-def make_handler(
-    chats_history: defaultdict[ChatId, list[dict[str | Any] | str | None]],
+def make_remote_call_processor(
     agents: dict[AgentName, Agent],
-) -> Callable[[], Awaitable[AgentBusEvent | None]]:
-    async def handler(
+) -> Callable[[], Awaitable[AgentBusMessage | None]]:
+    async def remote_call_processor(
+        history: AgentBusMessage,
         agent_name: Annotated[str, Path()],
-        event: Annotated[AgentBusEvent, Depends(_serialize_request_to_event)],
-        chat_id: Annotated[ChatId, Depends(_chat_id)],
-    ) -> AgentBusEvent | None:
-        print(event)
+    ) -> AgentBusMessage | None:
         try:
             agent = agents[agent_name]
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
 
-        if event.event_type is ProtocolEvents.STOP_CHAT:
-            del chats_history[chat_id]
-            return
+        # TODO: support input guardrails
+        reply = agent.generate_reply(
+            history.messages,
+            None,
+            exclude={
+                ConversableAgent.generate_function_call_reply,
+                ConversableAgent.generate_tool_calls_reply,
+                ConversableAgent.generate_code_execution_reply,
+            },
+        )
 
-        messages = chats_history[chat_id]
+        # TODO: add ToolExecutionAgent to call local tools
+        # TODO: catch update context events
 
-        if event.event_type is ProtocolEvents.SEND_MESSAGE:
-            _, in_message = normilize_message_to_oai(event.content, str(chat_id), role="user")
-            messages.append(in_message)
-            return
+        if reply is None:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-        if event.event_type is ProtocolEvents.NEXT_SPEAKER:
-            reply = agent.generate_reply(
-                messages,
-                None,
-                exclude={
-                    ConversableAgent.generate_function_call_reply,
-                    ConversableAgent.generate_tool_calls_reply,
-                    ConversableAgent.generate_code_execution_reply,
-                },
-            )
+        is_valid, out_message = normilize_message_to_oai(reply, agent_name, role="assistant")
 
-            # TODO: how to call local tools?
+        # TODO: support output guardrails
+        if is_valid:
+            # TODO: reply with whole local history
+            return AgentBusMessage(messages=[out_message])
 
-            if reply is None:
-                return StopEvent()
-
-            _, out_message = normilize_message_to_oai(reply, agent_name, role="assistant")
-            messages.append(out_message)
-            return SendEvent(content=out_message)
-
-        raise NotImplementedError("unsupported protocol method")
-
-    return handler
+    return remote_call_processor

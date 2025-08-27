@@ -23,9 +23,9 @@ code_agent = ConversableAgent(
     name="coder",
     system_message=PYTHON_CODER_PROMPT,
     llm_config=llm_config,
-    is_termination_msg=lambda x: "LGTM" in (x.get("content", "") if isinstance(x, dict) else x),
+    is_termination_msg=lambda x: "LGTM" in x.get("content", ""),
     human_input_mode="NEVER",
     silent=True,
 )
 
-app = AgentBus(agents=[code_agent]).app
+app = AgentBus(agents=[code_agent])

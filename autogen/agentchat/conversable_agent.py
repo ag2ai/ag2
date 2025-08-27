@@ -2133,6 +2133,7 @@ class ConversableAgent(LLMAgent):
             return False, None
         if messages is None:
             messages = self._oai_messages[sender]
+
         extracted_response = self._generate_oai_reply_from_client(
             client, self._oai_system_message + messages, self.client_cache
         )
@@ -3937,9 +3938,13 @@ def normilize_message_to_oai(
     # create oai message to be appended to the oai conversation that can be passed to oai directly.
     oai_message = {
         k: message[k]
-        for k in ("content", "function_call", "tool_calls", "tool_responses", "tool_call_id", "name", "context")
+        for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
         if k in message and message[k] is not None
     }
+
+    if tools := message.get("tool_calls"):  # check for [], None and missed key
+        oai_message["tool_calls"] = tools
+
     if "content" not in oai_message:
         if "function_call" in oai_message or "tool_calls" in oai_message:
             oai_message["content"] = None  # if only function_call is provided, content will be set to None.

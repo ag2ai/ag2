@@ -33,4 +33,4 @@ general_agent = ConversableAgent(
 
 app = AgentBus(
     agents=[triage_agent, tech_agent, general_agent],
-).app
+)
