@@ -1271,7 +1271,7 @@ def test_role_for_select_speaker_messages():
     # into a message attribute called 'override_role'. This is evaluated in Conversable Agent's _append_oai_message function
     # e.g.: message={'content':self.select_speaker_prompt(agents),'override_role':self.role_for_select_speaker_messages},
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
+    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, name=checking_agent.name)
 
     # Test default is "system"
     assert len(checking_agent.chat_messages) == 1
@@ -1280,7 +1280,7 @@ def test_role_for_select_speaker_messages():
     # Test as "user"
     groupchat.role_for_select_speaker_messages = "user"
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
+    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, name=checking_agent.name)
 
     assert len(checking_agent.chat_messages) == 1
     assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "user"
@@ -1288,7 +1288,7 @@ def test_role_for_select_speaker_messages():
     # Test as something unusual
     groupchat.role_for_select_speaker_messages = "SockS"
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
+    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, name=checking_agent.name)
 
     assert len(checking_agent.chat_messages) == 1
     assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "SockS"
