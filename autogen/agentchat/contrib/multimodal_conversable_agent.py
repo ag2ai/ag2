@@ -7,8 +7,6 @@
 import copy
 from typing import Any
 
-from autogen.agentchat.conversable_agent import message_to_dict
-
 from ... import OpenAIWrapper
 from ...code_utils import content_str
 from .. import Agent, ConversableAgent
@@ -69,7 +67,7 @@ class MultimodalConversableAgent(ConversableAgent):
         Args:
             system_message (str): system message for the OpenAIWrapper inference.
         """
-        self._oai_system_message[0]["content"] = message_to_dict(system_message)["content"]
+        self._oai_system_message[0]["content"] = self._message_to_dict(system_message)["content"]
         self._oai_system_message[0]["role"] = "system"
 
     @staticmethod

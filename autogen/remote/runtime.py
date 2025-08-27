@@ -16,7 +16,7 @@ from .protocol import AgentBusMessage
 AgentName: TypeAlias = str
 
 
-class AgentBus:
+class HTTPAgentBus:
     def __init__(self, agents: Iterable[Agent]) -> None:
         self.agents: dict[AgentName, Agent] = {agent.name: agent for agent in agents}
 

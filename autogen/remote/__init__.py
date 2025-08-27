@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .agent import RemoteAgent
-from .runtime import AgentBus
+from .agent import HTTPRemoteAgent
+from .runtime import HTTPAgentBus
 
 __all__ = (
-    "AgentBus",
-    "RemoteAgent",
+    "HTTPAgentBus",
+    "HTTPRemoteAgent",
 )

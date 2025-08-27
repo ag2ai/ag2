@@ -662,7 +662,7 @@ def _determine_next_agent(
     if use_initial_agent:
         return initial_agent
 
-    if groupchat.messages[-1].get("tool_calls"):
+    if "tool_calls" in groupchat.messages[-1]:
         return tool_execution
 
     after_work_condition = None
@@ -1163,9 +1163,8 @@ async def a_run_swarm(
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
-    task = asyncio.create_task(stream_run())
-    # prevent the task from being garbage collected
-    response._task_ref = task  # type: ignore[attr-defined]
+    asyncio.create_task(stream_run())
+
     return response
 
 
@@ -1330,7 +1329,7 @@ def _generate_swarm_tool_reply(
         messages = agent._oai_messages[sender]
 
     message = messages[-1]
-    if message.get("tool_calls"):
+    if "tool_calls" in message:
         tool_call_count = len(message["tool_calls"])
 
         # Loop through tool calls individually (so context can be updated after each function call)

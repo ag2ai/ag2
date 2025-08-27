@@ -11,7 +11,7 @@ from autogen.oai.client import OpenAIWrapper
 from .protocol import AgentBusMessage
 
 
-class RemoteAgent(ConversableAgent):
+class HTTPRemoteAgent(ConversableAgent):
     def __init__(self, url: str, name: str) -> None:
         self.url = url
 
@@ -25,7 +25,7 @@ class RemoteAgent(ConversableAgent):
 
         self.register_reply(
             [Agent, None],
-            RemoteAgent.generate_remote_reply,
+            HTTPRemoteAgent.generate_remote_reply,
             position=len(self._reply_func_list),  # set latest
         )
 

@@ -1,7 +1,7 @@
 import os
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.remote import AgentBus
+from autogen.remote import HTTPAgentBus
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -31,6 +31,6 @@ general_agent = ConversableAgent(
     llm_config=llm_config,
 )
 
-app = AgentBus(
+app = HTTPAgentBus(
     agents=[triage_agent, tech_agent, general_agent],
 )

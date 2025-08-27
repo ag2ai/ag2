@@ -1,26 +1,26 @@
+import os
+
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.remote import RemoteAgent
+from autogen.remote import HTTPRemoteAgent
 
 llm_config = LLMConfig(
-    model="Qwen3-Coder",
-    base_url="http://172.29.24.150:3003/v1",
-    api_key="NotRequired",
-    api_type="openai",
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
 )
 
-triage_agent = RemoteAgent(
+triage_agent = HTTPRemoteAgent(
     "http://localhost:8000",
     name="triage_agent",
 )
 
-tech_agent = RemoteAgent(
+tech_agent = HTTPRemoteAgent(
     "http://localhost:8000",
     name="tech_agent",
 )
 
-general_agent = RemoteAgent(
+general_agent = HTTPRemoteAgent(
     "http://localhost:8000",
     name="general_agent",
 )

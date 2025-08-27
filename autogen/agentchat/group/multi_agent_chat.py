@@ -232,7 +232,6 @@ async def a_run_group_chat(
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
-    task = asyncio.create_task(_initiate_group_chat())
-    # prevent the task from being garbage collected
-    response._task_ref = task  # type: ignore[attr-defined]
+    asyncio.create_task(_initiate_group_chat())
+
     return response
