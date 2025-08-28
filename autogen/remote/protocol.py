@@ -8,3 +8,4 @@ from pydantic import BaseModel
 
 class AgentBusMessage(BaseModel):
     messages: list[dict[str, Any]]
+    context: dict[str, Any] | None = None

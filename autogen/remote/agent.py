@@ -43,16 +43,31 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        # TODO: track remote job status
-        reply_response = httpx.post(
-            f"{self.url}/{self.name}",
-            content=AgentBusMessage(messages=messages).model_dump_json(),
-            timeout=30,
-        )
+        with httpx.Client() as client:
+            # initiate remote procedure
+            task_response = client.post(
+                f"{self.url}/{self.name}",
+                content=AgentBusMessage(
+                    messages=messages,
+                    context=self.context_variables.data,
+                ).model_dump_json(),
+                timeout=30,
+            )
+
+            task_id = task_response.json()
+
+            # wait for remote task complete
+            while (
+                reply_response := client.get(
+                    f"{self.url}/{self.name}/{task_id}",
+                    timeout=30,
+                )
+            ).status_code == 425:
+                pass
 
         if reply := self._process_remote_reply(reply_response):
             # TODO: support multiple messages response for remote chat history
-            return True, reply.messages[0]
+            return True, reply.messages[-1]
 
         return True, None
 
@@ -65,17 +80,32 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        # TODO: track remote job status
         async with httpx.AsyncClient() as client:
-            reply_response = await client.post(
+            # initiate remote procedure
+            task_response = await client.post(
                 f"{self.url}/{self.name}",
-                content=AgentBusMessage(messages=messages).model_dump_json(),
+                content=AgentBusMessage(
+                    messages=messages,
+                    context=self.context_variables.data,
+                ).model_dump_json(),
                 timeout=30,
             )
 
+            task_id = task_response.json()
+
+            # wait for remote task complete
+            while (
+                reply_response := await client.get(
+                    f"{self.url}/{self.name}/{task_id}",
+                    timeout=30,
+                )
+            ).status_code == 425:
+                pass
+
         if reply := self._process_remote_reply(reply_response):
             # TODO: support multiple messages response for remote chat history
-            return True, reply.messages[0]
+            return True, reply.messages[-1]
+
         return True, None
 
     def _process_remote_reply(self, reply_response: httpx.Response) -> AgentBusMessage | None:

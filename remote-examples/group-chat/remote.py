@@ -1,6 +1,7 @@
 import os
 
 from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat.group import ContextVariables
 from autogen.remote import HTTPAgentBus
 
 llm_config = LLMConfig(
@@ -17,6 +18,21 @@ triage_agent = ConversableAgent(
     Do not provide suggestions or answers, only route the query.""",
     llm_config=llm_config,
 )
+
+
+@triage_agent.register_for_llm(
+    name="get_user_context",
+    description="Use `get_user_context` tool to understand the current session before responding",
+)
+@triage_agent.register_for_execution(
+    name="get_user_context",
+    description="Use `get_user_context` tool to understand the current session before responding",
+)
+def get_user_context(context_variables: ContextVariables) -> str:
+    return f"""Current session information:
+    - User Name: {context_variables.get("user_name")}
+    """
+
 
 tech_agent = ConversableAgent(
     name="tech_agent",

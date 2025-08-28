@@ -15,7 +15,7 @@ import threading
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from inspect import signature
@@ -2364,7 +2364,7 @@ class ConversableAgent(LLMAgent):
         if messages is None:
             messages = self._oai_messages[sender]
         message = messages[-1]
-        if "function_call" in message:
+        if message.get("function_call"):
             call_id = message.get("id", None)
             func_call = message["function_call"]
             func_name = func_call.get("name", "")
@@ -2751,7 +2751,7 @@ class ConversableAgent(LLMAgent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
+        exclude: Container[Any] = (),
     ) -> str | dict[str, Any] | None:
         """Reply based on the conversation history and the sender.
 
@@ -2773,8 +2773,7 @@ class ConversableAgent(LLMAgent):
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
-                - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
+            exclude: A list of reply functions to exclude from
                 the reply generation process. Functions in this list will be skipped even if
                 they would normally be triggered.
 
@@ -2802,7 +2801,7 @@ class ConversableAgent(LLMAgent):
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
-            if "exclude" in kwargs and reply_func in kwargs["exclude"]:
+            if reply_func in exclude:
                 continue
             if is_coroutine_callable(reply_func):
                 continue
@@ -2825,7 +2824,7 @@ class ConversableAgent(LLMAgent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
+        exclude: Container[Any] = (),
     ) -> str | dict[str, Any] | None:
         """(async) Reply based on the conversation history and the sender.
 
@@ -2847,8 +2846,7 @@ class ConversableAgent(LLMAgent):
         Args:
             messages: a list of messages in the conversation history.
             sender: sender of an Agent instance.
-            **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
-                - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
+            exclude: A list of reply functions to exclude from
                 the reply generation process. Functions in this list will be skipped even if
                 they would normally be triggered.
 
@@ -2876,7 +2874,7 @@ class ConversableAgent(LLMAgent):
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
-            if "exclude" in kwargs and reply_func in kwargs["exclude"]:
+            if reply_func in exclude:
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):

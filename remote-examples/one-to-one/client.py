@@ -8,7 +8,6 @@ llm_config = LLMConfig(
     api_key=os.getenv("OPENAI_API_KEY"),
 )
 
-
 PYTHON_REVIEW_PROMPT = (
     "You are code reviewer. Analyze provided code and suggest your changes.\n"
     "Do not generate any code, only suggest improvements.\n"
@@ -31,8 +30,10 @@ review_agent = ConversableAgent(
     llm_config=llm_config,
 )
 
-
-code_agent = HTTPRemoteAgent(url="http://localhost:8000", name="coder")
+code_agent = HTTPRemoteAgent(
+    url="http://localhost:8000",
+    name="coder",
+)
 
 
 def generate_code(prompt: str) -> str:

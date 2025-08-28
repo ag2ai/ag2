@@ -2,26 +2,58 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
+import asyncio
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
-from typing import Annotated, Any, TypeAlias
+from itertools import chain
+from typing import Any, Protocol
+from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException, Path, Response, status
+from fastapi import FastAPI, Response, status
 
-from autogen.agentchat import Agent, ConversableAgent
+from autogen.agentchat import ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
 
 from .protocol import AgentBusMessage
 
-AgentName: TypeAlias = str
+
+class RemoteService(Protocol):
+    """Interface to make AgentBus compatible with non AG2 systems."""
+
+    name: str
+
+    async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
+        """Executable that consumes Conversation State and returns a new state."""
+        ...
 
 
 class HTTPAgentBus:
-    def __init__(self, agents: Iterable[Agent]) -> None:
-        self.agents: dict[AgentName, Agent] = {agent.name: agent for agent in agents}
+    def __init__(
+        self,
+        agents: Iterable[ConversableAgent],
+        *,
+        long_polling_interval: float = 10.0,
+        additional_services: Iterable[RemoteService] = (),
+    ) -> None:
+        """Create HTTPAgentBus runtime.
 
+        The runtime make passed agents able to process remote calls.
+
+        Args:
+            agents: agents to register as remote services
+            long_polling_interval:
+                timeout to response on task status calls for long living executions.
+                Should be less then clients' HTTP request timeout.
+            additional_services:
+                additional services to register as remote services
+        """
         self.app = FastAPI()
-        self.app.post("/{agent_name}")(make_remote_call_processor(self.agents))
+
+        for service in chain(map(AgentService, agents), additional_services):
+            register_agent_endpoints(
+                app=self.app,
+                service=service,
+                long_polling_interval=long_polling_interval,
+            )
 
     async def __call__(
         self,
@@ -33,42 +65,88 @@ class HTTPAgentBus:
         await self.app(scope, receive, send)
 
 
-def make_remote_call_processor(
-    agents: dict[AgentName, Agent],
-) -> Callable[[], Awaitable[AgentBusMessage | None]]:
-    # TODO: stream remote job status to the client
-    async def remote_call_processor(
-        history: AgentBusMessage,
-        agent_name: Annotated[str, Path()],
-    ) -> AgentBusMessage | None:
-        try:
-            agent = agents[agent_name]
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
+def register_agent_endpoints(
+    app: FastAPI,
+    service: RemoteService,
+    long_polling_interval: float,
+) -> None:
+    tasks = {}
 
-        # TODO: support input guardrails
-        reply = await agent.a_generate_reply(
-            history.messages,
-            None,
-            exclude={
-                ConversableAgent.a_generate_function_call_reply,
-                ConversableAgent.a_generate_tool_calls_reply,
-                ConversableAgent.generate_code_execution_reply,
-                ConversableAgent._generate_code_execution_reply_using_executor,
-            },
+    @app.get(f"/{service.name}" + "/{task_id}")
+    async def remote_call_result(task_id: UUID) -> AgentBusMessage | None:
+        if task_id not in tasks:
+            return Response(
+                content=f"`{task_id}` task not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        task = tasks[task_id]
+
+        await asyncio.wait(
+            (task, asyncio.create_task(asyncio.sleep(long_polling_interval))),
+            return_when=asyncio.FIRST_COMPLETED,
         )
 
-        # TODO: add ToolExecutionAgent to call local tools
-        # TODO: catch update context events
+        if not task.done():
+            return Response(status_code=status.HTTP_425_TOO_EARLY)
+
+        try:
+            reply = task.result()  # Task inner errors raising here
+        finally:
+            # TODO: how to clear hanged tasks?
+            tasks.pop(task_id, None)
 
         if reply is None:
             return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-        is_valid, out_message = normilize_message_to_oai(reply, agent_name, role="assistant")
+        return reply
+
+    @app.post(f"/{service.name}", status_code=status.HTTP_202_ACCEPTED)
+    async def remote_call_starter(state: AgentBusMessage) -> UUID:
+        task, task_id = asyncio.create_task(service(state)), uuid4()
+        tasks[task_id] = task
+        return task_id
+
+
+class AgentService(RemoteService):
+    def __init__(self, agent: ConversableAgent) -> None:
+        self.name = agent
+        self.agent = agent
+
+    async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
+        # TODO: support input guardrails
+        local_history: list[dict[str, Any]] = []
+
+        while True:
+            # TODO: How to pass `ContextVariables(state.context)` to `self.agent`?
+            reply = await self.agent.a_generate_reply(
+                state.messages + local_history,
+                None,
+            )
+
+            if reply is None:
+                break  # last reply empty
+
+            is_valid, out_message = normilize_message_to_oai(reply, self.agent.name, role="assistant")
+
+            if is_valid:
+                local_history.append(reply)
+
+                # TODO: catch update ContextVariables events
+                # TODO: catch handoffs
+
+                if any((
+                    out_message.get("tool_responses"),  # process tool response
+                    out_message.get("tool_calls"),  # execute tool by agent itself
+                )):
+                    continue  # process response by agent itself
+
+            # last reply broken or
+            # final reply from LLM
+            break
+
+        if not local_history:
+            return None
 
         # TODO: support output guardrails
-        if is_valid:
-            # TODO: reply with whole local history
-            return AgentBusMessage(messages=[out_message])
-
-    return remote_call_processor
+        return AgentBusMessage(messages=local_history)
