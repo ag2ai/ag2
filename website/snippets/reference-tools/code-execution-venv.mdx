@@ -18,7 +18,7 @@ python_executor = PythonCodeExecutionTool(
     python_environment=venv,
 )
 
-with LLMConfig(model="gpt-4o", api_type="openai"):
+with LLMConfig(model="gpt-5", api_type="openai"):
 
     # code_runner has the code execution tool available to execute
     code_runner = ConversableAgent(

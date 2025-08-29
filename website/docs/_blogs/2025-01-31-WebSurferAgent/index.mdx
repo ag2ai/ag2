@@ -73,7 +73,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", api_key=os.environ["OPENAI_API_KEY"])
 ````
 
 [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
@@ -399,7 +399,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 ```python
 llm_config = LLMConfig(
     api_type="openai",
-    model="gpt-4o-mini",
+    model="gpt-5-nano",
     api_key=os.environ["OPENAI_API_KEY"],
 )
 ```
@@ -484,9 +484,9 @@ INFO:httpx:HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/m
 * 'fields' has been removed
   warnings.warn(message, UserWarning)
 14:23:43 - LiteLLM:INFO: utils.py:2825 -
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:LiteLLM:
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 14:23:57 - LiteLLM:INFO: utils.py:1030 - Wrapper: Completed Call, calling success_handler
 INFO:LiteLLM:Wrapper: Completed Call, calling success_handler

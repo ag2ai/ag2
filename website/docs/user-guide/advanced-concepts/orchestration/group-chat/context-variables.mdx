@@ -402,7 +402,7 @@ def get_user_context(context_variables: ContextVariables) -> str:
     - Query type: {context_variables.get("query_type", "Unknown")}"""
 
 # Create the agents
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 with llm_config:
     triage_agent = ConversableAgent(

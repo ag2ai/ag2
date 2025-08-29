@@ -110,7 +110,7 @@ from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 # 3. Create our LLM agent
 with llm_config:
@@ -134,7 +134,7 @@ print(response.messages)
 
 <Note>
 
-Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
+Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
 
 === "macOS / Linux"
 
@@ -191,7 +191,7 @@ from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 
 # 3. Create our LLM agent
@@ -235,7 +235,7 @@ from autogen import ConversableAgent, UserProxyAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 
 # 3. Create our LLM agent
@@ -275,7 +275,7 @@ Here's how to implement a collaborative team for curriculum development using Gr
 from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -368,7 +368,7 @@ from typing import Annotated
 from autogen import ConversableAgent, register_function, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:

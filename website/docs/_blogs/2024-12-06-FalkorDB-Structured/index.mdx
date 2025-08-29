@@ -145,7 +145,7 @@ class MathReasoning(BaseModel):
 # response_format is added to our configuration
 llm_config = autogen.LLMConfig(
     api_type="openai",
-    model="gpt-4o-mini",
+    model="gpt-5-nano",
     api_key=os.getenv("OPENAI_API_KEY"),
     response_format=MathReasoning
 )

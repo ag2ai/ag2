@@ -53,7 +53,7 @@ class ResponseModel(BaseModel):
 # 2. Create LLM configuration with the structured output model
 llm_config = LLMConfig(
     api_type="openai",
-    model="gpt-4o-mini",
+    model="gpt-5-nano",
     response_format=ResponseModel,  # Specify the response format
 )
 
@@ -107,7 +107,7 @@ Next, let's update our summary agent to use this structured output model:
 # Configure the LLM for summary bot with structured output
 summary_llm_config = LLMConfig(
     api_type="openai",
-    model="gpt-4o-mini",
+    model="gpt-5-nano",
     api_key=os.environ.get("OPENAI_API_KEY"),
     temperature=0.2,
     response_format=AuditLogSummary,  # Using our Pydantic model for structured output
@@ -273,7 +273,7 @@ Here's the complete, ready-to-run code for our financial compliance system with 
     # Configure the LLM for finance bot (standard configuration)
     finance_llm_config = LLMConfig(
         api_type="openai",
-        model="gpt-4o-mini",
+        model="gpt-5-nano",
         api_key=os.environ.get("OPENAI_API_KEY"),
         temperature=0.2
     )
@@ -326,7 +326,7 @@ Here's the complete, ready-to-run code for our financial compliance system with 
     # Configure the LLM for summary bot with structured output
     summary_llm_config = LLMConfig(
         api_type="openai",
-        model="gpt-4o-mini",
+        model="gpt-5-nano",
         api_key=os.environ.get("OPENAI_API_KEY"),
         temperature=0.2,
         response_format=AuditLogSummary,  # Using the Pydantic model for structured output

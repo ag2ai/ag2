@@ -56,7 +56,7 @@ A demonstration video which shows <a href="https://github.com/CMBAgents/cmbagent
 
 Our project is leveraging a wide range of AG2 capabilities to solve some of the challenges of cosmology research.
 
-- **Multi-LLM calls**: we utilize different LLM for different tasks. Current examples include gpt-4o-mini for simple straightforward tasks, claude-3.7 for reviewing or critique tasks, o3-mini-high for reasoning,  gpt-4o for planning, o3-min or gemini-2.5-pro-exp for coding.
+- **Multi-LLM calls**: we utilize different LLM for different tasks. Current examples include gpt-5-nano for simple straightforward tasks, claude-3.7 for reviewing or critique tasks, o3-mini-high for reasoning,  gpt-5 for planning, o3-min or gemini-2.5-pro-exp for coding.
 - **Swarm orchestration**: to handle agent transitions we implemented <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a> using swarm orchestration, where transitions are done based on conditions on a set of context variables that evolve and define the state of each agent.
 - **Tool calls** allow us to operate on data, either by executing code locally or storing relevant information into context. With AG2 we are able to control these tool or function calls strictly.
 - **Structured Output** is a key feature that we found to dramatically increase the robustness of <a href="https://github.com/CMBAgents/cmbagent" target="_blank">CMBAGENT</a>. For instance, during the planning stage of the workflow, the plan has a very specific structure with steps corresponding to sub-tasks, the agent in charge and the corresponding instructions. These are then injected into the agent’s context using swarm capabilities.

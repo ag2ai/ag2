@@ -38,7 +38,7 @@ import os
 from autogen import UserProxyAgent, ReasoningAgent, LLMConfig
 
 # Configure the model
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY"))
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Create a reasoning agent with MCTS
 with llm_config:
@@ -69,8 +69,8 @@ Here’s how you can set it up:
 
 ```python
 # Configure the model
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ.get("OPENAI_API_KEY"))
-llm_config_larger = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ.get("OPENAI_API_KEY"))
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", api_key=os.environ.get("OPENAI_API_KEY"))
+llm_config_larger = LLMConfig(api_type="openai", model="gpt-5", api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Create a reasoning agent with MCTS
 with llm_config:
