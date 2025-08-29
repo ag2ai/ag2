@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 from autogen import LLMConfig, ConversableAgent
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group import ContextVariables, AgentTarget, FunctionTarget, ReplyResult
+from autogen.agentchat.group.function_target_result import FunctionTargetMessage, FunctionTargetResult
 from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group.targets.transition_target import RevertToUserTarget, StayTarget, TerminateTarget
 
 load_dotenv()
 
@@ -21,7 +23,7 @@ def main(session_id: Optional[str] = None) -> dict:
     cfg = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
 
     # Shared context
-    ctx = ContextVariables(data={"variable": "value1"})
+    ctx = ContextVariables(data={"application": "<empty>"})
 
     # Agents
     first_agent = ConversableAgent(
@@ -43,20 +45,23 @@ def main(session_id: Optional[str] = None) -> dict:
     )
 
     # After-work hook
-    def afterwork_function(output: str, context_variables: Any) -> ReplyResult:
+    def afterwork_function(output: str, context_variables: Any, *args) -> FunctionTargetResult:
         """
         Switches a context variable and routes the next turn.
         """
-        if context_variables.get("variable") == "value1":
-            context_variables["variable"] = "value2"
-            return ReplyResult(
-                message="The job you are applying to is specifically in GPU optimization",
-                target=AgentTarget(first_agent),
+        if context_variables.get("application") == "<empty>":
+            context_variables["application"] = output
+            return FunctionTargetResult(
+                messages="apply for a job in gpu optimization",
+                target=StayTarget(),
                 context_variables=context_variables,
             )
 
-        return ReplyResult(
-            message="The job you are applying to is specifically in agentic open source development",
+        return FunctionTargetResult(
+            messages=[FunctionTargetMessage(
+                content=f"Revise the draft written by the first agent: {output}",
+                msg_target=second_agent
+            )],
             target=AgentTarget(second_agent),
             context_variables=context_variables,
         )
@@ -77,7 +82,7 @@ def main(session_id: Optional[str] = None) -> dict:
     initiate_group_chat(
         pattern=pattern,
         messages="the job you are applying to is specifically in machine learning",
-        max_rounds=60,
+        max_rounds=20,
     )
 
     return {"session_id": session_id}

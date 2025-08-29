@@ -4,7 +4,8 @@
 
 import random
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -423,19 +424,44 @@ class RandomAgentTarget(TransitionTarget):
 
 
 if TYPE_CHECKING:
-    from ..reply_result import ReplyResult
-
-    AfterworkFn = Callable[[str, Any], "ReplyResult"]
+    from ..function_target_result import FunctionTargetResult
+    from ..function_target_result import FunctionTargetMessage
+    AfterworkFn = Callable[..., "FunctionTargetResult"]
 else:
-    AfterworkFn = Callable[[str, Any], Any]
+    AfterworkFn = Callable[..., Any]
 
+def broadcast(messages: List["FunctionTargetMessage"] | str, group_chat, current_agent, fn_name, target, user_agent, *args) -> None:
+    """Broadcast a message to a specific agent."""
+    if isinstance(messages, str):
+        if hasattr(target, "agent_name"):
+            next_target = target.agent_name
+            for agent in group_chat.agents:
+                if agent.name == next_target:
+                    messages = [SimpleNamespace(content=messages, msg_target=agent)]
+                    break
+        elif isinstance(target, RevertToUserTarget):
+            messages = [SimpleNamespace(content=messages, msg_target=user_agent)]
+        elif isinstance(target, StayTarget):
+            messages = [SimpleNamespace(content=messages, msg_target=current_agent)]
+    for message in messages:
+        content = message.content
+        broadcast = {
+            "role": "system",
+            "name": f"{fn_name}",
+            "content": f"[FUNCTION_HANDOFF] - Reply from function {fn_name}: \n\n {content}"
+        }
+        current_agent._group_manager.send(
+            broadcast,
+            message.msg_target,   
+            request_reply=False,
+            silent=False,
+        )
 
 class FunctionTarget(TransitionTarget):
     """Transition target that invokes a tool function with (prev_output, context)."""
 
     fn_name: str = Field(...)
     fn: AfterworkFn = Field(..., repr=False)
-    broadcast_recipients: list[str] | None = None
 
     def __init__(self, incoming_fn, **kwargs):
         # If the first arg is callable, auto-populate fn and fn_name
@@ -446,7 +472,6 @@ class FunctionTarget(TransitionTarget):
             raise ValueError(
                 "FunctionTarget must be initialized with a callable function as the first argument or 'fn' keyword argument."
             )
-    # --- TransitionTarget API ---
     def can_resolve_for_speaker_selection(self) -> bool:
         return False
 
@@ -455,17 +480,13 @@ class FunctionTarget(TransitionTarget):
         last_message = group_chat.messages[-1]["content"] if group_chat.messages else ""
         current_agent: ConversableAgent = args[1]
         ctx = current_agent.context_variables
-
-        # Define the signature of the function that can be called (parameters and return type)
-        # Create a message class and object for adding a message to the conversation
-        function_target_result = self.fn(group_chat, current_agent, last_message, ctx)
-
-        # resolve_next_target = function_target_result.target.resolve(group_chat, args[1], args[2])
-
-        # if function_target_result.message:
-        #     broadcast(function_target_result.message.content, function_target_result.message.target_agent)
-
-        return function_target_result.target.resolve(group_chat, args[1], args[2])
+        user_agent = args[2]
+        function_target_result = self.fn(last_message, ctx, group_chat, current_agent)
+        if function_target_result.context_variables:
+            ctx.update(function_target_result.context_variables)
+        if function_target_result.messages:
+            broadcast(function_target_result.messages, group_chat, current_agent, self.fn_name, function_target_result.target, user_agent)
+        return function_target_result.target.resolve(group_chat, current_agent, user_agent)
 
     def display_name(self) -> str:
         return self.fn_name

@@ -16,7 +16,6 @@ from .targets.group_manager_target import GroupManagerTarget
 from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
-    FunctionTarget,
     TransitionTarget,
 )
 
@@ -114,101 +113,13 @@ def _evaluate_after_works_conditions(
         if is_available and (
             after_work_condition.condition is None or after_work_condition.condition.evaluate(agent.context_variables)
         ):
-            tgt = after_work_condition.target
-
-            # NEW: Inline execution path for FunctionTarget
-            if isinstance(tgt, FunctionTarget):
-                # extract the agent output and context variables to pass in to the FunctionTarget
-                first_input = groupchat.messages[-1]["content"] if groupchat.messages else ""
-                ctx = agent.context_variables
-
-                try:
-                    rr = tgt.fn(first_input, ctx)  # rr: ReplyResult
-                except Exception as e:
-                    from types import SimpleNamespace
-                    rr = SimpleNamespace(message=f"[{tgt.fn_name}] error: {e}", target=None, context_variables=None)
-
-                # 1) merge returned context vars (if your ReplyResult carries them)
-                if getattr(rr, "context_variables", None):
-                    if isinstance(ctx, dict) and isinstance(rr.context_variables, dict):
-                        ctx.update(rr.context_variables)
-
-                # 2) append/broadcast the tool output
-                fn_content = rr.message if getattr(rr, "message", None) is not None else str(rr)
-
-                # send to manager itself for visibility
-                agent._group_manager.send(
-                    {
-                        "role": "assistant",
-                        "name": tgt.fn_name,
-                        "content": f"[{tgt.fn_name}] {fn_content}",
-                    },
-                    agent._group_manager, 
-                    request_reply=False,
-                    silent=True,
-                )
-                # this may not be ideal but system gives more priority to the msg than tool
-                broadcast = {
-                    "role": "system",
-                    "name": tgt.fn_name,
-                    "content": f"""{fn_content}"""
-                }
-                # 3) choose next agent and broadcast based on rr.target or broadcast_recipients parameter if provided
-                # TODO: fix for StayTarget and TerminateTarget
-                next_target = getattr(rr, "target", None)
-                if hasattr(next_target, "agent_name"):
-                    next_ag_name = next_target.agent_name
-                else:
-                    next_ag_name = None
-                    print("No next target. next_target: ", next_target)
-                for ag in groupchat.agents:
-                    if (
-                        # ag != tool_executor
-                        ag != agent._group_manager
-                        and (
-                            # 1. broadcast_recipients overrides everything
-                            (tgt.broadcast_recipients == "all")
-                            or (tgt.broadcast_recipients is not None and ag.name in tgt.broadcast_recipients)
-                            # 2. otherwise, send only to next agent if present
-                            or (tgt.broadcast_recipients is None and next_ag_name is not None and ag.name == next_ag_name)
-                            # 3. otherwise, send to all
-                            or (tgt.broadcast_recipients is None and next_ag_name is None)
-                        )
-                    ):
-                        # sending from group manager seems to give higher priority than from tool executor.
-                        agent._group_manager.send(
-                            broadcast,
-                            ag,   
-                            request_reply=False,
-                            silent=False,
-                        )
-
-                # add some error handling
-                if next_target is None:
-                    # no explicit next target: delegate to the manager's auto selection
-                    from .targets.group_manager_target import GroupManagerTarget
-                    return GroupManagerTarget().resolve(groupchat, agent, user_agent).get_speaker_selection_result(groupchat)
-
-                # explicit target provided
-                if isinstance(next_target, TransitionTarget):
-                    if next_target.can_resolve_for_speaker_selection():
-                        return next_target.resolve(groupchat, agent, user_agent).get_speaker_selection_result(groupchat)
-                    else:
-                        # If someone tries to return another FunctionTarget here, you can decide what to do.
-                        # For now, delegate to manager to avoid loops.
-                        from .targets.group_manager_target import GroupManagerTarget
-                        return GroupManagerTarget().resolve(groupchat, agent, user_agent).get_speaker_selection_result(groupchat)
-
-                # fallback if target type isn't recognized
-                from .targets.group_manager_target import GroupManagerTarget
-                return GroupManagerTarget().resolve(groupchat, agent, user_agent).get_speaker_selection_result(groupchat)
-            else:
-                # proceed as before if not a FunctionTarget
-                return after_work_condition.target.resolve(
-                    groupchat,
-                    agent,
-                    user_agent,
-                ).get_speaker_selection_result(groupchat)
+            # Condition matched, resolve and return
+            return after_work_condition.target.resolve(
+                groupchat,
+                agent,
+                user_agent,
+            ).get_speaker_selection_result(groupchat)
+        
     return None
 
 
