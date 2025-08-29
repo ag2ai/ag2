@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Annotated
 
 from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat.group import ContextVariables
 from autogen.remote import HTTPAgentBus
 from autogen.tools.dependency_injection import ChatContext
 
@@ -24,8 +25,10 @@ agent = ConversableAgent(
 def get_weekday(
     date_string: Annotated[str, "Format: YYYY-MM-DD"],
     context: ChatContext,
+    context_variables: ContextVariables,
 ) -> str:
     print(context.chat_messages)
+    print(context_variables)
     date = datetime.strptime(date_string, "%Y-%m-%d")
     return date.strftime("%A")
 

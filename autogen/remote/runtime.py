@@ -12,6 +12,9 @@ from fastapi import FastAPI, HTTPException, Response, status
 
 from autogen.agentchat import ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
+from autogen.agentchat.group.context_variables import ContextVariables
+from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
+from autogen.tools.tool import Tool
 
 from .protocol import AgentBusMessage
 
@@ -115,14 +118,20 @@ class AgentService(RemoteService):
 
     async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
         # TODO: support input guardrails
+        context_variables = ContextVariables(state.context_variables)
+
+        tool_executor = GroupToolExecutor()
+        for tool in self.agent.tools:
+            # TODO: inject ChatContext to tool
+            new_tool = tool_executor._make_tool_copy_with_context_variables(Tool(func_or_tool=tool), context_variables)
+            tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
+
         local_history: list[dict[str, Any]] = []
 
         while True:
-            # TODO: How to pass `ContextVariables(state.context)` to `self.agent`?
-            reply = await self.agent.a_generate_reply(
-                state.messages + local_history,
-                None,
-            )
+            chat_history = state.messages + local_history
+
+            reply = await self.agent.a_generate_reply(chat_history, None)
 
             if reply is None:
                 break  # last reply empty
@@ -132,13 +141,18 @@ class AgentService(RemoteService):
             if is_valid:
                 local_history.append(out_message)
 
-                # TODO: catch update ContextVariables events
-                # TODO: catch handoffs
+                if "tool_calls" in out_message:
+                    _, tool_message = tool_executor.generate_tool_calls_reply([out_message])
+                    is_valid, out_message = normilize_message_to_oai(tool_message, self.agent.name, role="tool")
 
-                if any((
-                    out_message.get("tool_responses"),  # process tool response
-                    out_message.get("tool_calls"),  # execute tool by agent itself
-                )):
+                    if is_valid:
+                        local_history.append(out_message)
+
+                    else:
+                        break
+
+                    # TODO: catch update ContextVariables events
+                    # TODO: catch handoffs
                     continue  # process response by agent itself
 
             # last reply broken or
