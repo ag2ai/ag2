@@ -118,7 +118,7 @@ class AgentService(RemoteService):
 
     async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
         # TODO: support input guardrails
-        context_variables = ContextVariables(state.context_variables)
+        context_variables = ContextVariables(state.context)
 
         tool_executor = GroupToolExecutor()
         for tool in self.agent.tools:
