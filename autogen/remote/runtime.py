@@ -14,7 +14,6 @@ from autogen.agentchat import ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
-from autogen.tools.tool import Tool
 
 from .protocol import AgentBusMessage
 
@@ -123,15 +122,14 @@ class AgentService(RemoteService):
         tool_executor = GroupToolExecutor()
         for tool in self.agent.tools:
             # TODO: inject ChatContext to tool
-            new_tool = tool_executor._make_tool_copy_with_context_variables(Tool(func_or_tool=tool), context_variables)
-            tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
+            new_tool = tool_executor.make_tool_copy_with_context_variables(tool, context_variables)
+            if new_tool is not None:
+                tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
 
         local_history: list[dict[str, Any]] = []
 
         while True:
-            chat_history = state.messages + local_history
-
-            reply = await self.agent.a_generate_reply(chat_history, None)
+            reply = await self.agent.a_generate_reply(state.messages + local_history, None)
 
             if reply is None:
                 break  # last reply empty
@@ -143,6 +141,9 @@ class AgentService(RemoteService):
 
                 if "tool_calls" in out_message:
                     _, tool_message = tool_executor.generate_tool_calls_reply([out_message])
+                    if tool_message is None:
+                        break
+
                     is_valid, out_message = normilize_message_to_oai(tool_message, self.agent.name, role="tool")
 
                     if is_valid:

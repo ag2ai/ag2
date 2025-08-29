@@ -24,10 +24,10 @@ agent = ConversableAgent(
 @agent.register_for_execution(name="get_weekday")
 def get_weekday(
     date_string: Annotated[str, "Format: YYYY-MM-DD"],
-    context: ChatContext,
+    # context: ChatContext,
     context_variables: ContextVariables,
 ) -> str:
-    print(context.chat_messages)
+    # print(context.chat_messages)
     print(context_variables)
     date = datetime.strptime(date_string, "%Y-%m-%d")
     return date.strftime("%A")
