@@ -493,7 +493,7 @@ python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",
-#    "autogen/agentchat/cenversable_agent.py",
+#    "autogen/agentchat/conversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -516,6 +516,7 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
+    "autogen/remote",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",

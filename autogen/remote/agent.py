@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -12,26 +12,20 @@ from .protocol import AgentBusMessage
 
 
 class HTTPRemoteAgent(ConversableAgent):
-    def __init__(self, url: str, name: str) -> None:
+    def __init__(self, url: str, name: str, *, client: httpx.AsyncClient | httpx.Client | None = None) -> None:
         self.url = url
+
+        self._httpx_client = client
 
         super().__init__(name, silent=True)
 
-        # Replace `generate_oai_reply` by `generate_remote_reply`
-        # Save `_reply_func_list` order to execute tools & functions locally
-        self._reply_func_list.pop()  # remove ConversableAgent.a_generate_oai_reply
-        self._reply_func_list.pop()  # remove ConversableAgent.generate_oai_reply
-
-        self.register_reply(
-            [Agent, None],
+        self.replace_reply_func(
+            ConversableAgent.generate_oai_reply,
             HTTPRemoteAgent.generate_remote_reply,
-            position=len(self._reply_func_list),
         )
-        self.register_reply(
-            [Agent, None],
+        self.replace_reply_func(
+            ConversableAgent.a_generate_oai_reply,
             HTTPRemoteAgent.a_generate_remote_reply,
-            position=len(self._reply_func_list),
-            ignore_async_in_sync_chat=True,
         )
 
     def generate_remote_reply(
@@ -43,7 +37,9 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        with httpx.Client() as client:
+        client = cast(httpx.Client, self._httpx_client) or httpx.Client()
+
+        with client:
             # initiate remote procedure
             task_response = client.post(
                 f"{self.url}/{self.name}",
@@ -80,7 +76,9 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        async with httpx.AsyncClient() as client:
+        client = cast(httpx.AsyncClient, self._httpx_client) or httpx.AsyncClient()
+
+        async with client:
             # initiate remote procedure
             task_response = await client.post(
                 f"{self.url}/{self.name}",
@@ -115,6 +113,6 @@ class HTTPRemoteAgent(ConversableAgent):
         try:
             serialized_message = AgentBusMessage.model_validate_json(reply_response.content)
         except Exception as e:
-            raise ValueError(f"Remote client error: {reply_response}, {reply_response.content}") from e
+            raise ValueError(f"Remote client error: {reply_response}, {reply_response.content!r}") from e
 
         return serialized_message

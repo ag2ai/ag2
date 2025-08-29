@@ -8,7 +8,7 @@ from itertools import chain
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, HTTPException, Response, status
 
 from autogen.agentchat import ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
@@ -70,13 +70,13 @@ def register_agent_endpoints(
     service: RemoteService,
     long_polling_interval: float,
 ) -> None:
-    tasks = {}
+    tasks: dict[UUID, asyncio.Task[AgentBusMessage | None]] = {}
 
-    @app.get(f"/{service.name}" + "/{task_id}")
-    async def remote_call_result(task_id: UUID) -> AgentBusMessage | None:
+    @app.get(f"/{service.name}" + "/{task_id}", response_model=AgentBusMessage | None)
+    async def remote_call_result(task_id: UUID) -> Response | AgentBusMessage | None:
         if task_id not in tasks:
-            return Response(
-                content=f"`{task_id}` task not found",
+            raise HTTPException(
+                detail=f"`{task_id}` task not found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
@@ -110,7 +110,7 @@ def register_agent_endpoints(
 
 class AgentService(RemoteService):
     def __init__(self, agent: ConversableAgent) -> None:
-        self.name = agent
+        self.name = agent.name
         self.agent = agent
 
     async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
@@ -130,7 +130,7 @@ class AgentService(RemoteService):
             is_valid, out_message = normilize_message_to_oai(reply, self.agent.name, role="assistant")
 
             if is_valid:
-                local_history.append(reply)
+                local_history.append(out_message)
 
                 # TODO: catch update ContextVariables events
                 # TODO: catch handoffs
