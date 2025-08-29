@@ -17,17 +17,17 @@ __all__ = [
 
 @export_module("autogen")
 class OnCondition(BaseModel):  # noqa: N801
-    """Defines a condition for transitioning to another agent or nested chats.
-
-    This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
-
-    These are evaluated after the OnCondition conditions but before the after work condition.
-
-    Args:
-        target (TransitionTarget): The transition (essentially an agent) to hand off to.
-        condition (LLMCondition): The condition for transitioning to the target agent, evaluated by the LLM.
-        available (AvailableCondition): Optional condition to determine if this OnCondition is included for the LLM to evaluate based on context variables using classes like StringAvailableCondition and ContextExpressionAvailableCondition.
-        llm_function_name (Optional[str]): The name of the LLM function to use for this condition.
+    """Defines a condition for transitioning to another agent or nested chats.\n
+    \n
+        This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.\n
+    \n
+        These are evaluated after the OnCondition conditions but before the after work condition.\n
+    \n
+        Args:\n
+            target (TransitionTarget): The transition (essentially an agent) to hand off to.\n
+            condition (LLMCondition): The condition for transitioning to the target agent, evaluated by the LLM.\n
+            available (AvailableCondition): Optional condition to determine if this OnCondition is included for the LLM to evaluate based on context variables using classes like StringAvailableCondition and ContextExpressionAvailableCondition.\n
+            llm_function_name (Optional[str]): The name of the LLM function to use for this condition.\n
     """
 
     target: TransitionTarget

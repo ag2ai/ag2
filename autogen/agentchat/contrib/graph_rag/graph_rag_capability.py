@@ -14,10 +14,10 @@ __all__ = ["GraphRagCapability"]
 class GraphRagCapability(AgentCapability):
     """A graph-based RAG capability uses a graph query engine to give a conversable agent the graph-based RAG ability.
 
-    An agent class with graph-based RAG capability could
-    1. create a graph in the underlying database with input documents.
-    2. retrieved relevant information based on messages received by the agent.
-    3. generate answers from retrieved information and send messages back.
+    An agent class with graph-based RAG capability could:\n
+    1. create a graph in the underlying database with input documents.\n
+    2. retrieved relevant information based on messages received by the agent.\n
+    3. generate answers from retrieved information and send messages back.\n
 
     For example,
     ```python
