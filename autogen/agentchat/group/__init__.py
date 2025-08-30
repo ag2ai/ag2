@@ -14,6 +14,7 @@ from .llm_condition import ContextStrLLMCondition, StringLLMCondition
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
 from .reply_result import ReplyResult
+from .function_target_result import FunctionTargetResult
 from .speaker_selection_result import SpeakerSelectionResult
 from .targets.group_chat_target import GroupChatConfig, GroupChatTarget
 
@@ -32,6 +33,7 @@ from .targets.transition_target import (
     RevertToUserTarget,
     StayTarget,
     TerminateTarget,
+    FunctionTarget,
 )
 
 __all__ = [
@@ -54,6 +56,7 @@ __all__ = [
     "OnCondition",
     "OnContextCondition",
     "ReplyResult",
+    "FunctionTargetResult",
     "RevertToUserTarget",
     "SpeakerSelectionResult",
     "StayTarget",
@@ -61,4 +64,5 @@ __all__ = [
     "StringContextCondition",
     "StringLLMCondition",
     "TerminateTarget",
+    "FunctionTarget",
 ]
