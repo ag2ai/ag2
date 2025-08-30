@@ -81,7 +81,7 @@ from autogen.agentchat.contrib.capabilities import transform_messages
 
 system_message = "You are a world-class researcher."
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o")
+llm_config = LLMConfig(api_type="openai", model="gpt-5")
 
 # Define your agent; the user proxy and an assistant
 with llm_config:
@@ -142,7 +142,7 @@ LLMLingua's flexibility allows for various configurations, such as customizing i
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
 
 with llm_config:
     researcher = autogen.ConversableAgent(
