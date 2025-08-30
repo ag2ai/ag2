@@ -198,7 +198,7 @@ class DocAgent(ConversableAgent):
         )
         self.register_reply([ConversableAgent, None], self.generate_inner_group_chat_reply, position=0)
 
-        self.context_variables: ContextVariables = ContextVariables(
+        self._doc_agent_context_variables: ContextVariables = ContextVariables(
             data={
                 "DocumentsToIngest": [],
                 "DocumentsIngested": [],
