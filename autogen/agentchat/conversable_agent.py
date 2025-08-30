@@ -132,11 +132,11 @@ class ConversableAgent(LLMAgent):
     For example, AssistantAgent and UserProxyAgent are subclasses of this class,
     configured with different default settings.
 
-    To modify auto reply, override `generate_reply` method.
-    To disable/enable human response in every turn, set `human_input_mode` to "NEVER" or "ALWAYS".
-    To modify the way to get human input, override `get_human_input` method.
-    To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`,
-    `run_code`, and `execute_function` methods respectively.
+    To modify auto reply, override `generate_reply` method. \n
+    To disable/enable human response in every turn, set `human_input_mode` to "NEVER" or "ALWAYS". \n
+    To modify the way to get human input, override `get_human_input` method. \n
+    To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`, \n
+    `run_code`, and `execute_function` methods respectively. \n
     """
 
     DEFAULT_CONFIG = False  # False or dict, the default config for llm inference
@@ -168,60 +168,60 @@ class ConversableAgent(LLMAgent):
         | None = None,
         handoffs: Handoffs | None = None,
     ):
-        """Args:
-        name (str): name of the agent.
-        system_message (str or list): system message for the ChatCompletion inference.
-        is_termination_msg (function): a function that takes a message in the form of a dictionary
+        """Args:\n
+        1) name (str): name of the agent.\n
+        2) system_message (str or list): system message for the ChatCompletion inference.\n
+        3) is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
-            The dict can contain the following keys: "content", "role", "name", "function_call".
-        max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
+            The dict can contain the following keys: "content", "role", "name", "function_call".\n
+        4) max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
             default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
-            When set to 0, no auto reply will be generated.
-        human_input_mode (str): whether to ask for human inputs every time a message is received.
-            Possible values are "ALWAYS", "TERMINATE", "NEVER".
+            When set to 0, no auto reply will be generated.\n
+        5) human_input_mode (str): whether to ask for human inputs every time a message is received.\n
+            Possible values are "ALWAYS", "TERMINATE", "NEVER".\n
             (1) When "ALWAYS", the agent prompts for human input every time a message is received.
                 Under this mode, the conversation stops when the human input is "exit",
-                or when is_termination_msg is True and there is no human input.
+                or when is_termination_msg is True and there is no human input.\n
             (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
-                the number of auto reply reaches the max_consecutive_auto_reply.
+                the number of auto reply reaches the max_consecutive_auto_reply.\n
             (3) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
-                when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
-        function_map (dict[str, callable]): Mapping function names (passed to openai) to callable functions, also used for tool calls.
-        code_execution_config (dict or False): config for the code execution.
-            To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:
-            - work_dir (Optional, str): The working directory for the code execution.
-                If None, a default working directory will be used.
+                when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True. \n
+        6) function_map (dict[str, callable]): Mapping function names (passed to openai) to callable functions, also used for tool calls. \n
+        7) code_execution_config (dict or False): config for the code execution.\n
+            To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:\n
+            - work_dir (Optional, str): The working directory for the code execution.\n
+                If None, a default working directory will be used.\n
                 The default working directory is the "extensions" directory under
-                "path_to_autogen".
-            - use_docker (Optional, list, str or bool): The docker image to use for code execution.
-                Default is True, which means the code will be executed in a docker container. A default list of images will be used.
-                If a list or a str of image name(s) is provided, the code will be executed in a docker container
-                with the first image successfully pulled.
-                If False, the code will be executed in the current environment.
-                We strongly recommend using docker for code execution.
-            - timeout (Optional, int): The maximum execution time in seconds.
+                "path_to_autogen".\n
+            - use_docker (Optional, list, str or bool): The docker image to use for code execution.\n
+                Default is True, which means the code will be executed in a docker container. A default list of images will be used.\n
+                If a list or a str of image name(s) is provided, the code will be executed in a docker container\n
+                with the first image successfully pulled.\n
+                If False, the code will be executed in the current environment.\n
+                We strongly recommend using docker for code execution.\n
+            - timeout (Optional, int): The maximum execution time in seconds.\n
             - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
-                If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
-        llm_config (LLMConfig or dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
-            for available options.
-            When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
-            To disable llm-based auto reply, set to False.
-            When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
-        default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.
-        description (str): a short description of the agent. This description is used by other agents
-            (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
-        chat_messages (dict or None): the previous chat messages that this agent had in the past with other agents.
+                If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)\n
+        8) llm_config (LLMConfig or dict or False or None): llm inference configuration.\n
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)\n
+            for available options.\n
+            When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.\n
+            To disable llm-based auto reply, set to False.\n
+            When set to None, will use self.DEFAULT_CONFIG, which defaults to False.\n
+        9) default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.\n
+        10) description (str): a short description of the agent. This description is used by other agents
+            (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)\n
+        11) chat_messages (dict or None): the previous chat messages that this agent had in the past with other agents.
             Can be used to give the agent a memory by providing the chat history. This will allow the agent to
-            resume previous had conversations. Defaults to an empty chat history.
-        silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
-            silent in each function.
-        context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
-            Note: This will be a reference to a shared context for multi-agent chats.
-            Behaves like a dictionary with keys and values (akin to dict[str, Any]).
-        functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
-        update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
-        handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
+            resume previous had conversations. Defaults to an empty chat history.\n
+        12) silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
+            silent in each function.\n
+        13) context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
+            Note: This will be a reference to a shared context for multi-agent chats.\n
+            Behaves like a dictionary with keys and values (akin to dict[str, Any]).\n
+        14) functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).\n
+        15) update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.\n
+        16) handoffs (Handoffs): Handoffs object containing all handoff transition conditions.\n
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
         self.input_guardrails: list[Guardrail] = []
