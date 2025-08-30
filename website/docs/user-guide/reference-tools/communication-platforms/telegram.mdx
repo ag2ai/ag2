@@ -78,7 +78,7 @@ from autogen.tools.experimental import TelegramRetrieveTool, TelegramSendTool
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig(model="gpt-5-nano", api_type="openai")
 
 # Our tool executor agent, which will run the tools once recommended by the telegram_agent, no LLM required
 executor_agent = ConversableAgent(

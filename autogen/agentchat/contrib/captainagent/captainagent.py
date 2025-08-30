@@ -149,25 +149,26 @@ Note that the previous experts will forget everything after you obtain the respo
         description: str | None = DEFAULT_DESCRIPTION,
         **kwargs: Any,
     ):
-        """Args:
-        name (str): agent name.
-        system_message (str): system message for the ChatCompletion inference.
-            Please override this attribute if you want to reprogram the agent.
-        llm_config (LLMConfig or dict or False): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.
-        is_termination_msg (function): a function that takes a message in the form of a dictionary
-            and returns a boolean value indicating if this received message is a termination message.
-            The dict can contain the following keys: "content", "role", "name", "function_call".
-        max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
-            default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
-            The limit only plays a role when human_input_mode is not "ALWAYS".
-        agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.
-        tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.
-        nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.
-            A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/latest/docs/user-guide/reference-agents/captainagent).
-        agent_config_save_path (str): the path to save the generated or retrieved agent configuration.
-        **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).
+        """
+        Args:\n
+        name (str): agent name.\n
+        system_message (str): system message for the ChatCompletion inference.\n
+            Please override this attribute if you want to reprogram the agent.\n
+        llm_config (LLMConfig or dict or False): llm inference configuration.\n
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) for available options.\n
+        is_termination_msg (function): a function that takes a message in the form of a dictionary\n
+            and returns a boolean value indicating if this received message is a termination message.\n
+            The dict can contain the following keys: "content", "role", "name", "function_call".\n
+        max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.\n
+            default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).\n
+            The limit only plays a role when human_input_mode is not "ALWAYS".\n
+        agent_lib (str): the path or a JSON file of the agent library for retrieving the nested chat instantiated by CaptainAgent.\n
+        tool_lib (str): the path to the tool library for retrieving the tools used in the nested chat instantiated by CaptainAgent.\n
+        nested_config (dict): the configuration for the nested chat instantiated by CaptainAgent.\n
+            A full list of keys and their functionalities can be found in [docs](https://docs.ag2.ai/latest/docs/user-guide/reference-agents/captainagent).\n
+        agent_config_save_path (str): the path to save the generated or retrieved agent configuration.\n
+        **kwargs (dict): Please refer to other kwargs in\n
+            [ConversableAgent](https://github.com/ag2ai/ag2/blob/main/autogen/agentchat/conversable_agent.py#L74).\n
         """
         super().__init__(
             name,
