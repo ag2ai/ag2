@@ -6,13 +6,13 @@ In this deep-dive we run through the LLM configuration in depth, including the u
 
 # LLM Configuration
 
-In AG2, agents use LLMs as key components to understand and react. To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4o`:
+In AG2, agents use LLMs as key components to understand and react. To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4.1`:
 
 ```python
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
 ```
 
 <Warning>
@@ -34,7 +34,7 @@ Different tasks may require different models, and the `config_list` allows speci
 <Tabs>
   <Tab title="OpenAI">
 - `api_type` (str, required): The model provider
-- `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4o-mini'.
+- `model` (str, required): The identifier of the model to be used, such as 'gpt-5', 'gpt-5-nano'.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
 - `tags` (List[str], optional): Tags which can be used for filtering.
@@ -44,7 +44,7 @@ Different tasks may require different models, and the `config_list` allows speci
     [
       {
         "api_type": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-5",
         "api_key": os.environ['OPENAI_API_KEY']
       }
     ]
@@ -62,7 +62,7 @@ Different tasks may require different models, and the `config_list` allows speci
     ```json
     [
       {
-        "model": "my-gpt-4o-deployment",
+        "model": "my-gpt-4.1-deployment",
         "api_type": "azure",
         "api_key": os.environ['AZURE_OPENAI_API_KEY'],
         "base_url": "https://ENDPOINT.openai.azure.com/",
@@ -130,10 +130,10 @@ An agent uses the very first model available in the "config_list" and makes LLM 
 
 ### Config list filtering
 
-As described above the list can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you have a list of configs and you want to select the one with the model "gpt-4o-mini" you can use the following filter:
+As described above the list can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you have a list of configs and you want to select the one with the model "gpt-5-nano" you can use the following filter:
 
 ```python
-filter_dict = {"model": ["gpt-4o-mini"]}
+filter_dict = {"model": ["gpt-5-nano"]}
 ```
 
 This can then be applied to a config when constructing `LLM_CONFIG` with `where` method:
@@ -154,7 +154,7 @@ Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy wa
 
 ```python
 config_list = [
-    {"api_type": "openai", "model": "my-gpt-4o-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
+    {"api_type": "openai", "model": "my-gpt-4.1-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
     {"api_type": "openai", "model": "llama-7B", "base_url": "http://127.0.0.1:8080", "tags": ["llama", "local"]},
 ]
 ```
@@ -185,7 +185,7 @@ class MyHttpClient(httpx.Client):
 
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "my-gpt-4o-deployment",
+    "model": "my-gpt-5-deployment",
     "api_key": "",
 }, http_client=MyHttpClient(proxy="http://localhost:8030"))
 ```
@@ -324,7 +324,7 @@ from autogen import LLMConfig
 
 llm_config = LLMConfig(
     {
-        "model": "my-gpt-4o-deployment",
+        "model": "my-gpt-5-deployment",
         "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
         "api_type": "azure",
         "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),

@@ -44,7 +44,7 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 ```
 
 ### 2. Create Specialized Agents
@@ -145,7 +145,7 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini"})
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

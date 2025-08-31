@@ -26,7 +26,7 @@ import os
 
 from autogen import ConversableAgent, LLMConfig
 
-llm_config=LLMConfig({"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 student_agent = ConversableAgent(
     name="Student_Agent",

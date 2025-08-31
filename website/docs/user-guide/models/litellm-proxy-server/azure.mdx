@@ -11,9 +11,9 @@ To connect LiteLLM with an `Azure model`, configure your `litellm_config.yaml` a
 
 ```yaml
 model_list:
-  - model_name: azure-gpt-4o-mini
+  - model_name: azure-gpt-5-nano
     litellm_params:
-      model: azure/gpt-4o-mini
+      model: azure/gpt-5-nano
       api_base: os.environ/AZURE_API_BASE
       api_key: os.environ/AZURE_API_KEY
       api_version: os.environ/AZURE_API_VERSION
@@ -42,9 +42,9 @@ To confirm that `config.yaml` is correctly mounted, check the logs:
 13:49:43 - LiteLLM Proxy:DEBUG: proxy_server.py:1507 - loaded config={
     "model_list": [
         {
-            "model_name": "azure-gpt-4o-mini",
+            "model_name": "azure-gpt-5-nano",
             "litellm_params": {
-                "model": "azure/gpt-4o-mini",
+                "model": "azure/gpt-5-nano",
                 "api_base": "os.environ/AZURE_API_BASE",
                 "api_key": "os.environ/AZURE_API_KEY",
                 "api_version": "os.environ/AZURE_API_VERSION"
@@ -61,7 +61,7 @@ To communicate with LiteLLM, configure the model in `config_list` and initiate a
 ```python
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig({"model": "azure-gpt-4o-mini", "base_url": "http://0.0.0.0:4000"})
+llm_config = LLMConfig({"model": "azure-gpt-5-nano", "base_url": "http://0.0.0.0:4000"})
 
 user_proxy = UserProxyAgent(
     name="user_proxy",

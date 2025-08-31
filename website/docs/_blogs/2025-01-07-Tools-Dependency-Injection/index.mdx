@@ -108,7 +108,7 @@ Configure the agents for the interaction.
 
 
 ```python
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant = ConversableAgent(name="assistant", llm_config=llm_config)
 
@@ -190,7 +190,7 @@ Configure the agents for the interaction.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 ```python
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant = ConversableAgent(name="assistant", llm_config=llm_config)
 
@@ -276,7 +276,7 @@ You can assign different contexts, such as distinct account data, to different a
 Let's configure a `GroupChat` with two assistant agents.
 
 ```python
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 assistant_1 = ConversableAgent(name="assistant_1", llm_config=llm_config)
 assistant_2 = ConversableAgent(name="assistant_2", llm_config=llm_config)

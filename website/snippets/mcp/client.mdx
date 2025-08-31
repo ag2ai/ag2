@@ -133,7 +133,7 @@ async def create_toolkit_and_run(session: ClientSession) -> None:
     toolkit = await create_toolkit(session=session)
     agent = AssistantAgent(
         name="assistant",
-        llm_config=LLMConfig({"model": "gpt-4o-mini", "api_type": "openai"})
+        llm_config=LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
     )
     # Register MCP tools with the agent
     toolkit.register_for_llm(agent)

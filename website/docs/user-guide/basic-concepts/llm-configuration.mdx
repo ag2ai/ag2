@@ -43,7 +43,7 @@ from autogen import LLMConfig
 
 llm_config = LLMConfig({
     "api_type": "openai",                      # The provider
-    "model": "gpt-4o-mini",                    # The specific model
+    "model": "gpt-5-nano",                    # The specific model
     "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
 })
 ```
@@ -59,12 +59,12 @@ from autogen import LLMConfig
 llm_config = LLMConfig(
     {
         "api_type": "openai",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5-nano",
         "api_key": os.environ["OPENAI_API_KEY"]
     },
     {
         "api_type": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-5",
         "api_key": os.environ["OPENAI_API_KEY"]
     }
 )
@@ -136,7 +136,7 @@ import os
 # Basic configuration using environment variable
 llm_config = LLMConfig({
     "api_type": "openai",
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-nano",
     "api_key": os.environ["OPENAI_API_KEY"],
     "temperature": 0.2  # Lower temperature for more consistent financial analysis
 })
@@ -144,7 +144,7 @@ llm_config = LLMConfig({
 
 **Code walkthrough**:
 
-- We're using OpenAI's `GPT-4o-mini` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
+- We're using OpenAI's `gpt-5-nano` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
 - We've set temperature to 0.2 because when it comes to financial compliance, creativity is NOT what we want (sorry, creative accountants!)
 - We're keeping our API key in an environment variable because security first, folks!
 

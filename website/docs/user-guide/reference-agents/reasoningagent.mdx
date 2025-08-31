@@ -51,7 +51,7 @@ from autogen.agents.experimental import ReasoningAgent, ThinkNode
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 verbose = True
 
@@ -730,11 +730,11 @@ The narrative of Nvidia is one of relentless innovation and vision. We find ours
 
 ## Use a different Model for Grading
 
-To use a different model for grading instead of gpt-4o, pass the `grader_llm_config` argument when initializing the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent). This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
+To use a different model for grading instead of gpt-5, pass the `grader_llm_config` argument when initializing the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent). This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o-mini"})
+grader_llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 writer = AssistantAgent(
     name="Writer",

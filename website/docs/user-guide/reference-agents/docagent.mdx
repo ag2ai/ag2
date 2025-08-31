@@ -109,7 +109,7 @@ To use the in-memory query engine, you will need to create it and pass it to the
 from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
 
 # Example LLM Config
-llm_config_list = {"config_list": {"api_type": "openai", "model": "gpt-4o-mini", "cache_seed": None}}
+llm_config_list = {"config_list": {"api_type": "openai", "model": "gpt-5-nano", "cache_seed": None}}
 
 # Create our In-Memory Query Engine
 inmemory_qe = InMemoryQueryEngine(llm_config=llm_config_list)
@@ -145,7 +145,7 @@ Note that the request is handled in natural language and the output will show th
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgent
 document_agent = DocAgent(llm_config=llm_config)
@@ -460,7 +460,7 @@ However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/ag
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4o"})
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgents with their own collections
 # so that their ingested data and queries will be unique to them

@@ -48,6 +48,7 @@ SELECT_SPEAKER_PROMPT_TEMPLATE = (
 @export_module("autogen")
 class GroupChat:
     """(In preview) A group chat class that contains the following data fields:
+
     - agents: a list of participating agents.
     - messages: a list of messages in the group chat.
     - max_round: the maximum number of rounds.
@@ -103,9 +104,9 @@ class GroupChat:
         Default is 2.
     - select_speaker_transform_messages: (optional) the message transformations to apply to the nested select speaker agent-to-agent chat messages.
         Takes a TransformMessages object, defaults to None and is only utilised when the speaker selection method is "auto".
-    - select_speaker_auto_verbose: whether to output the select speaker responses and selections
+    - select_speaker_auto_verbose: whether to output the select speaker responses and selections.
         If set to True, the outputs from the two agents in the nested select speaker chat will be output, along with
-        whether the responses were successful, or not, in selecting an agent
+        whether the responses were successful, or not, in selecting an agent.
         Applies only to "auto" speaker selection method.
     - allow_repeat_speaker: whether to allow the same speaker to speak consecutively.
         Default is True, in which case all speakers are allowed to speak consecutively.
@@ -1707,19 +1708,20 @@ class GroupChatManager(ConversableAgent):
             agent._raise_exception_on_async_reply_functions()
 
     def clear_agents_history(self, reply: dict[str, Any], groupchat: GroupChat) -> str:
-        """Clears history of messages for all agents or selected one. Can preserve selected number of last messages.
-        That function is called when user manually provide "clear history" phrase in his reply.
-        When "clear history" is provided, the history of messages for all agents is cleared.
-        When "clear history `<agent_name>`" is provided, the history of messages for selected agent is cleared.
-        When "clear history `<nr_of_messages_to_preserve>`" is provided, the history of messages for all agents is cleared
-        except last `<nr_of_messages_to_preserve>` messages.
-        When "clear history `<agent_name>` `<nr_of_messages_to_preserve>`" is provided, the history of messages for selected
-        agent is cleared except last `<nr_of_messages_to_preserve>` messages.
-        Phrase "clear history" and optional arguments are cut out from the reply before it passed to the chat.
-
-        Args:
-            reply (dict): reply message dict to analyze.
-            groupchat (GroupChat): GroupChat object.
+        """Clears history of messages for all agents or a selected one. Can preserve a selected number of last messages.\n
+        \n
+        This function is called when the user manually provides the "clear history" phrase in their reply.\n
+        When "clear history" is provided, the history of messages for all agents is cleared.\n
+        When "clear history `<agent_name>`" is provided, the history of messages for the selected agent is cleared.\n
+        When "clear history `<nr_of_messages_to_preserve>`" is provided, the history of messages for all agents is cleared\n
+        except for the last `<nr_of_messages_to_preserve>` messages.\n
+        When "clear history `<agent_name>` `<nr_of_messages_to_preserve>`" is provided, the history of messages for the selected\n
+        agent is cleared except for the last `<nr_of_messages_to_preserve>` messages.\n
+        The phrase "clear history" and optional arguments are cut out from the reply before it is passed to the chat.\n
+        \n
+        Args:\n
+            reply (dict): reply message dict to analyze.\n
+            groupchat (GroupChat): GroupChat object.\n
         """
         iostream = IOStream.get_default()
 
