@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import warnings
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from itertools import chain
 from typing import Any, Protocol
@@ -14,6 +15,8 @@ from autogen.agentchat import ConversableAgent
 from autogen.agentchat.conversable_agent import normilize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
+from autogen.agentchat.group.reply_result import ReplyResult
+from autogen.agentchat.group.targets.transition_target import TransitionTarget
 
 from .protocol import AgentBusMessage
 
@@ -129,31 +132,46 @@ class AgentService(RemoteService):
         local_history: list[dict[str, Any]] = []
 
         while True:
+            # TODO: catch ask user input event
             reply = await self.agent.a_generate_reply(state.messages + local_history, None)
-
             if reply is None:
                 break  # last reply empty
 
-            is_valid, out_message = normilize_message_to_oai(reply, self.agent.name, role="assistant")
+            valid, out_message = normilize_message_to_oai(reply, self.agent.name, role="assistant")
 
-            if is_valid:
+            if valid:
                 local_history.append(out_message)
 
                 if "tool_calls" in out_message:
                     _, tool_message = tool_executor.generate_tool_calls_reply([out_message])
                     if tool_message is None:
+                        break  # tool response empty
+
+                    if "tool_responses" in tool_message:
+                        # TODO: catch handoffs
+                        for tool_response in tool_message["tool_responses"]:
+                            content = tool_response["content"]
+
+                            if isinstance(content, TransitionTarget):
+                                warnings.warn(
+                                    f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
+                                )
+
+                            elif isinstance(content, ReplyResult):
+                                if content.target:
+                                    warnings.warn(
+                                        f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
+                                    )
+
+                                if content.context_variables:
+                                    context_variables.update(content.context_variables.to_dict())
+                                    tool_response["content"] = content.message
+
+                    valid, out_message = normilize_message_to_oai(tool_message, self.agent.name, role="tool")
+                    if not valid:
                         break
 
-                    is_valid, out_message = normilize_message_to_oai(tool_message, self.agent.name, role="tool")
-
-                    if is_valid:
-                        local_history.append(out_message)
-
-                    else:
-                        break
-
-                    # TODO: catch update ContextVariables events
-                    # TODO: catch handoffs
+                    local_history.append(out_message)
                     continue  # process response by agent itself
 
             # last reply broken or
@@ -164,4 +182,4 @@ class AgentService(RemoteService):
             return None
 
         # TODO: support output guardrails
-        return AgentBusMessage(messages=local_history)
+        return AgentBusMessage(messages=local_history, context=context_variables.data)

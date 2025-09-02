@@ -5,7 +5,8 @@ from typing import Any, cast
 
 import httpx
 
-from autogen import Agent, ConversableAgent
+from autogen import ConversableAgent
+from autogen.agentchat.group import ContextVariables
 from autogen.oai.client import OpenAIWrapper
 
 from .protocol import AgentBusMessage
@@ -31,7 +32,7 @@ class HTTPRemoteAgent(ConversableAgent):
     def generate_remote_reply(
         self,
         messages: list[dict[str, Any]] | None = None,
-        sender: Agent | None = None,
+        sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         if messages is None:
@@ -62,6 +63,9 @@ class HTTPRemoteAgent(ConversableAgent):
                 pass
 
         if reply := self._process_remote_reply(reply_response):
+            if sender:
+                context_variables = ContextVariables(reply.context)
+                sender.context_variables.update(context_variables.to_dict())
             # TODO: support multiple messages response for remote chat history
             return True, reply.messages[-1]
 
@@ -70,7 +74,7 @@ class HTTPRemoteAgent(ConversableAgent):
     async def a_generate_remote_reply(
         self,
         messages: list[dict[str, Any]] | None = None,
-        sender: Agent | None = None,
+        sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         if messages is None:
@@ -101,6 +105,9 @@ class HTTPRemoteAgent(ConversableAgent):
                 pass
 
         if reply := self._process_remote_reply(reply_response):
+            if sender:
+                context_variables = ContextVariables(reply.context)
+                sender.context_variables.update(context_variables.to_dict())
             # TODO: support multiple messages response for remote chat history
             return True, reply.messages[-1]
 

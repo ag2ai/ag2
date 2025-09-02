@@ -4,8 +4,8 @@ from typing import Annotated
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.group import ContextVariables
+from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.remote import HTTPAgentBus
-from autogen.tools.dependency_injection import ChatContext
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -30,7 +30,11 @@ def get_weekday(
     # print(context.chat_messages)
     print(context_variables)
     date = datetime.strptime(date_string, "%Y-%m-%d")
-    return date.strftime("%A")
+
+    return ReplyResult(
+        # context_variables=context_variables,
+        message=date.strftime("%A"),
+    )
 
 
 app = HTTPAgentBus(agents=[agent])
