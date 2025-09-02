@@ -16,7 +16,7 @@ from .....llm_config import LLMConfig
 from ..core.base_interfaces import RAGQueryEngine
 from ..core.config import DocAgentConfig
 
-__all__ = ["DocAgent2"]
+__all__ = ["DocAgent"]
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ If there are no citations at all, DON'T INCLUDE ANY mention of citations.
 
 
 @export_module("autogen.agents.experimental.document_agent")
-class DocAgent2(ConversableAgent):
+class DocAgent(ConversableAgent):
     """Refactored DocAgent with Query Agent, Error Agent, and Summary Agent.
 
     This agent uses a multi-agent architecture to handle queries against pre-ingested documents.
@@ -108,7 +108,7 @@ class DocAgent2(ConversableAgent):
         self._create_summary_agent(llm_config)
 
         # Register the main reply function
-        self.register_reply([ConversableAgent, None], DocAgent2._generate_group_chat_reply)
+        self.register_reply([ConversableAgent, None], DocAgent._generate_group_chat_reply)
 
     def _create_query_agent(self, llm_config: LLMConfig | dict[str, Any]) -> None:
         """Create the Query Agent."""
