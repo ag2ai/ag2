@@ -95,6 +95,7 @@ class TestDoclingDocumentProcessor:
         input_file.write_text("test content")
         return input_file
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_init_with_output_dir(self, mock_docling_imports: Any, tmp_path: Path) -> None:
         """Test initialization with custom output directory."""
         output_dir = tmp_path / "custom_output"
@@ -104,6 +105,7 @@ class TestDoclingDocumentProcessor:
         assert processor.chunk_size == 1024
         assert output_dir.exists()
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_init_without_output_dir(self, mock_docling_imports: Any) -> None:
         """Test initialization without output directory (uses default)."""
         processor = DoclingDocumentProcessor()
@@ -113,6 +115,7 @@ class TestDoclingDocumentProcessor:
         assert processor.chunk_size == 512
         assert expected_dir.exists()
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_init_with_path_object(self, mock_docling_imports: Any, tmp_path: Path) -> None:
         """Test initialization with Path object."""
         output_dir = tmp_path / "path_output"
@@ -121,6 +124,7 @@ class TestDoclingDocumentProcessor:
         assert processor.output_dir == output_dir
         assert output_dir.exists()
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_process_document_with_custom_output_dir(
         self,
         mock_docling_imports: Any,
@@ -149,6 +153,7 @@ class TestDoclingDocumentProcessor:
         assert result[0].name == "test_document.md"
         assert temp_output_dir.exists()
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_process_document_with_default_output_dir(
         self, mock_docling_imports: Any, mock_docling_modules: Any, mock_handle_input: Any, temp_input_file: Path
     ) -> None:
@@ -172,6 +177,7 @@ class TestDoclingDocumentProcessor:
         assert result[0].name == "test_document.md"
         assert processor.output_dir.exists()
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_chunk_document_with_default_chunk_size(self, mock_docling_imports: Any, temp_input_file: Path) -> None:
         """Test chunk_document with default chunk size."""
         processor = DoclingDocumentProcessor()
@@ -186,6 +192,7 @@ class TestDoclingDocumentProcessor:
         assert len(chunks[0]) == 512
         assert len(chunks[1]) == 488
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_chunk_document_with_custom_chunk_size(self, mock_docling_imports: Any, temp_input_file: Path) -> None:
         """Test chunk_document with custom chunk size."""
         processor = DoclingDocumentProcessor(chunk_size=100)
@@ -200,6 +207,7 @@ class TestDoclingDocumentProcessor:
         assert all(len(chunk) == 50 for chunk in chunks[:-1])
         assert len(chunks[-1]) == 50
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_chunk_document_with_content_shorter_than_chunk_size(
         self, mock_docling_imports: Any, temp_input_file: Path
     ) -> None:
@@ -215,6 +223,7 @@ class TestDoclingDocumentProcessor:
         assert len(chunks) == 1
         assert chunks[0] == content
 
+    @skip_on_missing_imports(["docling"], "rag")
     def test_chunk_document_with_empty_file(self, mock_docling_imports: Any, temp_input_file: Path) -> None:
         """Test chunk_document with empty file."""
         processor = DoclingDocumentProcessor()
