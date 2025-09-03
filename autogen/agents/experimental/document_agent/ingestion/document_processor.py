@@ -50,6 +50,10 @@ class DoclingDocumentProcessor(DocumentProcessor):
         with open(document_path, encoding="utf-8") as f:
             content = f.read()
 
+        # Handle empty content - return a single empty chunk
+        if not content:
+            return [""]
+
         # Simple chunking by character count
         chunks = []
         for i in range(0, len(content), chunk_size):
