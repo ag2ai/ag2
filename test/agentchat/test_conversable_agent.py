@@ -607,6 +607,37 @@ async def test_a_generate_reply_with_messages_and_sender_none(conversable_agent)
         pytest.fail(f"Unexpected exception: {e}")
 
 
+def test_generate_reply_with_single_dict_message(conversable_agent):
+    """Test generate_reply with a single message of type dict[str, Any]."""
+    single_message = {"role": "user", "content": "Hello, this is a single message"}
+
+    try:
+        response = conversable_agent.generate_reply(messages=single_message, sender=None)
+        assert response is not None, "Response should not be None"
+        # Since conversable_agent has no LLM config, it should return the default auto reply
+        assert response == conversable_agent._default_auto_reply
+    except AssertionError as e:
+        pytest.fail(f"Unexpected AssertionError: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {e}")
+
+
+@pytest.mark.asyncio
+async def test_a_generate_reply_with_single_dict_message(conversable_agent):
+    """Test a_generate_reply with a single message of type dict[str, Any]."""
+    single_message = {"role": "user", "content": "Hello, this is a single message"}
+
+    try:
+        response = await conversable_agent.a_generate_reply(messages=single_message, sender=None)
+        assert response is not None, "Response should not be None"
+        # Since conversable_agent has no LLM config, it should return the default auto reply
+        assert response == conversable_agent._default_auto_reply
+    except AssertionError as e:
+        pytest.fail(f"Unexpected AssertionError: {e}")
+    except Exception as e:
+        pytest.fail(f"Unexpected exception: {e}")
+
+
 @pytest.mark.asyncio
 @patch("builtins.input")
 async def test_a_get_human_input_console_io(mock_input) -> None:
