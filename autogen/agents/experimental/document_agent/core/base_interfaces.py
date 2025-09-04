@@ -33,6 +33,30 @@ class RAGQueryEngine(ABC):
         pass
 
 
+class DocumentSource(ABC):
+    """Abstract base class for document input sources."""
+
+    @abstractmethod
+    def list_documents(self, prefix: str | None = None) -> list[str]:
+        """List available documents."""
+        pass
+
+    @abstractmethod
+    def download_document(self, document_key: str, local_path: Path) -> bool:
+        """Download document to local path for processing."""
+        pass
+
+    @abstractmethod
+    def get_document_metadata(self, document_key: str) -> dict[str, Any]:
+        """Get metadata for a document."""
+        pass
+
+    @abstractmethod
+    def document_exists(self, document_key: str) -> bool:
+        """Check if document exists."""
+        pass
+
+
 class DocumentProcessor(ABC):
     """Abstract base class for document processing."""
 

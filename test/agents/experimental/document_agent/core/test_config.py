@@ -9,7 +9,7 @@ from autogen.agents.experimental.document_agent.core.config import (
     DocAgentConfig,
     ProcessingConfig,
     RAGConfig,
-    StorageConfig,
+    SourceConfig,
 )
 
 
@@ -63,37 +63,37 @@ class TestRAGConfig:
 
 
 class TestStorageConfig:
-    """Test cases for StorageConfig class."""
+    """Test cases for SourceConfig class."""
 
     def test_default_values(self) -> None:
-        """Test that StorageConfig has correct default values."""
-        config = StorageConfig()
+        """Test that SourceConfig has correct default values."""
+        config = SourceConfig()
 
-        assert config.storage_type == "local"
-        assert config.base_path == Path("./storage")
+        assert config.source_type == "local"
+        assert config.base_path == Path("./documents")
         assert config.bucket_name is None
         assert config.credentials is None
 
     def test_custom_values(self) -> None:
-        """Test that StorageConfig can be initialized with custom values."""
+        """Test that SourceConfig can be initialized with custom values."""
         custom_path = Path("/custom/storage")
         custom_creds = {"access_key": "test", "secret_key": "test"}
 
-        config = StorageConfig(
-            storage_type="s3", base_path=custom_path, bucket_name="test-bucket", credentials=custom_creds
+        config = SourceConfig(
+            source_type="s3", base_path=custom_path, bucket_name="test-bucket", credentials=custom_creds
         )
 
-        assert config.storage_type == "s3"
+        assert config.source_type == "s3"
         assert config.base_path == custom_path
         assert config.bucket_name == "test-bucket"
         assert config.credentials == custom_creds
 
     def test_partial_customization(self) -> None:
-        """Test that StorageConfig can be partially customized."""
-        config = StorageConfig(storage_type="azure", bucket_name="azure-container")
+        """Test that SourceConfig can be partially customized."""
+        config = SourceConfig(source_type="azure", bucket_name="azure-container")
 
         # Custom values
-        assert config.storage_type == "azure"
+        assert config.source_type == "azure"
         assert config.bucket_name == "azure-container"
 
         # Default values should remain
@@ -102,10 +102,10 @@ class TestStorageConfig:
 
     def test_base_path_is_path_object(self) -> None:
         """Test that base_path is always a Path object."""
-        config = StorageConfig()
+        config = SourceConfig()
         assert isinstance(config.base_path, Path)
 
-        config = StorageConfig(base_path=Path("./relative/path"))
+        config = SourceConfig(base_path=Path("./relative/path"))
         assert isinstance(config.base_path, Path)
         assert config.base_path == Path("./relative/path")
 
@@ -190,31 +190,31 @@ class TestDocAgentConfig:
 
         # Check that nested configs are created with defaults
         assert isinstance(config.rag, RAGConfig)
-        assert isinstance(config.storage, StorageConfig)
+        assert isinstance(config.source, SourceConfig)
         assert isinstance(config.processing, ProcessingConfig)
 
         # Check default values of nested configs
         assert config.rag.rag_type == "vector"
-        assert config.storage.storage_type == "local"
+        assert config.source.source_type == "local"
         assert config.processing.chunk_size == 512
 
     def test_custom_nested_configs(self) -> None:
         """Test that DocAgentConfig can be initialized with custom nested configs."""
         custom_rag = RAGConfig(rag_type="graph", backend="neo4j")
-        custom_storage = StorageConfig(storage_type="s3", bucket_name="test-bucket")
+        custom_storage = SourceConfig(source_type="s3", bucket_name="test-bucket")
         custom_processing = ProcessingConfig(chunk_size=1024, max_file_size=50 * 1024 * 1024)
 
-        config = DocAgentConfig(rag=custom_rag, storage=custom_storage, processing=custom_processing)
+        config = DocAgentConfig(rag=custom_rag, source=custom_storage, processing=custom_processing)
 
         assert config.rag == custom_rag
-        assert config.storage == custom_storage
+        assert config.source == custom_storage
         assert config.processing == custom_processing
 
         # Verify the custom values
         assert config.rag.rag_type == "graph"
         assert config.rag.backend == "neo4j"
-        assert config.storage.storage_type == "s3"
-        assert config.storage.bucket_name == "test-bucket"
+        assert config.source.source_type == "s3"
+        assert config.source.bucket_name == "test-bucket"
         assert config.processing.chunk_size == 1024
         assert config.processing.max_file_size == 50 * 1024 * 1024
 
@@ -228,7 +228,7 @@ class TestDocAgentConfig:
         assert config.rag.rag_type == "structured"
 
         # Default nested configs should remain
-        assert config.storage.storage_type == "local"
+        assert config.source.source_type == "local"
         assert config.processing.chunk_size == 512
 
     def test_nested_configs_are_instances(self) -> None:
@@ -236,7 +236,7 @@ class TestDocAgentConfig:
         config = DocAgentConfig()
 
         assert isinstance(config.rag, RAGConfig)
-        assert isinstance(config.storage, StorageConfig)
+        assert isinstance(config.source, SourceConfig)
         assert isinstance(config.processing, ProcessingConfig)
 
     def test_nested_configs_independence(self) -> None:
@@ -248,8 +248,8 @@ class TestDocAgentConfig:
         config1.rag.chunk_size = 1024
         assert config2.rag.chunk_size == 512  # Default value unchanged
 
-        config1.storage.base_path = Path("/custom/path")
-        assert config2.storage.base_path == Path("./storage")  # Default value unchanged
+        config1.source.base_path = Path("/custom/path")
+        assert config2.source.base_path == Path("./storage")  # Default value unchanged
 
 
 class TestConfigIntegration:
@@ -261,12 +261,12 @@ class TestConfigIntegration:
 
         # Modify nested config values
         config.rag.chunk_size = 2048
-        config.storage.bucket_name = "modified-bucket"
+        config.source.bucket_name = "modified-bucket"
         config.processing.supported_formats.append("new-format")
 
         # Verify modifications
         assert config.rag.chunk_size == 2048
-        assert config.storage.bucket_name == "modified-bucket"
+        assert config.source.bucket_name == "modified-bucket"
         assert "new-format" in config.processing.supported_formats
 
     def test_config_copy_independence(self) -> None:
@@ -278,11 +278,11 @@ class TestConfigIntegration:
 
         # Modify original
         original.rag.chunk_size = 9999
-        original.storage.bucket_name = "original-bucket"
+        original.source.bucket_name = "original-bucket"
 
         # Copied should remain unchanged
         assert copied.rag.chunk_size == 512  # Default value
-        assert copied.storage.bucket_name is None  # Default value
+        assert copied.source.bucket_name is None  # Default value
 
     def test_config_serialization(self) -> None:
         """Test that config objects can be converted to dictionaries."""
@@ -300,11 +300,11 @@ class TestConfigIntegration:
                 "chunk_size": config.rag.chunk_size,
                 "chunk_overlap": config.rag.chunk_overlap,
             },
-            "storage": {
-                "storage_type": config.storage.storage_type,
-                "base_path": str(config.storage.base_path),
-                "bucket_name": config.storage.bucket_name,
-                "credentials": config.storage.credentials,
+            "source": {
+                "source_type": config.source.source_type,
+                "base_path": str(config.source.base_path),
+                "bucket_name": config.source.bucket_name,
+                "credentials": config.source.credentials,
             },
             "processing": {
                 "output_dir": str(config.processing.output_dir),

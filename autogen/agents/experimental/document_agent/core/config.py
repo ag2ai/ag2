@@ -21,6 +21,27 @@ class RAGConfig:
 
 
 @dataclass
+class SourceConfig:
+    """Configuration for document input sources (where documents come from)."""
+
+    source_type: str = "local"  # "local", "s3", "minio", "gcs", "azure"
+
+    # Local settings
+    base_path: Path = field(default_factory=lambda: Path("./documents"))
+
+    # Cloud settings
+    bucket_name: str | None = None
+    prefix: str | None = None  # S3 prefix/folder path
+    region: str | None = None
+    endpoint_url: str | None = None  # For MinIO
+
+    # Authentication
+    credentials: dict[str, Any] | None = None
+    access_key: str | None = None
+    secret_key: str | None = None
+
+
+@dataclass
 class StorageConfig:
     """Configuration for storage backends."""
 
@@ -64,5 +85,5 @@ class DocAgentConfig:
     """Main configuration for DocAgent."""
 
     rag: RAGConfig = field(default_factory=RAGConfig)
-    storage: StorageConfig = field(default_factory=StorageConfig)
+    source: SourceConfig = field(default_factory=SourceConfig)
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
