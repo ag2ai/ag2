@@ -19,8 +19,9 @@ class DocumentSourceFactory:
             return LocalDocumentSource(config)
 
         elif source_type in ["s3", "minio"]:
-            # Future: return S3DocumentSource(config)
-            raise NotImplementedError(f"{source_type} source not yet implemented")
+            from .s3_source import S3DocumentSource
+
+            return S3DocumentSource(config)
 
         elif source_type == "gcs":
             # Future: return GCSDocumentSource(config)
@@ -36,4 +37,4 @@ class DocumentSourceFactory:
     @staticmethod
     def get_supported_types() -> list[str]:
         """Get list of supported source types."""
-        return ["local"]  # Will expand as we add more backends
+        return ["local", "s3", "minio"]
