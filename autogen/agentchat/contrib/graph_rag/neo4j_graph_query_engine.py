@@ -28,23 +28,24 @@ with optional_import_block():
 
 @require_optional_import("llama_index", "neo4j")
 class Neo4jGraphQueryEngine:
-    """This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,
-    facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.
-
-    It builds a property graph Index from input documents,
-    storing and retrieving data from the property graph in the Neo4j database.
-
-    It extracts triplets, i.e., [entity] -> [relationship] -> [entity] sets,
-    from the input documents using llamIndex extractors.
-
-    Users can provide custom entities, relationships, and schema to guide the extraction process.
-
-    If strict is True, the engine will extract triplets following the schema
-    of allowed relationships for each entity specified in the schema.
-
-    It also leverages LlamaIndex's chat engine which has a conversation history internally to provide context-aware responses.
-
-    For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb
+    """
+    This class serves as a wrapper for a property graph query engine backed by LlamaIndex and Neo4j,\n
+    facilitating the creating, connecting, updating, and querying of LlamaIndex property graphs.\n
+    \n
+    It builds a property graph Index from input documents,\n
+    storing and retrieving data from the property graph in the Neo4j database.\n
+    \n
+    It extracts triplets, i.e., [entity] -> [relationship] -> [entity] sets,\n
+    from the input documents using llamIndex extractors.\n
+    \n
+    Users can provide custom entities, relationships, and schema to guide the extraction process.\n
+    \n
+    If strict is True, the engine will extract triplets following the schema\n
+    of allowed relationships for each entity specified in the schema.\n
+    \n
+    It also leverages LlamaIndex's chat engine which has a conversation history internally to provide context-aware responses.\n
+    \n
+    For usage, please refer to example notebook/agentchat_graph_rag_neo4j.ipynb\n
     """
 
     def __init__(  # type: ignore[no-any-unimported]

@@ -345,7 +345,7 @@ def track_itinerary_status(
     )
 
 # Configure LLM
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", parallel_tool_calls=False)
+llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", parallel_tool_calls=False)
 
 # Create agents
 with llm_config:
@@ -474,7 +474,7 @@ To run this example yourself:
 
 1. **Save the code** to a file (e.g., `customer_service_demo.py`)
 
-2. **Set up your OpenAI API key** - This example uses the `gpt-4o-mini` model from OpenAI:
+2. **Set up your OpenAI API key** - This example uses the `gpt-5-nano` model from OpenAI:
 
     === "macOS / Linux"
 
@@ -499,7 +499,7 @@ To run this example yourself:
    ```
 
     !!! note
-        This example uses OpenAI's `gpt-4o-mini` model. If you want to use a different provider, ensure you:
+        This example uses OpenAI's `gpt-5-nano` model. If you want to use a different provider, ensure you:
 
             - Install the appropriate AG2 extra (e.g., `pip install ag2[anthropic]` for Claude models)
             - Update the `LLMConfig` to use your preferred provider and model
