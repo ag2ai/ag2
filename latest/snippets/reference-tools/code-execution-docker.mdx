@@ -17,7 +17,7 @@ with DockerPythonEnvironment(image="python:3.11-slim", pip_packages=["numpy", "p
             # python_environment=docker_env,
         )
 
-    with LLMConfig(model="gpt-4o", api_type="openai"):
+    with LLMConfig(model="gpt-5", api_type="openai"):
 
         # code_runner has the code execution tool available to execute
         code_runner = ConversableAgent(
