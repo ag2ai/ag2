@@ -2820,7 +2820,7 @@ class ConversableAgent(LLMAgent):
 
     def generate_reply(
         self,
-        messages: list[dict[str, Any]] | None = None,
+        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | None:
@@ -2842,7 +2842,7 @@ class ConversableAgent(LLMAgent):
         AI replies are generated only when no code execution is performed.
 
         Args:
-            messages: a list of messages in the conversation history.
+            messages: a list of messages in the conversation history or a single message.
             sender: sender of an Agent instance.
             **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
                 - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
@@ -2916,7 +2916,7 @@ class ConversableAgent(LLMAgent):
         AI replies are generated only when no code execution is performed.
 
         Args:
-            messages: a list of messages in the conversation history.
+            messages: a list of messages in the conversation history or a single message.
             sender: sender of an Agent instance.
             **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
                 - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
