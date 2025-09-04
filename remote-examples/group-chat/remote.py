@@ -4,7 +4,6 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.remote import HTTPAgentBus
-from autogen.tools.dependency_injection import ChatContext
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -30,11 +29,13 @@ triage_agent = ConversableAgent(
     name="get_user_context",
     description="Use `get_user_context` tool to understand the current session before responding",
 )
-def get_user_context(context_variables: ContextVariables, chat_ctx: ChatContext) -> str:
-    from loguru import logger
-
-    logger.error(chat_ctx.chat_messages)
-    logger.error(chat_ctx.last_message)
+def get_user_context(
+    context_variables: ContextVariables,
+    # chat_ctx: ChatContext,
+) -> str:
+    # from loguru import logger
+    # logger.error(chat_ctx.chat_messages)
+    # logger.error(chat_ctx.last_message)
     context_variables["issue_count"] = context_variables.get("issue_count", 0) + 1
     return ReplyResult(
         context_variables=context_variables,

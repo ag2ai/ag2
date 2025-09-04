@@ -6,7 +6,7 @@ import asyncio
 import warnings
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from itertools import chain
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, cast
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, Response, status
@@ -17,6 +17,7 @@ from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.doc_utils import export_module
 
 from .protocol import AgentBusMessage
 
@@ -31,6 +32,7 @@ class RemoteService(Protocol):
         ...
 
 
+@export_module("autogen.remote")
 class HTTPAgentBus:
     def __init__(
         self,
@@ -119,67 +121,99 @@ class AgentService(RemoteService):
         self.agent = agent
 
     async def __call__(self, state: AgentBusMessage) -> AgentBusMessage | None:
-        # TODO: support input guardrails
-        context_variables = ContextVariables(state.context)
+        out_message: dict[str, Any] | None
+        if guardrail_result := self.agent.run_input_guardrails(state.messages):
+            # input guardrail activated by initial messages
+            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role="assistant")
+            return AgentBusMessage(messages=[out_message], context=state.context)
 
+        context_variables = ContextVariables(state.context)
+        tool_executor = self._make_tool_executor(context_variables)
+
+        local_history: list[dict[str, Any]] = []
+        while True:
+            # TODO: catch ask user input event
+            reply = await self.agent.a_generate_reply(state.messages + local_history, None)
+
+            should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
+            if out_message:
+                local_history.append(out_message)
+            if not should_continue:
+                break
+
+            out_message = cast(dict[str, Any], out_message)
+            tool_result, updated_context_variables = self._try_execute_tool(tool_executor, out_message)
+
+            if updated_context_variables:
+                context_variables.update(updated_context_variables.to_dict())
+
+            should_continue, out_message = self._add_message_to_local_history(tool_result, role="tool")
+            if out_message:
+                local_history.append(out_message)
+            if not should_continue:
+                break
+
+        if not local_history:
+            return None
+
+        return AgentBusMessage(messages=local_history, context=context_variables.data)
+
+    def _add_message_to_local_history(
+        self, message: str | dict[str, Any] | None, role: str
+    ) -> tuple[Literal[True], dict[str, Any]] | tuple[Literal[False], dict[str, Any] | None]:
+        if message is None:
+            return False, None  # output message is empty, interrupt the loop
+
+        if guardrail_result := self.agent.run_output_guardrails(message):
+            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role=role)
+            return False, out_message  # output guardrail activated, interrupt the loop
+
+        valid, out_message = normilize_message_to_oai(message, self.agent.name, role=role)
+        if not valid:
+            return False, None  # tool result is not valid OAI message, interrupt the loop
+
+        return True, out_message
+
+    def _make_tool_executor(self, context_variables: ContextVariables) -> GroupToolExecutor:
         tool_executor = GroupToolExecutor()
         for tool in self.agent.tools:
             # TODO: inject ChatContext to tool
             new_tool = tool_executor.make_tool_copy_with_context_variables(tool, context_variables)
             if new_tool is not None:
                 tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
+        return tool_executor
 
-        local_history: list[dict[str, Any]] = []
+    def _try_execute_tool(
+        self,
+        tool_executor: GroupToolExecutor,
+        tool_message: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, ContextVariables | None]:
+        tool_result: dict[str, Any] | None = None
+        updated_context_variables: ContextVariables | None = None
 
-        while True:
-            # TODO: catch ask user input event
-            reply = await self.agent.a_generate_reply(state.messages + local_history, None)
-            if reply is None:
-                break  # last reply empty
+        if "tool_calls" in tool_message:
+            _, tool_result = tool_executor.generate_tool_calls_reply([tool_message])
+            if tool_result is None:
+                return tool_result, updated_context_variables
 
-            valid, out_message = normilize_message_to_oai(reply, self.agent.name, role="assistant")
+            if "tool_responses" in tool_result:
+                # TODO: catch handoffs
+                for tool_response in tool_result["tool_responses"]:
+                    content = tool_response["content"]
 
-            if valid:
-                local_history.append(out_message)
+                    if isinstance(content, TransitionTarget):
+                        warnings.warn(
+                            f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
+                        )
 
-                if "tool_calls" in out_message:
-                    _, tool_message = tool_executor.generate_tool_calls_reply([out_message])
-                    if tool_message is None:
-                        break  # tool response empty
+                    elif isinstance(content, ReplyResult):
+                        if content.target:
+                            warnings.warn(
+                                f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
+                            )
 
-                    if "tool_responses" in tool_message:
-                        # TODO: catch handoffs
-                        for tool_response in tool_message["tool_responses"]:
-                            content = tool_response["content"]
+                        if content.context_variables:
+                            updated_context_variables = content.context_variables
+                            tool_response["content"] = content.message
 
-                            if isinstance(content, TransitionTarget):
-                                warnings.warn(
-                                    f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
-                                )
-
-                            elif isinstance(content, ReplyResult):
-                                if content.target:
-                                    warnings.warn(
-                                        f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
-                                    )
-
-                                if content.context_variables:
-                                    context_variables.update(content.context_variables.to_dict())
-                                    tool_response["content"] = content.message
-
-                    valid, out_message = normilize_message_to_oai(tool_message, self.agent.name, role="tool")
-                    if not valid:
-                        break
-
-                    local_history.append(out_message)
-                    continue  # process response by agent itself
-
-            # last reply broken or
-            # final reply from LLM
-            break
-
-        if not local_history:
-            return None
-
-        # TODO: support output guardrails
-        return AgentBusMessage(messages=local_history, context=context_variables.data)
+        return tool_result, updated_context_variables

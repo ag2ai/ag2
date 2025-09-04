@@ -7,11 +7,13 @@ import httpx
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
+from autogen.doc_utils import export_module
 from autogen.oai.client import OpenAIWrapper
 
 from .protocol import AgentBusMessage
 
 
+@export_module("autogen.remote")
 class HTTPRemoteAgent(ConversableAgent):
     def __init__(self, url: str, name: str, *, client: httpx.AsyncClient | httpx.Client | None = None) -> None:
         self.url = url
