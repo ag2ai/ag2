@@ -61,6 +61,25 @@ import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
 
 <RunMethodHelpMsg/>
 
+## Using generate_reply and a_generate_reply
+
+For advanced use cases, you may interact directly with the low-level response generation APIs: `generate_reply` (sync) and `a_generate_reply` (async). Both support the `messages` parameter, which can be either a list of message dicts (the conversation history) or a single message dict.
+
+```python
+# Single message dict usage:
+single_message = {"role": "user", "content": "Hello."}
+reply = my_agent.generate_reply(messages=single_message)
+
+# List of message dicts:
+conversation = [
+    {"role": "user", "content": "Hi there!"},
+    {"role": "assistant", "content": "Hello!"},
+]
+reply = my_agent.generate_reply(messages=conversation)
+```
+
+The `messages` argument can be either a list of dicts or a single dict. The method will handle both forms in accordance with the latest implementation.
+
 ## Financial Compliance Example
 
 Let's create a simple financial agent using `ConversableAgent`:
@@ -156,3 +175,4 @@ This is just the beginning of what you can do with `ConversableAgent`. In subseq
 Now that you understand the basics of `ConversableAgent`, it's time to add some human oversight!
 
 For financial compliance systems, a human review of flagged transactions adds an essential layer of security and compliance. In the next section, you'll see how to build upon our simple example to create a more robust financial assistant with human oversight.
+ 
