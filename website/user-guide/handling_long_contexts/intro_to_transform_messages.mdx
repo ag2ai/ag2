@@ -145,11 +145,11 @@ from autogen.agentchat.contrib.capabilities import transform_messages, transform
 from typing import Dict, List
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 # Define your agent; the user proxy and an assistant
-with llm_config:
-    assistant = autogen.AssistantAgent("assistant")
+assistant = autogen.AssistantAgent("assistant", llm_config=llm_config)
+
 user_proxy = autogen.UserProxyAgent(
     "user_proxy",
     human_input_mode="NEVER",

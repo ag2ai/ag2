@@ -131,7 +131,7 @@ from autogen.agentchat.group import ReplyResult, ContextVariables, AgentTarget, 
 # transportation, and dining in various cities
 
 # Setup LLM configuration
-llm_config = LLMConfig(api_type="openai", model="gpt-4.1-mini", parallel_tool_calls=False, cache_seed=None)
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-4.1-mini", "parallel_tool_calls": False, "cache_seed": None})
 
 # Shared context for all agents in the group chat
 shared_context = ContextVariables({
@@ -216,71 +216,73 @@ def provide_food_info(food_content: str, context_variables: ContextVariables) ->
 # ========================
 # SPECIALIST AGENTS
 # ========================
+weather_specialist = ConversableAgent(
+    name="weather_specialist",
+    system_message="""You are a specialist in weather forecasting and climate information.
+    Your task is to provide accurate and helpful weather information for the specified city and date range.
+    Include:
+    1. Temperature ranges (high/low)
+    2. Precipitation forecasts
+    3. Notable weather conditions (sunny, rainy, windy, etc.)
+    4. Recommendations for appropriate clothing or preparation
 
-with llm_config:
-    weather_specialist = ConversableAgent(
-        name="weather_specialist",
-        system_message="""You are a specialist in weather forecasting and climate information.
-        Your task is to provide accurate and helpful weather information for the specified city and date range.
-        Include:
-        1. Temperature ranges (high/low)
-        2. Precipitation forecasts
-        3. Notable weather conditions (sunny, rainy, windy, etc.)
-        4. Recommendations for appropriate clothing or preparation
+    Be concise but informative, focusing on what would be most relevant for someone planning activities.
+    Use your tool to provide the weather information.
+    """,
+    functions=[provide_weather_info],
+    llm_config=llm_config
+)
 
-        Be concise but informative, focusing on what would be most relevant for someone planning activities.
-        Use your tool to provide the weather information.
-        """,
-        functions=[provide_weather_info],
-    )
+events_specialist = ConversableAgent(
+    name="events_specialist",
+    system_message="""You are a specialist in local events, attractions, and entertainment.
+    Your task is to provide information about interesting events, attractions, and activities for the specified city and date range.
+    Include:
+    1. Major events (concerts, festivals, sports games)
+    2. Popular attractions and landmarks
+    3. Cultural activities (museums, galleries, theater)
+    4. Outdoor recreation opportunities
 
-    events_specialist = ConversableAgent(
-        name="events_specialist",
-        system_message="""You are a specialist in local events, attractions, and entertainment.
-        Your task is to provide information about interesting events, attractions, and activities for the specified city and date range.
-        Include:
-        1. Major events (concerts, festivals, sports games)
-        2. Popular attractions and landmarks
-        3. Cultural activities (museums, galleries, theater)
-        4. Outdoor recreation opportunities
+    Be specific about what's happening during the requested time frame and focus on notable highlights.
+    Use your tool to provide the events information.
+    """,
+    functions=[provide_events_info],
+    llm_config=llm_config
+)
 
-        Be specific about what's happening during the requested time frame and focus on notable highlights.
-        Use your tool to provide the events information.
-        """,
-        functions=[provide_events_info],
-    )
+traffic_specialist = ConversableAgent(
+    name="traffic_specialist",
+    system_message="""You are a specialist in transportation, traffic patterns, and getting around cities.
+    Your task is to provide helpful transportation information for the specified city.
+    Include:
+    1. Best ways to get around (public transit, rental options, walking)
+    2. Traffic patterns and areas to avoid
+    3. Parking recommendations if relevant
+    4. Tips for efficient transportation between popular areas
 
-    traffic_specialist = ConversableAgent(
-        name="traffic_specialist",
-        system_message="""You are a specialist in transportation, traffic patterns, and getting around cities.
-        Your task is to provide helpful transportation information for the specified city.
-        Include:
-        1. Best ways to get around (public transit, rental options, walking)
-        2. Traffic patterns and areas to avoid
-        3. Parking recommendations if relevant
-        4. Tips for efficient transportation between popular areas
+    Focus on practical advice that will help someone navigate the city efficiently.
+    Use your tool to provide the traffic information.
+    """,
+    functions=[provide_traffic_info],
+    llm_config=llm_config
+)
 
-        Focus on practical advice that will help someone navigate the city efficiently.
-        Use your tool to provide the traffic information.
-        """,
-        functions=[provide_traffic_info],
-    )
+food_specialist = ConversableAgent(
+    name="food_specialist",
+    system_message="""You are a specialist in local cuisine, dining, and food culture.
+    Your task is to provide dining recommendations for the specified city.
+    Include:
+    1. Notable restaurants across different price ranges
+    2. Local specialties and must-try dishes
+    3. Food districts or areas with good dining options
+    4. Any famous food markets or unique food experiences
 
-    food_specialist = ConversableAgent(
-        name="food_specialist",
-        system_message="""You are a specialist in local cuisine, dining, and food culture.
-        Your task is to provide dining recommendations for the specified city.
-        Include:
-        1. Notable restaurants across different price ranges
-        2. Local specialties and must-try dishes
-        3. Food districts or areas with good dining options
-        4. Any famous food markets or unique food experiences
-
-        Focus on what makes the food scene in this city special and provide diverse options.
-        Use your tool to provide the food recommendations.
-        """,
-        functions=[provide_food_info],
-    )
+    Focus on what makes the food scene in this city special and provide diverse options.
+    Use your tool to provide the food recommendations.
+    """,
+    functions=[provide_food_info],
+    llm_config=llm_config
+)
 
 # ========================
 # COORDINATOR FUNCTIONS
@@ -301,32 +303,31 @@ def compile_final_response(response_content: str, context_variables: ContextVari
 # ========================
 # COORDINATOR AGENT
 # ========================
+coordinator_agent = ConversableAgent(
+    name="coordinator_agent",
+    system_message="""You are the coordinator for a virtual city guide service that helps users plan their visits or activities.
 
-with llm_config:
-    coordinator_agent = ConversableAgent(
-        name="coordinator_agent",
-        system_message="""You are the coordinator for a virtual city guide service that helps users plan their visits or activities.
+    You have four specialist agents that you can delegate to:
+    1. Weather Specialist - Provides weather forecasts and climate information
+    2. Events Specialist - Provides information about local events, attractions, and activities
+    3. Traffic Specialist - Provides transportation advice and traffic information
+    4. Food Specialist - Provides dining recommendations and food culture information
 
-        You have four specialist agents that you can delegate to:
-        1. Weather Specialist - Provides weather forecasts and climate information
-        2. Events Specialist - Provides information about local events, attractions, and activities
-        3. Traffic Specialist - Provides transportation advice and traffic information
-        4. Food Specialist - Provides dining recommendations and food culture information
+    Your responsibilities include:
+    1. Analyzing user queries to determine which specialists need to be consulted
+    2. Delegating specific questions to the appropriate specialists
+    3. Synthesizing information from all specialists into a comprehensive, coherent response
+    4. Ensuring the response is helpful, well-organized, and addresses the user's query
 
-        Your responsibilities include:
-        1. Analyzing user queries to determine which specialists need to be consulted
-        2. Delegating specific questions to the appropriate specialists
-        3. Synthesizing information from all specialists into a comprehensive, coherent response
-        4. Ensuring the response is helpful, well-organized, and addresses the user's query
+    First, analyze the user's query to understand what city they're asking about and what timeframe.
+    Then, delegate to the appropriate specialists to gather the necessary information.
+    Finally, synthesize all the information into a helpful response.
 
-        First, analyze the user's query to understand what city they're asking about and what timeframe.
-        Then, delegate to the appropriate specialists to gather the necessary information.
-        Finally, synthesize all the information into a helpful response.
-
-        When responding to the user, organize the information clearly with appropriate sections and highlights.
-        """,
-        functions=[compile_final_response],
-    )
+    When responding to the user, organize the information clearly with appropriate sections and highlights.
+    """,
+    functions=[compile_final_response],
+    llm_config=llm_config
+)
 
 
 @coordinator_agent.register_for_llm(description="Currency exchange calculator.")

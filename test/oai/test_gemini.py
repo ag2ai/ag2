@@ -48,10 +48,7 @@ def test_gemini_llm_config_entry():
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual
 
-    llm_config = LLMConfig(
-        config_list=[gemini_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(gemini_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

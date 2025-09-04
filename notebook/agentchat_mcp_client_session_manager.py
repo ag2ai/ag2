@@ -14,7 +14,7 @@ from autogen.tools import tool
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-llm_config = LLMConfig(model="o3-mini", api_type="openai", api_key=OPENAI_API_KEY)
+llm_config = LLMConfig({"model": "o3-mini", "api_type": "openai", "api_key": OPENAI_API_KEY})
 
 # build server config
 ArxivServer = StdioConfig(
