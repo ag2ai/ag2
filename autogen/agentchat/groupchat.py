@@ -1118,19 +1118,18 @@ class GroupChatManager(ConversableAgent):
     def _prepare_chat(
         self,
         recipient: ConversableAgent,
-        chat_id: int,
         clear_history: bool,
         prepare_recipient: bool = True,
         reply_at_receive: bool = True,
     ) -> None:
-        super()._prepare_chat(recipient, chat_id, clear_history, prepare_recipient, reply_at_receive)
+        super()._prepare_chat(recipient, clear_history, prepare_recipient, reply_at_receive)
 
         if clear_history:
             self._groupchat.reset()
 
         for agent in self._groupchat.agents:
             if (recipient != agent or prepare_recipient) and isinstance(agent, ConversableAgent):
-                agent._prepare_chat(self, chat_id, clear_history, False, reply_at_receive)
+                agent._prepare_chat(self, clear_history, False, reply_at_receive)
 
     @property
     def last_speaker(self) -> Agent:

@@ -219,7 +219,7 @@ class SwarmableAgent(Agent):
         recipient.previous_cache = recipient.client_cache  # type: ignore[attr-defined]
         recipient.client_cache = cache  # type: ignore[attr-defined, assignment]
 
-        self._prepare_chat(recipient, chat_id, clear_history)
+        self._prepare_chat(recipient, clear_history)
         self.send(message, recipient, silent=silent)
         summary = self._last_msg_as_summary(self, recipient, summary_args)
 
@@ -281,7 +281,6 @@ class SwarmableAgent(Agent):
     def _prepare_chat(
         self,
         recipient: ConversableAgent,
-        chat_id: int,
         clear_history: bool,
         prepare_recipient: bool = True,
         reply_at_receive: bool = True,
@@ -290,7 +289,7 @@ class SwarmableAgent(Agent):
         if clear_history:
             self._oai_messages[recipient].clear()
         if prepare_recipient:
-            recipient._prepare_chat(self, chat_id, clear_history, False, reply_at_receive)  # type: ignore[arg-type]
+            recipient._prepare_chat(self, clear_history, False, reply_at_receive)  # type: ignore[arg-type]
 
     def _raise_exception_on_async_reply_functions(self) -> None:
         pass
