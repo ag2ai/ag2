@@ -15,7 +15,13 @@ from .protocol import AgentBusMessage
 
 @export_module("autogen.remote")
 class HTTPRemoteAgent(ConversableAgent):
-    def __init__(self, url: str, name: str, *, client: httpx.AsyncClient | httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        url: str,
+        name: str,
+        *,
+        client: httpx.AsyncClient | httpx.Client | None = None,
+    ) -> None:
         self.url = url
 
         self._httpx_client = client
@@ -36,7 +42,7 @@ class HTTPRemoteAgent(ConversableAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
-    ) -> tuple[bool, str | dict[str, Any] | None]:
+    ) -> tuple[bool, dict[str, Any] | None]:
         if messages is None:
             messages = self._oai_messages[sender]
 
@@ -78,7 +84,7 @@ class HTTPRemoteAgent(ConversableAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
-    ) -> tuple[bool, str | dict[str, Any] | None]:
+    ) -> tuple[bool, dict[str, Any] | None]:
         if messages is None:
             messages = self._oai_messages[sender]
 
