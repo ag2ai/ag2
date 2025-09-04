@@ -2861,15 +2861,15 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.update_agent_state_before_reply(messages)
+        self.update_agent_state_before_reply([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_last_received_message(messages)
+        messages = self.process_last_received_message([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_all_messages_before_reply(messages)
+        messages = self.process_all_messages_before_reply([messages] if isinstance(messages, dict) else messages)
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
@@ -2894,7 +2894,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_reply(
         self,
-        messages: list[dict[str, Any]] | None = None,
+        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | None:
@@ -2935,15 +2935,15 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.update_agent_state_before_reply(messages)
+        self.update_agent_state_before_reply([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_last_received_message(messages)
+        messages = self.process_last_received_message([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_all_messages_before_reply(messages)
+        messages = self.process_all_messages_before_reply([messages] if isinstance(messages, dict) else messages)
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
