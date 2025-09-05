@@ -93,11 +93,11 @@ Minimal dependencies are installed by default. You can install extra options bas
 
 ### Setup your API keys
 
-To keep your LLM dependencies neat and avoid accidentally checking in code with your API key, we recommend storing your keys in a configuration file.  
+To keep your LLM dependencies neat and avoid accidentally checking in code with your API key, we recommend storing your keys in a configuration file.
 
-In our examples, we use a file named **`OAI_CONFIG_LIST`** to store API keys. You can choose any filename, but make sure to add it to `.gitignore` so it will not be committed to source control.  
+In our examples, we use a file named **`OAI_CONFIG_LIST`** to store API keys. You can choose any filename, but make sure to add it to `.gitignore` so it will not be committed to source control.
 
-You can use the following content as a template:  
+You can use the following content as a template:
 
 ```json
 [
@@ -145,8 +145,8 @@ We have several agent concepts in AG2 to help you build your AI agents. We intro
 
 The [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent) is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
 
-Let's begin with a simple example where two agents collaborate:  
-- A **coder agent** that writes Python code.  
+Let's begin with a simple example where two agents collaborate:
+- A **coder agent** that writes Python code.
 - A **reviewer agent** that critiques the code without rewriting it.
 
 ```python
@@ -253,7 +253,7 @@ logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
 
 ### Human in the Loop
 
-Human oversight is often essential for validating or guiding AI outputs.  
+Human oversight is often essential for validating or guiding AI outputs.
 AG2 provides the `UserProxyAgent` for seamless integration of human feedback.
 
 Here we extend the **teacher–planner–reviewer** example by introducing a **human agent** who validates the final lesson:
