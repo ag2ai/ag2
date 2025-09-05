@@ -1102,15 +1102,31 @@ class ConversableAgent(LLMAgent):
         return True
 
     def _process_message_before_send(
-        self, message: dict[str, Any] | str, recipient: Agent, silent: bool
-    ) -> dict[str, Any] | str:
+        self, message: dict[str, Any] | str | list[dict[str, Any]], recipient: Agent, silent: bool
+    ) -> dict[str, Any] | str | list[dict[str, Any]]:
         """Process the message before sending it to the recipient."""
         hook_list = self.hook_lists["process_message_before_send"]
-        for hook in hook_list:
-            message = hook(
-                sender=self, message=message, recipient=recipient, silent=ConversableAgent._is_silent(self, silent)
-            )
-        return message
+
+        if isinstance(message, list):
+            # Process each message in the list
+            processed_messages = []
+            for msg in message:
+                processed_msg = msg
+                for hook in hook_list:
+                    processed_msg = hook(
+                        sender=self,
+                        message=processed_msg,
+                        recipient=recipient,
+                        silent=ConversableAgent._is_silent(self, silent),
+                    )
+                processed_messages.append(processed_msg)
+            return processed_messages
+        else:
+            for hook in hook_list:
+                message = hook(
+                    sender=self, message=message, recipient=recipient, silent=ConversableAgent._is_silent(self, silent)
+                )
+            return message
 
     def send(
         self,
