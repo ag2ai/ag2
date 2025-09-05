@@ -61,12 +61,12 @@ Here's a breakdown of how the internal swarm chat is used within the [`DocAgent`
 
 ### Workflow
 
-1. **Initialization**: The `DocAgent` initializes the swarm agents and sets up context variables required for tracking state during the workflow.
-2. **Triage User Requests**: The `Triage Agent` categorizes the tasks into ingestions and queries, updating context with the needs for the session.
-3. **Task Management**: The `Task Manager Agent` manages the tasks and ensures they are executed in the correct sequence, leveraging shared workflow state.
-4. **Data Ingestion**: The `Data Ingestion Agent` processes the documents as indicated in the context.
-5. **Query Execution**: The `Query Agent` answers the user's questions based on documents ingested and tracked in context.
-6. **Summary Generation**: The `Summary Agent` generates a summary of the completed tasks using available context about what was processed.
+1. **Initialization**: The `DocAgent` initializes the swarm agents and sets up the context variables.
+2. **Triage User Requests**: The `Triage Agent` categorizes the tasks into ingestions and queries.
+3. **Task Management**: The `Task Manager Agent` manages the tasks and ensures they are executed in the correct sequence.
+4. **Data Ingestion**: The `Data Ingestion Agent` processes the documents.
+5. **Query Execution**: The `Query Agent` answers the user's questions.
+6. **Summary Generation**: The `Summary Agent` generates a summary of the completed tasks.
 
 ## Parsing documents and web pages
 
@@ -197,6 +197,7 @@ Arguments:
 
 Next speaker: _Swarm_Tool_Executor
 
+
 >>>>>>>> EXECUTING FUNCTION initiate_tasks...
 Call ID: call_NG9mq8dtBEthy8YDsREjiRER
 Input arguments: {'ingestions': [{'path_or_url': '../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf'}], 'queries': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'context_variables': {'CompletedTaskCount': 0, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': []}}
@@ -226,6 +227,7 @@ Arguments:
 
 Next speaker: _Swarm_Tool_Executor
 
+
 >>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_DoclingDocIngestAgent...
 Call ID: call_I30PrRbDngJPmidOOKutGhsa
 Input arguments: {}
@@ -239,6 +241,7 @@ Swarm agent --> DoclingDocIngestAgent
 
 Next speaker: DoclingDocIngestAgent
 
+
 >>>>>>>> USING AUTO REPLY...
 DoclingDocIngestAgent (to chat_manager):
 
@@ -250,6 +253,7 @@ Arguments:
 --------------------------------------------------------------------------------
 
 Next speaker: _Swarm_Tool_Executor
+
 
 >>>>>>>> EXECUTING FUNCTION data_ingest_task...
 Call ID: call_zloTpZZrxiNcvyflE0AHSjAw
@@ -295,6 +299,7 @@ Arguments:
 
 Next speaker: _Swarm_Tool_Executor
 
+
 >>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_QueryAgent...
 Call ID: call_jDHDy8MHHqvucS89X62yUpFE
 Input arguments: {}
@@ -308,6 +313,7 @@ Swarm agent --> QueryAgent
 
 Next speaker: QueryAgent
 
+
 >>>>>>>> USING AUTO REPLY...
 QueryAgent (to chat_manager):
 
@@ -319,6 +325,7 @@ Arguments:
 --------------------------------------------------------------------------------
 
 Next speaker: _Swarm_Tool_Executor
+
 
 >>>>>>>> EXECUTING FUNCTION execute_rag_query...
 Call ID: call_YFLZPfxUvG0cBqWw0dnH2keA
@@ -332,6 +339,7 @@ For the fiscal year 2024, Toast, Inc. reported total assets of $2,227 million as
 --------------------------------------------------------------------------------
 
 Next speaker: QueryAgent
+
 
 >>>>>>>> USING AUTO REPLY...
 QueryAgent (to chat_manager):
@@ -365,6 +373,7 @@ Arguments:
 
 Next speaker: _Swarm_Tool_Executor
 
+
 >>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_SummaryAgent...
 Call ID: call_3XuWepUFg5FPt6C6JtzrxbFJ
 Input arguments: {}
@@ -377,6 +386,7 @@ Swarm agent --> SummaryAgent
 --------------------------------------------------------------------------------
 
 Next speaker: SummaryAgent
+
 
 >>>>>>>> USING AUTO REPLY...
 SummaryAgent (to chat_manager):
@@ -472,3 +482,4 @@ document_agent_nvidia = DocAgent(
 
 See this [notebook](/docs/use-cases/notebooks/notebooks/agents_docagent) for more examples of using document agent.
  
+  </content>
