@@ -129,26 +129,28 @@ from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
 
 # Configure LLM
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-with llm_config:
-    # Main support agent
-    support_agent = ConversableAgent(
-        name="support_agent",
-        system_message="You provide general customer support. Keep responses helpful and professional."
-    )
+# Main support agent
+support_agent = ConversableAgent(
+    name="support_agent",
+    system_message="You provide general customer support. Keep responses helpful and professional.",
+    llm_config=llm_config
+)
 
-    # Compliance agent for handling sensitive content
-    compliance_agent = ConversableAgent(
-        name="compliance_agent",
-        system_message="You handle messages that violate company policies or contain sensitive information. You ensure all responses comply with privacy regulations."
-    )
+# Compliance agent for handling sensitive content
+compliance_agent = ConversableAgent(
+    name="compliance_agent",
+    system_message="You handle messages that violate company policies or contain sensitive information. You ensure all responses comply with privacy regulations.",
+    llm_config=llm_config
+)
 
-    # Escalation agent for handling inappropriate requests
-    escalation_agent = ConversableAgent(
-        name="escalation_agent",
-        system_message="You handle inappropriate or harmful requests by politely declining and offering appropriate alternatives."
-    )
+# Escalation agent for handling inappropriate requests
+escalation_agent = ConversableAgent(
+    name="escalation_agent",
+    system_message="You handle inappropriate or harmful requests by politely declining and offering appropriate alternatives.",
+    llm_config=llm_config
+)
 
 # User agent
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")
@@ -298,23 +300,25 @@ from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
 
 # Configure LLM
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-with llm_config:
-    support_agent = ConversableAgent(
-        name="support_agent",
-        system_message="You provide general customer support. Keep responses helpful and professional."
-    )
+support_agent = ConversableAgent(
+    name="support_agent",
+    system_message="You provide general customer support. Keep responses helpful and professional.",
+    llm_config=llm_config
+)
 
-    compliance_agent = ConversableAgent(
-        name="compliance_agent",
-        system_message="You handle messages that violate company policies or contain sensitive information. You ensure all responses comply with privacy regulations."
-    )
+compliance_agent = ConversableAgent(
+    name="compliance_agent",
+    system_message="You handle messages that violate company policies or contain sensitive information. You ensure all responses comply with privacy regulations.",
+    llm_config=llm_config
+)
 
-    escalation_agent = ConversableAgent(
-        name="escalation_agent",
-        system_message="You handle inappropriate or harmful requests by politely declining and offering appropriate alternatives."
-    )
+escalation_agent = ConversableAgent(
+    name="escalation_agent",
+    system_message="You handle inappropriate or harmful requests by politely declining and offering appropriate alternatives.",
+    llm_config=llm_config
+)
 
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 

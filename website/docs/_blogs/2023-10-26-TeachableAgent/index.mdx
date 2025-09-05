@@ -68,10 +68,10 @@ llm_config = LLMConfig.from_json(
 ```python
 
 # Start by instantiating any agent that inherits from ConversableAgent, which we use directly here for simplicity.
-with llm_config:
-    teachable_agent = ConversableAgent(
-        name="teachable_agent",  # The name can be anything.
-    )
+teachable_agent = ConversableAgent(
+    name="teachable_agent",  # The name can be anything.
+    llm_config=llm_config,
+)
 
 # Instantiate a Teachability object. Its parameters are all optional.
 teachability = Teachability(
