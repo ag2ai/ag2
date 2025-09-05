@@ -79,17 +79,25 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 AG2 requires **Python version >= 3.10, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
 
+**Windows/Linux:**
 ```bash
 pip install ag2[openai]
+```
+
+**Mac:**
+```bash
+pip install 'ag2[openai]'
 ```
 
 Minimal dependencies are installed by default. You can install extra options based on the features you need.
 
 ### Setup your API keys
 
-To keep your LLM dependencies neat we recommend using the `OAI_CONFIG_LIST` file to store your API keys.
+To keep your LLM dependencies neat and avoid accidentally checking in code with your API key, we recommend storing your keys in a configuration file.  
 
-You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
+In our examples, we use a file named **`OAI_CONFIG_LIST`** to store API keys. You can choose any filename, but make sure to add it to `.gitignore` so it will not be committed to source control.  
+
+You can use the following content as a template:  
 
 ```json
 [
@@ -113,8 +121,7 @@ assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 
-user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
-# This initiates an automated chat between the two agents to solve the task
+user_proxy.initiate_chat(assistant, message="Summarize the main differences between Python lists and tuples.")
 ```
 
 ## Example applications
@@ -150,7 +157,7 @@ from autogen import ConversableAgent, LLMConfig
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load LLM configuration (see docs for OAI_CONFIG_LIST format)
+# Load LLM configuration
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
 # Define agents
@@ -253,29 +260,63 @@ Here we extend the **teacher–planner–reviewer** example by introducing a **h
 
 ```python
 import logging
-from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+from autogen import ConversableAgent, UserProxyAgent, GroupChat, GroupChatManager, LLMConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
-# AI assistant
-assistant = ConversableAgent(
-    name="assistant",
-    system_message="You are a helpful assistant.",
+# Same agents as before, but teacher no longer terminates automatically
+planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
+reviewer_message = "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
+teacher_message = "You are a classroom teacher. You decide topics and collaborate with planner and reviewer to create lesson plans."
+
+lesson_planner = ConversableAgent(
+    name="planner_agent",
+    system_message=planner_message,
+    description="Creates or revises lesson plans.",
     llm_config=llm_config,
 )
 
-# Human agent (manual input mode)
-human = UserProxyAgent(
-    name="human",
-    code_execution_config={"work_dir": "coding", "use_docker": False},
+lesson_reviewer = ConversableAgent(
+    name="reviewer_agent",
+    system_message=reviewer_message,
+    description="Provides one round of feedback to lesson plans.",
+    llm_config=llm_config,
 )
 
-chat_result = human.initiate_chat(
-    recipient=assistant,
-    message="Hello! Can you suggest a 4th grade math exercise?"
+teacher = ConversableAgent(
+    name="teacher_agent",
+    system_message=teacher_message,
+    llm_config=llm_config,
+)
+
+# Add human validator to the team
+human_validator = UserProxyAgent(
+    name="human_validator",
+    system_message="You are a human educator who provides final approval for lesson plans.",
+    code_execution_config={"work_dir": "lesson_plans", "use_docker": False},
+    is_termination_msg=lambda x: "APPROVED" in (x.get("content", "") or "").upper(),
+)
+
+# Set up group chat with human in the loop
+groupchat = GroupChat(
+    agents=[teacher, lesson_planner, lesson_reviewer, human_validator],
+    speaker_selection_method="auto",
+    messages=[],
+)
+
+manager = GroupChatManager(
+    name="group_manager",
+    groupchat=groupchat,
+    llm_config=llm_config,
+)
+
+# Initiate conversation - now requires human approval to complete
+chat_result = teacher.initiate_chat(
+    recipient=manager,
+    message="Let's introduce our kids to the solar system."
 )
 
 logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
