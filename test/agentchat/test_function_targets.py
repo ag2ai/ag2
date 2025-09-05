@@ -4,21 +4,21 @@ Minimal FunctionTarget test wiring for a two-agent group chat.
 """
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 
-from autogen import LLMConfig, ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
-from autogen.agentchat.group import ContextVariables, AgentTarget, FunctionTarget, ReplyResult
+from autogen.agentchat.group import AgentTarget, ContextVariables, FunctionTarget
 from autogen.agentchat.group.function_target_result import FunctionTargetMessage, FunctionTargetResult
 from autogen.agentchat.group.patterns import DefaultPattern
-from autogen.agentchat.group.targets.transition_target import RevertToUserTarget, StayTarget, TerminateTarget
+from autogen.agentchat.group.targets.transition_target import StayTarget
 
 load_dotenv()
 
 
-def main(session_id: Optional[str] = None) -> dict:
+def main(session_id: str | None = None) -> dict:
     # LLM config
     cfg = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
 
@@ -30,7 +30,7 @@ def main(session_id: Optional[str] = None) -> dict:
         name="first_agent",
         llm_config=cfg,
         system_message="Output a sample email you would send to apply to a job in tech. "
-                       "Listen to the specifics of the instructions.",
+        "Listen to the specifics of the instructions.",
     )
 
     second_agent = ConversableAgent(
@@ -58,10 +58,11 @@ def main(session_id: Optional[str] = None) -> dict:
             )
 
         return FunctionTargetResult(
-            messages=[FunctionTargetMessage(
-                content=f"Revise the draft written by the first agent: {output}",
-                msg_target=second_agent
-            )],
+            messages=[
+                FunctionTargetMessage(
+                    content=f"Revise the draft written by the first agent: {output}", msg_target=second_agent
+                )
+            ],
             target=AgentTarget(second_agent),
             context_variables=context_variables,
         )

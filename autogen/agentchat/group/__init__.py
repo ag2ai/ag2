@@ -9,12 +9,12 @@ from .context_condition import ExpressionContextCondition, StringContextConditio
 from .context_expression import ContextExpression
 from .context_str import ContextStr
 from .context_variables import ContextVariables
+from .function_target_result import FunctionTargetResult
 from .handoffs import Handoffs
 from .llm_condition import ContextStrLLMCondition, StringLLMCondition
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
 from .reply_result import ReplyResult
-from .function_target_result import FunctionTargetResult
 from .speaker_selection_result import SpeakerSelectionResult
 from .targets.group_chat_target import GroupChatConfig, GroupChatTarget
 
@@ -29,11 +29,11 @@ from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     AskUserTarget,
+    FunctionTarget,
     NestedChatTarget,
     RevertToUserTarget,
     StayTarget,
     TerminateTarget,
-    FunctionTarget,
 )
 
 __all__ = [

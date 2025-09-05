@@ -119,7 +119,7 @@ def _evaluate_after_works_conditions(
                 agent,
                 user_agent,
             ).get_speaker_selection_result(groupchat)
-        
+
     return None
 
 

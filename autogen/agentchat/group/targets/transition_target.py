@@ -5,7 +5,7 @@
 import random
 from collections.abc import Callable
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -424,13 +424,16 @@ class RandomAgentTarget(TransitionTarget):
 
 
 if TYPE_CHECKING:
-    from ..function_target_result import FunctionTargetResult
-    from ..function_target_result import FunctionTargetMessage
+    from ..function_target_result import FunctionTargetMessage, FunctionTargetResult
+
     AfterworkFn = Callable[..., "FunctionTargetResult"]
 else:
     AfterworkFn = Callable[..., Any]
 
-def broadcast(messages: List["FunctionTargetMessage"] | str, group_chat, current_agent, fn_name, target, user_agent, *args) -> None:
+
+def broadcast(
+    messages: list["FunctionTargetMessage"] | str, group_chat, current_agent, fn_name, target, user_agent, *args
+) -> None:
     """Broadcast a message to a specific agent."""
     if isinstance(messages, str):
         if hasattr(target, "agent_name"):
@@ -448,14 +451,15 @@ def broadcast(messages: List["FunctionTargetMessage"] | str, group_chat, current
         broadcast = {
             "role": "system",
             "name": f"{fn_name}",
-            "content": f"[FUNCTION_HANDOFF] - Reply from function {fn_name}: \n\n {content}"
+            "content": f"[FUNCTION_HANDOFF] - Reply from function {fn_name}: \n\n {content}",
         }
         current_agent._group_manager.send(
             broadcast,
-            message.msg_target,   
+            message.msg_target,
             request_reply=False,
             silent=False,
         )
+
 
 class FunctionTarget(TransitionTarget):
     """Transition target that invokes a tool function with (prev_output, context)."""
@@ -472,6 +476,7 @@ class FunctionTarget(TransitionTarget):
             raise ValueError(
                 "FunctionTarget must be initialized with a callable function as the first argument or 'fn' keyword argument."
             )
+
     def can_resolve_for_speaker_selection(self) -> bool:
         return False
 
@@ -485,7 +490,14 @@ class FunctionTarget(TransitionTarget):
         if function_target_result.context_variables:
             ctx.update(function_target_result.context_variables)
         if function_target_result.messages:
-            broadcast(function_target_result.messages, group_chat, current_agent, self.fn_name, function_target_result.target, user_agent)
+            broadcast(
+                function_target_result.messages,
+                group_chat,
+                current_agent,
+                self.fn_name,
+                function_target_result.target,
+                user_agent,
+            )
         return function_target_result.target.resolve(group_chat, current_agent, user_agent)
 
     def display_name(self) -> str:
