@@ -52,14 +52,14 @@ from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's gpt-5 mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 # 3. Create our LLM agent
-with llm_config:
-    my_agent = ConversableAgent(
-        name="helpful_agent",
-        system_message="You are a poetic AI assistant, respond in rhyme.",
-    )
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant, respond in rhyme.",
+    llm_config=llm_config,
+)
 
 # 4. Run the agent with a prompt
 response = my_agent.run(

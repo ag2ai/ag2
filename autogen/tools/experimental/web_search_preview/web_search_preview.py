@@ -17,7 +17,7 @@ from ... import Tool
 
 with optional_import_block():
     from openai import OpenAI
-    from openai.types.responses import WebSearchToolParam
+    from openai.types.responses.web_search_preview_tool_param import WebSearchPreviewToolParam
     from openai.types.responses.web_search_tool import UserLocation
 
 
