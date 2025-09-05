@@ -208,7 +208,7 @@ class ConversableAgentBase(LLMAgent):
 
     def _content_str(self, content):
         """Helper to get content string"""
-        from ..code_utils import content_str
+        from ...code_utils import content_str
 
         return content_str(content)
 
