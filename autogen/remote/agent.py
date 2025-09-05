@@ -10,6 +10,7 @@ from autogen.agentchat.group import ContextVariables
 from autogen.doc_utils import export_module
 from autogen.oai.client import OpenAIWrapper
 
+from .errors import RemoteAgentError, RemoteAgentNotFoundError
 from .protocol import AgentBusMessage
 
 
@@ -47,26 +48,24 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        client = cast(httpx.Client, self._httpx_client) or httpx.Client()
+        client = cast(httpx.Client, self._httpx_client) or httpx.Client(timeout=30)
 
         with client:
             # initiate remote procedure
-            task_response = client.post(
-                f"{self.url}/{self.name}",
-                content=AgentBusMessage(
-                    messages=messages,
-                    context=self.context_variables.data,
-                ).model_dump_json(),
-                timeout=30,
+            task_id = self._process_create_remote_task_response(
+                client.post(
+                    f"{self.url}/{self.name}",
+                    content=AgentBusMessage(
+                        messages=messages,
+                        context=self.context_variables.data,
+                    ).model_dump_json(),
+                )
             )
-
-            task_id = task_response.json()
 
             # wait for remote task complete
             while (
                 reply_response := client.get(
                     f"{self.url}/{self.name}/{task_id}",
-                    timeout=30,
                 )
             ).status_code == 425:
                 pass
@@ -89,26 +88,24 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        client = cast(httpx.AsyncClient, self._httpx_client) or httpx.AsyncClient()
+        client = cast(httpx.AsyncClient, self._httpx_client) or httpx.AsyncClient(timeout=30)
 
         async with client:
             # initiate remote procedure
-            task_response = await client.post(
-                f"{self.url}/{self.name}",
-                content=AgentBusMessage(
-                    messages=messages,
-                    context=self.context_variables.data,
-                ).model_dump_json(),
-                timeout=30,
+            task_id = self._process_create_remote_task_response(
+                await client.post(
+                    f"{self.url}/{self.name}",
+                    content=AgentBusMessage(
+                        messages=messages,
+                        context=self.context_variables.data,
+                    ).model_dump_json(),
+                )
             )
-
-            task_id = task_response.json()
 
             # wait for remote task complete
             while (
                 reply_response := await client.get(
                     f"{self.url}/{self.name}/{task_id}",
-                    timeout=30,
                 )
             ).status_code == 425:
                 pass
@@ -122,13 +119,23 @@ class HTTPRemoteAgent(ConversableAgent):
 
         return True, None
 
+    def _process_create_remote_task_response(self, response: httpx.Response) -> Any:
+        if response.status_code == 404:
+            raise RemoteAgentNotFoundError(self.name)
+
+        if response.status_code != 202:
+            raise RemoteAgentError(f"Remote client error: {response}, {response.content!r}")
+
+        return response.json()
+
     def _process_remote_reply(self, reply_response: httpx.Response) -> AgentBusMessage | None:
         if reply_response.status_code == 204:
             return None
 
         try:
             serialized_message = AgentBusMessage.model_validate_json(reply_response.content)
+
         except Exception as e:
-            raise ValueError(f"Remote client error: {reply_response}, {reply_response.content!r}") from e
+            raise RemoteAgentError(f"Remote client error: {reply_response}, {reply_response.content!r}") from e
 
         return serialized_message

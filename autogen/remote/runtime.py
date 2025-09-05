@@ -36,7 +36,7 @@ class RemoteService(Protocol):
 class HTTPAgentBus:
     def __init__(
         self,
-        agents: Iterable[ConversableAgent],
+        agents: Iterable[ConversableAgent] = (),
         *,
         long_polling_interval: float = 10.0,
         additional_services: Iterable[RemoteService] = (),
