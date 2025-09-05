@@ -1258,7 +1258,7 @@ class ConversableAgent(LLMAgent):
 
     def receive(
         self,
-        message: dict[str, Any] | str,
+        message: dict[str, Any] | list[dict[str, Any]] | str,
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1269,7 +1269,7 @@ class ConversableAgent(LLMAgent):
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided).
+            message (dict or str or list[messages]): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). Can also be a list of messages.
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1286,7 +1286,13 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        self._process_received_message(message, sender, silent)
+        # Handle list of messages
+        if isinstance(message, list):
+            for msg in message:
+                self._process_received_message(msg, sender, silent)
+        else:
+            self._process_received_message(message, sender, silent)
+
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
@@ -1295,7 +1301,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_receive(
         self,
-        message: dict[str, Any] | str,
+        message: dict[str, Any] | list[dict[str, Any]] | str,
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1306,7 +1312,7 @@ class ConversableAgent(LLMAgent):
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided).
+            message (dict or str or list[messages]): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). Can also be a list of messages.
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1323,7 +1329,13 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        self._process_received_message(message, sender, silent)
+        # Handle list of messages
+        if isinstance(message, list):
+            for msg in message:
+                self._process_received_message(msg, sender, silent)
+        else:
+            self._process_received_message(message, sender, silent)
+
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = await self.a_generate_reply(messages=self.chat_messages[sender], sender=sender)
