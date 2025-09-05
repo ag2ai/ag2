@@ -20,13 +20,14 @@ class HTTPRemoteAgent(ConversableAgent):
         url: str,
         name: str,
         *,
+        silent: bool = False,
         client: httpx.AsyncClient | httpx.Client | None = None,
     ) -> None:
         self.url = url
 
         self._httpx_client = client
 
-        super().__init__(name, silent=True)
+        super().__init__(name, silent=silent)
 
         self.replace_reply_func(
             ConversableAgent.generate_oai_reply,
