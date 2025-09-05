@@ -9,12 +9,16 @@ If you're wanting to develop new agents, agent capabilities, or understand the f
 This section involves diving into AG2's source code, if that doesn't sound like what you are after, check out our Basic and Advanced concept sections under [User Guide](/docs/user-guide/basic-concepts/installing-ag2).
 </Tip>
 
+AG2's agent workflow and the `ConversableAgent` class are built on a layered mixin architecture: core conversational logic, reply logic, function and tool execution, code execution, hooks (for extensibility/capabilities), messaging infrastructure, and LLM/utility integration are all implemented as modular components ("mixins"). If you're tracing the flow or adding capabilities, note that behaviors like `generate_reply`, receiving/sending messages, running code, function/tool handling, and context hooks may be defined or extended across these composable modules.
+
 Sections:
 
 1. Chat workflow with [initiate_chat](/docs/contributor-guide/how-ag2-works/initiate-chat)
 
 2. How ConversableAgent generates its reply with [generate_reply](/docs/contributor-guide/how-ag2-works/generate-reply)
+   (Includes trigger logic, reply handler registration, code execution, tool/function pipeline, and hooks.)
 
 3. How to update agent and message state using [hooks](/docs/contributor-guide/how-ag2-works/hooks)
+    (Includes details on registering and processing state before/after replies.)
 
 Ready to start building your own agents and tools? Check out our guides for [creating a tool](/docs/contributor-guide/building/creating-a-tool) and [creating an agent](/docs/contributor-guide/building/creating-an-agent).
