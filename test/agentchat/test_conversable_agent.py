@@ -2206,3 +2206,235 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
+
+
+def test_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "First message"},
+        {"role": "assistant", "content": "Second message"},
+        {"role": "user", "content": "Third message"},
+    ]
+
+    # Send the list of messages
+    sender.send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "First message"
+    assert recipient.chat_messages[sender][1]["content"] == "Second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Third message"
+
+
+def test_send_with_empty_list_of_messages(mock_credentials: Credentials):
+    """Test send() method with an empty list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Send an empty list of messages
+    sender.send([], recipient, request_reply=False, silent=True)
+
+    # Verify that no messages were added
+    assert len(recipient.chat_messages[sender]) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test a_send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Async first message"},
+        {"role": "assistant", "content": "Async second message"},
+        {"role": "user", "content": "Async third message"},
+    ]
+
+    # Send the list of messages asynchronously
+    await sender.a_send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Async first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Async second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Async third message"
+
+
+@pytest.mark.asyncio
+async def test_a_send_with_mixed_content_list(mock_credentials: Credentials):
+    """Test a_send() method with a list containing different message types."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with mixed content types
+    messages = [
+        {"role": "user", "content": "Text message"},
+        {"role": "assistant", "content": None},  # Message with None content
+        {"role": "function", "name": "test_function", "content": "Function result"},
+    ]
+
+    # Send the list of messages asynchronously
+    await sender.a_send(messages, recipient, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and sent
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Text message"
+    assert recipient.chat_messages[sender][1]["content"] is None
+    assert recipient.chat_messages[sender][2]["content"] == "Function result"
+
+
+def test_receive_with_list_of_messages(mock_credentials: Credentials):
+    """Test receive() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Received first message"},
+        {"role": "assistant", "content": "Received second message"},
+        {"role": "user", "content": "Received third message"},
+    ]
+
+    # Receive the list of messages
+    recipient.receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Received first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Received second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Received third message"
+
+
+def test_receive_with_list_containing_function_calls(mock_credentials: Credentials):
+    """Test receive() method with a list containing function call messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with function call messages
+    messages = [
+        {"role": "user", "content": "Please call a function"},
+        {"role": "assistant", "function_call": {"name": "test_func", "arguments": '{"arg": "value"}'}},
+        {"role": "function", "name": "test_func", "content": "Function executed successfully"},
+    ]
+
+    # Receive the list of messages
+    recipient.receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Please call a function"
+    assert "function_call" in recipient.chat_messages[sender][1]
+    assert recipient.chat_messages[sender][2]["content"] == "Function executed successfully"
+
+
+@pytest.mark.asyncio
+async def test_a_receive_with_list_of_messages(mock_credentials: Credentials):
+    """Test a_receive() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Async received first message"},
+        {"role": "assistant", "content": "Async received second message"},
+        {"role": "user", "content": "Async received third message"},
+    ]
+
+    # Receive the list of messages asynchronously
+    await recipient.a_receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Async received first message"
+    assert recipient.chat_messages[sender][1]["content"] == "Async received second message"
+    assert recipient.chat_messages[sender][2]["content"] == "Async received third message"
+
+
+@pytest.mark.asyncio
+async def test_a_receive_with_list_containing_tool_calls(mock_credentials: Credentials):
+    """Test a_receive() method with a list containing tool call messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list with tool call messages
+    messages = [
+        {"role": "user", "content": "Please use a tool"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "test_tool", "arguments": '{"param": "value"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Tool executed successfully"},
+    ]
+
+    # Receive the list of messages asynchronously
+    await recipient.a_receive(messages, sender, request_reply=False, silent=True)
+
+    # Verify that all messages were processed and received
+    assert len(recipient.chat_messages[sender]) == 3
+    assert recipient.chat_messages[sender][0]["content"] == "Please use a tool"
+    assert "tool_calls" in recipient.chat_messages[sender][1]
+    assert recipient.chat_messages[sender][2]["content"] == "Tool executed successfully"
+
+
+def test_process_message_before_send_with_list_of_messages(mock_credentials: Credentials):
+    """Test _process_message_before_send() method with a list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Create a list of messages
+    messages = [
+        {"role": "user", "content": "Process first message"},
+        {"role": "assistant", "content": "Process second message"},
+        {"role": "user", "content": "Process third message"},
+    ]
+
+    # Process the list of messages
+    processed_messages = sender._process_message_before_send(messages, recipient, silent=True)
+
+    # Verify that the processed messages are returned as a list
+    assert isinstance(processed_messages, list)
+    assert len(processed_messages) == 3
+    assert processed_messages[0]["content"] == "Process first message"
+    assert processed_messages[1]["content"] == "Process second message"
+    assert processed_messages[2]["content"] == "Process third message"
+
+
+def test_process_message_before_send_with_empty_list(mock_credentials: Credentials):
+    """Test _process_message_before_send() method with an empty list of messages."""
+    sender = ConversableAgent(name="sender", llm_config=False)
+    recipient = ConversableAgent(name="recipient", llm_config=False)
+
+    # Process an empty list of messages
+    processed_messages = sender._process_message_before_send([], recipient, silent=True)
+
+    # Verify that an empty list is returned
+    assert isinstance(processed_messages, list)
+    assert len(processed_messages) == 0
+
+
+if __name__ == "__main__":
+    # test_trigger()
+    # test_context()
+    # test_handle_carryover():
+    # test_max_turn()
+    # test_process_before_send()
+    # test_message_func()
+    # test_summary()
+    # test_adding_duplicate_function_warning()
+    # test_function_registration_e2e_sync()
+    # test_process_gemini_carryover()
+    # test_process_carryover()
+    # test_context_variables()
+    # test_max_consecutive_auto_reply_with_max_turns()
+    test_invalid_functions_parameter()
