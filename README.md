@@ -138,223 +138,184 @@ We have several agent concepts in AG2 to help you build your AI agents. We intro
 
 The [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent) is the fundamental building block of AG2, designed to enable seamless communication between AI entities. This core agent type handles message exchange and response generation, serving as the base class for all agents in the framework.
 
-In the example below, we'll create a simple information validation workflow with two specialized agents that communicate with each other:
-
-Note: Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock) supported by AG2.
+Let's begin with a simple example where two agents collaborate:  
+- A **coder agent** that writes Python code.  
+- A **reviewer agent** that critiques the code without rewriting it.
 
 ```python
-# 1. Import ConversableAgent class
+import logging
 from autogen import ConversableAgent, LLMConfig
 
-# 2. Define our LLM configuration for OpenAI's GPT-4o mini
-#    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({
-    "api_type": "openai",
-    "model": "gpt-5-mini",
-})
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 3. Create our LLM agent
-assistant = ConversableAgent(
-    name="assistant",
-    system_message="You are an assistant that responds concisely.",
+# Load LLM configuration (see docs for OAI_CONFIG_LIST format)
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+
+# Define agents
+coder = ConversableAgent(
+    name="coder",
+    system_message="You are a Python developer. Write short Python scripts.",
     llm_config=llm_config,
 )
 
-fact_checker = ConversableAgent(
-    name="fact_checker",
-    system_message="You are a fact-checking assistant.",
+reviewer = ConversableAgent(
+    name="reviewer",
+    system_message="You are a code reviewer. Analyze provided code and suggest improvements. "
+                   "Do not generate code, only suggest improvements.",
     llm_config=llm_config,
 )
 
-# 4. Start the conversation
-assistant.initiate_chat(
-    recipient=fact_checker,
-    message="What is AG2?",
+# Start a conversation
+chat_result = coder.initiate_chat(
+    recipient=reviewer,
+    message="Write a Python function that computes Fibonacci numbers.",
     max_turns=2
 )
+
+logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
 ```
 
-### Human in the loop
-
-Human oversight is crucial for many AI workflows, especially when dealing with critical decisions, creative tasks, or situations requiring expert judgment. AG2 makes integrating human feedback seamless through its human-in-the-loop functionality.
-You can configure how and when human input is solicited using the `human_input_mode` parameter:
-
-- `ALWAYS`: Requires human input for every response
-- `NEVER`: Operates autonomously without human involvement
-- `TERMINATE`: Only requests human input to end conversations
-
-For convenience, AG2 provides the specialized `UserProxyAgent` class that automatically sets `human_input_mode` to `ALWAYS` and supports code execution:
-
-Note: Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock) supported by AG2.
-
-```python
-# 1. Import ConversableAgent and UserProxyAgent classes
-from autogen import ConversableAgent, UserProxyAgent, LLMConfig
-
-# 2. Define our LLM configuration for OpenAI's GPT-4o mini
-#    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({
-    "api_type": "openai",
-    "model": "gpt-5-mini",
-})
-
-# 3. Create our LLM agent
-assistant = ConversableAgent(
-    name="assistant",
-    system_message="You are a helpful assistant.",
-    llm_config=llm_config,
-)
-
-# 4. Create a human agent with manual input mode
-human = ConversableAgent(
-    name="human",
-    human_input_mode="ALWAYS"
-)
-
-# or
-human = UserProxyAgent(
-    name="human",
-    code_execution_config={"work_dir": "coding", "use_docker": False},
-)
-
-# 5. Start the chat
-human.initiate_chat(
-    recipient=assistant,
-    message="Hello! What's 2 + 2?"
-)
-
-```
-
-### Orchestrating multiple agents
+---
+### Orchestrating Multiple Agents
 
 AG2 enables sophisticated multi-agent collaboration through flexible orchestration patterns, allowing you to create dynamic systems where specialized agents work together to solve complex problems.
 
-The framework offers both custom orchestration and several built-in collaboration patterns including `GroupChat` and `Swarm`.
-
-Here's how to implement a collaborative team for curriculum development using GroupChat:
-
-Note: Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock) supported by AG2.
+Here’s how to build a team of **teacher**, **lesson planner**, and **reviewer** agents working together to design a lesson plan:
 
 ```python
+import logging
 from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 
-# Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({
-    "api_type": "openai",
-    "model": "gpt-5-mini",
-})
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-planner_message = """You are a classroom lesson agent.
-Given a topic, write a lesson plan for a fourth grade class.
-Use the following format:
-<title>Lesson plan title</title>
-<learning_objectives>Key learning objectives</learning_objectives>
-<script>How to introduce the topic to the kids</script>
-"""
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
-reviewer_message = """You are a classroom lesson reviewer.
-You compare the lesson plan to the fourth grade curriculum and provide a maximum of 3 recommended changes.
-Provide only one round of reviews to a lesson plan.
-"""
-
-# 1. Add a separate 'description' for our planner and reviewer agents
-planner_description = "Creates or revises lesson plans."
-
-reviewer_description = """Provides one round of reviews to a lesson plan
-for the lesson_planner to revise."""
+# Define lesson planner and reviewer
+planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
+reviewer_message = "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
 
 lesson_planner = ConversableAgent(
     name="planner_agent",
     system_message=planner_message,
-    description=planner_description,
+    description="Creates or revises lesson plans.",
     llm_config=llm_config,
 )
 
 lesson_reviewer = ConversableAgent(
     name="reviewer_agent",
     system_message=reviewer_message,
-    description=reviewer_description,
+    description="Provides one round of feedback to lesson plans.",
     llm_config=llm_config,
 )
 
-# 2. The teacher's system message can also be used as a description, so we don't define it
-teacher_message = """You are a classroom teacher.
-You decide topics for lessons and work with a lesson planner.
-and reviewer to create and finalise lesson plans.
-When you are happy with a lesson plan, output "DONE!".
-"""
+teacher_message = "You are a classroom teacher. You decide topics and collaborate with planner and reviewer to finalize lesson plans. When satisfied, output DONE!"
 
 teacher = ConversableAgent(
     name="teacher_agent",
     system_message=teacher_message,
-    # 3. Our teacher can end the conversation by saying DONE!
     is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
     llm_config=llm_config,
 )
 
-# 4. Create the GroupChat with agents and selection method
+# Set up group chat
 groupchat = GroupChat(
     agents=[teacher, lesson_planner, lesson_reviewer],
     speaker_selection_method="auto",
     messages=[],
 )
 
-# 5. Our GroupChatManager will manage the conversation and uses an LLM to select the next agent
 manager = GroupChatManager(
     name="group_manager",
     groupchat=groupchat,
     llm_config=llm_config,
 )
 
-# 6. Initiate the chat with the GroupChatManager as the recipient
-teacher.initiate_chat(
+# Initiate group conversation
+chat_result = teacher.initiate_chat(
     recipient=manager,
-    message="Today, let's introduce our kids to the solar system."
+    message="Let's introduce our kids to the solar system."
 )
+
+logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
 ```
 
-When executed, this code creates a collaborative system where the teacher initiates the conversation, and the lesson planner and reviewer agents work together to create and refine a lesson plan. The GroupChatManager orchestrates the conversation, selecting the next agent to respond based on the context of the discussion.
+---
 
-For workflows requiring more structured processes, explore the Group Chat pattern in the detailed [documentation](https://docs.ag2.ai/latest/docs/user-guide/advanced-concepts/orchestration/group-chat/introduction).
+### Human in the Loop
+
+Human oversight is often essential for validating or guiding AI outputs.  
+AG2 provides the `UserProxyAgent` for seamless integration of human feedback.
+
+Here we extend the **teacher–planner–reviewer** example by introducing a **human agent** who validates the final lesson:
+
+```python
+import logging
+from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+
+# AI assistant
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config,
+)
+
+# Human agent (manual input mode)
+human = UserProxyAgent(
+    name="human",
+    code_execution_config={"work_dir": "coding", "use_docker": False},
+)
+
+chat_result = human.initiate_chat(
+    recipient=assistant,
+    message="Hello! Can you suggest a 4th grade math exercise?"
+)
+
+logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
+```
+
+---
 
 ### Tools
 
-Agents gain significant utility through tools as they provide access to external data, APIs, and functionality.
-
-Note: Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock) supported by AG2.
+Agents gain significant utility through **tools**, which extend their capabilities with external data, APIs, or functions.
 
 ```python
+import logging
 from datetime import datetime
 from typing import Annotated
-
 from autogen import ConversableAgent, register_function, LLMConfig
 
-# Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({
-    "api_type": "openai",
-    "model": "gpt-5-mini",
-})
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 1. Our tool, returns the day of the week for a given date
+llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
+
+# Tool: returns weekday for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     date = datetime.strptime(date_string, "%Y-%m-%d")
     return date.strftime("%A")
 
-# 2. Agent for determining whether to run the tool
 date_agent = ConversableAgent(
     name="date_agent",
-    system_message="You get the day of the week for a given date.",
+    system_message="You find the day of the week for a given date.",
     llm_config=llm_config,
 )
 
-# 3. And an agent for executing the tool
 executor_agent = ConversableAgent(
     name="executor_agent",
     human_input_mode="NEVER",
     llm_config=llm_config,
 )
 
-# 4. Registers the tool with the agents, the description will be used by the LLM
+# Register tool
 register_function(
     get_weekday,
     caller=date_agent,
@@ -362,14 +323,14 @@ register_function(
     description="Get the day of the week for a given date",
 )
 
-# 5. Two-way chat ensures the executor agent follows the suggesting agent
+# Use tool in chat
 chat_result = executor_agent.initiate_chat(
     recipient=date_agent,
-    message="I was born on the 25th of March 1995, what day was it?",
+    message="I was born on 1995-03-25, what day was it?",
     max_turns=2,
 )
 
-print(chat_result.chat_history[-1]["content"])
+logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
 ```
 
 ### Advanced agentic design patterns
