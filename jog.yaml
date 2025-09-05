@@ -18,6 +18,5 @@ pull:
 # 71–85   → Significant changes detected; accuracy of the documentation is questionable.
 # 86–100  → Documentation is largely outdated and misleading.
 
-# Note: The agent starts from the assumption that documentation is correct unless it finds clear evidence otherwise. 
+# Note: The agent starts from the assumption that documentation is correct unless it finds clear evidence otherwise.
 # Lower scores mean "likely still accurate," while higher scores mean "more likely outdated."
-
