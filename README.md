@@ -193,7 +193,9 @@ Here’s how to build a team of **teacher**, **lesson planner**, and **reviewer*
 
 ```python
 import logging
-from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
+from autogen import ConversableAgent, LLMConfig
+from autogen.agentchat import run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -227,26 +229,21 @@ teacher = ConversableAgent(
     llm_config=llm_config,
 )
 
-# Set up group chat
-groupchat = GroupChat(
+auto_selection = AutoPattern(
     agents=[teacher, lesson_planner, lesson_reviewer],
-    speaker_selection_method="auto",
-    messages=[],
+    initial_agent=lesson_planner,
+    group_manager_args={"name": "group_manager", "llm_config": llm_config},
 )
 
-manager = GroupChatManager(
-    name="group_manager",
-    groupchat=groupchat,
-    llm_config=llm_config,
+response = run_group_chat(
+    pattern=auto_selection,
+    messages="Let's introduce our kids to the solar system.",
+    max_rounds=20,
 )
 
-# Initiate group conversation
-chat_result = teacher.initiate_chat(
-    recipient=manager,
-    message="Let's introduce our kids to the solar system."
-)
+response.process()
 
-logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
+logger.info("Final output:\n%s", response.summary)
 ```
 
 ---
@@ -260,66 +257,65 @@ Here we extend the **teacher–planner–reviewer** example by introducing a **h
 
 ```python
 import logging
-from autogen import ConversableAgent, UserProxyAgent, GroupChat, GroupChatManager, LLMConfig
+from autogen import ConversableAgent, LLMConfig, UserProxyAgent
+from autogen.agentchat import run_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
-# Same agents as before, but teacher no longer terminates automatically
+# Same agents as before, but now the human validator will pass to the planner who will check for "APPROVED" and terminate
 planner_message = "You are a classroom lesson planner. Given a topic, write a lesson plan for a fourth grade class."
 reviewer_message = "You are a classroom lesson reviewer. Compare the plan to the curriculum and suggest up to 3 improvements."
-teacher_message = "You are a classroom teacher. You decide topics and collaborate with planner and reviewer to create lesson plans."
+teacher_message = "You are an experienced classroom teacher. You don't prepare plans, you provide simple guidance to the planner to prepare a lesson plan on the key topic."
 
 lesson_planner = ConversableAgent(
     name="planner_agent",
     system_message=planner_message,
-    description="Creates or revises lesson plans.",
+    description="Creates or revises lesson plans before having them reviewed.",
+    is_termination_msg=lambda x: "APPROVED" in (x.get("content", "") or "").upper(),
+    human_input_mode="NEVER",
     llm_config=llm_config,
 )
 
 lesson_reviewer = ConversableAgent(
     name="reviewer_agent",
     system_message=reviewer_message,
-    description="Provides one round of feedback to lesson plans.",
+    description="Provides one round of feedback to lesson plans back to the lesson planner before requiring the human validator.",
     llm_config=llm_config,
 )
 
 teacher = ConversableAgent(
     name="teacher_agent",
     system_message=teacher_message,
+    description="Provides guidance on the topic and content, if required.",
     llm_config=llm_config,
 )
 
-# Add human validator to the team
 human_validator = UserProxyAgent(
     name="human_validator",
     system_message="You are a human educator who provides final approval for lesson plans.",
-    code_execution_config={"work_dir": "lesson_plans", "use_docker": False},
-    is_termination_msg=lambda x: "APPROVED" in (x.get("content", "") or "").upper(),
+    description="Evaluates the proposed lesson plan and either approves it or requests revisions, before returning to the planner.",
 )
 
-# Set up group chat with human in the loop
-groupchat = GroupChat(
-    agents=[teacher, lesson_planner, lesson_reviewer, human_validator],
-    speaker_selection_method="auto",
-    messages=[],
+auto_selection = AutoPattern(
+    agents=[teacher, lesson_planner, lesson_reviewer],
+    initial_agent=teacher,
+    user_agent=human_validator,
+    group_manager_args={"name": "group_manager", "llm_config": llm_config},
 )
 
-manager = GroupChatManager(
-    name="group_manager",
-    groupchat=groupchat,
-    llm_config=llm_config,
+response = run_group_chat(
+    pattern=auto_selection,
+    messages="Let's introduce our kids to the solar system.",
+    max_rounds=20,
 )
 
-# Initiate conversation - now requires human approval to complete
-chat_result = teacher.initiate_chat(
-    recipient=manager,
-    message="Let's introduce our kids to the solar system."
-)
+response.process()
 
-logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
+logger.info("Final output:\n%s", response.summary)
 ```
 
 ---
