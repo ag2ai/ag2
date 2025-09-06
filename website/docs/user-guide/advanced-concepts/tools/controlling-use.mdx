@@ -51,18 +51,18 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="anthropic",
-    model="claude-3-7-sonnet-latest",
-    tool_choice={"type": "any"},
-    )
+llm_config = LLMConfig({
+    "api_type": "anthropic",
+    "model": "claude-3-7-sonnet-latest",
+    "tool_choice": {"type": "any"},
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="anthropic",
-    model="claude-3-7-sonnet-latest",
-    tool_choice={"type": "none"},
-    )
+llm_config = LLMConfig({
+    "api_type": "anthropic",
+    "model": "claude-3-7-sonnet-latest",
+    "tool_choice": {"type": "none"},
+})
 ```
 
 ### Cerebras
@@ -77,18 +77,18 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="cerebras",
-    model="llama-3.3-70b",
-    tool_choice="required",
-    )
+llm_config = LLMConfig({
+    "api_type": "cerebras",
+    "model": "llama-3.3-70b",
+    "tool_choice": "required",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="cerebras",
-    model="llama-3.3-70b",
-    tool_choice="none",
-    )
+llm_config = LLMConfig({
+    "api_type": "cerebras",
+    "model": "llama-3.3-70b",
+    "tool_choice": "none",
+})
 ```
 
 ### Cohere
@@ -101,18 +101,18 @@ Cohere supports the ability to force the model to call at least one call or to c
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="cohere",
-    model="command-r7b-12-2024",
-    tool_choice="REQUIRED",
-    )
+llm_config = LLMConfig({
+    "api_type": "cohere",
+    "model": "command-r7b-12-2024",
+    "tool_choice": "REQUIRED",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="cohere",
-    model="command-r7b-12-2024",
-    tool_choice="NONE",
-    )
+llm_config = LLMConfig({
+    "api_type": "cohere",
+    "model": "command-r7b-12-2024",
+    "tool_choice": "NONE",
+})
 ```
 
 ### DeepSeek
@@ -127,20 +127,20 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="deepseeek",
-    base_url="https://api.deepseek.com/v1",
-    model="deekseek-chat",
-    tool_choice="required",
-    )
+llm_config = LLMConfig({
+    "api_type": "deepseeek",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deekseek-chat",
+    "tool_choice": "required",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="deepseeek",
-    base_url="https://api.deepseek.com/v1",
-    model="deekseek-chat",
-    tool_choice="none",
-    )
+llm_config = LLMConfig({
+    "api_type": "deepseeek",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deekseek-chat",
+    "tool_choice": "none",
+})
 ```
 
 ### Gemini / Vertex AI
@@ -157,32 +157,32 @@ from google.genai.types import FunctionCallingConfig, FunctionCallingConfigMode,
 # Must call a tool
 function_calling_config = FunctionCallingConfig(
     mode=FunctionCallingConfigMode.ANY,
-    )
+)
 
 tool_config = ToolConfig(
     function_calling_config=function_calling_config,
-    )
+)
 
-llm_config = LLMConfig(
-    api_type="google",
-    model="models/gemini-2.0-flash-lite",
-    tool_config=tool_config,
-    )
+llm_config = LLMConfig({
+    "api_type": "google",
+    "model": "models/gemini-2.0-flash-lite",
+    "tool_config": tool_config,
+})
 
 # Must not call a tool
 function_calling_config = FunctionCallingConfig(
     mode=FunctionCallingConfigMode.NONE, # No tool call
-    )
+)
 
 tool_config = ToolConfig(
     function_calling_config=function_calling_config,
-    )
+)
 
-llm_config = LLMConfig(
-    api_type="google",
-    model="models/gemini-2.0-flash-lite",
-    tool_config=tool_config,
-    )
+llm_config = LLMConfig({
+    "api_type": "google",
+    "model": "models/gemini-2.0-flash-lite",
+    "tool_config": tool_config,
+})
 ```
 
 ### Groq
@@ -197,18 +197,18 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="groq",
-    model="llama-3.3-70b-versatile",
-    tool_choice="required",
-    )
+llm_config = LLMConfig({
+    "api_type": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "tool_choice": "required",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="groq",
-    model="llama-3.3-70b-versatile",
-    tool_choice="none",
-    )
+llm_config = LLMConfig({
+    "api_type": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "tool_choice": "none",
+})
 ```
 
 ### Mistral AI
@@ -223,18 +223,18 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="mistral",
-    model="mistral-large-latest",
-    tool_choice="any",
-    )
+llm_config = LLMConfig({
+    "api_type": "mistral",
+    "model": "mistral-large-latest",
+    "tool_choice": "any",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="mistral",
-    model="mistral-large-latest",
-    tool_choice="none",
-    )
+llm_config = LLMConfig({
+    "api_type": "mistral",
+    "model": "mistral-large-latest",
+    "tool_choice": "none",
+})
 ```
 
 ### OpenAI / Azure OpenAI
@@ -249,18 +249,18 @@ The default value is "auto" and doesn't need to be provided.
 
 ```python
 # Must call a tool
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    tool_choice="required",
-    )
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "tool_choice": "required",
+})
 
 # Must not call a tool
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    tool_choice="none",
-    )
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "tool_choice": "none",
+})
 ```
 
 ### Together AI
@@ -277,10 +277,10 @@ This parameter wasn't always adhered to during testing with no tool calls made e
 
 ```python
 # Must call the tool named 'my_tool'
-llm_config = LLMConfig(
-    api_type="together",
-    model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    cache_seed=None,
-    tool_choice={"type": "function", "function": {"name": "my_tool"}},
-    )
+llm_config = LLMConfig({
+    "api_type": "together",
+    "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "cache_seed": None,
+    "tool_choice": {"type": "function", "function": {"name": "my_tool"}},
+})
 ```

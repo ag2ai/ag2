@@ -14,17 +14,17 @@ __all__ = ["Handoffs"]
 
 
 class Handoffs(BaseModel):
-    """Container for all handoff transition conditions of a ConversableAgent.
-
-    Three types of conditions can be added, each with a different order and time of use:
-    1. OnContextConditions (evaluated without an LLM)
-    2. OnConditions (evaluated with an LLM)
-    3. After work TransitionTarget (if no other transition is triggered)
-
-    Supports method chaining:
-    agent.handoffs.add_context_conditions([condition1]) \
-                   .add_llm_condition(condition2) \
-                   .set_after_work(after_work)
+    """Container for all handoff transition conditions of a ConversableAgent.\n
+    \n
+        Three types of conditions can be added, each with a different order and time of use:\n
+        1. OnContextConditions (evaluated without an LLM)\n
+        2. OnConditions (evaluated with an LLM)\n
+        3. After work TransitionTarget (if no other transition is triggered)\n
+    \n
+        Supports method chaining:\n
+        agent.handoffs.add_context_conditions([condition1])\n
+                       .add_llm_condition(condition2)\n
+                       .set_after_work(after_work)\n
     """
 
     context_conditions: list[OnContextCondition] = Field(default_factory=list)

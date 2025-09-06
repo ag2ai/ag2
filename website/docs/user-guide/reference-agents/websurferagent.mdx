@@ -72,14 +72,14 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     from autogen.agents.experimental import WebSurferAgent
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
     # Create our agent
-    with llm_config:
-      websurfer = WebSurferAgent(
-          name="WebSurfer",
-          web_tool="browser_use",
-      )
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        web_tool="browser_use",
+        llm_config=llm_config,
+    )
     ```
   </Tab>
   <Tab title="crawl4ai">
@@ -88,14 +88,14 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     from autogen.agents.experimental import WebSurferAgent
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
     # Create our agent
-    with llm_config:
-      websurfer = WebSurferAgent(
-          name="WebSurfer",
-          web_tool="crawl4ai",
-      )
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        web_tool="crawl4ai",
+        llm_config=llm_config,
+    )
     ```
   </Tab>
 </Tabs>

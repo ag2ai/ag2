@@ -41,11 +41,10 @@ In this example, our `Mike` agent will have this hook registered, so all their m
 from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Union
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
-with llm_config:
-  agent_mike = ConversableAgent(name="Mike")
-  agent_bob = ConversableAgent(name="Bob")
+agent_mike = ConversableAgent(name="Mike", llm_config=llm_config)
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our function associated with the hook
 def update_message_before_send(
@@ -179,17 +178,16 @@ In the following example we will update an agent's system message to have the cu
 from autogen import ConversableAgent, LLMConfig
 from typing import Any
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
 calendar_prompt = ("You are a calendar agent who answers questions on the date and day.\n"
                    "The current date is: [CURRENT_DATE]\n"
                    "The current day is: [CURRENT_DAY]"
 )
 
-with llm_config:
-  # Our calendar agent, we won't set a system_message here as we will set it with the hook
-  agent_calendar = ConversableAgent(name="Calendar_Agent")
-  agent_bob = ConversableAgent(name="Bob")
+# Our calendar agent, we won't set a system_message here as we will set it with the hook
+agent_calendar = ConversableAgent(name="Calendar_Agent", llm_config=llm_config)
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our function to update the agent's system message, this will be attached to the hook
 def update_my_agent_state(
@@ -269,11 +267,10 @@ Here's an example that changes any instances of the word "blue" to "red" in the 
 from autogen import ConversableAgent, LLMConfig
 from typing import Any, Union
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
-with llm_config:
-  agent_scientist = ConversableAgent(name="scientist")
-  agent_bob = ConversableAgent(name="Bob")
+agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our function for the hook, to replace "blue" with "red" in the last received message
 def replace_blue_with_red(
@@ -351,11 +348,10 @@ from autogen import ConversableAgent, LLMConfig
 from typing import Any
 import json
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
-with llm_config:
-  agent_mike = ConversableAgent(name="Mike", system_message="You are a comedian.")
-  agent_bob = ConversableAgent(name="Bob", system_message="You are a comedian.")
+agent_mike = ConversableAgent(name="Mike", system_message="You are a comedian.", llm_config=llm_config)
+agent_bob = ConversableAgent(name="Bob", system_message="You are a comedian.", llm_config=llm_config)
 
 # Our function for the hook, to prepend the agent's name on each message
 def prepend_name(
