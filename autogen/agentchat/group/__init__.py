@@ -46,6 +46,8 @@ __all__ = [
     "ContextVariables",
     "ExpressionAvailableCondition",
     "ExpressionContextCondition",
+    "FunctionTarget",
+    "FunctionTargetResult",
     "GroupChatConfig",
     "GroupChatTarget",
     # "GroupManagerSelectionMessageContextStr",
@@ -56,7 +58,6 @@ __all__ = [
     "OnCondition",
     "OnContextCondition",
     "ReplyResult",
-    "FunctionTargetResult",
     "RevertToUserTarget",
     "SpeakerSelectionResult",
     "StayTarget",
@@ -64,5 +65,4 @@ __all__ = [
     "StringContextCondition",
     "StringLLMCondition",
     "TerminateTarget",
-    "FunctionTarget",
 ]
