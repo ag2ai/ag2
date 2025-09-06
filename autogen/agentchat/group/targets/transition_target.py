@@ -3,11 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import random
-from collections.abc import Callable
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..speaker_selection_result import SpeakerSelectionResult
 from .transition_utils import __AGENT_WRAPPER_PREFIX__
@@ -421,99 +419,6 @@ class RandomAgentTarget(TransitionTarget):
     def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
         """Create a wrapper agent for the target if needed."""
         raise NotImplementedError("RandomAgentTarget does not require wrapping in an agent.")
-
-
-if TYPE_CHECKING:
-    from ..function_target_result import FunctionTargetMessage, FunctionTargetResult
-
-    AfterworkFn = Callable[..., "FunctionTargetResult"]
-else:
-    AfterworkFn = Callable[..., Any]
-
-
-def broadcast(
-    messages: list["FunctionTargetMessage"] | str, group_chat, current_agent, fn_name, target, user_agent, *args
-) -> None:
-    """Broadcast a message to a specific agent."""
-    if isinstance(messages, str):
-        if hasattr(target, "agent_name"):
-            next_target = target.agent_name
-            for agent in group_chat.agents:
-                if agent.name == next_target:
-                    messages = [SimpleNamespace(content=messages, msg_target=agent)]
-                    break
-        elif isinstance(target, RevertToUserTarget):
-            messages = [SimpleNamespace(content=messages, msg_target=user_agent)]
-        elif isinstance(target, StayTarget):
-            messages = [SimpleNamespace(content=messages, msg_target=current_agent)]
-    for message in messages:
-        content = message.content
-        broadcast = {
-            "role": "system",
-            "name": f"{fn_name}",
-            "content": f"[FUNCTION_HANDOFF] - Reply from function {fn_name}: \n\n {content}",
-        }
-        current_agent._group_manager.send(
-            broadcast,
-            message.msg_target,
-            request_reply=False,
-            silent=False,
-        )
-
-
-class FunctionTarget(TransitionTarget):
-    """Transition target that invokes a tool function with (prev_output, context)."""
-
-    fn_name: str = Field(...)
-    fn: AfterworkFn = Field(..., repr=False)
-
-    def __init__(self, incoming_fn, **kwargs):
-        # If the first arg is callable, auto-populate fn and fn_name
-        # allows this to be called simply with FunctionTarget(fn)
-        if callable(incoming_fn):
-            super().__init__(fn_name=incoming_fn.__name__, fn=incoming_fn, **kwargs)
-        else:
-            raise ValueError(
-                "FunctionTarget must be initialized with a callable function as the first argument or 'fn' keyword argument."
-            )
-
-    def can_resolve_for_speaker_selection(self) -> bool:
-        return False
-
-    def resolve(self, *args, **kwargs) -> SpeakerSelectionResult:
-        group_chat: GroupChat = args[0]
-        last_message = group_chat.messages[-1]["content"] if group_chat.messages else ""
-        current_agent: ConversableAgent = args[1]
-        ctx = current_agent.context_variables
-        user_agent = args[2]
-        function_target_result = self.fn(last_message, ctx, group_chat, current_agent)
-        if function_target_result.context_variables:
-            ctx.update(function_target_result.context_variables)
-        if function_target_result.messages:
-            broadcast(
-                function_target_result.messages,
-                group_chat,
-                current_agent,
-                self.fn_name,
-                function_target_result.target,
-                user_agent,
-            )
-        return function_target_result.target.resolve(group_chat, current_agent, user_agent)
-
-    def display_name(self) -> str:
-        return self.fn_name
-
-    def normalized_name(self) -> str:
-        return self.fn_name.replace(" ", "_")
-
-    def __str__(self) -> str:
-        return f"Transfer to tool {self.fn_name}"
-
-    def needs_agent_wrapper(self) -> bool:
-        return False
-
-    def create_wrapper_agent(self, *args, **kwargs):
-        raise NotImplementedError("ToolTarget is executed inline and needs no wrapper")
 
 
 # TODO: Consider adding a SequentialChatTarget class

@@ -9,7 +9,6 @@ from .context_condition import ExpressionContextCondition, StringContextConditio
 from .context_expression import ContextExpression
 from .context_str import ContextStr
 from .context_variables import ContextVariables
-from .function_target_result import FunctionTargetResult
 from .handoffs import Handoffs
 from .llm_condition import ContextStrLLMCondition, StringLLMCondition
 from .on_condition import OnCondition
@@ -25,11 +24,11 @@ from .targets.group_manager_target import (
     GroupManagerTarget,
 )
 """
+from .targets.function_target import FunctionTarget, FunctionTargetResult
 from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     AskUserTarget,
-    FunctionTarget,
     NestedChatTarget,
     RevertToUserTarget,
     StayTarget,

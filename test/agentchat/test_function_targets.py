@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group import AgentTarget, ContextVariables, FunctionTarget
-from autogen.agentchat.group.function_target_result import FunctionTargetMessage, FunctionTargetResult
 from autogen.agentchat.group.patterns import DefaultPattern
+from autogen.agentchat.group.targets.function_target import FunctionTargetMessage, FunctionTargetResult
 from autogen.agentchat.group.targets.transition_target import StayTarget
 
 load_dotenv()
