@@ -5,10 +5,10 @@
 
 from abc import ABC
 from collections.abc import Callable
-from typing import Annotated, Any, Literal, Union, ClassVar, Dict, Type
+from typing import Annotated, Any, ClassVar, Literal, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, create_model, PrivateAttr
+from pydantic import BaseModel, Field, create_model
 
 from ..doc_utils import export_module
 
@@ -30,7 +30,9 @@ class BaseEvent(BaseModel, ABC):
             f (Optional[Callable[..., Any]], optional): Print function. If none, python's default print will be used.
         """
         ...
-    _hooks: ClassVar[Dict[Type["BaseEvent"], list[Callable]]] = {}
+
+    _hooks: ClassVar[dict[type["BaseEvent"], list[Callable]]] = {}
+
     @classmethod
     def register_hook(cls, event_type, func):
         cls._hooks.setdefault(event_type, []).append(func)
@@ -41,7 +43,6 @@ class BaseEvent(BaseModel, ABC):
             if isinstance(event, base):
                 for f in funcs:
                     f(event)
-
 
 
 def camel2snake(name: str) -> str:
