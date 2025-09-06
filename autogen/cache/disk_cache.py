@@ -4,18 +4,13 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import sys
 from types import TracebackType
 from typing import Any
 
 import diskcache
+from typing_extensions import Self
 
 from .abstract_cache_base import AbstractCache
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
 
 
 class DiskCache(AbstractCache):

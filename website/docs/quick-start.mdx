@@ -13,7 +13,7 @@ We recommend using a virtual environment for your project to keep your packages 
 
 **Install AG2**
 
-AG2 requires **Python version >= 3.9, < 3.14**. Install AG2 with OpenAI integration using pip:
+AG2 requires **Python version >= 3.10, < 3.14**. Install AG2 with OpenAI integration using pip:
 
 ```bash
 pip install ag2[openai]
@@ -36,7 +36,7 @@ On Mac OS, if you get "no matches found:", add a quote to the package name, for 
 
 ### Build Your First Agent Workflow
 
-Let’s build a poetic AI assistant that responds in rhymes using AG2 and OpenAI’s GPT-4o-mini model.
+Let’s build a poetic AI assistant that responds in rhymes using AG2 and OpenAI’s gpt-5-nano model.
 
 This example demonstrates how to:
 
@@ -50,16 +50,16 @@ Create a Python script called `first_agent.py`, and paste the following code int
 # 1. Import our agent class
 from autogen import ConversableAgent, LLMConfig
 
-# 2. Define our LLM configuration for OpenAI's GPT-4o mini
+# 2. Define our LLM configuration for OpenAI's gpt-5 mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 # 3. Create our LLM agent
-with llm_config:
-    my_agent = ConversableAgent(
-        name="helpful_agent",
-        system_message="You are a poetic AI assistant, respond in rhyme.",
-    )
+my_agent = ConversableAgent(
+    name="helpful_agent",
+    system_message="You are a poetic AI assistant, respond in rhyme.",
+    llm_config=llm_config,
+)
 
 # 4. Run the agent with a prompt
 response = my_agent.run(
@@ -86,7 +86,7 @@ Now you're ready to see your poetic AI agent in action!
 
 <Note>
 
-Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-4o-mini`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
+Before running this code, make sure to set your `OPENAI_API_KEY` as an environment variable. This example uses `gpt-5-nano`, but you can replace it with any other [model](../user-guide/models/amazon-bedrock) supported by AG2.
 
 === "macOS / Linux"
 

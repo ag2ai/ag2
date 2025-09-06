@@ -67,37 +67,43 @@ def discover_groups(operations: list["Operation"], chunk_size: int = 30) -> dict
     for config in llm_config.config_list:
         config.response_format = GroupSuggestions
 
-    with llm_config:
-        agent = ConversableAgent(name="group_discovery_agent", system_message=GROUP_DISCOVERY_MESSAGE)
-        groups = {}
+    agent = ConversableAgent(
+        name="group_discovery_agent",
+        system_message=GROUP_DISCOVERY_MESSAGE,
+        llm_config=llm_config,
+    )
+    groups = {}
 
-        for i, chunk in enumerate(chunk_list(operations, chunk_size)):
-            func_descriptions = [f"- {op.function_name}: {op.summary} (args: {op.arguments})" for op in chunk]
-            message = "Here are some functions:\n" + "\n".join(func_descriptions)
+    for chunk in chunk_list(operations, chunk_size):
+        func_descriptions = [f"- {op.function_name}: {op.summary} (args: {op.arguments})" for op in chunk]
+        message = "Here are some functions:\n" + "\n".join(func_descriptions)
 
-            response = agent.run(message=message, max_turns=1, user_input=False)
+        response = agent.run(message=message, max_turns=1, user_input=False)
 
-            for event in response.events:
-                if event.type == "text" and event.content.sender == "group_discovery_agent":
-                    # Naively parse "group_name: description" from text block
-                    new_groups = GroupSuggestions.model_validate_json(event.content.content).groups
-                    groups.update(new_groups)
+        for event in response.events:
+            if event.type == "text" and event.content.sender == "group_discovery_agent":
+                # Naively parse "group_name: description" from text block
+                new_groups = GroupSuggestions.model_validate_json(event.content.content).groups
+                groups.update(new_groups)
 
     logger.warning("Discovered groups: %s", groups)
 
     # Remove duplicates
-    with llm_config:
-        agent = ConversableAgent(name="group_refining_agent", system_message=GROUP_DISCOVERY_MESSAGE)
+    agent = ConversableAgent(
+        name="group_refining_agent",
+        system_message=GROUP_DISCOVERY_MESSAGE,
+        llm_config=llm_config,
+    )
 
-        message = (
-            "You need to refine the group names and descriptions to ensure they are unique.\n"
-            "Here are the groups:\n" + "\n".join([f"- {name}: {desc}" for name, desc in groups.items()])
-        )
-        response = agent.run(message=message, max_turns=1, user_input=False)
-        for event in response.events:
-            if event.type == "text" and event.content.sender == "group_refining_agent":
-                # Naively parse "group_name: description" from text block
-                refined_groups = json.loads(event.content.content)
+    message = (
+        "You need to refine the group names and descriptions to ensure they are unique.\n"
+        "Here are the groups:\n" + "\n".join([f"- {name}: {desc}" for name, desc in groups.items()])
+    )
+    response = agent.run(message=message, max_turns=1, user_input=False)
+    for event in response.events:
+        if event.type == "text" and event.content.sender == "group_refining_agent":
+            # Naively parse "group_name: description" from text block
+            refined_groups = json.loads(event.content.content)
 
     return refined_groups
 
@@ -108,25 +114,28 @@ def assign_operation_to_group(operation: "Operation", groups: dict[str, str]) ->
     for config in llm_config.config_list:
         config.response_format = GroupNames
 
-    with llm_config:
-        agent = ConversableAgent(name="group_assignment_agent", system_message=GROUP_ASSIGNMENT_MESSAGE)
+    agent = ConversableAgent(
+        name="group_assignment_agent",
+        system_message=GROUP_ASSIGNMENT_MESSAGE,
+        llm_config=llm_config,
+    )
 
-        message = (
-            "Function summary:\n"
-            f"{operation.summary}\n\n"
-            f"Arguments: {operation.arguments}\n\n"
-            f"Available groups: {json.dumps(groups)}\n\n"
-            "What group should this function go in?"
-        )
+    message = (
+        "Function summary:\n"
+        f"{operation.summary}\n\n"
+        f"Arguments: {operation.arguments}\n\n"
+        f"Available groups: {json.dumps(groups)}\n\n"
+        "What group should this function go in?"
+    )
 
-        response = agent.run(message=message, max_turns=1, user_input=True)
+    response = agent.run(message=message, max_turns=1, user_input=True)
 
-        groups = []
-        for event in response.events:
-            if event.type == "text" and event.content.sender == "group_assignment_agent":
-                groups = GroupNames.model_validate_json(event.content.content).groups
+    groups = []
+    for event in response.events:
+        if event.type == "text" and event.content.sender == "group_assignment_agent":
+            groups = GroupNames.model_validate_json(event.content.content).groups
 
-        return groups
+    return groups
 
 
 def refine_group_names(groups: dict[str, str]) -> dict[str, str]:

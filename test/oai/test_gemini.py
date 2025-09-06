@@ -20,7 +20,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.genai.types import GenerateContentResponse, GoogleSearch, Tool
+    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Tool
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -48,10 +48,7 @@ def test_gemini_llm_config_entry():
     actual = gemini_llm_config.model_dump()
     assert actual == expected, actual
 
-    llm_config = LLMConfig(
-        config_list=[gemini_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(gemini_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
@@ -237,9 +234,7 @@ class TestGeminiClient:
         }
         converted_safety_settings = GeminiClient._to_vertexai_safety_settings(safety_settings)
 
-        expected_safety_settings = {
-            category: VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH for category in safety_settings
-        }
+        expected_safety_settings = dict.fromkeys(safety_settings, VertexAIHarmBlockThreshold.BLOCK_ONLY_HIGH)
 
         def compare_safety_settings(converted_safety_settings, expected_safety_settings):
             for expected_setting_key in expected_safety_settings:
@@ -457,6 +452,48 @@ class TestGeminiClient:
         ):
             gemini_client._convert_json_response(no_json_response)
 
+    @pytest.fixture
+    def nested_function_parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "$defs": {
+                        "Subquestion": {
+                            "properties": {
+                                "question": {
+                                    "description": "The original question.",
+                                    "title": "Question",
+                                    "type": "string",
+                                }
+                            },
+                            "required": ["question"],
+                            "title": "Subquestion",
+                            "type": "object",
+                        }
+                    },
+                    "properties": {
+                        "question": {
+                            "description": "The original question.",
+                            "title": "Question",
+                            "type": "string",
+                        },
+                        "subquestions": {
+                            "description": "The subquestions that need to be answered.",
+                            "items": {"$ref": "#/$defs/Subquestion"},
+                            "title": "Subquestions",
+                            "type": "array",
+                        },
+                    },
+                    "required": ["question", "subquestions"],
+                    "title": "Task",
+                    "type": "object",
+                    "description": "task",
+                }
+            },
+            "required": ["task"],
+        }
+
     def test_unwrap_references(self, nested_function_parameters: dict[str, Any]) -> None:
         result = GeminiClient._unwrap_references(nested_function_parameters)
 
@@ -530,16 +567,25 @@ class TestGeminiClient:
             "top_k": 3,
         })
 
-        # Verify GenerateContentConfig was called with correct parameters
-        mock_generate_content_config.assert_called_once()
-        call_kwargs = mock_generate_content_config.call_args.kwargs
+        # Verify Client was called with correct parameters
+        client_kwargs = mock_generative_client.call_args.kwargs
+        assert "http_options" in client_kwargs
+        http_options = client_kwargs["http_options"]
+        assert isinstance(http_options, HttpOptions)
+        assert http_options.client_args == {"proxy": "http://mock-test-proxy:90/"}
+        assert http_options.async_client_args == {"proxy": "http://mock-test-proxy:90/"}
 
-        # Check that generation config parameters are correctly mapped
-        assert call_kwargs["proxy"] == "http://mock-test-proxy:90/", "Proxy parameter should be set in the config"
-        assert call_kwargs["temperature"] == 0.7, "Temperature parameter should be passed to generation config"
-        assert call_kwargs["max_output_tokens"] == 265, "max_tokens should be mapped to max_output_tokens"
-        assert call_kwargs["top_p"] == 0.5, "top_p parameter should be passed to generation config"
-        assert call_kwargs["top_k"] == 3, "top_k parameter should be passed to generation config"
+        # Verify GenerateContentConfig was called with correct parameters
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        expected_config = {
+            "temperature": 0.7,
+            "max_output_tokens": 265,
+            "top_p": 0.5,
+            "top_k": 3,
+        }
+        for key, expected_value in expected_config.items():
+            assert key in config_kwargs, f"Expected key '{key}' not found in config kwargs"
+            assert config_kwargs[key] == expected_value, f"Expected {key}={expected_value}, got {config_kwargs[key]}"
 
     def test_create_gemini_function_parameters_with_nested_parameters(
         self, nested_function_parameters: dict[str, Any]

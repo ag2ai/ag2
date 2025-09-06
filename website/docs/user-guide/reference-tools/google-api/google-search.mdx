@@ -46,8 +46,10 @@ The [`GoogleSearchTool`](/docs/api-reference/autogen/tools/experimental/GoogleSe
 ```python
 llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model="gemini-2.0-flash")
 
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
 ```
 
 ### GoogleSearchTool Initialization
@@ -135,10 +137,12 @@ For all other LLM providers or if you need to combine Google Search with other t
 ### Agent Configuration
 
 ```python
-llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model="gpt-4o-mini")
+llm_config = LLMConfig(path="OAI_CONFIG_LIST").where(model="gpt-5-nano")
 
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
+assistant = AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+)
 ```
 
 ### GoogleSearchTool Initialization

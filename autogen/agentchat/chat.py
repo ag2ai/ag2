@@ -7,11 +7,12 @@
 import asyncio
 import datetime
 import logging
+import uuid
 import warnings
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
-from typing import Any
+from typing import Any, TypedDict
 
 from ..doc_utils import export_module
 from ..events.agent_events import PostCarryoverProcessingEvent
@@ -24,26 +25,38 @@ Prerequisite = tuple[int, int]
 __all__ = ["ChatResult", "a_initiate_chats", "initiate_chats"]
 
 
+class CostDict(TypedDict):
+    usage_including_cached_inference: dict[str, Any]
+    usage_excluding_cached_inference: dict[str, Any]
+
+
 @dataclass
 @export_module("autogen")
 class ChatResult:
     """(Experimental) The result of a chat. Almost certain to be changed."""
 
-    chat_id: int = None
+    chat_id: int = field(default_factory=lambda: uuid.uuid4().int)
     """chat id"""
-    chat_history: list[dict[str, Any]] = None
+
+    chat_history: list[dict[str, Any]] = field(default_factory=list)
     """The chat history."""
-    summary: str = None
+
+    summary: str = ""
     """A summary obtained from the chat."""
-    cost: dict[str, dict[str, Any]] = (
-        None  # keys: "usage_including_cached_inference", "usage_excluding_cached_inference"
+
+    cost: CostDict = field(
+        default_factory=lambda: {
+            "usage_including_cached_inference": {},
+            "usage_excluding_cached_inference": {},
+        }
     )
     """The cost of the chat.
        The value for each usage type is a dictionary containing cost information for that specific type.
            - "usage_including_cached_inference": Cost information on the total usage, including the tokens in cached inference.
            - "usage_excluding_cached_inference": Cost information on the usage of tokens, excluding the tokens in cache. No larger than "usage_including_cached_inference".
     """
-    human_input: list[str] = None
+
+    human_input: list[str] = field(default_factory=list)
     """A list of human input solicited during the chat."""
 
 
@@ -141,37 +154,36 @@ def initiate_chats(chat_queue: list[dict[str, Any]]) -> list[ChatResult]:
     """Initiate a list of chats.
 
     Args:
-        chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.
-
+        chat_queue (List[Dict]): A list of dictionaries containing the information about the chats.\n
             Each dictionary should contain the input arguments for
-            [`ConversableAgent.initiate_chat`](../ConversableAgent#initiate-chat).
-            For example:
-                - `"sender"` - the sender agent.
-                - `"recipient"` - the recipient agent.
-                - `"clear_history"` (bool) - whether to clear the chat history with the agent.
-                Default is True.
-                - `"silent"` (bool or None) - (Experimental) whether to print the messages in this
-                conversation. Default is False.
-                - `"cache"` (Cache or None) - the cache client to use for this conversation.
-                Default is None.
-                - `"max_turns"` (int or None) - maximum number of turns for the chat. If None, the chat
-                will continue until a termination condition is met. Default is None.
-                - `"summary_method"` (str or callable) - a string or callable specifying the method to get
-                a summary from the chat. Default is DEFAULT_summary_method, i.e., "last_msg".
-                - `"summary_args"` (dict) - a dictionary of arguments to be passed to the summary_method.
-                Default is {}.
-                - `"message"` (str, callable or None) - if None, input() will be called to get the
-                initial message.
-                - `**context` - additional context information to be passed to the chat.
-                - `"carryover"` - It can be used to specify the carryover information to be passed
-                to this chat. If provided, we will combine this carryover with the "message" content when
-                generating the initial chat message in `generate_init_message`.
-                - `"finished_chat_indexes_to_exclude_from_carryover"` - It can be used by specifying a list of indexes of the finished_chats list,
-                from which to exclude the summaries for carryover. If 'finished_chat_indexes_to_exclude_from_carryover' is not provided or an empty list,
-                then summary from all the finished chats will be taken.
+            [`ConversableAgent.initiate_chat`](../ConversableAgent#initiate-chat).\n
+            For example:\n
+                - `"sender"` - the sender agent.\n
+                - `"recipient"` - the recipient agent.\n
+                - `"clear_history"` (bool) - whether to clear the chat history with the agent.\n
+                  Default is True.\n
+                - `"silent"` (bool or None) - (Experimental) whether to print the messages in this\n
+                  conversation. Default is False.\n
+                - `"cache"` (Cache or None) - the cache client to use for this conversation.\n
+                  Default is None.\n
+                - `"max_turns"` (int or None) - maximum number of turns for the chat. If None, the chat\n
+                  will continue until a termination condition is met. Default is None.\n
+                - `"summary_method"` (str or callable) - a string or callable specifying the method to get\n
+                  a summary from the chat. Default is DEFAULT_summary_method, i.e., "last_msg".\n
+                - `"summary_args"` (dict) - a dictionary of arguments to be passed to the summary_method.\n
+                  Default is {}.\n
+                - `"message"` (str, callable or None) - if None, input() will be called to get the\n
+                  initial message.\n
+                - `**context` - additional context information to be passed to the chat.\n
+                - `"carryover"` - It can be used to specify the carryover information to be passed\n
+                  to this chat. If provided, we will combine this carryover with the "message" content when\n
+                  generating the initial chat message in `generate_init_message`.\n
+                - `"finished_chat_indexes_to_exclude_from_carryover"` - It can be used by specifying a list of indexes of the finished_chats list,\n
+                  from which to exclude the summaries for carryover. If 'finished_chat_indexes_to_exclude_from_carryover' is not provided or an empty list,\n
+                  then summary from all the finished chats will be taken.\n
 
     Returns:
-        (list): a list of ChatResult objects corresponding to the finished chats in the chat_queue.
+        (list): a list of ChatResult objects corresponding to the finished chats in the chat_queue.\n
     """
     consolidate_chat_info(chat_queue)
     _validate_recipients(chat_queue)
@@ -220,7 +232,7 @@ async def _dependent_chat_future(
     finished_chat_indexes_to_exclude_from_carryover = chat_info.get(
         "finished_chat_indexes_to_exclude_from_carryover", []
     )
-    finished_chats = dict()
+    finished_chats = {}
     for chat in prerequisite_chat_futures:
         chat_future = prerequisite_chat_futures[chat]
         if chat_future.cancelled():
@@ -291,18 +303,18 @@ async def a_initiate_chats(chat_queue: list[dict[str, Any]]) -> dict[int, ChatRe
     num_chats = chat_book.keys()
     prerequisites = __create_async_prerequisites(chat_queue)
     chat_order_by_id = __find_async_chat_order(num_chats, prerequisites)
-    finished_chat_futures = dict()
+    finished_chat_futures = {}
     for chat_id in chat_order_by_id:
         chat_info = chat_book[chat_id]
         prerequisite_chat_ids = chat_info.get("prerequisites", [])
-        pre_chat_futures = dict()
+        pre_chat_futures = {}
         for pre_chat_id in prerequisite_chat_ids:
             pre_chat_future = finished_chat_futures[pre_chat_id]
             pre_chat_futures[pre_chat_id] = pre_chat_future
         current_chat_future = await _dependent_chat_future(chat_id, chat_info, pre_chat_futures)
         finished_chat_futures[chat_id] = current_chat_future
     await asyncio.gather(*list(finished_chat_futures.values()))
-    finished_chats = dict()
+    finished_chats = {}
     for chat in finished_chat_futures:
         chat_result = finished_chat_futures[chat].result()
         finished_chats[chat] = chat_result

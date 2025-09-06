@@ -93,7 +93,7 @@ jupyter-executor = [
 
 retrievechat = [
     "protobuf==6.31.1",
-    "chromadb==1.0.16",
+    "chromadb==1.0.20",
     "sentence_transformers<=5.1.0",
     "pypdf",
     "ipython",
@@ -127,7 +127,7 @@ retrievechat-couchbase = [
 ]
 
 graph-rag-falkor-db = [
-    "graphrag_sdk==0.7.1",
+    "graphrag_sdk==0.8.0",
     "falkordb>=1.0.10",
 ]
 
@@ -137,7 +137,7 @@ rag = [
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<2",
     "llama-index>=0.12,<1",
-    "llama-index-vector-stores-chroma==0.4.1",
+    "llama-index-vector-stores-chroma==0.5.2",
     "llama-index-vector-stores-mongodb==0.8.0",
     "llama-index-embeddings-huggingface==0.6.0",
     "llama-index-llms-langchain==0.7.0",
@@ -177,7 +177,7 @@ neo4j = [
     "docx2txt==0.9",
     "llama-index>=0.12,<1",
     "llama-index-graph-stores-neo4j==0.5.0",
-    "llama-index-readers-web==0.5.0",
+    "llama-index-readers-web==0.5.1",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -189,7 +189,7 @@ twilio = [
 
 mcp = [
     # mcp 1.9.4+ fixes issue #1865 where string parameters are converted to integers
-    "mcp>=1.9.4",
+    "mcp>=1.11.0",
 ]
 
 mcp-proxy-gen = [
@@ -204,11 +204,11 @@ interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
     # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.75.5.post1",
+    "litellm<=1.76.1",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.6.2"]
+interop-pydantic-ai = ["pydantic-ai==0.8.1"]
 interop =[
     "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
@@ -247,6 +247,10 @@ websockets = ["websockets>=14.0,<16"]
 long-context = ["llmlingua<0.3"]
 anthropic = ["anthropic[vertex]>=0.23.1"]
 cerebras = ["cerebras_cloud_sdk>=1.0.0"]
+yepcode = [
+    "yepcode-run>=1.6.1",
+    "python-dotenv",
+]
 mistral = ["mistralai>=1.0.1"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]
@@ -254,7 +258,7 @@ ollama = ["ollama>=0.4.7", "fix_busted_json>=0.0.18"]
 bedrock = ["boto3>=1.34.149"]
 deepseek = ["ag2[openai]"]
 
-commsagent-discord = ["discord.py>=2.4.0,<2.6"]
+commsagent-discord = ["discord.py>=2.4.0,<2.7"]
 commsagent-slack = ["slack_sdk>=3.33.0,<3.40"]
 commsagent-telegram = ["telethon>=1.38.1, <2"]
 
@@ -272,22 +276,23 @@ test = [
     "pytest-asyncio==1.1.0",
     "pytest==8.4.1",
     "mock==5.2.0",
-    "pandas==2.3.1",
+    "pandas==2.3.2",
     "fastapi==0.116.1",
     "dirty-equals==0.9.0",
+    "mcp>=1.11.0"
 ]
 
 docs = [
-    "mkdocs-material==9.6.16",
+    "mkdocs-material==9.6.18",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.4.7",
     "mike==2.1.3",
-    "typer==0.16.0",
+    "typer==0.17.3",
     "mkdocs-minify-plugin==0.8.0",
-    "mkdocs-macros-plugin==1.3.7",  # includes with variables
+    "mkdocs-macros-plugin==1.3.9",  # includes with variables
     "mkdocs-glightbox==0.4.0",  # img zoom
     "mkdocs-redirects==1.2.2",  # required for handling redirects natively
     "pillow",  # required for mkdocs-glightbo
@@ -297,7 +302,7 @@ docs = [
     "pyyaml==6.0.2",
     "termcolor==3.1.0",
     "nbclient==0.10.2",
-    "mcp>=1.9.4",
+    "mcp>=1.11.0",
 ]
 
 types = [
@@ -312,7 +317,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.12.8",
+    "ruff==0.12.11",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -322,7 +327,7 @@ dev = [
     "ag2[lint,test,types,docs]",
     "pre-commit==4.3.0",
     "detect-secrets==1.5.0",
-    "uv==0.8.8",
+    "uv==0.8.14",
 ]
 
 
@@ -345,8 +350,6 @@ exclude = ["/test", "/notebook"]
 packages = ["autogen"]
 only-include = [
     "autogen",
-    # not sure about this, probably is not needed
-    "autogen/agentchat/contrib/captainagent/tools",
     # need for generation of MCP Servers from OpenAPI specification
     "templates",
 ]
@@ -356,7 +359,6 @@ exclude = ["test", "notebook"]
 
 [tool.hatch.build.targets.wheel.sources]
 "autogen" = "autogen"
-"autogen/agentchat/contrib/captainagent/tools" = "autogen/agentchat/contrib/captainagent/tools"
 
 [tool.pytest.ini_options]
 addopts = '--cov=autogen --cov-append --cov-branch --cov-report=xml -m "not conda"'
@@ -444,7 +446,7 @@ select = [
     "I",     # isort                  https://docs.astral.sh/ruff/rules/#isort-i
     "F",     # pyflakes               https://docs.astral.sh/ruff/rules/#pyflakes-f
     "ASYNC", # flake8-async           https://docs.astral.sh/ruff/rules/#flake8-async-async
-#    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
+    "C4",    # flake8-comprehensions  https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
 #    "B",     # flake8-bugbear         https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "Q",     # flake8-quotes          https://docs.astral.sh/ruff/rules/#flake8-quotes-q
 #    "T20",   # flake8-print           https://docs.astral.sh/ruff/rules/#flake8-print-t20
@@ -456,17 +458,27 @@ select = [
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
     "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "D417",   # undocumented-param     https://docs.astral.sh/ruff/rules/undocumented-param/
 ]
 
-extend-select = ["D417"]
-
-ignore = ["E501", "F403", "C901",
+ignore = [
+    "E501",
+    "F403",
+    "C901",
     "E402",
     "E721",
     "ASYNC109",
     "E501",  # line too long, handled by formatter later
-    "D100", "D101", "D102", "D103", "D104",
     "C901",  # too complex
+]
+
+[tool.ruff.lint.per-file-ignores]
+"notebook/agentchat_webscraping_with_oxylabs.ipynb" = [
+    "E226",
+    "E303",
+    "F811",
+    "F821",
+    "F706",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -481,7 +493,6 @@ docstring-code-format = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
 
 [tool.mypy]
 python_version = "3.10"

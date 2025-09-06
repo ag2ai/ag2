@@ -10,7 +10,7 @@ from typing import Literal
 
 from ._models import BaseModel
 
-__all__ = ["ChatCompletionMessageToolCall", "Function"]
+__all__ = ["ChatCompletionMessageCustomToolCall", "ChatCompletionMessageFunctionToolCall", "Custom", "Function"]
 
 
 class Function(BaseModel):
@@ -26,7 +26,15 @@ class Function(BaseModel):
     """The name of the function to call."""
 
 
-class ChatCompletionMessageToolCall(BaseModel):
+class Custom(BaseModel):
+    input: str
+    """The input to the custom tool."""
+
+    name: str
+    """The name of the custom tool."""
+
+
+class ChatCompletionMessageFunctionToolCall(BaseModel):
     id: str
     """The ID of the tool call."""
 
@@ -35,3 +43,18 @@ class ChatCompletionMessageToolCall(BaseModel):
 
     type: Literal["function"]
     """The type of the tool. Currently, only `function` is supported."""
+
+
+class ChatCompletionMessageCustomToolCall(BaseModel):
+    id: str
+    """The ID of the tool call."""
+
+    custom: Custom
+    """The custom tool that the model called."""
+
+    type: Literal["custom"]
+    """The type of the tool. Currently, only `custom` is supported."""
+
+
+# Backward compatibility alias
+ChatCompletionMessageToolCall = ChatCompletionMessageFunctionToolCall
