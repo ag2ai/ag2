@@ -198,15 +198,6 @@ class DocAgent(ConversableAgent):
         )
         self.register_reply([ConversableAgent, None], self.generate_inner_group_chat_reply, position=0)
 
-        self.context_variables: ContextVariables = ContextVariables(
-            data={
-                "DocumentsToIngest": [],
-                "DocumentsIngested": [],
-                "QueriesToRun": [],
-                "QueryResults": [],
-            }
-        )
-
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
 
         def create_error_agent_prompt(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:

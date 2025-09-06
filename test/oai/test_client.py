@@ -672,12 +672,9 @@ def test_azure_llm_config_entry() -> None:
         "stream": False,
     }
     actual = azure_llm_config.model_dump()
-    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[azure_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(azure_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
@@ -701,12 +698,9 @@ def test_deepseek_llm_config_entry() -> None:
         "stream": False,
     }
     actual = deepseek_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[deepseek_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(deepseek_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
@@ -1007,15 +1001,3 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
-
-
-if __name__ == "__main__":
-    pass
-    # test_aoai_chat_completion()
-    # test_oai_tool_calling_extraction()
-    # test_chat_completion()
-    # test_completion()
-    # test_cost()
-    # test_usage_summary()
-    # test_legacy_cache()
-    # test_cache()

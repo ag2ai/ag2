@@ -22,7 +22,7 @@ from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import optional_import_block
 
 KEY_LOC = str((Path(__file__).parents[1] / "notebook").resolve())
-OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
+OAI_CONFIG_LIST = Path(__file__).parents[1] / "OAI_CONFIG_LIST"
 MOCK_OPEN_AI_API_KEY = "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
 MOCK_AZURE_API_KEY = "mockazureAPIkeysinexpectedformatsfortestingonly"
 
@@ -145,7 +145,7 @@ def get_credentials(
     """Fixture to load the LLM config."""
     try:
         config_list = autogen.config_list_from_json(
-            OAI_CONFIG_LIST,
+            str(OAI_CONFIG_LIST),
             filter_dict=filter_dict,
             file_location=KEY_LOC,
         )

@@ -1462,6 +1462,13 @@ class OpenAIWrapper:
 # -----------------------------------------------------------------------------
 
 
+class OpenAIResponsesEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["responses"]
+
+    tool_choice: Literal["none", "auto", "required"] | None
+    built_in_tools: list[str] | None
+
+
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     """LLMConfig entry for the OpenAI Responses API (stateful, tool-enabled).
 
