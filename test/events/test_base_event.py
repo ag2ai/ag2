@@ -130,5 +130,3 @@ class TestBaseEventHooks:
 
         assert captured_a == ["A:foo"]
         assert captured_b == ["B:bar"]
-
-
