@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any, TypeVar
 
-from anyio import lowlevel
-from asyncer import create_task_group
+from anyio import create_task_group, lowlevel
 
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -102,7 +101,7 @@ class RealtimeAgent:
 
     async def start_observers(self) -> None:
         for observer in self._observers:
-            self._tg.soonify(observer.run)(self)
+            self._tg.start_soon(observer.run, self)
 
         # wait for the observers to be ready
         for observer in self._observers:
