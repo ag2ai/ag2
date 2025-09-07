@@ -57,7 +57,6 @@ dependencies = [
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
-    "asyncer==0.0.8",
 #    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
     "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends

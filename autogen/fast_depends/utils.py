@@ -26,6 +26,16 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
+def asyncify(func: Callable[P, T]) -> Callable[P, Awaitable[T]]:
+    if is_coroutine_callable(func):
+        return cast(Callable[P, Awaitable[T]], func)
+
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return await run_in_threadpool(func, *args, **kwargs)
+
+    return wrapper
+
+
 async def run_async(
     func: Callable[P, T] | Callable[P, Awaitable[T]],
     *args: P.args,

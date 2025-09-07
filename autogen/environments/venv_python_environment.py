@@ -9,6 +9,8 @@ import sys
 import tempfile
 from typing import Any
 
+from anyio import to_thread
+
 from .python_environment import PythonEnvironment
 
 __all__ = ["VenvPythonEnvironment"]
@@ -131,13 +133,13 @@ class VenvPythonEnvironment(PythonEnvironment):
                 os.makedirs(script_dir, exist_ok=True)
 
             # Write the code to the script file using anyio.to_thread.run_sync (from base class)
-            await anyio.to_thread.run_sync(self._write_to_file)(script_path, code)
+            await to_thread.run_sync(self._write_to_file, script_path, code)
 
             logging.info(f"Wrote code to {script_path}")
 
             try:
                 # Execute directly with subprocess using anyio.to_thread.run_sync for better reliability
-                result = await anyio.to_thread.run_sync(self._run_subprocess)([python_executable, script_path], timeout)
+                result = await to_thread.run_sync(self._run_subprocess, [python_executable, script_path], timeout)
 
                 # Main execution result
                 return {
