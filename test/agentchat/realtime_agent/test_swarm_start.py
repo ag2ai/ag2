@@ -7,8 +7,7 @@ from typing import Annotated
 from unittest.mock import MagicMock
 
 import pytest
-from anyio import Event, move_on_after, sleep
-from asyncer import create_task_group
+from anyio import Event, create_task_group, move_on_after, sleep
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
@@ -72,7 +71,7 @@ class TestSwarmE2E:
             )
 
             async with create_task_group() as tg:
-                tg.soonify(agent.run)()
+                tg.start_soon(agent.run)
                 await sleep(25)  # Run for 10 seconds
                 tg.cancel_scope.cancel()
 
