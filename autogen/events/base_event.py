@@ -42,7 +42,7 @@ class BaseEvent(BaseModel, ABC):
         for base, funcs in cls._hooks.items():
             if isinstance(event, base):
                 for f in funcs:
-                    f(event)
+                    f(event.content)
 
 
 def camel2snake(name: str) -> str:
