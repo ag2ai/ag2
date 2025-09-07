@@ -71,27 +71,29 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -170,27 +172,29 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -276,27 +280,29 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -346,27 +352,29 @@ pattern = RandomPattern(
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -417,27 +425,29 @@ pattern = ManualPattern(
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
 
-    llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query."""
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues."""
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent",
-            system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 

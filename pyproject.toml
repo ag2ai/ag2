@@ -209,11 +209,11 @@ interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
     # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.76.0",
+    "litellm<=1.76.1",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.7.4"]
+interop-pydantic-ai = ["pydantic-ai==0.8.1"]
 interop =[
     "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
@@ -295,7 +295,7 @@ docs = [
     # ToDo: currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.4.7",
     "mike==2.1.3",
-    "typer==0.16.1",
+    "typer==0.17.3",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.3.9",  # includes with variables
     "mkdocs-glightbox==0.4.0",  # img zoom
@@ -322,7 +322,7 @@ types = [
 ]
 
 lint = [
-    "ruff==0.12.10",
+    "ruff==0.12.11",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -332,7 +332,7 @@ dev = [
     "ag2[lint,test,types,docs]",
     "pre-commit==4.3.0",
     "detect-secrets==1.5.0",
-    "uv==0.8.13",
+    "uv==0.8.14",
 ]
 
 
@@ -463,7 +463,7 @@ select = [
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
     "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
-    "D417",   # undocumented-param https://docs.astral.sh/ruff/rules/undocumented-param/
+    "D417",   # undocumented-param     https://docs.astral.sh/ruff/rules/undocumented-param/
 ]
 
 ignore = [
@@ -478,7 +478,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"notebook/agentchat_webscraping_with_oxylabs.ipynb" = ["E226", "E303", "F811", "F821", "F706"]
+"notebook/agentchat_webscraping_with_oxylabs.ipynb" = [
+    "E226",
+    "E303",
+    "F811",
+    "F821",
+    "F706",
+]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
@@ -492,7 +498,6 @@ docstring-code-format = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
 
 [tool.mypy]
 python_version = "3.10"

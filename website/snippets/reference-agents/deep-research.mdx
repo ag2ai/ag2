@@ -65,12 +65,13 @@ Models like `gpt-5-nano` often don’t perform well enough for complex tasks.
 ```python
 from autogen import LLMConfig
 
-llm_config = LLMConfig(
-    config_list=[{"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]}],
-)
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5",
+    "api_key": os.environ["OPENAI_API_KEY"]
+})
 
-with llm_config:
-    agent = DeepResearchAgent(name="DeepResearchAgent")
+agent = DeepResearchAgent(name="DeepResearchAgent", llm_config=llm_config)
 
 message = "What was the impact of DeepSeek on stock prices and why?"
 
