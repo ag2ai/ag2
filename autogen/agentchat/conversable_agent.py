@@ -486,17 +486,12 @@ class ConversableAgent(LLMAgent):
         if llm_config is None:
             llm_config = LLMConfig.get_current_llm_config()
             if llm_config is None:
-                llm_config = cls.DEFAULT_CONFIG
-        elif isinstance(llm_config, dict):
-            llm_config = LLMConfig(**llm_config)
-        elif isinstance(llm_config, LLMConfig):
-            llm_config = llm_config.copy()
-        elif llm_config is False:
-            pass
-        else:
-            raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
+                return cls.DEFAULT_CONFIG
 
-        return llm_config
+        elif llm_config is False:
+            return False
+
+        return LLMConfig.ensure_config(llm_config)
 
     @classmethod
     def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:

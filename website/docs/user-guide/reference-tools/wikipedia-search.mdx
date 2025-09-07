@@ -45,7 +45,7 @@ from autogen.tools.experimental import WikipediaQueryRunTool, WikipediaPageLoadT
 Configure an assistant agent and user proxy to be used for LLM recommendation and execution respectively.
 
 ```python
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
 assistant = AssistantAgent(
     name="assistant",

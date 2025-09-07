@@ -131,7 +131,10 @@ To allow AG2 to interact with the MCP server, we need to establish a connection,
 async def create_toolkit_and_run(session: ClientSession) -> None:
     # Create a toolkit with available MCP tools
     toolkit = await create_toolkit(session=session)
-    agent = AssistantAgent(name="assistant", llm_config=LLMConfig(model="gpt-5-nano", api_type="openai"))
+    agent = AssistantAgent(
+        name="assistant",
+        llm_config=LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+    )
     # Register MCP tools with the agent
     toolkit.register_for_llm(agent)
 

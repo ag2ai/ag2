@@ -56,15 +56,17 @@ from autogen import UserProxyAgent, LLMConfig
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model="gpt-5")
 
 ## build agents
-with llm_config:
-    captain_agent = CaptainAgent(
-        name="captain_agent",
-        code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-    )
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    llm_config=llm_config,
+)
+
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER"
 )
+
 query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
@@ -82,18 +84,20 @@ from autogen import UserProxyAgent, LLMConfig
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST", temperature=0).where(model="gpt-5")
 
 ## build agents
-with llm_config:
-    captain_agent = CaptainAgent(
-        name="captain_agent",
-        nested_config=nested_mode_config,
-        agent_lib="captainagent_expert_library.json",
-        tool_lib="default",
-        code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-    )
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    nested_config=nested_mode_config,
+    agent_lib="captainagent_expert_library.json",
+    tool_lib="default",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    llm_config=llm_config,
+)
+
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER"
 )
+
 query = "Search arxiv for the latest paper about large language models and discuss its potential application in software engineering."
 result = user_proxy.initiate_chat(captain_agent, message=query)
 ```
