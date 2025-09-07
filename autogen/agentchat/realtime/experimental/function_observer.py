@@ -5,11 +5,10 @@
 import json
 from typing import TYPE_CHECKING, Any, Optional
 
-from asyncer import asyncify
 from pydantic import BaseModel
 
 from ....doc_utils import export_module
-from ....fast_depends.utils import is_coroutine_callable
+from ....fast_depends.utils import asyncify
 from .realtime_events import FunctionCall, RealtimeEvent
 from .realtime_observer import RealtimeObserver
 
@@ -49,7 +48,7 @@ class FunctionObserver(RealtimeObserver):
         """
         if name in self.agent.registered_realtime_tools:
             func = self.agent.registered_realtime_tools[name].func
-            func = func if is_coroutine_callable(func) else asyncify(func)
+            func = asyncify(func)
             try:
                 result = await func(**kwargs)
             except Exception:
