@@ -56,19 +56,14 @@ To communicate with LiteLLM, configure the model in `config_list` and initiate a
 ```python
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig(
-    model="openai-gpt-5-nano",
-    base_url="http://0.0.0.0:4000",
-)
+llm_config = LLMConfig({"model": "openai-gpt-5-nano", "base_url": "http://0.0.0.0:4000"})
 
 user_proxy = UserProxyAgent(
     name="user_proxy",
     human_input_mode="NEVER",
 )
 
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
-
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 user_proxy.initiate_chat(
     recipient=assistant,

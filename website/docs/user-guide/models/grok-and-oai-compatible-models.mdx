@@ -45,14 +45,12 @@ from autogen import LLMConfig
 
 # Basic Grok configuration
 llm_config = LLMConfig(
-    config_list=[
-        {
-            "model": "grok-4",
-            "api_type": "openai",  # Grok is OpenAI-compatible
-            "base_url": "https://api.x.ai/v1",
-            "api_key": os.environ.get("XAI_API_KEY"),
-        }
-    ],
+    {
+        "model": "grok-4",
+        "api_type": "openai",  # Grok is OpenAI-compatible
+        "base_url": "https://api.x.ai/v1",
+        "api_key": os.environ.get("XAI_API_KEY"),
+    },
     temperature=0.7,
 )
 ```
@@ -63,24 +61,22 @@ Grok's unique capability is its real-time access to information. You can enable 
 
 ```python
 llm_config = LLMConfig(
-    config_list=[
-        {
-            "model": "grok-4",
-            "api_type": "openai",
-            "base_url": "https://api.x.ai/v1",
-            "api_key": os.environ.get("XAI_API_KEY"),
-            "extra_body": {
-                "search_enabled": True,
-                "real_time_data": True,
-                "search_parameters": {
-                    "max_search_results": 5,
-                    "include_citations": True,
-                    "search_timeout": 10,
-                    "return_citations": True
-                },
+    {
+        "model": "grok-4",
+        "api_type": "openai",
+        "base_url": "https://api.x.ai/v1",
+        "api_key": os.environ.get("XAI_API_KEY"),
+        "extra_body": {
+            "search_enabled": True,
+            "real_time_data": True,
+            "search_parameters": {
+                "max_search_results": 5,
+                "include_citations": True,
+                "search_timeout": 10,
+                "return_citations": True
             },
-        }
-    ],
+        },
+    }
     temperature=0.5,
 )
 ```
@@ -93,32 +89,6 @@ Grok supports standard OpenAI-compatible parameters. You can include additional 
 - **max_tokens** (integer): Maximum tokens in the response
 - **top_p** (number 0..1): Nucleus sampling parameter
 
-<Warning>
-**Important Configuration Note:** In AG2's LLMConfig, parameters like `temperature` and `max_tokens` should be placed at the **top level**, not inside individual `config_list` entries. This is due to AG2's two-tier validation system.
-
-```python
-#  CORRECT
-LLMConfig(
-    config_list=[{
-        "model": "grok-4",
-        "api_type": "openai",
-        "base_url": "https://api.x.ai/v1",
-        "api_key": os.environ.get("XAI_API_KEY"),
-    }],
-    temperature=0.3,  # Top-level parameters
-    max_tokens=800,
-)
-
-# L WRONG - Causes ValidationError
-LLMConfig(
-    config_list=[{
-        "model": "grok-4",
-        "temperature": 0.3,  # ERROR: Not allowed here
-    }]
-)
-```
-</Warning>
-
 ## Basic Conversation Example
 
 Here's a simple example demonstrating a conversation with Grok:
@@ -128,27 +98,23 @@ import os
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 # Configure Grok with real-time search
-grok_config = LLMConfig(
-    config_list=[
-        {
-            "model": "grok-4",
-            "api_type": "openai",
-            "base_url": "https://api.x.ai/v1",
-            "api_key": os.getenv("XAI_API_KEY"),
-            "max_tokens": 1000,
-            "extra_body": {
-                "search_enabled": True,
-                "real_time_data": True,
-                "search_parameters": {
-                    "max_search_results": 5,
-                    "include_citations": True,
-                    "search_timeout": 10
-                },
-            },
-        }
-    ],
-    temperature=0.5,
-)
+grok_config = LLMConfig({
+    "model": "grok-4",
+    "api_type": "openai",
+    "base_url": "https://api.x.ai/v1",
+    "api_key": os.getenv("XAI_API_KEY"),
+    "max_tokens": 1000,
+    "temperature": 0.5,
+    "extra_body": {
+        "search_enabled": True,
+        "real_time_data": True,
+        "search_parameters": {
+            "max_search_results": 5,
+            "include_citations": True,
+            "search_timeout": 10
+        },
+    },
+})
 
 # Create agents
 assistant = AssistantAgent(
@@ -200,19 +166,14 @@ def calculate_math(expression: Annotated[str, "Mathematical expression to evalua
         return f"Could not evaluate the expression: {expression}"
 
 # Configure Grok for function calling
-function_config = LLMConfig(
-    config_list=[
-        {
-            "model": "grok-4",
-            "api_key": os.getenv("XAI_API_KEY"),
-            "base_url": "https://api.x.ai/v1",
-            "api_type": "openai",
-        }
-    ],
-    temperature=0.3,
-    max_tokens=800,
-    # NOTE: Do NOT put functions here - causes JSON serialization error
-)
+function_config = LLMConfig({
+    "model": "grok-4",
+    "api_key": os.getenv("XAI_API_KEY"),
+    "base_url": "https://api.x.ai/v1",
+    "api_type": "openai",
+    "temperature": 0.3,
+    "max_tokens": 800,
+})
 
 # Create function-calling assistant
 function_assistant = AssistantAgent(
@@ -247,32 +208,25 @@ You can control how Grok uses functions with the `tool_choice` parameter:
 
 ```python
 # Automatic function calling (default)
-llm_config = LLMConfig(
-    config_list=[{
-        "model": "grok-4",
-        "api_type": "openai",
-        "base_url": "https://api.x.ai/v1",
-        "api_key": os.environ.get("XAI_API_KEY"),
-        "tool_choice": "auto",  # Model decides when to call functions
-    }],
-    # ... other parameters
-)
+llm_config = LLMConfig({
+    "model": "grok-4",
+    "api_type": "openai",
+    "base_url": "https://api.x.ai/v1",
+    "api_key": os.environ.get("XAI_API_KEY"),
+    "tool_choice": "auto",  # Model decides when to call functions
+})
 
 # Force function calling
-llm_config = LLMConfig(
-    config_list=[{
-        # ... config
-        "tool_choice": "required",  # Always call a function
-    }],
-)
+llm_config = LLMConfig({
+    # ... config
+    "tool_choice": "required",  # Always call a function
+})
 
 # Disable function calling
-llm_config = LLMConfig(
-    config_list=[{
-        # ... config
-        "tool_choice": "none",  # Never call functions
-    }],
-)
+llm_config = LLMConfig({
+    # ... config
+    "tool_choice": "none",  # Never call functions
+})
 ```
 
 ### Parallel Function Calling
@@ -280,17 +234,12 @@ llm_config = LLMConfig(
 Grok supports calling multiple functions simultaneously, which is enabled by default:
 
 ```python
-llm_config = LLMConfig(
-    config_list=[{
-        "model": "grok-4",
-        # ... other config
-    }],
-    parallel_tool_calls=True,  # Enable parallel function calls (default)
-)
+llm_config = LLMConfig({
+    "model": "grok-4",
+    # ... other config
+    "parallel_tool_calls": True,  # Enable parallel function calls (default)
+})
 ```
-
-
-
 
 ## Best Practices
 

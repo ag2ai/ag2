@@ -52,17 +52,17 @@ def classify_query(query: str) -> ReplyResult:
         )
 
 # Create the triage agent with the tool
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-with llm_config:
-    triage_agent = ConversableAgent(
-        name="triage_agent",
-        system_message="""You are a triage agent. For each user query,
-        identify whether it is a technical issue or a general question.
-        Use the classify_query tool to categorize queries and route them appropriately.
-        Do not provide suggestions or answers, only route the query.""",
-        functions=[classify_query]  # Register the function with the agent
-    )
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="""You are a triage agent. For each user query,
+    identify whether it is a technical issue or a general question.
+    Use the classify_query tool to categorize queries and route them appropriately.
+    Do not provide suggestions or answers, only route the query.""",
+    functions=[classify_query],  # Register the function with the agent
+    llm_config=llm_config
+)
 ```
 
 By adding the `classify_query` function to the triage agent, we've given it a specific tool to use for routing queries instead of relying solely on its LLM capabilities. The function returns a `ReplyResult` that provides the Group Manager with an indication of the type of query for it decide the appropriate next speaker.
@@ -170,29 +170,31 @@ def classify_query(
         )
 
 # Create the agents
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-with llm_config:
-    triage_agent = ConversableAgent(
-        name="triage_agent",
-        system_message="""You are a triage agent. For each user query,
-        identify whether it is a technical issue or a general question.
-        Use the classify_query tool to categorize queries and route them appropriately.
-        Do not provide suggestions or answers, only route the query.""",
-        functions=[classify_query]
-    )
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="""You are a triage agent. For each user query,
+    identify whether it is a technical issue or a general question.
+    Use the classify_query tool to categorize queries and route them appropriately.
+    Do not provide suggestions or answers, only route the query.""",
+    functions=[classify_query],
+    llm_config=llm_config
+)
 
-    tech_agent = ConversableAgent(
-        name="tech_agent",
-        system_message="""You solve technical problems like software bugs
-        and hardware issues. After analyzing the problem, use the provide_technical_solution
-        tool to format your response consistently."""
-    )
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="""You solve technical problems like software bugs
+    and hardware issues. After analyzing the problem, use the provide_technical_solution
+    tool to format your response consistently.""",
+    llm_config=llm_config
+)
 
-    general_agent = ConversableAgent(
-        name="general_agent",
-        system_message="You handle general, non-technical support questions."
-    )
+general_agent = ConversableAgent(
+    name="general_agent",
+    system_message="You handle general, non-technical support questions.",
+    llm_config=llm_config
+)
 
 # User agent
 user = ConversableAgent(

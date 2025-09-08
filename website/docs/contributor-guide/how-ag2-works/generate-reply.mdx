@@ -79,15 +79,14 @@ from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Optional
 import json
 
-llm_config = LLMConfig(model="gpt-5-nano", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
 agent_calendar = ConversableAgent(
     name="Calendar_agent",
     # No LLM required for this agent, we'll use a function to reply
 )
 
-with llm_config:
-  agent_bob = ConversableAgent(name="Bob")
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our reply function
 def get_date_time_reply(

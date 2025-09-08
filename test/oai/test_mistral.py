@@ -49,12 +49,9 @@ def test_mistral_llm_config_entry():
         "tags": [],
     }
     actual = mistral_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[mistral_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(mistral_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

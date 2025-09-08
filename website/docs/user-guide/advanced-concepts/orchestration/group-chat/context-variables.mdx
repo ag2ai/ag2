@@ -402,39 +402,41 @@ def get_user_context(context_variables: ContextVariables) -> str:
     - Query type: {context_variables.get("query_type", "Unknown")}"""
 
 # Create the agents
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
 
-with llm_config:
-    triage_agent = ConversableAgent(
-        name="triage_agent",
-        system_message="""You are a triage agent. For each user query,
-        identify whether it is a technical issue or a general question.
-        Use the classify_and_log_query tool to categorize and log queries.""",
-        functions=[classify_and_log_query]
-    )
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="""You are a triage agent. For each user query,
+    identify whether it is a technical issue or a general question.
+    Use the classify_and_log_query tool to categorize and log queries.""",
+    functions=[classify_and_log_query],
+    llm_config=llm_config
+)
 
-    tech_agent = ConversableAgent(
-        name="tech_agent",
-        system_message="""You solve technical problems like software bugs
-        and hardware issues. After analyzing the problem, use the provide_technical_solution
-        tool to format your response consistently and log it for future reference.""",
-        functions=[provide_technical_solution],
-        # Using UpdateSystemMessage to make context visible
-        update_agent_state_before_reply=[
-            UpdateSystemMessage(
-                "You are assisting with query #{query_count}. "
-                "The current issue is: {last_query} (Type: {query_type})"
-            )
-        ]
-    )
+tech_agent = ConversableAgent(
+    name="tech_agent",
+    system_message="""You solve technical problems like software bugs
+    and hardware issues. After analyzing the problem, use the provide_technical_solution
+    tool to format your response consistently and log it for future reference.""",
+    functions=[provide_technical_solution],
+    # Using UpdateSystemMessage to make context visible
+    update_agent_state_before_reply=[
+        UpdateSystemMessage(
+            "You are assisting with query #{query_count}. "
+            "The current issue is: {last_query} (Type: {query_type})"
+        )
+    ],
+    llm_config=llm_config
+)
 
-    general_agent = ConversableAgent(
-        name="general_agent",
-        system_message="""You handle general, non-technical support questions.
-        Use the get_user_context tool to understand the current session before responding.""",
-        # Providing a tool to access context
-        functions=[get_user_context]
-    )
+general_agent = ConversableAgent(
+    name="general_agent",
+    system_message="""You handle general, non-technical support questions.
+    Use the get_user_context tool to understand the current session before responding.""",
+    # Providing a tool to access context
+    functions=[get_user_context],
+    llm_config=llm_config
+)
 
 # User agent
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")
