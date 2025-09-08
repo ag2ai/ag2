@@ -4,7 +4,6 @@
 
 from collections.abc import Callable
 from typing import Any
-from uuid import UUID
 
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
@@ -21,8 +20,8 @@ class AfterWorksTransitionEvent(BaseEvent):
     source_agent: Agent
     transition_target: TransitionTarget
 
-    def __init__(self, source_agent: Agent, transition_target: TransitionTarget, uuid: UUID | None = None):
-        super().__init__(uuid=uuid, source_agent=source_agent, transition_target=transition_target)
+    def __init__(self, source_agent: Agent, transition_target: TransitionTarget):
+        super().__init__(source_agent=source_agent, transition_target=transition_target)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
@@ -46,8 +45,8 @@ class OnContextConditionTransitionEvent(BaseEvent):
     source_agent: Agent
     transition_target: TransitionTarget
 
-    def __init__(self, source_agent: Agent, transition_target: TransitionTarget, uuid: UUID | None = None):
-        super().__init__(uuid=uuid, source_agent=source_agent, transition_target=transition_target)
+    def __init__(self, source_agent: Agent, transition_target: TransitionTarget):
+        super().__init__(source_agent=source_agent, transition_target=transition_target)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
@@ -71,8 +70,8 @@ class OnConditionLLMTransitionEvent(BaseEvent):
     source_agent: Agent
     transition_target: TransitionTarget
 
-    def __init__(self, source_agent: Agent, transition_target: TransitionTarget, uuid: UUID | None = None):
-        super().__init__(uuid=uuid, source_agent=source_agent, transition_target=transition_target)
+    def __init__(self, source_agent: Agent, transition_target: TransitionTarget):
+        super().__init__(source_agent=source_agent, transition_target=transition_target)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
