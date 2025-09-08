@@ -8,7 +8,7 @@ from contextlib import AbstractAsyncContextManager
 from logging import Logger
 from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
-from asyncer import create_task_group
+from anyio import create_task_group
 
 from .....doc_utils import export_module
 from .....llm_config import LLMConfig

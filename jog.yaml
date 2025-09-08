@@ -1,0 +1,22 @@
+version: 0.1
+pull:
+  analysis:
+    # The status check one of 'error' or 'warning'
+    check: error
+    confidence_threshold: 50 # Joggr will only suggest a change if the agent is at least 70% confident in its analysis.
+  autofix:
+    enabled: true
+    confidence_threshold: 80 # Joggr will only open a PR if the agent is at least 80% confident it can apply the fix correctly.
+
+# Recommendation guidelines for setting thresholds:
+# 50 → More suggestions, though some may be less relevant. Useful for public repos or docs where freshness is critical.
+# 75 → Fewer suggestions, but higher quality. Best for internal repos where only significant updates matter.
+
+# How the agent interprets confidence scores:
+#  0–50   → Documentation is still valid; at most small details may have changed.
+# 51-70   → Partially relevant; core ideas are still correct, but some parts may be outdated.
+# 71–85   → Significant changes detected; accuracy of the documentation is questionable.
+# 86–100  → Documentation is largely outdated and misleading.
+
+# Note: The agent starts from the assumption that documentation is correct unless it finds clear evidence otherwise.
+# Lower scores mean "likely still accurate," while higher scores mean "more likely outdated."
