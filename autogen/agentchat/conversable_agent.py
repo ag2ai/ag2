@@ -1102,7 +1102,7 @@ class ConversableAgent(LLMAgent):
         return True
 
     def _process_message_before_send(
-        self, message: dict[str, Any] | str | list[dict[str, Any]], recipient: Agent, silent: bool
+        self, message: list[dict[str, Any]], recipient: Agent, silent: bool
     ) -> dict[str, Any] | str | list[dict[str, Any]]:
         """Process the message before sending it to the recipient."""
         hook_list = self.hook_lists["process_message_before_send"]
@@ -1121,16 +1121,10 @@ class ConversableAgent(LLMAgent):
                     )
                 processed_messages.append(processed_msg)
             return processed_messages
-        else:
-            for hook in hook_list:
-                message = hook(
-                    sender=self, message=message, recipient=recipient, silent=ConversableAgent._is_silent(self, silent)
-                )
-            return message
 
     def send(
         self,
-        message: dict[str, Any] | str | list[dict[str, Any]],
+        message: str | list[dict[str, Any]],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1138,7 +1132,7 @@ class ConversableAgent(LLMAgent):
         """Send a message to another agent.
 
         Args:
-            message (dict or str or list[messages]): message to be sent. Can also be a list of messages.
+            message (str or list[messages]): message to be sent. Can also be a list of messages.
                 The message could contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
@@ -1166,33 +1160,25 @@ class ConversableAgent(LLMAgent):
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
         # Handle list of messages
-        if isinstance(message, list):
-            for msg in message:
-                processed_msg = self._process_message_before_send(
-                    msg, recipient, ConversableAgent._is_silent(self, silent)
-                )
-                valid = self._append_oai_message(processed_msg, "assistant", recipient, is_sending=True)
-                if not valid:
-                    raise ValueError(
-                        "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
-                    )
-            # Send all messages to recipient
-            for msg in message:
-                recipient.receive(msg, self, request_reply, silent)
-        else:
-            # Original single message logic
-            message = self._process_message_before_send(message, recipient, ConversableAgent._is_silent(self, silent))
-            valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
-            if valid:
-                recipient.receive(message, self, request_reply, silent)
-            else:
-                raise ValueError(
-                    "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
-                )
+        if isinstance(message, str):
+            message = [message]
+
+        processed_msgs = self._process_message_before_send(
+            message, recipient, ConversableAgent._is_silent(self, silent)
+        )
+
+        # Validate all messages and raise error if any are invalid
+        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
+            raise ValueError(
+                "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
+            )
+
+        # Send all messages to recipient
+        recipient.receive(message, self, request_reply, silent)
 
     async def a_send(
         self,
-        message: dict[str, Any] | str | list[dict[str, Any]],
+        message: str | list[dict[str, Any]],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1200,7 +1186,7 @@ class ConversableAgent(LLMAgent):
         """(async) Send a message to another agent.
 
         Args:
-            message (dict or str or list[messages]): message to be sent. Can also be a list of messages.
+            message (str or list[messages]): message to be sent. Can also be a list of messages.
                 The message could contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
@@ -1227,29 +1213,22 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        if isinstance(message, list):
-            for msg in message:
-                processed_msg = self._process_message_before_send(
-                    msg, recipient, ConversableAgent._is_silent(self, silent)
-                )
-                valid = self._append_oai_message(processed_msg, "assistant", recipient, is_sending=True)
-                if not valid:
-                    raise ValueError(
-                        "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
-                    )
-            # Send all messages to recipient
-            for msg in message:
-                recipient.receive(msg, self, request_reply, silent)
-        else:
-            # Original single message logic
-            message = self._process_message_before_send(message, recipient, ConversableAgent._is_silent(self, silent))
-            valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
-            if valid:
-                recipient.receive(message, self, request_reply, silent)
-            else:
-                raise ValueError(
-                    "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
-                )
+        # Handle list of messages
+        if isinstance(message, str):
+            message = [message]
+
+        processed_msgs = self._process_message_before_send(
+            message, recipient, ConversableAgent._is_silent(self, silent)
+        )
+
+        # Validate all messages and raise error if any are invalid
+        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
+            raise ValueError(
+                "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
+            )
+
+        # Send all messages to recipient
+        recipient.receive(message, self, request_reply, silent)
 
     def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
