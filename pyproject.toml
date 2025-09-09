@@ -272,14 +272,15 @@ test = [
     "ipykernel==6.30.1",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
-    "pytest-cov==6.2.1",
-    "pytest-asyncio==1.1.0",
-    "pytest==8.4.1",
-    "mock==5.2.0",
     "pandas==2.3.2",
     "fastapi==0.116.1",
+    "mcp>=1.11.0",
+    # test utilities
+    "pytest==8.4.1",
+    "pytest-cov==6.2.1",
+    "pytest-asyncio==1.1.0",
     "dirty-equals==0.9.0",
-    "mcp>=1.11.0"
+    "freezegun==1.5.5",
 ]
 
 docs = [
