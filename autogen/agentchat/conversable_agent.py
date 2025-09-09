@@ -1174,7 +1174,7 @@ class ConversableAgent(LLMAgent):
             )
 
         # Send all messages to recipient
-        recipient.receive(message, self, request_reply, silent)
+        recipient.receive(processed_msgs, self, request_reply, silent)
 
     async def a_send(
         self,
@@ -1228,7 +1228,7 @@ class ConversableAgent(LLMAgent):
             )
 
         # Send all messages to recipient
-        recipient.receive(message, self, request_reply, silent)
+        recipient.receive(processed_msgs, self, request_reply, silent)
 
     def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
@@ -1253,18 +1253,18 @@ class ConversableAgent(LLMAgent):
 
     def receive(
         self,
-        message: dict[str, Any] | list[dict[str, Any]] | str,
+        message: list[dict[str, Any]],
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """Receive a message from another agent.
+        """Receive a list[messages] from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str or list[messages]): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). Can also be a list of messages.
+            message (list[messages]): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1283,10 +1283,7 @@ class ConversableAgent(LLMAgent):
         """
         # Handle list of messages
         if isinstance(message, list):
-            for msg in message:
-                self._process_received_message(msg, sender, silent)
-        else:
-            self._process_received_message(message, sender, silent)
+            message = [self._process_received_message(msg, sender, silent) for msg in message]
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
@@ -1326,16 +1323,13 @@ class ConversableAgent(LLMAgent):
         """
         # Handle list of messages
         if isinstance(message, list):
-            for msg in message:
-                self._process_received_message(msg, sender, silent)
-        else:
-            self._process_received_message(message, sender, silent)
+            message = [self._process_received_message(msg, sender, silent) for msg in message]
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
-        reply = await self.a_generate_reply(messages=self.chat_messages[sender], sender=sender)
+        reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
         if reply is not None:
-            await self.a_send(reply, sender, silent=silent)
+            self.send(reply, sender, silent=silent)
 
     def _prepare_chat(
         self,

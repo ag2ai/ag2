@@ -72,7 +72,7 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: list[dict[str, Any]] | str,
+        message: list[dict[str, Any]],
         sender: "Agent",
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -80,7 +80,7 @@ class Agent(Protocol):
         """Receive a message from another agent.
 
         Args:
-            message (list[messages] or str): the message received. If a list of messages, it should be
+            message (list[messages]): the list[messages] received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.
@@ -89,7 +89,7 @@ class Agent(Protocol):
 
     async def a_receive(
         self,
-        message: list[dict[str, Any]] | str,
+        message: list[dict[str, Any]],
         sender: "Agent",
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -97,7 +97,7 @@ class Agent(Protocol):
         """(Async) Receive a message from another agent.
 
         Args:
-            message (list[messages] or str): the message received. If a list of messages, it should be
+            message (list[messages]): the list[messages] received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.
