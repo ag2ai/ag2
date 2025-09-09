@@ -25,17 +25,19 @@ The example below is a two-agent chat between a student agent and a teacher agen
 import os
 
 from autogen import ConversableAgent, LLMConfig
-llm_config=LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
 
-with llm_config:
-    student_agent = ConversableAgent(
-        name="Student_Agent",
-        system_message="You are a student willing to learn.",
-    )
-    teacher_agent = ConversableAgent(
-        name="Teacher_Agent",
-        system_message="You are a math teacher.",
-    )
+llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
+
+student_agent = ConversableAgent(
+    name="Student_Agent",
+    system_message="You are a student willing to learn.",
+    llm_config=llm_config
+)
+teacher_agent = ConversableAgent(
+    name="Teacher_Agent",
+    system_message="You are a math teacher.",
+    llm_config=llm_config
+)
 
 chat_result = student_agent.initiate_chat(
     teacher_agent,

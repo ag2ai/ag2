@@ -19,10 +19,10 @@ class AssistantAgent(ConversableAgent):
 
     AssistantAgent is a subclass of ConversableAgent configured with a default system message.
     The default system message is designed to solve a task with LLM,
-    including suggesting python code blocks and debugging.
-    `human_input_mode` is default to "NEVER"
-    and `code_execution_config` is default to False.
-    This agent doesn't execute code by default, and expects the user to execute the code.
+    including suggesting python code blocks and debugging. \n
+    `human_input_mode` is default to "NEVER" \n
+    and `code_execution_config` is default to False. \n
+    This agent doesn't execute code by default, and expects the user to execute the code. \n
     """
 
     DEFAULT_SYSTEM_MESSAGE = """You are a helpful AI assistant.
@@ -52,20 +52,20 @@ Reply "TERMINATE" in the end when everything is done.
         **kwargs: Any,
     ):
         """Args:
-        name (str): agent name.
-        system_message (str): system message for the ChatCompletion inference.
+        - name (str): agent name. \n
+        - system_message (str): system message for the ChatCompletion inference. \n
             Please override this attribute if you want to reprogram the agent.
-        llm_config (dict or False or None): llm inference configuration.
-            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
-            for available options.
-        is_termination_msg (function): a function that takes a message in the form of a dictionary
+        - llm_config (dict or False or None): llm inference configuration. \n
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create) \n
+            for available options. \n
+        - is_termination_msg (function): a function that takes a message in the form of a dictionary
             and returns a boolean value indicating if this received message is a termination message.
-            The dict can contain the following keys: "content", "role", "name", "function_call".
-        max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
+            The dict can contain the following keys: "content", "role", "name", "function_call". \n
+        - max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
             default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
-            The limit only plays a role when human_input_mode is not "ALWAYS".
-        **kwargs (dict): Please refer to other kwargs in
-            [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent).
+            The limit only plays a role when human_input_mode is not "ALWAYS". \n
+        - **kwargs (dict): Please refer to other kwargs in
+            [ConversableAgent](https://docs.ag2.ai/latest/docs/api-reference/autogen/ConversableAgent). \n
         """
         super().__init__(
             name,

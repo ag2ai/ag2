@@ -13,27 +13,27 @@ from .context_variables import ContextVariables
 @dataclass
 @export_module("autogen")
 class ContextExpression:
-    """A class to evaluate logical expressions using context variables.
-
-    Args:
-        expression (str): A string containing a logical expression with context variable references.
-            - Variable references use ${var_name} syntax: ${logged_in}, ${attempts}
-            - String literals can use normal quotes: 'hello', "world"
-            - Supported operators:
-                - Logical: not/!, and/&, or/|
-                - Comparison: >, <, >=, <=, ==, !=
-            - Supported functions:
-                - len(${var_name}): Gets the length of a list, string, or other collection
-            - Parentheses can be used for grouping
-            - Examples:
-                - "not ${logged_in} and ${is_admin} or ${guest_checkout}"
-                - "!${logged_in} & ${is_admin} | ${guest_checkout}"
-                - "len(${orders}) > 0 & ${user_active}"
-                - "len(${cart_items}) == 0 | ${checkout_started}"
-
-    Raises:
-        SyntaxError: If the expression cannot be parsed
-        ValueError: If the expression contains disallowed operations
+    """A class to evaluate logical expressions using context variables.\n
+    \n
+        Args:\n
+            expression (str): A string containing a logical expression with context variable references.\n
+                - Variable references use ${var_name} syntax: ${logged_in}, ${attempts}\n
+                - String literals can use normal quotes: 'hello', "world"\n
+                - Supported operators:\n
+                    - Logical: not/!, and/&, or/|\n
+                    - Comparison: >, <, >=, <=, ==, !=\n
+                - Supported functions:\n
+                    - len(${var_name}): Gets the length of a list, string, or other collection\n
+                - Parentheses can be used for grouping\n
+                - Examples:\n
+                    - "not ${logged_in} and ${is_admin} or ${guest_checkout}"\n
+                    - "!${logged_in} & ${is_admin} | ${guest_checkout}"\n
+                    - "len(${orders}) > 0 & ${user_active}"\n
+                    - "len(${cart_items}) == 0 | ${checkout_started}"\n
+    \n
+        Raises:\n
+            SyntaxError: If the expression cannot be parsed\n
+            ValueError: If the expression contains disallowed operations\n
     """
 
     expression: str

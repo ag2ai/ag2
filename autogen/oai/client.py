@@ -287,7 +287,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
-    reasoning_effort: Literal["low", "medium", "high"] | None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
 
@@ -301,7 +301,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None = None
     max_completion_tokens: int | None = None
 
     def create_client(self) -> ModelClient:
@@ -1460,6 +1460,13 @@ class OpenAIWrapper:
 # -----------------------------------------------------------------------------
 # New: Responses API config entry (OpenAI-hosted preview endpoint)
 # -----------------------------------------------------------------------------
+
+
+class OpenAIResponsesEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["responses"]
+
+    tool_choice: Literal["none", "auto", "required"] | None
+    built_in_tools: list[str] | None
 
 
 class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
