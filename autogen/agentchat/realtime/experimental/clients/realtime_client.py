@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from contextlib import AbstractAsyncContextManager
 from logging import Logger
-from typing import Any, AsyncContextManager, Callable, Literal, Optional, Protocol, TypeVar, Union, runtime_checkable
+from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
-from asyncer import create_task_group
+from anyio import create_task_group
 
 from .....doc_utils import export_module
 from .....llm_config import LLMConfig
@@ -66,7 +67,7 @@ class RealtimeClientProtocol(Protocol):
         """
         ...
 
-    def connect(self) -> AsyncContextManager[None]: ...
+    def connect(self) -> AbstractAsyncContextManager[None]: ...
 
     def read_events(self) -> AsyncGenerator[RealtimeEvent, None]:
         """Read events from a Realtime Client."""
@@ -89,8 +90,8 @@ class RealtimeClientProtocol(Protocol):
 
     @classmethod
     def get_factory(
-        cls, llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any
-    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        cls, llm_config: LLMConfig | dict[str, Any], logger: Logger, **kwargs: Any
+    ) -> Callable[[], "RealtimeClientProtocol"] | None:
         """Create a Realtime API client.
 
         Args:
@@ -108,10 +109,10 @@ class RealtimeClientBase:
     def __init__(self):
         self._eventQueue = asyncio.Queue()
 
-    async def add_event(self, event: Optional[RealtimeEvent]):
+    async def add_event(self, event: RealtimeEvent | None):
         await self._eventQueue.put(event)
 
-    async def get_event(self) -> Optional[RealtimeEvent]:
+    async def get_event(self) -> RealtimeEvent | None:
         return await self._eventQueue.get()
 
     async def _read_from_connection_task(self):
@@ -134,12 +135,12 @@ class RealtimeClientBase:
                     break
 
     async def queue_input_audio_buffer_delta(self, audio: str) -> None:
-        """queue InputAudioBufferDelta.
+        """Queue InputAudioBufferDelta.
 
         Args:
             audio (str): The audio.
         """
-        await self.add_event(InputAudioBufferDelta(delta=audio, item_id=None, raw_message=dict()))
+        await self.add_event(InputAudioBufferDelta(delta=audio, item_id=None, raw_message={}))
 
 
 _realtime_client_classes: dict[str, type[RealtimeClientProtocol]] = {}
@@ -170,7 +171,7 @@ def register_realtime_client() -> Callable[[type[T]], type[T]]:
 
 
 @export_module("autogen.agentchat.realtime.experimental.clients")
-def get_client(llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
+def get_client(llm_config: LLMConfig | dict[str, Any], logger: Logger, **kwargs: Any) -> "RealtimeClientProtocol":
     """Get a registered Realtime API client.
 
     Args:

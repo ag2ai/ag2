@@ -26,7 +26,6 @@ class TimeTool(Tool):
         Args:
             date_time_format (str, optional): The format of the date and time. Defaults to "%Y-%m-%d %H:%M:%S".
         """
-
         self._date_time_format = date_time_format
 
         async def get_date_and_time(

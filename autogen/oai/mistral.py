@@ -29,12 +29,12 @@ import json
 import os
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
-from pydantic import Field
+from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -53,17 +53,23 @@ with optional_import_block():
     )
 
 
-@register_llm_config
+class MistralEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["mistral"]
+
+    safe_prompt: bool
+    random_seed: int | None
+    stream: bool
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    tool_choice: Literal["none", "auto", "any"] | None
+
+
 class MistralLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["mistral"] = "mistral"
-    temperature: float = Field(default=0.7)
-    top_p: Optional[float] = None
-    max_tokens: Optional[int] = Field(default=None, ge=0)
     safe_prompt: bool = False
-    random_seed: Optional[int] = None
+    random_seed: int | None = None
     stream: bool = False
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
-    tool_choice: Optional[Literal["none", "auto", "any"]] = None
+    tool_choice: Literal["none", "auto", "any"] | None = None
 
     def create_client(self):
         raise NotImplementedError("MistralLLMConfigEntry.create_client is not implemented.")
@@ -73,7 +79,7 @@ class MistralLLMConfigEntry(LLMConfigEntry):
 class MistralAIClient:
     """Client for Mistral.AI's API."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Unpack[MistralEntryDict]):
         """Requires api_key or environment variable to be set
 
         Args:
@@ -93,7 +99,7 @@ class MistralAIClient:
 
         self._client = Mistral(api_key=self.api_key)
 
-    def message_retrieval(self, response: ChatCompletion) -> Union[list[str], list[ChatCompletionMessage]]:
+    def message_retrieval(self, response: ChatCompletion) -> list[str] | list[ChatCompletionMessage]:
         """Retrieve the messages from the response."""
         return [choice.message for choice in response.choices]
 

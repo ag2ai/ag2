@@ -4,7 +4,7 @@
 
 import asyncio
 import threading
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
@@ -30,7 +30,7 @@ __all__ = [
 @export_module("autogen")
 def initiate_group_chat(
     pattern: "Pattern",
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration.
@@ -92,7 +92,7 @@ def initiate_group_chat(
 @export_module("autogen.agentchat")
 async def a_initiate_group_chat(
     pattern: "Pattern",
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration, asynchronously.
@@ -154,7 +154,7 @@ async def a_initiate_group_chat(
 @export_module("autogen.agentchat")
 def run_group_chat(
     pattern: "Pattern",
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
 ) -> RunResponseProtocol:
     iostream = ThreadIOStream()
@@ -163,7 +163,7 @@ def run_group_chat(
 
     def _initiate_group_chat(
         pattern: "Pattern" = pattern,
-        messages: Union[list[dict[str, Any]], str] = messages,
+        messages: list[dict[str, Any]] | str = messages,
         max_rounds: int = max_rounds,
         iostream: ThreadIOStream = iostream,
         response: RunResponse = response,
@@ -198,7 +198,7 @@ def run_group_chat(
 @export_module("autogen.agentchat")
 async def a_run_group_chat(
     pattern: "Pattern",
-    messages: Union[list[dict[str, Any]], str],
+    messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
 ) -> AsyncRunResponseProtocol:
     iostream = AsyncThreadIOStream()
@@ -207,7 +207,7 @@ async def a_run_group_chat(
 
     async def _initiate_group_chat(
         pattern: "Pattern" = pattern,
-        messages: Union[list[dict[str, Any]], str] = messages,
+        messages: list[dict[str, Any]] | str = messages,
         max_rounds: int = max_rounds,
         iostream: AsyncThreadIOStream = iostream,
         response: AsyncRunResponse = response,
@@ -232,6 +232,7 @@ async def a_run_group_chat(
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
-    asyncio.create_task(_initiate_group_chat())
-
+    task = asyncio.create_task(_initiate_group_chat())
+    # prevent the task from being garbage collected
+    response._task_ref = task  # type: ignore[attr-defined]
     return response

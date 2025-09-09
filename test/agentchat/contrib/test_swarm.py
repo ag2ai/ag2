@@ -4,7 +4,7 @@
 import inspect
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -466,11 +466,11 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     agent2 = ConversableAgent("agent2", functions=[test_func_1, test_func_2], llm_config=testing_llm_config)
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply(*args: Any, **kwargs: Any) -> tuple[bool, str | dict[str, Any]]:
         return True, "This is a mock response from the agent."
 
     # Fake generate_oai_reply
-    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> tuple[bool, Union[str, dict[str, Any]]]:
+    def mock_generate_oai_reply_tool(*args: Any, **kwargs: Any) -> tuple[bool, str | dict[str, Any]]:
         return True, {
             "role": "assistant",
             "name": "agent1",
@@ -841,17 +841,17 @@ def test_after_work_callable() -> None:
 
     def return_agent(
         last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, ConversableAgent, str]:
+    ) -> AfterWorkOption | ConversableAgent | str:
         return agent2
 
     def return_agent_str(
         last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, ConversableAgent, str]:
+    ) -> AfterWorkOption | ConversableAgent | str:
         return "agent3"
 
     def return_after_work_option(
         last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> Union[AfterWorkOption, ConversableAgent, str]:
+    ) -> AfterWorkOption | ConversableAgent | str:
         return AfterWorkOption.TERMINATE
 
     register_hand_off(
@@ -1072,7 +1072,7 @@ def test_process_initial_messages() -> None:
     user_agent = UserProxyAgent("test_user")
 
     # Test single string message
-    messages: Union[str, list[dict[str, Any]]] = "Initial message"
+    messages: str | list[dict[str, Any]] = "Initial message"
     processed_messages, last_agent, agent_names, temp_users = _process_initial_messages(
         messages, None, [agent1, agent2], [nested_agent]
     )
@@ -1193,7 +1193,7 @@ def test_swarmresult_afterworkoption() -> None:
 
     def call_determine_next_agent(
         next_agent_afterworkoption: AfterWorkOption, swarm_afterworkoption: AfterWorkOption
-    ) -> Optional[Union[Agent, Literal["auto"]]]:
+    ) -> Agent | Literal["auto"] | None:
         last_speaker_agent = ConversableAgent("dummy_1")
         tool_executor, _ = _prepare_swarm_agents(last_speaker_agent, [last_speaker_agent], ContextVariables())
         user = UserProxyAgent("User")
@@ -1411,10 +1411,10 @@ def test_swarmresult_afterworkoption_tool_swarmresult() -> None:
 
     def call_determine_next_agent_from_tool_execution(
         last_speaker_agent: ConversableAgent,
-        tool_execution_swarm_result: Union[ConversableAgent, AfterWorkOption, str],
+        tool_execution_swarm_result: ConversableAgent | AfterWorkOption | str,
         next_agent_afterworkoption: AfterWorkOption,
         swarm_afterworkoption: AfterWorkOption,
-    ) -> Optional[Union[Agent, Literal["auto"]]]:
+    ) -> Agent | Literal["auto"] | None:
         another_agent = ConversableAgent(name="another_agent")
         tool_executor, _ = _prepare_swarm_agents(
             last_speaker_agent, [last_speaker_agent, another_agent], ContextVariables()
@@ -1680,7 +1680,7 @@ def test_on_context_condition_run() -> None:
     assert tool_executor._swarm_next_agent is None  # type: ignore[attr-defined]
 
     # Test with a nested chat target
-    nested_chat_config = {
+    nested_chat_config: dict[str, Any] = {
         "chat_queue": [],
         "reply_func_from_nested_chats": "summary_from_nested_chats",
         "config": None,

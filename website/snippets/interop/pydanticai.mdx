@@ -38,14 +38,16 @@ Configure the agents for the interaction.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 ```python
-llm_config = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
 user_proxy = UserProxyAgent(
     name="User",
     human_input_mode="NEVER",
 )
 
-with llm_config:
-    chatbot = AssistantAgent(name="chatbot")
+chatbot = AssistantAgent(
+    name="chatbot",
+    llm_config=llm_config,
+)
 ```
 
 ### Tool Integration

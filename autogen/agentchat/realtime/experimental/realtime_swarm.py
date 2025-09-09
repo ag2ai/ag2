@@ -3,17 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import uuid
 import warnings
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import anyio
-from asyncer import asyncify, create_task_group, syncify
+from anyio import create_task_group, from_thread
 
 from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
+from ....fast_depends.utils import asyncify
 from ... import Agent, ChatResult, ConversableAgent, LLMAgent
 from ...utils import consolidate_chat_info, gather_usage_summary
 
@@ -42,7 +45,7 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def message_to_dict(message: Union[dict[str, Any], str]) -> dict[str, Any]:
+def message_to_dict(message: dict[str, Any] | str) -> dict[str, Any]:
     if isinstance(message, str):
         return {"content": message}
     elif isinstance(message, dict):
@@ -51,9 +54,8 @@ def message_to_dict(message: Union[dict[str, Any], str]) -> dict[str, Any]:
         return dict(message)
 
 
-def parse_oai_message(message: Union[dict[str, Any], str], role: str, adressee: Agent) -> dict[str, Any]:
-    """
-    Parse a message into an OpenAI-compatible message format.
+def parse_oai_message(message: dict[str, Any] | str, role: str, adressee: Agent) -> dict[str, Any]:
+    """Parse a message into an OpenAI-compatible message format.
 
     Args:
         message: The message to parse.
@@ -111,9 +113,9 @@ class SwarmableAgent(Agent):
         self,
         name: str,
         system_message: str = "You are a helpful AI Assistant.",
-        is_termination_msg: Optional[Callable[..., bool]] = None,
-        description: Optional[str] = None,
-        silent: Optional[bool] = None,
+        is_termination_msg: Callable[..., bool] | None = None,
+        description: str | None = None,
+        silent: bool | None = None,
     ):
         self._oai_messages: dict[Agent, Any] = defaultdict(list)
 
@@ -156,20 +158,20 @@ class SwarmableAgent(Agent):
 
     def send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
         self._oai_messages[recipient].append(parse_oai_message(message, "assistant", recipient))
         recipient.receive(message, self, request_reply)
 
     def receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
         self._oai_messages[sender].append(parse_oai_message(message, "user", self))
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
@@ -180,10 +182,10 @@ class SwarmableAgent(Agent):
 
     def generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, dict[str, Any], None]:
+    ) -> str | dict[str, Any] | None:
         if messages is None:
             if sender is None:
                 raise ValueError("Either messages or sender must be provided.")
@@ -195,22 +197,23 @@ class SwarmableAgent(Agent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, None]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | None]:
         raise NotImplementedError
 
     def initiate_chat(
         self,
         recipient: ConversableAgent,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         clear_history: bool = True,
-        silent: Optional[bool] = False,
-        cache: Optional[AbstractCache] = None,
-        summary_args: Optional[dict[str, Any]] = {},
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        summary_args: dict[str, Any] | None = {},
         **kwargs: dict[str, Any],
     ) -> ChatResult:
+        chat_id = uuid.uuid4().int
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -226,6 +229,7 @@ class SwarmableAgent(Agent):
         recipient.previous_cache = None  # type: ignore[attr-defined]
 
         chat_result = ChatResult(
+            chat_id=chat_id,
             chat_history=self.chat_messages[recipient],
             summary=summary,
             cost=gather_usage_summary([self, recipient]),  # type: ignore[arg-type]
@@ -235,25 +239,25 @@ class SwarmableAgent(Agent):
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, dict[str, Any], None]:
+    ) -> str | dict[str, Any] | None:
         return self.generate_reply(messages=messages, sender=sender, **kwargs)
 
     async def a_receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         self.receive(message, sender, request_reply)
 
     async def a_send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: "Agent",
-        request_reply: Optional[bool] = None,
+        request_reply: bool | None = None,
     ) -> None:
         self.send(message, recipient, request_reply)
 
@@ -262,7 +266,7 @@ class SwarmableAgent(Agent):
         """A dictionary of conversations from agent to list of messages."""
         return self._oai_messages
 
-    def last_message(self, agent: Optional[Agent] = None) -> Optional[dict[str, Any]]:
+    def last_message(self, agent: Agent | None = None) -> dict[str, Any] | None:
         if agent is None:
             n_conversations = len(self._oai_messages)
             if n_conversations == 0:
@@ -293,7 +297,7 @@ class SwarmableAgent(Agent):
     def _raise_exception_on_async_reply_functions(self) -> None:
         pass
 
-    def set_ui_tools(self, tools: Optional[list] = None) -> None:
+    def set_ui_tools(self, tools: list | None = None) -> None:
         """Set UI tools for the agent."""
         pass
 
@@ -302,7 +306,7 @@ class SwarmableAgent(Agent):
         pass
 
     @staticmethod
-    def _last_msg_as_summary(sender: Agent, recipient: Agent, summary_args: Optional[dict[str, Any]]) -> str:
+    def _last_msg_as_summary(sender: Agent, recipient: Agent, summary_args: dict[str, Any] | None) -> str:
         """Get a chat summary from the last message of the recipient."""
         summary = ""
         try:
@@ -324,9 +328,9 @@ if TYPE_CHECKING:
     def _create_swarmable_agent(
         name: str,
         system_message: str,
-        is_termination_msg: Optional[Callable[..., bool]],
-        description: Optional[str],
-        silent: Optional[bool],
+        is_termination_msg: Callable[..., bool] | None,
+        description: str | None,
+        silent: bool | None,
     ) -> LLMAgent:
         return SwarmableAgent(
             name=name,
@@ -343,13 +347,13 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         realtime_agent: "RealtimeAgent",
         initial_agent: ConversableAgent,
         agents: list[ConversableAgent],
-        question_message: Optional[str] = None,
+        question_message: str | None = None,
     ) -> None:
         self._initial_agent = initial_agent
         self._agents = agents
         self._realtime_agent = realtime_agent
 
-        self._answer_event: anyio.Event = anyio.Event()
+        self._answer_event = anyio.Event()
         self._answer: str = ""
         self.question_message = question_message or QUESTION_MESSAGE
 
@@ -401,10 +405,10 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[str]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | None]:
         """Check if the conversation should be terminated and if the agent should reply.
 
         Called when its agents turn in the chat conversation.
@@ -419,19 +423,20 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
         async def get_input() -> None:
             async with create_task_group() as tg:
-                tg.soonify(self.ask_question)(
+                tg.start_soon(
+                    self.ask_question,
                     self.question_message.format(messages[-1]["content"]),
                     question_timeout=QUESTION_TIMEOUT_SECONDS,
                 )
 
-        syncify(get_input)()
+        from_thread.run_sync(get_input)
 
         return True, {"role": "user", "content": self._answer}  # type: ignore[return-value]
 
     def start_chat(self) -> None:
         raise NotImplementedError
 
-    def configure_realtime_agent(self, system_message: Optional[str]) -> None:
+    def configure_realtime_agent(self, system_message: str | None) -> None:
         realtime_agent = self._realtime_agent
 
         logger = realtime_agent.logger
@@ -449,7 +454,8 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         )(self.set_answer)
 
         async def on_observers_ready() -> None:
-            self._realtime_agent._tg.soonify(asyncify(initiate_swarm_chat))(
+            self._realtime_agent._tg.start_soon(
+                asyncify(initiate_swarm_chat),
                 initial_agent=self._initial_agent,
                 agents=self._agents,
                 user_agent=self,  # type: ignore[arg-type]
@@ -466,8 +472,8 @@ def register_swarm(
     realtime_agent: "RealtimeAgent",
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
-    system_message: Optional[str] = None,
-    question_message: Optional[str] = None,
+    system_message: str | None = None,
+    question_message: str | None = None,
 ) -> None:
     """Create a SwarmableRealtimeAgent.
 

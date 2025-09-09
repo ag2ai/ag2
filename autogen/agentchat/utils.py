@@ -5,14 +5,14 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import re
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..doc_utils import export_module
 from .agent import Agent
 
 
 def consolidate_chat_info(
-    chat_info: Union[dict[str, Any], list[dict[str, Any]]], uniform_sender: Optional[Agent] = None
+    chat_info: dict[str, Any] | list[dict[str, Any]], uniform_sender: Agent | None = None
 ) -> None:
     if isinstance(chat_info, dict):
         chat_info = [chat_info]
@@ -101,7 +101,7 @@ def gather_usage_summary(agents: list[Agent]) -> dict[str, dict[str, Any]]:
     }
 
 
-def parse_tags_from_content(tag: str, content: Union[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def parse_tags_from_content(tag: str, content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Parses HTML style tags from message contents.
 
     The parsing is done by looking for patterns in the text that match the format of HTML tags. The tag to be parsed is

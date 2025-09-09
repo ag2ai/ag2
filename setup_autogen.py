@@ -11,7 +11,7 @@ import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-with open("README.md", "r", encoding="UTF-8") as fh:
+with open("README.md", encoding="UTF-8") as fh:
     long_description = fh.read()
 
 # Get the code version
@@ -70,6 +70,7 @@ setuptools.setup(
         "long-context": ["ag2[long-context]==" + __version__],
         "anthropic": ["ag2[anthropic]==" + __version__],
         "cerebras": ["ag2[cerebras]==" + __version__],
+        "yepcode": ["ag2[yepcode]==" + __version__],
         "mistral": ["ag2[mistral]==" + __version__],
         "groq": ["ag2[groq]==" + __version__],
         "cohere": ["ag2[cohere]==" + __version__],
@@ -97,5 +98,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     license="Apache Software License 2.0",
-    python_requires=">=3.9,<3.14",
+    python_requires=">=3.10,<3.14",
 )

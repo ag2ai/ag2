@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from ......doc_utils import export_module
 from ......import_utils import optional_import_block, require_optional_import
@@ -36,8 +36,8 @@ class OpenAIRealtimeClient(RealtimeClientBase):
     def __init__(
         self,
         *,
-        llm_config: Union[LLMConfig, dict[str, Any]],
-        logger: Optional[Logger] = None,
+        llm_config: LLMConfig | dict[str, Any],
+        logger: Logger | None = None,
     ) -> None:
         """(Experimental) Client for OpenAI Realtime API.
 
@@ -49,7 +49,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         self._llm_config = llm_config
         self._logger = logger
 
-        self._connection: Optional["AsyncRealtimeConnection"] = None
+        self._connection: AsyncRealtimeConnection | None = None
 
         self.config = llm_config["config_list"][0]
         # model is passed to self._client.beta.realtime.connect function later
@@ -57,7 +57,7 @@ class OpenAIRealtimeClient(RealtimeClientBase):
         self._voice: str = self.config.get("voice", "alloy")
         self._temperature: float = llm_config.get("temperature", 0.8)  # type: ignore[union-attr]
 
-        self._client: Optional["AsyncOpenAI"] = None
+        self._client: AsyncOpenAI | None = None
 
     @property
     def logger(self) -> Logger:
@@ -198,8 +198,8 @@ class OpenAIRealtimeClient(RealtimeClientBase):
 
     @classmethod
     def get_factory(
-        cls, llm_config: Union[LLMConfig, dict[str, Any]], logger: Logger, **kwargs: Any
-    ) -> Optional[Callable[[], "RealtimeClientProtocol"]]:
+        cls, llm_config: LLMConfig | dict[str, Any], logger: Logger, **kwargs: Any
+    ) -> Callable[[], "RealtimeClientProtocol"] | None:
         """Create a Realtime API client.
 
         Args:

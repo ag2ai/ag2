@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -30,18 +31,18 @@ class ModelUsageSummary(BaseModel):
 class ActualUsageSummary(BaseModel):
     """Actual usage summary."""
 
-    usages: Optional[list[ModelUsageSummary]] = None
+    usages: list[ModelUsageSummary] | None = None
     """List of model usage summaries."""
-    total_cost: Optional[float] = None
+    total_cost: float | None = None
     """Total cost."""
 
 
 class TotalUsageSummary(BaseModel):
     """Total usage summary."""
 
-    usages: Optional[list[ModelUsageSummary]] = None
+    usages: list[ModelUsageSummary] | None = None
     """List of model usage summaries."""
-    total_cost: Optional[float] = None
+    total_cost: float | None = None
     """Total cost."""
 
 
@@ -49,7 +50,7 @@ Mode = Literal["both", "total", "actual"]
 
 
 def _change_usage_summary_format(
-    actual_usage_summary: Optional[dict[str, Any]] = None, total_usage_summary: Optional[dict[str, Any]] = None
+    actual_usage_summary: dict[str, Any] | None = None, total_usage_summary: dict[str, Any] | None = None
 ) -> dict[str, dict[str, Any]]:
     summary: dict[str, Any] = {}
 
@@ -61,7 +62,7 @@ def _change_usage_summary_format(
         usage_summary_altered_format: dict[str, list[dict[str, Any]]] = {"usages": []}
         for k, v in usage_summary.items():
             if isinstance(k, str) and isinstance(v, dict):
-                current_usage = {key: value for key, value in v.items()}
+                current_usage = dict(v.items())
                 current_usage["model"] = k
                 usage_summary_altered_format["usages"].append(current_usage)
             else:
@@ -85,9 +86,9 @@ class UsageSummaryEvent(BaseEvent):
     def __init__(
         self,
         *,
-        uuid: Optional[UUID] = None,
-        actual_usage_summary: Optional[dict[str, Any]] = None,
-        total_usage_summary: Optional[dict[str, Any]] = None,
+        uuid: UUID | None = None,
+        actual_usage_summary: dict[str, Any] | None = None,
+        total_usage_summary: dict[str, Any] | None = None,
         mode: Mode = "both",
     ):
         # print(f"{actual_usage_summary=}")
@@ -99,9 +100,9 @@ class UsageSummaryEvent(BaseEvent):
 
     def _print_usage(
         self,
-        usage_summary: Union[ActualUsageSummary, TotalUsageSummary],
+        usage_summary: ActualUsageSummary | TotalUsageSummary,
         usage_type: str = "total",
-        f: Optional[Callable[..., Any]] = None,
+        f: Callable[..., Any] | None = None,
     ) -> None:
         f = f or print
         word_from_type = "including" if usage_type == "total" else "excluding"
@@ -118,7 +119,7 @@ class UsageSummaryEvent(BaseEvent):
                 flush=True,
             )
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         if self.total.usages is None:
@@ -152,10 +153,10 @@ class StreamEvent(BaseEvent):
     content: str
     """Content of the event."""
 
-    def __init__(self, *, uuid: Optional[UUID] = None, content: str) -> None:
+    def __init__(self, *, uuid: UUID | None = None, content: str) -> None:
         super().__init__(uuid=uuid, content=content)
 
-    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+    def print(self, f: Callable[..., Any] | None = None) -> None:
         f = f or print
 
         # Set the terminal text color to green

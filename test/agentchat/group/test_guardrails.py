@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
-from typing import Any, Union
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -76,7 +76,7 @@ class TestGuardrail:
         """Create a concrete implementation of Guardrail for testing."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
+            def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
                 return GuardrailResult(activated=True, justification="Test check")
 
         return ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
@@ -85,7 +85,7 @@ class TestGuardrail:
         """Test Guardrail initialization with default activation message."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
+            def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
                 return GuardrailResult(activated=True)
 
         guardrail = ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
@@ -99,7 +99,7 @@ class TestGuardrail:
         """Test Guardrail initialization with custom activation message."""
 
         class ConcreteGuardrail(Guardrail):
-            def check(self, context: Union[str, list[dict[str, Any]]]) -> GuardrailResult:
+            def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
                 return GuardrailResult(activated=True)
 
         custom_message = "Custom activation message"

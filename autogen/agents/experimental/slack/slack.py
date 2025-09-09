@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -24,7 +24,7 @@ class SlackAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[str] = None,
+        system_message: str | None = None,
         *,
         bot_token: str,
         channel_id: str,

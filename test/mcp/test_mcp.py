@@ -3,17 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 import tempfile
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import anyio
 import pytest
 from pydantic.networks import AnyUrl
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
-from autogen.mcp.mcp_client import ResultSaved, create_toolkit
+from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.mcp.mcp_client import (
+    DEFAULT_HTTP_REQUEST_TIMEOUT,
+    DEFAULT_SSE_EVENT_READ_TIMEOUT,
+    MCPClientSessionManager,
+    ResultSaved,
+    SseConfig,
+    StdioConfig,
+    create_toolkit,
+)
 
 from ..conftest import Credentials
 
@@ -23,19 +33,12 @@ with optional_import_block():
     from mcp.types import ReadResourceResult, TextResourceContents
 
 
-@skip_on_missing_imports(
-    [
-        "mcp.client.stdio",
-        "mcp.server.fastmcp",
-    ],
-    "mcp",
-)
 class TestMCPClient:
     @pytest.fixture
     def server_params(self) -> "StdioServerParameters":  # type: ignore[no-any-unimported]
         server_file = Path(__file__).parent / "math_server.py"
         return StdioServerParameters(
-            command="python",
+            command="python3",
             args=[str(server_file)],
         )
 
@@ -70,13 +73,13 @@ class TestMCPClient:
                         "name": "add",
                         "description": "Add two numbers",
                         "parameters": {
+                            "type": "object",
                             "properties": {
                                 "a": {"title": "A", "type": "integer"},
                                 "b": {"title": "B", "type": "integer"},
                             },
                             "required": ["a", "b"],
                             "title": "addArguments",
-                            "type": "object",
                         },
                     },
                 },
@@ -86,13 +89,13 @@ class TestMCPClient:
                         "name": "multiply",
                         "description": "Multiply two numbers",
                         "parameters": {
+                            "type": "object",
                             "properties": {
                                 "a": {"title": "A", "type": "integer"},
                                 "b": {"title": "B", "type": "integer"},
                             },
                             "required": ["a", "b"],
                             "title": "multiplyArguments",
-                            "type": "object",
                         },
                     },
                 },
@@ -137,6 +140,25 @@ class TestMCPClient:
             assert result.contents == expected_result
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
+    async def test_register_for_llm_tool(
+        self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials
+    ) -> None:  # type: ignore[no-any-unimported]
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session,
+        ):
+            # Initialize the connection
+            await session.initialize()
+            toolkit = await create_toolkit(session=session)
+            agent = AssistantAgent(
+                name="agent",
+                llm_config=credentials_gpt_4o_mini.llm_config,
+            )
+            toolkit.register_for_llm(agent)
+            assert len(agent.tools) == len(toolkit.tools)
+
+    @pytest.mark.asyncio
     async def test_convert_resource_with_download_folder(self, server_params: "StdioServerParameters") -> None:  # type: ignore[no-any-unimported]
         async with (
             stdio_client(server_params) as (read, write),
@@ -158,12 +180,16 @@ class TestMCPClient:
 
                     expected_result = [
                         TextResourceContents(
-                            uri=AnyUrl("echo://AG2User"), mimeType="text/plain", text="Resource echo: AG2User"
+                            uri=AnyUrl("echo://AG2User"),
+                            mimeType="text/plain",
+                            text="Resource echo: AG2User",
+                            meta=None,
                         )
                     ]
                     assert loaded_result.contents == expected_result
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif("OPENAI_API_KEY" not in os.environ, reason="OPENAI_API_KEY not set, skipping integration test.")
     @run_for_optional_imports("openai", "openai")
     async def test_with_llm(self, server_params: "StdioServerParameters", credentials_gpt_4o_mini: Credentials) -> None:  # type: ignore[no-any-unimported]
         async with (
@@ -190,3 +216,127 @@ class TestMCPClient:
             await result.process()
             summary = await result.summary
             assert "6912" in summary
+
+
+class MockClientSession:
+    def __init__(self, reader, writer):
+        pass
+
+    async def __aenter__(self) -> "AsyncMock":
+        mock_session = AsyncMock()
+        mock_session.initialize = AsyncMock()
+        return mock_session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+@pytest.fixture
+def mock_client() -> "MagicMock":
+    mock_context_manager = MagicMock()
+    mock_context_manager.__aenter__ = AsyncMock(return_value=(None, None))
+    mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+    return MagicMock(return_value=mock_context_manager)
+
+
+@pytest.fixture
+def session_manager() -> "MCPClientSessionManager":  # type: ignore[no-any-unimported]
+    return MCPClientSessionManager()
+
+
+class TestSseConfig:
+    @pytest.fixture
+    def sse_config(self) -> "SseConfig":  # type: ignore[no-any-unimported]
+        return SseConfig(
+            url="http://localhost:8080/sse",
+            server_name="test_sse_server",
+            headers=None,
+            timeout=5.0,
+            sse_read_timeout=300.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_sse_config_creation(self, sse_config: "SseConfig") -> None:
+        assert sse_config.url == "http://localhost:8080/sse"
+        assert sse_config.server_name == "test_sse_server"
+        assert sse_config.headers is None
+        assert sse_config.timeout == DEFAULT_HTTP_REQUEST_TIMEOUT
+        assert sse_config.sse_read_timeout == DEFAULT_SSE_EVENT_READ_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_create_session_mocked(
+        self,
+        sse_config: "SseConfig",
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:  # type: ignore[no-any-unimported]
+        monkeypatch.setattr("autogen.mcp.mcp_client.sse_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
+
+        async with session_manager.open_session(sse_config) as session:
+            mock_client.assert_called_once_with(
+                sse_config.url,
+                sse_config.headers,
+                sse_config.timeout,
+                sse_config.sse_read_timeout,
+            )
+
+            session.initialize.assert_called_once()
+
+
+class TestMCPStdioConfig:
+    @pytest.fixture
+    def stdio_config(self) -> "StdioConfig":  # type: ignore[no-any-unimported]
+        return StdioConfig(
+            command="python3",
+            args=["/path/to/server.py"],
+            server_name="test_stdio_server",
+            environment={"ENV_VAR": "test_value"},
+            working_dir="/tmp",
+            encoding="utf-8",
+            encoding_error_handler="strict",
+            session_options={"read_timeout_seconds": 30},
+        )
+
+    @pytest.mark.asyncio
+    async def test_stdio_config_creation(self, stdio_config: "StdioConfig") -> None:  # type: ignore[no-any-unimported]
+        assert stdio_config.command == "python3"
+        assert stdio_config.args == ["/path/to/server.py"]
+        assert stdio_config.server_name == "test_stdio_server"
+        assert stdio_config.environment == {"ENV_VAR": "test_value"}
+        assert stdio_config.working_dir == "/tmp"
+        assert stdio_config.encoding == "utf-8"
+        assert stdio_config.encoding_error_handler == "strict"
+        assert stdio_config.transport == "stdio"
+        assert stdio_config.session_options == {"read_timeout_seconds": 30}
+
+    @pytest.mark.asyncio
+    async def test_create_session(
+        self,
+        stdio_config: "StdioConfig",
+        monkeypatch: pytest.MonkeyPatch,
+        mock_client: "MagicMock",
+        session_manager: "MCPClientSessionManager",
+    ) -> None:  # type: ignore[no-any-unimported]
+        monkeypatch.setattr("autogen.mcp.mcp_client.stdio_client", mock_client)
+        monkeypatch.setattr("autogen.mcp.mcp_client.ClientSession", MockClientSession)
+
+        async with session_manager.open_session(stdio_config) as session:
+            mock_client.assert_called_once_with(
+                StdioServerParameters(
+                    command=stdio_config.command,
+                    args=stdio_config.args,
+                    env=stdio_config.environment,
+                    encoding=stdio_config.encoding,
+                    encoding_error_handler=stdio_config.encoding_error_handler,
+                ),
+            )
+
+            session.initialize.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_session_manager_initialization(session_manager: "MCPClientSessionManager") -> None:  # type: ignore[no-any-unimported]
+    assert session_manager.exit_stack is not None
+    assert session_manager.sessions == {}

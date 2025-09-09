@@ -7,7 +7,8 @@
 import os
 import re
 import urllib.parse
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any, Optional
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -41,11 +42,11 @@ class Collection:
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         collection_name: str = "ag2-docs",
-        embedding_function: Optional[Callable[..., Any]] = None,
-        metadata: Optional[Any] = None,
-        get_or_create: Optional[Any] = None,
+        embedding_function: Callable[..., Any] | None = None,
+        metadata: Any | None = None,
+        get_or_create: Any | None = None,
     ):
         """Initialize the Collection object.
 
@@ -85,9 +86,9 @@ class Collection:
     def add(
         self,
         ids: list[ItemID],
-        documents: Optional[list[Document]],
-        embeddings: Optional[list[Any]] = None,
-        metadatas: Optional[list[Any]] = None,
+        documents: list[Document] | None,
+        embeddings: list[Any] | None = None,
+        metadatas: list[Any] | None = None,
     ) -> None:
         """Add documents to the collection.
 
@@ -130,8 +131,8 @@ class Collection:
         self,
         ids: list[ItemID],
         documents: list[Document],
-        embeddings: Optional[list[Any]] = None,
-        metadatas: Optional[list[Any]] = None,
+        embeddings: list[Any] | None = None,
+        metadatas: list[Any] | None = None,
     ) -> None:
         """Upsert documents into the collection.
 
@@ -232,11 +233,11 @@ class Collection:
 
     def get(
         self,
-        ids: Optional[str] = None,
-        include: Optional[str] = None,
-        where: Optional[str] = None,
-        limit: Optional[Union[int, str]] = None,
-        offset: Optional[Union[int, str]] = None,
+        ids: str | None = None,
+        include: str | None = None,
+        where: str | None = None,
+        limit: int | str | None = None,
+        offset: int | str | None = None,
     ) -> list[Document]:
         """Retrieve documents from the collection.
 
@@ -380,11 +381,11 @@ class Collection:
     def query(
         self,
         query_texts: list[str],
-        collection_name: Optional[str] = None,
-        n_results: Optional[int] = 10,
-        distance_type: Optional[str] = "euclidean",
-        distance_threshold: Optional[float] = -1,
-        include_embedding: Optional[bool] = False,
+        collection_name: str | None = None,
+        n_results: int | None = 10,
+        distance_type: str | None = "euclidean",
+        distance_threshold: float | None = -1,
+        include_embedding: bool | None = False,
     ) -> QueryResults:
         """Query documents in the collection.
 
@@ -465,7 +466,7 @@ class Collection:
         array = [float(num) for num in array_string.split()]
         return array
 
-    def modify(self, metadata, collection_name: Optional[str] = None) -> None:
+    def modify(self, metadata, collection_name: str | None = None) -> None:
         """Modify metadata for the collection.
 
         Args:
@@ -481,7 +482,7 @@ class Collection:
         cursor.execute("UPDATE collectionsSET metadata = '%s'WHERE collection_name = '%s';", (metadata, self.name))
         cursor.close()
 
-    def delete(self, ids: list[ItemID], collection_name: Optional[str] = None) -> None:
+    def delete(self, ids: list[ItemID], collection_name: str | None = None) -> None:
         """Delete documents from the collection.
 
         Args:
@@ -498,7 +499,7 @@ class Collection:
         cursor.execute(f"DELETE FROM {self.name} WHERE id IN ({id_placeholders});", ids)
         cursor.close()
 
-    def delete_collection(self, collection_name: Optional[str] = None) -> None:
+    def delete_collection(self, collection_name: str | None = None) -> None:
         """Delete the entire collection.
 
         Args:
@@ -513,9 +514,7 @@ class Collection:
         cursor.execute(f"DROP TABLE IF EXISTS {self.name}")
         cursor.close()
 
-    def create_collection(
-        self, collection_name: Optional[str] = None, dimension: Optional[Union[str, int]] = None
-    ) -> None:
+    def create_collection(self, collection_name: str | None = None, dimension: str | int | None = None) -> None:
         """Create a new collection.
 
         Args:
@@ -558,15 +557,15 @@ class PGVectorDB(VectorDB):
         self,
         *,
         conn: Optional["psycopg.Connection"] = None,
-        connection_string: Optional[str] = None,
-        host: Optional[str] = None,
-        port: Optional[Union[int, str]] = None,
-        dbname: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        connect_timeout: Optional[int] = 10,
+        connection_string: str | None = None,
+        host: str | None = None,
+        port: int | str | None = None,
+        dbname: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        connect_timeout: int | None = 10,
         embedding_function: Callable = None,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the vector database.
 
@@ -615,13 +614,13 @@ class PGVectorDB(VectorDB):
     def establish_connection(
         self,
         conn: Optional["psycopg.Connection"] = None,
-        connection_string: Optional[str] = None,
-        host: Optional[str] = None,
-        port: Optional[Union[int, str]] = None,
-        dbname: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        connect_timeout: Optional[int] = 10,
+        connection_string: str | None = None,
+        host: str | None = None,
+        port: int | str | None = None,
+        dbname: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        connect_timeout: int | None = 10,
     ) -> "psycopg.Connection":
         """Establishes a connection to a PostgreSQL database using psycopg.
 

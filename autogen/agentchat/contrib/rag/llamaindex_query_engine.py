@@ -4,8 +4,9 @@
 
 import logging
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -33,8 +34,7 @@ logger = logging.getLogger(__name__)
 @require_optional_import("llama_index", "rag")
 @export_module("autogen.agentchat.contrib.rag")
 class LlamaIndexQueryEngine:
-    """
-    This engine leverages LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
+    """This engine leverages LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. It use any LlamaIndex [vector store](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/).
 
     By default the engine will use OpenAI's GPT-4o model (use the `llm` parameter to change that).
@@ -44,10 +44,10 @@ class LlamaIndexQueryEngine:
         self,
         vector_store: "BasePydanticVectorStore",
         llm: Optional["LLM"] = None,
-        file_reader_class: Optional[type["SimpleDirectoryReader"]] = None,
+        file_reader_class: type["SimpleDirectoryReader"] | None = None,
     ) -> None:
-        """
-        Initializes the LlamaIndexQueryEngine with the given vector store.
+        """Initializes the LlamaIndexQueryEngine with the given vector store.
+
         Args:
             vector_store: The vector store to use for indexing and querying documents.
             llm: LLM model used by LlamaIndex for query processing. You can find more supported LLMs at [LLM](https://docs.llamaindex.ai/en/stable/module_guides/models/llms/).
@@ -59,8 +59,8 @@ class LlamaIndexQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -80,7 +80,6 @@ class LlamaIndexQueryEngine:
             bool: True if initialization is successful
 
         """
-
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
         documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
         self.index = VectorStoreIndex.from_documents(documents=documents, storage_context=self.storage_context)
@@ -106,8 +105,8 @@ class LlamaIndexQueryEngine:
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -125,8 +124,7 @@ class LlamaIndexQueryEngine:
             self.index.insert(doc)
 
     def query(self, question: str) -> str:
-        """
-        Retrieve information from indexed documents by processing a query using the engine's LLM.
+        """Retrieve information from indexed documents by processing a query using the engine's LLM.
 
         Args:
             question: A natural language query string used to search the indexed documents.
@@ -149,10 +147,9 @@ class LlamaIndexQueryEngine:
             raise Exception("Query index is not initialized. Please call init_db or connect_db first.")
 
     def _load_doc(  # type: ignore[no-any-unimported]
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+        self, input_dir: Path | str | None, input_docs: Sequence[Path | str] | None
     ) -> Sequence["LlamaDocument"]:
-        """
-        Load documents from a directory and/or a sequence of file paths.
+        """Load documents from a directory and/or a sequence of file paths.
 
         Default to uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats](https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types).
 
@@ -170,7 +167,7 @@ class LlamaIndexQueryEngine:
             ValueError: If any provided file path does not exist.
             ValueError: If neither input_dir nor input_docs is provided.
         """
-        loaded_documents: list["LlamaDocument"] = []  # type: ignore[no-any-unimported]
+        loaded_documents: list[LlamaDocument] = []  # type: ignore[no-any-unimported]
         if input_dir:
             logger.info(f"Loading docs from directory: {input_dir}")
             if not os.path.exists(input_dir):

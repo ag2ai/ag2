@@ -13,15 +13,10 @@ import signal
 import subprocess
 import sys
 from types import TracebackType
-from typing import Optional
+
+from typing_extensions import Self
 
 from ...doc_utils import export_module
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
 from .base import JupyterConnectable, JupyterConnectionInfo
 from .import_utils import require_jupyter_kernel_gateway_installed
 from .jupyter_client import JupyterClient
@@ -36,7 +31,7 @@ class LocalJupyterServer(JupyterConnectable):
     def __init__(
         self,
         ip: str = "127.0.0.1",
-        port: Optional[int] = None,
+        port: int | None = None,
         token: str | GenerateToken = GenerateToken(),
         log_file: str = "jupyter_gateway.log",
         log_level: str = "INFO",
@@ -54,9 +49,6 @@ class LocalJupyterServer(JupyterConnectable):
             log_max_bytes (int, optional): Max logfile size. Defaults to 1048576.
             log_backup_count (int, optional): Number of backups for rotating log. Defaults to 3.
         """
-        # Remove as soon as https://github.com/jupyter-server/kernel_gateway/issues/398 is fixed
-        if sys.platform == "win32":
-            raise ValueError("LocalJupyterServer is not supported on Windows due to kernelgateway bug.")
 
         # Check Jupyter gateway server is installed
         try:
@@ -167,6 +159,6 @@ class LocalJupyterServer(JupyterConnectable):
         return self
 
     def __exit__(
-        self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         self.stop()

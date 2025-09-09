@@ -3,11 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+import shutil
 import sys
+import types
+from collections.abc import Iterable, Iterator
+from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterable, Iterator, Optional, Type, Union
+from typing import Any
 
 import pytest
+from pytest import MonkeyPatch
 
 from autogen.import_utils import ModuleInfo, get_missing_imports, optional_import_block, require_optional_import
 
@@ -154,7 +159,7 @@ class TestmoduleInfo:
             ),
         ],
     )
-    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: Optional[str]) -> None:
+    def test_is_in_sys_modules(self, mock_module: ModuleType, module_info: ModuleInfo, expected: str | None) -> None:
         assert module_info.is_in_sys_modules() == expected
 
     @pytest.mark.parametrize(
@@ -168,7 +173,7 @@ class TestmoduleInfo:
         ],
     )
     def test_is_in_sys_modules_without_version(
-        self, mock_module_without_version: ModuleType, module_info: ModuleInfo, expected: Optional[str]
+        self, mock_module_without_version: ModuleType, module_info: ModuleInfo, expected: str | None
     ) -> None:
         assert module_info.is_in_sys_modules() == expected
 
@@ -215,7 +220,7 @@ Please install it using:
             dummy_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
-    def test_function_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_function_attributes(self, except_for: str | list[str] | None) -> None:
         def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
             pass
@@ -242,7 +247,7 @@ Please install it using:
             actual()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_function", ["dummy_function"]])
-    def test_function_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_function_call(self, except_for: str | list[str] | None) -> None:
         @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
         def dummy_function() -> None:
             """Dummy function to test requires_optional_import"""
@@ -261,7 +266,7 @@ Please install it using:
             dummy_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_method", ["dummy_method"]])
-    def test_method_attributes(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_method_attributes(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             def dummy_method(self) -> None:
                 """Dummy method to test requires_optional_import"""
@@ -297,7 +302,7 @@ Please install it using:
             dummy.dummy_method()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_method", ["dummy_method"]])
-    def test_method_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_method_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
             def dummy_method(self) -> None:
@@ -319,7 +324,7 @@ Please install it using:
             dummy.dummy_method()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_static_function", ["dummy_static_function"]])
-    def test_static_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_static_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
             @staticmethod
@@ -342,7 +347,7 @@ Please install it using:
             dummy.dummy_static_function()
 
     @pytest.mark.parametrize("except_for", [None, "dummy_property", ["dummy_property"]])
-    def test_property_call(self, except_for: Optional[Union[str, list[str]]]) -> None:
+    def test_property_call(self, except_for: str | list[str] | None) -> None:
         class DummyClass:
             @property
             @require_optional_import("some_optional_module", "optional_dep", except_for=except_for)
@@ -368,7 +373,7 @@ Please install it using:
 
 class TestRequiresOptionalImportClasses:
     @pytest.fixture
-    def dummy_cls(self) -> Type[Any]:
+    def dummy_cls(self) -> type[Any]:
         @require_optional_import("some_optional_module", "optional_dep")
         class DummyClass:
             def dummy_method(self) -> None:
@@ -392,7 +397,7 @@ class TestRequiresOptionalImportClasses:
 
         return DummyClass
 
-    def test_class_init_call(self, dummy_cls: Type[Any]) -> None:
+    def test_class_init_call(self, dummy_cls: type[Any]) -> None:
         with pytest.raises(
             ImportError,
             match=re.escape("""A module needed for __init__ is missing:
@@ -444,8 +449,120 @@ class TestGetMissingImports:
         ],
     )
     def test_get_missing_imports(
-        self, mock_modules: dict[str, MockModule], modules: Union[str, Iterable[str]], expected_missing: dict[str, str]
+        self, mock_modules: dict[str, MockModule], modules: str | Iterable[str], expected_missing: dict[str, str]
     ) -> None:
         assert mock_modules
         missing = get_missing_imports(modules)
         assert missing == expected_missing
+
+
+def test_openai_version_higher_than_min(monkeypatch: MonkeyPatch) -> None:
+    # Simulate 'openai' module with version 1.100.1 (should satisfy >=1.66.2)
+    fake_openai = types.SimpleNamespace(
+        __version__="1.100.1", __file__="/usr/lib/python3.11/site-packages/openai/__init__.py"
+    )
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    modinfo = ModuleInfo.from_str("openai>=1.66.2")
+    result = modinfo.is_in_sys_modules()
+
+    # Should be None, meaning the version is sufficient
+    assert result is None
+
+
+def test_openai_version_too_low(monkeypatch: MonkeyPatch) -> None:
+    # Simulate 'openai' module with version 1.0.0 (should NOT satisfy >=1.66.2)
+    fake_openai = types.SimpleNamespace(
+        __version__="1.0.0", __file__="/usr/lib/python3.11/site-packages/openai/__init__.py"
+    )
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    modinfo = ModuleInfo.from_str("openai>=1.66.2")
+    result = modinfo.is_in_sys_modules()
+
+    assert result == "'openai' is installed, but the installed version 1.0.0 is too low (required 'openai>=1.66.2')."
+
+
+class TestVersionAsModule:
+    """
+    Tests for when a package's __version__ is a module.
+    """
+
+    @pytest.fixture
+    def mock_package_with_module_version(self) -> Iterator[None]:
+        """
+        Mock package, 'problem_package', will have a __version__ attribute that is a module.
+        """
+        temp_dir = Path("./temp_test_modules")
+        package_path = temp_dir / "problem_package"
+
+        # Create directory structure
+        package_path.mkdir(parents=True, exist_ok=True)
+
+        # Create the __init__.py file that sets __version__ to be a module
+        with open(package_path / "__init__.py", "w") as f:
+            f.write("from . import _version\n")
+            f.write("__version__ = _version\n")
+
+        # Create the _version.py file (this will be the module object)
+        with open(package_path / "_version.py", "w") as f:
+            f.write("# This file exists to be a module object.\n")
+
+        # Add the temporary directory to sys.path to make the package importable
+        sys.path.insert(0, str(temp_dir.resolve()))
+
+        # Remove the package from sys.modules if it exists
+        if "problem_package" in sys.modules:
+            del sys.modules["problem_package"]
+        if "problem_package._version" in sys.modules:
+            del sys.modules["problem_package._version"]
+
+        yield
+
+        # Cleanup: Remove from sys.path
+        sys.path.pop(0)
+
+        # Remove from sys.modules
+        if "problem_package" in sys.modules:
+            del sys.modules["problem_package"]
+        if "problem_package._version" in sys.modules:
+            del sys.modules["problem_package._version"]
+
+        # Delete the temporary directory
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+
+    def test_handle_module_as_version_with_constraints(self, mock_package_with_module_version: None) -> None:
+        """
+        Verify that the code correctly handles a module as a version
+        when version constraints are present.
+        """
+        # Import the mock package
+        import problem_package  # noqa: F401
+
+        # Create a ModuleInfo instance with a version constraint
+        module_info = ModuleInfo.from_str("problem_package>=1.0")
+
+        # Call the method that was causing the error
+        result = module_info.is_in_sys_modules()
+
+        # Assert that the result is the expected message, not a crash
+        expected_message = "'problem_package' is installed, but the version is not available."
+        assert result == expected_message
+
+    def test_handle_module_as_version_no_constraints(self, mock_package_with_module_version: None) -> None:
+        """
+        Verify that if there are no version constraints, the check passes
+        even if the version attribute is not a string.
+        """
+        # Import the mock package
+        import problem_package  # noqa: F401
+
+        # Create a ModuleInfo instance without version constraints
+        module_info = ModuleInfo.from_str("problem_package")
+
+        # Call the method
+        result = module_info.is_in_sys_modules()
+
+        # The module is present and no version check is required, so it should return None
+        assert result is None

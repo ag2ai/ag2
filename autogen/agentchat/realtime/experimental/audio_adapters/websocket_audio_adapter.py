@@ -5,7 +5,7 @@
 import base64
 import json
 from logging import Logger
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from .....doc_utils import export_module
 from ..realtime_events import AudioDelta, RealtimeEvent, SpeechStarted
@@ -29,7 +29,7 @@ SHOW_TIMING_MATH = False
 
 @export_module("autogen.agentchat.realtime.experimental")
 class WebSocketAudioAdapter(RealtimeObserver):
-    def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None) -> None:
+    def __init__(self, websocket: "WebSocket", *, logger: Logger | None = None) -> None:
         """Observer for handling function calls from the OpenAI Realtime API.
 
         Args:
@@ -42,9 +42,9 @@ class WebSocketAudioAdapter(RealtimeObserver):
         # Connection specific state
         self.stream_sid = None
         self.latest_media_timestamp = 0
-        self.last_assistant_item: Optional[str] = None
+        self.last_assistant_item: str | None = None
         self.mark_queue: list[str] = []
-        self.response_start_timestamp_socket: Optional[int] = None
+        self.response_start_timestamp_socket: int | None = None
 
     async def on_event(self, event: RealtimeEvent) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to websocket."""

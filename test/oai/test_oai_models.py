@@ -7,7 +7,7 @@ from autogen.oai.oai_models import (
     ChatCompletionMessage as ChatCompletionMessageLocal,
 )
 from autogen.oai.oai_models import (
-    ChatCompletionMessageToolCall as ChatCompletionMessageToolCallLocal,
+    ChatCompletionMessageFunctionToolCall as ChatCompletionMessageFunctionToolCallLocal,
 )
 from autogen.oai.oai_models import (
     Choice as ChoiceLocal,
@@ -18,9 +18,10 @@ from autogen.oai.oai_models import (
 from autogen.oai.oai_models.chat_completion import ChatCompletion as ChatCompletionLocal
 
 with optional_import_block():
-    from openai.types.chat import ChatCompletion, ChatCompletionMessageToolCall
+    from openai.types.chat import ChatCompletion
     from openai.types.chat.chat_completion import Choice
     from openai.types.chat.chat_completion_message import ChatCompletionMessage
+    from openai.types.chat.chat_completion_message_function_tool_call import ChatCompletionMessageFunctionToolCall
     from openai.types.completion_usage import CompletionUsage
 
 
@@ -34,7 +35,8 @@ class TestOAIModels:
 
     def test_chat_completion_message_tool_call_schema(self) -> None:
         assert (
-            ChatCompletionMessageToolCallLocal.model_json_schema() == ChatCompletionMessageToolCall.model_json_schema()
+            ChatCompletionMessageFunctionToolCallLocal.model_json_schema()
+            == ChatCompletionMessageFunctionToolCall.model_json_schema()
         )
 
     def test_choice_schema(self) -> None:

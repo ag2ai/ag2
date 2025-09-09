@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import sys
 import warnings
+from collections.abc import Callable
 from functools import wraps
 from inspect import signature
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ...doc_utils import export_module
 from ...import_utils import optional_import_block, require_optional_import
@@ -55,7 +55,7 @@ class PydanticAIInteroperability:
         Raises:
             ValueError: If the tool fails after the maximum number of retries.
         """
-        ctx_typed: Optional[RunContext[Any]] = ctx  # type: ignore[no-any-unimported]
+        ctx_typed: RunContext[Any] | None = ctx  # type: ignore[no-any-unimported]
         tool_typed: PydanticAITool[Any] = tool  # type: ignore[no-any-unimported]
 
         max_retries = tool_typed.max_retries if tool_typed.max_retries is not None else 1
@@ -63,19 +63,22 @@ class PydanticAIInteroperability:
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if tool_typed.current_retry >= max_retries:
+            current_retry = 0 if ctx_typed is None else ctx_typed.retries.get(tool_typed.name, 0)
+
+            if current_retry >= max_retries:
                 raise ValueError(f"{tool_typed.name} failed after {max_retries} retries")
 
             try:
                 if ctx_typed is not None:
                     kwargs.pop("ctx", None)
-                    ctx_typed.retry = tool_typed.current_retry
+                    ctx_typed.retry = current_retry
                     result = f(**kwargs, ctx=ctx_typed)  # type: ignore[call-arg]
+                    ctx_typed.retries[tool_typed.name] = 0
                 else:
                     result = f(**kwargs)  # type: ignore[call-arg]
-                tool_typed.current_retry = 0
             except Exception as e:
-                tool_typed.current_retry += 1
+                if ctx_typed is not None:
+                    ctx_typed.retries[tool_typed.name] += 1
                 raise e
 
             return result
@@ -151,14 +154,11 @@ class PydanticAIInteroperability:
             name=pydantic_ai_tool.name,
             description=pydantic_ai_tool.description,
             func_or_tool=func,
-            parameters_json_schema=pydantic_ai_tool._parameters_json_schema,
+            parameters_json_schema=pydantic_ai_tool.function_schema.json_schema,
         )
 
     @classmethod
-    def get_unsupported_reason(cls) -> Optional[str]:
-        if sys.version_info < (3, 9):
-            return "This submodule is only supported for Python versions 3.9 and above"
-
+    def get_unsupported_reason(cls) -> str | None:
         with optional_import_block() as result:
             import pydantic_ai.tools  # noqa: F401
 

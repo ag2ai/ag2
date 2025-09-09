@@ -6,7 +6,6 @@ on:
     types: [checks_requested]
   workflow_dispatch: # allows manual triggering of the workflow
 
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
@@ -18,12 +17,12 @@ jobs:
     env:
       SKIP: "mypy"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - name: Set $PY environment variable
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
       - uses: actions/cache@v4
@@ -39,13 +38,13 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.10"
       - run: uv pip install --system ".[types]"
       # Any additional configuration for mypy should be defined in pyproject.toml under the [tool.mypy] section
       - run: |
@@ -56,7 +55,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -74,9 +73,11 @@ jobs:
     needs: test-paths-filter
     if: needs.test-paths-filter.outputs.hasChanges == 'true'
     runs-on: ubuntu-latest
+    env:
+      YEPCODE_API_TOKEN: ${{ secrets.YEPCODE_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - name: Set up Python 3.11
@@ -88,7 +89,7 @@ jobs:
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,docs]
       - name: Install optional dependencies for code executors
         run: |
-          uv pip install --system -e ".[jupyter-executor]"
+          uv pip install --system -e ".[jupyter-executor,yepcode]"
           python -m ipykernel install --user --name python3
       - name: Test with pytest skipping openai tests
         run: |
@@ -109,7 +110,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.website == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' || steps.filter.outputs.scripts == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
         id: filter
         with:

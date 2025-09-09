@@ -1,0 +1,100 @@
+---
+title: Waldiez
+sidebarTitle: Waldiez
+---
+
+<img src="https://github.com/waldiez/waldiez/blob/main/docs/static/images/logo.png?raw=true" alt="Waldiez logo" width="300" />
+
+[Waldiez](https://waldiez.io) is an open-source, drag-and-drop platform that lets developers **design**, **orchestrate**, and **execute** multi-agent workflows across LLMs like OpenAI, Anthropic, Google, NVIDIA, Ollama, and more—backed by the AG2 multi-agent engine.
+
+## 🌟 Core Capabilities
+
+| Feature                          | Description                                                                 |
+|----------------------------------|-----------------------------------------------------------------------------|
+| 🧩 **Visual Workflow Builder**   | Build agent workflows visually via drag‑and‑drop—no code needed |
+| 🔄 **Multi-Agent Collaboration** | Real-time collaboration across agents using AG2 patterns |
+| 🌐 **Multi‑LLM & Tool Support**  | Integrates OpenAI, Anthropic, Gemini, Cohere, NVIDIA NIM, Ollama, and more |
+| ⚙️ **Rapid Prototyping**         | Export/import flows, agents, and skills easily for fast iteration |
+| 🛠 **Extensible via IDE/Studio** | Use Playground, JupyterLab, VS Code, or Waldiez Studio to design & run |
+| 🐳 **Docker‑Ready Execution**    | Run workflows via prebuilt Docker images for CLI, Jupyter, or Studio |
+
+---
+
+<img src="https://docs.waldiez.io/static/images/dark/front.webp" alt="Waldiez logo" />
+
+## 🛠️ Installation & Setup
+
+### 1. Playground (No install)
+Use the web-based editor to visually design flows. It's **design-only**, ideal for quick mockups.
+
+### 2. Python SDK (via PyPI)
+
+#### CLI
+```bash
+pip install waldiez
+
+# Convert a Waldiez flow to a python script or a jupyter notebook
+waldiez convert --file /path/to/a/flow.waldiez --output /path/to/an/output/flow[.py|.ipynb]
+# Convert and run the script, optionally force generation if the output file already exists
+waldiez run --file /path/to/a/flow.waldiez --output /path/to/an/output/flow[.py|.ipynb] [--force]
+```
+
+#### JupyterLab
+```bash
+pip install waldiez[jupyter]
+# installs jupyterlab with waldiez extension for designing, converting and running waldiez flows
+```
+
+#### Studio
+```bash
+pip install waldiez[studio]
+# installs FastAPI-based app for designing, converting and running waldiez flows
+```
+
+### 3. Docker
+Use prebuilt images:
+
+- `waldiez/waldiez` – CLI
+- `waldiez/jupyter` – JupyterLab
+- `waldiez/studio` – FastAPI web UI
+
+```bash
+docker pull waldiez/waldiez
+docker pull waldiez/jupyter
+docker pull waldiez/studio
+```
+
+### 4. VS Code Extension
+Install the Waldiez [extension](https://marketplace.visualstudio.com/items?itemName=Waldiez.waldiez-vscode) for in-editor visual flow design.
+
+---
+
+
+## 🔬 Usage Workflow
+
+### Design
+Build workflows visually—add agents, models, tools, and set the data flow order.
+
+### Orchestrate
+Assign agent roles, handoffs and communication patterns.
+
+### Execute
+Use CLI, Docker, Jupyter, VS Code or Studio to run flows. Export to Python or notebook formats.
+
+### Monitor & Export
+View real-time logs, visualize cost analysis, and then export results (CSV, JSON) for further analysis.
+
+---
+
+## 🕹️ Remote execution
+
+Waldiez Runner orchestrates execution in isolated environments via:
+
+- **AG2 + FastStream** for isolated flow execution
+- **FastAPI + Taskiq** for task management
+- **Redis + WebSocket** for real-time I/O
+- **PostgreSQL** for persistence
+
+---
+
+For Waldiez examples and documentation visit [documentation](https://docs.waldiez.io)

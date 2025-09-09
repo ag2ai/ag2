@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Optional
+from typing import Any
 
 from .... import ConversableAgent
 from ....doc_utils import export_module
@@ -24,7 +24,7 @@ class TelegramAgent(ConversableAgent):
     def __init__(
         self,
         name: str,
-        system_message: Optional[str] = None,
+        system_message: str | None = None,
         *,
         api_id: str,
         api_hash: str,
@@ -43,7 +43,6 @@ class TelegramAgent(ConversableAgent):
             has_writing_instructions (bool): Whether to add writing instructions to the system message. Defaults to True.
             **kwargs: Additional keyword arguments passed to the parent ConversableAgent class.
         """
-
         telegram_system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE
 
         self._send_tool = TelegramSendTool(api_id=api_id, api_hash=api_hash, chat_id=chat_id)

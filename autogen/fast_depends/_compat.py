@@ -6,8 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import sys
-from importlib.metadata import version as get_version
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any
 
 from pydantic import BaseModel, create_model
 from pydantic.version import VERSION as PYDANTIC_VERSION
@@ -35,13 +34,13 @@ if PYDANTIC_V2:
         eval_type_lenient as evaluate_forwardref,
     )
 
-    def model_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+    def model_schema(model: type[BaseModel]) -> dict[str, Any]:
         return model.model_json_schema()
 
-    def get_config_base(config_data: Optional[ConfigDict] = None) -> ConfigDict:
+    def get_config_base(config_data: ConfigDict | None = None) -> ConfigDict:
         return config_data or ConfigDict(**default_pydantic_config)  # type: ignore[typeddict-item]
 
-    def get_aliases(model: Type[BaseModel]) -> Tuple[str, ...]:
+    def get_aliases(model: type[BaseModel]) -> tuple[str, ...]:
         return tuple(f.alias or name for name, f in model.model_fields.items())
 
     class CreateBaseModel(BaseModel):
@@ -53,13 +52,13 @@ else:
     from pydantic.typing import evaluate_forwardref as evaluate_forwardref  # type: ignore[no-redef]
     from pydantic.config import get_config, ConfigDict, BaseConfig
 
-    def get_config_base(config_data: Optional[ConfigDict] = None) -> Type[BaseConfig]:  # type: ignore[misc,no-any-unimported]
+    def get_config_base(config_data: ConfigDict | None = None) -> type[BaseConfig]:  # type: ignore[misc,no-any-unimported]
         return get_config(config_data or ConfigDict(**default_pydantic_config))  # type: ignore[typeddict-item,no-any-unimported,no-any-return]
 
-    def model_schema(model: Type[BaseModel]) -> Dict[str, Any]:
+    def model_schema(model: type[BaseModel]) -> dict[str, Any]:
         return model.schema()
 
-    def get_aliases(model: Type[BaseModel]) -> Tuple[str, ...]:
+    def get_aliases(model: type[BaseModel]) -> tuple[str, ...]:
         return tuple(f.alias or name for name, f in model.__fields__.items())  # type: ignore[attr-defined]
 
     class CreateBaseModel(BaseModel):  # type: ignore[no-redef]
@@ -69,12 +68,8 @@ else:
             arbitrary_types_allowed = True
 
 
-ANYIO_V3 = get_version("anyio").startswith("3.")
+if sys.version_info < (3, 11):
+    from exceptiongroup import ExceptionGroup as ExceptionGroup
 
-if ANYIO_V3:
-    from anyio import ExceptionGroup as ExceptionGroup  # type: ignore[attr-defined]
 else:
-    if sys.version_info < (3, 11):
-        from exceptiongroup import ExceptionGroup as ExceptionGroup
-    else:
-        ExceptionGroup = ExceptionGroup
+    ExceptionGroup = ExceptionGroup

@@ -10,11 +10,12 @@ import re
 import subprocess
 import sys
 import warnings
+from collections.abc import Callable
 from hashlib import md5
 from pathlib import Path
 from string import Template
 from types import SimpleNamespace
-from typing import Any, Callable, ClassVar, Optional, Union
+from typing import Any, ClassVar
 
 from typing_extensions import ParamSpec
 
@@ -73,11 +74,11 @@ $functions"""
     def __init__(
         self,
         timeout: int = 60,
-        virtual_env_context: Optional[SimpleNamespace] = None,
-        work_dir: Union[Path, str] = Path(),
-        functions: list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]] = [],
+        virtual_env_context: SimpleNamespace | None = None,
+        work_dir: Path | str = Path(),
+        functions: list[FunctionWithRequirements[Any, A] | Callable[..., Any] | FunctionWithRequirementsStr] = [],
         functions_module: str = "functions",
-        execution_policies: Optional[dict[str, bool]] = None,
+        execution_policies: dict[str, bool] | None = None,
     ):
         """(Experimental) A code executor class that executes or saves LLM generated code a local command line
         environment.
@@ -128,7 +129,7 @@ $functions"""
 
         self._timeout = timeout
         self._work_dir: Path = work_dir
-        self._virtual_env_context: Optional[SimpleNamespace] = virtual_env_context
+        self._virtual_env_context: SimpleNamespace | None = virtual_env_context
 
         self._functions = functions
         # Setup could take some time so we intentionally wait for the first code block to do it.
@@ -168,7 +169,7 @@ $functions"""
     @property
     def functions(
         self,
-    ) -> list[Union[FunctionWithRequirements[Any, A], Callable[..., Any], FunctionWithRequirementsStr]]:
+    ) -> list[FunctionWithRequirements[Any, A] | Callable[..., Any] | FunctionWithRequirementsStr]:
         """(Experimental) The functions that are available to the code executor."""
         return self._functions
 
@@ -338,68 +339,3 @@ $functions"""
     def restart(self) -> None:
         """(Experimental) Restart the code executor."""
         warnings.warn("Restarting local command line code executor is not supported. No action is taken.")
-
-
-# From stack overflow: https://stackoverflow.com/a/52087847/2214524
-class _DeprecatedClassMeta(type):
-    def __new__(cls, name, bases, classdict, *args, **kwargs):  # type: ignore[no-untyped-def]
-        alias = classdict.get("_DeprecatedClassMeta__alias")
-
-        if alias is not None:
-
-            def new(cls, *args, **kwargs):  # type: ignore[no-untyped-def]
-                alias = cls._DeprecatedClassMeta__alias
-
-                if alias is not None:
-                    warnings.warn(
-                        f"{cls.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
-                        DeprecationWarning,
-                        stacklevel=2,
-                    )
-
-                return alias(*args, **kwargs)
-
-            classdict["__new__"] = new
-            classdict["_DeprecatedClassMeta__alias"] = alias
-
-        fixed_bases = []
-
-        for b in bases:
-            alias = getattr(b, "_DeprecatedClassMeta__alias", None)
-
-            if alias is not None:
-                warnings.warn(
-                    f"{b.__name__} has been renamed to {alias.__name__}, the alias will be removed in the future",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-
-            # Avoid duplicate base classes.
-            b = alias or b
-            if b not in fixed_bases:
-                fixed_bases.append(b)
-
-        fixed_bases = tuple(fixed_bases)  # type: ignore[assignment]
-
-        return super().__new__(cls, name, fixed_bases, classdict, *args, **kwargs)  # type: ignore[call-overload]
-
-    def __instancecheck__(cls, instance):  # type: ignore[no-untyped-def]
-        return any(cls.__subclasscheck__(c) for c in {type(instance), instance.__class__})  # type: ignore[no-untyped-call]
-
-    def __subclasscheck__(cls, subclass):  # type: ignore[no-untyped-def]
-        if subclass is cls:
-            return True
-        else:
-            return issubclass(subclass, cls._DeprecatedClassMeta__alias)  # type: ignore[attr-defined]
-
-
-class LocalCommandlineCodeExecutor(metaclass=_DeprecatedClassMeta):
-    """LocalCommandlineCodeExecutor renamed to LocalCommandLineCodeExecutor"""
-
-    _DeprecatedClassMeta__alias = LocalCommandLineCodeExecutor
-
-
-class CommandlineCodeResult(metaclass=_DeprecatedClassMeta):
-    """CommandlineCodeResult renamed to CommandLineCodeResult"""
-
-    _DeprecatedClassMeta__alias = CommandLineCodeResult

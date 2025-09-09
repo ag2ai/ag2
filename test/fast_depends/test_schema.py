@@ -5,7 +5,6 @@
 # Portions derived from  https://github.com/https://github.com/Lancetnik/FastDepends are under the MIT License.
 # SPDX-License-Identifier: MIT
 
-from typing import Optional
 
 from dirty_equals import IsDict, IsPartialDict
 from pydantic import BaseModel, Field
@@ -86,7 +85,7 @@ class TestOneArg:
         assert schema == {"title": "A", "type": "integer"}, schema
 
     def test_one_arg_with_optional(self) -> None:
-        def handler(a: Optional[int]) -> None:
+        def handler(a: int | None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler))
@@ -169,7 +168,7 @@ class TestOneArgWithModel:
         class Model(BaseModel):
             a: int
 
-        def handler(a: Optional[Model] = None) -> None:
+        def handler(a: Model | None = None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler), resolve_refs=True)
@@ -202,7 +201,7 @@ class TestOneArgWithModel:
         class Model(BaseModel):
             a: int
 
-        def handler(a: Optional[Model]) -> None:
+        def handler(a: Model | None) -> None:
             pass
 
         schema = get_schema(build_call_model(handler), resolve_refs=True, embed=True)

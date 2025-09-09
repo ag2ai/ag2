@@ -5,7 +5,7 @@
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import Annotated, Any, Optional, Union, cast
+from typing import Annotated, Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -123,7 +123,7 @@ class DocumentTask(BaseModel):
 class DocumentTriageAgent(ConversableAgent):
     """The DocumentTriageAgent is responsible for deciding what type of task to perform from user requests."""
 
-    def __init__(self, llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None):
+    def __init__(self, llm_config: LLMConfig | dict[str, Any] | None = None):
         # Add the structured message to the LLM configuration
         structured_config_list = deepcopy(llm_config)
         structured_config_list["response_format"] = DocumentTask  # type: ignore[index]
@@ -145,20 +145,19 @@ class DocumentTriageAgent(ConversableAgent):
 
 @export_module("autogen.agents.experimental")
 class DocAgent(ConversableAgent):
-    """
-    The DocAgent is responsible for ingest and querying documents.
+    """The DocAgent is responsible for ingest and querying documents.
 
     Internally, it generates a group chat with a set of agents to ingest, query, and summarize.
     """
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        system_message: Optional[str] = None,
-        parsed_docs_path: Optional[Union[str, Path]] = None,
-        collection_name: Optional[str] = None,
-        query_engine: Optional[RAGQueryEngine] = None,
+        name: str | None = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        system_message: str | None = None,
+        parsed_docs_path: str | Path | None = None,
+        collection_name: str | None = None,
+        query_engine: RAGQueryEngine | None = None,
     ):
         """Initialize the DocAgent.
 
@@ -198,15 +197,6 @@ class DocAgent(ConversableAgent):
             human_input_mode="NEVER",
         )
         self.register_reply([ConversableAgent, None], self.generate_inner_group_chat_reply, position=0)
-
-        self.context_variables: ContextVariables = ContextVariables(
-            data={
-                "DocumentsToIngest": [],
-                "DocumentsIngested": [],
-                "QueriesToRun": [],
-                "QueryResults": [],
-            }
-        )
 
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
 
@@ -397,7 +387,7 @@ class DocAgent(ConversableAgent):
             else:
                 # First time initialization - no deduplication needed
                 context_variables["DocumentsToIngest"] = ingestions
-                context_variables["QueriesToRun"] = [query for query in queries]
+                context_variables["QueriesToRun"] = list(queries)
                 context_variables["TaskInitiated"] = True
                 response_message = "Updated context variables with task decisions"
 
@@ -564,14 +554,14 @@ class DocAgent(ConversableAgent):
         self.register_reply([Agent, None], DocAgent.generate_inner_group_chat_reply)
 
         self.documents_ingested: list[str] = []
-        self._group_chat_context_variables: Optional[ContextVariables] = None
+        self._group_chat_context_variables: ContextVariables | None = None
 
     def generate_inner_group_chat_reply(
         self,
-        messages: Optional[Union[list[dict[str, Any]], str]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | str | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Reply function that generates the inner group chat reply for the DocAgent.
 
         Args:
@@ -628,7 +618,7 @@ class DocAgent(ConversableAgent):
 
         return True, chat_result.summary
 
-    def _get_document_input_message(self, messages: Optional[Union[list[dict[str, Any]], str]]) -> str:  # type: ignore[type-arg]
+    def _get_document_input_message(self, messages: list[dict[str, Any]] | str | None) -> str:  # type: ignore[type-arg]
         """Gets and validates the input message(s) for the document agent.
 
         Args:

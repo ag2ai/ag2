@@ -4,8 +4,9 @@
 
 import logging
 import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from ....doc_utils import export_module
 from ....import_utils import optional_import_block, require_optional_import
@@ -37,8 +38,7 @@ logger = logging.getLogger(__name__)
 @require_optional_import(["chromadb", "llama_index"], "rag")
 @export_module("autogen.agentchat.contrib.rag")
 class ChromaDBQueryEngine:
-    """
-    This engine leverages Chromadb to persist document embeddings in a named collection
+    """This engine leverages Chromadb to persist document embeddings in a named collection
     and LlamaIndex's VectorStoreIndex to efficiently index and retrieve documents, and generate an answer in response
     to natural language queries. Collection can be regarded as an abstraction of group of documents in the database.
 
@@ -51,18 +51,18 @@ class ChromaDBQueryEngine:
 
     def __init__(  # type: ignore[no-any-unimported]
         self,
-        host: Optional[str] = "localhost",
-        port: Optional[int] = 8000,
+        host: str | None = "localhost",
+        port: int | None = 8000,
         settings: Optional["Settings"] = None,
-        tenant: Optional[str] = None,
-        database: Optional[str] = None,
-        embedding_function: "Optional[EmbeddingFunction[Any]]" = None,
-        metadata: Optional[dict[str, Any]] = None,
+        tenant: str | None = None,
+        database: str | None = None,
+        embedding_function: "EmbeddingFunction[Any] | None" = None,
+        metadata: dict[str, Any] | None = None,
         llm: Optional["LLM"] = None,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
     ) -> None:
-        """
-        Initializes the ChromaDBQueryEngine with db_path, metadata, and embedding function and llm.
+        """Initializes the ChromaDBQueryEngine with db_path, metadata, and embedding function and llm.
+
         Args:
             host: The host address of the ChromaDB server. Default is localhost.
             port: The port number of the ChromaDB server. Default is 8000.
@@ -101,8 +101,8 @@ class ChromaDBQueryEngine:
 
     def init_db(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> bool:
@@ -125,7 +125,6 @@ class ChromaDBQueryEngine:
             bool: True if initialization is successful
 
         """
-
         self._set_up(overwrite=True)
         documents = self._load_doc(input_dir=new_doc_dir, input_docs=new_doc_paths_or_urls)
         self.index = VectorStoreIndex.from_documents(documents=documents, storage_context=self.storage_context)
@@ -155,8 +154,8 @@ class ChromaDBQueryEngine:
 
     def add_docs(
         self,
-        new_doc_dir: Optional[Union[Path, str]] = None,
-        new_doc_paths_or_urls: Optional[Sequence[Union[Path, str]]] = None,
+        new_doc_dir: Path | str | None = None,
+        new_doc_paths_or_urls: Sequence[Path | str] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -174,8 +173,7 @@ class ChromaDBQueryEngine:
             self.index.insert(doc)
 
     def query(self, question: str) -> str:
-        """
-        Retrieve information from indexed documents by processing a query using the engine's LLM.
+        """Retrieve information from indexed documents by processing a query using the engine's LLM.
 
         Args:
             question: A natural language query string used to search the indexed documents.
@@ -193,8 +191,7 @@ class ChromaDBQueryEngine:
         return str(response)
 
     def get_collection_name(self) -> str:
-        """
-        Get the name of the collection used by the query engine.
+        """Get the name of the collection used by the query engine.
 
         Returns:
             The name of the collection.
@@ -210,10 +207,10 @@ class ChromaDBQueryEngine:
             raise Exception("Query index is not initialized. Please call init_db or connect_db first.")
 
     def _set_up(self, overwrite: bool) -> None:
-        """
-        Set up ChromaDB and LlamaIndex storage by:
+        """Set up ChromaDB and LlamaIndex storage by:
         1. Initialize the ChromaDB using VectorDBFactory and create a collection with the given name.
         2. Create the LlamaIndex vector store and storage context for the collection.
+
         Args:
             overwrite: If True, overwrite the existing collection with the same name.
         """
@@ -223,10 +220,9 @@ class ChromaDBQueryEngine:
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 
     def _load_doc(  # type: ignore[no-any-unimported]
-        self, input_dir: Optional[Union[Path, str]], input_docs: Optional[Sequence[Union[Path, str]]]
+        self, input_dir: Path | str | None, input_docs: Sequence[Path | str] | None
     ) -> Sequence["LlamaDocument"]:
-        """
-        Load documents from a directory and/or a sequence of file paths.
+        """Load documents from a directory and/or a sequence of file paths.
 
         It uses LlamaIndex's SimpleDirectoryReader that supports multiple file[formats]((https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader/#supported-file-types)).
 

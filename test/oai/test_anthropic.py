@@ -16,8 +16,9 @@ with optional_import_block() as result:
     from anthropic.types import Message, TextBlock
 
 
+from typing import Literal
+
 from pydantic import BaseModel
-from typing_extensions import Literal
 
 
 @pytest.fixture
@@ -55,7 +56,6 @@ def test_anthropic_llm_config_entry():
         api_key="dummy_api_key",
         stream=False,
         temperature=1.0,
-        top_p=0.8,
         max_tokens=100,
     )
     expected = {
@@ -64,17 +64,13 @@ def test_anthropic_llm_config_entry():
         "api_key": "dummy_api_key",
         "stream": False,
         "temperature": 1.0,
-        "top_p": 0.8,
         "max_tokens": 100,
         "tags": [],
     }
     actual = anthropic_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[anthropic_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(anthropic_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

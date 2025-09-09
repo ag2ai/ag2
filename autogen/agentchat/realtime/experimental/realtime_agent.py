@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from logging import Logger, getLogger
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
-from anyio import lowlevel
-from asyncer import create_task_group
+from anyio import create_task_group, lowlevel
 
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -35,11 +35,11 @@ class RealtimeAgent:
         self,
         *,
         name: str,
-        audio_adapter: Optional[RealtimeObserver] = None,
+        audio_adapter: RealtimeObserver | None = None,
         system_message: str = "You are a helpful AI Assistant.",
-        llm_config: Optional[Union[LLMConfig, dict[str, Any]]] = None,
-        logger: Optional[Logger] = None,
-        observers: Optional[list[RealtimeObserver]] = None,
+        llm_config: LLMConfig | dict[str, Any] | None = None,
+        logger: Logger | None = None,
+        observers: list[RealtimeObserver] | None = None,
         **client_kwargs: Any,
     ):
         """(Experimental) Agent for interacting with the Realtime Clients.
@@ -101,7 +101,7 @@ class RealtimeAgent:
 
     async def start_observers(self) -> None:
         for observer in self._observers:
-            self._tg.soonify(observer.run)(self)
+            self._tg.start_soon(observer.run, self)
 
         # wait for the observers to be ready
         for observer in self._observers:
@@ -127,9 +127,9 @@ class RealtimeAgent:
     def register_realtime_function(
         self,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-    ) -> Callable[[Union[F, Tool]], Tool]:
+        name: str | None = None,
+        description: str | None = None,
+    ) -> Callable[[F | Tool], Tool]:
         """Decorator for registering a function to be used by an agent.
 
         Args:
@@ -140,7 +140,7 @@ class RealtimeAgent:
             Callable[[Union[F, Tool]], Tool]: The decorator for registering a function.
         """
 
-        def _decorator(func_or_tool: Union[F, Tool]) -> Tool:
+        def _decorator(func_or_tool: F | Tool) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:

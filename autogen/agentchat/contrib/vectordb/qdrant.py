@@ -7,7 +7,7 @@
 import abc
 import logging
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Any
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -20,7 +20,7 @@ with optional_import_block():
 
 logger = get_logger(__name__)
 
-Embeddings = Union[Sequence[float], Sequence[int]]
+Embeddings = Sequence[float] | Sequence[int]
 
 
 class EmbeddingFunction(abc.ABC):
@@ -37,9 +37,9 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction):
         self,
         model_name: str = "BAAI/bge-small-en-v1.5",
         batch_size: int = 256,
-        cache_dir: Optional[str] = None,
-        threads: Optional[int] = None,
-        parallel: Optional[int] = None,
+        cache_dir: str | None = None,
+        threads: int | None = None,
+        parallel: int | None = None,
         **kwargs: Any,
     ):
         """Initialize fastembed.TextEmbedding.

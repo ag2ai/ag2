@@ -57,20 +57,21 @@ nest_asyncio.apply()
 This code initializes [`DeepResearchAgent`](/docs/api-reference/autogen/agents/experimental/DeepResearchAgent) and asks it to find out `What was the impact of DeepSeek on stock prices and why?` using `GPT-4o`.
 
 <Tip>
-We recommend using `gpt-4o`
+We recommend using `gpt-5`
 
-Models like `gpt-4o-mini` often don’t perform well enough for complex tasks.
+Models like `gpt-5-nano` often don’t perform well enough for complex tasks.
 </Tip>
 
 ```python
 from autogen import LLMConfig
 
-llm_config = LLMConfig(
-    config_list=[{"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]}],
-)
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5",
+    "api_key": os.environ["OPENAI_API_KEY"]
+})
 
-with llm_config:
-    agent = DeepResearchAgent(name="DeepResearchAgent")
+agent = DeepResearchAgent(name="DeepResearchAgent", llm_config=llm_config)
 
 message = "What was the impact of DeepSeek on stock prices and why?"
 

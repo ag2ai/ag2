@@ -8,7 +8,7 @@ import json
 import re
 import sys
 import tempfile
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import wraps
 from logging import getLogger
@@ -17,10 +17,7 @@ from types import ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
-    Optional,
-    Union,
 )
 
 import requests
@@ -49,7 +46,7 @@ logger = getLogger(__name__)
 
 
 @contextmanager
-def optional_temp_path(path: Optional[str] = None) -> Iterator[Path]:
+def optional_temp_path(path: str | None = None) -> Iterator[Path]:
     if path is None:
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
@@ -74,7 +71,7 @@ def add_to_builtins(new_globals: dict[str, Any]) -> Iterator[None]:
 
 
 class MCPProxy:
-    def __init__(self, servers: list[dict[str, Any]], title: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, servers: list[dict[str, Any]], title: str | None = None, **kwargs: Any) -> None:
         """Proxy class to generate client from OpenAPI schema."""
         self._servers = servers
         self._title = title or "MCP Proxy"
@@ -83,7 +80,7 @@ class MCPProxy:
         self._globals: dict[str, Any] = {}
 
         self._security: dict[str, list[BaseSecurity]] = {}
-        self._security_params: dict[Optional[str], BaseSecurityParameters] = {}
+        self._security_params: dict[str | None, BaseSecurityParameters] = {}
         self._tags: set[str] = set()
 
         self._function_group: dict[str, list[str]] = {}
@@ -100,7 +97,7 @@ class MCPProxy:
         return result
 
     @staticmethod
-    def _get_params(path: str, func: Callable[..., Any]) -> tuple[set[str], set[str], Optional[str], bool]:
+    def _get_params(path: str, func: Callable[..., Any]) -> tuple[set[str], set[str], str | None, bool]:
         sig = inspect.signature(func)
 
         params_names = set(sig.parameters.keys())
@@ -118,11 +115,11 @@ class MCPProxy:
         return q_params, path_params, body, security
 
     def get_mcp(self, **settings: Any) -> "FastMCP":
-        mcp = FastMCP(title=self._title, **settings)
+        mcp = FastMCP(name=self._title, **settings)  # newer mcp
 
         for func in self._registered_funcs:
             try:
-                mcp.tool()(func)  # type: ignore [no-untyped-call]
+                mcp.tool()(func)
             except PydanticInvalidForJsonSchema as e:
                 logger.warning("Could not register function %s: %s", func.__name__, e)
 
@@ -157,7 +154,7 @@ class MCPProxy:
 
         return url, params, body_dict
 
-    def set_security_params(self, security_params: BaseSecurityParameters, name: Optional[str] = None) -> None:
+    def set_security_params(self, security_params: BaseSecurityParameters, name: str | None = None) -> None:
         if name is not None:
             security = self._security.get(name)
             if security is None:
@@ -180,7 +177,7 @@ class MCPProxy:
                 return match_security
         raise ValueError(f"Security parameters {security_params} does not match any given security {security}")
 
-    def _get_security_params(self, name: str) -> tuple[Optional[BaseSecurityParameters], Optional[BaseSecurity]]:
+    def _get_security_params(self, name: str) -> tuple[BaseSecurityParameters | None, BaseSecurity | None]:
         # check if security is set for the method
         security = self._security.get(name)
         if not security:
@@ -203,8 +200,8 @@ class MCPProxy:
         self,
         method: Literal["put", "get", "post", "head", "delete", "patch"],
         path: str,
-        description: Optional[str] = None,
-        security: Optional[list[BaseSecurity]] = None,
+        description: str | None = None,
+        security: list[BaseSecurity] | None = None,
         **kwargs: Any,
     ) -> Callable[..., dict[str, Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., dict[str, Any]]:
@@ -275,7 +272,7 @@ class MCPProxy:
         input_text: str,
         output_dir: Path,
         disable_timestamp: bool = False,
-        custom_visitors: Optional[list[Path]] = None,
+        custom_visitors: list[Path] | None = None,
     ) -> str:
         if custom_visitors is None:
             custom_visitors = []
@@ -318,10 +315,10 @@ class MCPProxy:
     def create(
         cls,
         *,
-        openapi_specification: Optional[str] = None,
-        openapi_url: Optional[str] = None,
-        client_source_path: Optional[str] = None,
-        servers: Optional[list[dict[str, Any]]] = None,
+        openapi_specification: str | None = None,
+        openapi_url: str | None = None,
+        client_source_path: str | None = None,
+        servers: list[dict[str, Any]] | None = None,
         rename_functions: bool = False,
         group_functions: bool = False,
         configuration_type: Literal["json", "yaml"] = "json",
@@ -392,7 +389,7 @@ class MCPProxy:
 
     def dump_configurations(self, output_dir: Path) -> None:
         for tag in self._function_group:
-            output_file = output_dir / "mcp_config_{}.json".format(tag)
+            output_file = output_dir / f"mcp_config_{tag}.json"
 
             functions = [
                 registered_function
@@ -458,8 +455,8 @@ class MCPProxy:
 
     def _get_functions_to_register(
         self,
-        functions: Optional[Iterable[Union[str, Mapping[str, Mapping[str, str]]]]] = None,
-    ) -> dict[Callable[..., Any], dict[str, Union[str, None]]]:
+        functions: Iterable[str | Mapping[str, Mapping[str, str]]] | None = None,
+    ) -> dict[Callable[..., Any], dict[str, str | None]]:
         if functions is None:
             return {
                 f: {
@@ -469,7 +466,7 @@ class MCPProxy:
                 for f in self._registered_funcs
             }
 
-        functions_with_name_desc: dict[str, dict[str, Union[str, None]]] = {}
+        functions_with_name_desc: dict[str, dict[str, str | None]] = {}
 
         for f in functions:
             if isinstance(f, str):
@@ -485,7 +482,7 @@ class MCPProxy:
             else:
                 raise ValueError(f"Invalid type {type(f)} for function {f}")
 
-        funcs_to_register: dict[Callable[..., Any], dict[str, Union[str, None]]] = {
+        funcs_to_register: dict[Callable[..., Any], dict[str, str | None]] = {
             f: functions_with_name_desc[f.__name__]
             for f in self._registered_funcs
             if f.__name__ in functions_with_name_desc
@@ -528,7 +525,7 @@ class MCPProxy:
     def _register_for_llm(
         self,
         agent: "ConversableAgent",
-        functions: Optional[Iterable[Union[str, Mapping[str, Mapping[str, str]]]]] = None,
+        functions: Iterable[str | Mapping[str, Mapping[str, str]]] | None = None,
     ) -> None:
         funcs_to_register = self._get_functions_to_register(functions)
 
@@ -543,7 +540,7 @@ class MCPProxy:
     def _register_for_execution(
         self,
         agent: "ConversableAgent",
-        functions: Optional[Iterable[Union[str, Mapping[str, Mapping[str, str]]]]] = None,
+        functions: Iterable[str | Mapping[str, Mapping[str, str]]] | None = None,
     ) -> None:
         funcs_to_register = self._get_functions_to_register(functions)
 

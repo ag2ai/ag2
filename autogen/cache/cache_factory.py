@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import logging
 import os
-from typing import Any, Optional, Union
+from typing import Any
 
 from ..import_utils import optional_import_block
 from .abstract_cache_base import AbstractCache
@@ -16,10 +16,10 @@ from .disk_cache import DiskCache
 class CacheFactory:
     @staticmethod
     def cache_factory(
-        seed: Union[str, int],
-        redis_url: Optional[str] = None,
+        seed: str | int,
+        redis_url: str | None = None,
         cache_path_root: str = ".cache",
-        cosmosdb_config: Optional[dict[str, Any]] = None,
+        cosmosdb_config: dict[str, Any] | None = None,
     ) -> AbstractCache:
         """Factory function for creating cache instances.
 

@@ -6,12 +6,17 @@ import inspect
 import re
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from functools import wraps
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Callable, Generator, Generic, Iterable, Optional, TypeVar, Union
+from typing import Any, Generic, Optional, TypeVar
+
+from packaging import version
+
+from .fast_depends.utils import is_coroutine_callable
 
 __all__ = [
     "optional_import_block",
@@ -27,12 +32,12 @@ logger = getLogger(__name__)
 @dataclass
 class ModuleInfo:
     name: str
-    min_version: Optional[str] = None
-    max_version: Optional[str] = None
+    min_version: str | None = None
+    max_version: str | None = None
     min_inclusive: bool = False
     max_inclusive: bool = False
 
-    def is_in_sys_modules(self) -> Optional[str]:
+    def is_in_sys_modules(self) -> str | None:
         """Check if the module is installed and satisfies the version constraints
 
         Returns:
@@ -52,25 +57,34 @@ class ModuleInfo:
                     # Aka similarly named module in the autogen or test directory
                     return f"'{self.name}' is not installed."
 
-        installed_version = (
+        # Ensure that the retrieved version is a string. Some packages might unexpectedly
+        # have a __version__ attribute that is not a string (e.g., a module).
+        raw_version_attr = (
             sys.modules[self.name].__version__ if hasattr(sys.modules[self.name], "__version__") else None
         )
+        installed_version = raw_version_attr if isinstance(raw_version_attr, str) else None
         if installed_version is None and (self.min_version or self.max_version):
             return f"'{self.name}' is installed, but the version is not available."
 
-        if self.min_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
-            if not self.min_inclusive and installed_version == self.min_version:
-                return msg
-            if self.min_inclusive and installed_version < self.min_version:  # type: ignore[operator]
-                return msg
+        if installed_version:
+            # Convert to version object for comparison
+            installed_ver = version.parse(installed_version)
 
-        if self.max_version:
-            msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
-            if not self.max_inclusive and installed_version == self.max_version:
-                return msg
-            if self.max_inclusive and installed_version > self.max_version:  # type: ignore[operator]
-                return msg
+            if self.min_version:
+                min_ver = version.parse(self.min_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too low (required '{self}')."
+                if not self.min_inclusive and installed_ver == min_ver:
+                    return msg
+                if self.min_inclusive and installed_ver < min_ver:
+                    return msg
+
+            if self.max_version:
+                max_ver = version.parse(self.max_version)
+                msg = f"'{self.name}' is installed, but the installed version {installed_version} is too high (required '{self}')."
+                if not self.max_inclusive and installed_ver == max_ver:
+                    return msg
+                if self.max_inclusive and installed_ver > max_ver:
+                    return msg
 
         return None
 
@@ -95,7 +109,6 @@ class ModuleInfo:
         Raises:
             ValueError: If the module information is invalid
         """
-
         pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
         match = pattern.match(module_info.strip())
 
@@ -140,7 +153,7 @@ class ModuleInfo:
 
 class Result:
     def __init__(self) -> None:
-        self._failed: Optional[bool] = None
+        self._failed: bool | None = None
 
     @property
     def is_successful(self) -> bool:
@@ -173,7 +186,7 @@ def optional_import_block() -> Generator[Result, None, None]:
         result._failed = True
 
 
-def get_missing_imports(modules: Union[str, Iterable[str]]) -> dict[str, str]:
+def get_missing_imports(modules: str | Iterable[str]) -> dict[str, str]:
     """Get missing modules from a list of module names
 
     Args:
@@ -191,7 +204,7 @@ def get_missing_imports(modules: Union[str, Iterable[str]]) -> dict[str, str]:
 
 
 T = TypeVar("T")
-G = TypeVar("G", bound=Union[Callable[..., Any], type])
+G = TypeVar("G", bound=Callable[..., Any] | type)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -401,7 +414,7 @@ def patch_object(
     missing_modules: dict[str, str],
     dep_target: str,
     fail_if_not_patchable: bool = True,
-    except_for: Optional[Union[str, Iterable[str]]] = None,
+    except_for: str | Iterable[str] | None = None,
 ) -> T:
     patcher = PatchObject.create(o, missing_modules=missing_modules, dep_target=dep_target)
     if fail_if_not_patchable and patcher is None:
@@ -414,10 +427,10 @@ def patch_object(
 
 
 def require_optional_import(
-    modules: Union[str, Iterable[str]],
+    modules: str | Iterable[str],
     dep_target: str,
     *,
-    except_for: Optional[Union[str, Iterable[str]]] = None,
+    except_for: str | Iterable[str] | None = None,
 ) -> Callable[[T], T]:
     """Decorator to handle optional module dependencies
 
@@ -453,7 +466,7 @@ def _mark_object(o: T, dep_target: str) -> T:
     return pytest_mark_o  # type: ignore[no-any-return]
 
 
-def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[G], G]:
+def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[G], G]:
     """Decorator to run a test if and only if optional modules are installed
 
     Args:
@@ -470,7 +483,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
         if isinstance(o, type):
             wrapped = require_optional_import(modules, dep_target)(o)
         else:
-            if inspect.iscoroutinefunction(o):
+            if is_coroutine_callable(o):
 
                 @wraps(o)
                 async def wrapped(*args: Any, **kwargs: Any) -> Any:
@@ -497,7 +510,7 @@ def run_for_optional_imports(modules: Union[str, Iterable[str]], dep_target: str
     return decorator
 
 
-def skip_on_missing_imports(modules: Union[str, Iterable[str]], dep_target: str) -> Callable[[T], T]:
+def skip_on_missing_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[T], T]:
     """Decorator to skip a test if an optional module is missing
 
     Args:

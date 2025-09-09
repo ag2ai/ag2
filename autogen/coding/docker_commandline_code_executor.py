@@ -8,27 +8,22 @@ from __future__ import annotations
 
 import atexit
 import logging
-import sys
 import uuid
 from hashlib import md5
 from pathlib import Path
 from time import sleep
 from types import TracebackType
-from typing import Any, ClassVar, Optional, Union
+from typing import Any, ClassVar
 
 import docker
 from docker.errors import ImageNotFound
+from typing_extensions import Self
 
 from ..code_utils import TIMEOUT_MSG, _cmd
 from ..doc_utils import export_module
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CommandLineCodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 from .utils import _get_file_name_from_content, silence_pip
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
 
 
 def _wait_for_ready(container: Any, timeout: int = 60, stop_time: float = 0.1) -> None:
@@ -64,15 +59,15 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
     def __init__(
         self,
         image: str = "python:3-slim",
-        container_name: Optional[str] = None,
+        container_name: str | None = None,
         timeout: int = 60,
-        work_dir: Optional[Union[Path, str]] = None,
-        bind_dir: Optional[Union[Path, str]] = None,
+        work_dir: Path | str | None = None,
+        bind_dir: Path | str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
-        execution_policies: Optional[dict[str, bool]] = None,
+        execution_policies: dict[str, bool] | None = None,
         *,
-        container_create_kwargs: Optional[dict[str, Any]] = None,
+        container_create_kwargs: dict[str, Any] | None = None,
     ):
         """(Experimental) A code executor class that executes code through
         a command line environment in a Docker container.
@@ -281,8 +276,8 @@ class DockerCommandLineCodeExecutor(CodeExecutor):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.stop()

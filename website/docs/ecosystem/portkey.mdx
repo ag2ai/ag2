@@ -25,16 +25,16 @@ Portkey adds 4 core production capabilities to any AG2 agent:
    from autogen import AssistantAgent, UserProxyAgent, LLMConfig
    from portkey_ai import PORTKEY_GATEWAY_URL, createHeaders
 
-   llm_config = LLMConfig(
-      api_key="OPENAI_API_KEY",
-      model="gpt-3.5-turbo",
-      base_url=PORTKEY_GATEWAY_URL,
-      api_type="openai",
-      default_headers=createHeaders(
+   llm_config = LLMConfig({
+      "api_key": "OPENAI_API_KEY",
+      "model": "gpt-3.5-turbo",
+      "base_url": PORTKEY_GATEWAY_URL,
+      "api_type": "openai",
+      "default_headers": createHeaders(
           api_key="YOUR_PORTKEY_API_KEY",
           provider="openai",
       )
-   )
+   })
    ```
 
    Generate your API key in the [Portkey Dashboard](https://app.portkey.ai/).
@@ -56,11 +56,11 @@ user_proxy = autogen.UserProxyAgent(
     human_input_mode="ALWAYS",
 )
 
-with llm_config:
-  coder = autogen.AssistantAgent(
-      name="Coder",
-      system_message = "You are a Python developer who is good at developing games. You work with Product Manager.",
-  )
+coder = autogen.AssistantAgent(
+    name="Coder",
+    system_message = "You are a Python developer who is good at developing games. You work with Product Manager.",
+    llm_config=llm_config
+)
 
 # Create groupchat
 groupchat = autogen.GroupChat(

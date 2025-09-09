@@ -4,7 +4,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Annotated, Any, Union
+from typing import Annotated, Any
 
 from .....doc_utils import export_module
 from .....import_utils import optional_import_block, require_optional_import
@@ -26,8 +26,7 @@ class DiscordSendTool(Tool):
     """Sends a message to a Discord channel."""
 
     def __init__(self, *, bot_token: str, channel_name: str, guild_name: str) -> None:
-        """
-        Initialize the DiscordSendTool.
+        """Initialize the DiscordSendTool.
 
         Args:
             bot_token: The bot token to use for sending messages.
@@ -42,8 +41,7 @@ class DiscordSendTool(Tool):
             guild_name: Annotated[str, Depends(on(guild_name))],
             channel_name: Annotated[str, Depends(on(channel_name))],
         ) -> Any:
-            """
-            Sends a message to a Discord channel.
+            """Sends a message to a Discord channel.
 
             Args:
                 message: The message to send to the channel.
@@ -123,8 +121,7 @@ class DiscordRetrieveTool(Tool):
     """Retrieves messages from a Discord channel."""
 
     def __init__(self, *, bot_token: str, channel_name: str, guild_name: str) -> None:
-        """
-        Initialize the DiscordRetrieveTool.
+        """Initialize the DiscordRetrieveTool.
 
         Args:
             bot_token: The bot token to use for retrieving messages.
@@ -137,15 +134,14 @@ class DiscordRetrieveTool(Tool):
             guild_name: Annotated[str, Depends(on(guild_name))],
             channel_name: Annotated[str, Depends(on(channel_name))],
             messages_since: Annotated[
-                Union[str, None],
+                str | None,
                 "Date to retrieve messages from (ISO format) OR Discord snowflake ID. If None, retrieves latest messages.",
             ] = None,
             maximum_messages: Annotated[
-                Union[int, None], "Maximum number of messages to retrieve. If None, retrieves all messages since date."
+                int | None, "Maximum number of messages to retrieve. If None, retrieves all messages since date."
             ] = None,
         ) -> Any:
-            """
-            Retrieves messages from a Discord channel.
+            """Retrieves messages from a Discord channel.
 
             Args:
                 bot_token: The bot token to use for Discord. (uses dependency injection)
@@ -162,7 +158,7 @@ class DiscordRetrieveTool(Tool):
             client = Client(intents=intents)
             result_future: asyncio.Future[list[dict[str, Any]]] = asyncio.Future()
 
-            messages_since_date: Union[str, None] = None
+            messages_since_date: str | None = None
             if messages_since is not None:
                 if DiscordRetrieveTool._is_snowflake(messages_since):
                     messages_since_date = DiscordRetrieveTool._snowflake_to_iso(messages_since)

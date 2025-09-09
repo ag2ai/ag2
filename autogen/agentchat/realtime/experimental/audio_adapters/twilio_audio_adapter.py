@@ -5,7 +5,7 @@
 import base64
 import json
 from logging import Logger
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from .....doc_utils import export_module
 from ..realtime_events import AudioDelta, RealtimeEvent, SpeechStarted
@@ -32,7 +32,7 @@ SHOW_TIMING_MATH = False
 class TwilioAudioAdapter(RealtimeObserver):
     """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa."""
 
-    def __init__(self, websocket: "WebSocket", *, logger: Optional[Logger] = None):
+    def __init__(self, websocket: "WebSocket", *, logger: Logger | None = None):
         """Adapter for streaming audio from Twilio to OpenAI Realtime API and vice versa.
 
         Args:
@@ -45,9 +45,9 @@ class TwilioAudioAdapter(RealtimeObserver):
         # Connection specific state
         self.stream_sid = None
         self.latest_media_timestamp = 0
-        self.last_assistant_item: Optional[str] = None
+        self.last_assistant_item: str | None = None
         self.mark_queue: list[str] = []
-        self.response_start_timestamp_twilio: Optional[int] = None
+        self.response_start_timestamp_twilio: int | None = None
 
     async def on_event(self, event: RealtimeEvent) -> None:
         """Receive events from the OpenAI Realtime API, send audio back to Twilio."""

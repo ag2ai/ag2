@@ -13,7 +13,7 @@ import logging
 import re
 import tempfile
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -1013,7 +1013,7 @@ def test_nested_teams_chat():
     team1_msg = {"content": "Hello from team 1"}
     team2_msg = {"content": "Hello from team 2"}
 
-    def agent(name: str, auto_reply: Optional[dict[str, Any]] = None) -> autogen.ConversableAgent:
+    def agent(name: str, auto_reply: dict[str, Any] | None = None) -> autogen.ConversableAgent:
         return autogen.ConversableAgent(
             name=name,
             max_consecutive_auto_reply=10,
@@ -1022,7 +1022,7 @@ def test_nested_teams_chat():
             default_auto_reply=auto_reply,
         )
 
-    def team(name: str, auto_reply: Optional[dict[str, Any]] = None) -> autogen.ConversableAgent:
+    def team(name: str, auto_reply: dict[str, Any] | None = None) -> autogen.ConversableAgent:
         member1 = agent(f"member1_{name}", auto_reply=auto_reply)
         member2 = agent(f"member2_{name}", auto_reply=auto_reply)
 
@@ -1142,7 +1142,7 @@ def test_custom_speaker_selection_with_transition_graph():
             allowed_or_disallowed_speaker_transitions[previous_agent].append(current_agent)
         previous_agent = current_agent
 
-    def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat) -> Optional[Agent]:
+    def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat) -> Agent | None:
         """Define a customized speaker selection function."""
         expected_sequence = ["a", "u", "t", "o", "g", "e", "n"]
 
@@ -1208,7 +1208,7 @@ def test_custom_speaker_selection_overrides_transition_graph():
     # teamB_engineer can transition to no one
     allowed_or_disallowed_speaker_transitions[agents[0]] = [agents[1], agents[2]]
 
-    def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat) -> Optional[Agent]:
+    def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat) -> Agent | None:
         if last_speaker.name == "teamA_engineer":
             return agents[2]  # Goto teamB_engineer
         elif last_speaker.name == "teamB_engineer":
@@ -1565,7 +1565,6 @@ def test_speaker_selection_auto_process_result():
     groupchat = autogen.GroupChat(agents=agent_list, messages=[], max_round=3)
 
     chat_result = autogen.ChatResult(
-        chat_id=None,
         chat_history=[
             {
                 "content": "Let's get this meeting started. First the Product_Manager will create 3 new product ideas.",
@@ -2159,7 +2158,13 @@ def test_custom_model_client():
 
     # Check that the LLM Config is assigned
     expected_config_list = [
-        {"model": "test_model_name", "model_client_cls": "CustomModelClient", "api_type": "openai", "tags": []}
+        {
+            "model": "test_model_name",
+            "model_client_cls": "CustomModelClient",
+            "api_type": "openai",
+            "tags": [],
+            "stream": False,
+        }
     ]
     assert speaker_selection_agent.client._config_list == expected_config_list
 

@@ -5,7 +5,7 @@ name: Core tests with LLMs
 
 on:
   schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+    - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
   # pull_request_target:
   #   branches: ["main"]
@@ -29,7 +29,7 @@ jobs:
     strategy:
       matrix:
         llm: ["openai", "openai-realtime", "gemini", "gemini-realtime", "anthropic", "deepseek", "ollama", "bedrock", "cerebras"]
-        python-version: ["3.9"]
+        python-version: ["3.10"]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -58,10 +58,10 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}

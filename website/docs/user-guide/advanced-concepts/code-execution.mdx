@@ -12,6 +12,7 @@ For each type of executor, AG2 provides two ways to execute code: locally and in
 | ---------------------------- | ----------- | -------- |
 | [`LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)  | Shell       | Local  |
 | [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
+| [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor) | Serverless | YepCode Cloud |
 | [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
 ## Local Execution
@@ -193,9 +194,7 @@ Reply 'TERMINATE' in the end when everything is done.
 code_writer_agent = ConversableAgent(
     "code_writer_agent",
     system_message=code_writer_system_message,
-    llm_config=LLMConfig(
-        api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"]
-    ),
+    llm_config=LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]}),
     code_execution_config=False,  # Turn off code execution for this agent.
 )
 
@@ -351,7 +350,7 @@ print("The 'stock_gains.png' file has been successfully saved")
 '''
 This script will download the historical data for TSLA and META from the start of the year to the specified date and calculates the YTD gains. It then generates the plot showing these gains and saves it to 'stock_gains.png'.
 
-Please save the script to a file named 'stock_gains.py' and run it using Python. Remember to have the correct start and end dates for the YTD value when running the script. If your Python version is below 3.9, you should update it to execute this code perfectly.
+Please save the script to a file named 'stock_gains.py' and run it using Python. Remember to have the correct start and end dates for the YTD value when running the script. If your Python version is below 3.10, you should update it to execute this code perfectly.
 
 --------------------------------------------------------------------------------
 
@@ -404,6 +403,140 @@ temp_dir.cleanup()
 executor.stop()
 ```
 
+## Serverless Execution with YepCode
+
+For production-grade serverless code execution, AG2 supports [YepCode's](https://yepcode.io) serverless runtime through the [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor). This executor runs code in secure, isolated sandboxes with automatic dependency management.
+
+### Key Benefits of YepCode Execution
+
+- **🚀 Serverless**: No infrastructure management required
+- **🔒 Secure**: Code runs in isolated, production-grade sandboxes
+- **📦 Automatic Dependencies**: NPM and PyPI packages installed automatically
+- **🌐 Multi-Language**: Support for Python and JavaScript
+- **⚡ Scalable**: Built for enterprise-scale applications
+- **☁️ Cloud-Native**: No local setup or Docker required
+
+### Prerequisites
+
+1. **Get a YepCode API token** from [yepcode.io](https://yepcode.io)
+2. **Install YepCode dependencies**:
+   ```bash
+   pip install "ag2[yepcode]"
+   ```
+3. **Set your API token**:
+   ```bash
+   export YEPCODE_API_TOKEN=your_yepcode_token
+   ```
+
+### Basic Usage
+
+```python
+import tempfile
+from autogen import ConversableAgent, LLMConfig
+from autogen.coding import YepCodeCodeExecutor
+
+# Create YepCode executor
+yepcode_executor = YepCodeCodeExecutor(
+    timeout=120,           # Timeout in seconds
+    remove_on_done=False,  # Keep execution logs for debugging
+    sync_execution=True,   # Wait for execution to complete
+)
+
+# Create an agent with YepCode executor
+code_executor_agent = ConversableAgent(
+    "code_executor_agent",
+    llm_config=False,  # Turn off LLM for this agent
+    code_execution_config={
+        "executor": yepcode_executor
+    },
+    human_input_mode="NEVER",
+)
+
+# Test execution
+task = """
+Run this Python code:
+```python
+import pandas as pd
+import numpy as np
+
+# Create sample data with automatic pandas installation
+data = pd.DataFrame({
+    'x': np.random.randn(100),
+    'y': np.random.randn(100)
+})
+
+print(f"Generated {len(data)} data points")
+print(f"Mean of x: {data['x'].mean():.2f}")
+print(f"Mean of y: {data['y'].mean():.2f}")
+
+return {
+    "data_points": len(data),
+    "x_mean": round(data['x'].mean(), 2),
+    "y_mean": round(data['y'].mean(), 2)
+}
+```
+"""
+
+reply = code_executor_agent.generate_reply(messages=[{"role": "user", "content": task}])
+print(reply)
+```
+
+### Factory Pattern
+
+You can also use the factory pattern for convenience:
+
+```python
+from autogen.coding import CodeExecutorFactory
+
+# Create YepCode executor using factory
+executor = CodeExecutorFactory.create({
+    "executor": "yepcode",
+    "yepcode": {
+        "timeout": 90,
+        "remove_on_done": True,  # Clean up after execution
+        "sync_execution": True,
+    }
+})
+
+# Use with agent
+agent = ConversableAgent(
+    "agent",
+    llm_config=False,
+    code_execution_config={"executor": executor},
+    human_input_mode="NEVER",
+)
+```
+
+### Configuration Options
+
+The `YepCodeCodeExecutor` supports several configuration options:
+
+- **`api_token`**: YepCode API token (or set `YEPCODE_API_TOKEN` environment variable)
+- **`timeout`**: Execution timeout in seconds (default: 60)
+- **`remove_on_done`**: Clean up execution after completion (default: False)
+- **`sync_execution`**: Wait for execution to complete (default: True)
+
+### Use Cases
+
+YepCode execution is ideal for:
+
+- **🏢 Production Environments**: No Docker or local setup required
+- **📊 Data Analysis**: Automatic pandas, numpy, matplotlib installation
+- **🌐 API Integration**: Built-in requests, axios availability
+- **🔄 CI/CD Pipelines**: Serverless execution in cloud environments
+- **👥 Team Collaboration**: Consistent execution environment for all users
+
+### Security and Isolation
+
+YepCode provides enterprise-grade security:
+
+- **Isolated Sandboxes**: Each execution runs in a separate, secure container
+- **Network Isolation**: Controlled access to external resources
+- **Resource Limits**: CPU and memory limits to prevent resource exhaustion
+- **Audit Logging**: Comprehensive execution logs for debugging and compliance
+
+For more examples, see the [YepCode Executor Notebook](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor).
+
 #### Command Line or Jupyter Code Executor?
 
 The command line code executor does not keep any state in memory between executions of different code blocks it receives, as it writes each code block to a separate file and executes the code block in a new process.
@@ -415,9 +548,11 @@ The choice between command line and Jupyter code executor depends on the nature 
 ### More Code Execution examples
 - [Task Solving with Code Generation, Execution, and Debugging](/docs/use-cases/notebooks/notebooks/agentchat_auto_feedback_from_code_execution)
 - [Auto-Generated Agent Chat: Task Solving with Code Gen, Execution, Debugging & Human Feedback](/docs/use-cases/notebooks/notebooks/agentchat_human_feedback)
+- [YepCode Serverless Code Execution](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
 
 ### API
 - [ConversableAgent.code_execution_config](/docs/api-reference/autogen/ConversableAgent#conversableagent)
 - [LocalCommandLineCodeExecutor](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)
 - [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)
+- [YepCodeCodeExecutor](/docs/api-reference/autogen/coding/YepCodeCodeExecutor)
 - [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)

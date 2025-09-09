@@ -21,29 +21,35 @@ Let's look at how the standard ConversableAgent's [generate_reply](/docs/api-ref
 3. The final step is the evaluation of the reply functions, these are done in order and the default functions are shown. Setting your own reply functions using ConversableAgent's [register_reply](/docs/api-reference/autogen/ConversableAgent#register-reply) method.
 
     - Check Termination and Human Reply
-      - Before replying, the agent will check if we meet any termination conditions. It's important to understand that termination occurs on the following agent, so if you are expecting an agent to include a keyword like `TERMINATE` in their text, the following agent's `is_termination_msg` condition should evaluate for that keyword.
-      - The maximum consecutive auto-reply limit for an agent and this will cause a termination.
-      - If it is to terminate but the agent's human input mode is `ALWAYS` or `TERMINATE` ([ConversableAgent.human_input_mode](/docs/api-reference/autogen/ConversableAgent#conversableagent)), it will prompt the user for input where they can continue the conversation or terminate by typing `exit`.
-      - If the termination condition is met and the user doesn't continue the conversation, no further reply functions will be evaluated and the result will be returned.
+
+        - Before replying, the agent will check if we meet any termination conditions. It's important to understand that termination occurs on the following agent, so if you are expecting an agent to include a keyword like `TERMINATE` in their text, the following agent's `is_termination_msg` condition should evaluate for that keyword.
+        - The maximum consecutive auto-reply limit for an agent and this will cause a termination.
+        - If it is to terminate but the agent's human input mode is `ALWAYS` or `TERMINATE` ([ConversableAgent.human_input_mode](/docs/api-reference/autogen/ConversableAgent#conversableagent)), it will prompt the user for input where they can continue the conversation or terminate by typing `exit`.
+        - If the termination condition is met and the user doesn't continue the conversation, no further reply functions will be evaluated and the result will be returned.
 
     - Generate Function Call Reply
-      - The latest message in the messages list is checked to see if it contains function call recommendations and, if so, it will try to execute the function calls. If the functions are registered for execution with the current agent they will execute normally but if they are not registered with the agent it will respond with an error message as the function result.
-      - If functions are executed, no further reply functions will be evaluated and the result of the function(s) will be returned.
-      - Note: This function has been largely superseded by the next function as tool calls are more typical than function calls with LLMs.
+
+        - The latest message in the messages list is checked to see if it contains function call recommendations and, if so, it will try to execute the function calls. If the functions are registered for execution with the current agent they will execute normally but if they are not registered with the agent it will respond with an error message as the function result.
+        - If functions are executed, no further reply functions will be evaluated and the result of the function(s) will be returned.
+        - Note: This function has been largely superseded by the next function as tool calls are more typical than function calls with LLMs.
 
     - Generate Tool Call Reply
-      - This behaves the same way as the previous reply function but for tools, the same logic applies.
+
+        - This behaves the same way as the previous reply function but for tools, the same logic applies.
 
     - Generate Code Execution Reply
-      - If the agent is configured for code execution (see more on [Code Execution](/docs/user-guide/advanced-concepts/code-execution)), it will look for code blocks in the previous messages (configurable, defaults to all messages since the agent last spoke) and execute all the code blocks, returning the result of the execution as the reply.
-      - If code blocks are found, no further reply functions will be evaluated and it will return the result of the execution(s).
+
+        - If the agent is configured for code execution (see more on [Code Execution](/docs/user-guide/advanced-concepts/code-execution)), it will look for code blocks in the previous messages (configurable, defaults to all messages since the agent last spoke) and execute all the code blocks, returning the result of the execution as the reply.
+        - If code blocks are found, no further reply functions will be evaluated and it will return the result of the execution(s).
 
     - Generate LLM Reply
-      - If none of the previous reply functions are final and the agent has an LLM configured, an LLM-based reply will be generated.
-      - Each of the LLMs configured in the agent's LLM configuration will be attempted in order until one successfully returns a response (typically the first one).
+
+        - If none of the previous reply functions are final and the agent has an LLM configured, an LLM-based reply will be generated.
+        - Each of the LLMs configured in the agent's LLM configuration will be attempted in order until one successfully returns a response (typically the first one).
 
     - If no reply is generated
-      - If none of the reply functions generate a final result, the agent's [`ConversableAgent.default_auto_reply`](/docs/api-reference/autogen/ConversableAgent#conversableagent) value will be returned. The default for this property is an empty string and this denotes no reply.
+
+        - If none of the reply functions generate a final result, the agent's [`ConversableAgent.default_auto_reply`](/docs/api-reference/autogen/ConversableAgent#conversableagent) value will be returned. The default for this property is an empty string and this denotes no reply.
 
 ### Registering your own reply functions
 
@@ -73,15 +79,14 @@ from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Optional
 import json
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_type="openai")
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
 
 agent_calendar = ConversableAgent(
     name="Calendar_agent",
     # No LLM required for this agent, we'll use a function to reply
 )
 
-with llm_config:
-  agent_bob = ConversableAgent(name="Bob")
+agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 
 # Our reply function
 def get_date_time_reply(

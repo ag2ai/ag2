@@ -7,8 +7,9 @@
 
 import json
 import time
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal, Optional
 
 from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
@@ -36,9 +37,7 @@ EMBEDDING_KEY = "embedding"
 
 @require_optional_import(["couchbase", "sentence_transformers"], "retrievechat-couchbase")
 class CouchbaseVectorDB(VectorDB):
-    """
-    A vector database implementation that uses Couchbase as the backend.
-    """
+    """A vector database implementation that uses Couchbase as the backend."""
 
     def __init__(
         self,
@@ -51,8 +50,8 @@ class CouchbaseVectorDB(VectorDB):
         collection_name: str = "_default",
         index_name: str = None,
     ):
-        """
-        Initialize the vector database.
+        """Initialize the vector database.
+
         Args:
             connection_string (str): The Couchbase connection string to connect to. Default is 'couchbase://localhost'.
             username (str): The username for Couchbase authentication. Default is 'Administrator'.
@@ -107,8 +106,8 @@ class CouchbaseVectorDB(VectorDB):
         overwrite: bool = False,
         get_or_create: bool = True,
     ) -> "Collection":
-        """
-        Create a collection in the vector database and create a vector search index in the collection.
+        """Create a collection in the vector database and create a vector search index in the collection.
+
         Args:
             collection_name (str): The name of the collection.
             overwrite (bool): Whether to overwrite the collection if it exists. Default is False.
@@ -135,8 +134,8 @@ class CouchbaseVectorDB(VectorDB):
     def create_index_if_not_exists(
         self, index_name: str = "vector_index", collection: Optional["Collection"] = None
     ) -> None:
-        """
-        Creates a vector search index on the specified collection in Couchbase.
+        """Creates a vector search index on the specified collection in Couchbase.
+
         Args:
             index_name (str, optional): The name of the vector search index to create. Defaults to "vector_search_index".
             collection (Collection, optional): The Couchbase collection to create the index on. Defaults to None.
@@ -144,11 +143,12 @@ class CouchbaseVectorDB(VectorDB):
         if not self.search_index_exists(index_name):
             self.create_vector_search_index(collection, index_name)
 
-    def get_collection(self, collection_name: Optional[str] = None) -> "Collection":
-        """
-        Get the collection from the vector database.
+    def get_collection(self, collection_name: str | None = None) -> "Collection":
+        """Get the collection from the vector database.
+
         Args:
             collection_name (str): The name of the collection. Default is None. If None, return the current active collection.
+
         Returns:
             The collection object (Collection)
         """
@@ -165,8 +165,8 @@ class CouchbaseVectorDB(VectorDB):
         return self.active_collection
 
     def delete_collection(self, collection_name: str) -> None:
-        """
-        Delete the collection from the vector database.
+        """Delete the collection from the vector database.
+
         Args:
             collection_name (str): The name of the collection.
         """
@@ -179,7 +179,7 @@ class CouchbaseVectorDB(VectorDB):
     def create_vector_search_index(
         self,
         collection,
-        index_name: Optional[str] = "vector_index",
+        index_name: str | None = "vector_index",
         similarity: Literal["l2_norm", "dot_product"] = "dot_product",
     ) -> None:
         """Create a vector search index in the collection."""
@@ -279,7 +279,7 @@ class CouchbaseVectorDB(VectorDB):
 
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
-            docs_to_upsert = dict()
+            docs_to_upsert = {}
             for doc in batch:
                 doc_id = doc["id"]
                 embedding = self.embedding_function([
@@ -329,9 +329,9 @@ class CouchbaseVectorDB(VectorDB):
 
     def get_docs_by_ids(
         self,
-        ids: Optional[list[ItemID]] = None,
+        ids: list[ItemID] | None = None,
         collection_name: str = None,
-        include: Optional[list[str]] = None,
+        include: list[str] | None = None,
         **kwargs: Any,
     ) -> list[Document]:
         """Retrieve documents from the collection of the vector database based on the ids."""
@@ -365,7 +365,6 @@ class CouchbaseVectorDB(VectorDB):
         """Retrieve documents from the collection of the vector database based on the queries.
         Note: Distance threshold is not supported in Couchbase FTS.
         """
-
         results: QueryResults = []
         for query_text in queries:
             query_vector = np.array(self.embedding_function([query_text])).tolist()[0]
@@ -381,7 +380,6 @@ class CouchbaseVectorDB(VectorDB):
         self, embedding_vector: list[float], n_results: int = 10, **kwargs
     ) -> list[tuple[dict[str, Any], float]]:
         """Core vector search using Couchbase FTS."""
-
         search_req = search.SearchRequest.create(
             VectorSearch.from_vector_query(
                 VectorQuery(

@@ -22,18 +22,19 @@ Resources:
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import random
 import re
 import time
 import warnings
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..import_utils import optional_import_block, require_optional_import
-from ..llm_config import LLMConfigEntry, register_llm_config
+from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import FormatterProtocol, should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
@@ -43,10 +44,23 @@ with optional_import_block():
     from ollama import Client
 
 
-@register_llm_config
+class OllamaEntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["ollama"]
+    client_host: HttpUrl | None
+    stream: bool
+    num_predict: int
+    num_ctx: int
+    repeat_penalty: float
+    seed: int
+    top_k: int
+    hide_tools: Literal["if_all_run", "if_any_run", "never"]
+    native_tool_calls: bool
+
+
 class OllamaLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["ollama"] = "ollama"
-    client_host: Optional[HttpUrl] = None
+    # TODO: max_tokens
+    client_host: HttpUrl | None = None
     stream: bool = False
     num_predict: int = Field(
         default=-1,
@@ -55,10 +69,9 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
     num_ctx: int = Field(default=2048)
     repeat_penalty: float = Field(default=1.1)
     seed: int = Field(default=0)
-    temperature: float = Field(default=0.8)
     top_k: int = Field(default=40)
-    top_p: float = Field(default=0.9)
     hide_tools: Literal["if_all_run", "if_any_run", "never"] = "never"
+    native_tool_calls: bool = False
 
     def create_client(self):
         raise NotImplementedError("OllamaLLMConfigEntry.create_client is not implemented.")
@@ -99,11 +112,10 @@ class OllamaClient:
     # Override using "manual_tool_call_step2" config parameter
     TOOL_CALL_MANUAL_STEP2 = " (proceed with step 2)"
 
-    def __init__(self, response_format: Optional[Union[BaseModel, dict[str, Any]]] = None, **kwargs):
+    def __init__(self, response_format: BaseModel | dict[str, Any] | None = None, **kwargs):
         """Note that no api_key or environment variable is required for Ollama."""
-
         # Store the response format, if provided (for structured outputs)
-        self._response_format: Optional[Union[BaseModel, dict[str, Any]]] = response_format
+        self._response_format: BaseModel | dict[str, Any] | None = response_format
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -612,7 +624,7 @@ def _object_to_tool_call(data_object: Any) -> list[dict[str, Any]]:
         is_invalid = False
         for i, item in enumerate(data_copy):
             try:
-                new_item = eval(item)
+                new_item = ast.literal_eval(item)
                 if isinstance(new_item, dict):
                     if is_valid_tool_call_item(new_item):
                         data_object[i] = new_item

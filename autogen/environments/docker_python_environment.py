@@ -8,9 +8,9 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from typing import Any, Optional, Tuple
+from typing import Any
 
-from asyncer import asyncify
+from anyio import to_thread
 
 from .python_environment import PythonEnvironment
 
@@ -24,19 +24,18 @@ class DockerPythonEnvironment(PythonEnvironment):
         self,
         image: str = "python:3.11-slim",
         container_name_prefix: str = "ag2_docker_env_",
-        volumes: Optional[dict[str, str]] = None,
-        environment: Optional[dict[str, str]] = None,
-        network: Optional[str] = None,
-        pip_packages: Optional[list[str]] = None,
-        requirements_file: Optional[str] = None,
-        dockerfile: Optional[str] = None,
-        build_args: Optional[dict[str, str]] = None,
+        volumes: dict[str, str] | None = None,
+        environment: dict[str, str] | None = None,
+        network: str | None = None,
+        pip_packages: list[str] | None = None,
+        requirements_file: str | None = None,
+        dockerfile: str | None = None,
+        build_args: dict[str, str] | None = None,
         cleanup_container: bool = True,
         keep_container_running: bool = False,
         container_startup_timeout: int = 30,
     ):
-        """
-        Initialize a Docker Python environment.
+        """Initialize a Docker Python environment.
 
         Args:
             image: Docker image to use (ignored if dockerfile is provided)
@@ -99,8 +98,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                 subprocess.run(
                     ["docker", "pull", self.image],
                     check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                 )
                 logging.info(f"Pulled Docker image: {self.image}")
@@ -133,8 +131,7 @@ class DockerPythonEnvironment(PythonEnvironment):
             _ = subprocess.run(
                 build_cmd,
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
             logging.info(f"Built custom Docker image: {self._custom_image_name}")
@@ -185,8 +182,7 @@ class DockerPythonEnvironment(PythonEnvironment):
             result = subprocess.run(
                 run_cmd,
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
 
@@ -211,8 +207,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                 _ = subprocess.run(
                     ["docker", "exec", self._container_name, "pip", "install", "--no-cache-dir"] + self.pip_packages,
                     check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                 )
                 logging.info("Successfully installed pip packages")
@@ -241,8 +236,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                             f"/workspace/{req_filename}",
                         ],
                         check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                     )
                     logging.info("Successfully installed requirements")
@@ -261,8 +255,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                     subprocess.run(
                         ["docker", "stop", self._container_name],
                         check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                     )
                 except subprocess.CalledProcessError:
@@ -275,8 +268,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                     subprocess.run(
                         ["docker", "rm", "-f", self._container_name],
                         check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                     )
                 except subprocess.CalledProcessError:
@@ -289,8 +281,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                     subprocess.run(
                         ["docker", "rmi", self._custom_image_name],
                         check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                        capture_output=True,
                         text=True,
                     )
                 except subprocess.CalledProcessError:
@@ -329,7 +320,7 @@ class DockerPythonEnvironment(PythonEnvironment):
                 os.makedirs(script_dir, exist_ok=True)
 
             # Write the code to the script file on the host
-            await asyncify(self._write_to_file)(host_script_path, code)
+            await to_thread.run_sync(self._write_to_file, host_script_path, code)
 
             # Path to the script in the container
             container_script_path = f"/workspace/{rel_path}"
@@ -338,7 +329,7 @@ class DockerPythonEnvironment(PythonEnvironment):
             exec_cmd = ["docker", "exec", self._container_name, "python", container_script_path]
 
             # Run the command with a timeout
-            result = await asyncify(self._run_subprocess_with_timeout)(exec_cmd, timeout)
+            result = await to_thread.run_sync(self._run_subprocess_with_timeout, exec_cmd, timeout)
 
             return {
                 "success": result[0],
@@ -350,9 +341,8 @@ class DockerPythonEnvironment(PythonEnvironment):
         except Exception as e:
             return {"success": False, "error": f"Execution error: {str(e)}"}
 
-    def _run_subprocess_with_timeout(self, cmd: list[str], timeout: int) -> Tuple[bool, str, str, int]:
-        """
-        Run a subprocess with timeout and return status, stdout, stderr, and return code.
+    def _run_subprocess_with_timeout(self, cmd: list[str], timeout: int) -> tuple[bool, str, str, int]:
+        """Run a subprocess with timeout and return status, stdout, stderr, and return code.
 
         Args:
             cmd: Command to run as a list of strings

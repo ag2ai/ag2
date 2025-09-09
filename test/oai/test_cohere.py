@@ -24,6 +24,7 @@ def test_cohere_llm_config_entry():
         model="command-r-plus",
         api_key="dummy_api_key",
         stream=False,
+        temperature=0.3,
     )
     expected = {
         "api_type": "cohere",
@@ -31,7 +32,6 @@ def test_cohere_llm_config_entry():
         "api_key": "dummy_api_key",
         "frequency_penalty": 0,
         "k": 0,
-        "p": 0.75,
         "presence_penalty": 0,
         "strict_tools": False,
         "stream": False,
@@ -39,12 +39,9 @@ def test_cohere_llm_config_entry():
         "temperature": 0.3,
     }
     actual = cohere_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[cohere_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(cohere_llm_config).model_dump() == {
         "config_list": [expected],
     }
 

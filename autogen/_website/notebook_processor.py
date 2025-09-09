@@ -15,10 +15,11 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from ..import_utils import optional_import_block, require_optional_import
 
@@ -37,7 +38,7 @@ with optional_import_block():
 @dataclass
 class NotebookError:
     error_name: str
-    error_value: Optional[str]
+    error_value: str | None
     traceback: str
     cell_source: str
 
@@ -79,7 +80,6 @@ C = TypeVar("C", bound=Callable[..., Any])
 
 def require_quarto_bin(f: C) -> C:
     """Decorator to skip a function if quarto is not installed."""
-
     if check_quarto_bin():
         return f
     else:
@@ -91,13 +91,13 @@ def require_quarto_bin(f: C) -> C:
         return wrapper  # type: ignore[return-value]
 
 
-def load_metadata(notebook: Path) -> dict[str, dict[str, Union[str, list[str], None]]]:
+def load_metadata(notebook: Path) -> dict[str, dict[str, str | list[str] | None]]:
     content = json.load(notebook.open(encoding="utf-8"))
-    metadata: dict[str, dict[str, Union[str, list[str], None]]] = content.get("metadata", {})
+    metadata: dict[str, dict[str, str | list[str] | None]] = content.get("metadata", {})
     return metadata
 
 
-def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]]:
+def skip_reason_or_none_if_ok(notebook: Path) -> str | None | dict[str, Any]:
     """Return a reason to skip the notebook, or None if it should not be skipped."""
     if notebook.suffix != ".ipynb":
         return "not a notebook"
@@ -139,7 +139,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
         return "description is not in front matter"
 
     # Make sure tags is a list of strings
-    if front_matter["tags"] is not None and not all([isinstance(tag, str) for tag in front_matter["tags"]]):
+    if front_matter["tags"] is not None and not all(isinstance(tag, str) for tag in front_matter["tags"]):
         return "tags must be a list of strings"
 
     # Make sure description is a string
@@ -149,7 +149,7 @@ def skip_reason_or_none_if_ok(notebook: Path) -> Union[str, None, dict[str, Any]
     return None
 
 
-def extract_title(notebook: Path) -> Optional[str]:
+def extract_title(notebook: Path) -> str | None:
     """Extract the title of the notebook."""
     with open(notebook, encoding="utf-8") as f:
         content = f.read()
@@ -196,7 +196,7 @@ def fmt_ok(notebook: Path) -> str:
 
 
 @require_optional_import("termcolor", "docs")
-def fmt_error(notebook: Path, error: Union[NotebookError, str]) -> str:
+def fmt_error(notebook: Path, error: NotebookError | str) -> str:
     if isinstance(error, str):
         return f"{colored('[Error]', 'red')} {colored(notebook.name, 'blue')}: {error}"
     elif isinstance(error, NotebookError):
@@ -207,7 +207,7 @@ def fmt_error(notebook: Path, error: Union[NotebookError, str]) -> str:
 
 @require_quarto_bin
 @require_optional_import("nbclient", "docs")
-def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Optional[Union[NotebookError, NotebookSkip]]]:
+def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, NotebookError | NotebookSkip | None]:
     nb = nbformat.read(str(notebook_path), NB_VERSION)  # type: ignore[arg-type,no-untyped-call]
 
     if "skip_test" in nb.metadata:
@@ -240,7 +240,7 @@ def test_notebook(notebook_path: Path, timeout: int = 300) -> tuple[Path, Option
 @require_optional_import("nbclient", "docs")
 def get_timeout_info(
     nb: NotebookNode,
-) -> Optional[NotebookError]:
+) -> NotebookError | None:
     for i, cell in enumerate(nb.cells):
         if cell.cell_type != "code":
             continue
@@ -256,7 +256,7 @@ def get_timeout_info(
 
 
 @require_optional_import("nbclient", "docs")
-def get_error_info(nb: NotebookNode) -> Optional[NotebookError]:
+def get_error_info(nb: NotebookNode) -> NotebookError | None:
     for cell in nb["cells"]:  # get LAST error
         if cell["cell_type"] != "code":
             continue
@@ -288,7 +288,7 @@ def process_notebook(
     quarto_bin: str,
     dry_run: bool,
     target_dir_func: Callable[[Path], Path],
-    post_processor: Optional[Callable[[Path, Path, dict[str, Any], Path], None]] = None,
+    post_processor: Callable[[Path, Path, dict[str, Any], Path], None] | None = None,
 ) -> str:
     """Process a single notebook.
 
@@ -301,7 +301,6 @@ def process_notebook(
         target_dir_func: Function to determine target directory for notebooks
         post_processor: Optional callback for post-processing
     """
-
     in_notebook_dir = "notebook" in src_notebook.parts
 
     metadata = load_metadata(src_notebook)
@@ -400,7 +399,7 @@ def create_base_argument_parser() -> argparse.ArgumentParser:
 
 def process_notebooks_core(
     args: argparse.Namespace,
-    post_process_func: Optional[Callable[[Path, Path, dict[str, Any], Path], None]],
+    post_process_func: Callable[[Path, Path, dict[str, Any], Path], None] | None,
     target_dir_func: Callable[[Path], Path],
 ) -> list[Path]:
     """Core logic for processing notebooks shared across build systems.

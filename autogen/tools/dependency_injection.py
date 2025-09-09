@@ -6,14 +6,16 @@ import functools
 import inspect
 import sys
 from abc import ABC
+from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, TypeVar, Union, get_type_hints
+from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints
 
 from ..agentchat import Agent
 from ..doc_utils import export_module
 from ..fast_depends import Depends as FastDepends
 from ..fast_depends import inject
 from ..fast_depends.dependencies import model
+from ..fast_depends.utils import is_coroutine_callable
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -67,7 +69,7 @@ class ChatContext(BaseContext):
         return self._agent.chat_messages
 
     @property
-    def last_message(self) -> Optional[dict[str, Any]]:
+    def last_message(self) -> dict[str, Any] | None:
         """The last message in the chat.
 
         Returns:
@@ -102,7 +104,7 @@ def Depends(x: Any) -> Any:  # noqa: N802
     return FastDepends(x)
 
 
-def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContext], type[ChatContext]]) -> list[str]:
+def get_context_params(func: Callable[..., Any], subclass: type[BaseContext] | type[ChatContext]) -> list[str]:
     """Gets the names of the context parameters in a function signature.
 
     Args:
@@ -116,9 +118,7 @@ def get_context_params(func: Callable[..., Any], subclass: Union[type[BaseContex
     return [p.name for p in sig.parameters.values() if _is_context_param(p, subclass=subclass)]
 
 
-def _is_context_param(
-    param: inspect.Parameter, subclass: Union[type[BaseContext], type[ChatContext]] = BaseContext
-) -> bool:
+def _is_context_param(param: inspect.Parameter, subclass: type[BaseContext] | type[ChatContext] = BaseContext) -> bool:
     # param.annotation.__args__[0] is used to handle Annotated[MyContext, Depends(MyContext(b=2))]
     param_annotation = param.annotation.__args__[0] if hasattr(param.annotation, "__args__") else param.annotation
     try:
@@ -141,10 +141,7 @@ def remove_params(func: Callable[..., Any], sig: inspect.Signature, params: Iter
 
 
 def _remove_injected_params_from_signature(func: Callable[..., Any]) -> Callable[..., Any]:
-    # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
-    if sys.version_info >= (3, 9) and isinstance(func, staticmethod) and hasattr(func, "__func__"):
-        func = _fix_staticmethod(func)
-
+    func = _fix_staticmethod(func)
     sig = inspect.signature(func)
     params_to_remove = [p.name for p in sig.parameters.values() if _is_context_param(p) or _is_depends_param(p)]
     remove_params(func, sig, params_to_remove)
@@ -206,7 +203,7 @@ def _fix_staticmethod(f: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _set_return_annotation_to_any(f: Callable[..., Any]) -> Callable[..., Any]:
-    if inspect.iscoroutinefunction(f):
+    if is_coroutine_callable(f):
 
         @functools.wraps(f)
         async def _a_wrapped_func(*args: Any, **kwargs: Any) -> Any:
@@ -243,9 +240,7 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
         The modified function with injected dependencies and updated signature.
     """
     # This is a workaround for Python 3.9+ where staticmethod.__func__ is accessible
-    if sys.version_info >= (3, 9) and isinstance(f, staticmethod) and hasattr(f, "__func__"):
-        f = _fix_staticmethod(f)
-
+    f = _fix_staticmethod(f)
     f = _string_metadata_to_description_field(f)
     f = _set_return_annotation_to_any(f)
     f = inject(f)

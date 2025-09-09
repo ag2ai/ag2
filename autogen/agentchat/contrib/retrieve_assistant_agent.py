@@ -5,12 +5,15 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import warnings
-from typing import Any, Optional, Union
+from typing import Any
+
+from typing_extensions import deprecated
 
 from ..agent import Agent
 from ..assistant_agent import AssistantAgent
 
 
+@deprecated("The RetrieveAssistantAgent is deprecated. Please use the AssistantAgent instead.")
 class RetrieveAssistantAgent(AssistantAgent):
     """(Experimental) Retrieve Assistant agent, designed to solve a task with LLM.
 
@@ -33,10 +36,10 @@ class RetrieveAssistantAgent(AssistantAgent):
 
     def _generate_retrieve_assistant_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         if config is None:
             config = self
         if messages is None:

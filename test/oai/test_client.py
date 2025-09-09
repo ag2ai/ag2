@@ -16,7 +16,6 @@ from typing import Any  # Added import for Any
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import ValidationError
 
 from autogen import OpenAIWrapper
 from autogen.cache.cache import Cache
@@ -146,19 +145,6 @@ def test_fixed_order_routing_successful_first_client(fixture_name: str, request:
     assert "Response from client1" in response.choices[0].message.content
     assert wrapper._clients[0].call_count == 1
     assert wrapper._clients[1].call_count == 0
-
-
-@pytest.mark.parametrize(
-    "fixture_name", ["mock_openai_wrapper_fixed_order_default", "mock_openai_wrapper_fixed_order_explicit"]
-)
-def test_fixed_order_routing_first_client_fails(fixture_name: str, request: pytest.FixtureRequest):
-    wrapper = request.getfixturevalue(fixture_name)
-    # Make the first client fail
-    wrapper._clients[0].config["should_fail"] = True
-    response = wrapper.create(messages=[{"role": "user", "content": "Hello"}])
-    assert "Response from client2" in response.choices[0].message.content
-    assert wrapper._clients[0].call_count == 1
-    assert wrapper._clients[1].call_count == 1
 
 
 def test_round_robin_routing(mock_openai_wrapper_round_robin: OpenAIWrapper):
@@ -643,6 +629,27 @@ def test_openai_llm_config_entry():
         "model": "gpt-4o-mini",
         "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         "tags": [],
+        "stream": False,
+    }
+    actual = openai_llm_config.model_dump()
+    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+
+
+def test_openai_llm_config_entry_with_verbosity():
+    openai_llm_config = OpenAILLMConfigEntry(
+        model="gpt-5", api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly", verbosity="low"
+    )
+    assert openai_llm_config.api_type == "openai"
+    assert openai_llm_config.model == "gpt-5"
+    assert openai_llm_config.api_key.get_secret_value() == "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly"
+    assert openai_llm_config.base_url is None
+    expected = {
+        "api_type": "openai",
+        "model": "gpt-5",
+        "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        "tags": [],
+        "stream": False,
+        "verbosity": "low",
     }
     actual = openai_llm_config.model_dump()
     assert actual == expected, f"Expected: {expected}, Actual: {actual}"
@@ -662,14 +669,12 @@ def test_azure_llm_config_entry() -> None:
         "base_url": "https://api.openai.com/v1",
         "user": "unique_user_id",
         "tags": [],
+        "stream": False,
     }
     actual = azure_llm_config.model_dump()
-    assert actual == expected, f"Expected: {expected}, Actual: {actual}"
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[azure_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(azure_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
@@ -678,6 +683,8 @@ def test_deepseek_llm_config_entry() -> None:
     deepseek_llm_config = DeepSeekLLMConfigEntry(
         api_key="fake_api_key",
         model="deepseek-chat",
+        max_tokens=8192,
+        temperature=0.5,
     )
 
     expected = {
@@ -688,24 +695,14 @@ def test_deepseek_llm_config_entry() -> None:
         "max_tokens": 8192,
         "temperature": 0.5,
         "tags": [],
+        "stream": False,
     }
     actual = deepseek_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[deepseek_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(deepseek_llm_config).model_dump() == {
         "config_list": [expected],
     }
-
-    with pytest.raises(ValidationError) as e:
-        deepseek_llm_config = DeepSeekLLMConfigEntry(
-            model="deepseek-chat",
-            temperature=1,
-            top_p=0.8,
-        )
-    assert "Value error, temperature and top_p cannot be set at the same time" in str(e.value)
 
 
 class TestOpenAIClientBadRequestsError:
@@ -848,6 +845,28 @@ class TestDeepSeekPatch:
         assert kwargs == expected_kwargs
 
 
+class TestGemini:
+    def test_configure_openai_config_for_gemini_updates_proxy(self):
+        config_list = [
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+        ]
+        client = OpenAIWrapper(config_list=config_list)
+        openai_config = {}
+        config = {"proxy": "http://proxy.example.com:8080"}
+        client._configure_openai_config_for_gemini(config, openai_config)
+        assert openai_config["proxy"] == "http://proxy.example.com:8080"
+
+    def test_configure_openai_config_for_gemini_no_proxy(self):
+        config_list = [
+            {"model": "gemini-2.5-flash", "api_key": "key1", "model_client_cls": "MockModelClient", "name": "client1"}
+        ]
+        config = {}
+        openai_config = {}
+        client = OpenAIWrapper(config_list=config_list)
+        client._configure_openai_config_for_gemini(config, openai_config)
+        assert "proxy" not in openai_config
+
+
 class TestO1:
     @pytest.fixture
     def mock_oai_client(self, mock_credentials: Credentials) -> OpenAIClient:
@@ -982,15 +1001,3 @@ class TestO1:
     @pytest.mark.skip(reason="Wait for o1 to be available in CI")
     def test_completion_o1(self, o1_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_client, messages)
-
-
-if __name__ == "__main__":
-    pass
-    # test_aoai_chat_completion()
-    # test_oai_tool_calling_extraction()
-    # test_chat_completion()
-    # test_completion()
-    # test_cost()
-    # test_usage_summary()
-    # test_legacy_cache()
-    # test_cache()

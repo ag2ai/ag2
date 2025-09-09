@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 import copy
 import sys
-from typing import Any, Optional, Protocol, Union
+from typing import Any, Protocol
 
 import tiktoken
 from termcolor import colored
@@ -62,9 +62,9 @@ class MessageHistoryLimiter:
 
     def __init__(
         self,
-        max_messages: Optional[int] = None,
+        max_messages: int | None = None,
         keep_first_message: bool = False,
-        exclude_names: Optional[list[str]] = None,
+        exclude_names: list[str] | None = None,
     ):
         """Args:
         max_messages Optional[int]: Maximum number of messages to keep in the context. Must be greater than 0 if not None.
@@ -91,7 +91,6 @@ class MessageHistoryLimiter:
         Returns:
             List[Dict]: A new list containing the most recent messages up to the specified maximum.
         """
-
         exclude_names = getattr(self, "_exclude_names", None)
 
         filtered = [msg for msg in messages if msg.get("name") not in exclude_names] if exclude_names else messages
@@ -136,7 +135,7 @@ class MessageHistoryLimiter:
             return logs_str, True
         return "No messages were removed.", False
 
-    def _validate_max_messages(self, max_messages: Optional[int]):
+    def _validate_max_messages(self, max_messages: int | None):
         if max_messages is not None and max_messages < 1:
             raise ValueError("max_messages must be None or greater than 1")
 
@@ -171,11 +170,11 @@ class MessageTokenLimiter:
 
     def __init__(
         self,
-        max_tokens_per_message: Optional[int] = None,
-        max_tokens: Optional[int] = None,
-        min_tokens: Optional[int] = None,
+        max_tokens_per_message: int | None = None,
+        max_tokens: int | None = None,
+        min_tokens: int | None = None,
         model: str = "gpt-3.5-turbo-0613",
-        filter_dict: Optional[dict[str, Any]] = None,
+        filter_dict: dict[str, Any] | None = None,
         exclude_filter: bool = True,
     ):
         """Args:
@@ -268,7 +267,7 @@ class MessageTokenLimiter:
             return logs_str, True
         return "No tokens were truncated.", False
 
-    def _truncate_str_to_tokens(self, contents: Union[str, list], n_tokens: int) -> Union[str, list]:
+    def _truncate_str_to_tokens(self, contents: str | list, n_tokens: int) -> str | list:
         if isinstance(contents, str):
             return self._truncate_tokens(contents, n_tokens)
         elif isinstance(contents, list):
@@ -296,7 +295,7 @@ class MessageTokenLimiter:
 
         return truncated_text
 
-    def _validate_max_tokens(self, max_tokens: Optional[int] = None) -> Optional[int]:
+    def _validate_max_tokens(self, max_tokens: int | None = None) -> int | None:
         if max_tokens is not None and max_tokens < 0:
             raise ValueError("max_tokens and max_tokens_per_message must be None or greater than or equal to 0")
 
@@ -317,7 +316,7 @@ class MessageTokenLimiter:
 
         return max_tokens if max_tokens is not None else sys.maxsize
 
-    def _validate_min_tokens(self, min_tokens: Optional[int], max_tokens: Optional[int]) -> int:
+    def _validate_min_tokens(self, min_tokens: int | None, max_tokens: int | None) -> int:
         if min_tokens is None:
             return 0
         if min_tokens < 0:
@@ -336,11 +335,11 @@ class TextMessageCompressor:
 
     def __init__(
         self,
-        text_compressor: Optional[TextCompressor] = None,
-        min_tokens: Optional[int] = None,
-        compression_params: dict = dict(),
-        cache: Optional[AbstractCache] = None,
-        filter_dict: Optional[dict[str, Any]] = None,
+        text_compressor: TextCompressor | None = None,
+        min_tokens: int | None = None,
+        compression_params: dict = {},
+        cache: AbstractCache | None = None,
+        filter_dict: dict[str, Any] | None = None,
         exclude_filter: bool = True,
     ):
         """Args:
@@ -466,7 +465,7 @@ class TextMessageCompressor:
 
         return compressed_text["compressed_prompt"], savings
 
-    def _validate_min_tokens(self, min_tokens: Optional[int]):
+    def _validate_min_tokens(self, min_tokens: int | None):
         if min_tokens is not None and min_tokens <= 0:
             raise ValueError("min_tokens must be greater than 0 or None")
 
@@ -497,7 +496,7 @@ class TextMessageContentName:
         position: str = "start",
         format_string: str = "{name}:\n",
         deduplicate: bool = True,
-        filter_dict: Optional[dict[str, Any]] = None,
+        filter_dict: dict[str, Any] | None = None,
         exclude_filter: bool = True,
     ):
         """Args:

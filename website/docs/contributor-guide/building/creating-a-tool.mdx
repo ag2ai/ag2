@@ -121,11 +121,10 @@ from autogen import ConversableAgent, LLMConfig
 # Import the Tool
 from autogen.tools.experimental import Crawl4AITool
 
-llm_config = LLMConfig(model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig({"model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 # Agent for LLM tool recommendation
-with llm_config:
-    assistant = AssistantAgent(name="assistant")
+assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 # Agent for tool execution
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
@@ -163,6 +162,7 @@ Put your tool tests in a folder under [`test/tools/contrib`](https://github.com/
 ## Documentation
 
 As a way for other developers to learn about and understand how to use your tool, it is recommended to create a Jupyter notebook that:
+
 - Explains what the tool is
 - How to install AG2 for the tool (e.g. with extras)
 - Has sample codes, simple to advanced

@@ -12,7 +12,8 @@ import os
 import sqlite3
 import threading
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from ..doc_utils import export_module
 from .base_logger import BaseLogger, LLMConfig
@@ -293,7 +294,7 @@ class SqliteLogger(BaseLogger):
             client_id,
             wrapper_id,
             self.session_id,
-            json.dumps(request),
+            json.dumps(to_dict(request)),
             response_messages,
             is_cached,
             cost,

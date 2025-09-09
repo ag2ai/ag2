@@ -14,15 +14,13 @@ import re
 import threading
 import warnings
 from collections import defaultdict
+from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from inspect import signature
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Generator,
-    Iterable,
     Literal,
     Optional,
     TypeVar,
@@ -61,11 +59,13 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
-from ..oai.client import ModelClient, OpenAIWrapper
+from ..llm_config.client import ModelClient
+from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
@@ -103,7 +103,7 @@ class UpdateSystemMessage:
                 def my_content_updater(agent: ConversableAgent, messages: List[Dict[str, Any]]) -> str
     """
 
-    content_updater: Union[Callable, str]
+    content_updater: Callable | str
 
     def __post_init__(self):
         if isinstance(self.content_updater, str):
@@ -132,11 +132,11 @@ class ConversableAgent(LLMAgent):
     For example, AssistantAgent and UserProxyAgent are subclasses of this class,
     configured with different default settings.
 
-    To modify auto reply, override `generate_reply` method.
-    To disable/enable human response in every turn, set `human_input_mode` to "NEVER" or "ALWAYS".
-    To modify the way to get human input, override `get_human_input` method.
-    To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`,
-    `run_code`, and `execute_function` methods respectively.
+    To modify auto reply, override `generate_reply` method. \n
+    To disable/enable human response in every turn, set `human_input_mode` to "NEVER" or "ALWAYS". \n
+    To modify the way to get human input, override `get_human_input` method. \n
+    To modify the way to execute code blocks, single code block, or function call, override `execute_code_blocks`, \n
+    `run_code`, and `execute_function` methods respectively. \n
     """
 
     DEFAULT_CONFIG = False  # False or dict, the default config for llm inference
@@ -144,88 +144,88 @@ class ConversableAgent(LLMAgent):
 
     DEFAULT_SUMMARY_PROMPT = "Summarize the takeaway from the conversation. Do not add any introductory phrases."
     DEFAULT_SUMMARY_METHOD = "last_msg"
-    llm_config: Union[dict[str, Any], Literal[False]]
+    llm_config: dict[str, Any] | Literal[False]
 
     def __init__(
         self,
         name: str,
-        system_message: Optional[Union[str, list]] = "You are a helpful AI Assistant.",
-        is_termination_msg: Optional[Callable[[dict[str, Any]], bool]] = None,
-        max_consecutive_auto_reply: Optional[int] = None,
+        system_message: str | list | None = "You are a helpful AI Assistant.",
+        is_termination_msg: Callable[[dict[str, Any]], bool] | None = None,
+        max_consecutive_auto_reply: int | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "TERMINATE",
-        function_map: Optional[dict[str, Callable[..., Any]]] = None,
-        code_execution_config: Union[dict[str, Any], Literal[False]] = False,
-        llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]] = None,
-        default_auto_reply: Union[str, dict[str, Any]] = "",
-        description: Optional[str] = None,
-        chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
-        silent: Optional[bool] = None,
+        function_map: dict[str, Callable[..., Any]] | None = None,
+        code_execution_config: dict[str, Any] | Literal[False] = False,
+        llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None,
+        default_auto_reply: str | dict[str, Any] = "",
+        description: str | None = None,
+        chat_messages: dict[Agent, list[dict[str, Any]]] | None = None,
+        silent: bool | None = None,
         context_variables: Optional["ContextVariables"] = None,
-        functions: Union[list[Callable[..., Any]], Callable[..., Any]] = None,
-        update_agent_state_before_reply: Optional[
-            Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
-        ] = None,
-        handoffs: Optional[Handoffs] = None,
+        functions: list[Callable[..., Any]] | Callable[..., Any] = None,
+        update_agent_state_before_reply: list[Callable | UpdateSystemMessage]
+        | Callable
+        | UpdateSystemMessage
+        | None = None,
+        handoffs: Handoffs | None = None,
     ):
-        """
-        Args:
-            name (str): name of the agent.
-            system_message (str or list): system message for the ChatCompletion inference.
-            is_termination_msg (function): a function that takes a message in the form of a dictionary
-                and returns a boolean value indicating if this received message is a termination message.
-                The dict can contain the following keys: "content", "role", "name", "function_call".
-            max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
-                default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
-                When set to 0, no auto reply will be generated.
-            human_input_mode (str): whether to ask for human inputs every time a message is received.
-                Possible values are "ALWAYS", "TERMINATE", "NEVER".
-                (1) When "ALWAYS", the agent prompts for human input every time a message is received.
-                    Under this mode, the conversation stops when the human input is "exit",
-                    or when is_termination_msg is True and there is no human input.
-                (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
-                    the number of auto reply reaches the max_consecutive_auto_reply.
-                (3) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
-                    when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True.
-            function_map (dict[str, callable]): Mapping function names (passed to openai) to callable functions, also used for tool calls.
-            code_execution_config (dict or False): config for the code execution.
-                To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:
-                - work_dir (Optional, str): The working directory for the code execution.
-                    If None, a default working directory will be used.
-                    The default working directory is the "extensions" directory under
-                    "path_to_autogen".
-                - use_docker (Optional, list, str or bool): The docker image to use for code execution.
-                    Default is True, which means the code will be executed in a docker container. A default list of images will be used.
-                    If a list or a str of image name(s) is provided, the code will be executed in a docker container
-                    with the first image successfully pulled.
-                    If False, the code will be executed in the current environment.
-                    We strongly recommend using docker for code execution.
-                - timeout (Optional, int): The maximum execution time in seconds.
-                - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
-                    If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)
-            llm_config (LLMConfig or dict or False or None): llm inference configuration.
-                Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)
-                for available options.
-                When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.
-                To disable llm-based auto reply, set to False.
-                When set to None, will use self.DEFAULT_CONFIG, which defaults to False.
-            default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.
-            description (str): a short description of the agent. This description is used by other agents
-                (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
-            chat_messages (dict or None): the previous chat messages that this agent had in the past with other agents.
-                Can be used to give the agent a memory by providing the chat history. This will allow the agent to
-                resume previous had conversations. Defaults to an empty chat history.
-            silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
-                silent in each function.
-            context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
-                Note: This will be a reference to a shared context for multi-agent chats.
-                Behaves like a dictionary with keys and values (akin to dict[str, Any]).
-            functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
-            update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
-            handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
+        """Args:\n
+        1) name (str): name of the agent.\n
+        2) system_message (str or list): system message for the ChatCompletion inference.\n
+        3) is_termination_msg (function): a function that takes a message in the form of a dictionary
+            and returns a boolean value indicating if this received message is a termination message.
+            The dict can contain the following keys: "content", "role", "name", "function_call".\n
+        4) max_consecutive_auto_reply (int): the maximum number of consecutive auto replies.
+            default to None (no limit provided, class attribute MAX_CONSECUTIVE_AUTO_REPLY will be used as the limit in this case).
+            When set to 0, no auto reply will be generated.\n
+        5) human_input_mode (str): whether to ask for human inputs every time a message is received.\n
+            Possible values are "ALWAYS", "TERMINATE", "NEVER".\n
+            (1) When "ALWAYS", the agent prompts for human input every time a message is received.
+                Under this mode, the conversation stops when the human input is "exit",
+                or when is_termination_msg is True and there is no human input.\n
+            (2) When "TERMINATE", the agent only prompts for human input only when a termination message is received or
+                the number of auto reply reaches the max_consecutive_auto_reply.\n
+            (3) When "NEVER", the agent will never prompt for human input. Under this mode, the conversation stops
+                when the number of auto reply reaches the max_consecutive_auto_reply or when is_termination_msg is True. \n
+        6) function_map (dict[str, callable]): Mapping function names (passed to openai) to callable functions, also used for tool calls. \n
+        7) code_execution_config (dict or False): config for the code execution.\n
+            To disable code execution, set to False. Otherwise, set to a dictionary with the following keys:\n
+            - work_dir (Optional, str): The working directory for the code execution.\n
+                If None, a default working directory will be used.\n
+                The default working directory is the "extensions" directory under
+                "path_to_autogen".\n
+            - use_docker (Optional, list, str or bool): The docker image to use for code execution.\n
+                Default is True, which means the code will be executed in a docker container. A default list of images will be used.\n
+                If a list or a str of image name(s) is provided, the code will be executed in a docker container\n
+                with the first image successfully pulled.\n
+                If False, the code will be executed in the current environment.\n
+                We strongly recommend using docker for code execution.\n
+            - timeout (Optional, int): The maximum execution time in seconds.\n
+            - last_n_messages (Experimental, int or str): The number of messages to look back for code execution.
+                If set to 'auto', it will scan backwards through all messages arriving since the agent last spoke, which is typically the last time execution was attempted. (Default: auto)\n
+        8) llm_config (LLMConfig or dict or False or None): llm inference configuration.\n
+            Please refer to [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create)\n
+            for available options.\n
+            When using OpenAI or Azure OpenAI endpoints, please specify a non-empty 'model' either in `llm_config` or in each config of 'config_list' in `llm_config`.\n
+            To disable llm-based auto reply, set to False.\n
+            When set to None, will use self.DEFAULT_CONFIG, which defaults to False.\n
+        9) default_auto_reply (str or dict): default auto reply when no code execution or llm-based reply is generated.\n
+        10) description (str): a short description of the agent. This description is used by other agents
+            (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)\n
+        11) chat_messages (dict or None): the previous chat messages that this agent had in the past with other agents.
+            Can be used to give the agent a memory by providing the chat history. This will allow the agent to
+            resume previous had conversations. Defaults to an empty chat history.\n
+        12) silent (bool or None): (Experimental) whether to print the message sent. If None, will use the value of
+            silent in each function.\n
+        13) context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
+            Note: This will be a reference to a shared context for multi-agent chats.\n
+            Behaves like a dictionary with keys and values (akin to dict[str, Any]).\n
+        14) functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).\n
+        15) update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.\n
+        16) handoffs (Handoffs): Handoffs object containing all handoff transition conditions.\n
         """
         self.handoffs = handoffs if handoffs is not None else Handoffs()
-        self.input_guardrails: list["Guardrail"] = []
-        self.output_guardrails: list["Guardrail"] = []
+        self.input_guardrails: list[Guardrail] = []
+        self.output_guardrails: list[Guardrail] = []
 
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -247,7 +247,7 @@ class ConversableAgent(LLMAgent):
             else (lambda x: content_str(x.get("content")) == "TERMINATE")
         )
         self.silent = silent
-        self.run_executor: Optional[ConversableAgent] = None
+        self.run_executor: ConversableAgent | None = None
 
         # Take a copy to avoid modifying the given dict
         if isinstance(llm_config, dict):
@@ -320,7 +320,7 @@ class ConversableAgent(LLMAgent):
                 raise ValueError("code_execution_config must be a dict or False.")
 
             # We have got a valid code_execution_config.
-            self._code_execution_config: Union[dict[str, Any], Literal[False]] = code_execution_config
+            self._code_execution_config: dict[str, Any] | Literal[False] = code_execution_config
 
             if self._code_execution_config.get("executor") is not None:
                 if "use_docker" in self._code_execution_config:
@@ -379,9 +379,7 @@ class ConversableAgent(LLMAgent):
         if not self.llm_config:
             return
 
-        if any([
-            entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)
-        ]):
+        if any(entry for entry in self.llm_config.config_list if entry.api_type == "openai" and re.search(r"\s", name)):
             raise ValueError(f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'")
 
     def _get_display_name(self):
@@ -401,11 +399,12 @@ class ConversableAgent(LLMAgent):
         """Add (Register) a list of functions to the agent
 
         Args:
-            func_list (list[Callable[..., Any]]): A list of functions to register with the agent."""
+            func_list (list[Callable[..., Any]]): A list of functions to register with the agent.
+        """
         for func in func_list:
             self._add_single_function(func)
 
-    def _add_single_function(self, func: Callable, name: Optional[str] = None, description: Optional[str] = ""):
+    def _add_single_function(self, func: Callable, name: str | None = None, description: str | None = ""):
         """Add a single function to the agent
 
         Args:
@@ -433,10 +432,9 @@ class ConversableAgent(LLMAgent):
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
     def _register_update_agent_state_before_reply(
-        self, functions: Optional[Union[list[Callable[..., Any]], Callable[..., Any]]]
+        self, functions: list[Callable[..., Any]] | Callable[..., Any] | None
     ):
-        """
-        Register functions that will be called when the agent is selected and before it speaks.
+        """Register functions that will be called when the agent is selected and before it speaks.
         You can add your own validation or precondition functions here.
 
         Args:
@@ -483,34 +481,24 @@ class ConversableAgent(LLMAgent):
 
     @classmethod
     def _validate_llm_config(
-        cls, llm_config: Optional[Union[LLMConfig, dict[str, Any], Literal[False]]]
-    ) -> Union[LLMConfig, Literal[False]]:
-        # if not(llm_config in (None, False) or isinstance(llm_config, [dict, LLMConfig])):
-        #     raise ValueError(
-        #         "llm_config must be a dict or False or None."
-        #     )
-
+        cls, llm_config: LLMConfig | dict[str, Any] | Literal[False] | None
+    ) -> LLMConfig | Literal[False]:
         if llm_config is None:
             llm_config = LLMConfig.get_current_llm_config()
             if llm_config is None:
-                llm_config = cls.DEFAULT_CONFIG
-        elif isinstance(llm_config, dict):
-            llm_config = LLMConfig(**llm_config)
-        elif isinstance(llm_config, LLMConfig):
-            llm_config = llm_config.copy()
-        elif llm_config is False:
-            pass
-        else:
-            raise ValueError("llm_config must be a LLMConfig, dict or False or None.")
+                return cls.DEFAULT_CONFIG
 
-        return llm_config
+        elif llm_config is False:
+            return False
+
+        return LLMConfig.ensure_config(llm_config)
 
     @classmethod
-    def _create_client(cls, llm_config: Union[LLMConfig, Literal[False]]) -> Optional[OpenAIWrapper]:
+    def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:
         return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
-    def _is_silent(agent: Agent, silent: Optional[bool] = False) -> bool:
+    def _is_silent(agent: Agent, silent: bool | None = False) -> bool:
         return agent.silent if agent.silent is not None else silent
 
     @property
@@ -529,7 +517,7 @@ class ConversableAgent(LLMAgent):
         self._description = description
 
     @property
-    def code_executor(self) -> Optional[CodeExecutor]:
+    def code_executor(self) -> CodeExecutor | None:
         """The code executor used by this agent. Returns None if code execution is disabled."""
         if not hasattr(self, "_code_executor"):
             return None
@@ -537,11 +525,11 @@ class ConversableAgent(LLMAgent):
 
     def register_reply(
         self,
-        trigger: Union[type[Agent], str, Agent, Callable[[Agent], bool], list],
+        trigger: type[Agent] | str | Agent | Callable[[Agent], bool] | list,
         reply_func: Callable,
         position: int = 0,
-        config: Optional[Any] = None,
-        reset_config: Optional[Callable[..., Any]] = None,
+        config: Any | None = None,
+        reset_config: Callable[..., Any] | None = None,
         *,
         ignore_async_in_sync_chat: bool = False,
         remove_other_reply_funcs: bool = False,
@@ -622,7 +610,7 @@ class ConversableAgent(LLMAgent):
     def _get_chats_to_run(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: list[dict[str, Any]] | None,
         sender: Agent,
         config: Any,
     ) -> list[dict[str, Any]]:
@@ -684,7 +672,7 @@ class ConversableAgent(LLMAgent):
             trim_n_messages: The number of latest messages to trim from the messages list
         """
 
-        def concat_carryover(chat_message: str, carryover_message: Union[str, list[dict[str, Any]]]) -> str:
+        def concat_carryover(chat_message: str, carryover_message: str | list[dict[str, Any]]) -> str:
             """Concatenate the carryover message to the chat message."""
             prefix = f"{chat_message}\n" if chat_message else ""
 
@@ -755,11 +743,11 @@ class ConversableAgent(LLMAgent):
     def _process_chat_queue_carryover(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Union[str, Callable[..., Any]],
+        messages: str | Callable[..., Any],
         sender: Agent,
         config: Any,
         trim_messages: int = 2,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Process carryover configuration for the first chat in the queue.
 
         Args:
@@ -801,10 +789,10 @@ class ConversableAgent(LLMAgent):
     def _summary_from_nested_chats(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: list[dict[str, Any]] | None,
         sender: Agent,
         config: Any,
-    ) -> tuple[bool, Union[str, None]]:
+    ) -> tuple[bool, str | None]:
         """A simple chat reply function.
         This function initiate one or a sequence of chats between the "recipient" and the agents in the
         chat_queue.
@@ -840,10 +828,10 @@ class ConversableAgent(LLMAgent):
     async def _a_summary_from_nested_chats(
         chat_queue: list[dict[str, Any]],
         recipient: Agent,
-        messages: Optional[list[dict[str, Any]]],
+        messages: list[dict[str, Any]] | None,
         sender: Agent,
         config: Any,
-    ) -> tuple[bool, Union[str, None]]:
+    ) -> tuple[bool, str | None]:
         """A simple chat reply function.
         This function initiate one or a sequence of chats between the "recipient" and the agents in the
         chat_queue.
@@ -879,10 +867,10 @@ class ConversableAgent(LLMAgent):
     def register_nested_chats(
         self,
         chat_queue: list[dict[str, Any]],
-        trigger: Union[type[Agent], str, Agent, Callable[[Agent], bool], list],
-        reply_func_from_nested_chats: Union[str, Callable[..., Any]] = "summary_from_nested_chats",
+        trigger: type[Agent] | str | Agent | Callable[[Agent], bool] | list,
+        reply_func_from_nested_chats: str | Callable[..., Any] = "summary_from_nested_chats",
         position: int = 2,
-        use_async: Union[bool, None] = None,
+        use_async: bool | None = None,
         **kwargs: Any,
     ) -> None:
         """Register a nested chat reply function.
@@ -957,7 +945,7 @@ class ConversableAgent(LLMAgent):
         """
         self._oai_system_message[0]["content"] = system_message
 
-    def update_max_consecutive_auto_reply(self, value: int, sender: Optional[Agent] = None):
+    def update_max_consecutive_auto_reply(self, value: int, sender: Agent | None = None):
         """Update the maximum number of consecutive auto replies.
 
         Args:
@@ -971,7 +959,7 @@ class ConversableAgent(LLMAgent):
         else:
             self._max_consecutive_auto_reply_dict[sender] = value
 
-    def max_consecutive_auto_reply(self, sender: Optional[Agent] = None) -> int:
+    def max_consecutive_auto_reply(self, sender: Agent | None = None) -> int:
         """The maximum number of consecutive auto replies."""
         return self._max_consecutive_auto_reply if sender is None else self._max_consecutive_auto_reply_dict[sender]
 
@@ -984,7 +972,7 @@ class ConversableAgent(LLMAgent):
         """A list of messages as a conversation to summarize."""
         return self._oai_messages[agent]
 
-    def last_message(self, agent: Optional[Agent] = None) -> Optional[dict[str, Any]]:
+    def last_message(self, agent: Agent | None = None) -> dict[str, Any] | None:
         """The last message exchanged with the agent.
 
         Args:
@@ -1010,14 +998,14 @@ class ConversableAgent(LLMAgent):
         return self._oai_messages[agent][-1]
 
     @property
-    def use_docker(self) -> Union[bool, str, None]:
+    def use_docker(self) -> bool | str | None:
         """Bool value of whether to use docker to execute the code,
         or str value of the docker image name to use, or None when code execution is disabled.
         """
         return None if self._code_execution_config is False else self._code_execution_config.get("use_docker")
 
     @staticmethod
-    def _message_to_dict(message: Union[dict[str, Any], str]) -> dict:
+    def _message_to_dict(message: dict[str, Any] | str) -> dict:
         """Convert a message to a dictionary.
 
         The message can be a string or a dictionary. The string will be put in the "content" field of the new dictionary.
@@ -1050,7 +1038,7 @@ class ConversableAgent(LLMAgent):
         return name
 
     def _append_oai_message(
-        self, message: Union[dict[str, Any], str], role, conversation_id: Agent, is_sending: bool
+        self, message: dict[str, Any] | str, role, conversation_id: Agent, is_sending: bool
     ) -> bool:
         """Append a message to the ChatCompletion conversation.
 
@@ -1108,8 +1096,8 @@ class ConversableAgent(LLMAgent):
         return True
 
     def _process_message_before_send(
-        self, message: Union[dict[str, Any], str], recipient: Agent, silent: bool
-    ) -> Union[dict[str, Any], str]:
+        self, message: dict[str, Any] | str, recipient: Agent, silent: bool
+    ) -> dict[str, Any] | str:
         """Process the message before sending it to the recipient."""
         hook_list = self.hook_lists["process_message_before_send"]
         for hook in hook_list:
@@ -1120,10 +1108,10 @@ class ConversableAgent(LLMAgent):
 
     def send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ):
         """Send a message to another agent.
 
@@ -1168,10 +1156,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_send(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         recipient: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ):
         """(async) Send a message to another agent.
 
@@ -1214,14 +1202,14 @@ class ConversableAgent(LLMAgent):
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
 
-    def _print_received_message(self, message: Union[dict[str, Any], str], sender: Agent, skip_head: bool = False):
+    def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
         message_model = create_received_event_model(event=message, sender=sender, recipient=self)
         iostream = IOStream.get_default()
         # message_model.print(iostream.print)
         iostream.send(message_model)
 
-    def _process_received_message(self, message: Union[dict[str, Any], str], sender: Agent, silent: bool):
+    def _process_received_message(self, message: dict[str, Any] | str, sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
         valid = self._append_oai_message(message, "user", sender, is_sending=False)
         if logging_enabled():
@@ -1237,10 +1225,10 @@ class ConversableAgent(LLMAgent):
 
     def receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ):
         """Receive a message from another agent.
 
@@ -1274,10 +1262,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_receive(
         self,
-        message: Union[dict[str, Any], str],
+        message: dict[str, Any] | str,
         sender: Agent,
-        request_reply: Optional[bool] = None,
-        silent: Optional[bool] = False,
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ):
         """(async) Receive a message from another agent.
 
@@ -1343,16 +1331,35 @@ class ConversableAgent(LLMAgent):
 
             raise RuntimeError(msg)
 
+    def _should_terminate_chat(self, recipient: "ConversableAgent", message: dict[str, Any]) -> bool:
+        """
+        Determines whether the chat should be terminated based on the message content
+        and the recipient's termination condition.
+
+        Args:
+            recipient (ConversableAgent): The agent to check for termination condition.
+            message (dict[str, Any]): The message dictionary to evaluate for termination.
+
+        Returns:
+            bool: True if the chat should be terminated, False otherwise.
+        """
+        return (
+            isinstance(recipient, ConversableAgent)
+            and isinstance(message.get("content"), str)
+            and hasattr(recipient, "_is_termination_msg")
+            and recipient._is_termination_msg(message)
+        )
+
     def initiate_chat(
         self,
         recipient: "ConversableAgent",
         clear_history: bool = True,
-        silent: Optional[bool] = False,
-        cache: Optional[AbstractCache] = None,
-        max_turns: Optional[int] = None,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
-        summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Initiate a chat with the recipient agent.
@@ -1457,6 +1464,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            is_termination = False
             for i in range(max_turns):
                 # check recipient max consecutive auto reply limit
                 if self._consecutive_auto_reply_counter[recipient] >= recipient._max_consecutive_auto_reply:
@@ -1467,11 +1475,13 @@ class ConversableAgent(LLMAgent):
                     else:
                         msg2send = self.generate_init_message(message, **kwargs)
                 else:
+                    last_message = self.chat_messages[recipient][-1]
+                    if self._should_terminate_chat(recipient, last_message):
+                        break
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
                 if msg2send is None:
                     break
                 self.send(msg2send, recipient, request_reply=True, silent=silent)
-
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
                     TerminationEvent(
@@ -1506,16 +1516,16 @@ class ConversableAgent(LLMAgent):
         self,
         recipient: Optional["ConversableAgent"] = None,
         clear_history: bool = True,
-        silent: Optional[bool] = False,
-        cache: Optional[AbstractCache] = None,
-        max_turns: Optional[int] = None,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
-        summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
-        executor_kwargs: Optional[dict[str, Any]] = None,
-        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
-        user_input: Optional[bool] = False,
-        msg_to: Optional[str] = "agent",
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
         **kwargs: Any,
     ) -> RunResponseProtocol:
         iostream = ThreadIOStream()
@@ -1616,12 +1626,12 @@ class ConversableAgent(LLMAgent):
         self,
         recipient: "ConversableAgent",
         clear_history: bool = True,
-        silent: Optional[bool] = False,
-        cache: Optional[AbstractCache] = None,
-        max_turns: Optional[int] = None,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
-        summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[str, Callable[..., Any]]] = None,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """(async) Initiate a chat with the recipient agent.
@@ -1645,6 +1655,7 @@ class ConversableAgent(LLMAgent):
             agent.client_cache = cache
         if isinstance(max_turns, int):
             self._prepare_chat(recipient, clear_history, reply_at_receive=False)
+            is_termination = False
             for _ in range(max_turns):
                 if _ == 0:
                     if isinstance(message, Callable):
@@ -1652,9 +1663,12 @@ class ConversableAgent(LLMAgent):
                     else:
                         msg2send = await self.a_generate_init_message(message, **kwargs)
                 else:
+                    last_message = self.chat_messages[recipient][-1]
+                    if self._should_terminate_chat(recipient, last_message):
+                        break
                     msg2send = await self.a_generate_reply(messages=self.chat_messages[recipient], sender=recipient)
-                if msg2send is None:
-                    break
+                    if msg2send is None:
+                        break
                 await self.a_send(msg2send, recipient, request_reply=True, silent=silent)
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
@@ -1690,16 +1704,16 @@ class ConversableAgent(LLMAgent):
         self,
         recipient: Optional["ConversableAgent"] = None,
         clear_history: bool = True,
-        silent: Optional[bool] = False,
-        cache: Optional[AbstractCache] = None,
-        max_turns: Optional[int] = None,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
-        summary_args: Optional[dict[str, Any]] = {},
-        message: Optional[Union[dict[str, Any], str, Callable[..., Any]]] = None,
-        executor_kwargs: Optional[dict[str, Any]] = None,
-        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
-        user_input: Optional[bool] = False,
-        msg_to: Optional[str] = "agent",
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
         iostream = AsyncThreadIOStream()
@@ -1796,8 +1810,8 @@ class ConversableAgent(LLMAgent):
         self,
         summary_method,
         summary_args,
-        recipient: Optional[Agent] = None,
-        cache: Optional[AbstractCache] = None,
+        recipient: Agent | None = None,
+        cache: AbstractCache | None = None,
     ) -> str:
         """Get a chat summary from an agent participating in a chat.
 
@@ -1839,6 +1853,8 @@ class ConversableAgent(LLMAgent):
             raise ValueError(
                 "If not None, the summary_method must be a string from [`reflection_with_llm`, `last_msg`] or a callable."
             )
+        if isinstance(summary, dict):
+            summary = str(summary.get("content", ""))
         return summary
 
     @staticmethod
@@ -1884,9 +1900,9 @@ class ConversableAgent(LLMAgent):
         self,
         prompt,
         messages,
-        llm_agent: Optional[Agent] = None,
-        cache: Optional[AbstractCache] = None,
-        role: Union[str, None] = None,
+        llm_agent: Agent | None = None,
+        cache: AbstractCache | None = None,
+        role: str | None = None,
     ) -> str:
         """Get a chat summary using reflection with an llm client based on the conversation history.
 
@@ -2083,7 +2099,7 @@ class ConversableAgent(LLMAgent):
 
         return responses
 
-    def get_chat_results(self, chat_index: Optional[int] = None) -> Union[list[ChatResult], ChatResult]:
+    def get_chat_results(self, chat_index: int | None = None) -> list[ChatResult] | ChatResult:
         """A summary from the finished chats of particular agents."""
         if chat_index is not None:
             return self._finished_chats[chat_index]
@@ -2103,21 +2119,21 @@ class ConversableAgent(LLMAgent):
             else:
                 reply_func_tuple["config"] = copy.copy(reply_func_tuple["init_config"])
 
-    def stop_reply_at_receive(self, sender: Optional[Agent] = None):
+    def stop_reply_at_receive(self, sender: Agent | None = None):
         """Reset the reply_at_receive of the sender."""
         if sender is None:
             self.reply_at_receive.clear()
         else:
             self.reply_at_receive[sender] = False
 
-    def reset_consecutive_auto_reply_counter(self, sender: Optional[Agent] = None):
+    def reset_consecutive_auto_reply_counter(self, sender: Agent | None = None):
         """Reset the consecutive_auto_reply_counter of the sender."""
         if sender is None:
             self._consecutive_auto_reply_counter.clear()
         else:
             self._consecutive_auto_reply_counter[sender] = 0
 
-    def clear_history(self, recipient: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None):
+    def clear_history(self, recipient: Agent | None = None, nr_messages_to_preserve: int | None = None):
         """Clear the chat history of the agent.
 
         Args:
@@ -2150,10 +2166,10 @@ class ConversableAgent(LLMAgent):
 
     def generate_oai_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[OpenAIWrapper] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: OpenAIWrapper | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
         client = self.client if config is None else config
         if client is None:
@@ -2165,7 +2181,7 @@ class ConversableAgent(LLMAgent):
         )
         return (False, None) if extracted_response is None else (True, extracted_response)
 
-    def _generate_oai_reply_from_client(self, llm_client, messages, cache) -> Optional[Union[str, dict[str, Any]]]:
+    def _generate_oai_reply_from_client(self, llm_client, messages, cache) -> str | dict[str, Any] | None:
         # unroll tool_responses
         all_messages = []
         for message in messages:
@@ -2210,16 +2226,16 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_oai_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai asynchronously."""
         iostream = IOStream.get_default()
 
         def _generate_oai_reply(
             self, iostream: IOStream, *args: Any, **kwargs: Any
-        ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
+        ) -> tuple[bool, str | dict[str, Any] | None]:
             with IOStream.set_default(iostream):
                 return self.generate_oai_reply(*args, **kwargs)
 
@@ -2232,9 +2248,9 @@ class ConversableAgent(LLMAgent):
 
     def _generate_code_execution_reply_using_executor(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: dict[str, Any] | Literal[False] | None = None,
     ):
         """Generate a reply using code executor."""
         iostream = IOStream.get_default()
@@ -2283,9 +2299,9 @@ class ConversableAgent(LLMAgent):
 
     def generate_code_execution_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Union[dict[str, Any], Literal[False]]] = None,
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: dict[str, Any] | Literal[False] | None = None,
     ):
         """Generate a reply using code execution."""
         code_execution_config = config if config is not None else self._code_execution_config
@@ -2348,10 +2364,10 @@ class ConversableAgent(LLMAgent):
 
     def generate_function_call_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
         """Generate a reply using function call.
 
         "function_call" replaced by "tool_calls" as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
@@ -2376,10 +2392,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_function_call_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
         """Generate a reply using async function call.
 
         "function_call" replaced by "tool_calls" as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
@@ -2408,10 +2424,10 @@ class ConversableAgent(LLMAgent):
 
     def generate_tool_calls_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
         """Generate a reply using tool call."""
         if config is None:
             config = self
@@ -2466,10 +2482,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_tool_calls_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, dict[str, Any] | None]:
         """Generate a reply using async function call."""
         if config is None:
             config = self
@@ -2491,10 +2507,10 @@ class ConversableAgent(LLMAgent):
 
     def check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, None]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | None]:
         """Check if the conversation should be terminated, and if human reply is provided.
 
         This method checks for conditions that require the conversation to be terminated, such as reaching
@@ -2635,10 +2651,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_check_termination_and_human_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> tuple[bool, Union[str, None]]:
+        messages: list[dict[str, Any]] | None = None,
+        sender: Agent | None = None,
+        config: Any | None = None,
+    ) -> tuple[bool, str | None]:
         """(async) Check if the conversation should be terminated, and if human reply is provided.
 
         This method checks for conditions that require the conversation to be terminated, such as reaching
@@ -2775,10 +2791,10 @@ class ConversableAgent(LLMAgent):
 
     def generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Optional[Union[str, dict[str, Any]]]:
+    ) -> str | dict[str, Any] | None:
         """Reply based on the conversation history and the sender.
 
         Either messages or sender must be provided.
@@ -2849,10 +2865,10 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_reply(
         self,
-        messages: Optional[list[dict[str, Any]]] = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> Union[str, dict[str, Any], None]:
+    ) -> str | dict[str, Any] | None:
         """(async) Reply based on the conversation history and the sender.
 
         Either messages or sender must be provided.
@@ -2916,7 +2932,7 @@ class ConversableAgent(LLMAgent):
                     return reply
         return self._default_auto_reply
 
-    def _match_trigger(self, trigger: Union[None, str, type, Agent, Callable, list], sender: Optional[Agent]) -> bool:
+    def _match_trigger(self, trigger: None | str | type | Agent | Callable | list, sender: Agent | None) -> bool:
         """Check if the sender matches the trigger.
 
         Args:
@@ -2978,28 +2994,18 @@ class ConversableAgent(LLMAgent):
         Returns:
             str: human input.
         """
-        iostream = IOStream.get_default()
 
-        reply = await iostream.input(prompt)
+        iostream = IOStream.get_default()
+        input_func = iostream.input
+
+        if is_coroutine_callable(input_func):
+            reply = await input_func(prompt)
+        else:
+            reply = await asyncio.to_thread(input_func, prompt)
         self._human_input.append(reply)
         return reply
 
-        # def _get_human_input(
-        #     self, iostream: IOStream, prompt: str,
-        # ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
-        #     with IOStream.set_default(iostream):
-        #         print("!"*100)
-        #         print("Getting human input...")
-        #         return self.get_human_input(prompt)
-
-        # return await asyncio.get_event_loop().run_in_executor(
-        #     None,
-        #     functools.partial(
-        #         _get_human_input, self=self, iostream=iostream, prompt=prompt,
-        #     ),
-        # )
-
-    def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, Optional[str]]:
+    def run_code(self, code: str, **kwargs: Any) -> tuple[int, str, str | None]:
         """Run the code and return the result.
 
         Override this function to modify the way to run the code.
@@ -3084,7 +3090,7 @@ class ConversableAgent(LLMAgent):
         return "".join(result)
 
     def execute_function(
-        self, func_call: dict[str, Any], call_id: Optional[str] = None, verbose: bool = False
+        self, func_call: dict[str, Any], call_id: str | None = None, verbose: bool = False
     ) -> tuple[bool, dict[str, Any]]:
         """Execute a function call and return the result.
 
@@ -3153,7 +3159,7 @@ class ConversableAgent(LLMAgent):
         }
 
     async def a_execute_function(
-        self, func_call: dict[str, Any], call_id: Optional[str] = None, verbose: bool = False
+        self, func_call: dict[str, Any], call_id: str | None = None, verbose: bool = False
     ) -> tuple[bool, dict[str, Any]]:
         """Execute an async function call and return the result.
 
@@ -3224,9 +3230,7 @@ class ConversableAgent(LLMAgent):
             "content": content,
         }
 
-    def generate_init_message(
-        self, message: Optional[Union[dict[str, Any], str]], **kwargs: Any
-    ) -> Union[str, dict[str, Any]]:
+    def generate_init_message(self, message: dict[str, Any] | str | None, **kwargs: Any) -> str | dict[str, Any]:
         """Generate the initial message for the agent.
         If message is None, input() will be called to get the initial message.
 
@@ -3245,7 +3249,7 @@ class ConversableAgent(LLMAgent):
 
         return self._handle_carryover(message, kwargs)
 
-    def _handle_carryover(self, message: Union[str, dict[str, Any]], kwargs: dict) -> Union[str, dict[str, Any]]:
+    def _handle_carryover(self, message: str | dict[str, Any], kwargs: dict) -> str | dict[str, Any]:
         if not kwargs.get("carryover"):
             return message
 
@@ -3291,8 +3295,8 @@ class ConversableAgent(LLMAgent):
         return [{"type": "text", "text": self._process_carryover("", kwargs)}] + content
 
     async def a_generate_init_message(
-        self, message: Optional[Union[dict[str, Any], str]], **kwargs: Any
-    ) -> Union[str, dict[str, Any]]:
+        self, message: dict[str, Any] | str | None, **kwargs: Any
+    ) -> str | dict[str, Any]:
         """Generate the initial message for the agent.
         If message is None, input() will be called to get the initial message.
 
@@ -3327,7 +3331,7 @@ class ConversableAgent(LLMAgent):
         except ValueError:
             raise ValueError(f"Tool {tool} not found in collection")
 
-    def register_function(self, function_map: dict[str, Union[Callable[..., Any]]], silent_override: bool = False):
+    def register_function(self, function_map: dict[str, Callable[..., Any]], silent_override: bool = False):
         """Register functions to the agent.
 
         Args:
@@ -3344,7 +3348,7 @@ class ConversableAgent(LLMAgent):
         self._function_map = {k: v for k, v in self._function_map.items() if v is not None}
 
     def update_function_signature(
-        self, func_sig: Union[str, dict[str, Any]], is_remove: None, silent_override: bool = False
+        self, func_sig: str | dict[str, Any], is_remove: bool = False, silent_override: bool = False
     ):
         """Update a function_signature in the LLM configuration for function_call.
 
@@ -3396,9 +3400,7 @@ class ConversableAgent(LLMAgent):
 
         self.client = OpenAIWrapper(**self.llm_config)
 
-    def update_tool_signature(
-        self, tool_sig: Union[str, dict[str, Any]], is_remove: bool, silent_override: bool = False
-    ):
+    def update_tool_signature(self, tool_sig: str | dict[str, Any], is_remove: bool, silent_override: bool = False):
         """Update a tool_signature in the LLM configuration for tool_call.
 
         Args:
@@ -3456,10 +3458,10 @@ class ConversableAgent(LLMAgent):
 
         self.client = OpenAIWrapper(**self.llm_config)
 
-    def can_execute_function(self, name: Union[list[str], str]) -> bool:
+    def can_execute_function(self, name: list[str] | str) -> bool:
         """Whether the agent can execute the function."""
         names = name if isinstance(name, list) else [name]
-        return all([n in self._function_map for n in names])
+        return all(n in self._function_map for n in names)
 
     @property
     def function_map(self) -> dict[str, Callable[..., Any]]:
@@ -3505,9 +3507,9 @@ class ConversableAgent(LLMAgent):
 
     @staticmethod
     def _create_tool_if_needed(
-        func_or_tool: Union[F, Tool],
-        name: Optional[str],
-        description: Optional[str],
+        func_or_tool: F | Tool,
+        name: str | None,
+        description: str | None,
     ) -> Tool:
         if isinstance(func_or_tool, Tool):
             tool: Tool = func_or_tool
@@ -3524,11 +3526,11 @@ class ConversableAgent(LLMAgent):
     def register_for_llm(
         self,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
         api_style: Literal["function", "tool"] = "tool",
         silent_override: bool = False,
-    ) -> Callable[[Union[F, Tool]], Tool]:
+    ) -> Callable[[F | Tool], Tool]:
         """Decorator factory for registering a function to be used by an agent.
 
         It's return value is used to decorate a function to be registered to the agent. The function uses type hints to
@@ -3569,9 +3571,7 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(
-            func_or_tool: Union[F, Tool], name: Optional[str] = name, description: Optional[str] = description
-        ) -> Tool:
+        def _decorator(func_or_tool: F | Tool, name: str | None = name, description: str | None = description) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
@@ -3600,8 +3600,7 @@ class ConversableAgent(LLMAgent):
     def _register_for_llm(
         self, tool: Tool, api_style: Literal["tool", "function"], is_remove: bool = False, silent_override: bool = False
     ) -> None:
-        """
-        Register a tool for LLM.
+        """Register a tool for LLM.
 
         Args:
             tool: the tool to be registered.
@@ -3672,12 +3671,12 @@ class ConversableAgent(LLMAgent):
 
     def register_for_execution(
         self,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
         *,
         serialize: bool = True,
         silent_override: bool = False,
-    ) -> Callable[[Union[Tool, F]], Tool]:
+    ) -> Callable[[Tool | F], Tool]:
         """Decorator factory for registering a function to be executed by an agent.
 
         It's return value is used to decorate a function to be registered to the agent.
@@ -3702,9 +3701,7 @@ class ConversableAgent(LLMAgent):
 
         """
 
-        def _decorator(
-            func_or_tool: Union[Tool, F], name: Optional[str] = name, description: Optional[str] = description
-        ) -> Tool:
+        def _decorator(func_or_tool: Tool | F, name: str | None = name, description: str | None = description) -> Tool:
             """Decorator for registering a function to be used by an agent.
 
             Args:
@@ -3716,10 +3713,9 @@ class ConversableAgent(LLMAgent):
                 The tool to be registered.
 
             """
-
             tool = self._create_tool_if_needed(func_or_tool, name, description)
             chat_context = ChatContext(self)
-            chat_context_params = {param: chat_context for param in tool._chat_context_param_names}
+            chat_context_params = dict.fromkeys(tool._chat_context_param_names, chat_context)
 
             self.register_function(
                 {tool.name: self._wrap_function(tool.func, chat_context_params, serialize=serialize)},
@@ -3817,7 +3813,7 @@ class ConversableAgent(LLMAgent):
         messages[-1]["content"] = processed_user_content
         return messages
 
-    def print_usage_summary(self, mode: Union[str, list[str]] = ["actual", "total"]) -> None:
+    def print_usage_summary(self, mode: str | list[str] = ["actual", "total"]) -> None:
         """Print the usage summary."""
         iostream = IOStream.get_default()
         if self.client is None:
@@ -3828,14 +3824,14 @@ class ConversableAgent(LLMAgent):
         if self.client is not None:
             self.client.print_usage_summary(mode)
 
-    def get_actual_usage(self) -> Union[None, dict[str, int]]:
+    def get_actual_usage(self) -> None | dict[str, int]:
         """Get the actual usage summary."""
         if self.client is None:
             return None
         else:
             return self.client.actual_usage_summary
 
-    def get_total_usage(self) -> Union[None, dict[str, int]]:
+    def get_total_usage(self) -> None | dict[str, int]:
         """Get the total usage summary."""
         if self.client is None:
             return None
@@ -3845,8 +3841,8 @@ class ConversableAgent(LLMAgent):
     @contextmanager
     def _create_or_get_executor(
         self,
-        executor_kwargs: Optional[dict[str, Any]] = None,
-        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
         agent_name: str = "executor",
         agent_human_input_mode: str = "NEVER",
     ) -> Generator["ConversableAgent", None, None]:
@@ -3873,28 +3869,42 @@ class ConversableAgent(LLMAgent):
                     **executor_kwargs,
                 )
 
-            tools = [] if tools is None else tools
-            tools = [tools] if isinstance(tools, Tool) else tools
-            for tool in tools:
+            # Combine agent's existing tools with passed tools
+            agent_tools = self._tools.copy()  # Get agent's pre-registered tools
+            passed_tools = [] if tools is None else tools
+            passed_tools = [passed_tools] if isinstance(passed_tools, Tool) else passed_tools
+
+            # Combine both sets of tools (avoid duplicates)
+            all_tools = agent_tools.copy()
+            for tool in passed_tools:
+                if tool not in all_tools:
+                    all_tools.append(tool)
+
+            # Register all tools with the executor
+            for tool in all_tools:
                 tool.register_for_execution(self.run_executor)
+
+            # Register only newly passed tools for LLM (agent's pre-existing tools are already registered)
+            for tool in passed_tools:
                 tool.register_for_llm(self)
             yield self.run_executor
         finally:
-            if tools is not None:
-                for tool in tools:
+            # Clean up only newly passed tools (not agent's pre-existing tools)
+            if "passed_tools" in locals():
+                for tool in passed_tools:
                     self.update_tool_signature(tool_sig=tool.tool_schema["function"]["name"], is_remove=True)
 
     def _deprecated_run(
         self,
         message: str,
         *,
-        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
-        executor_kwargs: Optional[dict[str, Any]] = None,
-        max_turns: Optional[int] = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        max_turns: int | None = None,
         msg_to: Literal["agent", "user"] = "agent",
         clear_history: bool = False,
         user_input: bool = True,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
     ) -> ChatResult:
         """Run a chat with the agent using the given message.
 
@@ -3939,13 +3949,13 @@ class ConversableAgent(LLMAgent):
         self,
         message: str,
         *,
-        tools: Optional[Union[Tool, Iterable[Tool]]] = None,
-        executor_kwargs: Optional[dict[str, Any]] = None,
-        max_turns: Optional[int] = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        max_turns: int | None = None,
         msg_to: Literal["agent", "user"] = "agent",
         clear_history: bool = False,
         user_input: bool = True,
-        summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
     ) -> ChatResult:
         """Run a chat asynchronously with the agent using the given message.
 
@@ -3987,8 +3997,7 @@ class ConversableAgent(LLMAgent):
                 )
 
     def register_handoff(self, condition: Union["OnContextCondition", "OnCondition"]) -> None:
-        """
-        Register a single handoff condition (OnContextCondition or OnCondition).
+        """Register a single handoff condition (OnContextCondition or OnCondition).
 
         Args:
             condition: The condition to add (OnContextCondition, OnCondition)
@@ -3996,8 +4005,7 @@ class ConversableAgent(LLMAgent):
         self.handoffs.add(condition)
 
     def register_handoffs(self, conditions: list[Union["OnContextCondition", "OnCondition"]]) -> None:
-        """
-        Register multiple handoff conditions (OnContextCondition or OnCondition).
+        """Register multiple handoff conditions (OnContextCondition or OnCondition).
 
         Args:
             conditions: List of conditions to add
@@ -4005,8 +4013,7 @@ class ConversableAgent(LLMAgent):
         self.handoffs.add_many(conditions)
 
     def register_input_guardrail(self, guardrail: "Guardrail") -> None:
-        """
-        Register a guardrail to be used for input validation.
+        """Register a guardrail to be used for input validation.
 
         Args:
             guardrail: The guardrail to register.
@@ -4014,8 +4021,7 @@ class ConversableAgent(LLMAgent):
         self.input_guardrails.append(guardrail)
 
     def register_input_guardrails(self, guardrails: list["Guardrail"]) -> None:
-        """
-        Register multiple guardrails to be used for input validation.
+        """Register multiple guardrails to be used for input validation.
 
         Args:
             guardrails: List of guardrails to register.
@@ -4023,8 +4029,7 @@ class ConversableAgent(LLMAgent):
         self.input_guardrails.extend(guardrails)
 
     def register_output_guardrail(self, guardrail: "Guardrail") -> None:
-        """
-        Register a guardrail to be used for output validation.
+        """Register a guardrail to be used for output validation.
 
         Args:
             guardrail: The guardrail to register.
@@ -4032,8 +4037,7 @@ class ConversableAgent(LLMAgent):
         self.output_guardrails.append(guardrail)
 
     def register_output_guardrails(self, guardrails: list["Guardrail"]) -> None:
-        """
-        Register multiple guardrails to be used for output validation.
+        """Register multiple guardrails to be used for output validation.
 
         Args:
             guardrails: List of guardrails to register.
@@ -4047,7 +4051,7 @@ def register_function(
     *,
     caller: ConversableAgent,
     executor: ConversableAgent,
-    name: Optional[str] = None,
+    name: str | None = None,
     description: str,
 ) -> None:
     """Register a function to be proposed by an agent and executed for an executor.

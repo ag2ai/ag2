@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
-from typing import Annotated, Any, Callable, Union
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -77,7 +78,7 @@ class DeepResearchTool(Tool):
 
     def __init__(
         self,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         max_web_steps: int = 30,
     ):
         """Initialize the DeepResearchTool.
@@ -117,7 +118,7 @@ class DeepResearchTool(Tool):
 
         def delegate_research_task(
             task: Annotated[str, "The task to perform a research on."],
-            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
+            llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
             """Delegate a research task to the agent.
@@ -165,11 +166,11 @@ class DeepResearchTool(Tool):
 
     @staticmethod
     def _get_split_question_and_answer_subquestions(
-        llm_config: Union[LLMConfig, dict[str, Any]], max_web_steps: int
+        llm_config: LLMConfig | dict[str, Any], max_web_steps: int
     ) -> Callable[..., Any]:
         def split_question_and_answer_subquestions(
             question: Annotated[str, "The question to split and answer."],
-            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
+            llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
             decomposition_agent = ConversableAgent(
@@ -233,7 +234,7 @@ class DeepResearchTool(Tool):
 
     @staticmethod
     def _get_generate_subquestions(
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         max_web_steps: int,
     ) -> Callable[..., str]:
         """Get the generate_subquestions method.
@@ -248,7 +249,7 @@ class DeepResearchTool(Tool):
 
         def generate_subquestions(
             task: Task,
-            llm_config: Annotated[Union[LLMConfig, dict[str, Any]], Depends(on(llm_config))],
+            llm_config: Annotated[LLMConfig | dict[str, Any], Depends(on(llm_config))],
             max_web_steps: Annotated[int, Depends(on(max_web_steps))],
         ) -> str:
             if not task.subquestions:
@@ -270,7 +271,7 @@ class DeepResearchTool(Tool):
     @staticmethod
     def _answer_question(
         question: str,
-        llm_config: Union[LLMConfig, dict[str, Any]],
+        llm_config: LLMConfig | dict[str, Any],
         max_web_steps: int,
     ) -> str:
         from ....agents.experimental.websurfer import WebSurferAgent

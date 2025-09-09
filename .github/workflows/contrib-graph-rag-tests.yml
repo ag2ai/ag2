@@ -5,7 +5,7 @@ name: ContribGraphRagTests
 
 on:
   schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+    - cron: "0 0 * * 0" # weekly on Sunday at midnight UTC
   workflow_dispatch: # allows manual triggering of the workflow
   # pull_request_target:
   #   branches: ["main"]
@@ -56,10 +56,10 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -129,10 +129,10 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -170,7 +170,7 @@ jobs:
   #   strategy:
   #     fail-fast: false
   #     matrix:
-  #       python-version: ["3.9", "3.10", "3.13"]
+  #       python-version: ["3.10", "3.13"]
   #   services:
   #     neo4j:
   #       image: neo4j:latest
@@ -180,8 +180,8 @@ jobs:
   #       env:
   #         NEO4J_AUTH: neo4j/password
   #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: astral-sh/setup-uv@v5
+  #     - uses: actions/checkout@v5
+  #     - uses: astral-sh/setup-uv@v6
   #       with:
   #         version: "latest"
   #     - name: Set up Python ${{ matrix.python-version }}

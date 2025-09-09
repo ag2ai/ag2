@@ -3,17 +3,29 @@
 <p align="center">
   <!-- The image URL points to the GitHub-hosted content, ensuring it displays correctly on the PyPI website.-->
   <img src="https://raw.githubusercontent.com/ag2ai/ag2/27b37494a6f72b1f8050f6bd7be9a7ff232cf749/website/static/img/ag2.svg" width="150" title="hover text">
+
   <br>
   <br>
-  <img src="https://img.shields.io/pypi/dm/ag2?label=PyPI%20downloads">
-  <a href="https://badge.fury.io/py/autogen"><img src="https://badge.fury.io/py/autogen.svg"></a>
+
+  <a href="https://www.pepy.tech/projects/ag2">
+    <img src="https://static.pepy.tech/personalized-badge/ag2?period=month&units=international_system&left_color=grey&right_color=green&left_text=downloads/month" alt="Downloads"/>
+  </a>
+
+  <a href="https://pypi.org/project/autogen/">
+    <img src="https://img.shields.io/pypi/v/ag2?label=PyPI&color=green">
+  </a>
+
+  <img src="https://img.shields.io/pypi/pyversions/ag2.svg?label=">
+
   <a href="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml">
     <img src="https://github.com/ag2ai/ag2/actions/workflows/python-package.yml/badge.svg">
   </a>
-  <img src="https://img.shields.io/badge/3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue">
   <a href="https://discord.gg/pAbnFJrkgZ">
     <img src="https://img.shields.io/discord/1153072414184452236?logo=discord&style=flat">
   </a>
+
+  <br>
+
   <a href="https://x.com/ag2oss">
     <img src="https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40ag2ai">
   </a>
@@ -65,7 +77,7 @@ For a step-by-step walk through of AG2 concepts and code, see [Basic Concepts](h
 
 ### Installation
 
-AG2 requires **Python version >= 3.9, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
+AG2 requires **Python version >= 3.10, < 3.14**. AG2 is available via `ag2` (or its alias `autogen`) on PyPI.
 
 ```bash
 pip install ag2[openai]
@@ -82,7 +94,7 @@ You can use the sample file `OAI_CONFIG_LIST_sample` as a template.
 ```json
 [
   {
-    "model": "gpt-4o",
+    "model": "gpt-5",
     "api_key": "<your OpenAI API key here>"
   }
 ]
@@ -97,10 +109,10 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 
+assistant = AssistantAgent("assistant", llm_config=llm_config)
 
-with llm_config:
-    assistant = AssistantAgent("assistant")
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
+
 user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
 # This initiates an automated chat between the two agents to solve the task
 ```
@@ -136,22 +148,23 @@ from autogen import ConversableAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
-
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-mini",
+})
 
 # 3. Create our LLM agent
-with llm_config:
-  # Create an AI agent
-  assistant = ConversableAgent(
-      name="assistant",
-      system_message="You are an assistant that responds concisely.",
-  )
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are an assistant that responds concisely.",
+    llm_config=llm_config,
+)
 
-  # Create another AI agent
-  fact_checker = ConversableAgent(
-      name="fact_checker",
-      system_message="You are a fact-checking assistant.",
-  )
+fact_checker = ConversableAgent(
+    name="fact_checker",
+    system_message="You are a fact-checking assistant.",
+    llm_config=llm_config,
+)
 
 # 4. Start the conversation
 assistant.initiate_chat(
@@ -180,23 +193,29 @@ from autogen import ConversableAgent, UserProxyAgent, LLMConfig
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
-
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-mini",
+})
 
 # 3. Create our LLM agent
-with llm_config:
-  assistant = ConversableAgent(
-      name="assistant",
-      system_message="You are a helpful assistant.",
-  )
+assistant = ConversableAgent(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config=llm_config,
+)
 
 # 4. Create a human agent with manual input mode
 human = ConversableAgent(
     name="human",
     human_input_mode="ALWAYS"
 )
+
 # or
-human = UserProxyAgent(name="human", code_execution_config={"work_dir": "coding", "use_docker": False})
+human = UserProxyAgent(
+    name="human",
+    code_execution_config={"work_dir": "coding", "use_docker": False},
+)
 
 # 5. Start the chat
 human.initiate_chat(
@@ -220,7 +239,10 @@ Note: Before running this code, make sure to set your `OPENAI_API_KEY` as an env
 from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-mini",
+})
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -241,18 +263,19 @@ planner_description = "Creates or revises lesson plans."
 reviewer_description = """Provides one round of reviews to a lesson plan
 for the lesson_planner to revise."""
 
-with llm_config:
-    lesson_planner = ConversableAgent(
-        name="planner_agent",
-        system_message=planner_message,
-        description=planner_description,
-    )
+lesson_planner = ConversableAgent(
+    name="planner_agent",
+    system_message=planner_message,
+    description=planner_description,
+    llm_config=llm_config,
+)
 
-    lesson_reviewer = ConversableAgent(
-        name="reviewer_agent",
-        system_message=reviewer_message,
-        description=reviewer_description,
-    )
+lesson_reviewer = ConversableAgent(
+    name="reviewer_agent",
+    system_message=reviewer_message,
+    description=reviewer_description,
+    llm_config=llm_config,
+)
 
 # 2. The teacher's system message can also be used as a description, so we don't define it
 teacher_message = """You are a classroom teacher.
@@ -261,13 +284,13 @@ and reviewer to create and finalise lesson plans.
 When you are happy with a lesson plan, output "DONE!".
 """
 
-with llm_config:
-    teacher = ConversableAgent(
-        name="teacher_agent",
-        system_message=teacher_message,
-        # 3. Our teacher can end the conversation by saying DONE!
-        is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
-    )
+teacher = ConversableAgent(
+    name="teacher_agent",
+    system_message=teacher_message,
+    # 3. Our teacher can end the conversation by saying DONE!
+    is_termination_msg=lambda x: "DONE!" in (x.get("content", "") or "").upper(),
+    llm_config=llm_config,
+)
 
 # 4. Create the GroupChat with agents and selection method
 groupchat = GroupChat(
@@ -307,7 +330,10 @@ from typing import Annotated
 from autogen import ConversableAgent, register_function, LLMConfig
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = LLMConfig({
+    "api_type": "openai",
+    "model": "gpt-5-mini",
+})
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
@@ -315,16 +341,17 @@ def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     return date.strftime("%A")
 
 # 2. Agent for determining whether to run the tool
-with llm_config:
-    date_agent = ConversableAgent(
-        name="date_agent",
-        system_message="You get the day of the week for a given date.",
-    )
+date_agent = ConversableAgent(
+    name="date_agent",
+    system_message="You get the day of the week for a given date.",
+    llm_config=llm_config,
+)
 
 # 3. And an agent for executing the tool
 executor_agent = ConversableAgent(
     name="executor_agent",
     human_input_mode="NEVER",
+    llm_config=llm_config,
 )
 
 # 4. Registers the tool with the agents, the description will be used by the LLM
