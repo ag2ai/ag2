@@ -6,9 +6,10 @@ import logging
 from pathlib import Path
 from typing import Annotated, Any
 
-from .... import ConversableAgent
+from .... import ConversableAgent, UserProxyAgent
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.group.context_variables import ContextVariables
+from ....agentchat.group.reply_result import ReplyResult
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs
@@ -57,22 +58,40 @@ class TaskManagerAgent(ConversableAgent):
         """
         self.query_engine = query_engine
         self.parsed_docs_path = Path(parsed_docs_path) if parsed_docs_path else Path("./parsed_docs")
-
-        def ingest_documents(
-            context_variables: Annotated[ContextVariables, "Context variables containing document tasks"],
-        ) -> str:
+        
+        super().__init__(
+            name=name,
+            system_message=TASK_MANAGER_SYSTEM_MESSAGE,
+            llm_config=llm_config,
+        )
+        
+        # Register tools after initialization
+        self._register_tools()
+    
+    def _register_tools(self):
+        """Register the tools with the agent."""
+        
+        @self.register_for_llm(description="Use this tool to ingest documents")
+        @self.register_for_execution(description="Use this tool to ingest documents")
+        def ingest_documents() -> ReplyResult:
             """Ingest documents from the DocumentsToIngest list.
 
-            Args:
-                context_variables: The current context variables
-
             Returns:
-                str: Status message about the ingestion process
+                ReplyResult: Status message and context updates
             """
+            # Access context variables from the agent
+            context_variables = self.context_variables
+            print(f"[TaskManagerAgent] ingest_documents called")
+            print(f"[TaskManagerAgent] context_variables: {context_variables}")
+            print(f"[TaskManagerAgent] context_variables type: {type(context_variables)}")
             documents_to_ingest = context_variables.get("DocumentsToIngest", [])
+            print(f"[TaskManagerAgent] documents_to_ingest: {documents_to_ingest}")
 
             if not documents_to_ingest:
-                return "No documents to ingest"
+                return ReplyResult(
+                    message="No documents to ingest",
+                    context_variables=context_variables
+                )
 
             results = []
             documents_ingested = context_variables.get("DocumentsIngested", [])
@@ -116,23 +135,46 @@ class TaskManagerAgent(ConversableAgent):
             context_variables["DocumentsToIngest"] = documents_to_ingest
             context_variables["DocumentsIngested"] = documents_ingested
 
-            return "; ".join(results) if results else "No documents processed"
+            message = "; ".join(results) if results else "No documents processed"
+            
+            # Check if there are more tasks to process
+            remaining_ingestions = len(documents_to_ingest)
+            remaining_queries = len(context_variables.get("QueriesToRun", []))
+            
+            if remaining_ingestions > 0 or remaining_queries > 0:
+                # Continue processing - return to self
+                return ReplyResult(
+                    message=f"{message}. Remaining tasks: {remaining_ingestions} ingestions, {remaining_queries} queries.",
+                    context_variables=context_variables
+                )
+            else:
+                # All tasks complete
+                return ReplyResult(
+                    message=f"{message}. All tasks completed.",
+                    context_variables=context_variables
+                )
 
-        def execute_query(
-            context_variables: Annotated[ContextVariables, "Context variables containing query tasks"],
-        ) -> str:
+        @self.register_for_llm(description="Use this tool to execute queries")
+        @self.register_for_execution(description="Use this tool to execute queries")
+        def execute_query() -> ReplyResult:
             """Execute queries from the QueriesToRun list.
 
-            Args:
-                context_variables: The current context variables
-
             Returns:
-                str: The answer to the query or error message
+                ReplyResult: Query result and context updates
             """
+            # Access context variables from the agent
+            context_variables = self.context_variables
+            print(f"[TaskManagerAgent] execute_query called")
+            print(f"[TaskManagerAgent] context_variables: {context_variables}")
+            print(f"[TaskManagerAgent] context_variables type: {type(context_variables)}")
             queries_to_run = context_variables.get("QueriesToRun", [])
+            print(f"[TaskManagerAgent] queries_to_run: {queries_to_run}")
 
             if not queries_to_run:
-                return "No queries to run"
+                return ReplyResult(
+                    message="No queries to run",
+                    context_variables=context_variables
+                )
 
             # Process one query at a time
             query_task = queries_to_run[0]
@@ -172,7 +214,22 @@ class TaskManagerAgent(ConversableAgent):
                     query_results.append({"query": query_text, "answer": answer, "citations": txt_citations})
                 context_variables["QueryResults"] = query_results
 
-                return str(answer)
+                # Check if there are more tasks to process
+                remaining_ingestions = len(context_variables.get("DocumentsToIngest", []))
+                remaining_queries = len(queries_to_run)
+                
+                if remaining_ingestions > 0 or remaining_queries > 0:
+                    # Continue processing - return to self
+                    return ReplyResult(
+                        message=f"Query answered: {str(answer)}. Remaining tasks: {remaining_ingestions} ingestions, {remaining_queries} queries.",
+                        context_variables=context_variables
+                    )
+                else:
+                    # All tasks complete
+                    return ReplyResult(
+                        message=f"Query answered: {str(answer)}. All tasks completed.",
+                        context_variables=context_variables
+                    )
 
             except Exception as e:
                 error_msg = f"Query failed for '{query_text}': {str(e)}"
@@ -186,14 +243,22 @@ class TaskManagerAgent(ConversableAgent):
                     query_results.append({"query": query_text, "answer": error_msg, "citations": []})
                 context_variables["QueryResults"] = query_results
 
-                return error_msg
-
-        super().__init__(
-            name=name,
-            system_message=TASK_MANAGER_SYSTEM_MESSAGE,
-            llm_config=llm_config,
-            functions=[ingest_documents, execute_query],
-        )
+                # Check if there are more tasks to process
+                remaining_ingestions = len(context_variables.get("DocumentsToIngest", []))
+                remaining_queries = len(queries_to_run)
+                
+                if remaining_ingestions > 0 or remaining_queries > 0:
+                    # Continue processing - return to self
+                    return ReplyResult(
+                        message=f"{error_msg}. Remaining tasks: {remaining_ingestions} ingestions, {remaining_queries} queries.",
+                        context_variables=context_variables
+                    )
+                else:
+                    # All tasks complete
+                    return ReplyResult(
+                        message=f"{error_msg}. All tasks completed.",
+                        context_variables=context_variables
+                    )
 
     def process_triage_output(self, document_task: Any, context_variables: ContextVariables) -> None:
         """Process the DocumentTask from triage agent and update context variables.
@@ -202,9 +267,15 @@ class TaskManagerAgent(ConversableAgent):
             document_task: The DocumentTask containing ingestions and queries
             context_variables: The current context variables
         """
+        print(f"[TaskManagerAgent] process_triage_output called")
+        print(f"[TaskManagerAgent] document_task: {document_task}")
+        print(f"[TaskManagerAgent] context_variables: {context_variables}")
+        
         # Extract ingestions and queries from DocumentTask
         ingestions = getattr(document_task, "ingestions", [])
         queries = getattr(document_task, "queries", [])
+        print(f"[TaskManagerAgent] extracted ingestions: {ingestions}")
+        print(f"[TaskManagerAgent] extracted queries: {queries}")
 
         # Apply deduplication logic
         existing_ingestions = context_variables.get("DocumentsToIngest", [])
@@ -240,3 +311,8 @@ class TaskManagerAgent(ConversableAgent):
 
         # Set task initiated flag
         context_variables["TaskInitiated"] = True
+        
+        print(f"[TaskManagerAgent] Updated context variables:")
+        print(f"[TaskManagerAgent] DocumentsToIngest: {context_variables.get('DocumentsToIngest', [])}")
+        print(f"[TaskManagerAgent] QueriesToRun: {context_variables.get('QueriesToRun', [])}")
+        print(f"[TaskManagerAgent] TaskInitiated: {context_variables.get('TaskInitiated', False)}")

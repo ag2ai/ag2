@@ -1,0 +1,12 @@
+This is a test document for the TaskManagerAgent.
+
+Financial Summary for Fiscal Year 2024:
+- Revenue: $1,000,000
+- Expenses: $750,000
+- Net Income: $250,000
+- Growth Rate: 15%
+
+Key highlights:
+- Strong performance in Q4
+- New product launches successful
+- Market expansion completed

@@ -200,6 +200,9 @@ class DocAgent(ConversableAgent):
                 # Copy all attributes from base agent
                 self.__dict__.update(base_agent.__dict__)
                 self._context_vars = context_vars
+                # Set the context variables on the agent so tools can access them
+                self.context_variables = context_vars
+                print(f"[CustomTaskManager] Set context_variables: {context_vars}")
 
             def generate_reply(
                 self,
@@ -207,6 +210,11 @@ class DocAgent(ConversableAgent):
                 sender: Agent | None = None,
                 **kwargs: Any,
             ) -> str | dict[str, Any] | None:
+                print(f"[CustomTaskManager] generate_reply called")
+                print(f"[CustomTaskManager] messages: {messages}")
+                print(f"[CustomTaskManager] sender: {sender}")
+                print(f"[CustomTaskManager] self.context_variables: {self.context_variables}")
+                
                 # Check if we received a message from triage agent
                 if messages and len(messages) > 0:
                     last_message = messages[-1]
