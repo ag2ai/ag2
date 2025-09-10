@@ -2,6 +2,7 @@ import os
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.remote import HTTPRemoteAgent
+from autogen.remote.retry import SleepRetryPolicy
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -33,6 +34,7 @@ review_agent = ConversableAgent(
 code_agent = HTTPRemoteAgent(
     url="http://localhost:8000",
     name="coder",
+    retry_policy=SleepRetryPolicy(retry_interval=10, retry_count=3),
 )
 
 

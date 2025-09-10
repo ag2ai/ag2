@@ -12,6 +12,7 @@ from autogen.oai.client import OpenAIWrapper
 
 from .errors import RemoteAgentError, RemoteAgentNotFoundError
 from .protocol import RequestMessage, ResponseMessage
+from .retry import EmptyRetryPolicy, RetryPolicy
 
 
 @export_module("autogen.remote")
@@ -23,9 +24,10 @@ class HTTPRemoteAgent(ConversableAgent):
         *,
         silent: bool = False,
         client: httpx.AsyncClient | httpx.Client | None = None,
+        retry_policy: RetryPolicy | None = None,
     ) -> None:
         self.url = url
-
+        self.retry_policy: RetryPolicy = retry_policy or EmptyRetryPolicy
         self._httpx_client = client
 
         super().__init__(name, silent=silent)
@@ -52,26 +54,38 @@ class HTTPRemoteAgent(ConversableAgent):
 
         client = cast(httpx.Client, self._httpx_client) or httpx.Client(timeout=30)
 
-        with client:
-            # initiate remote procedure
-            task_id = self._process_create_remote_task_response(
-                client.post(
-                    f"{self.url}/{self.name}",
-                    content=RequestMessage(
-                        messages=messages,
-                        context=self.context_variables.data,
-                        client_tools=self.__llm_config.get("tools", []),
-                    ).model_dump_json(),
-                )
-            )
+        retry_policy = self.retry_policy()
 
-            # wait for remote task complete
-            while (
-                reply_response := client.get(
-                    f"{self.url}/{self.name}/{task_id}",
-                )
-            ).status_code == 425:
-                pass
+        task_id: Any = None
+        with client:
+            while True:
+                with retry_policy:
+                    if task_id is None:
+                        # initiate remote procedure
+                        task_id = self._process_create_remote_task_response(
+                            client.post(
+                                f"{self.url}/{self.name}",
+                                content=RequestMessage(
+                                    messages=messages,
+                                    context=self.context_variables.data,
+                                    client_tools=self.__llm_config.get("tools", []),
+                                ).model_dump_json(),
+                            )
+                        )
+
+                    reply_response = client.get(f"{self.url}/{self.name}/{task_id}")
+
+                    if reply_response.status_code in (200, 204):  # valid answer codes
+                        break
+
+                    if reply_response.status_code == 425:  # task still in progress
+                        continue
+
+                    if reply_response.status_code == 404:
+                        task_id = None  # recreate task due remote agent lost it
+                        continue
+
+                    raise RemoteAgentError(f"Remote client error: {reply_response}, {reply_response.content!r}")
 
         if reply := self._process_remote_reply(reply_response):
             if sender:
@@ -93,26 +107,38 @@ class HTTPRemoteAgent(ConversableAgent):
 
         client = cast(httpx.AsyncClient, self._httpx_client) or httpx.AsyncClient(timeout=30)
 
-        async with client:
-            # initiate remote procedure
-            task_id = self._process_create_remote_task_response(
-                await client.post(
-                    f"{self.url}/{self.name}",
-                    content=RequestMessage(
-                        messages=messages,
-                        context=self.context_variables.data,
-                        client_tools=self.__llm_config.get("tools", []),
-                    ).model_dump_json(),
-                )
-            )
+        retry_policy = self.retry_policy()
 
-            # wait for remote task complete
-            while (
-                reply_response := await client.get(
-                    f"{self.url}/{self.name}/{task_id}",
-                )
-            ).status_code == 425:
-                pass
+        task_id: Any = None
+        async with client:
+            while True:
+                with retry_policy:
+                    if task_id is None:
+                        # initiate remote procedure
+                        task_id = self._process_create_remote_task_response(
+                            await client.post(
+                                f"{self.url}/{self.name}",
+                                content=RequestMessage(
+                                    messages=messages,
+                                    context=self.context_variables.data,
+                                    client_tools=self.__llm_config.get("tools", []),
+                                ).model_dump_json(),
+                            )
+                        )
+
+                    reply_response = await client.get(f"{self.url}/{self.name}/{task_id}")
+
+                    if reply_response.status_code in (200, 204):  # valid answer codes
+                        break
+
+                    if reply_response.status_code == 425:  # task still in progress
+                        continue
+
+                    if reply_response.status_code == 404:
+                        task_id = None  # recreate task due remote agent lost it
+                        continue
+
+                    raise RemoteAgentError(f"Remote client error: {reply_response}, {reply_response.content!r}")
 
         if reply := self._process_remote_reply(reply_response):
             if sender:
