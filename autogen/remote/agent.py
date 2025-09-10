@@ -11,7 +11,7 @@ from autogen.doc_utils import export_module
 from autogen.oai.client import OpenAIWrapper
 
 from .errors import RemoteAgentError, RemoteAgentNotFoundError
-from .protocol import AgentBusMessage
+from .protocol import RequestMessage, ResponseMessage
 
 
 @export_module("autogen.remote")
@@ -57,7 +57,7 @@ class HTTPRemoteAgent(ConversableAgent):
             task_id = self._process_create_remote_task_response(
                 client.post(
                     f"{self.url}/{self.name}",
-                    content=AgentBusMessage(
+                    content=RequestMessage(
                         messages=messages,
                         context=self.context_variables.data,
                         client_tools=self.__llm_config.get("tools", []),
@@ -98,7 +98,7 @@ class HTTPRemoteAgent(ConversableAgent):
             task_id = self._process_create_remote_task_response(
                 await client.post(
                     f"{self.url}/{self.name}",
-                    content=AgentBusMessage(
+                    content=RequestMessage(
                         messages=messages,
                         context=self.context_variables.data,
                         client_tools=self.__llm_config.get("tools", []),
@@ -132,12 +132,12 @@ class HTTPRemoteAgent(ConversableAgent):
 
         return response.json()
 
-    def _process_remote_reply(self, reply_response: httpx.Response) -> AgentBusMessage | None:
+    def _process_remote_reply(self, reply_response: httpx.Response) -> ResponseMessage | None:
         if reply_response.status_code == 204:
             return None
 
         try:
-            serialized_message = AgentBusMessage.model_validate_json(reply_response.content)
+            serialized_message = ResponseMessage.model_validate_json(reply_response.content)
 
         except Exception as e:
             raise RemoteAgentError(f"Remote client error: {reply_response}, {reply_response.content!r}") from e
