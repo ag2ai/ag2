@@ -19,7 +19,7 @@ from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.doc_utils import export_module
 
-from .protocol import AgentBusMessage
+from .protocol import AgentBusMessage, get_tool_names
 
 
 class RemoteService(Protocol):
@@ -132,17 +132,41 @@ class AgentService(RemoteService):
 
         local_history: list[dict[str, Any]] = []
         while True:
+            messages = state.messages + local_history
+
             # TODO: catch ask user input event
-            reply = await self.agent.a_generate_reply(state.messages + local_history, None)
+            is_final, _ = await self.agent.a_check_termination_and_human_reply(messages)
+            if is_final:
+                break
+
+            reply = await self.agent.a_generate_reply(
+                messages,
+                exclude=(
+                    ConversableAgent.check_termination_and_human_reply,
+                    ConversableAgent.a_check_termination_and_human_reply,
+                    ConversableAgent.generate_oai_reply,
+                    ConversableAgent.a_generate_oai_reply,
+                ),
+            )
+
+            if not reply:
+                _, reply = await self.agent.a_generate_oai_reply(
+                    messages,
+                    tools=state.client_tools,
+                )
 
             should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
             if out_message:
                 local_history.append(out_message)
             if not should_continue:
                 break
-
             out_message = cast(dict[str, Any], out_message)
-            tool_result, updated_context_variables = self._try_execute_tool(tool_executor, out_message)
+
+            called_tools = get_tool_names(out_message.get("tool_calls", []))
+            if state.client_tool_names.intersection(called_tools):
+                break  # return client tool execution command back to client
+
+            tool_result, updated_context_variables = self._try_execute_local_tool(tool_executor, out_message)
 
             if updated_context_variables:
                 context_variables.update(updated_context_variables.to_dict())
@@ -178,12 +202,11 @@ class AgentService(RemoteService):
         tool_executor = GroupToolExecutor()
         for tool in self.agent.tools:
             # TODO: inject ChatContext to tool
-            new_tool = tool_executor.make_tool_copy_with_context_variables(tool, context_variables)
-            if new_tool is not None:
-                tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
+            new_tool = tool_executor.make_tool_copy_with_context_variables(tool, context_variables) or tool
+            tool_executor.register_for_execution(serialize=False, silent_override=True)(new_tool)
         return tool_executor
 
-    def _try_execute_tool(
+    def _try_execute_local_tool(
         self,
         tool_executor: GroupToolExecutor,
         tool_message: dict[str, Any],

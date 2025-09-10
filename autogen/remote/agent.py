@@ -30,6 +30,8 @@ class HTTPRemoteAgent(ConversableAgent):
 
         super().__init__(name, silent=silent)
 
+        self.__llm_config: dict[str, Any] = {}
+
         self.replace_reply_func(
             ConversableAgent.generate_oai_reply,
             HTTPRemoteAgent.generate_remote_reply,
@@ -58,6 +60,7 @@ class HTTPRemoteAgent(ConversableAgent):
                     content=AgentBusMessage(
                         messages=messages,
                         context=self.context_variables.data,
+                        client_tools=self.__llm_config.get("tools", []),
                     ).model_dump_json(),
                 )
             )
@@ -98,6 +101,7 @@ class HTTPRemoteAgent(ConversableAgent):
                     content=AgentBusMessage(
                         messages=messages,
                         context=self.context_variables.data,
+                        client_tools=self.__llm_config.get("tools", []),
                     ).model_dump_json(),
                 )
             )
@@ -139,3 +143,16 @@ class HTTPRemoteAgent(ConversableAgent):
             raise RemoteAgentError(f"Remote client error: {reply_response}, {reply_response.content!r}") from e
 
         return serialized_message
+
+    def update_tool_signature(
+        self,
+        tool_sig: str | dict[str, Any],
+        is_remove: bool,
+        silent_override: bool = False,
+    ) -> None:
+        self.__llm_config = self._update_tool_config(
+            self.__llm_config,
+            tool_sig=tool_sig,
+            is_remove=is_remove,
+            silent_override=silent_override,
+        )
