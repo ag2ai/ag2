@@ -20,23 +20,24 @@ __all__ = ["TaskManagerAgent"]
 logger = logging.getLogger(__name__)
 
 TASK_MANAGER_SYSTEM_MESSAGE = """
-You are a task manager agent responsible for processing document ingestion and query tasks.
+You are task manager agent responsible for processing document ingestion and query tasks.
 
-Your workflow:
-1. ALWAYS call initiate_tasks first when you receive a message from the DocumentTriageAgent
-2. Use your tools to handle tasks:
-   - Call ingest_documents with a list of document paths/URLs
-   - Call execute_query with a list of query strings
-3. Continue processing until all tasks are complete
+# INSTRUCTIONS:
+1) You are provided provided with tools use those tools to process the tasks.
+2) ingest_documents: (tool) For processing document ingestion tasks (takes list of paths/URLs)
+3) execute_query: (tool) For answering queries using the RAG system (takes list of query strings)
 
-You have three tools available:
-- ingest_documents: For processing document ingestion tasks (takes list of paths/URLs)
-- execute_query: For answering queries using the RAG system (takes list of query strings)
+# TASK FLOW (examples):
+1)  Query: “Please ingest this PDF file: /path/to/document.pdf”
+ TaskManager → ingest_documents -> summary agent
+2) Query: “What is machine learning?”
+ TaskManager → execute_query -> summary agent
+3) Query: "ingest document A.pdf, What is machine learning?"
+ TaskManager → ingest_documents -> execute_query -> summary agent
 
-Always process ingestions before queries to ensure documents are available for querying.
-When all tasks are complete, the system will automatically move to summary generation.
-
-# STRICTLY end if no tasks are left to process.
+# IMPORTANT:
+- Strictly follow the Instruction.
+- Use Task flows as reference for tool call Execution.
 """
 
 
@@ -68,7 +69,9 @@ class TaskManagerAgent(ConversableAgent):
         self.query_engine = query_engine if query_engine else VectorChromaQueryEngine(collection_name=collection_name)
         self.parsed_docs_path = Path(parsed_docs_path) if parsed_docs_path else Path("./parsed_docs")
 
-        def ingest_documents(documents_to_ingest: list[str], context_variables: ContextVariables) -> ReplyResult | str:
+        async def ingest_documents(
+            documents_to_ingest: list[str], context_variables: ContextVariables
+        ) -> ReplyResult | str:
             """Ingest documents from the provided list.
 
             Args:
@@ -78,52 +81,78 @@ class TaskManagerAgent(ConversableAgent):
             Returns:
                 str: Status message about the ingestion process
             """
-            context_variables["DocumentsToIngest"].append(documents_to_ingest)
-            try:
-                for input_file_path in documents_to_ingest:
-                    output_files = docling_parse_docs(
-                        input_file_path=input_file_path,
-                        output_dir_path=self.parsed_docs_path,
-                        output_formats=["markdown"],
-                    )
+            # Safely handle context variable initialization
+            if "DocumentsToIngest" not in context_variables:
+                context_variables["DocumentsToIngest"] = []
+            if "DocumentsIngested" not in context_variables:
+                context_variables["DocumentsIngested"] = []
+            if "CompletedTaskCount" not in context_variables:
+                context_variables["CompletedTaskCount"] = 0
+            if "QueriesToRun" not in context_variables:
+                context_variables["QueriesToRun"] = []
 
-                    # Limit to one output markdown file for now.
-                    if output_files:
-                        output_file = output_files[0]
-                        if output_file.suffix == ".md":
-                            self.query_engine.add_docs(new_doc_paths_or_urls=[output_file])
+            # Add current batch to pending ingestions
+            context_variables["DocumentsToIngest"].append(documents_to_ingest)
+
+            try:
+                successfully_ingested = []
+                for input_file_path in documents_to_ingest:
+                    try:
+                        output_files = docling_parse_docs(
+                            input_file_path=input_file_path,
+                            output_dir_path=self.parsed_docs_path,
+                            output_formats=["markdown"],
+                        )
+
+                        # Limit to one output markdown file for now.
+                        if output_files:
+                            output_file = output_files[0]
+                            if output_file.suffix == ".md":
+                                self.query_engine.add_docs(new_doc_paths_or_urls=[output_file])
+                                successfully_ingested.append(input_file_path)
+                    except Exception as doc_error:
+                        logger.warning(f"Failed to ingest document {input_file_path}: {doc_error}")
+                        continue
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
                 logger.info("🔧 TOOL: ingest_documents")
                 logger.info("🤖 AGENT: TaskManagerAgent")
                 logger.info(f"📄 DOCUMENTS: {documents_to_ingest}")
+                logger.info(f"✅ SUCCESSFULLY INGESTED: {successfully_ingested}")
                 logger.info("=" * 80)
 
-                context_variables["DocumentsIngested"].append(documents_to_ingest)
-                context_variables["CompletedTaskCount"] += 1
+                # Update context variables with successful ingestions
+                if successfully_ingested:
+                    context_variables["DocumentsIngested"].append(successfully_ingested)
+                    context_variables["CompletedTaskCount"] += 1
+
+                # Clear processed tasks
                 context_variables["DocumentsToIngest"] = []
                 context_variables["QueriesToRun"] = []
+
                 return ReplyResult(
-                    message=f"Documents ingested successfully: {documents_to_ingest}",
+                    message=f"Documents ingested successfully: {successfully_ingested}",
                     context_variables=context_variables,
                 )
 
             except Exception as e:
                 # Enhanced error logging
                 logger.error("=" * 80)
-                logger.error("❌ TOOL ERROR: ingest_documents")
-                logger.error("🤖 AGENT: TaskManagerAgent")
-                logger.error(f"💥 ERROR: {e}")
-                logger.error(f"📄 DOCUMENTS: {documents_to_ingest}")
+                logger.error("TOOL ERROR: ingest_documents")
+                logger.error("AGENT: TaskManagerAgent")
+                logger.error(f"ERROR: {e}")
+                logger.error(f"DOCUMENTS: {documents_to_ingest}")
                 logger.error("=" * 80)
+
+                # Preserve failed documents for retry
                 context_variables["DocumentsToIngest"] = [documents_to_ingest]
                 return ReplyResult(
                     message=f"Documents ingestion failed: {e}",
                     context_variables=context_variables,
                 )
 
-        def execute_query(queries_to_run: list[str], context_variables: ContextVariables) -> ReplyResult | str:
+        async def execute_query(queries_to_run: list[str], context_variables: ContextVariables) -> ReplyResult | str:
             """Execute queries from the provided list.
 
             Args:
@@ -135,34 +164,53 @@ class TaskManagerAgent(ConversableAgent):
             """
             if not queries_to_run:
                 return "No queries to run"
+
+            # Safely handle context variable initialization
+            if "QueriesToRun" not in context_variables:
+                context_variables["QueriesToRun"] = []
+            if "CompletedTaskCount" not in context_variables:
+                context_variables["CompletedTaskCount"] = 0
+            if "QueryResults" not in context_variables:
+                context_variables["QueryResults"] = []
+
+            # Add current batch to pending queries
             context_variables["QueriesToRun"].append(queries_to_run)
+
             try:
                 answers = []
                 for query_text in queries_to_run:
-                    # Check for citations support
-                    if (
-                        hasattr(self.query_engine, "enable_query_citations")
-                        and getattr(self.query_engine, "enable_query_citations", False)
-                        and hasattr(self.query_engine, "query_with_citations")
-                        and callable(getattr(self.query_engine, "query_with_citations", None))
-                    ):
-                        answer_with_citations = getattr(self.query_engine, "query_with_citations")(query_text)
-                        answer = answer_with_citations.answer
-                        txt_citations = [
-                            {
-                                "text_chunk": source.node.get_text(),
-                                "file_path": source.metadata.get("file_path", "Unknown"),
-                            }
-                            for source in answer_with_citations.citations
-                        ]
-                        logger.info(f"Citations: {txt_citations}")
-                    else:
-                        answer = (
-                            self.query_engine.query(query_text) if self.query_engine else "Query engine not available"
-                        )
-                        txt_citations = []
+                    try:
+                        # Check for citations support
+                        if (
+                            hasattr(self.query_engine, "enable_query_citations")
+                            and getattr(self.query_engine, "enable_query_citations", False)
+                            and hasattr(self.query_engine, "query_with_citations")
+                            and callable(getattr(self.query_engine, "query_with_citations", None))
+                        ):
+                            answer_with_citations = getattr(self.query_engine, "query_with_citations")(query_text)
+                            answer = answer_with_citations.answer
+                            txt_citations = [
+                                {
+                                    "text_chunk": source.node.get_text(),
+                                    "file_path": source.metadata.get("file_path", "Unknown"),
+                                }
+                                for source in answer_with_citations.citations
+                            ]
+                            logger.info(f"Citations: {txt_citations}")
+                        else:
+                            answer = (
+                                self.query_engine.query(query_text)
+                                if self.query_engine
+                                else "Query engine not available"
+                            )
+                            txt_citations = []
 
-                    answers.append(f"Query: {query_text}\nAnswer: {answer}")
+                        answers.append(f"Query: {query_text}\nAnswer: {answer}")
+
+                    except Exception as query_error:
+                        logger.warning(f"Failed to execute query '{query_text}': {query_error}")
+                        answers.append(f"Query: {query_text}\nAnswer: Error executing query: {query_error}")
+                        continue
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
@@ -170,9 +218,12 @@ class TaskManagerAgent(ConversableAgent):
                 logger.info("🤖 AGENT: TaskManagerAgent")
                 logger.info(f"❓ QUERIES: {queries_to_run}")
                 logger.info("=" * 80)
-                context_variables["QueriesToRun"].pop(0)
+
+                # Update context variables
+                context_variables["QueriesToRun"].pop(0)  # Remove processed batch
                 context_variables["CompletedTaskCount"] += 1
                 context_variables["QueryResults"].append({"query": queries_to_run, "answer": answers})
+
                 return ReplyResult(
                     message="\n\n".join(answers),
                     context_variables=context_variables,
@@ -183,10 +234,10 @@ class TaskManagerAgent(ConversableAgent):
 
                 # Enhanced error logging
                 logger.error("=" * 80)
-                logger.error("❌ TOOL ERROR: execute_query")
-                logger.error("🤖 AGENT: TaskManagerAgent")
-                logger.error(f"❓ QUERIES: {queries_to_run}")
-                logger.error(f"💥 ERROR: {e}")
+                logger.error("TOOL ERROR: execute_query")
+                logger.error("AGENT: TaskManagerAgent")
+                logger.error(f"QUERIES: {queries_to_run}")
+                logger.error(f"ERROR: {e}")
                 logger.error("=" * 80)
 
                 return ReplyResult(
