@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -28,9 +30,9 @@ You are task manager agent responsible for processing document ingestion and que
 3) execute_query: (tool) For answering queries using the RAG system (takes list of query strings)
 
 # TASK FLOW (examples):
-1)  Query: “Please ingest this PDF file: /path/to/document.pdf”
+1)  Query: "Please ingest this PDF file: /path/to/document.pdf"
  TaskManager → ingest_documents -> summary agent
-2) Query: “What is machine learning?”
+2) Query: "What is machine learning?"
  TaskManager → execute_query -> summary agent
 3) Query: "ingest document A.pdf, What is machine learning?"
  TaskManager → ingest_documents -> execute_query -> summary agent
@@ -54,6 +56,7 @@ class TaskManagerAgent(ConversableAgent):
         return_agent_success: str = "TaskManagerAgent",
         return_agent_error: str = "SummaryAgent",
         collection_name: str | None = None,
+        max_workers: int | None = None,
     ):
         """Initialize the TaskManagerAgent.
 
@@ -65,14 +68,65 @@ class TaskManagerAgent(ConversableAgent):
             return_agent_success: The agent to return on successful completion of the task
             return_agent_error: The agent to return on error
             collection_name: The collection name for the RAG query engine
+            max_workers: Maximum number of threads for concurrent processing (None for default)
         """
         self.query_engine = query_engine if query_engine else VectorChromaQueryEngine(collection_name=collection_name)
         self.parsed_docs_path = Path(parsed_docs_path) if parsed_docs_path else Path("./parsed_docs")
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+
+        def _process_single_document(self: "TaskManagerAgent", input_file_path: str) -> tuple[str, bool, str]:
+            """Process a single document. Returns (path, success, error_msg)."""
+            try:
+                output_files = docling_parse_docs(
+                    input_file_path=input_file_path,
+                    output_dir_path=self.parsed_docs_path,
+                    output_formats=["markdown"],
+                )
+
+                # Limit to one output markdown file for now.
+                if output_files:
+                    output_file = output_files[0]
+                    if output_file.suffix == ".md":
+                        self.query_engine.add_docs(new_doc_paths_or_urls=[output_file])
+                        return (input_file_path, True, "")
+
+                return (input_file_path, False, "No valid markdown output generated")
+            except Exception as doc_error:
+                return (input_file_path, False, str(doc_error))
+
+        def _execute_single_query(self: "TaskManagerAgent", query_text: str) -> tuple[str, str]:
+            """Execute a single query. Returns (query, result)."""
+            try:
+                # Check for citations support
+                if (
+                    hasattr(self.query_engine, "enable_query_citations")
+                    and getattr(self.query_engine, "enable_query_citations", False)
+                    and hasattr(self.query_engine, "query_with_citations")
+                    and callable(getattr(self.query_engine, "query_with_citations", None))
+                ):
+                    answer_with_citations = getattr(self.query_engine, "query_with_citations")(query_text)
+                    answer = answer_with_citations.answer
+                    txt_citations = [
+                        {
+                            "text_chunk": source.node.get_text(),
+                            "file_path": source.metadata.get("file_path", "Unknown"),
+                        }
+                        for source in answer_with_citations.citations
+                    ]
+                    logger.info(f"Citations: {txt_citations}")
+                else:
+                    answer = self.query_engine.query(query_text) if self.query_engine else "Query engine not available"
+
+                return (query_text, f"Query: {query_text}\nAnswer: {answer}")
+
+            except Exception as query_error:
+                logger.warning(f"Failed to execute query '{query_text}': {query_error}")
+                return (query_text, f"Query: {query_text}\nAnswer: Error executing query: {query_error}")
 
         async def ingest_documents(
             documents_to_ingest: list[str], context_variables: ContextVariables
         ) -> ReplyResult | str:
-            """Ingest documents from the provided list.
+            """Ingest documents from the provided list using concurrent processing.
 
             Args:
                 documents_to_ingest: List of document paths or URLs to ingest
@@ -95,28 +149,35 @@ class TaskManagerAgent(ConversableAgent):
             context_variables["DocumentsToIngest"].append(documents_to_ingest)
 
             try:
-                successfully_ingested = []
-                for input_file_path in documents_to_ingest:
-                    try:
-                        output_files = docling_parse_docs(
-                            input_file_path=input_file_path,
-                            output_dir_path=self.parsed_docs_path,
-                            output_formats=["markdown"],
-                        )
+                # Process documents concurrently using ThreadPoolExecutor
+                loop = asyncio.get_event_loop()
+                futures = [
+                    loop.run_in_executor(self.executor, _process_single_document, self, doc_path)
+                    for doc_path in documents_to_ingest
+                ]
 
-                        # Limit to one output markdown file for now.
-                        if output_files:
-                            output_file = output_files[0]
-                            if output_file.suffix == ".md":
-                                self.query_engine.add_docs(new_doc_paths_or_urls=[output_file])
-                                successfully_ingested.append(input_file_path)
-                    except Exception as doc_error:
-                        logger.warning(f"Failed to ingest document {input_file_path}: {doc_error}")
+                # Wait for all documents to be processed
+                results = await asyncio.gather(*futures, return_exceptions=True)
+
+                successfully_ingested = []
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.warning(f"Document processing failed with exception: {result}")
                         continue
+
+                    # Type check to ensure result is the expected tuple
+                    if isinstance(result, tuple) and len(result) == 3:
+                        doc_path, success, error_msg = result
+                        if success:
+                            successfully_ingested.append(doc_path)
+                        else:
+                            logger.warning(f"Failed to ingest document {doc_path}: {error_msg}")
+                    else:
+                        logger.warning(f"Unexpected result format: {result}")
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
-                logger.info("🔧 TOOL: ingest_documents")
+                logger.info("🔧 TOOL: ingest_documents (CONCURRENT)")
                 logger.info("🤖 AGENT: TaskManagerAgent")
                 logger.info(f"📄 DOCUMENTS: {documents_to_ingest}")
                 logger.info(f"✅ SUCCESSFULLY INGESTED: {successfully_ingested}")
@@ -139,7 +200,7 @@ class TaskManagerAgent(ConversableAgent):
             except Exception as e:
                 # Enhanced error logging
                 logger.error("=" * 80)
-                logger.error("TOOL ERROR: ingest_documents")
+                logger.error("TOOL ERROR: ingest_documents (CONCURRENT)")
                 logger.error("AGENT: TaskManagerAgent")
                 logger.error(f"ERROR: {e}")
                 logger.error(f"DOCUMENTS: {documents_to_ingest}")
@@ -153,7 +214,7 @@ class TaskManagerAgent(ConversableAgent):
                 )
 
         async def execute_query(queries_to_run: list[str], context_variables: ContextVariables) -> ReplyResult | str:
-            """Execute queries from the provided list.
+            """Execute queries from the provided list using concurrent processing.
 
             Args:
                 queries_to_run: List of queries to execute
@@ -177,44 +238,33 @@ class TaskManagerAgent(ConversableAgent):
             context_variables["QueriesToRun"].append(queries_to_run)
 
             try:
+                # Process queries concurrently using ThreadPoolExecutor
+                loop = asyncio.get_event_loop()
+                futures = [
+                    loop.run_in_executor(self.executor, _execute_single_query, self, query) for query in queries_to_run
+                ]
+
+                # Wait for all queries to be processed
+                results = await asyncio.gather(*futures, return_exceptions=True)
+
                 answers = []
-                for query_text in queries_to_run:
-                    try:
-                        # Check for citations support
-                        if (
-                            hasattr(self.query_engine, "enable_query_citations")
-                            and getattr(self.query_engine, "enable_query_citations", False)
-                            and hasattr(self.query_engine, "query_with_citations")
-                            and callable(getattr(self.query_engine, "query_with_citations", None))
-                        ):
-                            answer_with_citations = getattr(self.query_engine, "query_with_citations")(query_text)
-                            answer = answer_with_citations.answer
-                            txt_citations = [
-                                {
-                                    "text_chunk": source.node.get_text(),
-                                    "file_path": source.metadata.get("file_path", "Unknown"),
-                                }
-                                for source in answer_with_citations.citations
-                            ]
-                            logger.info(f"Citations: {txt_citations}")
-                        else:
-                            answer = (
-                                self.query_engine.query(query_text)
-                                if self.query_engine
-                                else "Query engine not available"
-                            )
-                            txt_citations = []
-
-                        answers.append(f"Query: {query_text}\nAnswer: {answer}")
-
-                    except Exception as query_error:
-                        logger.warning(f"Failed to execute query '{query_text}': {query_error}")
-                        answers.append(f"Query: {query_text}\nAnswer: Error executing query: {query_error}")
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.warning(f"Query processing failed with exception: {result}")
+                        answers.append(f"Query processing failed: {result}")
                         continue
+
+                    # Type check to ensure result is the expected tuple
+                    if isinstance(result, tuple) and len(result) == 2:
+                        query_text, answer = result
+                        answers.append(answer)
+                    else:
+                        logger.warning(f"Unexpected result format: {result}")
+                        answers.append(f"Unexpected result format: {result}")
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
-                logger.info("🔧 TOOL: execute_query")
+                logger.info("🔧 TOOL: execute_query (CONCURRENT)")
                 logger.info("🤖 AGENT: TaskManagerAgent")
                 logger.info(f"❓ QUERIES: {queries_to_run}")
                 logger.info("=" * 80)
@@ -234,7 +284,7 @@ class TaskManagerAgent(ConversableAgent):
 
                 # Enhanced error logging
                 logger.error("=" * 80)
-                logger.error("TOOL ERROR: execute_query")
+                logger.error("TOOL ERROR: execute_query (CONCURRENT)")
                 logger.error("AGENT: TaskManagerAgent")
                 logger.error(f"QUERIES: {queries_to_run}")
                 logger.error(f"ERROR: {e}")
@@ -251,3 +301,8 @@ class TaskManagerAgent(ConversableAgent):
             llm_config=llm_config,
             functions=[ingest_documents, execute_query],  # Add initiate_tasks
         )
+
+    def __del__(self) -> None:
+        """Clean up the ThreadPoolExecutor when the agent is destroyed."""
+        if hasattr(self, "executor"):
+            self.executor.shutdown(wait=True)
