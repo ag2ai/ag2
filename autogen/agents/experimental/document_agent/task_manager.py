@@ -177,10 +177,10 @@ class TaskManagerAgent(ConversableAgent):
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
-                logger.info("🔧 TOOL: ingest_documents (CONCURRENT)")
-                logger.info("🤖 AGENT: TaskManagerAgent")
-                logger.info(f"📄 DOCUMENTS: {documents_to_ingest}")
-                logger.info(f"✅ SUCCESSFULLY INGESTED: {successfully_ingested}")
+                logger.info("TOOL: ingest_documents (CONCURRENT)")
+                logger.info("AGENT: TaskManagerAgent")
+                logger.info(f"DOCUMENTS: {documents_to_ingest}")
+                logger.info(f"SUCCESSFULLY INGESTED: {successfully_ingested}")
                 logger.info("=" * 80)
 
                 # Update context variables with successful ingestions
@@ -264,9 +264,9 @@ class TaskManagerAgent(ConversableAgent):
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
-                logger.info("🔧 TOOL: execute_query (CONCURRENT)")
-                logger.info("🤖 AGENT: TaskManagerAgent")
-                logger.info(f"❓ QUERIES: {queries_to_run}")
+                logger.info("TOOL: execute_query (CONCURRENT)")
+                logger.info("AGENT: TaskManagerAgent")
+                logger.info(f"QUERIES: {queries_to_run}")
                 logger.info("=" * 80)
 
                 # Update context variables
