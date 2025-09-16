@@ -65,9 +65,9 @@ The project is currently maintained by a [dynamic group of volunteers](MAINTAINE
     - [Tools](#tools)
     - [Advanced agentic design patterns](#advanced-agentic-design-patterns)
   - [Announcements](#announcements)
-  - [Contributors Wall](#contributors-wall)
   - [Code style and linting](#code-style-and-linting)
   - [Related papers](#related-papers)
+  - [Contributors Wall](#contributors-wall)
   - [Cite the project](#cite-the-project)
   - [License](#license)
 
@@ -121,7 +121,7 @@ assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 
-user_proxy.initiate_chat(assistant, message="Summarize the main differences between Python lists and tuples.")
+user_proxy.run(assistant, message="Summarize the main differences between Python lists and tuples.").process()
 ```
 
 ## Example applications
@@ -175,13 +175,15 @@ reviewer = ConversableAgent(
 )
 
 # Start a conversation
-chat_result = coder.initiate_chat(
-    recipient=reviewer,
-    message="Write a Python function that computes Fibonacci numbers.",
-    max_turns=2
-)
+response = reviewer.run(
+            recipient=coder,
+            message="Write a Python function that computes Fibonacci numbers.",
+            max_turns=10
+        )
+ 
+response.process()
 
-logger.info("Final output:\n%s", chat_result.chat_history[-1]["content"])
+logger.info("Final output:\n%s", response.summary)
 ```
 
 ---
@@ -396,12 +398,6 @@ We adopt the Apache 2.0 license from v0.3. This enhances our commitment to open-
 
 [More Announcements](announcements.md)
 
-## Contributors Wall
-
-<a href="https://github.com/ag2ai/ag2/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
-</a>
-
 ## Code style and linting
 
 This project uses pre-commit hooks to maintain code quality. Before contributing:
@@ -430,6 +426,12 @@ pre-commit run --all-files
 - [AgentOptimizer: Offline Training of Language Model Agents with Functions as Learnable Weights](https://arxiv.org/pdf/2402.11359)
 
 - [StateFlow: Enhancing LLM Task-Solving through State-Driven Workflows](https://arxiv.org/abs/2403.11322)
+
+## Contributors Wall
+
+<a href="https://github.com/ag2ai/ag2/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ag2ai/ag2&max=204" />
+</a>
 
 ## Cite the project
 
