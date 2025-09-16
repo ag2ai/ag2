@@ -113,7 +113,7 @@ assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 
-user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
+user_proxy.run(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.").process()
 # This initiates an automated chat between the two agents to solve the task
 ```
 
