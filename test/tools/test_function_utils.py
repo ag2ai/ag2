@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 import pytest
 from pydantic import BaseModel, Field
 
+from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.tools.dependency_injection import Field as AG2Field
 from autogen.tools.function_utils import (
     get_default_values,
@@ -435,7 +436,7 @@ def test_load_basemodels_if_needed_sync() -> None:
     ) -> tuple[Currency, CurrencySymbol]:
         return base, quote_currency
 
-    assert not inspect.iscoroutinefunction(f)
+    assert not is_coroutine_callable(f)
 
     actual = f(base={"currency": "USD", "amount": 123.45}, quote_currency="EUR")
     assert isinstance(actual[0], Currency)
@@ -453,7 +454,7 @@ async def test_load_basemodels_if_needed_async() -> None:
     ) -> tuple[Currency, CurrencySymbol]:
         return base, quote_currency
 
-    assert inspect.iscoroutinefunction(f)
+    assert is_coroutine_callable(f)
 
     actual = await f(base={"currency": "USD", "amount": 123.45}, quote_currency="EUR")
     assert isinstance(actual[0], Currency)

@@ -8,7 +8,6 @@
 
 import asyncio
 import copy
-import inspect
 import os
 import threading
 import time
@@ -26,6 +25,7 @@ from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
+from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
@@ -787,7 +787,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert not inspect.iscoroutinefunction(currency_calculator)
+        assert not is_coroutine_callable(currency_calculator)
 
     @pytest.mark.skip(reason="Not implemented yet")
     def test__wrap_function_list(self) -> None:
@@ -840,7 +840,7 @@ class TestWrapFunction:
             == '{"currency":"EUR","amount":100.1}'
         )
 
-        assert inspect.iscoroutinefunction(currency_calculator)
+        assert is_coroutine_callable(currency_calculator)
 
 
 def get_origin(d: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
@@ -1108,24 +1108,24 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = LLMConfig(credentials_gpt_4o_mini.llm_config)
 
-    with llm_config:
-        coder = autogen.AssistantAgent(
-            name="chatbot",
-            system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-            # llm_config=credentials_gpt_4o_mini.llm_config,
-        )
+    coder = autogen.AssistantAgent(
+        name="chatbot",
+        system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
+        llm_config=llm_config,
+    )
 
-        # create a UserProxyAgent instance named "user_proxy"
-        user_proxy = autogen.UserProxyAgent(
-            name="user_proxy",
-            system_message="A proxy for the user for executing code.",
-            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-            human_input_mode="NEVER",
-            max_consecutive_auto_reply=10,
-            code_execution_config={"work_dir": "coding"},
-        )
+    # create a UserProxyAgent instance named "user_proxy"
+    user_proxy = autogen.UserProxyAgent(
+        name="user_proxy",
+        system_message="A proxy for the user for executing code.",
+        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=10,
+        code_execution_config={"work_dir": "coding"},
+        llm_config=llm_config,
+    )
 
     # define functions according to the function description
     timer_mock = unittest.mock.MagicMock()
@@ -2034,14 +2034,20 @@ def test_create_or_get_executor(mock_credentials: Credentials):
         (False, False),
         pytest.param(
             {"config_list": [{"model": "gpt-3", "api_key": "whatever"}]},
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")]),
-            marks=pytest.mark.xfail(
-                reason="This doesn't fails when executed with filename but fails when running using scripts"
-            ),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format with config_list",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
         ),
-        (
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
-            LLMConfig(config_list=[OpenAILLMConfigEntry(model="gpt-3")]),
+        pytest.param(
+            {"model": "gpt-3", "api_key": "whatever"},
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3", api_key="whatever")),
+            id="deprecated (remove in 0.11): legacy dict format",
+            marks=pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+        ),
+        pytest.param(
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            LLMConfig(OpenAILLMConfigEntry(model="gpt-3")),
+            id="LLMConfig passed",
         ),
     ],
 )

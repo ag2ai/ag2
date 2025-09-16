@@ -82,12 +82,9 @@ def test_ollama_llm_config_entry():
         "native_tool_calls": False,
     }
     actual = ollama_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[ollama_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(ollama_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
@@ -216,7 +213,7 @@ def test_ollama_client_host_value(ollama_client):
         }
     ]
 
-    llm_config = LLMConfig(config_list=config_list)
+    llm_config = LLMConfig(*config_list)
     system_message = "You are a helpful assistant."
 
     # Create the agent with the specified configuration

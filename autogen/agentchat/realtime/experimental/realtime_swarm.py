@@ -3,18 +3,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import anyio
-from asyncer import asyncify, create_task_group, syncify
+from anyio import create_task_group, from_thread
 
 from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
+from ....fast_depends.utils import asyncify
 from ... import Agent, ChatResult, ConversableAgent, LLMAgent
 from ...utils import consolidate_chat_info, gather_usage_summary
 
@@ -211,6 +213,7 @@ class SwarmableAgent(Agent):
         summary_args: dict[str, Any] | None = {},
         **kwargs: dict[str, Any],
     ) -> ChatResult:
+        chat_id = uuid.uuid4().int
         _chat_info = locals().copy()
         _chat_info["sender"] = self
         consolidate_chat_info(_chat_info, uniform_sender=self)
@@ -226,6 +229,7 @@ class SwarmableAgent(Agent):
         recipient.previous_cache = None  # type: ignore[attr-defined]
 
         chat_result = ChatResult(
+            chat_id=chat_id,
             chat_history=self.chat_messages[recipient],
             summary=summary,
             cost=gather_usage_summary([self, recipient]),  # type: ignore[arg-type]
@@ -349,7 +353,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         self._agents = agents
         self._realtime_agent = realtime_agent
 
-        self._answer_event: anyio.Event = anyio.Event()
+        self._answer_event = anyio.Event()
         self._answer: str = ""
         self.question_message = question_message or QUESTION_MESSAGE
 
@@ -419,12 +423,13 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
         async def get_input() -> None:
             async with create_task_group() as tg:
-                tg.soonify(self.ask_question)(
+                tg.start_soon(
+                    self.ask_question,
                     self.question_message.format(messages[-1]["content"]),
                     question_timeout=QUESTION_TIMEOUT_SECONDS,
                 )
 
-        syncify(get_input)()
+        from_thread.run_sync(get_input)
 
         return True, {"role": "user", "content": self._answer}  # type: ignore[return-value]
 
@@ -449,7 +454,8 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         )(self.set_answer)
 
         async def on_observers_ready() -> None:
-            self._realtime_agent._tg.soonify(asyncify(initiate_swarm_chat))(
+            self._realtime_agent._tg.start_soon(
+                asyncify(initiate_swarm_chat),
                 initial_agent=self._initial_agent,
                 agents=self._agents,
                 user_agent=self,  # type: ignore[arg-type]

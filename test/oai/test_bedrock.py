@@ -59,20 +59,18 @@ def test_bedrock_llm_config_entry():
         "supports_system_prompts": True,
     }
     actual = bedrock_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[bedrock_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(bedrock_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(ValidationError, match="List should have at least 2 items after validation, not 1"):
         bedrock_llm_config = BedrockLLMConfigEntry(
-            model="anthropic.claude-3-sonnet-20240229-v1:0", aws_region="us-east-1", price=["0.1"]
+            model="anthropic.claude-3-sonnet-20240229-v1:0",
+            aws_region="us-east-1",
+            price=["0.1"],
         )
-    assert " List should have at least 2 items after validation, not 1" in str(e.value)
 
 
 def test_bedrock_llm_config_entry_repr():
