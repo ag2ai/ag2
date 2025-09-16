@@ -65,7 +65,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       # All additional modules should be defined in pyproject.toml
