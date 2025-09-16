@@ -180,7 +180,7 @@ response = reviewer.run(
             message="Write a Python function that computes Fibonacci numbers.",
             max_turns=10
         )
- 
+
 response.process()
 
 logger.info("Final output:\n%s", response.summary)
