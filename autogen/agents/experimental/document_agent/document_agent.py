@@ -92,6 +92,7 @@ class DocAgent(ConversableAgent):
         enable_citations: bool = False,
         citation_chunk_size: int = 512,
         update_inner_agent_system_message: dict[str, Any] | None = None,
+        rag_config: dict[str, dict[str, Any]] | None = None,  # NEW: {"vector": {}, "graph": {...}}
     ):
         """Initialize the DocAgent.
 
@@ -107,6 +108,7 @@ class DocAgent(ConversableAgent):
             update_inner_agent_system_message: Dictionary mapping inner agent names to custom system messages.
                 Keys: "DocumentTriageAgent", "TaskManagerAgent", "SummaryAgent"
                 Values: Custom system message strings for each agent.
+            rag_config: Configuration for RAG engines {"vector": {}, "graph": {...}}.
         """
         name = name or "DocAgent"
         llm_config = llm_config or LLMConfig.get_current_llm_config()
@@ -141,6 +143,7 @@ class DocAgent(ConversableAgent):
             parsed_docs_path=parsed_docs_path,
             collection_name=collection_name,
             custom_system_message=update_inner_agent_system_message.get("TaskManagerAgent"),
+            rag_config=rag_config,  # NEW
         )
 
         def update_ingested_documents() -> None:
