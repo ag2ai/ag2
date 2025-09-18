@@ -1,7 +1,11 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import multiprocessing as mp
 import queue
 
-from autogen.agentchat.parallel.communication.message_router import MessageRouter
+from autogen.agentchat.parallel_agents.communication.message_router import MessageRouter
 
 __all__ = ["CommunicationLayer"]
 

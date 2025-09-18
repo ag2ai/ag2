@@ -6,6 +6,8 @@ import multiprocessing as mp
 import threading
 from typing import Any
 
+__all__ = ["ContextManager"]
+
 
 class ContextManager:
     """Manages context variables across parallel processes with real-time synchronization"""

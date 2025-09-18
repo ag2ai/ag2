@@ -7,6 +7,8 @@ import os
 
 from ..utils.core_affinity import CoreAffinityManager
 
+__all__ = ["ProcessManager"]
+
 
 def core_worker_process(core_id: int, input_queue: mp.Queue, output_queue: mp.Queue):
     """Worker function that runs in each core process"""

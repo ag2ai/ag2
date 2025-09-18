@@ -6,6 +6,8 @@ import threading
 import time
 from typing import Any
 
+__all__ = ["LLMConnection", "LLMPool"]
+
 
 class LLMConnection:
     """Represents an LLM connection with context"""

@@ -7,6 +7,8 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
+__all__ = ["ThreadMessenger"]
+
 
 class ThreadMessenger:
     """Handles same-core agent communication using threading"""

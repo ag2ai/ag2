@@ -6,6 +6,8 @@ import multiprocessing as mp
 
 from .serialization import MessageSerializer
 
+__all__ = ["MessageRouter"]
+
 
 class MessageRouter:
     """Routes messages between agents based on their core locations"""
