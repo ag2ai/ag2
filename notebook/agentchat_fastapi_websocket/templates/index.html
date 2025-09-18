@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced WebSocket JSON Client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom animations for enhanced UX */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes pulse-dot {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        .toast-show { animation: slideIn 0.3s ease-out; }
+        .toast-hide { animation: slideOut 0.3s ease-in; }
+        .spinner { animation: spin 1s linear infinite; }
+        .typing-dot { animation: pulse-dot 1.4s infinite ease-in-out; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        /* Custom scrollbar for messages */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Dark mode scrollbar */
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Collapsed panel toggle buttons */
+        .panel-toggle-collapsed {
+            position: fixed;
+            z-index: 40;
+            background: rgba(59, 130, 246, 0.9);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(59, 130, 246, 0.5);
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .panel-toggle-collapsed:hover {
+            background: rgba(59, 130, 246, 1);
+            transform: scale(1.05);
+        }
+        .panel-toggle-left {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .panel-toggle-right {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body class="h-screen bg-gray-50 dark:bg-gray-900 font-sans transition-colors duration-300">
+    <!-- Collapsed Panel Toggle Buttons -->
+    <div id="leftPanelToggle" class="panel-toggle-collapsed panel-toggle-left hidden" onclick="togglePanel('left')" title="Show controls panel">
+        ▶
+    </div>
+    <div id="rightPanelToggle" class="panel-toggle-collapsed panel-toggle-right hidden" onclick="togglePanel('right')" title="Show messages panel">
+        ◀
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Performance Modal -->
+    <div id="performanceModal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="hidePerformanceModal()"></div>
+        <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">📊 Performance Report</h3>
+                <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl" onclick="hidePerformanceModal()">&times;</button>
+            </div>
+            <div class="p-6">
+                <div id="performanceContent" class="space-y-6">
+                    <!-- Performance content will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="hideShortcuts()"></div>
+        <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">⌨️ Keyboard Shortcuts</h3>
+                <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl" onclick="hideShortcuts()">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="grid gap-6 md:grid-cols-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3">General</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Send message</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Focus message input</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">K</kbd>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Clear messages</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">L</kbd>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Toggle theme</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">D</kbd>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3">Panels</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Toggle left panel</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">B</kbd>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Toggle right panel</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">M</kbd>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-300">Advanced search</span>
+                                <div class="flex gap-1">
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Ctrl</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">Alt</kbd>
+                                    <kbd class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded">S</kbd>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Search Modal -->
+    <div id="advancedSearchModal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="hideAdvancedSearch()"></div>
+        <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">🔍 Advanced Search</h3>
+                <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl" onclick="hideAdvancedSearch()">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search Term:</label>
+                        <input type="text" id="advancedSearchTerm" placeholder="Enter search term..."
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message Type:</label>
+                            <select id="advancedSearchType" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500">
+                                <option value="all">All messages</option>
+                                <option value="sent">Sent only</option>
+                                <option value="received">Received only</option>
+                                <option value="system">System only</option>
+                                <option value="error">Errors only</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Source:</label>
+                            <select id="advancedSearchSource" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500">
+                                <option value="all">All sources</option>
+                                <option value="user">User</option>
+                                <option value="AGENT">AGENT</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="datetime-local" id="searchStartDate" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                            <input type="datetime-local" id="searchEndDate" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-4">
+                        <button onclick="performAdvancedSearch()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">Search</button>
+                        <button onclick="clearAdvancedSearch()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Clear</button>
+                        <button onclick="hideAdvancedSearch()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancel</button>
+                    </div>
+
+                    <div id="advancedSearchResults" class="hidden max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onclick="hideExportModal()"></div>
+        <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">📁 Export Chat History</h3>
+                <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl" onclick="hideExportModal()">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Choose Export Format:</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="export-format-card border-2 border-gray-200 dark:border-gray-600 rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors text-center" data-format="json" onclick="selectExportFormat('json')">
+                                <div class="text-2xl mb-2">📄</div>
+                                <div class="font-semibold text-gray-900 dark:text-white">JSON</div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Structured data format</div>
+                            </div>
+                            <div class="export-format-card border-2 border-gray-200 dark:border-gray-600 rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors text-center" data-format="csv" onclick="selectExportFormat('csv')">
+                                <div class="text-2xl mb-2">📊</div>
+                                <div class="font-semibold text-gray-900 dark:text-white">CSV</div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Spreadsheet compatible</div>
+                            </div>
+                            <div class="export-format-card border-2 border-gray-200 dark:border-gray-600 rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors text-center" data-format="txt" onclick="selectExportFormat('txt')">
+                                <div class="text-2xl mb-2">📝</div>
+                                <div class="font-semibold text-gray-900 dark:text-white">Text</div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Plain text format</div>
+                            </div>
+                            <div class="export-format-card border-2 border-gray-200 dark:border-gray-600 rounded-lg p-4 cursor-pointer hover:border-blue-500 transition-colors text-center" data-format="html" onclick="selectExportFormat('html')">
+                                <div class="text-2xl mb-2">🌐</div>
+                                <div class="font-semibold text-gray-900 dark:text-white">HTML</div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">Web page format</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="exportApplyFilters" class="mr-2">
+                            <span class="text-gray-700 dark:text-gray-300">Apply current search filters</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="exportIncludeStats" class="mr-2">
+                            <span class="text-gray-700 dark:text-gray-300">Include statistics</span>
+                        </label>
+                    </div>
+
+                    <div class="flex gap-2 pt-4">
+                        <button onclick="performExport()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors disabled:bg-gray-400" id="exportButton" disabled>Export</button>
+                        <button onclick="hideExportModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="h-screen flex flex-col">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-5 flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-light mb-1">🚀 AG2AI WebSocket</h1>
+                    <p class="opacity-90 text-sm">Developed by: <a href="https://github.com/Suryaaa-Rathore" target="_blank">Suryaaa!</a></p>
+                    <!-- <p class="opacity-90 text-sm">Email: <a href="mailto:rathoresuryaaa21@gmail.com" target="_blank">Suryaaa!</a></p> -->
+                </div>
+                <div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="themeToggle" class="w-10 h-10 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg flex items-center justify-center hover:bg-opacity-20 transition-all" title="Toggle theme (Ctrl+D)">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <button id="shortcutsBtn" class="w-10 h-10 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg flex items-center justify-center hover:bg-opacity-20 transition-all" title="Keyboard shortcuts (Ctrl+/)">
+                        <span>⌨️</span>
+                    </button>
+                    <button id="fontSizeBtn" class="w-10 h-10 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg flex items-center justify-center hover:bg-opacity-20 transition-all" title="Font size">
+                        <span>🔤</span>
+                    </button>
+                    <button id="performanceBtn" class="w-10 h-10 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg flex items-center justify-center hover:bg-opacity-20 transition-all" title="Performance report (Ctrl+Alt+P)">
+                        <span>📊</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="flex flex-1 min-h-0">
+            <!-- Left Panel - Controls -->
+            <div class="w-96 bg-gray-100 dark:bg-gray-800 border-r-2 border-gray-300 dark:border-gray-700 flex-shrink-0 transition-all duration-300 flex flex-col" id="leftPanel">
+                <div class="flex items-center justify-between p-4 bg-gray-200 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600 flex-shrink-0">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Controls</h3>
+                    <button class="w-8 h-8 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 rounded flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors text-xs" id="leftCollapseBtn" onclick="togglePanel('left')" title="Toggle panel">
+                        <span id="leftCollapseIcon">◀</span>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-5">
+                    <!-- Create New Chat Section -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="toggleSection(this)">
+                            <div class="flex items-center gap-2">
+                                <span>💬</span>
+                                <span class="font-semibold text-gray-900 dark:text-white">Create New Chat</span>
+                            </div>
+                            <span class="collapse-indicator text-gray-500">▼</span>
+                        </div>
+
+                        <div class="section-content mt-3 space-y-3">
+                            <button id="newChatBtn" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-2 px-4 rounded transition-all transform hover:-translate-y-0.5 hover:shadow-lg">Create New Chat</button>
+
+                            <div id="chatCreationStatus" class="hidden p-3 rounded-lg border"></div>
+
+                            <div id="recentChats" class="hidden">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recent Chat IDs:</label>
+                                <div id="chatHistory" class="space-y-2"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Section -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="toggleSection(this)">
+                            <div class="flex items-center gap-2">
+                                <span>🔗</span>
+                                <span class="font-semibold text-gray-900 dark:text-white">Connection</span>
+                            </div>
+                            <span class="collapse-indicator text-gray-500">▼</span>
+                        </div>
+
+                        <div class="section-content mt-3 space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Client UUID:</label>
+                                <div class="flex gap-2">
+                                    <input id="clientId" value="3b3c6993-ccdb-47d2-a568-d0f7e91d3f2f" placeholder="Enter your client UUID"
+                                           class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                                    <button class="px-3 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors" onclick="copyClientId()" title="Copy UUID">📋</button>
+                                </div>
+                            </div>
+
+                            <div id="status" class="p-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700">
+                                <div class="flex items-center gap-2">
+                                    <span class="status-icon">❌</span>
+                                    <span class="status-text text-red-700 dark:text-red-300">Disconnected</span>
+                                </div>
+                                <div id="connectionQuality" class="hidden"></div>
+                                <div id="reconnectInfo" class="hidden mt-2 text-sm text-center">
+                                    <span>Reconnecting in <span id="reconnectTimer">5</span>s...</span>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button id="connectBtn" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-2 px-4 rounded transition-all">Connect</button>
+                                <button id="disconnectBtn" class="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2 px-4 rounded transition-all disabled:bg-gray-400" disabled>Disconnect</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Send Message Section -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="toggleSection(this)">
+                            <div class="flex items-center gap-2">
+                                <span>📤</span>
+                                <span class="font-semibold text-gray-900 dark:text-white">Send Message</span>
+                            </div>
+                            <span class="collapse-indicator text-gray-500">▼</span>
+                        </div>
+
+                        <div class="section-content mt-3 space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quick JSON Templates:</label>
+                                <div class="flex flex-col gap-2">
+                                    <button class="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-2 px-3 rounded text-sm transition-all" onclick="fillUserQuery()">User Query</button>
+                                    <button class="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-2 px-3 rounded text-sm transition-all" onclick="fillManualVerification()">User Input</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">JSON Message:</label>
+                                <div class="relative">
+                                    <textarea id="jsonInput" placeholder='{"type": "start","task": "Your Query Here!","files": []}'
+                                              class="w-full h-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y">{"type": "start","task": "Your Query Here!","files": []}</textarea>
+                                    <div class="absolute top-2 right-2 flex gap-1">
+                                        <button class="w-7 h-7 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex items-center justify-center" onclick="autoSaveDraft()" title="Save draft">💾</button>
+                                        <button class="w-7 h-7 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex items-center justify-center" onclick="loadDraft()" title="Load draft">📁</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button id="sendBtn" class="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-2 px-4 rounded transition-all disabled:bg-gray-400" disabled>Send Message</button>
+                                <button id="formatBtn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Format JSON</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Section -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="toggleSection(this)">
+                            <div class="flex items-center gap-2">
+                                <span>🔍</span>
+                                <span class="font-semibold text-gray-900 dark:text-white">Search & Filter</span>
+                            </div>
+                            <span class="collapse-indicator text-gray-500">▼</span>
+                        </div>
+
+                        <div class="section-content mt-3 space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search messages:</label>
+                                <input id="searchInput" type="text" placeholder="Search content..."
+                                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filter by type:</label>
+                                <select id="filterType" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500">
+                                    <option value="all">All messages</option>
+                                    <option value="sent">Sent only</option>
+                                    <option value="received">Received only</option>
+                                    <option value="system">System only</option>
+                                    <option value="error">Errors only</option>
+                                </select>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button id="clearSearchBtn" class="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-3 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Clear</button>
+                                <button id="advancedSearchBtn" class="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-3 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Advanced</button>
+                                <button id="exportBtn" class="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 py-2 px-3 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Export</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resize Handle -->
+            <div class="w-1 bg-gray-300 dark:bg-gray-600 cursor-col-resize hover:bg-blue-500 transition-colors flex items-center justify-center flex-shrink-0" id="resizeHandle">
+                <div class="text-gray-400 text-xs writing-mode-vertical">⋮</div>
+            </div>
+
+            <!-- Right Panel - Messages -->
+            <div class="flex-1 flex flex-col bg-white dark:bg-gray-900 min-w-0 transition-all duration-300" id="rightPanel">
+                <div class="flex items-center justify-between p-4 bg-gray-200 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600 flex-shrink-0">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Messages</h3>
+                    <div class="flex gap-2">
+                        <button id="autoScrollBtn" class="w-8 h-8 bg-green-100 dark:bg-green-900 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 rounded flex items-center justify-center hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="Auto-scroll">📄</button>
+                        <button id="clearBtn" class="w-8 h-8 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded flex items-center justify-center hover:bg-red-200 dark:hover:bg-red-800 transition-colors">🗑️</button>
+                        <button class="w-8 h-8 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 rounded flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors text-xs" id="rightCollapseBtn" onclick="togglePanel('right')" title="Toggle panel">
+                            <span id="rightCollapseIcon">▶</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="typingIndicator" class="hidden flex items-center gap-3 p-3 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm">
+                    <div class="flex gap-1">
+                        <span class="w-2 h-2 bg-blue-500 rounded-full typing-dot"></span>
+                        <span class="w-2 h-2 bg-blue-500 rounded-full typing-dot"></span>
+                        <span class="w-2 h-2 bg-blue-500 rounded-full typing-dot"></span>
+                    </div>
+                    <span>System is processing...</span>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-gray-900 text-gray-100 font-mono text-sm" id="messages">
+                    <div class="flex flex-col items-center justify-center h-full text-center text-gray-500" id="emptyState">
+                        <div class="text-5xl mb-4 opacity-50">💬</div>
+                        <h3 class="text-lg mb-2 text-gray-400">No messages yet</h3>
+                        <p class="text-gray-500">Connect and start sending messages to see them here</p>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="bg-gray-100 dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 p-4 flex justify-around flex-shrink-0">
+                    <div class="text-center">
+                        <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="sentCount">0</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Sent</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="receivedCount">0</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Received</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="errorCount">0</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Errors</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="connectionTime">--</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Uptime</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl font-bold text-blue-600 dark:text-blue-400" id="qualityIndicator">--</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Quality</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Enhanced Ravian AI with all requested fixes
+        // Global variables
+        let ws;
+        let sentCount = 0;
+        let receivedCount = 0;
+        let errorCount = 0;
+        let currentChatId = null;
+        let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        let connectionStartTime = null;
+        let uptimeInterval = null;
+        let autoScroll = true;
+        let allMessages = [];
+        let currentTheme = localStorage.getItem('theme') || 'light';
+        let currentFontSize = localStorage.getItem('fontSize') || 'medium';
+
+        // Panel state management
+        let leftPanelCollapsed = localStorage.getItem('leftPanelCollapsed') === 'true';
+        let rightPanelCollapsed = localStorage.getItem('rightPanelCollapsed') === 'true';
+        let leftPanelWidth = parseInt(localStorage.getItem('leftPanelWidth')) || 384;
+
+        // Performance tracking
+        let performanceMetrics = {
+            messagesPerSecond: 0,
+            averageLatency: 0,
+            connectionStability: 100,
+            memoryUsage: 0,
+            messageHistory: [],
+            latencyHistory: [],
+            connectionEvents: []
+        };
+
+        // WebSocket ping/pong
+        let pingInterval = null;
+        let lastPongTime = null;
+        let connectionQuality = 100;
+
+        // Current search and export state
+        let currentSearchResults = [];
+        let selectedExportFormat = null;
+
+        // Toast notification system
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const typeClasses = {
+                'success': 'bg-green-100 border-green-300 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-300',
+                'error': 'bg-red-100 border-red-300 text-red-800 dark:bg-red-900 dark:border-red-700 dark:text-red-300',
+                'warning': 'bg-yellow-100 border-yellow-300 text-yellow-800 dark:bg-yellow-900 dark:border-yellow-700 dark:text-yellow-300',
+                'info': 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-300'
+            };
+
+            const icons = {
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️',
+                'info': 'ℹ️'
+            };
+
+            toast.className = `toast-show flex items-center gap-3 p-3 border-l-4 rounded-lg shadow-lg min-w-80 max-w-md pointer-events-auto ${typeClasses[type] || typeClasses.info}`;
+
+            toast.innerHTML = `
+                <span class="text-lg">${icons[type] || 'ℹ️'}</span>
+                <span class="flex-1">${message}</span>
+                <button class="text-lg hover:bg-black hover:bg-opacity-10 rounded-full w-6 h-6 flex items-center justify-center transition-colors" onclick="closeToast(this.parentElement)">&times;</button>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    closeToast(toast);
+                }
+            }, duration);
+        }
+
+        function closeToast(toast) {
+            toast.classList.remove('toast-show');
+            toast.classList.add('toast-hide');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.parentElement.removeChild(toast);
+                }
+            }, 300);
+        }
+
+        // Theme management
+        function initTheme() {
+            if (currentTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            if (currentTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            localStorage.setItem('theme', currentTheme);
+            updateThemeIcon();
+            showToast(`Switched to ${currentTheme} theme`, 'success', 2000);
+        }
+
+        function updateThemeIcon() {
+            const icon = document.querySelector('.theme-icon');
+            if (icon) {
+                icon.textContent = currentTheme === 'light' ? '🌙' : '☀️';
+            }
+        }
+
+        function cycleFontSize() {
+            const sizes = ['small', 'medium', 'large'];
+            const currentIndex = sizes.indexOf(currentFontSize);
+            currentFontSize = sizes[(currentIndex + 1) % sizes.length];
+            localStorage.setItem('fontSize', currentFontSize);
+
+            // Apply font size classes to messages container
+            const messages = document.getElementById('messages');
+            messages.classList.remove('text-xs', 'text-sm', 'text-base');
+            if (currentFontSize === 'small') messages.classList.add('text-xs');
+            else if (currentFontSize === 'medium') messages.classList.add('text-sm');
+            else messages.classList.add('text-base');
+
+            showToast(`Font size: ${currentFontSize}`, 'info', 2000);
+        }
+
+        // Performance tracking functions
+        function updatePerformanceMetrics() {
+            // Update messages per second
+            const now = Date.now();
+            const recentMessages = performanceMetrics.messageHistory.filter(time => now - time < 1000);
+            performanceMetrics.messagesPerSecond = recentMessages.length;
+
+            // Update average latency
+            if (performanceMetrics.latencyHistory.length > 0) {
+                const sum = performanceMetrics.latencyHistory.reduce((a, b) => a + b, 0);
+                performanceMetrics.averageLatency = Math.round(sum / performanceMetrics.latencyHistory.length);
+            }
+
+            // Update memory usage estimate
+            performanceMetrics.memoryUsage = Math.round(JSON.stringify(allMessages).length / 1024); // KB
+
+            // Clean old data
+            performanceMetrics.messageHistory = performanceMetrics.messageHistory.filter(time => now - time < 60000);
+            if (performanceMetrics.latencyHistory.length > 100) {
+                performanceMetrics.latencyHistory = performanceMetrics.latencyHistory.slice(-50);
+            }
+        }
+
+        function showPerformanceModal() {
+            updatePerformanceMetrics();
+            const modal = document.getElementById('performanceModal');
+            const content = document.getElementById('performanceContent');
+
+            content.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
+                        <h4 class="font-semibold text-blue-800 dark:text-blue-200 mb-2">Connection Health</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Quality:</span>
+                                <span class="font-mono text-blue-600 dark:text-blue-400">${connectionQuality}%</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Avg Latency:</span>
+                                <span class="font-mono text-blue-600 dark:text-blue-400">${performanceMetrics.averageLatency}ms</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Stability:</span>
+                                <span class="font-mono text-blue-600 dark:text-blue-400">${performanceMetrics.connectionStability}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-green-50 dark:bg-green-900 p-4 rounded-lg">
+                        <h4 class="font-semibold text-green-800 dark:text-green-200 mb-2">Message Stats</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Total Sent:</span>
+                                <span class="font-mono text-green-600 dark:text-green-400">${sentCount}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Total Received:</span>
+                                <span class="font-mono text-green-600 dark:text-green-400">${receivedCount}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Msg/Second:</span>
+                                <span class="font-mono text-green-600 dark:text-green-400">${performanceMetrics.messagesPerSecond}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-purple-50 dark:bg-purple-900 p-4 rounded-lg">
+                        <h4 class="font-semibold text-purple-800 dark:text-purple-200 mb-2">Memory Usage</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Messages Cache:</span>
+                                <span class="font-mono text-purple-600 dark:text-purple-400">${performanceMetrics.memoryUsage} KB</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Total Messages:</span>
+                                <span class="font-mono text-purple-600 dark:text-purple-400">${allMessages.length}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Errors:</span>
+                                <span class="font-mono text-purple-600 dark:text-purple-400">${errorCount}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-orange-50 dark:bg-orange-900 p-4 rounded-lg">
+                        <h4 class="font-semibold text-orange-800 dark:text-orange-200 mb-2">Session Info</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Current Chat:</span>
+                                <span class="font-mono text-orange-600 dark:text-orange-400 text-xs">${currentChatId ? currentChatId.substring(0, 8) + '...' : 'None'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Theme:</span>
+                                <span class="font-mono text-orange-600 dark:text-orange-400">${currentTheme}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-300">Font Size:</span>
+                                <span class="font-mono text-orange-600 dark:text-orange-400">${currentFontSize}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 dark:text-gray-200 mb-2">Recent Activity</h4>
+                    <div class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                        ${performanceMetrics.connectionEvents.slice(-5).map(event =>
+                            `<div>• ${event.time}: ${event.event}</div>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+        }
+
+        function hidePerformanceModal() {
+            document.getElementById('performanceModal').classList.add('hidden');
+        }
+
+        // WebSocket ping/pong functionality
+        function startPing() {
+            if (pingInterval) clearInterval(pingInterval);
+
+            pingInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const pingTime = Date.now();
+                    ws.send(JSON.stringify({ type: 'ping', timestamp: pingTime }));
+
+                    // Check if we haven't received a pong in a while
+                    if (lastPongTime && Date.now() - lastPongTime > 10000) {
+                        connectionQuality = Math.max(0, connectionQuality - 10);
+                    }
+                }
+            }, 5000); // Ping every 5 seconds
+        }
+
+        function stopPing() {
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingInterval = null;
+            }
+        }
+
+        function handlePong(timestamp) {
+            const now = Date.now();
+            lastPongTime = now;
+            const latency = now - timestamp;
+
+            performanceMetrics.latencyHistory.push(latency);
+
+            // Update connection quality based on latency
+            if (latency < 100) connectionQuality = Math.min(100, connectionQuality + 1);
+            else if (latency > 500) connectionQuality = Math.max(0, connectionQuality - 5);
+
+            document.getElementById('qualityIndicator').textContent = connectionQuality + '%';
+        }
+
+        // Modal functions
+        function showShortcuts() {
+            document.getElementById('shortcutsModal').classList.remove('hidden');
+        }
+
+        function hideShortcuts() {
+            document.getElementById('shortcutsModal').classList.add('hidden');
+        }
+
+        function showAdvancedSearch() {
+            document.getElementById('advancedSearchModal').classList.remove('hidden');
+        }
+
+        function hideAdvancedSearch() {
+            document.getElementById('advancedSearchModal').classList.add('hidden');
+        }
+
+        function showExportModal() {
+            document.getElementById('exportModal').classList.remove('hidden');
+        }
+
+        function hideExportModal() {
+            document.getElementById('exportModal').classList.add('hidden');
+            selectedExportFormat = null;
+            // Reset format selection
+            document.querySelectorAll('.export-format-card').forEach(card => {
+                card.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900');
+                card.classList.add('border-gray-200', 'dark:border-gray-600');
+            });
+            document.getElementById('exportButton').disabled = true;
+        }
+
+        function selectExportFormat(format) {
+            selectedExportFormat = format;
+
+            // Update UI
+            document.querySelectorAll('.export-format-card').forEach(card => {
+                card.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900');
+                card.classList.add('border-gray-200', 'dark:border-gray-600');
+            });
+            const selectedCard = document.querySelector(`[data-format="${format}"]`);
+            selectedCard.classList.remove('border-gray-200', 'dark:border-gray-600');
+            selectedCard.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900');
+            document.getElementById('exportButton').disabled = false;
+        }
+
+        // Panel Management Functions with fixed toggle visibility
+        function togglePanel(side) {
+            const panel = document.getElementById(side === 'left' ? 'leftPanel' : 'rightPanel');
+            const collapseIcon = document.getElementById(side === 'left' ? 'leftCollapseIcon' : 'rightCollapseIcon');
+            const toggleButton = document.getElementById(side === 'left' ? 'leftPanelToggle' : 'rightPanelToggle');
+
+            if (!panel) return;
+
+            const isCollapsed = side === 'left' ? leftPanelCollapsed : rightPanelCollapsed;
+
+            if (isCollapsed) {
+                // Expand panel
+                panel.classList.remove('w-0', 'overflow-hidden');
+                if (side === 'left') {
+                    panel.style.width = leftPanelWidth + 'px';
+                    leftPanelCollapsed = false;
+                    collapseIcon.textContent = '◀';
+                } else {
+                    rightPanelCollapsed = false;
+                    collapseIcon.textContent = '▶';
+                }
+                toggleButton.classList.add('hidden');
+                localStorage.setItem(`${side}PanelCollapsed`, 'false');
+                showToast(`${side.charAt(0).toUpperCase() + side.slice(1)} panel expanded`, 'info', 1000);
+            } else {
+                // Collapse panel
+                panel.classList.add('w-0', 'overflow-hidden');
+                if (side === 'left') {
+                    leftPanelCollapsed = true;
+                    collapseIcon.textContent = '▶';
+                } else {
+                    rightPanelCollapsed = true;
+                    collapseIcon.textContent = '◀';
+                }
+                toggleButton.classList.remove('hidden');
+                localStorage.setItem(`${side}PanelCollapsed`, 'true');
+                showToast(`${side.charAt(0).toUpperCase() + side.slice(1)} panel collapsed`, 'info', 1000);
+            }
+        }
+
+        function toggleSection(titleElement) {
+            const content = titleElement.parentElement.querySelector('.section-content');
+            const indicator = titleElement.querySelector('.collapse-indicator');
+
+            if (content && indicator) {
+                const isHidden = content.classList.contains('hidden');
+                if (isHidden) {
+                    content.classList.remove('hidden');
+                    indicator.textContent = '▼';
+                } else {
+                    content.classList.add('hidden');
+                    indicator.textContent = '▶';
+                }
+            }
+        }
+
+        // Status and UI updates
+        function updateStatus(type, icon, text) {
+            const status = document.getElementById("status");
+            const statusClasses = {
+                'connected': 'border-green-300 bg-green-50 dark:bg-green-900 dark:border-green-700',
+                'connecting': 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900 dark:border-yellow-700',
+                'disconnected': 'border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700'
+            };
+
+            status.className = `p-3 rounded-lg border ${statusClasses[type] || statusClasses.disconnected}`;
+
+            const statusIndicator = status.querySelector('.status-indicator') || status.querySelector('div');
+            if (statusIndicator) {
+                const textColors = {
+                    'connected': 'text-green-700 dark:text-green-300',
+                    'connecting': 'text-yellow-700 dark:text-yellow-300',
+                    'disconnected': 'text-red-700 dark:text-red-300'
+                };
+                statusIndicator.innerHTML = `<span class="status-icon">${icon}</span><span class="status-text ${textColors[type]}">${text}</span>`;
+            }
+        }
+
+        function updateButtons(connectEnabled, disconnectEnabled, sendEnabled) {
+            const connectBtn = document.getElementById("connectBtn");
+            const disconnectBtn = document.getElementById("disconnectBtn");
+            const sendBtn = document.getElementById("sendBtn");
+
+            connectBtn.disabled = !connectEnabled;
+            disconnectBtn.disabled = !disconnectEnabled;
+            sendBtn.disabled = !sendEnabled;
+
+            // Update button classes based on state
+            if (connectEnabled) {
+                connectBtn.classList.remove('bg-gray-400');
+                connectBtn.classList.add('bg-gradient-to-r', 'from-green-500', 'to-green-600', 'hover:from-green-600', 'hover:to-green-700');
+            } else {
+                connectBtn.classList.add('bg-gray-400');
+                connectBtn.classList.remove('bg-gradient-to-r', 'from-green-500', 'to-green-600', 'hover:from-green-600', 'hover:to-green-700');
+            }
+
+            if (sendEnabled) {
+                sendBtn.classList.remove('bg-gray-400');
+                sendBtn.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-blue-600', 'hover:from-blue-600', 'hover:to-blue-700');
+            } else {
+                sendBtn.classList.add('bg-gray-400');
+                sendBtn.classList.remove('bg-gradient-to-r', 'from-blue-500', 'to-blue-600', 'hover:from-blue-600', 'hover:to-blue-700');
+            }
+        }
+
+        function updateStats() {
+            document.getElementById("sentCount").textContent = sentCount;
+            document.getElementById("receivedCount").textContent = receivedCount;
+            document.getElementById("errorCount").textContent = errorCount;
+        }
+
+        function startConnectionTimer() {
+            connectionStartTime = Date.now();
+            uptimeInterval = setInterval(updateUptime, 1000);
+            performanceMetrics.connectionEvents.push({
+                time: new Date().toLocaleTimeString(),
+                event: 'Connection established'
+            });
+        }
+
+        function updateUptime() {
+            if (!connectionStartTime) return;
+
+            const elapsed = Date.now() - connectionStartTime;
+            const seconds = Math.floor(elapsed / 1000) % 60;
+            const minutes = Math.floor(elapsed / 60000) % 60;
+            const hours = Math.floor(elapsed / 3600000);
+
+            const uptime = hours > 0
+                ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+                : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            document.getElementById('connectionTime').textContent = uptime;
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const btn = document.getElementById('autoScrollBtn');
+            if (autoScroll) {
+                btn.classList.remove('bg-red-100', 'dark:bg-red-900', 'border-red-300', 'dark:border-red-700', 'text-red-700', 'dark:text-red-300');
+                btn.classList.add('bg-green-100', 'dark:bg-green-900', 'border-green-300', 'dark:border-green-700', 'text-green-700', 'dark:text-green-300');
+            } else {
+                btn.classList.remove('bg-green-100', 'dark:bg-green-900', 'border-green-300', 'dark:border-green-700', 'text-green-700', 'dark:text-green-300');
+                btn.classList.add('bg-red-100', 'dark:bg-red-900', 'border-red-300', 'dark:border-red-700', 'text-red-700', 'dark:text-red-300');
+            }
+            btn.title = autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled';
+            showToast(`Auto-scroll ${autoScroll ? 'enabled' : 'disabled'}`, 'info', 2000);
+        }
+
+        // Connection functions
+        function connect() {
+            const clientId = document.getElementById("clientId").value.trim();
+            if (!clientId) {
+                showToast("Please enter a valid UUID!", 'error');
+                return;
+            }
+
+            updateStatus("connecting", "🔄", "Connecting...");
+            updateButtons(false, false, false);
+
+            const url = `ws://${location.host}/ws/chat/${clientId}`;
+            ws = new WebSocket(url);
+
+            ws.onopen = function() {
+                updateStatus("connected", "✅", "Connected");
+                updateButtons(false, true, true);
+                startConnectionTimer();
+                startPing();
+                showToast('Connected successfully', 'success');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    // Handle ping/pong
+                    if (data.type === 'pong') {
+                        handlePong(data.timestamp);
+                        return;
+                    }
+
+                    receivedCount++;
+                    performanceMetrics.messageHistory.push(Date.now());
+                    updateStats();
+                    updatePerformanceMetrics();
+                    showMessage("", data, getMessageClassBasic(data));
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                    errorCount++;
+                    updateStats();
+                }
+            };
+
+            ws.onclose = function(event) {
+                if (uptimeInterval) {
+                    clearInterval(uptimeInterval);
+                    uptimeInterval = null;
+                }
+                stopPing();
+                updateStatus("disconnected", "❌", "Disconnected");
+                updateButtons(true, false, false);
+                performanceMetrics.connectionEvents.push({
+                    time: new Date().toLocaleTimeString(),
+                    event: 'Connection closed'
+                });
+                showToast('Connection closed', 'warning');
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                errorCount++;
+                updateStats();
+                performanceMetrics.connectionEvents.push({
+                    time: new Date().toLocaleTimeString(),
+                    event: 'Connection error'
+                });
+                showToast('Connection error', 'error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close(1000, "User initiated disconnect");
+            }
+            showToast('Disconnected', 'info', 2000);
+        }
+
+        function sendMessage() {
+            const raw = document.getElementById("jsonInput").value.trim();
+            if (!raw) {
+                showToast("Please enter a message to send.", 'warning');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showToast("Not connected to server", 'error');
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(raw);
+                const jsonText = JSON.stringify(parsed);
+
+                ws.send(jsonText);
+                sentCount++;
+                performanceMetrics.messageHistory.push(Date.now());
+                updateStats();
+                updatePerformanceMetrics();
+                // showMessage("User", parsed, "user-message");
+                showToast('Message sent', 'success', 1000);
+            } catch (e) {
+                showToast(`Invalid JSON: ${e.message}`, 'error');
+            }
+        }
+
+        function getMessageClassBasic(data) {
+            if (data.data && data.data.source) {
+                const source = data.data.source;
+                if (source === 'user') return 'user-message';
+                if (source === 'AGENT') return 'bot-message';
+            }
+            if (data.type === 'system') return 'system-message';
+            if (data.type === 'completion') return 'completion-message';
+            return 'legacy-message';
+        }
+
+        // Enhanced message display with conversational formatting
+        function showMessage(type, data, className) {
+            const messages = document.getElementById("messages");
+            const timestamp = new Date().toLocaleTimeString();
+
+            // Remove empty state if it exists
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            let messageData = data;
+            if (typeof data === 'string') {
+                try {
+                    messageData = JSON.parse(data);
+                } catch (e) {
+                    // Keep as string if not valid JSON
+                }
+            }
+
+            const div = document.createElement("div");
+            div.className = "mb-6 p-4 rounded-xl border-2 shadow-lg";
+
+            // Determine source, name, and icon with updated mappings
+            let source = type || 'System';
+            let displayName = source;
+            let icon = '⚙️';
+            let messageContent = '';
+
+            if (messageData && messageData.data && messageData.data.source) {
+                source = messageData.data.source;
+                const sourceMap = {
+                    'user': { name: 'You', icon: '👤' },
+                    'AgentChat': { name: 'AGENT Assistant', icon: '🤖' },
+                };
+
+                if (sourceMap[source]) {
+                    displayName = sourceMap[source].name;
+                    icon = sourceMap[source].icon;
+                }
+
+                // Extract display name from content if available
+                const contentName = extractDisplayName(messageData, displayName);
+                if (contentName && contentName !== displayName) {
+                    displayName = `${displayName} (${contentName})`;
+                }
+
+                // Extract actual content from the nested structure
+                if (messageData.data.content) {
+                    messageContent = extractMessageContent(messageData.data.content);
+                } else {
+                    messageContent = messageData.data;
+                }
+            } else {
+                messageContent = messageData;
+            }
+
+            // Apply message-specific styling based on type
+            if (className.includes('user-message')) {
+                div.classList.add('bg-gradient-to-br', 'from-blue-900', 'to-blue-800', 'border-blue-400', 'ml-8', 'text-blue-50');
+            } else if (className.includes('bot-message')) {
+                div.classList.add('bg-gradient-to-br', 'from-green-900', 'to-green-800', 'border-green-400', 'mr-8', 'text-green-50');
+            } else if (className.includes('system-message')) {
+                div.classList.add('bg-gradient-to-br', 'from-gray-800', 'to-gray-700', 'border-gray-500', 'text-gray-100');
+            } else {
+                div.classList.add('bg-gradient-to-br', 'from-purple-900', 'to-purple-800', 'border-purple-400', 'text-purple-50');
+            }
+
+            // Create formatted content
+            const formattedContent = formatMessageContent(messageContent);
+
+            // Generate unique ID for this message
+            const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+            div.innerHTML = `
+                <!-- Name Header -->
+                <div class="text-center mb-4 pb-2 border-b border-opacity-30 border-gray-300">
+                    <div class="flex items-center justify-center gap-3 mb-1">
+                        <span class="text-2xl">${icon}</span>
+                        <h3 class="text-lg font-bold">${displayName}</h3>
+                    </div>
+                    <span class="text-xs opacity-75">${timestamp}</span>
+                </div>
+
+                <!-- Message Content -->
+                <div class="message-content space-y-3">
+                    ${formattedContent}
+                </div>
+
+                <!-- Action Bar -->
+                <div class="mt-4 pt-3 border-t border-opacity-30 border-gray-300 flex justify-end">
+                    <button class="copy-btn text-sm px-3 py-1 rounded-full bg-black bg-opacity-20 hover:bg-opacity-30 transition-colors flex items-center gap-2" data-message-id="${messageId}" title="Copy message">
+                        📋 <span class="text-xs">Copy</span>
+                    </button>
+                </div>
+            `;
+
+            // Store the message data as a data attribute for copying
+            div.setAttribute('data-message', JSON.stringify(messageData));
+            div.setAttribute('id', messageId);
+
+            messages.appendChild(div);
+
+            // Add event listener for copy button
+            const copyBtn = div.querySelector('.copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function() {
+                    copyMessageById(messageId);
+                });
+            }
+
+            // Add event listeners for code block copy buttons
+            const copyCodeBtns = div.querySelectorAll('.copy-code-btn');
+            copyCodeBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const codeId = this.getAttribute('data-code-id');
+                    if (codeId && window.codeMap && window.codeMap[codeId]) {
+                        copyCodeFromMap(codeId);
+                    }
+                });
+            });
+
+            // Auto-scroll if enabled
+            if (autoScroll) {
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            // Store in allMessages array for export
+            allMessages.push({
+                timestamp: Date.now(),
+                type: type,
+                data: messageData,
+                className: className
+            });
+        }
+
+        // Extract meaningful content from nested message structure
+        function extractMessageContent(content) {
+            if (typeof content === 'string') {
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    return content;
+                }
+            }
+
+            // If it's an object, check for common content fields
+            if (content && typeof content === 'object') {
+                // Check for nested content field first
+                if (content.content) {
+                    // If content.content is a string, try to parse it as JSON
+                    if (typeof content.content === 'string') {
+                        try {
+                            return JSON.parse(content.content);
+                        } catch (e) {
+                            return content.content;
+                        }
+                    }
+                    return content.content;
+                }
+                if (content.message) return content.message;
+                if (content.text) return content.text;
+                if (content.raw_message) {
+                    try {
+                        return JSON.parse(content.raw_message);
+                    } catch (e) {
+                        return content.raw_message;
+                    }
+                }
+            }
+
+            return content;
+        }
+
+        // Extract display name from message content
+        function extractDisplayName(messageData, defaultName) {
+            // Check if there's a name field in the content
+            if (messageData && messageData.data && messageData.data.content) {
+                const content = messageData.data.content;
+                if (content.name) {
+                    return content.name;
+                }
+                if (content.role) {
+                    return content.role;
+                }
+            }
+            return defaultName;
+        }
+
+        // Format message content based on type with markdown support
+        function formatMessageContent(content) {
+            if (!content) return '<div class="text-gray-400 italic">No content</div>';
+
+            // If it's a simple string, check for markdown and format accordingly
+            if (typeof content === 'string') {
+                return formatMarkdownContent(content);
+            }
+
+            // If it's an object, format as a table
+            if (typeof content === 'object' && content !== null) {
+                if (Array.isArray(content)) {
+                    return formatArrayAsCards(content);
+                } else {
+                    return formatObjectAsTable(content);
+                }
+            }
+
+            return `<div class="text-base">${escapeHtml(String(content))}</div>`;
+        }
+
+        // Parse and format markdown content
+        function formatMarkdownContent(text) {
+            // Handle code blocks first with a much simpler approach
+            let html = text;
+
+            // Find and replace code blocks directly without placeholders
+            html = html.replace(/```(\w+)?\s*\n?([\s\S]*?)```/g, (match, language, code) => {
+                const lang = language || 'text';
+                const codeId = 'code_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                return createCodeBlockHtml(code.trim(), lang.toLowerCase(), codeId);
+            });
+
+            // Handle inline code (`code`)
+            html = html.replace(/`([^`]+)`/g, '<code class="px-2 py-1 bg-black bg-opacity-30 rounded text-sm font-mono">$1</code>');
+
+            // Handle bold (**text** or __text__)
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
+            html = html.replace(/__(.*?)__/g, '<strong class="font-bold">$1</strong>');
+
+            // Handle italic (*text* or _text_)
+            html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+            html = html.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
+
+            // Handle headers (# ## ###)
+            html = html.replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
+
+            // Handle links [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-300 hover:text-blue-200 underline" target="_blank">$1</a>');
+
+            // Handle line breaks LAST
+            html = html.replace(/\n/g, '<br>');
+
+            return `<div class="text-base leading-relaxed">${html}</div>`;
+        }
+
+        // Create HTML for code block - proper code block formatting
+        function createCodeBlockHtml(code, language, codeId) {
+            const languageLabels = {
+                'python': 'Python',
+                'javascript': 'JavaScript',
+                'js': 'JavaScript',
+                'typescript': 'TypeScript',
+                'ts': 'TypeScript',
+                'html': 'HTML',
+                'css': 'CSS',
+                'json': 'JSON',
+                'xml': 'XML',
+                'sql': 'SQL',
+                'bash': 'Bash',
+                'shell': 'Shell',
+                'powershell': 'PowerShell',
+                'yaml': 'YAML',
+                'yml': 'YAML',
+                'markdown': 'Markdown',
+                'md': 'Markdown',
+                'text': 'Text'
+            };
+
+            const displayLang = languageLabels[language] || language.toUpperCase();
+            const languageIcon = getLanguageIcon(language);
+
+            // Store the code in a global map for copy functionality
+            window.codeMap = window.codeMap || {};
+            window.codeMap[codeId] = code;
+
+            return `<div class="code-block-container my-6 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-lg">
+                <div class="relative">
+                <code class="language-${language}">${escapeHtml(code)}</code>
+                </div>
+            </div>`;
+        }
+
+        // Toggle word wrap for code blocks
+        window.toggleWrap = function(codeId) {
+            const codeElement = document.getElementById(codeId);
+            if (codeElement) {
+                if (codeElement.style.whiteSpace === 'pre-wrap') {
+                    codeElement.style.whiteSpace = 'pre';
+                    codeElement.style.overflowX = 'auto';
+                } else {
+                    codeElement.style.whiteSpace = 'pre-wrap';
+                    codeElement.style.overflowX = 'visible';
+                }
+            }
+        };
+
+        // Get appropriate icon for programming language
+        function getLanguageIcon(language) {
+            const icons = {
+                'python': '🐍',
+                'javascript': '🟨',
+                'js': '🟨',
+                'typescript': '🔷',
+                'ts': '🔷',
+                'html': '🌐',
+                'css': '🎨',
+                'json': '📄',
+                'xml': '📄',
+                'sql': '🗄️',
+                'bash': '💻',
+                'shell': '💻',
+                'powershell': '💻',
+                'yaml': '⚙️',
+                'yml': '⚙️',
+                'markdown': '📝',
+                'md': '📝',
+                'text': '📄'
+            };
+
+            return icons[language] || '📄';
+        }
+
+        // Format object as a clean table
+        function formatObjectAsTable(obj, level = 0) {
+            const indent = level * 20;
+            let html = '<div class="overflow-x-auto">';
+            html += '<table class="w-full border border-opacity-30 border-gray-300 rounded-lg overflow-hidden">';
+
+            for (const [key, value] of Object.entries(obj)) {
+                html += '<tr class="border-b border-opacity-20 border-gray-300">';
+                html += `<td class="px-4 py-2 font-semibold bg-black bg-opacity-20 text-sm" style="margin-left: ${indent}px">${escapeHtml(key)}</td>`;
+
+                if (typeof value === 'object' && value !== null) {
+                    if (Array.isArray(value)) {
+                        html += `<td class="px-4 py-2">${formatArrayAsCards(value, level + 1)}</td>`;
+                    } else {
+                        html += `<td class="px-4 py-2">${formatObjectAsTable(value, level + 1)}</td>`;
+                    }
+                } else {
+                    const displayValue = value === null ? '<span class="italic text-gray-400">null</span>' : escapeHtml(String(value));
+                    html += `<td class="px-4 py-2 text-sm font-mono break-words">${displayValue}</td>`;
+                }
+                html += '</tr>';
+            }
+
+            html += '</table></div>';
+            return html;
+        }
+
+        // Format array as cards
+        function formatArrayAsCards(arr, level = 0) {
+            if (arr.length === 0) {
+                return '<div class="text-gray-400 italic text-sm">Empty array</div>';
+            }
+
+            let html = '<div class="space-y-2">';
+
+            arr.forEach((item, index) => {
+                html += `<div class="bg-black bg-opacity-10 rounded-lg p-3 border border-opacity-20 border-gray-300">`;
+                html += `<div class="text-xs font-semibold mb-2 text-gray-300">Item ${index + 1}</div>`;
+
+                if (typeof item === 'object' && item !== null) {
+                    html += formatObjectAsTable(item, level + 1);
+                } else {
+                    html += `<div class="text-sm">${escapeHtml(String(item))}</div>`;
+                }
+
+                html += '</div>';
+            });
+
+            html += '</div>';
+            return html;
+        }
+
+        // Utility function to escape HTML
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Utility functions
+        function copyClientId() {
+            const clientId = document.getElementById('clientId').value;
+            navigator.clipboard.writeText(clientId).then(() => {
+                showToast('Client ID copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                showToast('Failed to copy Client ID', 'error');
+            });
+        }
+
+        function copyCodeFromMap(codeId) {
+            const code = window.codeMap[codeId];
+            if (!code) return;
+
+            navigator.clipboard.writeText(code).then(() => {
+                showToast('Code copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy code:', err);
+                showToast('Failed to copy code', 'error');
+            });
+        }
+
+        function copyCodeFromData(codeData) {
+            // Decode HTML entities back to original code
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = codeData;
+            const actualCode = tempDiv.textContent || tempDiv.innerText || '';
+
+            navigator.clipboard.writeText(actualCode).then(() => {
+                showToast('Code copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy code:', err);
+                showToast('Failed to copy code', 'error');
+            });
+        }
+
+        function copyCodeBlock(codeId) {
+            // First try to get code from the stored code blocks
+            if (window.codeBlocks && window.codeBlocks[codeId]) {
+                const codeText = window.codeBlocks[codeId].code;
+                navigator.clipboard.writeText(codeText).then(() => {
+                    showToast('Code copied to clipboard', 'success', 2000);
+                }).catch(err => {
+                    console.error('Failed to copy code:', err);
+                    showToast('Failed to copy code', 'error');
+                });
+                return;
+            }
+
+            // Fallback: try to get from DOM element
+            const codeElement = document.getElementById(codeId);
+            if (!codeElement) return;
+
+            const codeText = codeElement.textContent;
+
+            navigator.clipboard.writeText(codeText).then(() => {
+                showToast('Code copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy code:', err);
+                showToast('Failed to copy code', 'error');
+            });
+        }
+
+        function copyMessage(button) {
+            const messageDiv = button.closest('.mb-6');
+            const messageData = messageDiv.getAttribute('data-message');
+
+            let textToCopy = '';
+
+            try {
+                const parsed = JSON.parse(messageData);
+                textToCopy = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                textToCopy = messageData;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast('Message copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('Failed to copy message', 'error');
+            });
+        }
+
+        function copyMessageById(messageId) {
+            const messageDiv = document.getElementById(messageId);
+            if (!messageDiv) return;
+
+            const messageData = messageDiv.getAttribute('data-message');
+
+            let textToCopy = '';
+
+            try {
+                const parsed = JSON.parse(messageData);
+                textToCopy = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                textToCopy = messageData;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast('Message copied to clipboard', 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('Failed to copy message', 'error');
+            });
+        }
+
+        function autoSaveDraft() {
+            const content = document.getElementById('jsonInput').value;
+            localStorage.setItem('messageDraft', content);
+            showToast('Draft saved', 'success', 1000);
+        }
+
+        function loadDraft() {
+            const draft = localStorage.getItem('messageDraft');
+            if (draft) {
+                document.getElementById('jsonInput').value = draft;
+                showToast('Draft loaded', 'success', 2000);
+            } else {
+                showToast('No draft found', 'warning', 2000);
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById("messages").innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center text-gray-500" id="emptyState">
+                    <div class="text-5xl mb-4 opacity-50">💬</div>
+                    <h3 class="text-lg mb-2 text-gray-400">No messages yet</h3>
+                    <p class="text-gray-500">Connect and start sending messages to see them here</p>
+                </div>
+            `;
+            sentCount = 0;
+            receivedCount = 0;
+            errorCount = 0;
+            allMessages = [];
+            performanceMetrics.messageHistory = [];
+            updateStats();
+            showToast('Messages cleared', 'info', 2000);
+        }
+
+        function formatJSON() {
+            const textarea = document.getElementById("jsonInput");
+            try {
+                const parsed = JSON.parse(textarea.value);
+                textarea.value = JSON.stringify(parsed, null, 2);
+                showToast('JSON formatted successfully', 'success', 1000);
+            } catch (e) {
+                showToast(`Invalid JSON: ${e.message}`, 'error');
+            }
+        }
+
+        // Chat management functions
+        async function createNewChat() {
+            const statusDiv = document.getElementById("chatCreationStatus");
+            const newChatBtn = document.getElementById("newChatBtn");
+
+            statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300";
+            statusDiv.classList.remove('hidden');
+            statusDiv.innerHTML = '<div class="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full spinner"></div> Creating new chat...';
+            newChatBtn.disabled = true;
+
+            try {
+                const response = await fetch('http://localhost:8000/chats/new_chat', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                    },
+                    body: ''
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const chatId = data.chat_id;
+
+                currentChatId = chatId;
+                document.getElementById("clientId").value = chatId;
+
+                statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900 dark:border-green-700 text-green-700 dark:text-green-300";
+                statusDiv.innerHTML = `✅ New chat created successfully! Chat ID: <strong>${chatId}</strong>`;
+
+                addToChatHistory(chatId);
+                showToast(`New chat created: ${chatId}`, 'success');
+
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error creating chat:', error);
+                statusDiv.className = "flex items-center gap-2 p-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-900 dark:border-red-700 text-red-700 dark:text-red-300";
+                statusDiv.innerHTML = `❌ Failed to create chat: ${error.message}`;
+                showToast(`Failed to create chat: ${error.message}`, 'error');
+
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 5000);
+            } finally {
+                newChatBtn.disabled = false;
+            }
+        }
+
+        function addToChatHistory(chatId) {
+            chatHistory = chatHistory.filter(id => id !== chatId);
+            chatHistory.unshift(chatId);
+            chatHistory = chatHistory.slice(0, 5);
+
+            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            displayChatHistory();
+        }
+
+        function displayChatHistory() {
+            const historyContainer = document.getElementById("recentChats");
+            const historyDiv = document.getElementById("chatHistory");
+
+            if (!historyContainer || !historyDiv) return;
+
+            if (chatHistory.length === 0) {
+                historyContainer.classList.add('hidden');
+                return;
+            }
+
+            historyContainer.classList.remove('hidden');
+            historyDiv.innerHTML = "";
+
+            chatHistory.forEach(chatId => {
+                const chatItem = document.createElement("div");
+                chatItem.className = "flex items-center justify-between p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded font-mono text-xs transition-colors hover:bg-gray-50 dark:hover:bg-gray-600";
+                chatItem.innerHTML = `
+                    <div class="flex-1 mr-2 break-all text-gray-900 dark:text-white">${chatId}</div>
+                    <div class="flex gap-1">
+                        <button class="px-2 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors" onclick="useChatId('${chatId}')">Use</button>
+                        <button class="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors" onclick="copySpecificChatId('${chatId}')">Copy</button>
+                        <button class="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors" onclick="deleteChatId('${chatId}')">Del</button>
+                    </div>
+                `;
+                historyDiv.appendChild(chatItem);
+            });
+        }
+
+        function useChatId(chatId) {
+            document.getElementById("clientId").value = chatId;
+            currentChatId = chatId;
+            addToChatHistory(chatId);
+            showToast(`Using chat: ${chatId}`, 'info', 2000);
+        }
+
+        function copySpecificChatId(chatId) {
+            navigator.clipboard.writeText(chatId).then(() => {
+                showToast(`Chat ID copied: ${chatId}`, 'success', 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast("Failed to copy chat ID", 'error');
+            });
+        }
+
+        function deleteChatId(chatId) {
+            if (confirm(`Are you sure you want to delete chat ID: ${chatId}?`)) {
+                chatHistory = chatHistory.filter(id => id !== chatId);
+                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                displayChatHistory();
+                showToast(`Chat ID deleted: ${chatId}`, 'success', 2000);
+            }
+        }
+
+        function fillUserQuery() {
+            const textarea = document.getElementById("jsonInput");
+            const userQueryJson = {
+                "type": "start",
+                "task": "Enter Query Here",
+                "files": []
+            };
+            textarea.value = JSON.stringify(userQueryJson, null, 2);
+            showToast('User query template loaded', 'info', 1000);
+        }
+
+        function fillManualVerification() {
+            const textarea = document.getElementById("jsonInput");
+            const manualVerificationJson = {
+                "type": "input_response",
+                "response": "Input response here",
+                "files": []
+            };
+            textarea.value = JSON.stringify(manualVerificationJson, null, 2);
+            showToast('Manual verification template loaded', 'info', 1000);
+        }
+
+        // Search and export functions
+        function performBasicSearch() {
+            const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+            const filterType = document.getElementById('filterType')?.value || 'all';
+
+            const messageElements = document.querySelectorAll('#messages > div:not(#emptyState)');
+            let visibleCount = 0;
+
+            messageElements.forEach(element => {
+                const messageText = element.textContent.toLowerCase();
+                const matchesSearch = !searchTerm || messageText.includes(searchTerm);
+
+                let matchesFilter = true;
+                if (filterType !== 'all') {
+                    switch (filterType) {
+                        case 'sent':
+                            matchesFilter = messageText.includes('👤') || messageText.includes('user');
+                            break;
+                        case 'received':
+                            matchesFilter = messageText.includes('🤖') || messageText.includes('bot');
+                            break;
+                        case 'system':
+                            matchesFilter = messageText.includes('system');
+                            break;
+                        case 'error':
+                            matchesFilter = messageText.toLowerCase().includes('error');
+                            break;
+                    }
+                }
+
+                const isVisible = matchesSearch && matchesFilter;
+                element.classList.toggle('hidden', !isVisible);
+                if (isVisible) visibleCount++;
+            });
+
+            if (searchTerm && visibleCount >= 0) {
+                showToast(`Found ${visibleCount} messages`, 'info', 2000);
+            }
+        }
+
+        function performAdvancedSearch() {
+            showToast('Advanced search functionality would be implemented here', 'info');
+        }
+
+        function clearAdvancedSearch() {
+            document.getElementById('advancedSearchTerm').value = '';
+            document.getElementById('advancedSearchType').value = 'all';
+            document.getElementById('advancedSearchSource').value = 'all';
+            document.getElementById('searchStartDate').value = '';
+            document.getElementById('searchEndDate').value = '';
+        }
+
+        function performExport() {
+            if (!selectedExportFormat) {
+                showToast('Please select an export format', 'warning');
+                return;
+            }
+
+            const content = JSON.stringify(allMessages, null, 2);
+            const timestamp = new Date().toISOString().split('T')[0];
+            const filename = `chat_history_${timestamp}.${selectedExportFormat}`;
+            downloadFile(content, filename, getContentType(selectedExportFormat));
+
+            showToast(`Chat history exported as ${selectedExportFormat.toUpperCase()}`, 'success');
+            hideExportModal();
+        }
+
+        function getContentType(format) {
+            const types = {
+                json: 'application/json',
+                csv: 'text/csv',
+                txt: 'text/plain',
+                html: 'text/html'
+            };
+            return types[format] || 'text/plain';
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Keyboard shortcuts
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Ignore if typing in input fields
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        sendMessage();
+                        return;
+                    }
+                    if (!e.ctrlKey) return;
+                }
+
+                if (e.ctrlKey) {
+                    switch (e.key) {
+                        case 'Enter':
+                            e.preventDefault();
+                            sendMessage();
+                            break;
+                        case 'k':
+                        case 'K':
+                            e.preventDefault();
+                            document.getElementById('jsonInput').focus();
+                            break;
+                        case 'l':
+                        case 'L':
+                            e.preventDefault();
+                            clearMessages();
+                            break;
+                        case 'd':
+                        case 'D':
+                            e.preventDefault();
+                            toggleTheme();
+                            break;
+                        case '/':
+                            e.preventDefault();
+                            showShortcuts();
+                            break;
+                        case 'b':
+                        case 'B':
+                            e.preventDefault();
+                            togglePanel('left');
+                            break;
+                        case 'm':
+                        case 'M':
+                            e.preventDefault();
+                            togglePanel('right');
+                            break;
+                    }
+
+                    // Advanced shortcuts with Alt
+                    if (e.altKey) {
+                        switch (e.key) {
+                            case 's':
+                            case 'S':
+                                e.preventDefault();
+                                showAdvancedSearch();
+                                break;
+                            case 'e':
+                            case 'E':
+                                e.preventDefault();
+                                showExportModal();
+                                break;
+                            case 'p':
+                            case 'P':
+                                e.preventDefault();
+                                showPerformanceModal();
+                                break;
+                        }
+                    }
+                }
+
+                if (e.key === 'Escape') {
+                    hideShortcuts();
+                    hideAdvancedSearch();
+                    hideExportModal();
+                    hidePerformanceModal();
+                }
+            });
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize theme
+            initTheme();
+
+            // Setup event listeners
+            const newChatBtn = document.getElementById("newChatBtn");
+            const connectBtn = document.getElementById("connectBtn");
+            const disconnectBtn = document.getElementById("disconnectBtn");
+            const sendBtn = document.getElementById("sendBtn");
+            const formatBtn = document.getElementById("formatBtn");
+            const clearBtn = document.getElementById("clearBtn");
+            const themeToggle = document.getElementById("themeToggle");
+            const shortcutsBtn = document.getElementById("shortcutsBtn");
+            const fontSizeBtn = document.getElementById("fontSizeBtn");
+            const performanceBtn = document.getElementById("performanceBtn");
+            const autoScrollBtn = document.getElementById("autoScrollBtn");
+            const exportBtn = document.getElementById("exportBtn");
+            const advancedSearchBtn = document.getElementById("advancedSearchBtn");
+
+            newChatBtn.addEventListener("click", createNewChat);
+            connectBtn.addEventListener("click", connect);
+            disconnectBtn.addEventListener("click", disconnect);
+            sendBtn.addEventListener("click", sendMessage);
+            formatBtn.addEventListener("click", formatJSON);
+            clearBtn.addEventListener("click", clearMessages);
+            themeToggle.addEventListener("click", toggleTheme);
+            shortcutsBtn.addEventListener("click", showShortcuts);
+            fontSizeBtn.addEventListener("click", cycleFontSize);
+            performanceBtn.addEventListener("click", showPerformanceModal);
+            autoScrollBtn.addEventListener("click", toggleAutoScroll);
+            exportBtn.addEventListener("click", showExportModal);
+            advancedSearchBtn.addEventListener("click", showAdvancedSearch);
+
+            // Setup search functionality
+            const searchInput = document.getElementById('searchInput');
+            const filterType = document.getElementById('filterType');
+
+            if (searchInput) searchInput.addEventListener('input', performBasicSearch);
+            if (filterType) filterType.addEventListener('change', performBasicSearch);
+
+            const clearSearchBtn = document.getElementById('clearSearchBtn');
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', () => {
+                    if (searchInput) searchInput.value = '';
+                    if (filterType) filterType.value = 'all';
+                    performBasicSearch();
+                });
+            }
+
+            // Setup keyboard shortcuts
+            setupKeyboardShortcuts();
+
+            // Restore panel states and show/hide toggle buttons accordingly
+            if (leftPanelCollapsed) {
+                document.getElementById('leftPanel').classList.add('w-0', 'overflow-hidden');
+                document.getElementById('leftCollapseIcon').textContent = '▶';
+                document.getElementById('leftPanelToggle').classList.remove('hidden');
+            }
+            if (rightPanelCollapsed) {
+                document.getElementById('rightPanel').classList.add('w-0', 'overflow-hidden');
+                document.getElementById('rightCollapseIcon').textContent = '◀';
+                document.getElementById('rightPanelToggle').classList.remove('hidden');
+            }
+
+            // Load chat history
+            displayChatHistory();
+
+            // Auto-save drafts while typing
+            document.getElementById("jsonInput").addEventListener("input", () => {
+                clearTimeout(window.autoSaveTimeout);
+                window.autoSaveTimeout = setTimeout(autoSaveDraft, 2000);
+            });
+
+            // Load draft on startup
+            const savedDraft = localStorage.getItem('messageDraft');
+            if (savedDraft && savedDraft !== '{ "hello": "world" }') {
+                document.getElementById("jsonInput").value = savedDraft;
+            }
+
+            // Apply initial font size
+            cycleFontSize();
+            cycleFontSize(); // Reset to medium
+
+            // Initialize performance tracking
+            setInterval(updatePerformanceMetrics, 1000);
+
+            showToast('Enhanced Ravian AI loaded successfully', 'success', 2000);
+        });
+    </script>
+</body>
+</html>
