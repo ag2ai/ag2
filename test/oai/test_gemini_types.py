@@ -26,7 +26,7 @@ with optional_import_block():
 @skip_on_missing_imports(["google.genai.types"], "gemini")
 class TestGeminiTypes:
     def test_FunctionCallingConfigMode(self) -> None:  # noqa: N802
-        for v in ["MODE_UNSPECIFIED", "AUTO", "ANY", "NONE"]:
+        for v in ["MODE_UNSPECIFIED", "AUTO", "ANY", "NONE", "VALIDATED"]:
             assert getattr(LocalFunctionCallingConfigMode, v) == getattr(FunctionCallingConfigMode, v)
 
     def test_LatLng(self) -> None:  # noqa: N802

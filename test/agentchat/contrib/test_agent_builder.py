@@ -16,7 +16,7 @@ from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST
+from ...conftest import KEY_LOC
 
 with optional_import_block() as result:
     import chromadb  # noqa: F401
@@ -42,7 +42,7 @@ def _config_check(config):
 @pytest.fixture
 def builder() -> AgentBuilder:
     return AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
+        config_file_or_env="OAI_CONFIG_LIST",
         config_file_location=KEY_LOC,
         builder_model_tags=["gpt-4o"],
         agent_model_tags=["gpt-4o"],

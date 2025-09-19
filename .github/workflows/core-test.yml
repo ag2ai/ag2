@@ -81,10 +81,13 @@ jobs:
       - name: Install packages and dependencies
         run: |
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
-      - name: Install optional dependencies for code executors
+      - name: Install Jupyter optional dependencies
         run: |
-          uv pip install --system -e ".[jupyter-executor,yepcode]"
+          uv pip install --system -e ".[jupyter-executor]"
           python -m ipykernel install --user --name python3
+      - name: Install yepcode optional dependency (Python 3.11+)
+        if: matrix.python-version != '3.10'
+        run: uv pip install --system -e ".[yepcode]"
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |

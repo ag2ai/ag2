@@ -105,6 +105,7 @@ class FunctionCallingConfigMode(CaseInSensitiveEnum):
     AUTO = "AUTO"
     ANY = "ANY"
     NONE = "NONE"
+    VALIDATED = "VALIDATED"
 
 
 class LatLng(CommonBaseModel):
