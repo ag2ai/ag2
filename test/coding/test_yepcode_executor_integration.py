@@ -4,9 +4,12 @@
 """Integration tests for YepCodeCodeExecutor with real API calls."""
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.version_info < (3, 11), reason="YepCode requires Python 3.11 or higher")
 
 from autogen.coding import CodeBlock
 

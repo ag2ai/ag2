@@ -4,9 +4,12 @@
 """Unit tests for YepCodeCodeExecutor."""
 
 import os
+import sys
 from unittest.mock import Mock, patch
 
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.version_info < (3, 11), reason="YepCode requires Python 3.11 or higher")
 
 from autogen.coding import CodeBlock, MarkdownCodeExtractor
 
