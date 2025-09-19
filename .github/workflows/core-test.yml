@@ -84,6 +84,15 @@ jobs:
       - name: Install optional dependencies for code executors
         run: |
           uv pip install --system -e ".[jupyter-executor,yepcode]"
+
+          # Conditionally install yepcode only for Python 3.11+
+          if [[ "${{ matrix.python-version }}" != "3.10" ]]; then
+            echo "Installing yepcode for Python ${{ matrix.python-version }}"
+            uv pip install --system -e ".[yepcode]"
+          else
+            echo "Skipping yepcode installation for Python 3.10"
+          fi
+
           python -m ipykernel install --user --name python3
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
