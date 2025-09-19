@@ -456,11 +456,11 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         async def on_observers_ready() -> None:
             self._realtime_agent._tg.start_soon(
                 asyncify(initiate_swarm_chat),
-                initial_agent=self._initial_agent,
-                agents=self._agents,
-                user_agent=self,  # type: ignore[arg-type]
-                messages="Find out what the user wants.",
-                after_work=AfterWorkOption.REVERT_TO_USER,
+                self._initial_agent,
+                self._agents,
+                self,  # type: ignore[arg-type]
+                "Find out what the user wants.",
+                AfterWorkOption.REVERT_TO_USER,
             )
 
         self._realtime_agent.callbacks.on_observers_ready = on_observers_ready
