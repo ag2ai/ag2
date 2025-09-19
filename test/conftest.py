@@ -145,9 +145,9 @@ def get_credentials(
     """Fixture to load the LLM config."""
     try:
         config_list = autogen.config_list_from_json(
-            str(OAI_CONFIG_LIST),
+            "OAI_CONFIG_LIST",
             filter_dict=filter_dict,
-            file_location=KEY_LOC,
+            file_location=str(KEY_LOC),
         )
     except Exception:
         config_list = []
