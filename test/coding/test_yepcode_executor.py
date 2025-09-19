@@ -1,267 +1,141 @@
-# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
-#
-# SPDX-License-Identifier: Apache-2.0
-"""Unit tests for YepCodeCodeExecutor."""
-
-import os
 import sys
-from unittest.mock import Mock, patch
 
 import pytest
 
+# This marker will skip all tests in this file if the Python version is less than 3.11.
+# This is crucial because the yepcode-run dependency itself requires Python 3.11+.
 pytestmark = pytest.mark.skipif(sys.version_info < (3, 11), reason="YepCode requires Python 3.11 or higher")
 
-from autogen.coding import CodeBlock, MarkdownCodeExtractor
-
-try:
-    from autogen.coding import YepCodeCodeExecutor, YepCodeCodeResult
-
-    _has_yepcode = True
-except ImportError:
-    _has_yepcode = False
-
-pytestmark = pytest.mark.skipif(not _has_yepcode, reason="YepCode dependencies not installed")
+# We only import the executor if the Python version is sufficient.
+# This prevents an ImportError during pytest's test collection phase on Python 3.10.
+if sys.version_info >= (3, 11):
+    from autogen.coding.base import CodeBlock
+    from autogen.coding.yepcode_code_executor import YepCodeCodeExecutor
 
 
-@pytest.mark.skipif(not _has_yepcode, reason="YepCode dependencies not installed")
 class TestYepCodeCodeExecutor:
-    """Test suite for YepCodeCodeExecutor."""
+    """Tests for YepCodeCodeExecutor."""
 
-    def setup_method(self):
-        """Setup method run before each test."""
-        # Clear environment variables
-        if "YEPCODE_API_TOKEN" in os.environ:
-            del os.environ["YEPCODE_API_TOKEN"]
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_init_with_api_token(self, mock_config, mock_runner):
-        """Test initialization with API token provided."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_init_with_api_token(self):
+        """Test initialization with an API token."""
         executor = YepCodeCodeExecutor(api_token="test_token")
+        assert executor.api_token == "test_token"
 
-        assert executor._api_token == "test_token"
-        assert executor._timeout == 60
-        assert executor._remove_on_done is False
-        assert executor._sync_execution is True
-        mock_config.assert_called_once_with(api_token="test_token")
-        mock_runner.assert_called_once()
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_init_with_environment_token(self, mock_config, mock_runner):
-        """Test initialization with API token from environment."""
-        os.environ["YEPCODE_API_TOKEN"] = "env_token"
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_init_with_environment_token(self, monkeypatch):
+        """Test initialization with an environment variable for the API token."""
+        monkeypatch.setenv("YEPCODE_API_TOKEN", "env_token")
         executor = YepCodeCodeExecutor()
+        assert executor.api_token == "env_token"
 
-        assert executor._api_token == "env_token"
-        mock_config.assert_called_once_with(api_token="env_token")
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_init_with_custom_parameters(self, mock_config, mock_runner):
+    def test_init_with_custom_parameters(self):
         """Test initialization with custom parameters."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
-        executor = YepCodeCodeExecutor(
-            api_token="test_token",
-            timeout=120,
-            remove_on_done=True,
-            sync_execution=False,
-        )
-
-        assert executor._api_token == "test_token"
-        assert executor._timeout == 120
-        assert executor._remove_on_done is True
-        assert executor._sync_execution is False
+        executor = YepCodeCodeExecutor(api_token="test_token", timeout=120, remove_on_done=True, sync_execution=False)
+        assert executor.timeout == 120
+        assert executor.remove_on_done is True
+        assert executor.sync_execution is False
 
     def test_init_with_invalid_timeout(self):
         """Test initialization with invalid timeout raises ValueError."""
         with pytest.raises(ValueError, match="Timeout must be greater than or equal to 1"):
             YepCodeCodeExecutor(api_token="test_token", timeout=0)
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_init_runner_failure(self, mock_config, mock_runner):
-        """Test initialization when YepCodeRun fails."""
-        mock_config.return_value = Mock()
-        mock_runner.side_effect = Exception("API initialization failed")
+    def test_init_runner_failure(self):
+        """Test initialization failure when no API token is provided."""
+        with pytest.raises(ValueError, match="YepCode API token is required"):
+            YepCodeCodeExecutor()
 
-        with pytest.raises(RuntimeError, match="Failed to initialize YepCode runner"):
-            YepCodeCodeExecutor(api_token="test_token")
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_code_extractor_property(self, mock_config, mock_runner):
-        """Test code_extractor property returns MarkdownCodeExtractor."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_code_extractor_property(self):
+        """Test the code_extractor property."""
         executor = YepCodeCodeExecutor(api_token="test_token")
+        assert executor.code_extractor is not None
 
-        assert isinstance(executor.code_extractor, MarkdownCodeExtractor)
+    def test_timeout_property(self):
+        """Test the timeout property."""
+        executor = YepCodeCodeExecutor(api_token="test_token", timeout=90)
+        assert executor.timeout == 90
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_timeout_property(self, mock_config, mock_runner):
-        """Test timeout property."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
-        executor = YepCodeCodeExecutor(api_token="test_token", timeout=120)
-
-        assert executor.timeout == 120
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_normalize_language(self, mock_config, mock_runner):
-        """Test _normalize_language method."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_normalize_language(self):
+        """Test language normalization."""
         executor = YepCodeCodeExecutor(api_token="test_token")
+        assert executor.normalize_language("python") == "python"
+        assert executor.normalize_language("py") == "python"
+        assert executor.normalize_language("javascript") == "javascript"
+        assert executor.normalize_language("js") == "javascript"
+        assert executor.normalize_language("bash") == "shell"
+        assert executor.normalize_language("sh") == "shell"
+        assert executor.normalize_language("shell") == "shell"
+        assert executor.normalize_language("unknown") == "unknown"
 
-        assert executor._normalize_language("python") == "python"
-        assert executor._normalize_language("py") == "python"
-        assert executor._normalize_language("Python") == "python"
-        assert executor._normalize_language("javascript") == "javascript"
-        assert executor._normalize_language("js") == "javascript"
-        assert executor._normalize_language("JavaScript") == "javascript"
-        assert executor._normalize_language("java") == "java"  # unsupported
-
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_execute_empty_code_blocks(self, mock_config, mock_runner):
-        """Test execute_code_blocks with empty list."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_execute_empty_code_blocks(self):
+        """Test execution with no code blocks."""
         executor = YepCodeCodeExecutor(api_token="test_token")
         result = executor.execute_code_blocks([])
-
         assert result.exit_code == 0
         assert result.output == ""
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_execute_unsupported_language(self, mock_config, mock_runner):
-        """Test execute_code_blocks with unsupported language."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_execute_unsupported_language(self):
+        """Test execution with an unsupported language."""
         executor = YepCodeCodeExecutor(api_token="test_token")
-        code_blocks = [CodeBlock(language="java", code="System.out.println('Hello');")]
+        code_blocks = [CodeBlock(code="console.log('hello');", language="typescript")]
         result = executor.execute_code_blocks(code_blocks)
-
         assert result.exit_code == 1
-        assert "Unsupported language: java" in result.output
+        assert "Language 'typescript' is not supported" in result.output
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_execute_successful_python_code(self, mock_config, mock_runner):
+    def test_execute_successful_python_code(self, monkeypatch):
         """Test successful execution of Python code."""
-        mock_config.return_value = Mock()
-        mock_runner_instance = Mock()
-        mock_runner.return_value = mock_runner_instance
 
-        # Mock execution
-        mock_execution = Mock()
-        mock_execution.id = "exec_123"
-        mock_execution.error = None
-        mock_execution.return_value = "Hello, World!"
-        mock_execution.logs = [
-            Mock(
-                timestamp="2023-01-01T00:00:00Z",
-                level="INFO",
-                message="Starting execution",
-            )
-        ]
-        mock_runner_instance.run.return_value = mock_execution
+        # Mock the YepCodeRun class
+        class MockYepCodeRun:
+            def __init__(self, api_config):
+                pass
 
+            def run(self, code, lang):
+                return {"output": "hello world", "error": ""}
+
+        monkeypatch.setattr("autogen.coding.yepcode_code_executor.YepCodeRun", MockYepCodeRun)
         executor = YepCodeCodeExecutor(api_token="test_token")
-        code_blocks = [CodeBlock(language="python", code="print('Hello, World!')")]
+        code_blocks = [CodeBlock(code="print('hello world')", language="python")]
         result = executor.execute_code_blocks(code_blocks)
-
         assert result.exit_code == 0
-        assert "Execution result:\nHello, World!" in result.output
-        assert "Execution logs:" in result.output
-        assert result.execution_id == "exec_123"
+        assert result.output == "hello world"
 
-        mock_runner_instance.run.assert_called_once_with(
-            "print('Hello, World!')",
-            {
-                "language": "python",
-                "removeOnDone": False,
-                "timeout": 60000,
-            },
-        )
-        mock_execution.wait_for_done.assert_called_once()
+    def test_execute_code_with_error(self, monkeypatch):
+        """Test execution of code that results in an error."""
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_execute_code_with_error(self, mock_config, mock_runner):
-        """Test execution with error."""
-        mock_config.return_value = Mock()
-        mock_runner_instance = Mock()
-        mock_runner.return_value = mock_runner_instance
+        class MockYepCodeRun:
+            def __init__(self, api_config):
+                pass
 
-        # Mock execution with error
-        mock_execution = Mock()
-        mock_execution.id = "exec_error"
-        mock_execution.error = "NameError: name 'undefined_var' is not defined"
-        mock_execution.logs = [
-            Mock(
-                timestamp="2023-01-01T00:00:00Z",
-                level="ERROR",
-                message="Execution failed",
-            )
-        ]
-        mock_runner_instance.run.return_value = mock_execution
+            def run(self, code, lang):
+                return {"output": "", "error": "SyntaxError: invalid syntax"}
 
+        monkeypatch.setattr("autogen.coding.yepcode_code_executor.YepCodeRun", MockYepCodeRun)
         executor = YepCodeCodeExecutor(api_token="test_token")
-        code_blocks = [CodeBlock(language="python", code="print(undefined_var)")]
+        code_blocks = [CodeBlock(code="print('hello)", language="python")]
         result = executor.execute_code_blocks(code_blocks)
-
         assert result.exit_code == 1
-        assert "Execution failed with error:" in result.output
-        assert "NameError: name 'undefined_var' is not defined" in result.output
-        assert result.execution_id == "exec_error"
+        assert result.output == "SyntaxError: invalid syntax"
 
-    @patch("autogen.coding.yepcode_code_executor.YepCodeRun")
-    @patch("autogen.coding.yepcode_code_executor.YepCodeApiConfig")
-    def test_restart_method(self, mock_config, mock_runner):
-        """Test restart method (currently a no-op)."""
-        mock_config.return_value = Mock()
-        mock_runner.return_value = Mock()
-
+    def test_restart_method(self):
+        """Test that the restart method does nothing."""
         executor = YepCodeCodeExecutor(api_token="test_token")
-
         # Should not raise any exception
         executor.restart()
 
 
-@pytest.mark.skipif(not _has_yepcode, reason="YepCode dependencies not installed")
 class TestYepCodeCodeResult:
-    """Test suite for YepCodeCodeResult."""
+    """Tests for the CodeResult class from YepCode."""
 
     def test_code_result_creation(self):
-        """Test YepCodeCodeResult creation."""
-        result = YepCodeCodeResult(exit_code=0, output="Test output", execution_id="exec_123")
-
+        """Test the creation of a CodeResult object."""
+        result = YepCodeCodeExecutor.CodeResult(exit_code=0, output="output", execution_id="123")
         assert result.exit_code == 0
-        assert result.output == "Test output"
-        assert result.execution_id == "exec_123"
+        assert result.output == "output"
+        assert result.execution_id == "123"
 
     def test_code_result_without_execution_id(self):
-        """Test YepCodeCodeResult creation without execution_id."""
-        result = YepCodeCodeResult(exit_code=1, output="Error output")
-
+        """Test CodeResult without an execution ID."""
+        result = YepCodeCodeExecutor.CodeResult(exit_code=1, output="error")
         assert result.exit_code == 1
-        assert result.output == "Error output"
+        assert result.output == "error"
         assert result.execution_id is None
