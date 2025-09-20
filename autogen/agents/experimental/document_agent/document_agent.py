@@ -17,7 +17,7 @@ from ....agentchat.group.patterns.pattern import DefaultPattern
 from ....agentchat.group.targets.transition_target import AgentTarget, TerminateTarget
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
-from .chroma_query_engine import VectorChromaQueryEngine
+from .chroma_query_engine import VectorChromaCitationQueryEngine, VectorChromaQueryEngine
 from .document_utils import Ingest, Query
 from .task_manager import TaskManagerAgent
 
@@ -84,6 +84,8 @@ class DocAgent(ConversableAgent):
         parsed_docs_path: str | Path | None = None,
         collection_name: str | None = None,
         query_engine: RAGQueryEngine | None = None,
+        enable_citations: bool = False,
+        citation_chunk_size: int = 512,
     ):
         """Initialize the DocAgent.
 
@@ -94,14 +96,20 @@ class DocAgent(ConversableAgent):
             parsed_docs_path: The path where parsed documents will be stored.
             collection_name: The unique name for the data store collection.
             query_engine: The query engine to use for querying documents.
+            enable_citations: Whether to enable citation support in queries. Defaults to False.
+            citation_chunk_size: The size of chunks to use for citations. Defaults to 512.
         """
         name = name or "DocAgent"
         llm_config = llm_config or LLMConfig.get_current_llm_config()
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
 
-        # Default Query Engine will be ChromaDB
-        if query_engine is None:
+        # Initialize query engine based on citation preference
+        if query_engine is None and enable_citations:
+            query_engine = VectorChromaCitationQueryEngine(
+                collection_name=collection_name, enable_query_citations=True, citation_chunk_size=citation_chunk_size
+            )
+        else:
             query_engine = VectorChromaQueryEngine(collection_name=collection_name)
 
         super().__init__(

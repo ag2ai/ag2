@@ -114,10 +114,16 @@ class TaskManagerAgent(ConversableAgent):
                         for source in answer_with_citations.citations
                     ]
                     logger.info(f"Citations: {txt_citations}")
+
+                    # Store citations in a temporary store that can be accessed by execute_query
+                    if not hasattr(self, "_temp_citations_store"):
+                        self._temp_citations_store = {}
+                    self._temp_citations_store[query_text] = txt_citations
+
+                    return (query_text, f"Query: {query_text}\nAnswer: {answer}")
                 else:
                     answer = self.query_engine.query(query_text) if self.query_engine else "Query engine not available"
-
-                return (query_text, f"Query: {query_text}\nAnswer: {answer}")
+                    return (query_text, f"Query: {query_text}\nAnswer: {answer}")
 
             except Exception as query_error:
                 logger.warning(f"Failed to execute query '{query_text}': {query_error}")
@@ -233,11 +239,16 @@ class TaskManagerAgent(ConversableAgent):
                 context_variables["CompletedTaskCount"] = 0
             if "QueryResults" not in context_variables:
                 context_variables["QueryResults"] = []
+            if "Citations" not in context_variables:
+                context_variables["Citations"] = []
 
             # Add current batch to pending queries
             context_variables["QueriesToRun"].append(queries_to_run)
 
             try:
+                # Clear temporary citations store before processing
+                self._temp_citations_store = {}
+
                 # Process queries concurrently using ThreadPoolExecutor
                 loop = asyncio.get_event_loop()
                 futures = [
@@ -248,19 +259,27 @@ class TaskManagerAgent(ConversableAgent):
                 results = await asyncio.gather(*futures, return_exceptions=True)
 
                 answers = []
-                for result in results:
+                all_citations = []
+
+                for i, result in enumerate(results):
                     if isinstance(result, Exception):
                         logger.warning(f"Query processing failed with exception: {result}")
                         answers.append(f"Query processing failed: {result}")
+                        all_citations.append(None)
                         continue
 
                     # Type check to ensure result is the expected tuple
                     if isinstance(result, tuple) and len(result) == 2:
                         query_text, answer = result
                         answers.append(answer)
+
+                        # Get citations from temporary store if available
+                        citations = self._temp_citations_store.get(query_text, None)
+                        all_citations.append(citations)
                     else:
                         logger.warning(f"Unexpected result format: {result}")
                         answers.append(f"Unexpected result format: {result}")
+                        all_citations.append(None)
 
                 # Enhanced logging with agent and tool title
                 logger.info("=" * 80)
@@ -272,7 +291,12 @@ class TaskManagerAgent(ConversableAgent):
                 # Update context variables
                 context_variables["QueriesToRun"].pop(0)  # Remove processed batch
                 context_variables["CompletedTaskCount"] += 1
-                context_variables["QueryResults"].append({"query": queries_to_run, "answer": answers})
+
+                # Store query results with citations
+                query_result = {"query": queries_to_run, "answer": answers, "citations": all_citations}
+                context_variables["QueryResults"].append(query_result)
+                # Clear temporary citations store after processing
+                self._temp_citations_store = {}
 
                 return ReplyResult(
                     message="\n\n".join(answers),
