@@ -42,7 +42,7 @@ class DocumentTask(BaseModel):
 class DocumentTriageAgent(ConversableAgent):
     """The DocumentTriageAgent is responsible for deciding what type of task to perform from user requests."""
 
-    def __init__(self, llm_config: LLMConfig | dict[str, Any] | None = None):
+    def __init__(self, llm_config: LLMConfig | dict[str, Any] | None = None, custom_system_message: str | None = None):
         # Handle None config by getting current config
         if llm_config is None:
             llm_config = LLMConfig.get_current_llm_config()
@@ -51,16 +51,21 @@ class DocumentTriageAgent(ConversableAgent):
         structured_config_list = deepcopy(llm_config)
         structured_config_list["response_format"] = DocumentTask  # type: ignore[index]
 
+        # Use custom system message if provided, otherwise use default
+        default_system_message = (
+            "You are a document triage agent. "
+            "You are responsible for deciding what type of task to perform from a user's request and populating a DocumentTask formatted response. "
+            "If the user specifies files or URLs, add them as individual 'ingestions' to DocumentTask. "
+            "You can access external websites if given a URL, so put them in as ingestions. "
+            "Add the user's questions about the files/URLs as individual 'RAG_QUERY' queries to the 'query' list in the DocumentTask. "
+            "Don't make up questions, keep it as concise and close to the user's request as possible."
+        )
+
+        system_message = custom_system_message or default_system_message
+
         super().__init__(
             name="DocumentTriageAgent",
-            system_message=(
-                "You are a document triage agent. "
-                "You are responsible for deciding what type of task to perform from a user's request and populating a DocumentTask formatted response. "
-                "If the user specifies files or URLs, add them as individual 'ingestions' to DocumentTask. "
-                "You can access external websites if given a URL, so put them in as ingestions. "
-                "Add the user's questions about the files/URLs as individual 'RAG_QUERY' queries to the 'query' list in the DocumentTask. "
-                "Don't make up questions, keep it as concise and close to the user's request as possible."
-            ),
+            system_message=system_message,
             human_input_mode="NEVER",
             llm_config=structured_config_list,
         )
@@ -86,6 +91,7 @@ class DocAgent(ConversableAgent):
         query_engine: RAGQueryEngine | None = None,
         enable_citations: bool = False,
         citation_chunk_size: int = 512,
+        update_inner_agent_system_message: dict[str, Any] | None = None,
     ):
         """Initialize the DocAgent.
 
@@ -98,11 +104,15 @@ class DocAgent(ConversableAgent):
             query_engine: The query engine to use for querying documents.
             enable_citations: Whether to enable citation support in queries. Defaults to False.
             citation_chunk_size: The size of chunks to use for citations. Defaults to 512.
+            update_inner_agent_system_message: Dictionary mapping inner agent names to custom system messages.
+                Keys: "DocumentTriageAgent", "TaskManagerAgent", "SummaryAgent"
+                Values: Custom system message strings for each agent.
         """
         name = name or "DocAgent"
         llm_config = llm_config or LLMConfig.get_current_llm_config()
         system_message = system_message or DEFAULT_SYSTEM_MESSAGE
         parsed_docs_path = parsed_docs_path or "./parsed_docs"
+        update_inner_agent_system_message = update_inner_agent_system_message or {}
 
         # Initialize query engine based on citation preference
         if query_engine is None and enable_citations:
@@ -120,14 +130,17 @@ class DocAgent(ConversableAgent):
         )
         self.register_reply([ConversableAgent, None], DocAgent.generate_inner_group_chat_reply, position=0)
 
-        # Initialize agents
-        self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
+        # Initialize agents with custom system messages if provided
+        self._triage_agent = DocumentTriageAgent(
+            llm_config=llm_config, custom_system_message=update_inner_agent_system_message.get("DocumentTriageAgent")
+        )
 
         self._task_manager_agent = TaskManagerAgent(
             llm_config=llm_config,
             query_engine=query_engine,
             parsed_docs_path=parsed_docs_path,
             collection_name=collection_name,
+            custom_system_message=update_inner_agent_system_message.get("TaskManagerAgent"),
         )
 
         def update_ingested_documents() -> None:
@@ -171,6 +184,7 @@ class DocAgent(ConversableAgent):
         self._summary_agent = ConversableAgent(
             name="SummaryAgent",
             llm_config=llm_config,
+            system_message=update_inner_agent_system_message.get("SummaryAgent"),
             update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
         )
 

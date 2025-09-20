@@ -57,6 +57,7 @@ class TaskManagerAgent(ConversableAgent):
         return_agent_error: str = "SummaryAgent",
         collection_name: str | None = None,
         max_workers: int | None = None,
+        custom_system_message: str | None = None,
     ):
         """Initialize the TaskManagerAgent.
 
@@ -69,10 +70,12 @@ class TaskManagerAgent(ConversableAgent):
             return_agent_error: The agent to return on error
             collection_name: The collection name for the RAG query engine
             max_workers: Maximum number of threads for concurrent processing (None for default)
+            custom_system_message: Custom system message for the TaskManagerAgent
         """
         self.query_engine = query_engine if query_engine else VectorChromaQueryEngine(collection_name=collection_name)
         self.parsed_docs_path = Path(parsed_docs_path) if parsed_docs_path else Path("./parsed_docs")
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._temp_citations_store: dict[str, list[dict[str, str]]] = {}
 
         def _process_single_document(self: "TaskManagerAgent", input_file_path: str) -> tuple[str, bool, str]:
             """Process a single document. Returns (path, success, error_msg)."""
@@ -259,7 +262,7 @@ class TaskManagerAgent(ConversableAgent):
                 results = await asyncio.gather(*futures, return_exceptions=True)
 
                 answers = []
-                all_citations = []
+                all_citations: list[list[dict[str, str]] | None] = []
 
                 for i, result in enumerate(results):
                     if isinstance(result, Exception):
@@ -319,9 +322,12 @@ class TaskManagerAgent(ConversableAgent):
                     context_variables=context_variables,
                 )
 
+        # Use custom system message if provided, otherwise use default
+        system_message = custom_system_message if custom_system_message else TASK_MANAGER_SYSTEM_MESSAGE
+
         super().__init__(
             name=name,
-            system_message=TASK_MANAGER_SYSTEM_MESSAGE,
+            system_message=system_message,
             llm_config=llm_config,
             functions=[ingest_documents, execute_query],  # Add initiate_tasks
         )
