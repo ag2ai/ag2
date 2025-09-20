@@ -5,6 +5,7 @@ sidebarTitle: DocAgent
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
 [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly with natural language instructions, leveraging a streamlined internal architecture to provide efficient document processing and information retrieval.
+[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly with natural language instructions, leveraging a streamlined internal architecture to provide efficient document processing and information retrieval.
 
 <Tip>
 DocAgent is designed to be production-ready and supports your RAG needs with a simplified, efficient architecture. It uses either a local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine) for flexible deployment scenarios.
@@ -89,7 +90,7 @@ The DocAgent follows a linear, efficient workflow:
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano"})
 
 # Basic DocAgent with default settings
 doc_agent = DocAgent(llm_config=llm_config)
@@ -240,7 +241,7 @@ However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/ag
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano"})
 
 # Create our DocAgents with their own collections
 # so that their ingested data and queries will be unique to them
