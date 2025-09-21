@@ -4,23 +4,19 @@
 
 import asyncio
 import logging
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF  # pyright: ignore[reportMissingImports]
-import requests
-import urllib3
-
 from autogen import ConversableAgent
-from autogen.agentchat.contrib.capabilities.text_compressors import LLMLingua
-from autogen.agentchat.contrib.capabilities.transforms import TextMessageCompressor
 from autogen.agentchat.contrib.rag.query_engine import RAGQueryEngine
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agents.experimental.document_agent.chroma_query_engine import VectorChromaQueryEngine
-from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
+from autogen.agents.experimental.document_agent.task_manager_utils import (
+    execute_single_query,
+    process_single_document,
+)
 from autogen.doc_utils import export_module
 from autogen.llm_config import LLMConfig
 
@@ -48,33 +44,6 @@ You are task manager agent responsible for processing document ingestion and que
 - Strictly follow the Instruction.
 - Use Task flows as reference for tool call Execution.
 """
-
-
-def extract_text_from_pdf(doc_path: str) -> list[dict[str, str]]:
-    """Extract compressed text from a PDF file"""
-    if isinstance(doc_path, str) and urllib3.util.url.parse_url(doc_path).scheme:
-        # Download the PDF
-        response = requests.get(doc_path)
-        response.raise_for_status()  # Ensure the download was successful
-
-        text = ""
-        # Save the PDF to a temporary file
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with open(temp_dir + "temp.pdf", "wb") as f:
-                f.write(response.content)
-
-            # Open the PDF
-            with fitz.open(temp_dir + "temp.pdf") as doc:
-                # Read and extract text from each page
-                for page in doc:
-                    text += page.get_text()
-            llm_lingua = LLMLingua()
-            text_compressor = TextMessageCompressor(text_compressor=llm_lingua)
-            compressed_text = text_compressor.apply_transform([{"content": text}])
-
-        return compressed_text
-    else:
-        raise ValueError("doc_path must be a string or a URL")
 
 
 @export_module("autogen.agents.experimental")
@@ -119,215 +88,6 @@ class TaskManagerAgent(ConversableAgent):
         # Keep backward compatibility
         self.query_engine = query_engine if query_engine else self.rag_engines.get("vector")
 
-        def _aggregate_rag_results(self: "TaskManagerAgent", query: str, results: dict[str, Any]) -> str:
-            """Aggregate results from multiple RAG engines."""
-            if not results:
-                return f"Query: {query}\nAnswer: No results found from any RAG engine."
-
-            # Simple aggregation
-            answer_parts = [f"Query: {query}"]
-
-            for engine_name, result in results.items():
-                answer_parts.append(f"\n{engine_name.upper()} Results:")
-                answer_parts.append(f"Answer: {result.get('answer', 'No answer available')}")
-
-                # Add citations if available
-                if "citations" in result and result["citations"]:
-                    answer_parts.append("Citations:")
-                    for i, citation in enumerate(result["citations"], 1):
-                        answer_parts.append(f"  [{i}] {citation.get('file_path', 'Unknown')}")
-
-            return "\n".join(answer_parts)
-
-        def _process_single_document(self: "TaskManagerAgent", input_file_path: str) -> tuple[str, bool, str]:
-            """Process a single document. Returns (path, success, error_msg)."""
-
-            def compress_and_save_text(text: str, input_path: str) -> str:
-                """Compress text and save as markdown file."""
-                llm_lingua = LLMLingua()
-                text_compressor = TextMessageCompressor(text_compressor=llm_lingua)
-                compressed_text = text_compressor.apply_transform([{"content": text}])
-
-                # Create a markdown file with the extracted text
-                output_file = self.parsed_docs_path / f"{Path(input_path).stem}.md"
-                self.parsed_docs_path.mkdir(parents=True, exist_ok=True)
-
-                with open(output_file, "w", encoding="utf-8") as f:
-                    f.write(compressed_text[0]["content"])
-
-                return str(output_file)
-
-            def ingest_to_engines(self: "TaskManagerAgent", output_file: str, input_path: str) -> None:
-                """Ingest document to configured RAG engines."""
-                from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
-
-                # Determine document type
-                doc_type = DocumentType.TEXT
-                if input_path.lower().endswith(".pdf"):
-                    doc_type = DocumentType.PDF
-                elif input_path.lower().endswith((".html", ".htm")):
-                    doc_type = DocumentType.HTML
-                elif input_path.lower().endswith(".json"):
-                    doc_type = DocumentType.JSON
-
-                # Create Document object for graph engines
-                graph_doc = Document(doctype=doc_type, path_or_url=output_file, data=None)
-
-                # Ingest to configured engines only
-                for rag_type in self.rag_config.keys():
-                    engine = self.rag_engines.get(rag_type)
-                    if engine is None:
-                        continue
-
-                    try:
-                        if rag_type == "vector":
-                            engine.add_docs(new_doc_paths_or_urls=[output_file])
-                        elif rag_type == "graph":
-                            # For graph engines, we need to initialize if not done already
-                            if not hasattr(engine, "_initialized"):
-                                engine.init_db([graph_doc])
-                                engine._initialized = True
-                            else:
-                                # Add new records to existing graph
-                                if hasattr(engine, "add_records"):
-                                    engine.add_records([graph_doc])
-                    except Exception as e:
-                        logger.warning(f"Failed to ingest to {rag_type} engine: {e}")
-
-            try:
-                # Check if the document is a PDF
-                is_pdf = False
-                if isinstance(input_file_path, str) and (
-                    input_file_path.lower().endswith(".pdf")
-                    or (urllib3.util.url.parse_url(input_file_path).scheme and input_file_path.lower().endswith(".pdf"))
-                ):
-                    # Check for PDF extension or URL ending with .pdf
-                    is_pdf = True
-
-                if is_pdf:
-                    # Handle PDF with PyMuPDF
-                    print("PDF found using PyMuPDF")
-                    if urllib3.util.url.parse_url(input_file_path).scheme:
-                        # Download the PDF
-                        response = requests.get(input_file_path)
-                        response.raise_for_status()
-
-                        text = ""
-                        # Save the PDF to a temporary file and extract text
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            temp_pdf_path = Path(temp_dir) / "temp.pdf"
-                            with open(temp_pdf_path, "wb") as f:
-                                f.write(response.content)
-
-                            # Open the PDF and extract text
-                            with fitz.open(temp_pdf_path) as doc:
-                                for page in doc:
-                                    text += page.get_text()
-
-                            # Compress and save
-                            output_file = compress_and_save_text(text, input_file_path)
-
-                            # Ingest to all active engines
-                            ingest_to_engines(self, output_file, input_file_path)
-
-                            return (input_file_path, True, "")
-                    else:
-                        # Local PDF file
-                        text = ""
-                        with fitz.open(input_file_path) as doc:
-                            for page in doc:
-                                text += page.get_text()
-
-                        # Compress and save
-                        output_file = compress_and_save_text(text, input_file_path)
-
-                        # Ingest to all active engines
-                        ingest_to_engines(self, output_file, input_file_path)
-
-                        return (input_file_path, True, "")
-                else:
-                    # Handle non-PDF documents with docling
-                    output_files = docling_parse_docs(
-                        input_file_path=input_file_path,
-                        output_dir_path=self.parsed_docs_path,
-                        output_formats=["markdown"],
-                    )
-
-                    # Limit to one output markdown file for now.
-                    if output_files:
-                        parsed_output_file: Path = output_files[0]
-                        if parsed_output_file.suffix == ".md":
-                            # Ingest to all active engines
-                            ingest_to_engines(self, str(parsed_output_file), input_file_path)
-                            return (input_file_path, True, "")
-
-                    return (input_file_path, False, "No valid markdown output generated")
-
-            except Exception as doc_error:
-                return (input_file_path, False, str(doc_error))
-
-        def _execute_single_query(self: "TaskManagerAgent", query_text: str) -> tuple[str, str]:
-            """Execute a single query across configured RAG engines. Returns (query, result)."""
-            try:
-                results = {}
-
-                # Only query engines that are configured in rag_config
-                for rag_type in self.rag_config.keys():
-                    engine = self.rag_engines.get(rag_type)
-                    if engine is None:
-                        continue
-
-                    try:
-                        if rag_type == "vector":
-                            # Handle vector queries
-                            if (
-                                hasattr(engine, "enable_query_citations")
-                                and getattr(engine, "enable_query_citations", False)
-                                and hasattr(engine, "query_with_citations")
-                                and callable(getattr(engine, "query_with_citations", None))
-                            ):
-                                answer_with_citations = getattr(engine, "query_with_citations")(query_text)
-                                answer = answer_with_citations.answer
-                                txt_citations = [
-                                    {
-                                        "text_chunk": source.node.get_text(),
-                                        "file_path": source.metadata.get("file_path", "Unknown"),
-                                    }
-                                    for source in answer_with_citations.citations
-                                ]
-                                results[rag_type] = {"answer": answer, "citations": txt_citations}
-                                logger.info(f"Vector Citations: {txt_citations}")
-                            else:
-                                answer = engine.query(query_text) if engine else "Vector engine not available"
-                                results[rag_type] = {"answer": answer}
-
-                        elif rag_type == "graph":
-                            # Handle graph queries
-                            # Try to connect to existing graph if not already connected
-                            if not hasattr(engine, "index"):
-                                try:
-                                    engine.connect_db()
-                                    logger.info("Connected to existing Neo4j graph for querying")
-                                except Exception as connect_error:
-                                    logger.warning(f"Failed to connect to Neo4j graph: {connect_error}")
-                                    results[rag_type] = {"answer": f"Error connecting to graph: {connect_error}"}
-                                    continue
-
-                            graph_result = engine.query(query_text)
-                            results[rag_type] = {"answer": graph_result.answer, "results": graph_result.results}
-
-                    except Exception as engine_error:
-                        logger.warning(f"Failed to query {rag_type} engine: {engine_error}")
-                        results[rag_type] = {"answer": f"Error querying {rag_type}: {engine_error}"}
-
-                # Aggregate results
-                aggregated_answer = _aggregate_rag_results(self, query_text, results)
-                return (query_text, aggregated_answer)
-
-            except Exception as query_error:
-                logger.warning(f"Failed to execute query '{query_text}': {query_error}")
-                return (query_text, f"Query: {query_text}\nAnswer: Error executing query: {query_error}")
-
         async def ingest_documents(
             documents_to_ingest: list[str], context_variables: ContextVariables
         ) -> ReplyResult | str:
@@ -357,7 +117,14 @@ class TaskManagerAgent(ConversableAgent):
                 # Process documents concurrently using ThreadPoolExecutor
                 loop = asyncio.get_event_loop()
                 futures = [
-                    loop.run_in_executor(self.executor, _process_single_document, self, doc_path)
+                    loop.run_in_executor(
+                        self.executor,
+                        process_single_document,
+                        doc_path,
+                        self.parsed_docs_path,
+                        self.rag_config,
+                        self.rag_engines,
+                    )
                     for doc_path in documents_to_ingest
                 ]
 
@@ -451,7 +218,8 @@ class TaskManagerAgent(ConversableAgent):
                 # Process queries concurrently using ThreadPoolExecutor
                 loop = asyncio.get_event_loop()
                 futures = [
-                    loop.run_in_executor(self.executor, _execute_single_query, self, query) for query in queries_to_run
+                    loop.run_in_executor(self.executor, execute_single_query, query, self.rag_config, self.rag_engines)
+                    for query in queries_to_run
                 ]
 
                 # Wait for all queries to be processed
@@ -539,9 +307,11 @@ class TaskManagerAgent(ConversableAgent):
 
         for rag_type, config in self.rag_config.items():
             if rag_type == "vector":
-                engines["vector"] = VectorChromaQueryEngine(
-                    collection_name=config.get("collection_name", collection_name),
-                    **{k: v for k, v in config.items() if k != "collection_name"},
+                engines["vector"] = config.get(
+                    "engine",
+                    VectorChromaQueryEngine(
+                        collection_name=collection_name if collection_name else "default_collection",
+                    ),
                 )
             elif rag_type == "graph":
                 engines["graph"] = self._create_neo4j_engine(config)

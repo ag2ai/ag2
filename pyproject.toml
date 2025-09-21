@@ -144,6 +144,8 @@ rag = [
     "llama-index-embeddings-openai>=0.3,<0.6",
     "llama-index-llms-openai>=0.4,<0.6",
     "requests>=2.32.3,<3",
+    "pymupdf>=1.24.4",
+    "llmlingua>=0.2.2"
 ]
 
 
