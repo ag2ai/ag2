@@ -497,7 +497,9 @@ def filter_config(
 
         filter_dict (dict, optional): A dictionary specifying filter criteria where:
             - Keys are field names to check in each configuration dictionary
-            - Values are lists/sets of acceptable values for that field
+            - Values can be:
+                * a single string value (e.g., {"model": "gpt-4o"})
+                * a list or set of acceptable values for that field (e.g., {"model": ["gpt-4o", "gpt-4o-mini"]})
             - A configuration matches if ALL filter keys are satisfied AND for each key,
               the config's field value matches at least one acceptable value
             - If a filter value includes None, configurations missing that field will match
@@ -525,22 +527,27 @@ def filter_config(
             {"model": "gpt-4", "tags": ["premium", "latest"]},
         ]
 
-        # Example 1: Single criterion - matches any model in the list
+        # Example 1: Single criterion with single string
+        filter_dict = {"model": "gpt-4o"}
+        result = filter_config(configs, filter_dict)
+        # Returns: [{"model": "gpt-4o", "api_type": "openai"}] if present
+        
+        # Example 2: Single criterion - matches any model in the list
         filter_dict = {"model": ["gpt-4", "gpt-4o"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4", "api_type": "openai"}, {"model": "gpt-4", "tags": ["premium", "latest"]}]
 
-        # Example 2: Multiple criteria - must satisfy ALL conditions
+        # Example 3: Multiple criteria - must satisfy ALL conditions
         filter_dict = {"model": ["gpt-3.5-turbo"], "api_type": ["azure"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"}]
 
-        # Example 3: Tag filtering with list intersection
+        # Example 4: Tag filtering with list intersection
         filter_dict = {"tags": ["premium"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4", "tags": ["premium", "latest"]}]
 
-        # Example 4: Exclude matching configurations
+        # Example 5: Exclude matching configurations
         filter_dict = {"api_type": ["openai"]}
         result = filter_config(configs, filter_dict, exclude=True)
         # Returns configs that do NOT have api_type="openai"
