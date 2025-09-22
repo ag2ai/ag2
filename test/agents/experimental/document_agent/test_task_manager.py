@@ -215,7 +215,7 @@ class TestTaskManagerAgent:
         llm_config = credentials_gpt_4o_mini.llm_config
 
         with (
-            patch("autogen.agents.experimental.document_agent.task_manager.docling_parse_docs") as mock_parse,
+            patch("autogen.agents.experimental.document_agent.task_manager_utils.docling_parse_docs") as mock_parse,
             patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
         ):
             # Mock successful document parsing
@@ -238,7 +238,7 @@ class TestTaskManagerAgent:
         llm_config = credentials_gpt_4o_mini.llm_config
 
         with (
-            patch("autogen.agents.experimental.document_agent.task_manager.docling_parse_docs") as mock_parse,
+            patch("autogen.agents.experimental.document_agent.task_manager_utils.docling_parse_docs") as mock_parse,
             patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
         ):
             # Mock document parsing failure
@@ -259,7 +259,7 @@ class TestTaskManagerAgent:
         llm_config = credentials_gpt_4o_mini.llm_config
 
         with (
-            patch("autogen.agents.experimental.document_agent.task_manager.docling_parse_docs") as mock_parse,
+            patch("autogen.agents.experimental.document_agent.task_manager_utils.docling_parse_docs") as mock_parse,
             patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
         ):
             # Mock no output files
@@ -280,7 +280,7 @@ class TestTaskManagerAgent:
         llm_config = credentials_gpt_4o_mini.llm_config
 
         with (
-            patch("autogen.agents.experimental.document_agent.task_manager.docling_parse_docs") as mock_parse,
+            patch("autogen.agents.experimental.document_agent.task_manager_utils.docling_parse_docs") as mock_parse,
             patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
         ):
             # Mock non-markdown output file

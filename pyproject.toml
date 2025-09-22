@@ -144,8 +144,6 @@ rag = [
     "llama-index-embeddings-openai>=0.3,<0.6",
     "llama-index-llms-openai>=0.4,<0.6",
     "requests>=2.32.3,<3",
-    "pymupdf>=1.24.4",
-    "llmlingua>=0.2.2"
 ]
 
 
@@ -309,6 +307,8 @@ docs = [
     "termcolor==3.1.0",
     "nbclient==0.10.2",
     "mcp>=1.11.0",
+    "pymupdf>=1.24.4",
+    "llmlingua>=0.2.2"
 ]
 
 types = [
