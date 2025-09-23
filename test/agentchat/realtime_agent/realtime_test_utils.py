@@ -13,7 +13,7 @@ from anyio import Event
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
-    from openai import OpenAI
+    from openai import Omit, OpenAI
 
 __all__ = ["text_to_speech", "trace"]
 
