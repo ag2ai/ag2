@@ -2,7 +2,7 @@
 
 ## Please refer to the github team page for the list of [active maintainers](https://github.com/orgs/ag2ai/teams/maintainer/members) for the AG2 project.
 The @active-maintainer role on AG2 discord server is in sync with this list.
-For current maintainers, please follow [maintainers manual](https://docs.google.com/document/d/10idZ1BcC5YUMUK2R2Hvq4jDJB4mt6gFFQyzWX8zfq1Y)
+For current maintainers, please follow [maintainers manual](https://docs.google.com/document/d/18g3DVoXNB-MuOQrLDnKfoP7EZ18wtzONdA2USX2Er_s/edit?usp=sharing)
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 
