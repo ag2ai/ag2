@@ -102,7 +102,7 @@ Configure the agents for the interaction.
     settings.
 
 ```python
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 
 agent = AssistantAgent(name="agent", llm_config=llm_config)
 
