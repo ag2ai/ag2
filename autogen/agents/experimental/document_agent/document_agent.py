@@ -159,6 +159,7 @@ class DocAgent(ConversableAgent):
             """Create the summary agent prompt with context information."""
             update_ingested_documents()
 
+            # Safe type casting with defaults
             query_results = cast(list[dict[str, Any]], agent.context_variables.get("QueryResults", []))
             documents_ingested = cast(list[str], agent.context_variables.get("DocumentsIngested", []))
             documents_to_ingest = cast(list[Ingest], agent.context_variables.get("DocumentsToIngest", []))
@@ -206,86 +207,94 @@ class DocAgent(ConversableAgent):
         config: Any = None,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         """Reply function that generates the inner group chat reply for the DocAgent."""
-        # Initialize or reuse context variables
-        if hasattr(self, "_group_chat_context_variables") and self._group_chat_context_variables is not None:
-            context_variables = self._group_chat_context_variables
-            # Reset pending tasks for new run
-            context_variables["DocumentsToIngest"] = []
-        else:
-            context_variables = ContextVariables(
-                data={
-                    "CompletedTaskCount": 0,
-                    "DocumentsToIngest": [],
-                    "DocumentsIngested": self.documents_ingested,
-                    "QueriesToRun": [],
-                    "QueryResults": [],
-                }
+        try:
+            # Initialize or reuse context variables
+            if hasattr(self, "_group_chat_context_variables") and self._group_chat_context_variables is not None:
+                context_variables = self._group_chat_context_variables
+                # Reset pending tasks for new run
+                context_variables["DocumentsToIngest"] = []
+            else:
+                context_variables = ContextVariables(
+                    data={
+                        "CompletedTaskCount": 0,
+                        "DocumentsToIngest": [],
+                        "DocumentsIngested": self.documents_ingested,
+                        "QueriesToRun": [],
+                        "QueryResults": [],
+                    }
+                )
+                self._group_chat_context_variables = context_variables
+
+            if messages and len(messages) > 0:
+                last_message = messages[-1]
+                if (
+                    isinstance(last_message, dict)
+                    and last_message.get("name") == "DocumentTriageAgent"
+                    and "content" in last_message
+                    and isinstance(last_message["content"], str)
+                ):
+                    try:
+                        import json
+
+                        document_task_data = json.loads(last_message["content"])
+
+                        # Extract ingestions and queries
+                        ingestions = [Ingest(**ing) for ing in document_task_data.get("ingestions", [])]
+                        queries = [Query(**q) for q in document_task_data.get("queries", [])]
+
+                        # Update context variables with new tasks
+                        existing_ingestions = context_variables.get("DocumentsToIngest", []) or []
+                        existing_queries = context_variables.get("QueriesToRun", []) or []
+                        documents_ingested = context_variables.get("DocumentsIngested", []) or []
+
+                        # Deduplicate and add new ingestions
+                        for ingestion in ingestions:
+                            if (
+                                ingestion.path_or_url not in [ing.path_or_url for ing in existing_ingestions]
+                                and ingestion.path_or_url not in documents_ingested
+                            ):
+                                existing_ingestions.append(ingestion)
+
+                        # Deduplicate and add new queries
+                        for query in queries:
+                            if query.query not in [q.query for q in existing_queries]:
+                                existing_queries.append(query)
+
+                        context_variables["DocumentsToIngest"] = existing_ingestions
+                        context_variables["QueriesToRun"] = existing_queries
+                        context_variables["TaskInitiated"] = True
+
+                        logger.info(f"Processed triage output: {len(ingestions)} ingestions, {len(queries)} queries")
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse triage output JSON: {e}")
+                    except Exception as e:
+                        logger.warning(f"Failed to process triage output: {e}")
+
+            group_chat_agents = [
+                self._triage_agent,
+                self._task_manager_agent,
+                self._summary_agent,
+            ]
+
+            agent_pattern = DefaultPattern(
+                initial_agent=self._triage_agent,
+                agents=group_chat_agents,
+                context_variables=context_variables,
+                group_after_work=TerminateTarget(),
             )
-            self._group_chat_context_variables = context_variables
 
-        if messages and len(messages) > 0:
-            last_message = messages[-1]
-            if (
-                isinstance(last_message, dict)
-                and last_message.get("name") == "DocumentTriageAgent"
-                and "content" in last_message
-            ):
-                try:
-                    import json
+            chat_result, context_variables, last_speaker = initiate_group_chat(
+                pattern=agent_pattern,
+                messages=self._get_document_input_message(messages),
+            )
 
-                    document_task_data = json.loads(last_message["content"])
+            # Always return the final result since we only have summary termination
+            return True, chat_result.summary
 
-                    # Extract ingestions and queries
-                    ingestions = [Ingest(**ing) for ing in document_task_data.get("ingestions", [])]
-                    queries = [Query(**q) for q in document_task_data.get("queries", [])]
-
-                    # Update context variables with new tasks
-                    existing_ingestions = context_variables.get("DocumentsToIngest", []) or []
-                    existing_queries = context_variables.get("QueriesToRun", []) or []
-                    documents_ingested = context_variables.get("DocumentsIngested", []) or []
-
-                    # Deduplicate and add new ingestions
-                    for ingestion in ingestions:
-                        if (
-                            ingestion.path_or_url not in [ing.path_or_url for ing in existing_ingestions]
-                            and ingestion.path_or_url not in documents_ingested
-                        ):
-                            existing_ingestions.append(ingestion)
-
-                    # Deduplicate and add new queries
-                    for query in queries:
-                        if query.query not in [q.query for q in existing_queries]:
-                            existing_queries.append(query)
-
-                    context_variables["DocumentsToIngest"] = existing_ingestions
-                    context_variables["QueriesToRun"] = existing_queries
-                    context_variables["TaskInitiated"] = True
-
-                    logger.info(f"Processed triage output: {len(ingestions)} ingestions, {len(queries)} queries")
-
-                except Exception as e:
-                    logger.warning(f"Failed to process triage output: {e}")
-
-        group_chat_agents = [
-            self._triage_agent,
-            self._task_manager_agent,
-            self._summary_agent,
-        ]
-
-        agent_pattern = DefaultPattern(
-            initial_agent=self._triage_agent,
-            agents=group_chat_agents,
-            context_variables=context_variables,
-            group_after_work=TerminateTarget(),
-        )
-
-        chat_result, context_variables, last_speaker = initiate_group_chat(
-            pattern=agent_pattern,
-            messages=self._get_document_input_message(messages),
-        )
-
-        # Always return the final result since we only have summary termination
-        return True, chat_result.summary
+        except Exception as e:
+            logger.error(f"Critical error in DocAgent group chat: {e}")
+            return True, f"Error processing request: {str(e)}"
 
     def _get_document_input_message(self, messages: list[dict[str, Any]] | None) -> str:
         """Gets and validates the input message(s) for the document agent."""

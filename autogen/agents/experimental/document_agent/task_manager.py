@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,7 @@ class TaskManagerAgent(ConversableAgent):
         self.parsed_docs_path = Path(parsed_docs_path) if parsed_docs_path else Path("./parsed_docs")
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._temp_citations_store: dict[str, list[dict[str, str]]] = {}
+        self._context_lock = threading.Lock()
 
         # Initialize RAG engines
         self.rag_engines = self._create_rag_engines(collection_name)
@@ -100,6 +102,27 @@ class TaskManagerAgent(ConversableAgent):
             Returns:
                 str: Status message about the ingestion process
             """
+            # Add input validation
+            if not documents_to_ingest:
+                return ReplyResult(
+                    message="No documents provided for ingestion",
+                    context_variables=context_variables,
+                )
+
+            # Validate document paths/URLs
+            valid_documents = []
+            for doc_path in documents_to_ingest:
+                if isinstance(doc_path, str) and doc_path.strip():
+                    valid_documents.append(doc_path.strip())
+                else:
+                    logger.warning(f"Invalid document path: {doc_path}")
+
+            if not valid_documents:
+                return ReplyResult(
+                    message="No valid documents found for ingestion",
+                    context_variables=context_variables,
+                )
+
             # Safely handle context variable initialization
             if "DocumentsToIngest" not in context_variables:
                 context_variables["DocumentsToIngest"] = []
@@ -111,7 +134,7 @@ class TaskManagerAgent(ConversableAgent):
                 context_variables["QueriesToRun"] = []
 
             # Add current batch to pending ingestions
-            context_variables["DocumentsToIngest"].append(documents_to_ingest)
+            context_variables["DocumentsToIngest"].append(valid_documents)
 
             try:
                 # Process documents concurrently using ThreadPoolExecutor
@@ -125,7 +148,7 @@ class TaskManagerAgent(ConversableAgent):
                         self.rag_config,
                         self.rag_engines,
                     )
-                    for doc_path in documents_to_ingest
+                    for doc_path in valid_documents
                 ]
 
                 # Wait for all documents to be processed
@@ -151,7 +174,7 @@ class TaskManagerAgent(ConversableAgent):
                 logger.info("=" * 80)
                 logger.info("TOOL: ingest_documents (CONCURRENT)")
                 logger.info("AGENT: TaskManagerAgent")
-                logger.info(f"DOCUMENTS: {documents_to_ingest}")
+                logger.info(f"DOCUMENTS: {valid_documents}")
                 logger.info(f"SUCCESSFULLY INGESTED: {successfully_ingested}")
                 logger.info("=" * 80)
 
@@ -175,11 +198,11 @@ class TaskManagerAgent(ConversableAgent):
                 logger.error("TOOL ERROR: ingest_documents (CONCURRENT)")
                 logger.error("AGENT: TaskManagerAgent")
                 logger.error(f"ERROR: {e}")
-                logger.error(f"DOCUMENTS: {documents_to_ingest}")
+                logger.error(f"DOCUMENTS: {valid_documents}")
                 logger.error("=" * 80)
 
                 # Preserve failed documents for retry
-                context_variables["DocumentsToIngest"] = [documents_to_ingest]
+                context_variables["DocumentsToIngest"] = [valid_documents]
                 return ReplyResult(
                     message=f"Documents ingestion failed: {e}",
                     context_variables=context_variables,
@@ -198,6 +221,11 @@ class TaskManagerAgent(ConversableAgent):
             if not queries_to_run:
                 return "No queries to run"
 
+            # Validate queries
+            valid_queries = [q.strip() for q in queries_to_run if isinstance(q, str) and q.strip()]
+            if not valid_queries:
+                return "No valid queries provided"
+
             # Safely handle context variable initialization
             if "QueriesToRun" not in context_variables:
                 context_variables["QueriesToRun"] = []
@@ -209,7 +237,7 @@ class TaskManagerAgent(ConversableAgent):
                 context_variables["Citations"] = []
 
             # Add current batch to pending queries
-            context_variables["QueriesToRun"].append(queries_to_run)
+            context_variables["QueriesToRun"].append(valid_queries)
 
             try:
                 # Clear temporary citations store before processing
@@ -219,7 +247,7 @@ class TaskManagerAgent(ConversableAgent):
                 loop = asyncio.get_event_loop()
                 futures = [
                     loop.run_in_executor(self.executor, execute_single_query, query, self.rag_config, self.rag_engines)
-                    for query in queries_to_run
+                    for query in valid_queries
                 ]
 
                 # Wait for all queries to be processed
@@ -252,7 +280,7 @@ class TaskManagerAgent(ConversableAgent):
                 logger.info("=" * 80)
                 logger.info("TOOL: execute_query (CONCURRENT)")
                 logger.info("AGENT: TaskManagerAgent")
-                logger.info(f"QUERIES: {queries_to_run}")
+                logger.info(f"QUERIES: {valid_queries}")
                 logger.info("=" * 80)
 
                 # Update context variables
@@ -260,7 +288,7 @@ class TaskManagerAgent(ConversableAgent):
                 context_variables["CompletedTaskCount"] += 1
 
                 # Store query results with citations
-                query_result = {"query": queries_to_run, "answer": answers, "citations": all_citations}
+                query_result = {"query": valid_queries, "answer": answers, "citations": all_citations}
                 context_variables["QueryResults"].append(query_result)
                 # Clear temporary citations store after processing
                 self._temp_citations_store = {}
@@ -271,13 +299,13 @@ class TaskManagerAgent(ConversableAgent):
                 )
 
             except Exception as e:
-                error_msg = f"Query failed for queries '{queries_to_run}': {str(e)}"
+                error_msg = f"Query failed for queries '{valid_queries}': {str(e)}"
 
                 # Enhanced error logging
                 logger.error("=" * 80)
                 logger.error("TOOL ERROR: execute_query (CONCURRENT)")
                 logger.error("AGENT: TaskManagerAgent")
-                logger.error(f"QUERIES: {queries_to_run}")
+                logger.error(f"QUERIES: {valid_queries}")
                 logger.error(f"ERROR: {e}")
                 logger.error("=" * 80)
 
@@ -298,8 +326,11 @@ class TaskManagerAgent(ConversableAgent):
 
     def __del__(self) -> None:
         """Clean up the ThreadPoolExecutor when the agent is destroyed."""
-        if hasattr(self, "executor"):
-            self.executor.shutdown(wait=True)
+        if hasattr(self, "executor") and self.executor is not None:
+            try:
+                self.executor.shutdown(wait=False)  # Don't block in destructor
+            except Exception as e:
+                logger.warning(f"Error shutting down executor: {e}")
 
     def _create_rag_engines(self, collection_name: str | None = None) -> dict[str, Any]:
         """Create RAG engines based on rag_config."""
@@ -335,3 +366,8 @@ class TaskManagerAgent(ConversableAgent):
         except ImportError as e:
             logger.warning(f"Neo4j dependencies not available: {e}. Skipping graph engine.")
             return None
+
+    def _safe_context_update(self, context_variables: ContextVariables, key: str, value: Any) -> None:
+        """Thread-safe context variable update."""
+        with self._context_lock:
+            context_variables[key] = value

@@ -28,11 +28,12 @@ def extract_text_from_pdf(doc_path: str) -> list[dict[str, str]]:
         text = ""
         # Save the PDF to a temporary file
         with tempfile.TemporaryDirectory() as temp_dir:
-            with open(temp_dir + "temp.pdf", "wb") as f:
+            temp_pdf_path = Path(temp_dir) / "temp.pdf"
+            with open(temp_pdf_path, "wb") as f:
                 f.write(response.content)
 
             # Open the PDF
-            with fitz.open(temp_dir + "temp.pdf") as doc:
+            with fitz.open(str(temp_pdf_path)) as doc:
                 # Read and extract text from each page
                 for page in doc:
                     text += page.get_text()
@@ -71,6 +72,9 @@ def compress_and_save_text(text: str, input_path: str, parsed_docs_path: Path) -
     llm_lingua = LLMLingua()
     text_compressor = TextMessageCompressor(text_compressor=llm_lingua)
     compressed_text = text_compressor.apply_transform([{"content": text}])
+
+    if not compressed_text or not compressed_text[0].get("content"):
+        raise ValueError("Text compression failed or returned empty result")
 
     # Create a markdown file with the extracted text
     output_file = parsed_docs_path / f"{Path(input_path).stem}.md"
@@ -138,7 +142,7 @@ def process_single_document(
 
         if is_pdf:
             # Handle PDF with PyMuPDF
-            print("PDF found using PyMuPDF")
+            logger.info("PDF found, using PyMuPDF for extraction")
             if urllib3.util.url.parse_url(input_file_path).scheme:
                 # Download the PDF
                 response = requests.get(input_file_path)
