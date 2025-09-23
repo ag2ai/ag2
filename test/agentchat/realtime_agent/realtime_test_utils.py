@@ -5,7 +5,7 @@
 import base64
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, Literal, TypeVar, Union
+from typing import Any, Literal, TypeVar
 from unittest.mock import MagicMock
 
 from anyio import Event
@@ -13,7 +13,8 @@ from anyio import Event
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
-    from openai import NotGiven, OpenAI
+    from openai import OpenAI
+    from openai._types import Omit
 
 __all__ = ["text_to_speech", "trace"]
 
@@ -24,7 +25,7 @@ def text_to_speech(
     openai_api_key: str,
     model: str = "tts-1",
     voice: Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"] = "alloy",
-    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], "NotGiven"] = "pcm",
+    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | Omit = "pcm",
 ) -> str:
     """Convert text to voice using OpenAI API.
 
@@ -33,7 +34,7 @@ def text_to_speech(
         openai_api_key (str): OpenAI API key.
         model (str, optional): Model to use for the conversion. Defaults to "tts-1".
         voice (Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"], optional): Voice to use for the conversion. Defaults to "alloy".
-        response_format (Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], NotGiven], optional): Response format. Defaults to "pcm".
+        response_format (Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | Omit, optional): Response format. Defaults to "pcm".
 
     Returns:
         str: Base64 encoded audio.
