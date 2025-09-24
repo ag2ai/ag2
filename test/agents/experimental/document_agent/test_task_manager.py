@@ -2,11 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agents.experimental.document_agent.task_manager import TASK_MANAGER_SYSTEM_MESSAGE, TaskManagerAgent
 from autogen.import_utils import skip_on_missing_imports
 
@@ -142,7 +145,7 @@ class TestTaskManagerAgent:
             agent.__del__()
 
             # Verify shutdown was called
-            mock_executor.shutdown.assert_called_once_with(wait=True)
+            mock_executor.shutdown.assert_called_once_with(wait=False)
 
     @pytest.mark.openai
     @skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
@@ -371,3 +374,205 @@ class TestTaskManagerAgent:
             # Test basic agent functionality
             assert agent.query_engine is None
             assert agent.parsed_docs_path == tmp_path
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_task_manager_agent_init_with_rag_config(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test TaskManagerAgent initialization with rag_config."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+    rag_config: dict[str, Any] = {"vector": {}, "graph": {"host": "bolt://localhost"}}
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine") as mock_ve,
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        mock_ve.return_value = MagicMock()
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path, rag_config=rag_config)
+        assert agent.rag_config == rag_config
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_task_manager_agent_init_with_custom_system_message(
+    credentials_gpt_4o_mini: Credentials, tmp_path: Path
+) -> None:
+    """Test TaskManagerAgent initialization with custom system message."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+    custom_message = "Custom system message"
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path, custom_system_message=custom_message)
+        assert agent.system_message == custom_message
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_create_rag_engines_with_graph_config(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test _create_rag_engines with graph configuration."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+    rag_config: dict[str, Any] = {"graph": {"host": "bolt://localhost", "port": 7687}}
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+        patch("autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine.Neo4jGraphQueryEngine") as mock_neo4j,
+    ):
+        mock_neo4j.return_value = MagicMock()
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path, rag_config=rag_config)
+        assert "graph" in agent.rag_engines
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_create_neo4j_engine_import_error(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test _create_neo4j_engine with ImportError."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+    rag_config: dict[str, Any] = {"graph": {}}
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+        patch(
+            "autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine.Neo4jGraphQueryEngine",
+            side_effect=ImportError("No module"),
+        ),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path, rag_config=rag_config)
+        assert agent.rag_engines.get("graph") is None
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_safe_context_update(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test _safe_context_update method."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        context_vars = ContextVariables()
+        agent._safe_context_update(context_vars, "test_key", "test_value")
+        assert context_vars["test_key"] == "test_value"
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_ingest_documents_empty_list(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test ingest_documents with empty document list."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        context_vars = ContextVariables()
+
+        # Access the ingest_documents function from the agent's tools
+        ingest_tool = None
+        for tool in agent.tools:
+            if tool.name == "ingest_documents":
+                ingest_tool = tool
+                break
+
+        assert ingest_tool is not None, "ingest_documents tool not found"
+        result = asyncio.run(ingest_tool.func([], context_vars))
+        assert "No documents provided" in str(result.message)
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_ingest_documents_invalid_paths(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test ingest_documents with invalid document paths."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        context_vars = ContextVariables()
+
+        # Access the ingest_documents function from the agent's tools
+        ingest_tool = None
+        for tool in agent.tools:
+            if tool.name == "ingest_documents":
+                ingest_tool = tool
+                break
+
+        assert ingest_tool is not None, "ingest_documents tool not found"
+        result = asyncio.run(ingest_tool.func(["", "   "], context_vars))
+        assert "No valid documents found" in str(result.message)
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_execute_query_empty_list(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test execute_query with empty query list."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        context_vars = ContextVariables()
+
+        # Access the execute_query function from the agent's tools
+        query_tool = None
+        for tool in agent.tools:
+            if tool.name == "execute_query":
+                query_tool = tool
+                break
+
+        assert query_tool is not None, "execute_query tool not found"
+        result = asyncio.run(query_tool.func([], context_vars))
+        assert result == "No queries to run"
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_execute_query_invalid_queries(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test execute_query with invalid queries."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor"),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        context_vars = ContextVariables()
+
+        # Access the execute_query function from the agent's tools
+        query_tool = None
+        for tool in agent.tools:
+            if tool.name == "execute_query":
+                query_tool = tool
+                break
+
+        assert query_tool is not None, "execute_query tool not found"
+        result = asyncio.run(query_tool.func(["", "   "], context_vars))
+        assert result == "No valid queries provided"
+
+
+@pytest.mark.openai
+@skip_on_missing_imports(["selenium", "webdriver_manager"], "rag")
+def test_del_with_exception(credentials_gpt_4o_mini: Credentials, tmp_path: Path) -> None:
+    """Test __del__ method with exception during shutdown."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+    mock_executor = MagicMock()
+    mock_executor.shutdown.side_effect = Exception("Shutdown failed")
+
+    with (
+        patch("autogen.agents.experimental.document_agent.task_manager.VectorChromaQueryEngine"),
+        patch("autogen.agents.experimental.document_agent.task_manager.ThreadPoolExecutor", return_value=mock_executor),
+    ):
+        agent = TaskManagerAgent(llm_config=llm_config, parsed_docs_path=tmp_path)
+        agent.__del__()
+        mock_executor.shutdown.assert_called_once_with(wait=False)

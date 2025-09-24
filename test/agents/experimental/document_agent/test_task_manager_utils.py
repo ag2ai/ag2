@@ -35,7 +35,11 @@ class TestExtractTextFromPDF:
         mock_response.content = b"fake pdf content"
         mock_get.return_value = mock_response
 
-        mock_temp_dir.return_value.__enter__.return_value = "/tmp/test"
+        # Mock the temporary directory context manager properly
+        mock_temp_dir_instance = Mock()
+        mock_temp_dir_instance.__enter__ = Mock(return_value="/tmp/test")
+        mock_temp_dir_instance.__exit__ = Mock(return_value=None)
+        mock_temp_dir.return_value = mock_temp_dir_instance
 
         # Create a proper mock document that supports iteration
         mock_doc = Mock()
@@ -56,9 +60,12 @@ class TestExtractTextFromPDF:
         mock_llm_lingua_class.return_value = mock_llm_lingua
 
         # Mock urllib3 to return a URL with scheme
-        with patch(
-            "autogen.agents.experimental.document_agent.task_manager_utils.urllib3.util.url.parse_url"
-        ) as mock_parse_url:
+        with (
+            patch(
+                "autogen.agents.experimental.document_agent.task_manager_utils.urllib3.util.url.parse_url"
+            ) as mock_parse_url,
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
             mock_parsed_url = Mock()
             mock_parsed_url.scheme = "https"
             mock_parse_url.return_value = mock_parsed_url
@@ -71,6 +78,8 @@ class TestExtractTextFromPDF:
             mock_get.assert_called_once_with("https://example.com/test.pdf")
             mock_fitz.open.assert_called_once()
             mock_compressor.apply_transform.assert_called_once_with([{"content": "Page 1 contentPage 2 content"}])
+            # Verify file was opened for writing - use Path object instead of string
+            mock_file.assert_called_with(Path("/tmp/test/temp.pdf"), "wb")
 
     @patch("autogen.agents.experimental.document_agent.task_manager_utils.urllib3.util.url.parse_url")
     def test_extract_text_from_pdf_non_url_raises_error(self, mock_parse_url: Any) -> None:
