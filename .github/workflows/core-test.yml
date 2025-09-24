@@ -83,7 +83,11 @@ jobs:
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
       - name: Install optional dependencies for code executors
         run: |
-          uv pip install --system -e ".[jupyter-executor,yepcode]"
+          uv pip install --system -e ".[jupyter-executor]"
+          # Only install yepcode on Python 3.11+
+          if python -c "import sys; exit(0 if sys.version_info >= (3,11) else 1)"; then
+            uv pip install --system -e ".[yepcode]"
+          fi
           python -m ipykernel install --user --name python3
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
