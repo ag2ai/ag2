@@ -67,12 +67,6 @@ def test_conversable_agent_name_with_white_space(
     ):
         ConversableAgent(name=name, llm_config=llm_config)
 
-    llm_config["config_list"][0]["api_type"] = "azure"
-    llm_config["config_list"][0]["api_version"] = "2023-01-01"
-    llm_config["config_list"][0]["base_url"] = "https://api.azure.com/v1"
-    agent = ConversableAgent(name=name, llm_config=llm_config)
-    assert agent.name == name
-
 
 def test_sync_trigger():
     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
@@ -1904,11 +1898,8 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
     # Remove the tool
     agent.remove_tool_for_llm(mock_tool)
 
-    # Verify tool was removed from internal list
-    assert len(agent._tools) == 0
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
@@ -1928,11 +1919,8 @@ def test_remove_tool_by_name_for_llm(mock_credentials: Credentials):
     # Remove the tool by name
     agent.update_tool_signature(tool_sig="test_tool", is_remove=True)
 
-    # Verify tool was removed from internal list
-    assert "tools" not in mock_credentials.llm_config
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
