@@ -17,7 +17,7 @@ from typing import Any, TypeVar
 import pytest
 
 import autogen
-from autogen import UserProxyAgent
+from autogen import LLMConfig, UserProxyAgent
 from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import optional_import_block
 
@@ -80,13 +80,11 @@ class Secrets:
 class Credentials:
     """Credentials for the OpenAI API."""
 
-    def __init__(self, llm_config: dict[str, Any]) -> None:
+    def __init__(self, llm_config: LLMConfig) -> None:
         self.llm_config = llm_config
-        if len(self.llm_config["config_list"]) == 0:
-            raise ValueError("No config list found")
         Secrets.add_secret(self.api_key)
 
-    def sanitize(self) -> dict[str, Any]:
+    def sanitize(self) -> LLMConfig:
         llm_config = self.llm_config.copy()
         for config in llm_config["config_list"]:
             if "api_key" in config:
@@ -101,19 +99,19 @@ class Credentials:
 
     @property
     def config_list(self) -> list[dict[str, Any]]:
-        return self.llm_config["config_list"]  # type: ignore[no-any-return]
+        return [c.model_dump() for c in self.llm_config.config_list]
 
     @property
     def api_key(self) -> str:
-        return self.llm_config["config_list"][0]["api_key"]  # type: ignore[no-any-return]
+        return self.config_list[0]["api_key"]  # type: ignore[no-any-return]
 
     @property
     def api_type(self) -> str:
-        return self.llm_config["config_list"][0].get("api_type", "openai")  # type: ignore[no-any-return]
+        return self.config_list[0]["api_type"]  # type: ignore[no-any-return]
 
     @property
     def model(self) -> str:
-        return self.llm_config["config_list"][0]["model"]  # type: ignore[no-any-return]
+        return self.config_list[0]["model"]  # type: ignore[no-any-return]
 
 
 def patch_pytest_terminal_writer() -> None:
@@ -139,122 +137,111 @@ def patch_pytest_terminal_writer() -> None:
 patch_pytest_terminal_writer()
 
 
-def get_credentials(
-    filter_dict: dict[str, Any] | None = None, temperature: float = 0.0, fail_if_empty: bool = True
-) -> Credentials | None:
-    """Fixture to load the LLM config."""
-    try:
-        config_list = autogen.config_list_from_json(
-            str(OAI_CONFIG_LIST),
-            filter_dict=filter_dict,
-            file_location=KEY_LOC,
-        )
-    except Exception:
-        config_list = []
-
-    if len(config_list) == 0:
-        if fail_if_empty:
-            raise ValueError("No config list found")
-        return None
-
-    return Credentials(
-        llm_config={
-            "config_list": config_list,
-            "temperature": temperature,
-        }
-    )
-
-
-def get_config_list_from_env(
-    env_var_name: str,
-    model: str,
-    api_type: str,
+def get_credentials_from_file(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
-) -> list[dict[str, Any]]:
-    if env_var_name in os.environ:
-        api_key = os.environ[env_var_name]
-        return [{"api_key": api_key, "model": model, **filter_dict, "api_type": api_type}]  # type: ignore[dict-item]
+    **kwargs: Any,
+) -> Credentials:
+    """Fixture to load the LLM config."""
+    llm_config = autogen.LLMConfig.from_json(
+        path=str(OAI_CONFIG_LIST),
+        filter_dict=filter_dict,
+        file_location=KEY_LOC,
+        temperature=temperature,
+    )
 
-    return []
+    return Credentials(llm_config)
 
 
-def get_llm_credentials(
+def get_credentials_from_env(
     env_var_name: str,
     model: str,
     api_type: str,
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> Credentials:
-    credentials = get_credentials(filter_dict, temperature, fail_if_empty=False)
-    config_list = credentials.config_list if credentials else []
-
-    # Filter out non-OpenAI configs
-    if api_type == "openai":
-        config_list = [conf for conf in config_list if "api_type" not in conf or conf["api_type"] == "openai"]
-
-    # If no config found, try to get it from the environment
-    if config_list == []:
-        config_list = get_config_list_from_env(env_var_name, model, api_type, filter_dict, temperature)
-
-    # If still no config found, raise an error
-    assert config_list, f"No {api_type} config list found and could not be created from an env var {env_var_name}"
-
     return Credentials(
-        llm_config={
-            "config_list": config_list,
-            "temperature": temperature,
-        }
+        LLMConfig(
+            {
+                "api_key": os.environ[env_var_name],
+                "model": model,
+                "api_type": api_type,
+                **(filter_dict or {}),
+            },
+            temperature=temperature,
+        )
     )
+
+
+def get_credentials(
+    env_var_name: str,
+    model: str,
+    api_type: str,
+    filter_dict: dict[str, Any] | None = None,
+    temperature: float = 0.0,
+) -> Credentials:
+    try:
+        credentials = get_credentials_from_file(filter_dict, temperature)
+        if api_type == "openai":
+            credentials.llm_config = credentials.llm_config.filter(api_type="openai")
+    except Exception:
+        credentials = get_credentials_from_env(env_var_name, model, api_type, filter_dict, temperature)
+
+    return credentials
 
 
 @pytest.fixture
 def credentials_azure() -> Credentials:
-    return get_credentials(filter_dict={"api_type": ["azure"]})  # type: ignore[return-value]
+    return get_credentials_from_file(filter_dict={"api_type": ["azure"]})
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo() -> Credentials:
-    return get_credentials(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})  # type: ignore[return-value]
+    return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
-    return get_credentials(  # type: ignore[return-value]
+    return get_credentials_from_file(
         filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
     )
 
 
 @pytest.fixture
+def credentials() -> Credentials:
+    return get_credentials_from_file(filter_dict={"tags": ["gpt-4o"]})
+
+
+@pytest.fixture
 def credentials_all() -> Credentials:
-    return get_credentials()  # type: ignore[return-value]
+    return get_credentials_from_file()
 
 
 @pytest.fixture
 def credentials_gpt_4o_mini() -> Credentials:
-    return get_llm_credentials(  # type: ignore[return-value]
+    return get_credentials(
         "OPENAI_API_KEY", model="gpt-4o-mini", api_type="openai", filter_dict={"tags": ["gpt-4o-mini"]}
     )
 
 
 @pytest.fixture
 def credentials_gpt_4o() -> Credentials:
-    return get_llm_credentials("OPENAI_API_KEY", model="gpt-4o", api_type="openai", filter_dict={"tags": ["gpt-4o"]})
+    return get_credentials("OPENAI_API_KEY", model="gpt-4o", api_type="openai", filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_o1_mini() -> Credentials:
-    return get_llm_credentials("OPENAI_API_KEY", model="o1-mini", api_type="openai", filter_dict={"tags": ["o1-mini"]})
+    return get_credentials("OPENAI_API_KEY", model="o1-mini", api_type="openai", filter_dict={"tags": ["o1-mini"]})
 
 
 @pytest.fixture
 def credentials_o1() -> Credentials:
-    return get_llm_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
+    return get_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
 
 
 @pytest.fixture
 def credentials_gpt_4o_realtime() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "OPENAI_API_KEY",
         model="gpt-4o-realtime-preview",
         filter_dict={"tags": ["gpt-4o-realtime"]},
@@ -265,33 +252,28 @@ def credentials_gpt_4o_realtime() -> Credentials:
 
 @pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
     )
 
 
 @pytest.fixture
-def credentials() -> Credentials:
-    return get_credentials(filter_dict={"tags": ["gpt-4o"]})  # type: ignore[return-value]
-
-
-@pytest.fixture
 def credentials_gemini_flash() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "GEMINI_API_KEY", model="gemini-1.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
     )
 
 
 @pytest.fixture
 def credentials_gemini_flash_exp() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-flash-exp"]}
     )
 
 
 @pytest.fixture
 def credentials_anthropic_claude_sonnet() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "ANTHROPIC_API_KEY",
         model="claude-3-5-sonnet-latest",
         api_type="anthropic",
@@ -301,7 +283,7 @@ def credentials_anthropic_claude_sonnet() -> Credentials:
 
 @pytest.fixture
 def credentials_deepseek_reasoner() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "DEEPSEEK_API_KEY",
         model="deepseek-reasoner",
         api_type="deepseek",
@@ -311,7 +293,7 @@ def credentials_deepseek_reasoner() -> Credentials:
 
 @pytest.fixture
 def credentials_deepseek_chat() -> Credentials:
-    return get_llm_credentials(
+    return get_credentials(
         "DEEPSEEK_API_KEY",
         model="deepseek-chat",
         api_type="deepseek",
@@ -320,17 +302,15 @@ def credentials_deepseek_chat() -> Credentials:
 
 
 def get_mock_credentials(model: str, temperature: float = 0.6) -> Credentials:
-    llm_config = {
-        "config_list": [
-            {
-                "model": model,
-                "api_key": MOCK_OPEN_AI_API_KEY,
-            },
-        ],
-        "temperature": temperature,
-    }
+    llm_config = LLMConfig(
+        {
+            "model": model,
+            "api_key": MOCK_OPEN_AI_API_KEY,
+        },
+        temperature=temperature,
+    )
 
-    return Credentials(llm_config=llm_config)
+    return Credentials(llm_config)
 
 
 @pytest.fixture
@@ -340,19 +320,17 @@ def mock_credentials() -> Credentials:
 
 @pytest.fixture
 def mock_azure_credentials() -> Credentials:
-    llm_config = {
-        "config_list": [
-            {
-                "api_type": "azure",
-                "model": "gpt-40",
-                "api_key": MOCK_AZURE_API_KEY,
-                "base_url": "https://my_models.azure.com/v1",
-            },
-        ],
-        "temperature": 0.6,
-    }
+    llm_config = LLMConfig(
+        {
+            "api_type": "azure",
+            "model": "gpt-40",
+            "api_key": MOCK_AZURE_API_KEY,
+            "base_url": "https://my_models.azure.com/v1",
+        },
+        temperature=0.6,
+    )
 
-    return Credentials(llm_config=llm_config)
+    return Credentials(llm_config)
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
