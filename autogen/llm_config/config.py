@@ -202,11 +202,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
                     **c,
                 })
 
-        from loguru import logger
-        from pprint import pformat
-
-        logger.success(pformat(final_config_list))
-
         self._model = _LLMConfig(
             **application_level_options,
             config_list=final_config_list,
