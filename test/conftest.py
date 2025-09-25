@@ -81,11 +81,15 @@ def get_credentials(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> Credentials:
+    credentials = None
     try:
         credentials = get_credentials_from_file(filter_dict, temperature)
         if api_type == "openai":
-            credentials.llm_config = credentials.llm_config.filter(api_type="openai")
+            credentials.llm_config = credentials.llm_config.where(api_type="openai")
     except Exception:
+        credentials = None
+
+    if not credentials:
         credentials = get_credentials_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
     return credentials
