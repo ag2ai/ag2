@@ -531,13 +531,13 @@ def filter_config(
         filter_dict = {"model": "gpt-4o"}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4o", "api_type": "openai"}] if present
-        
+
         # Example 2: Single criterion - matches any model in the list
         filter_dict = {"model": ["gpt-4", "gpt-4o"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4", "api_type": "openai"}, {"model": "gpt-4", "tags": ["premium", "latest"]}]
 
-        # Example 3: Multiple criteria - must satisfy ALL conditions
+        # Example 3: Multiple criteria - must satisfy ALL the conditions
         filter_dict = {"model": ["gpt-3.5-turbo"], "api_type": ["azure"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"}]
