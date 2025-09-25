@@ -885,7 +885,7 @@ class OpenAIWrapper:
             # adding placeholder until the register_model_client is called with the appropriate class
             self._clients.append(PlaceHolderClient(config))
             logger.info(
-                f"Detected custom model client in config: {model_client_cls_name}, model client can not be used until register_model_client is called."
+                "Detected custom model client in config; model client cannot be used until register_model_client is called."
             )
             # TODO: logging for custom client
         else:
