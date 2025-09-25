@@ -13,7 +13,8 @@ from anyio import Event
 from autogen.import_utils import optional_import_block
 
 with optional_import_block() as result:
-    from openai import NotGiven, OpenAI
+    from openai import OpenAI
+    from openai._types import Omit
 
 __all__ = ["text_to_speech", "trace"]
 
@@ -24,7 +25,7 @@ def text_to_speech(
     openai_api_key: str,
     model: str = "tts-1",
     voice: Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"] = "alloy",
-    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | NotGiven = "pcm",
+    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | Omit = "pcm",
 ) -> str:
     """Convert text to voice using OpenAI API.
 
