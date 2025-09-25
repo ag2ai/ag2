@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock
 import anyio
 import pytest
 from pydantic.networks import AnyUrl
-from tests.credentials import Credentials
 
 from autogen import AssistantAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -25,6 +24,7 @@ from autogen.mcp.mcp_client import (
     StdioConfig,
     create_toolkit,
 )
+from test.credentials import Credentials
 
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters
