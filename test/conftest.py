@@ -165,7 +165,7 @@ def credentials_gemini_realtime() -> Credentials:
 @pytest.fixture
 def credentials_gemini_flash() -> Credentials:
     return get_credentials(
-        "GEMINI_API_KEY", model="gemini-1.5-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
+        "GEMINI_API_KEY", model="gemini-2.0-flash", api_type="google", filter_dict={"tags": ["gemini-flash"]}
     )
 
 

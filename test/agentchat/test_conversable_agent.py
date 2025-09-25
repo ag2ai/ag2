@@ -1098,7 +1098,7 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = LLMConfig(credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -2175,20 +2175,3 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
-
-
-if __name__ == "__main__":
-    # test_trigger()
-    # test_context()
-    # test_handle_carryover():
-    # test_max_turn()
-    # test_process_before_send()
-    # test_message_func()
-    # test_summary()
-    # test_adding_duplicate_function_warning()
-    # test_function_registration_e2e_sync()
-    # test_process_gemini_carryover()
-    # test_process_carryover()
-    # test_context_variables()
-    # test_max_consecutive_auto_reply_with_max_turns()
-    test_invalid_functions_parameter()
