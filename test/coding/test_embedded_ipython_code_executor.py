@@ -27,8 +27,7 @@ from autogen.coding.jupyter import (
 )
 from autogen.coding.jupyter.import_utils import skip_on_missing_jupyter_kernel_gateway
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ..conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 # needed for skip_on_missing_imports to work
 with optional_import_block():

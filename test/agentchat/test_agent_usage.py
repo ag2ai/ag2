@@ -11,8 +11,7 @@ from contextlib import redirect_stdout
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")

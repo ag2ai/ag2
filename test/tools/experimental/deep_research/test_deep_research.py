@@ -11,8 +11,7 @@ from autogen.agentchat import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.dependency_injection import Depends, on
 from autogen.tools.experimental import DeepResearchTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports(

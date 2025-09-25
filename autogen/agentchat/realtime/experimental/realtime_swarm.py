@@ -2,12 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import partial
 import logging
 import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import anyio

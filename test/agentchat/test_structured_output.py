@@ -12,18 +12,14 @@ from pydantic import BaseModel, ValidationError
 
 import autogen
 from autogen.import_utils import optional_import_block
+from test.credentials import Credentials
+from test.marks import credentials_gemini_flash
+from test.utils import credentials_gpt_4o_mini, suppress_gemini_resource_exhausted
 
 with optional_import_block() as result:
     import openai  # noqa: F401
     from openai.types.chat.parsed_chat_completion import ChatCompletion, ChatCompletionMessage, Choice
 
-
-from ..conftest import (
-    Credentials,
-    credentials_gemini_flash,
-    credentials_gpt_4o_mini,
-    suppress_gemini_resource_exhausted,
-)
 
 credentials_structured_output = [
     pytest.param(

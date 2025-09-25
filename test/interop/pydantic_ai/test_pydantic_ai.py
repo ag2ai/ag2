@@ -13,8 +13,7 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
-
-from ...conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block():
     from pydantic_ai import RunContext
