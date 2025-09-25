@@ -85,7 +85,7 @@ jobs:
         run: |
           uv pip install --system -e ".[jupyter-executor]"
           # Only install yepcode on Python 3.11+
-          if python -c "import sys; exit(0 if sys.version_info >= (3,11) else 1)"; then
+          if python -c 'import sys; exit(0 if sys.version_info >= (3,11) else 1)'; then
             uv pip install --system -e ".[yepcode]"
           fi
           python -m ipykernel install --user --name python3
