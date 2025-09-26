@@ -15,7 +15,7 @@ with SystemPythonEnvironment(executable="/usr/local/bin/python") as sys_py_env:
             # python_environment=sys_py_env,
         )
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "model": "gpt-5",
     "api_type": "openai",
 })
