@@ -9,6 +9,9 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "mintlify": "^4.0.364"
+    "mintlify": "^4.2.103"
+  },
+  "overrides": {
+    "axios": "^1.12.0"
   }
 }

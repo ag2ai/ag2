@@ -16,8 +16,11 @@ Group chats afford you a great deal of flexibility and control, see the [Group C
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 1. Create our agents
 planner_message = """You are a classroom lesson planner.
