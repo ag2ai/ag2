@@ -15,6 +15,9 @@ try:
 
     from autogen.coding import YepCodeCodeExecutor
 
+    # Also check that the actual YepCode dependencies are available
+    from autogen.coding.yepcode_code_executor import YepCodeApiConfig, YepCodeRun
+
     _has_yepcode = True
 except ImportError:
     _has_yepcode = False
