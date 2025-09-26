@@ -363,18 +363,25 @@ class SafeguardEnforcer:
         hooks = {}
 
         # Check if we have any tool interaction rules that apply to this agent
-        agent_tool_rules = [
-            rule
-            for rule in self.environment_rules
-            if rule["type"] == "tool_interaction"
-            and (
-                rule.get("message_destination") == agent_name
-                or rule.get("message_source") == agent_name
-                or rule.get("agent_name") == agent_name
-                or "message_destination" not in rule
-            )
-        ]  # Simple pattern rules apply to all
-
+        if agent_name == "_Group_Tool_Executor":
+            # group tool executor is running all tools, so we need to check all tool interaction rules
+            agent_tool_rules = [
+                rule
+                for rule in self.environment_rules
+                if rule["type"] == "tool_interaction"
+            ]
+        else:
+            agent_tool_rules = [
+                rule
+                for rule in self.environment_rules
+                if rule["type"] == "tool_interaction"
+                and (
+                    rule.get("message_destination") == agent_name
+                    or rule.get("message_source") == agent_name
+                    or rule.get("agent_name") == agent_name
+                    or "message_destination" not in rule
+                )
+            ]  
         if agent_tool_rules:
 
             def tool_input_hook(tool_input: dict[str, Any]) -> dict[str, Any] | None:
@@ -1003,12 +1010,20 @@ class SafeguardEnforcer:
         # Extract tool name from data
         tool_name = data.get("name", data.get("tool_name", ""))
 
+        # Resolve the actual agent name if this is GroupToolExecutor
+        actual_agent_name = agent_name
+        if agent_name == "_Group_Tool_Executor" and self.group_tool_executor:
+            # Get the original tool caller from GroupToolExecutor
+            originator = self.group_tool_executor.get_tool_call_originator()
+            if originator:
+                actual_agent_name = originator
+
         # Determine source/destination based on direction
         if direction == "output":
-            source_name, dest_name = tool_name, agent_name
+            source_name, dest_name = tool_name, actual_agent_name
             content = str(data.get("content", ""))
         else:  # input
-            source_name, dest_name = agent_name, tool_name
+            source_name, dest_name = actual_agent_name, tool_name
             content = str(data.get("arguments", ""))
 
         result = self._check_interaction(
@@ -1017,7 +1032,7 @@ class SafeguardEnforcer:
             dest_name=dest_name,
             content=content,
             data=data,
-            context_info=f"{agent_name} <-> {tool_name} ({direction})",
+            context_info=f"{actual_agent_name} <-> {tool_name} ({direction})",
         )
 
         if result is not None:

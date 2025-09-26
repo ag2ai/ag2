@@ -229,4 +229,14 @@ def apply_safeguard_policy(
                 f"Agent {agent.name} does not support hooks. Please ensure it inherits from ConversableAgent."
             )
 
+    # Apply hooks to GroupToolExecutor if it exists (for GroupChat scenarios)
+    if groupchat_manager and enforcer.group_tool_executor:
+        if hasattr(enforcer.group_tool_executor, "hook_lists"):
+            # Create hooks for GroupToolExecutor - it needs tool interaction hooks
+            # since it's the one actually executing tools in GroupChat
+            hooks = enforcer.create_agent_hooks(enforcer.group_tool_executor.name)
+            for hook_name, hook_func in hooks.items():
+                if hook_name in enforcer.group_tool_executor.hook_lists:
+                    enforcer.group_tool_executor.hook_lists[hook_name].append(hook_func)
+
     return enforcer
