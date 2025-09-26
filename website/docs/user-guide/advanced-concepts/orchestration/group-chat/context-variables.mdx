@@ -302,6 +302,9 @@ from autogen import ConversableAgent, LLMConfig, UpdateSystemMessage
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group import ReplyResult, AgentNameTarget, ContextVariables
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Initialize context variables
 support_context = ContextVariables(data={
@@ -402,7 +405,7 @@ def get_user_context(context_variables: ContextVariables) -> str:
     - Query type: {context_variables.get("query_type", "Unknown")}"""
 
 # Create the agents
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 triage_agent = ConversableAgent(
     name="triage_agent",

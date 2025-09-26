@@ -41,7 +41,7 @@ The simplest approach is to directly specify the model provider, model name, and
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",                      # The provider
     "model": "gpt-5-nano",                    # The specific model
     "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
@@ -134,7 +134,7 @@ from autogen import LLMConfig
 import os
 
 # Basic configuration using environment variable
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.environ["OPENAI_API_KEY"],

@@ -25,7 +25,7 @@ Portkey adds 4 core production capabilities to any AG2 agent:
    from autogen import AssistantAgent, UserProxyAgent, LLMConfig
    from portkey_ai import PORTKEY_GATEWAY_URL, createHeaders
 
-   llm_config = LLMConfig({
+   llm_config = LLMConfig(config_list={
       "api_key": "OPENAI_API_KEY",
       "model": "gpt-3.5-turbo",
       "base_url": PORTKEY_GATEWAY_URL,

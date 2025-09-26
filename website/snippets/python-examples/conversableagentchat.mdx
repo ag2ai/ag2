@@ -1,10 +1,13 @@
 ```python
 # 1. Import our agent class
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-5 nano
 #    Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our agent
 my_agent = ConversableAgent(

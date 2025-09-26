@@ -76,7 +76,7 @@ import random
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.environ.get("OPENAI_API_KEY"),
@@ -174,7 +174,7 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig({
+    llm_config = LLMConfig(config_list={
         "api_type": "openai",
         "model": "gpt-5-nano",
         "api_key": os.environ.get("OPENAI_API_KEY"),
