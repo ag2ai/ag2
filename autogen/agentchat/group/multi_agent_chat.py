@@ -76,6 +76,7 @@ def initiate_group_chat(
     # Apply safeguards if provided
     if safeguard_policy:
         from .safeguards import apply_safeguard_policy
+
         apply_safeguard_policy(
             groupchat_manager=manager,
             policy=safeguard_policy,
@@ -154,6 +155,7 @@ async def a_initiate_group_chat(
     # Apply safeguards if provided
     if safeguard_policy:
         from .safeguards import apply_safeguard_policy
+
         apply_safeguard_policy(
             groupchat_manager=manager,
             policy=safeguard_policy,

@@ -11,11 +11,11 @@ from typing import Any
 
 from ....io.base import IOStream
 from ....llm_config import LLMConfig
+from ...conversable_agent import ConversableAgent
+from ...groupchat import GroupChatManager
 from ..guardrails import LLMGuardrail, RegexGuardrail
 from ..targets.transition_target import TransitionTarget
 from .events import SafeguardEvent
-from ...groupchat import GroupChatManager
-from ...conversable_agent import ConversableAgent
 
 
 class SafeguardEnforcer:
@@ -35,6 +35,8 @@ class SafeguardEnforcer:
             policy: Safeguard policy dict or path to JSON file
             safeguard_llm_config: LLM configuration for safeguard checks
             mask_llm_config: LLM configuration for masking
+            groupchat_manager: GroupChat manager instance for group chat scenarios
+            agents: List of conversable agents to apply safeguards to
         """
         self.policy = self._load_policy(policy)
         self.safeguard_llm_config = safeguard_llm_config
@@ -45,9 +47,9 @@ class SafeguardEnforcer:
         if self.groupchat_manager:
             for agent in self.groupchat_manager.groupchat.agents:
                 if agent.name == "_Group_Tool_Executor":
-                    self.group_tool_executor = agent
+                    self.group_tool_executor = agent  # type: ignore[assignment]
                     break
-        
+
         # Validate policy format before proceeding
         self._validate_policy()
 
@@ -365,11 +367,7 @@ class SafeguardEnforcer:
         # Check if we have any tool interaction rules that apply to this agent
         if agent_name == "_Group_Tool_Executor":
             # group tool executor is running all tools, so we need to check all tool interaction rules
-            agent_tool_rules = [
-                rule
-                for rule in self.environment_rules
-                if rule["type"] == "tool_interaction"
-            ]
+            agent_tool_rules = [rule for rule in self.environment_rules if rule["type"] == "tool_interaction"]
         else:
             agent_tool_rules = [
                 rule
@@ -381,7 +379,7 @@ class SafeguardEnforcer:
                     or rule.get("agent_name") == agent_name
                     or "message_destination" not in rule
                 )
-            ]  
+            ]
         if agent_tool_rules:
 
             def tool_input_hook(tool_input: dict[str, Any]) -> dict[str, Any] | None:
@@ -668,7 +666,10 @@ class SafeguardEnforcer:
                         blocked_item["content"] = block_msg
                     if "tool_calls" in blocked_item:
                         blocked_item["tool_calls"] = [
-                            {**tool_call, "function": {**tool_call["function"], "arguments": json.dumps({"error": block_msg})}}
+                            {
+                                **tool_call,
+                                "function": {**tool_call["function"], "arguments": json.dumps({"error": block_msg})},
+                            }
                             for tool_call in blocked_item["tool_calls"]
                         ]
                     if "tool_responses" in blocked_item:
@@ -760,22 +761,22 @@ class SafeguardEnforcer:
     ) -> str | dict[str, Any]:
         """Check inter-agent communication."""
         if isinstance(message, dict):
-            if "tool_calls" in message and isinstance(message['tool_calls'], list):
+            if "tool_calls" in message and isinstance(message["tool_calls"], list):
                 # Extract arguments from all tool calls and combine them
                 tool_args = []
-                for tool_call in message['tool_calls']:
-                    if 'function' in tool_call and 'arguments' in tool_call['function']:
-                        tool_args.append(tool_call['function']['arguments'])
+                for tool_call in message["tool_calls"]:
+                    if "function" in tool_call and "arguments" in tool_call["function"]:
+                        tool_args.append(tool_call["function"]["arguments"])
                 content_to_check = " | ".join(tool_args) if tool_args else ""
-            elif "tool_responses" in message and isinstance(message['tool_responses'], list):
+            elif "tool_responses" in message and isinstance(message["tool_responses"], list):
                 # Extract content from all tool responses and combine them
                 tool_contents = []
-                for tool_response in message['tool_responses']:
-                    if 'content' in tool_response:
-                        tool_contents.append(str(tool_response['content']))
+                for tool_response in message["tool_responses"]:
+                    if "content" in tool_response:
+                        tool_contents.append(str(tool_response["content"]))
                 content_to_check = " | ".join(tool_contents) if tool_contents else ""
             else:
-                content_to_check = str(message.get('content', ''))
+                content_to_check = str(message.get("content", ""))
         elif isinstance(message, str):
             content_to_check = message
         else:
@@ -1014,7 +1015,7 @@ class SafeguardEnforcer:
         actual_agent_name = agent_name
         if agent_name == "_Group_Tool_Executor" and self.group_tool_executor:
             # Get the original tool caller from GroupToolExecutor
-            originator = self.group_tool_executor.get_tool_call_originator()
+            originator = self.group_tool_executor.get_tool_call_originator()  # type: ignore[attr-defined]
             if originator:
                 actual_agent_name = originator
 
@@ -1114,11 +1115,7 @@ class SafeguardEnforcer:
 
         return None
 
-    def _resolve_tool_executor_source(
-        self,
-        src_agent_name: str,
-        tool_executor: Any = None
-    ) -> str:
+    def _resolve_tool_executor_source(self, src_agent_name: str, tool_executor: Any = None) -> str:
         """Resolve the actual source agent when GroupToolExecutor is involved.
 
         When src_agent_name is "_Group_Tool_Executor", get the original agent who called the tool.
@@ -1134,10 +1131,10 @@ class SafeguardEnforcer:
             return src_agent_name
 
         # Handle GroupToolExecutor - get the original tool caller
-        if tool_executor and hasattr(tool_executor, 'get_tool_call_originator'):
+        if tool_executor and hasattr(tool_executor, "get_tool_call_originator"):
             originator = tool_executor.get_tool_call_originator()
             if originator:
-                return originator
+                return originator  # type: ignore[no-any-return]
 
         # Fallback: Could not determine original caller
         return "tool_executor"

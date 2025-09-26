@@ -171,12 +171,12 @@ def apply_safeguard_policy(
             raise ValueError("groupchat_manager must be an instance of GroupChatManager")
 
         target_agents.extend([
-            agent for agent in groupchat_manager.groupchat.agents
+            agent
+            for agent in groupchat_manager.groupchat.agents
             if hasattr(agent, "hook_lists") and agent.name != "_Group_Tool_Executor"
         ])
         all_agent_names = [
-            agent.name for agent in groupchat_manager.groupchat.agents
-            if agent.name != "_Group_Tool_Executor"
+            agent.name for agent in groupchat_manager.groupchat.agents if agent.name != "_Group_Tool_Executor"
         ]
         all_agent_names.append(groupchat_manager.name)
 
@@ -230,13 +230,12 @@ def apply_safeguard_policy(
             )
 
     # Apply hooks to GroupToolExecutor if it exists (for GroupChat scenarios)
-    if groupchat_manager and enforcer.group_tool_executor:
-        if hasattr(enforcer.group_tool_executor, "hook_lists"):
-            # Create hooks for GroupToolExecutor - it needs tool interaction hooks
-            # since it's the one actually executing tools in GroupChat
-            hooks = enforcer.create_agent_hooks(enforcer.group_tool_executor.name)
-            for hook_name, hook_func in hooks.items():
-                if hook_name in enforcer.group_tool_executor.hook_lists:
-                    enforcer.group_tool_executor.hook_lists[hook_name].append(hook_func)
+    if groupchat_manager and enforcer.group_tool_executor and hasattr(enforcer.group_tool_executor, "hook_lists"):
+        # Create hooks for GroupToolExecutor - it needs tool interaction hooks
+        # since it's the one actually executing tools in GroupChat
+        hooks = enforcer.create_agent_hooks(enforcer.group_tool_executor.name)
+        for hook_name, hook_func in hooks.items():
+            if hook_name in enforcer.group_tool_executor.hook_lists:
+                enforcer.group_tool_executor.hook_lists[hook_name].append(hook_func)
 
     return enforcer

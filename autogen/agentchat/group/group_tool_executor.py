@@ -163,7 +163,7 @@ class GroupToolExecutor(ConversableAgent):
 
         message = messages[-1]
         # Track the original agent that initiated this tool call (for safeguard transparency)
-        self.set_tool_call_originator(message['name'])
+        self.set_tool_call_originator(message["name"])
 
         if "tool_calls" in message:
             tool_call_count = len(message["tool_calls"])
