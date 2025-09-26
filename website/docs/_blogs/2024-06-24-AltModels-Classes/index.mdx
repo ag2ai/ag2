@@ -164,7 +164,7 @@ from typing import Literal
 from typing_extensions import Annotated
 
 # Anthropic configuration, using api_type='anthropic'
-anthropic_llm_config = LLMConfig({
+anthropic_llm_config = LLMConfig(config_list={
     "api_type": "anthropic",
     "model": "claude-3-5-sonnet-20240620",
     "api_key": os.getenv("ANTHROPIC_API_KEY"),
