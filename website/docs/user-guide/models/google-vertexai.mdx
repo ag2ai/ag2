@@ -262,7 +262,7 @@ scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
 credentials, project_id = google.auth.default(scopes)
 
-llm_config_gemini_vision = LLMConfig({
+llm_config_gemini_vision = LLMConfig(config_list={
     "model": "gemini-pro-vision",
     "api_type": "google",
     "project_id": project_id,
@@ -335,7 +335,7 @@ completion_token_price_per_1k = (
     0.000375  # For more up-to-date prices see https://cloud.google.com/vertex-ai/generative-ai/pricing
 )
 
-llm_config_openai_gemini = LLMConfig({
+llm_config_openai_gemini = LLMConfig(config_list={
     "model": "google/gemini-1.5-pro-001",
     "api_type": "openai",
     "base_url": f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/endpoints/openapi",

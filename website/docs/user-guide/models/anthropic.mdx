@@ -109,7 +109,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config_claude = autogen.LLMConfig({
+llm_config_claude = autogen.LLMConfig(config_list={
     # Choose your model name.
     "model": "claude-3-5-sonnet-20240620",
     # You need to provide your API key here.
@@ -129,7 +129,7 @@ The following configuration example demonstrates how to set up Anthropic VertexA
 ```python
 import os
 
-llm_config_vertexai = LLMConfig({
+llm_config_vertexai = LLMConfig(config_list={
     "model": "claude-3-5-sonnet-20240620-v1:0",
     "gcp_project_id": "your_project_id",
     "gcp_region": "us-west-2",  # Replace with your GCP region
@@ -330,7 +330,7 @@ TERMINATE
 ```python
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, LLMConfig
 
-llm_config_gpt4 = autogen.LLMConfig({
+llm_config_gpt4 = autogen.LLMConfig(config_list={
     # Choose your model name.
     "model": "gpt-4",
     # You need to provide your API key here.
@@ -338,7 +338,7 @@ llm_config_gpt4 = autogen.LLMConfig({
     "api_type": "openai",
 })
 
-llm_config_gpt35 = autogen.LLMConfig({
+llm_config_gpt35 = autogen.LLMConfig(config_list={
     # Choose your model name.
     "model": "gpt-3.5-turbo",
     # You need to provide your API key here.
