@@ -41,7 +41,7 @@ In this example, our `Mike` agent will have this hook registered, so all their m
 from autogen import ConversableAgent, Agent, LLMConfig
 from typing import Any, Union
 
-llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 agent_mike = ConversableAgent(name="Mike", llm_config=llm_config)
 agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
@@ -178,7 +178,7 @@ In the following example we will update an agent's system message to have the cu
 from autogen import ConversableAgent, LLMConfig
 from typing import Any
 
-llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 calendar_prompt = ("You are a calendar agent who answers questions on the date and day.\n"
                    "The current date is: [CURRENT_DATE]\n"
@@ -267,7 +267,7 @@ Here's an example that changes any instances of the word "blue" to "red" in the 
 from autogen import ConversableAgent, LLMConfig
 from typing import Any, Union
 
-llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 agent_scientist = ConversableAgent(name="scientist", llm_config=llm_config)
 agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
@@ -348,7 +348,7 @@ from autogen import ConversableAgent, LLMConfig
 from typing import Any
 import json
 
-llm_config = LLMConfig({"model": "gpt-5-nano", "api_type": "openai"})
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 agent_mike = ConversableAgent(name="Mike", system_message="You are a comedian.", llm_config=llm_config)
 agent_bob = ConversableAgent(name="Bob", system_message="You are a comedian.", llm_config=llm_config)
