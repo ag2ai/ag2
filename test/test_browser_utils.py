@@ -63,13 +63,16 @@ def downloads_folder():
 @skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_simple_text_browser(downloads_folder: str):
     # Instantiate the browser
-    user_agent = "python-requests/" + requests.__version__
+    headers = {
+        "User-Agent": "AG2-AI-Agent/1.0 (+https://docs.ag2.ai/latest/)",
+        "X-Agent-Name": "ag2_test_agent",
+    }
     viewport_size = 1024
     browser = SimpleTextBrowser(
         downloads_folder=downloads_folder,
         viewport_size=viewport_size,
         request_kwargs={
-            "headers": {"User-Agent": user_agent},
+            "headers": headers,
         },
     )
 
@@ -148,12 +151,15 @@ def test_simple_text_browser(downloads_folder: str):
 @skip_on_missing_imports(["markdownify", "pathvalidate", "requests", "bs4"], "websurfer")
 def test_bing_search():
     # Instantiate the browser
-    user_agent = "python-requests/" + requests.__version__
+    headers = {
+        "User-Agent": "AG2-AI-Agent/1.0 (+https://ag2.ai/agent-policy)",
+        "X-Agent-Name": "ag2_test_agent",
+    }
     browser = SimpleTextBrowser(
         bing_api_key=BING_API_KEY,
         viewport_size=1024,
         request_kwargs={
-            "headers": {"User-Agent": user_agent},
+            "headers": headers,
         },
     )
 
