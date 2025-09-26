@@ -14,6 +14,8 @@ from ....llm_config import LLMConfig
 from ..guardrails import LLMGuardrail, RegexGuardrail
 from ..targets.transition_target import TransitionTarget
 from .events import SafeguardEvent
+from ...groupchat import GroupChatManager
+from ...conversable_agent import ConversableAgent
 
 
 class SafeguardEnforcer:
@@ -24,6 +26,8 @@ class SafeguardEnforcer:
         policy: dict[str, Any] | str,
         safeguard_llm_config: LLMConfig | dict[str, Any] | None = None,
         mask_llm_config: LLMConfig | dict[str, Any] | None = None,
+        groupchat_manager: GroupChatManager | None = None,
+        agents: list[ConversableAgent] | None = None,
     ):
         """Initialize the safeguard enforcer.
 
@@ -35,7 +39,15 @@ class SafeguardEnforcer:
         self.policy = self._load_policy(policy)
         self.safeguard_llm_config = safeguard_llm_config
         self.mask_llm_config = mask_llm_config
-
+        self.groupchat_manager = groupchat_manager
+        self.agents = agents
+        self.group_tool_executor = None
+        if self.groupchat_manager:
+            for agent in self.groupchat_manager.groupchat.agents:
+                if agent.name == "_Group_Tool_Executor":
+                    self.group_tool_executor = agent
+                    break
+        
         # Validate policy format before proceeding
         self._validate_policy()
 
@@ -624,7 +636,7 @@ class SafeguardEnforcer:
             # Handle tool_calls (like in tool inputs)
             elif "tool_calls" in blocked_content and blocked_content["tool_calls"]:
                 blocked_content["tool_calls"] = [
-                    {**tool_call, "function": {**tool_call["function"], "arguments": block_msg}}
+                    {**tool_call, "function": {**tool_call["function"], "arguments": json.dumps({"error": block_msg})}}
                     for tool_call in blocked_content["tool_calls"]
                 ]
             # Handle regular content
@@ -649,7 +661,7 @@ class SafeguardEnforcer:
                         blocked_item["content"] = block_msg
                     if "tool_calls" in blocked_item:
                         blocked_item["tool_calls"] = [
-                            {**tool_call, "function": {**tool_call["function"], "arguments": block_msg}}
+                            {**tool_call, "function": {**tool_call["function"], "arguments": json.dumps({"error": block_msg})}}
                             for tool_call in blocked_item["tool_calls"]
                         ]
                     if "tool_responses" in blocked_item:
@@ -740,7 +752,27 @@ class SafeguardEnforcer:
         self, sender_name: str, recipient_name: str, message: str | dict[str, Any]
     ) -> str | dict[str, Any]:
         """Check inter-agent communication."""
-        content = message.get("content", "") if isinstance(message, dict) else str(message)
+        if isinstance(message, dict):
+            if "tool_calls" in message and isinstance(message['tool_calls'], list):
+                # Extract arguments from all tool calls and combine them
+                tool_args = []
+                for tool_call in message['tool_calls']:
+                    if 'function' in tool_call and 'arguments' in tool_call['function']:
+                        tool_args.append(tool_call['function']['arguments'])
+                content_to_check = " | ".join(tool_args) if tool_args else ""
+            elif "tool_responses" in message and isinstance(message['tool_responses'], list):
+                # Extract content from all tool responses and combine them
+                tool_contents = []
+                for tool_response in message['tool_responses']:
+                    if 'content' in tool_response:
+                        tool_contents.append(str(tool_response['content']))
+                content_to_check = " | ".join(tool_contents) if tool_contents else ""
+            else:
+                content_to_check = str(message.get('content', ''))
+        elif isinstance(message, str):
+            content_to_check = message
+        else:
+            raise ValueError("Message must be a dictionary or a string")
 
         for rule in self.inter_agent_rules:
             if rule["type"] == "agent_transition":
@@ -750,7 +782,7 @@ class SafeguardEnforcer:
 
                 if source_match and target_match:
                     # Prepare content preview
-                    content_preview = content[:100] + ("..." if len(content) > 100 else "")
+                    content_preview = str(content_to_check)[:100] + ("..." if len(str(content_to_check)) > 100 else "")
 
                     # Use guardrail if available
                     if "guardrail" in rule and rule["guardrail"]:
@@ -766,7 +798,7 @@ class SafeguardEnforcer:
                         )
 
                         try:
-                            result = rule["guardrail"].check(content)
+                            result = rule["guardrail"].check(content_to_check)
                             if result.activated:
                                 self._send_safeguard_event(
                                     event_type="violation",
@@ -812,7 +844,7 @@ class SafeguardEnforcer:
                             # action=rule.get('action', 'N/A'),
                             content_preview=content_preview,
                         )
-                        is_violation, explanation = self._check_regex_violation(content, rule["pattern"])
+                        is_violation, explanation = self._check_regex_violation(content_to_check, rule["pattern"])
                         if is_violation:
                             result_value = self._apply_action(
                                 action=rule["action"],
@@ -847,11 +879,11 @@ class SafeguardEnforcer:
                         )
                         if "custom_prompt" in rule:
                             is_violation, explanation = self._check_llm_violation(
-                                content, custom_prompt=rule["custom_prompt"]
+                                content_to_check, custom_prompt=rule["custom_prompt"]
                             )
                         else:
                             is_violation, explanation = self._check_llm_violation(
-                                content, disallow_items=rule["disallow"]
+                                content_to_check, disallow_items=rule["disallow"]
                             )
 
                         if is_violation:
@@ -1050,15 +1082,47 @@ class SafeguardEnforcer:
         Returns:
             Optional replacement message if a safeguard triggers, None otherwise
         """
-        # Store original content for comparison
-        original_content = (
-            message_content.get("content", "") if isinstance(message_content, dict) else str(message_content)
-        )
+        # Handle GroupToolExecutor transparency for safeguards
+        if src_agent_name == "_Group_Tool_Executor":
+            actual_src_agent_name = self._resolve_tool_executor_source(src_agent_name, self.group_tool_executor)
+        else:
+            actual_src_agent_name = src_agent_name
 
-        result = self._check_inter_agent_communication(src_agent_name, dst_agent_name, message_content)
+        # Store original message for comparison
+        original_message = message_content
 
-        if result != original_content:
-            # Return the complete modified message structure to preserve tool_calls/tool_responses pairing
+        result = self._check_inter_agent_communication(actual_src_agent_name, dst_agent_name, message_content)
+
+        # Check if the result is different from the original
+        if result != original_message:
             return result
 
         return None
+
+    def _resolve_tool_executor_source(
+        self,
+        src_agent_name: str,
+        tool_executor: Any = None
+    ) -> str:
+        """Resolve the actual source agent when GroupToolExecutor is involved.
+
+        When src_agent_name is "_Group_Tool_Executor", get the original agent who called the tool.
+
+        Args:
+            src_agent_name: The source agent name from the communication
+            tool_executor: GroupToolExecutor instance for getting originator
+
+        Returns:
+            The actual source agent name (original tool caller for tool responses)
+        """
+        if src_agent_name != "_Group_Tool_Executor":
+            return src_agent_name
+
+        # Handle GroupToolExecutor - get the original tool caller
+        if tool_executor and hasattr(tool_executor, 'get_tool_call_originator'):
+            originator = tool_executor.get_tool_call_originator()
+            if originator:
+                return originator
+
+        # Fallback: Could not determine original caller
+        return "tool_executor"
