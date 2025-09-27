@@ -1121,6 +1121,30 @@ class ConversableAgent(LLMAgent):
                     )
                 processed_messages.append(processed_msg)
             return processed_messages
+        else:
+            # Handle non-list inputs by converting them to list format
+            # This maintains list[messages] type consistency
+            if isinstance(message, str):
+                # Convert string to message dict format
+                message_dict = {"content": message, "role": "user"}
+            elif isinstance(message, dict):
+                # Use dict as is, but ensure it has proper structure
+                message_dict = message
+            else:
+                # For any other type, convert to string content
+                message_dict = {"content": str(message), "role": "user"}
+            
+            # Process the single message through hooks
+            processed_msg = message_dict
+            for hook in hook_list:
+                processed_msg = hook(
+                    sender=self,
+                    message=processed_msg,
+                    recipient=recipient,
+                    silent=ConversableAgent._is_silent(self, silent),
+                )
+            # Return as list to maintain consistency
+            return [processed_msg]
 
     def send(
         self,
