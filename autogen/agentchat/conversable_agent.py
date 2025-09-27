@@ -2552,14 +2552,38 @@ class ConversableAgent(LLMAgent):
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
-        tool_call_id = tool_call["id"]
+        tool_call_id = tool_call.get("id", None)
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
-        return {
-            "tool_call_id": tool_call_id,
-            "role": "tool",
-            "content": func_return.get("content", ""),
-        }
+        
+        # Hook: Process tool input before execution
+        processed_call = self._process_tool_input(function_call)
+        if processed_call is None:
+            raise ValueError("safeguard_tool_inputs hook returned None")
+        
+        _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
+        
+        # Hook: Process tool output before returning
+        processed_return = self._process_tool_output(func_return)
+        if processed_return is None:
+            raise ValueError("safeguard_tool_outputs hook returned None")
+        
+        content = processed_return.get("content", "")
+        if content is None:
+            content = ""
+        
+        if tool_call_id is not None:
+            return {
+                "tool_call_id": tool_call_id,
+                "role": "tool",
+                "content": content,
+            }
+        else:
+            # Do not include tool_call_id if it is not present.
+            # This is to make the tool call object compatible with Mistral API.
+            return {
+                "role": "tool",
+                "content": content,
+            }
 
     async def a_generate_tool_calls_reply(
         self,
