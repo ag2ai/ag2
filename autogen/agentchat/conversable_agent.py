@@ -1133,7 +1133,7 @@ class ConversableAgent(LLMAgent):
             else:
                 # For any other type, convert to string content
                 message_dict = {"content": str(message), "role": "user"}
-            
+
             # Process the single message through hooks
             processed_msg = message_dict
             for hook in hook_list:

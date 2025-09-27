@@ -504,9 +504,9 @@ async def main():
 
     try:
         # Run all test scenarios
-        # await test_scenario_1_one_agent_chat()12+1
-        await test_scenario_2_two_agent_chat() # fail on tool calls execution
-        # await test_scenario_3_group_chat_manager()  # fail # problem in tool calls
+        await test_scenario_1_one_agent_chat()
+        # await test_scenario_2_two_agent_chat() # fail on tool calls execution
+        await test_scenario_3_group_chat_manager()  # fail # problem in tool calls
         # await test_scenario_4_patterns()
         # await test_scenario_5_handoffs_and_tools()
         # await test_scenario_6_mixed_tools_scenario()
