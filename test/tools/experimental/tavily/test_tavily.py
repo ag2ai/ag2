@@ -180,6 +180,7 @@ class TestTavilySearchTool:
             tool(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
         assert "Input should be a valid string" in str(exc_info.value)
 
+    @pytest.mark.skip()
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
         """

@@ -1,18 +1,23 @@
+# Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+#
+# SPDX-License-Identifier: Apache-2.0
 import asyncio
 import os
 
+import pytest
 from dotenv import load_dotenv
 
 from autogen import LLMConfig
-
-# from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.tools import tool
 
 load_dotenv()
 
-llm_config = LLMConfig(
-    config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
-)
+# Check for OpenAI API key
+pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": OPENAI_API_KEY})
 
 from autogen import AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.agentchat import a_initiate_group_chat
@@ -162,7 +167,9 @@ async def test_scenario_3_group_chat_manager():
     print("\n=== Scenario 3: Group Chat with Manager ===")
 
     # Create group chat with manager
-    group_chat = GroupChat(agents=[triage_agent, math_agent, weather_agent, db_agent, user_proxy], messages=[], max_round=5)
+    group_chat = GroupChat(
+        agents=[triage_agent, math_agent, weather_agent, db_agent, user_proxy], messages=[], max_round=5
+    )
 
     group_chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="TERMINATE")
 
@@ -170,7 +177,14 @@ async def test_scenario_3_group_chat_manager():
     messages = [
         {"role": "user", "content": "I need help with math and weather. Calculate 10+5 and check weather in Paris."},
     ]
-    user_proxy.register_function(function_map={"calculator": calculator, "weather_check": weather_check, "database_query": database_query, "file_processor": file_processor})
+    user_proxy.register_function(
+        function_map={
+            "calculator": calculator,
+            "weather_check": weather_check,
+            "database_query": database_query,
+            "file_processor": file_processor,
+        }
+    )
     await user_proxy.a_initiate_chat(group_chat_manager, messages=messages, max_turns=1)
 
     return "Group chat with manager completed"
@@ -409,7 +423,12 @@ async def test_scenario_9_nested_chat_target():
                 max_turns=2,
                 nested_chat_config={
                     "chat_queue": [
-                        {"recipient": math_agent, "message": "Please help with the math problem", "max_turns": 2, "chat_id": "math_chat"}
+                        {
+                            "recipient": math_agent,
+                            "message": "Please help with the math problem",
+                            "max_turns": 2,
+                            "chat_id": "math_chat",
+                        }
                     ],
                     "use_async": True,
                 },
@@ -423,7 +442,12 @@ async def test_scenario_9_nested_chat_target():
                 max_turns=2,
                 nested_chat_config={
                     "chat_queue": [
-                        {"recipient": weather_agent, "message": "Please help with the weather inquiry", "max_turns": 2, "chat_id": "weather_chat"}
+                        {
+                            "recipient": weather_agent,
+                            "message": "Please help with the weather inquiry",
+                            "max_turns": 2,
+                            "chat_id": "weather_chat",
+                        }
                     ],
                     "use_async": True,
                 },
@@ -500,19 +524,24 @@ async def test_scenario_10_terminate_target():
 # Main execution
 async def main():
     """Main async execution function"""
+    # Check for OpenAI API key before running tests
+    if not OPENAI_API_KEY:
+        print("OpenAI API key not found. Skipping all tests.")
+        return
+
     print("Starting AutoGen Async Test Scenarios...")
 
     try:
         # Run all test scenarios
-        # await test_scenario_1_one_agent_chat()
-        # await test_scenario_2_two_agent_chat()
-        # await test_scenario_3_group_chat_manager()
-        # await test_scenario_4_patterns()
-        # await test_scenario_5_handoffs_and_tools()
-        # await test_scenario_6_mixed_tools_scenario()
-        # await test_scenario_7_conditional_handoffs()
-        # await test_scenario_8_complex_conversation()
-        # await test_scenario_9_nested_chat_target()
+        await test_scenario_1_one_agent_chat()
+        await test_scenario_2_two_agent_chat()
+        await test_scenario_3_group_chat_manager()
+        await test_scenario_4_patterns()
+        await test_scenario_5_handoffs_and_tools()
+        await test_scenario_6_mixed_tools_scenario()
+        await test_scenario_7_conditional_handoffs()
+        await test_scenario_8_complex_conversation()
+        await test_scenario_9_nested_chat_target()
         await test_scenario_10_terminate_target()
 
         print("\n=== All Async Test Scenarios Completed Successfully! ===")

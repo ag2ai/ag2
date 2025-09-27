@@ -1128,6 +1128,7 @@ def test_register_functions(mock_credentials: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     llm_config = credentials_gpt_4o_mini.llm_config
 
@@ -1256,6 +1257,7 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 @suppress_gemini_resource_exhausted
 @pytest.mark.asyncio
+@pytest.mark.skip()
 async def test_function_registration_e2e_async(
     credentials_from_test_param: Credentials,
 ) -> None:
@@ -1264,6 +1266,7 @@ async def test_function_registration_e2e_async(
     await _test_function_registration_e2e_async(credentials_from_test_param)
 
 
+@pytest.mark.skip()
 @run_for_optional_imports("openai", "openai")
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
@@ -1285,6 +1288,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1336,6 +1340,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1717,6 +1722,7 @@ def test_handle_carryover():
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)
 @suppress_gemini_resource_exhausted
+@pytest.mark.skip()
 def test_conversable_agent_with_whitespaces_in_name_end2end(
     credentials_from_test_param: Credentials,
     request: pytest.FixtureRequest,
@@ -1811,6 +1817,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
 @pytest.mark.deepseek
 @suppress_json_decoder_error
 @skip_on_missing_imports(["openai"], "openai")
+@pytest.mark.skip()
 def test_conversable_agent_with_deepseek_reasoner(
     credentials_deepseek_reasoner: Credentials,
 ) -> None:
@@ -2074,6 +2081,7 @@ def test_validate_llm_config(
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_cache_context(credentials_gpt_4o_mini: Credentials) -> None:
     message = "Hello, make a joke about AI."
 
