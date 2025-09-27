@@ -1121,6 +1121,30 @@ class ConversableAgent(LLMAgent):
                     )
                 processed_messages.append(processed_msg)
             return processed_messages
+        else:
+            # Handle non-list inputs by converting them to list format
+            # This maintains list[messages] type consistency
+            if isinstance(message, str):
+                # Convert string to message dict format
+                message_dict = {"content": message, "role": "user"}
+            elif isinstance(message, dict):
+                # Use dict as is, but ensure it has proper structure
+                message_dict = message
+            else:
+                # For any other type, convert to string content
+                message_dict = {"content": str(message), "role": "user"}
+
+            # Process the single message through hooks
+            processed_msg = message_dict
+            for hook in hook_list:
+                processed_msg = hook(
+                    sender=self,
+                    message=processed_msg,
+                    recipient=recipient,
+                    silent=ConversableAgent._is_silent(self, silent),
+                )
+            # Return as list to maintain consistency
+            return [processed_msg]
 
     def send(
         self,
@@ -1228,7 +1252,10 @@ class ConversableAgent(LLMAgent):
             )
 
         # Send all messages to recipient
-        recipient.receive(processed_msgs, self, request_reply, silent)
+        if hasattr(recipient, "a_receive") and inspect.iscoroutinefunction(recipient.a_receive):
+            await recipient.a_receive(processed_msgs, self, request_reply, silent)
+        else:
+            recipient.receive(processed_msgs, self, request_reply, silent)
 
     def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
@@ -1327,9 +1354,9 @@ class ConversableAgent(LLMAgent):
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
-        reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
+        reply = await self.a_generate_reply(messages=self.chat_messages[sender], sender=sender)
         if reply is not None:
-            self.send(reply, sender, silent=silent)
+            await self.a_send(reply, sender, silent=silent)
 
     def _prepare_chat(
         self,
@@ -1393,7 +1420,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Initiate a chat with the recipient agent.
@@ -1555,7 +1582,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1565,7 +1592,7 @@ class ConversableAgent(LLMAgent):
         iostream = ThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = RunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             def initiate_chat(
@@ -1665,7 +1692,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """(async) Initiate a chat with the recipient agent.
@@ -1743,7 +1770,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1753,7 +1780,7 @@ class ConversableAgent(LLMAgent):
         iostream = AsyncThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = AsyncRunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             async def initiate_chat(
@@ -2422,6 +2449,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if message.get("function_call"):
             call_id = message.get("id", None)
@@ -2450,6 +2479,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if "function_call" in message:
             call_id = message.get("id", None)
@@ -2478,6 +2509,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
@@ -2528,14 +2561,38 @@ class ConversableAgent(LLMAgent):
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
-        tool_call_id = tool_call["id"]
+        tool_call_id = tool_call.get("id", None)
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
-        return {
-            "tool_call_id": tool_call_id,
-            "role": "tool",
-            "content": func_return.get("content", ""),
-        }
+
+        # Hook: Process tool input before execution
+        processed_call = self._process_tool_input(function_call)
+        if processed_call is None:
+            raise ValueError("safeguard_tool_inputs hook returned None")
+
+        _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
+
+        # Hook: Process tool output before returning
+        processed_return = self._process_tool_output(func_return)
+        if processed_return is None:
+            raise ValueError("safeguard_tool_outputs hook returned None")
+
+        content = processed_return.get("content", "")
+        if content is None:
+            content = ""
+
+        if tool_call_id is not None:
+            return {
+                "tool_call_id": tool_call_id,
+                "role": "tool",
+                "content": content,
+            }
+        else:
+            # Do not include tool_call_id if it is not present.
+            # This is to make the tool call object compatible with Mistral API.
+            return {
+                "role": "tool",
+                "content": content,
+            }
 
     async def a_generate_tool_calls_reply(
         self,
@@ -2548,6 +2605,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         async_tool_calls = []
         for tool_call in message.get("tool_calls", []):
@@ -2848,7 +2907,7 @@ class ConversableAgent(LLMAgent):
 
     def generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | list[dict[str, Any]] | None:
@@ -2922,7 +2981,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | list[dict[str, Any]] | None:

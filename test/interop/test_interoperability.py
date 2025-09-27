@@ -20,14 +20,30 @@ class TestInteroperability:
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
-        if sys.version_info >= (3, 9) and sys.version_info < (3, 10):
-            assert actual == ["langchain", "pydanticai"]
+        # Build expected list based on what should actually be available
+        expected = []
 
+        # Check if crewai should be available (Python 3.10-3.12 and crewai is installed)
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-            assert actual == ["crewai", "langchain", "pydanticai"]
+            from autogen.interop.crewai.crewai import CrewAIInteroperability
 
-        if sys.version_info >= (3, 13):
-            assert actual == ["langchain", "pydanticai"]
+            if CrewAIInteroperability.get_unsupported_reason() is None:
+                expected.append("crewai")
+
+        # Check if langchain should be available
+        from autogen.interop.langchain.langchain_tool import LangChainInteroperability
+
+        if LangChainInteroperability.get_unsupported_reason() is None:
+            expected.append("langchain")
+
+        # Check if pydantic_ai should be available
+        from autogen.interop.pydantic_ai.pydantic_ai import PydanticAIInteroperability
+
+        if PydanticAIInteroperability.get_unsupported_reason() is None:
+            expected.append("pydanticai")
+
+        expected.sort()  # get_supported_types() returns sorted list
+        assert actual == expected
 
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13),
