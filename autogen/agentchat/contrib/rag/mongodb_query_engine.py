@@ -17,7 +17,7 @@ with optional_import_block():
     from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
     from llama_index.core.embeddings import BaseEmbedding
     from llama_index.core.schema import Document as LlamaDocument
-    from llama_index.llms.langchain.base import LLM
+    from llama_index.llms.langchain.base import LLM  # type: ignore[attr-defined]
     from llama_index.llms.openai import OpenAI
     from llama_index.vector_stores.mongodb import MongoDBAtlasVectorSearch
     from pymongo import MongoClient
@@ -114,7 +114,7 @@ class MongoDBQueryEngine:
         logger.info("Vector database created.")
         self.vector_search_engine = MongoDBAtlasVectorSearch(
             mongodb_client=self.vector_db.client,  # type: ignore[union-attr]
-            db_name=self.database_name,
+            db_name=self.database_name,  # type: ignore[arg-type]
             collection_name=self.collection_name,
         )
         logger.info("Vector search engine created.")

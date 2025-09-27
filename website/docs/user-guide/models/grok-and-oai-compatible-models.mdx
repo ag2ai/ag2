@@ -98,7 +98,7 @@ import os
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
 # Configure Grok with real-time search
-grok_config = LLMConfig({
+grok_config = LLMConfig(config_list={
     "model": "grok-4",
     "api_type": "openai",
     "base_url": "https://api.x.ai/v1",
@@ -166,7 +166,7 @@ def calculate_math(expression: Annotated[str, "Mathematical expression to evalua
         return f"Could not evaluate the expression: {expression}"
 
 # Configure Grok for function calling
-function_config = LLMConfig({
+function_config = LLMConfig(config_list={
     "model": "grok-4",
     "api_key": os.getenv("XAI_API_KEY"),
     "base_url": "https://api.x.ai/v1",
@@ -208,7 +208,7 @@ You can control how Grok uses functions with the `tool_choice` parameter:
 
 ```python
 # Automatic function calling (default)
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "model": "grok-4",
     "api_type": "openai",
     "base_url": "https://api.x.ai/v1",
@@ -217,13 +217,13 @@ llm_config = LLMConfig({
 })
 
 # Force function calling
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     # ... config
     "tool_choice": "required",  # Always call a function
 })
 
 # Disable function calling
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     # ... config
     "tool_choice": "none",  # Never call functions
 })
@@ -234,7 +234,7 @@ llm_config = LLMConfig({
 Grok supports calling multiple functions simultaneously, which is enabled by default:
 
 ```python
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "model": "grok-4",
     # ... other config
     "parallel_tool_calls": True,  # Enable parallel function calls (default)

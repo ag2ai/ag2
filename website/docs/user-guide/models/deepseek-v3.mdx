@@ -98,7 +98,7 @@ workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
 
 # Setting up the configuration for DeepSeek-V3
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com/v1",
         "api_key": os.environ.get("DEEPSEEK_API_KEY"),

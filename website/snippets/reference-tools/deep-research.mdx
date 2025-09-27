@@ -58,7 +58,7 @@ Configure the agents for the interaction.
 - [`AssistantAgent`](/docs/api-reference/autogen/AssistantAgent) represents the AI agent, configured with the LLM settings.
 
 ```python
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-5",
     "api_key": os.environ["OPENAI_API_KEY"],

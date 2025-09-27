@@ -61,7 +61,7 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-4o-mini",
     "api_key": os.environ["OPENAI_API_KEY"],

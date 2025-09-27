@@ -68,6 +68,9 @@ Here's a simple example using the [`DiscordAgent`](/docs/api-reference/autogen/a
 # Agents are available in the autogen.agents namespace
 from autogen import ConversableAgent, LLMConfig
 from autogen.agents.experimental import DiscordAgent
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # For running the code in Jupyter, use nest_asyncio to allow nested event loops
 #import nest_asyncio
@@ -75,7 +78,7 @@ from autogen.agents.experimental import DiscordAgent
 
 # LLM configuration for our agent to select the tools and craft the message
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Tokens and Ids (CHANGE THESE)
 my_discord_bot_token = "ABC..."

@@ -13,7 +13,10 @@ from autogen.coding import CodeBlock, MarkdownCodeExtractor
 try:
     from autogen.coding import YepCodeCodeExecutor, YepCodeCodeResult
 
-    _has_yepcode = True
+    # Also check that the actual YepCode dependencies are available
+    from autogen.coding.yepcode_code_executor import YepCodeApiConfig, YepCodeRun
+
+    _has_yepcode = YepCodeRun is not None and YepCodeApiConfig is not None
 except ImportError:
     _has_yepcode = False
 

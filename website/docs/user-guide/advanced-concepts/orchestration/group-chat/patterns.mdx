@@ -70,8 +70,11 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import DefaultPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -171,8 +174,11 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
     from autogen import ConversableAgent, LLMConfig
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -279,8 +285,11 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import RoundRobinPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -351,8 +360,11 @@ pattern = RandomPattern(
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import RandomPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -424,8 +436,11 @@ pattern = ManualPattern(
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import ManualPattern
     from autogen.agentchat.group import AgentTarget, RevertToUserTarget, OnCondition, StringLLMCondition
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

@@ -345,7 +345,7 @@ def track_itinerary_status(
     )
 
 # Configure LLM
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False})
 
 # Create agents
 concierge = ConversableAgent(

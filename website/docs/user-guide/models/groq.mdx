@@ -134,7 +134,7 @@ workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
 
 # Setting up the Groq LLM configuration
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     # Let's choose the Llama 3 model
     "model": "llama3-8b-8192",
     # Put your Groq API key here or put it into the GROQ_API_KEY environment variable.
@@ -249,7 +249,7 @@ from typing_extensions import Annotated
 
 import autogen
 
-llm_config = autogen.LLMConfig({
+llm_config = autogen.LLMConfig(config_list={
     "api_type": "groq",
     "model": "llama3-8b-8192",
     "api_key": os.getenv("GROQ_API_KEY"),

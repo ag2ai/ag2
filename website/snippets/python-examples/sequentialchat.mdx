@@ -1,7 +1,10 @@
 ```python
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Three chats:
 # 1. Teacher and Curriculum designer > summary is a topic for next chat

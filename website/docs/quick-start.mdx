@@ -49,10 +49,13 @@ Create a Python script called `first_agent.py`, and paste the following code int
 ```python
 # 1. Import our agent class
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's gpt-5 mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 my_agent = ConversableAgent(

@@ -139,7 +139,7 @@ workdir.mkdir(exist_ok=True)
 code_executor = LocalCommandLineCodeExecutor(work_dir=workdir)
 
 # Setting up the LLM configuration
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     # Let's choose the Mixtral 8x22B model
     "model": "open-mixtral-8x22b",
     # Provide your Mistral AI API key here or put it into the MISTRAL_API_KEY environment variable.
@@ -287,7 +287,7 @@ We'll change models to Mistral AI's large model for this challenging task.
 ```python
 from autogen import LLMConfig
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     # Let's choose the Mistral AI's largest model which is better at Chess than the Mixtral model
     "model": "mistral-large-latest",
     "api_key": os.environ.get("MISTRAL_API_KEY"),

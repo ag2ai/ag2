@@ -40,7 +40,7 @@ def text_to_speech(
         str: Base64 encoded audio.
     """
     tts_client = OpenAI(api_key=openai_api_key)
-    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)
+    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)  # type: ignore[arg-type]
     return base64.b64encode(response.content).decode("utf-8")
 
 

@@ -15,7 +15,11 @@ from .document_utils import handle_input
 
 with optional_import_block():
     from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import AcceleratorDevice, AcceleratorOptions, PdfPipelineOptions
+    from docling.datamodel.pipeline_options import (  # type: ignore[attr-defined]
+        AcceleratorDevice,
+        AcceleratorOptions,
+        PdfPipelineOptions,
+    )
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
 __all__ = ["docling_parse_docs"]

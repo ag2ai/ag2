@@ -17,7 +17,7 @@ with DockerPythonEnvironment(image="python:3.11-slim", pip_packages=["numpy", "p
             # python_environment=docker_env,
         )
 
-    llm_config = LLMConfig({
+    llm_config = LLMConfig(config_list={
         "model": "gpt-5",
         "api_type": "openai",
     })

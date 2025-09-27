@@ -104,7 +104,7 @@ Although we are specifying the model when running the vLLM command, we must stil
 ```python
 from autogen import UserProxyAgent, ConversableAgent, LLMConfig
 
-local_llm_config = LLMConfig({
+local_llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "mistralai/Mistral-7B-Instruct-v0.2", # Same as in vLLM command
     "api_key": "NotRequired", # Not needed
