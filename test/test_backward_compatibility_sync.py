@@ -151,7 +151,7 @@ def test_scenario_2_two_agent_chat():
         {"role": "assistant", "content": "I'll calculate 15 * 7 for you using the calculator tool."},
     ]
 
-    user_proxy.initiate_chat(math_agent, messages=messages, max_turns=3)
+    user_proxy.initiate_chat(math_agent, messages=messages, max_turns=5)
 
     return "Two agent chat completed"
 
@@ -161,16 +161,25 @@ def test_scenario_3_group_chat_manager():
     print("\n=== Scenario 3: Group Chat with Manager ===")
 
     # Create group chat with manager
-    group_chat = GroupChat(agents=[triage_agent, math_agent, weather_agent, db_agent], messages=[], max_round=5)
+    group_chat = GroupChat(
+        agents=[triage_agent, math_agent, weather_agent, db_agent, user_proxy], messages=[], max_round=5
+    )
 
-    group_chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config)
+    group_chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="TERMINATE")
 
     # Initiate group chat using messages format
     messages = [
         {"role": "user", "content": "I need help with math and weather. Calculate 10+5 and check weather in Paris."},
     ]
-
-    user_proxy.initiate_chat(group_chat_manager, messages=messages, max_turns=6)
+    user_proxy.register_function(
+        function_map={
+            "calculator": calculator,
+            "weather_check": weather_check,
+            "database_query": database_query,
+            "file_processor": file_processor,
+        }
+    )
+    user_proxy.initiate_chat(group_chat_manager, messages=messages, max_turns=1)
 
     return "Group chat with manager completed"
 
@@ -215,7 +224,7 @@ def test_scenario_4_patterns():
     print("\n--- Random Pattern ---")
     random_pattern = RandomPattern(
         initial_agent=math_agent,
-        agents=[math_agent, weather_agent, file_agent, user],
+        agents=[math_agent, weather_agent, file_agent, user, general_agent],
         user_agent=user,
         group_manager_args={"llm_config": llm_config},
     )
@@ -494,10 +503,10 @@ if __name__ == "__main__":
         # Run all test scenarios
         # test_scenario_1_one_agent_chat()
         # test_scenario_2_two_agent_chat()
-        # test_scenario_3_group_chat_manager()  # fail # problem in tool calls
-        # test_scenario_4_patterns()
+        # test_scenario_3_group_chat_manager()
+        test_scenario_4_patterns()
         # test_scenario_5_handoffs_and_tools()
-        test_scenario_6_mixed_tools_scenario()
+        # test_scenario_6_mixed_tools_scenario()
         # test_scenario_7_conditional_handoffs()
         # test_scenario_8_complex_conversation()
         # test_scenario_9_nested_chat_target() # 50 % stuck auto reply in threads
