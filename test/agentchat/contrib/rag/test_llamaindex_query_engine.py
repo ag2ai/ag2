@@ -9,8 +9,7 @@ import pytest
 
 from autogen.agentchat.contrib.rag import LlamaIndexQueryEngine, RAGQueryEngine
 from autogen.import_utils import optional_import_block, skip_on_missing_imports
-
-from ....conftest import reason
+from test.const import reason
 
 with optional_import_block():
     from chromadb import HttpClient

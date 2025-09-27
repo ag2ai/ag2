@@ -15,8 +15,8 @@ from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
 )
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ....conftest import Credentials, reason
+from test.const import reason
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import chromadb

@@ -13,8 +13,7 @@ import pytest
 from autogen.agentchat.contrib.graph_rag import Document, DocumentType, GraphStoreQueryResult
 from autogen.agentchat.contrib.graph_rag.neo4j_graph_query_engine import Neo4jGraphQueryEngine
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import reason
+from test.const import reason
 
 # Configure the logging
 logging.basicConfig(level=logging.INFO)

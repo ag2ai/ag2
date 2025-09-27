@@ -17,8 +17,7 @@ from autogen.cache.cache import Cache
 from autogen.events.base_event import BaseEvent, wrap_event
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.io import IOWebsockets
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 # Check if the websockets module is available
 with optional_import_block() as result:

@@ -6,7 +6,7 @@ from autogen import ConversableAgent
 from autogen.agents.contrib import TimeReplyAgent
 
 # from autogen.import_utils import skip_on_missing_imports
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 # @skip_on_missing_imports("discord", "commsagent-discord") # If packages are required, use this

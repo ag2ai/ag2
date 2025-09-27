@@ -12,8 +12,7 @@ from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.agents.experimental.document_agent.parser_utils import docling_parse_docs
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools.tool import Tool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block():
     from docling.datamodel.document import ConversionResult, InputDocument

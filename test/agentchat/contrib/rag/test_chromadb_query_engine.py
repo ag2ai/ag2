@@ -9,8 +9,7 @@ import pytest
 
 from autogen.agentchat.contrib.rag import ChromaDBQueryEngine, RAGQueryEngine
 from autogen.import_utils import skip_on_missing_imports
-
-from ....conftest import reason
+from test.const import reason
 
 """
 This test file contains tests for the ChromaDBQueryEngine class in the ChromaDBQueryEngine module.

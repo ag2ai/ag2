@@ -12,8 +12,7 @@ import pytest
 
 from autogen.agentchat.contrib.vectordb.pgvectordb import PGVectorDB
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ....conftest import reason
+from test.const import reason
 
 with optional_import_block() as result:
     import psycopg

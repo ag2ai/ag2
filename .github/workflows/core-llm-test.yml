@@ -76,6 +76,9 @@ jobs:
         if: ${{ matrix.llm == 'gemini-realtime' }}
         run: |
           uv pip install --system -e ".[openai]"
+      - name: Create OAI_CONFIG_LIST from Secret
+        run: echo "${{ secrets.OAI_CONFIG_LIST_JSON }}" > OAI_CONFIG_LIST
+        shell: bash
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

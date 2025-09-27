@@ -10,8 +10,7 @@ import pytest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent
 from autogen.tools.tool import Tool
-
-from ...conftest import Credentials
+from test.credentials import Credentials
 
 
 def f(a: int, b: int = 3) -> int:

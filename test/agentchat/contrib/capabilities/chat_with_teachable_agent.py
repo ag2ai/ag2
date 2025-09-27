@@ -9,8 +9,7 @@
 from autogen import ConversableAgent, UserProxyAgent, config_list_from_json
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
-
-from ....conftest import KEY_LOC, OAI_CONFIG_LIST
+from test.const import KEY_LOC, OAI_CONFIG_LIST
 
 # Specify the model to use. GPT-3.5 is less reliable than GPT-4 at learning from user input.
 filter_dict = {"model": ["gpt-4o-mini"]}

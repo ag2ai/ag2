@@ -12,8 +12,7 @@ from autogen.agents.experimental.document_agent.document_agent import (
     DocumentTriageAgent,
 )
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports(["openai"], "openai")

@@ -18,7 +18,7 @@ from autogen.tools.experimental.reliable.reliable import ToolExecutionDetails
 
 # AG2 framework specific imports for testing
 # Adjust the path to conftest.py if necessary based on your test file's location
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import openai  # noqa: F401

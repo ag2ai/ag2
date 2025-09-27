@@ -6,8 +6,7 @@ import pytest
 
 from autogen.agentchat import ConversableAgent
 from autogen.tools import Toolkit, tool
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestToolkit:

@@ -20,9 +20,9 @@ from autogen.coding.base import CodeBlock, CodeExecutor
 from autogen.coding.docker_commandline_code_executor import DockerCommandLineCodeExecutor
 from autogen.coding.factory import CodeExecutorFactory
 from autogen.coding.local_commandline_code_executor import LocalCommandLineCodeExecutor
+from test.const import MOCK_OPEN_AI_API_KEY
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from ..conftest import MOCK_OPEN_AI_API_KEY
 
 if not is_docker_running() or not decide_use_docker(use_docker=None):
     skip_docker_test = True

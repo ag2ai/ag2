@@ -14,8 +14,8 @@ import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 from autogen.cache import Cache
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials, suppress_gemini_resource_exhausted
+from test.credentials import Credentials
+from test.utils import suppress_gemini_resource_exhausted
 
 
 @run_for_optional_imports("openai", "openai")

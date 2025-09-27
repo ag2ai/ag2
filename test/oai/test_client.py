@@ -40,7 +40,7 @@ except ImportError:
     APIError = Exception
 
 
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 class MockModelClient:

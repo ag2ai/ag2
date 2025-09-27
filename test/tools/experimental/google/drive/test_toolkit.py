@@ -12,15 +12,13 @@ import pytest
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports, skip_on_missing_imports
 from autogen.tools import Toolkit
+from test.credentials import Credentials
 
 with optional_import_block():
     from autogen.tools.experimental.google.authentication.credentials_local_provider import (
         GoogleCredentialsLocalProvider,
     )
     from autogen.tools.experimental.google.drive import GoogleDriveToolkit
-
-
-from .....conftest import Credentials
 
 
 @skip_on_missing_imports(

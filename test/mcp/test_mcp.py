@@ -24,8 +24,7 @@ from autogen.mcp.mcp_client import (
     StdioConfig,
     create_toolkit,
 )
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block():
     from mcp import ClientSession, StdioServerParameters

@@ -11,8 +11,7 @@ from contextlib import redirect_stdout
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
@@ -69,14 +68,10 @@ def test_gathering(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Cre
 
 @run_for_optional_imports("openai", "openai")
 def test_agent_usage(credentials: Credentials):
-    config_list = credentials.config_list
     assistant = AssistantAgent(
         "assistant",
         system_message="You are a helpful assistant.",
-        llm_config={
-            "cache_seed": None,
-            "config_list": config_list,
-        },
+        llm_config=credentials.llm_config,
     )
 
     ai_user_proxy = UserProxyAgent(
@@ -84,9 +79,7 @@ def test_agent_usage(credentials: Credentials):
         human_input_mode="NEVER",
         max_consecutive_auto_reply=1,
         code_execution_config=False,
-        llm_config={
-            "config_list": config_list,
-        },
+        llm_config=credentials.llm_config,
         # In the system message the "user" always refers to the other agent.
         system_message="You ask a user for help. You check the answer from the user and provide feedback.",
     )
@@ -118,8 +111,3 @@ def test_agent_usage(credentials: Credentials):
 
     print("Actual usage summary (excluding completion from cache):", ai_user_proxy.get_actual_usage())
     print("Total usage summary (including completion from cache):", ai_user_proxy.get_total_usage())
-
-
-if __name__ == "__main__":
-    # test_gathering()
-    test_agent_usage()

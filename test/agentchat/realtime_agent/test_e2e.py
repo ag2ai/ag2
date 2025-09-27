@@ -13,8 +13,8 @@ from fastapi.testclient import TestClient
 from pytest import FixtureRequest
 
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
+from test.credentials import Credentials
 
-from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)

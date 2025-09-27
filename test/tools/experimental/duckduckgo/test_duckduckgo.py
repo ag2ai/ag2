@@ -11,8 +11,7 @@ from pydantic import ValidationError
 from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.duckduckgo import DuckDuckGoSearchTool
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestDuckDuckGoSearchTool:

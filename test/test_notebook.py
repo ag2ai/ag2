@@ -44,7 +44,6 @@ def run_notebook(input_nb, output_nb="executed_openai_notebook.ipynb", save=Fals
                 nbformat.write(nb, nb_executed_file)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.13"),
     reason="do not run if py!=3.13",
@@ -54,7 +53,6 @@ def test_agentchat_auto_feedback_from_code(save=False):
     run_notebook("agentchat_auto_feedback_from_code_execution.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.11"),
     reason="do not run if py!=3.11",
@@ -64,7 +62,6 @@ def _test_oai_completion(save=False):
     run_notebook("oai_completion.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.12"),
     reason="do not run if py!=3.12",
@@ -74,7 +71,6 @@ def test_agentchat_function_call(save=False):
     run_notebook("agentchat_function_call.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.10"),
     reason="do not run if py!=3.10",
@@ -84,7 +80,6 @@ def test_agentchat_function_call_currency_calculator(save=False):
     run_notebook("agentchat_function_call_currency_calculator.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.13"),
     reason="do not run if py!=3.13",
@@ -94,7 +89,6 @@ def test_agentchat_function_call_async(save=False):
     run_notebook("agentchat_function_call_async.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.12"),
     reason="do not run if py!=3.12",
@@ -104,7 +98,6 @@ def _test_agentchat_MathChat(save=False):  # noqa: N802
     run_notebook("agentchat_MathChat.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.10"),
     reason="do not run if py!=3.10",
@@ -114,7 +107,6 @@ def _test_oai_chatgpt_gpt4(save=False):
     run_notebook("oai_chatgpt_gpt4.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.12"),
     reason="do not run if py!=3.12",
@@ -124,7 +116,6 @@ def test_agentchat_groupchat_finite_state_machine(save=False):
     run_notebook("agentchat_groupchat_finite_state_machine.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.11"),
     reason="do not run if py!=3.11",
@@ -134,7 +125,6 @@ def test_agentchat_cost_token_tracking(save=False):
     run_notebook("agentchat_cost_token_tracking.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.11"),
     reason="do not run if py!=3.11",
@@ -144,7 +134,6 @@ def test_agentchat_groupchat_stateflow(save=False):
     run_notebook("agentchat_groupchat_stateflow.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.13"),
     reason="do not run if py!=3.13",
@@ -154,7 +143,6 @@ def test_agentchat_grok_sbom_analysisw(save=False):
     run_notebook("agentchat_grok_sbom_analysis.ipynb", save=save)
 
 
-@run_for_optional_imports("openai", "openai")
 @pytest.mark.skipif(
     not sys.version.startswith("3.13"),
     reason="do not run if py!=3.13",
@@ -162,13 +150,3 @@ def test_agentchat_grok_sbom_analysisw(save=False):
 @run_for_optional_imports(["openai"], "openai")
 def test_agentchat_gpt_5_verbosity_example(save=False):
     run_notebook("agentchat_gpt-5_verbosity_example.ipynb", save=save)
-
-
-if __name__ == "__main__":
-    # test_agentchat_auto_feedback_from_code(save=True)
-    # test_oai_chatgpt_gpt4(save=True)
-    # test_oai_completion(save=True)
-    # test_agentchat_MathChat(save=True)
-    # test_agentchat_function_call(save=True)
-    # test_graph_modelling_language_using_select_speaker(save=True)
-    test_agentchat_function_call_async(save=True)

@@ -17,8 +17,7 @@ from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental.perplexity import PerplexitySearchTool
 from autogen.tools.experimental.perplexity.perplexity_search import PerplexityChatCompletionResponse, SearchResponse
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestPerplexitySearchTool:

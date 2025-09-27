@@ -23,8 +23,7 @@ from autogen.oai.openai_utils import (
     get_first_llm_config,
     is_valid_api_key,
 )
-
-from ..conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 # Example environment variables
 ENV_VARS = {

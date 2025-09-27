@@ -10,8 +10,7 @@ from anyio import move_on_after
 from autogen.agentchat.realtime.experimental.clients import OpenAIRealtimeClient, RealtimeClientProtocol
 from autogen.agentchat.realtime.experimental.realtime_events import AudioDelta, SessionCreated, SessionUpdated
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestOAIRealtimeClient:
