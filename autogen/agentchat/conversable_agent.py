@@ -2446,6 +2446,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if message.get("function_call"):
             call_id = message.get("id", None)
@@ -2474,6 +2476,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if "function_call" in message:
             call_id = message.get("id", None)
@@ -2502,6 +2506,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
@@ -2554,23 +2560,23 @@ class ConversableAgent(LLMAgent):
     async def _a_execute_tool_call(self, tool_call):
         tool_call_id = tool_call.get("id", None)
         function_call = tool_call.get("function", {})
-        
+
         # Hook: Process tool input before execution
         processed_call = self._process_tool_input(function_call)
         if processed_call is None:
             raise ValueError("safeguard_tool_inputs hook returned None")
-        
+
         _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
-        
+
         # Hook: Process tool output before returning
         processed_return = self._process_tool_output(func_return)
         if processed_return is None:
             raise ValueError("safeguard_tool_outputs hook returned None")
-        
+
         content = processed_return.get("content", "")
         if content is None:
             content = ""
-        
+
         if tool_call_id is not None:
             return {
                 "tool_call_id": tool_call_id,
@@ -2596,6 +2602,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         async_tool_calls = []
         for tool_call in message.get("tool_calls", []):
@@ -2896,7 +2904,7 @@ class ConversableAgent(LLMAgent):
 
     def generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | list[dict[str, Any]] | None:
@@ -2970,7 +2978,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
     ) -> str | dict[str, Any] | list[dict[str, Any]] | None:

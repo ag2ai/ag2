@@ -450,11 +450,14 @@ def test_config_list_from_dotenv(mock_os_environ, caplog):
     # Test with invalid API key
     ENV_VARS["ANOTHER_API_KEY"] = ""  # Removing ANOTHER_API_KEY value
 
-    with caplog.at_level(logging.WARNING):
-        config_list = autogen.config_list_from_dotenv()
-        assert "No .env file found. Loading configurations from environment variables." in caplog.text
-        # The function does not return an empty list if at least one configuration is loaded successfully
-        assert config_list != [], "Config list is empty"
+    with mock.patch.dict(os.environ, ENV_VARS, clear=True):
+        with mock.patch("autogen.oai.openai_utils.find_dotenv", return_value=""):
+            with caplog.at_level(logging.WARNING):
+                caplog.clear()  # Clear any previous log messages
+                config_list = autogen.config_list_from_dotenv()
+                assert "No .env file found. Loading configurations from environment variables." in caplog.text
+                # The function does not return an empty list if at least one configuration is loaded successfully
+                assert config_list != [], "Config list is empty"
 
     # Test with no configurations loaded
     invalid_model_api_key_map = {
