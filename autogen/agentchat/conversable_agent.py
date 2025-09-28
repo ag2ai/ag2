@@ -1252,7 +1252,10 @@ class ConversableAgent(LLMAgent):
             )
 
         # Send all messages to recipient
-        recipient.receive(processed_msgs, self, request_reply, silent)
+        if hasattr(recipient, "a_receive") and inspect.iscoroutinefunction(recipient.a_receive):
+            await recipient.a_receive(processed_msgs, self, request_reply, silent)
+        else:
+            recipient.receive(processed_msgs, self, request_reply, silent)
 
     def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
@@ -1353,7 +1356,7 @@ class ConversableAgent(LLMAgent):
             return
         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
         if reply is not None:
-            self.send(reply, sender, silent=silent)
+            await self.a_send(reply, sender, silent=silent)
 
     def _prepare_chat(
         self,

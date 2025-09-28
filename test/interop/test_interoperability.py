@@ -22,11 +22,12 @@ class TestInteroperability:
 
         if sys.version_info >= (3, 9) and sys.version_info < (3, 10):
             assert actual == ["langchain", "pydanticai"]
-
-        if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
+        elif sys.version_info >= (3, 10) and sys.version_info < (3, 13):
             assert actual == ["crewai", "langchain", "pydanticai"]
-
-        if sys.version_info >= (3, 13):
+        elif sys.version_info >= (3, 13):
+            assert actual == ["langchain", "pydanticai"]
+        else:
+            # Fallback for any other Python versions
             assert actual == ["langchain", "pydanticai"]
 
     @pytest.mark.skipif(

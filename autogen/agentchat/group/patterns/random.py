@@ -68,12 +68,12 @@ class RandomPattern(Pattern):
         # Use the parent class's implementation to prepare the agents and group chat
         # Create the random handoffs between agents BEFORE calling parent
         # This ensures validation passes since handoffs are set up correctly
-        agent_list = self.agents + ([self.user_agent] if self.user_agent is not None else [])
-        for agent in agent_list:
-            # Get the list of agents except itself
-            other_agents = [a for a in agent_list if a != agent]
-            # Create a random after work
-            agent.handoffs.set_after_work(target=RandomAgentTarget(agents=other_agents))
+        self._generate_handoffs(
+            initial_agent=self.initial_agent,
+            agents=self.agents,
+            user_agent=self.user_agent,
+        )
+
         (
             agents,
             wrapped_agents,
@@ -92,6 +92,7 @@ class RandomPattern(Pattern):
             max_rounds=max_rounds,
             messages=messages,
         )
+
         # Return all components with our group_after_work
         return (
             agents,
