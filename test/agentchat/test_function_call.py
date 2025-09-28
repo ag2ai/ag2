@@ -245,7 +245,7 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     )
     res1 = user_proxy.initiate_chat(
         assistant,
-        message="What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message="Do not execute, but tell me what functions, by their names, do you know about in the context of this conversation? End your response with 'TERMINATE'.",
         summary_method="reflection_with_llm",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
