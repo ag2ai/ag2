@@ -73,7 +73,3 @@ class TestRedisCache:
                 assert isinstance(cache, RedisCache)
                 mock_redis_instance = cache.cache
             mock_redis_instance.close.assert_called()
-
-
-if __name__ == "__main__":
-    unittest.main()
