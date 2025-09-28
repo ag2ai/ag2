@@ -1354,7 +1354,7 @@ class ConversableAgent(LLMAgent):
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
-        reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
+        reply = await self.a_generate_reply(messages=self.chat_messages[sender], sender=sender)
         if reply is not None:
             await self.a_send(reply, sender, silent=silent)
 
