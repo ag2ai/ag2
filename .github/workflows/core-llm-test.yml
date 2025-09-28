@@ -79,7 +79,7 @@ jobs:
       - name: Create OAI_CONFIG_LIST from Secret
         run: |
           cat > OAI_CONFIG_LIST << 'EOF'
-          ${{ secrets.OAI_CONFIG_LIST_JSON }}
+          ${{ secrets.OAI_CONFIG_LIST }}
           EOF
         shell: bash
       - name: LLM tests using ${{ matrix.llm }}
