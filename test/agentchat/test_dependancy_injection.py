@@ -11,8 +11,9 @@ from pydantic import BaseModel
 
 from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.tools import BaseContext, ChatContext, Depends
-
-from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
+from test.credentials import Credentials
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted
 
 
 class MyContext(BaseContext, BaseModel):

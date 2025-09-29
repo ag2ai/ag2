@@ -42,10 +42,7 @@ from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.tool import Tool
-
-from ...conftest import (
-    Credentials,
-)
+from test.credentials import Credentials
 
 TEST_MESSAGES = [{"role": "user", "content": "Initial message"}]
 
