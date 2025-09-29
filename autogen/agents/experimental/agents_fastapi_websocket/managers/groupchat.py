@@ -2,12 +2,16 @@ import asyncio
 import json
 import os
 from datetime import datetime
-from typing import Any
+
+# ✨ NEW: Add Union and Optional imports
+from typing import Any, Literal
 
 import autogen
 from autogen import UserProxyAgent
 
 today_date = datetime.now()
+from collections.abc import Awaitable, Callable
+
 from dependencies import get_websocket_manager
 from helpers import async_to_sync
 from managers import prompts
@@ -17,18 +21,25 @@ from autogen import LLMConfig
 
 class CustomGroupChatManager(autogen.GroupChatManager):
     def __init__(
-        self, groupchat, llm_config, chat_id=None, human_input_mode="NEVER", queue: asyncio.Queue | None = None
-    ):
+        self,
+        groupchat: Any,
+        llm_config: Any,
+        chat_id: str | None = None,
+        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "NEVER",
+        queue: asyncio.Queue[Any] | None = None,
+    ) -> None:
         super().__init__(groupchat=groupchat, llm_config=llm_config, human_input_mode=human_input_mode)
         self.queue = queue
         self.chat_id = chat_id
 
-    async def send_websocket(self, message):
+    async def send_websocket(self, message: Any) -> None:
         ws_manager = await get_websocket_manager()
         await ws_manager.send_chat_message(session_id=self.chat_id, content=message, source="AgentChat")
         return
 
-    def _print_received_message(self, message: dict[str, Any], sender: "autogen.Agent") -> None:
+    def _print_received_message(
+        self, message: dict[str, Any] | str, sender: "autogen.Agent", skip_head: bool = True
+    ) -> Any:
         super()._print_received_message(message, sender)
         content = message.get("content", "") if isinstance(message, dict) else str(message)
         db_content = {"role": "user", "name": sender.name, "content": content}
@@ -37,10 +48,10 @@ class CustomGroupChatManager(autogen.GroupChatManager):
 
 
 class CustomUserProxyAgent(UserProxyAgent):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
-    def set_input_function(self, input_function):
+    def set_input_function(self, input_function: Callable[[str], Awaitable[str]]) -> Callable[[str], Awaitable[str]]:
         self.input_function = input_function
         return self.input_function
 
@@ -52,7 +63,7 @@ class CustomUserProxyAgent(UserProxyAgent):
 
 
 class AgentChat:
-    def __init__(self, chat_id: str):
+    def __init__(self, chat_id: str) -> None:
         self.chat_id = chat_id
         self.cancellation_token = None
         self.llm_config = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
@@ -60,31 +71,31 @@ class AgentChat:
         self.agents = self.get_agents()
         self.get_chat_manager()
 
-    def set_input_function(self, input_function):
+    def set_input_function(self, input_function: Any) -> Any:
         self.input_function = input_function
         return self.input_function
 
-    def _set_cancellation_token(self, cancellation_token):
+    def _set_cancellation_token(self, cancellation_token: Any) -> None:
         self.cancellation_token = cancellation_token
 
-    def _check_cancellation(self):
+    def _check_cancellation(self) -> None:
         """Check if operations should be cancelled"""
         if self.cancellation_token and self.cancellation_token.is_cancelled():
             raise asyncio.CancelledError(f"OMNI operation cancelled for session {self.chat_id}")
 
-    def get_planner(self):
+    def get_planner(self) -> autogen.AssistantAgent:
         return autogen.AssistantAgent(
             name="planner_agent",
             llm_config=self.llm_config,
             system_message=prompts.planner_agent.format(chart_location=os.getcwd()),
         )
 
-    def get_code_writer(self):
+    def get_code_writer(self) -> autogen.AssistantAgent:
         return autogen.AssistantAgent(
             name="code_writer_agent", llm_config=self.llm_config, system_message=prompts.code_writer
         )
 
-    def get_code_executor(self):
+    def get_code_executor(self) -> UserProxyAgent:
         return UserProxyAgent(
             name="code_executor_agent",
             human_input_mode="NEVER",
@@ -95,7 +106,7 @@ class AgentChat:
             llm_config=self.llm_config,
         )
 
-    def get_code_debugger(self):
+    def get_code_debugger(self) -> autogen.AssistantAgent:
         return autogen.AssistantAgent(
             name="code_debugger_agent",
             llm_config=self.llm_config,
@@ -103,7 +114,7 @@ class AgentChat:
             system_message=prompts.debugger.format(chart_location=os.getcwd()),
         )
 
-    def get_agent_aligner(self):
+    def get_agent_aligner(self) -> autogen.AssistantAgent:
         return autogen.AssistantAgent(
             name="agent_aligner",
             llm_config=self.llm_config,
@@ -111,7 +122,7 @@ class AgentChat:
             system_message=prompts.agent_aligner,
         )
 
-    def get_user_acceptance(self):
+    def get_user_acceptance(self) -> CustomUserProxyAgent:
         return CustomUserProxyAgent(
             name="get_user_acceptance",
             llm_config=self.llm_config,
@@ -119,14 +130,14 @@ class AgentChat:
             code_execution_config=False,
         )
 
-    def get_process_completion(self):
+    def get_process_completion(self) -> autogen.AssistantAgent:
         return autogen.AssistantAgent(
             name="process_completion_agent",
             llm_config=self.llm_config,
             system_message=prompts.process_completion,
         )
 
-    def custom_speaker_selection_func(self, last_speaker: Any, groupchat: Any) -> Any:
+    def custom_speaker_selection_func(self, last_speaker: Any, groupchat: Any) -> Any | None:
         try:
             self._check_cancellation()
 
@@ -161,7 +172,7 @@ class AgentChat:
         except asyncio.CancelledError:
             raise
 
-    def get_agents(self):
+    def get_agents(self) -> list[Any]:
         self.planner = self.get_planner()
         self.agent_aligner = self.get_agent_aligner()
         self.code_writer = self.get_code_writer()
@@ -177,7 +188,7 @@ class AgentChat:
             self.process_completion,
         ]
 
-    def get_chat_manager(self):
+    def get_chat_manager(self) -> tuple[CustomGroupChatManager, autogen.GroupChat]:
         self.groupchat = autogen.GroupChat(
             agents=self.agents,
             messages=[],

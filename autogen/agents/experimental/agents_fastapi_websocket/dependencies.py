@@ -1,6 +1,10 @@
-from fastapi import HTTPException, status
-from managers.connection import WebSocketManager
+# ✨ NEW: Add typing imports
 
+from fastapi import HTTPException, status
+
+from .managers.connection import WebSocketManager
+
+# ✨ CHANGED: Use Optional[WebSocketManager] instead of WebSocketManager | None
 _websocket_manager: WebSocketManager | None = None
 
 # Singleton instance of MongoDB service

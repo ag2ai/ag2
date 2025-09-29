@@ -1,8 +1,10 @@
 import os
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+# ✨ NEW: Add typing imports
 import nest_asyncio
 import uvicorn
 import ws
@@ -25,7 +27,8 @@ middleware = [
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+# ✨ CHANGED: Added return type annotation
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Lifespan context manager for the FastAPI application
     Handles startup and shutdown events
@@ -59,7 +62,8 @@ app.include_router(
 
 
 @app.get(path="autogen", include_in_schema=False)
-async def docs_redirect():
+# ✨ CHANGED: Added return type annotation
+async def docs_redirect() -> RedirectResponse:
     return RedirectResponse(url="redoc")
 
 
@@ -67,13 +71,15 @@ async def docs_redirect():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_html():
+# ✨ CHANGED: Added return type annotation
+async def serve_html() -> HTMLResponse:
     html_content = Path("templates/index.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html_content)
 
 
 @app.get("/health")
-async def health_check():
+# ✨ CHANGED: Added return type annotation
+async def health_check() -> dict[str, str]:
     """
     Health check endpoint
     """
@@ -81,7 +87,8 @@ async def health_check():
 
 
 @app.post("/chats/new_chat")
-async def new_chat():
+# ✨ CHANGED: Added return type annotation
+async def new_chat() -> dict[str, str]:
     """
     Health check endpoint
     """

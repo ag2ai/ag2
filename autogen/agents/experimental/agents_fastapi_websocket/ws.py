@@ -2,11 +2,13 @@
 import asyncio
 import json
 from datetime import datetime
+from typing import Any
 
 from dependencies import get_websocket_manager
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from managers.connection import WebSocketManager
-from managers.groupchat import AgentChat
+
+from .managers.connection import WebSocketManager
+from .managers.groupchat import AgentChat
 
 router = APIRouter()
 
@@ -16,7 +18,7 @@ async def run_websocket(
     websocket: WebSocket,
     chat_id: str,
     ws_manager: WebSocketManager = Depends(get_websocket_manager),
-):
+) -> Any:
     """WebSocket endpoint for run communication"""
     chat = AgentChat(chat_id=chat_id)
     input_func = ws_manager._create_input_func(chat_id)

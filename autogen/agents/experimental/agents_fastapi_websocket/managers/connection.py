@@ -2,10 +2,14 @@ import asyncio
 import traceback
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+
+# ✨ NEW: Add Optional import
 from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
-from managers.cancellation_token import CancellationToken
+
+from .cancellation_token import CancellationToken
+from .groupchat import AgentChat
 
 # Type aliases for input handling
 InputFuncType = Callable[[str, str], Awaitable[str]]
@@ -20,12 +24,14 @@ class WebSocketManager:
     without any external dependencies.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._connections: dict[str, WebSocket] = {}
         self._closed_connections: set[str] = set()
         self._input_responses: dict[str, asyncio.Queue[str]] = {}
-        self._active_tasks: dict[str, asyncio.Task] = {}
-        self._cancellation_tokens: dict[int, CancellationToken] = {}
+
+        self._active_tasks: dict[str, asyncio.Task[Any]] = {}
+
+        self._cancellation_tokens: dict[str, CancellationToken] = {}
         self._stop_flags: dict[str, bool] = {}
 
     async def connect(self, websocket: WebSocket, session_id: str) -> bool:
@@ -61,8 +67,8 @@ class WebSocketManager:
     async def start_chat_stream(
         self,
         session_id: str,
-        initial_message: str = "",
-        chat=None,
+        chat: AgentChat,
+        initial_message: dict[str, Any] = {},
     ) -> None:
         """
         Start a chat stream over the WebSocket connection.
@@ -163,7 +169,7 @@ class WebSocketManager:
                 if session_id in self._input_responses:
                     try:
 
-                        async def poll_for_response():
+                        async def poll_for_response() -> str:
                             while True:
                                 # Check if session was closed/stopped
                                 if session_id in self._closed_connections or self._stop_flags.get(session_id, False):
@@ -360,7 +366,8 @@ class WebSocketManager:
                     self._cancellation_tokens[session_id].cancel()
 
             # Disconnect all websockets with timeout
-            async def disconnect_all():
+
+            async def disconnect_all() -> None:
                 for session_id in list(self.active_connections):
                     try:
                         await asyncio.wait_for(self.disconnect(session_id), timeout=2)
