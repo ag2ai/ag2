@@ -64,7 +64,7 @@ jobs:
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Graphviz based on OS (needed for ReasoningAgent)
@@ -83,8 +83,14 @@ jobs:
           uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
       - name: Install optional dependencies for code executors
         run: |
-          uv pip install --system -e ".[jupyter-executor,yepcode]"
+          uv pip install --system -e ".[jupyter-executor]"
           python -m ipykernel install --user --name python3
+        shell: bash
+      - name: Install yepcode dependencies (Python 3.11+ only)
+        if: matrix.python-version != '3.10'
+        run: |
+          uv pip install --system -e ".[yepcode]"
+        shell: bash
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |
@@ -124,13 +130,13 @@ jobs:
       - name: Fail workflow if build failed
         id: check_build_failed
         if: contains(join(needs.*.result, ','), 'failure')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: core.setFailed('Build Failed!')
 
       - name: Fail workflow if build cancelled
         id: check_build_cancelled
         if: contains(join(needs.*.result, ','), 'cancelled')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: core.setFailed('Build Cancelled!')

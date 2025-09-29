@@ -53,7 +53,7 @@ pip install autogen[openai]
 import os
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],
@@ -82,7 +82,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],
@@ -108,7 +108,7 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-4",
     "api_key": os.environ["OPENAI_API_KEY"],

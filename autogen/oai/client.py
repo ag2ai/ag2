@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
@@ -287,7 +286,7 @@ class AzureOpenAIEntryDict(LLMConfigEntryDict, total=False):
     stream: bool
     tool_choice: Literal["none", "auto", "required"] | None
     user: str | None
-    reasoning_effort: Literal["low", "medium", "high"] | None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
 
 
@@ -301,7 +300,7 @@ class AzureOpenAILLMConfigEntry(LLMConfigEntry):
     # reasoning models - see:
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
     # - https://learn.microsoft.com/en-us/azure/ai-services/openai/reference-preview
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    reasoning_effort: Literal["low", "minimal", "medium", "high"] | None = None
     max_completion_tokens: int | None = None
 
     def create_client(self) -> ModelClient:
@@ -884,6 +883,7 @@ class OpenAIWrapper:
             # a config for a custom client is set
             # adding placeholder until the register_model_client is called with the appropriate class
             self._clients.append(PlaceHolderClient(config))
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.info(
                 f"Detected custom model client in config: {model_client_cls_name}, model client can not be used until register_model_client is called."
             )

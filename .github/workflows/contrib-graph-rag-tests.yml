@@ -63,7 +63,7 @@ jobs:
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install FalkorDB SDK when on linux
@@ -136,7 +136,7 @@ jobs:
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Neo4j and Llama-index when on linux
@@ -185,7 +185,7 @@ jobs:
   #       with:
   #         version: "latest"
   #     - name: Set up Python ${{ matrix.python-version }}
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v6
   #       with:
   #         python-version: ${{ matrix.python-version }}
   #     - name: Install Neo4j and Llama-index when on linux

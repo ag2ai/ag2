@@ -61,7 +61,7 @@ Here's a breakdown of how the internal swarm chat is used within the [`DocAgent`
 
 ### Workflow
 
-1. **Initialization**: The `DocAgent` initializes the swarm agents and sets up the context variables.
+1. **Initialization**: The `DocAgent` initializes the swarm agents and orchestration.
 2. **Triage User Requests**: The `Triage Agent` categorizes the tasks into ingestions and queries.
 3. **Task Management**: The `Task Manager Agent` manages the tasks and ensures they are executed in the correct sequence.
 4. **Data Ingestion**: The `Data Ingestion Agent` processes the documents.
@@ -145,7 +145,7 @@ Note that the request is handled in natural language and the output will show th
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgent
 document_agent = DocAgent(llm_config=llm_config)
@@ -460,7 +460,7 @@ However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/ag
 from autogen import LLMConfig
 from autogen.agents.experimental import DocAgent
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5"})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5"})
 
 # Create our DocAgents with their own collections
 # so that their ingested data and queries will be unique to them

@@ -127,9 +127,12 @@ from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Configure LLM
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Main support agent
 support_agent = ConversableAgent(
@@ -298,9 +301,12 @@ from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.agentchat.group.guardrails import LLMGuardrail, RegexGuardrail
 from autogen.agentchat.group import AgentTarget
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Configure LLM
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 support_agent = ConversableAgent(
     name="support_agent",

@@ -17,7 +17,7 @@ from ... import Tool
 
 with optional_import_block():
     from openai import OpenAI
-    from openai.types.responses.web_search_preview_tool_param import WebSearchPreviewToolParam
+    from openai.types.responses import WebSearchToolParam
     from openai.types.responses.web_search_tool import UserLocation
 
 
@@ -48,8 +48,8 @@ class WebSearchPreviewTool(Tool):
             text_format: The format of the text to be returned. This should be a subclass of `BaseModel`.
                 The default is `None`, which means the text will be returned as a string.
         """
-        self.web_search_tool_param = WebSearchPreviewToolParam(
-            type="web_search_preview",
+        self.web_search_tool_param = WebSearchToolParam(
+            type="web_search",
             search_context_size=search_context_size,
             user_location=UserLocation(**user_location) if user_location else None,  # type: ignore[typeddict-item]
         )

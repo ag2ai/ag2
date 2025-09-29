@@ -370,6 +370,12 @@ class ConversableAgent(LLMAgent):
             "process_all_messages_before_reply": [],
             "process_message_before_send": [],
             "update_agent_state": [],
+            # Safeguard hooks for monitoring agent interactions
+            "safeguard_tool_inputs": [],  # Hook for processing tool inputs before execution
+            "safeguard_tool_outputs": [],  # Hook for processing tool outputs after execution
+            "safeguard_llm_inputs": [],  # Hook for processing LLM inputs before sending
+            "safeguard_llm_outputs": [],  # Hook for processing LLM outputs after receiving
+            "safeguard_human_inputs": [],  # Hook for processing human inputs
         }
 
         # Associate agent update state hooks
@@ -2149,12 +2155,24 @@ class ConversableAgent(LLMAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
+        # Process messages before sending to LLM, hook point for llm input monitoring
+        processed_messages = self._process_llm_input(self._oai_system_message + messages)
+        if processed_messages is None:
+            return True, {"content": "LLM call blocked by safeguard", "role": "assistant"}
+
         extracted_response = self._generate_oai_reply_from_client(
             client,
             self._oai_system_message + messages,
             self.client_cache,
             **kwargs,
         )
+
+        # Process LLM response
+        if extracted_response is not None:
+            processed_extracted_response = self._process_llm_output(extracted_response)
+            if processed_extracted_response is None:
+                raise ValueError("safeguard_llm_outputs hook returned None")
+
         return (False, None) if extracted_response is None else (True, extracted_response)
 
     def _generate_oai_reply_from_client(
@@ -2427,14 +2445,26 @@ class ConversableAgent(LLMAgent):
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
             function_call = tool_call.get("function", {})
+
+            # Hook: Process tool input before execution
+            processed_call = self._process_tool_input(function_call)
+            if processed_call is None:
+                raise ValueError("safeguard_tool_inputs hook returned None")
+
             tool_call_id = tool_call.get("id", None)
-            func = self._function_map.get(function_call.get("name", None), None)
-            if inspect.iscoroutinefunction(func):
-                coro = self.a_execute_function(function_call, call_id=tool_call_id)
+            func = self._function_map.get(processed_call.get("name", None), None)
+            if is_coroutine_callable(func):
+                coro = self.a_execute_function(processed_call, call_id=tool_call_id)
                 _, func_return = self._run_async_in_thread(coro)
             else:
-                _, func_return = self.execute_function(function_call, call_id=tool_call_id)
-            content = func_return.get("content", "")
+                _, func_return = self.execute_function(processed_call, call_id=tool_call_id)
+
+            # Hook: Process tool output before returning
+            processed_return = self._process_tool_output(func_return)
+            if processed_return is None:
+                raise ValueError("safeguard_tool_outputs hook returned None")
+
+            content = processed_return.get("content", "")
             if content is None:
                 content = ""
 
@@ -2971,8 +3001,14 @@ class ConversableAgent(LLMAgent):
         iostream = IOStream.get_default()
 
         reply = iostream.input(prompt)
-        self._human_input.append(reply)
-        return reply
+
+        # Process the human input through hooks
+        processed_reply = self._process_human_input(reply)
+        if processed_reply is None:
+            raise ValueError("safeguard_human_inputs hook returned None")
+
+        self._human_input.append(processed_reply)
+        return processed_reply
 
     async def a_get_human_input(self, prompt: str) -> str:
         """(Async) Get human input.
@@ -3823,6 +3859,87 @@ class ConversableAgent(LLMAgent):
         messages = messages.copy()
         messages[-1]["content"] = processed_user_content
         return messages
+
+    def _process_tool_input(self, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+        """Process tool input through registered hooks."""
+        hook_list = self.hook_lists["safeguard_tool_inputs"]
+
+        # If no hooks are registered, allow the tool input
+        if len(hook_list) == 0:
+            return tool_input
+
+        # Process through each hook
+        processed_input = tool_input
+        for hook in hook_list:
+            processed_input = hook(processed_input)
+            if processed_input is None:
+                return None
+
+        return processed_input
+
+    def _process_tool_output(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Process tool output through registered hooks"""
+        hook_list = self.hook_lists["safeguard_tool_outputs"]
+
+        # If no hooks are registered, return original response
+        if len(hook_list) == 0:
+            return response
+
+        # Process through each hook
+        processed_response = response
+        for hook in hook_list:
+            processed_response = hook(processed_response)
+
+        return processed_response
+
+    def _process_llm_input(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Process messages before sending to LLM through registered hooks."""
+        hook_list = self.hook_lists["safeguard_llm_inputs"]
+
+        # If no hooks registered, allow the messages through
+        if len(hook_list) == 0:
+            return messages
+
+        # Process through each hook
+        processed_messages = messages
+        for hook in hook_list:
+            processed_messages = hook(processed_messages)
+            if processed_messages is None:
+                return None
+
+        return processed_messages
+
+    def _process_llm_output(self, response: str | dict[str, Any]) -> str | dict[str, Any]:
+        """Process LLM response through registered hooks"""
+        hook_list = self.hook_lists["safeguard_llm_outputs"]
+
+        # If no hooks registered, return original response
+        if len(hook_list) == 0:
+            return response
+
+        # Process through each hook
+        processed_response = response
+        for hook in hook_list:
+            processed_response = hook(processed_response)
+
+        return processed_response
+
+    def _process_human_input(self, human_input: str) -> str | None:
+        """Process human input through registered hooks."""
+        hook_list = self.hook_lists["safeguard_human_inputs"]
+
+        # If no hooks registered, allow the input through
+        if len(hook_list) == 0:
+            return human_input
+
+        # Process through each hook
+        processed_input = human_input
+        for hook in hook_list:
+            processed_input = hook(processed_input)
+            if processed_input is None:
+                return None
+
+        return processed_input
 
     def print_usage_summary(self, mode: str | list[str] = ["actual", "total"]) -> None:
         """Print the usage summary."""

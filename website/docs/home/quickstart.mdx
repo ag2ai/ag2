@@ -107,10 +107,13 @@ Create a Python script or Jupyter Notebook with the following code:
 ```python
 # 1. Import our agent class
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 my_agent = ConversableAgent(
@@ -188,10 +191,13 @@ In the example below, we'll create a simple information validation workflow with
 ```python
 # 1. Import ConversableAgent class
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 
 # 3. Create our LLM agent
@@ -233,10 +239,13 @@ For convenience, AG2 provides the specialized `UserProxyAgent` class that automa
 ```python
 # 1. Import ConversableAgent and UserProxyAgent classes
 from autogen import ConversableAgent, UserProxyAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 2. Define our LLM configuration for OpenAI's GPT-4o mini
 #    uses the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 3. Create our LLM agent
 assistant = ConversableAgent(
@@ -273,9 +282,12 @@ Here's how to implement a collaborative team for curriculum development using Gr
 
 ```python
 from autogen import ConversableAgent, GroupChat, GroupChatManager, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 planner_message = """You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
@@ -367,9 +379,12 @@ from datetime import datetime
 from typing import Annotated
 
 from autogen import ConversableAgent, register_function, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # 1. Our tool, returns the day of the week for a given date
 def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
