@@ -7,8 +7,7 @@ import pytest
 from autogen.agents.experimental import SlackAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
-
-from .....conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports(["crewai_tools", "langchain", "pydantic_ai"], "commsagent-slack")

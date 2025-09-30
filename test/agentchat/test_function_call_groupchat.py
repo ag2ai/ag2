@@ -15,8 +15,7 @@ import autogen
 from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 func_def = {
     "name": "get_random_number",

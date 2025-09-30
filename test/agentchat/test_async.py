@@ -11,8 +11,9 @@ import asyncio
 import pytest
 
 import autogen
-
-from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
+from test.credentials import Credentials
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted
 
 
 def get_market_news(ind, ind_upper):

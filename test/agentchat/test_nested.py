@@ -11,8 +11,7 @@ import pytest
 import autogen
 from autogen.agentchat.contrib.capabilities.agent_capability import AgentCapability
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 class MockAgentReplies(AgentCapability):
