@@ -33,9 +33,6 @@ def get_user_context(
     context_variables: ContextVariables,
     # chat_ctx: ChatContext,
 ) -> str:
-    # from loguru import logger
-    # logger.error(chat_ctx.chat_messages)
-    # logger.error(chat_ctx.last_message)
     context_variables["issue_count"] = context_variables.get("issue_count", 0) + 1
     return ReplyResult(
         context_variables=context_variables,
