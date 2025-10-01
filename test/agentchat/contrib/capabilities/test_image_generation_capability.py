@@ -19,8 +19,7 @@ from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.cache.cache import Cache
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.oai import openai_utils
-
-from ....conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 with optional_import_block() as result:
     from PIL import Image

@@ -15,8 +15,7 @@ import pytest
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST
+from test.const import KEY_LOC, OAI_CONFIG_LIST
 
 with optional_import_block() as result:
     import chromadb  # noqa: F401
