@@ -4,7 +4,6 @@
 import asyncio
 import os
 
-import pytest
 from dotenv import load_dotenv
 
 from autogen import LLMConfig
@@ -13,14 +12,14 @@ from autogen.tools import tool
 load_dotenv()
 
 # Check for OpenAI API key
-pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
+# pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": OPENAI_API_KEY})
 
 from autogen import AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
-from autogen.agentchat import a_initiate_group_chat
+from autogen.agentchat import a_initiate_group_chat, a_run_group_chat
 from autogen.agentchat.group.llm_condition import StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
 from autogen.agentchat.group.patterns import (
@@ -521,6 +520,111 @@ async def test_scenario_10_terminate_target():
     return "Terminate target completed"
 
 
+async def test_scenario_11_a_run_group_chat_round_robin():
+    """Test Scenario 11: a_run_group_chat with Round Robin Pattern"""
+    print("\n=== Scenario 11: a_run_group_chat with Round Robin ===")
+
+    # Simple round robin pattern
+    pattern = RoundRobinPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "What is 10 + 5?"}]
+
+    # Use a_run_group_chat instead of a_initiate_group_chat
+    response = a_run_group_chat(pattern=pattern, messages=messages, max_rounds=5)
+
+    # Consume events asynchronously
+    async for event in response.events:
+        print(f"Event: {event.type}")
+
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"a_run_group_chat completed. Last speaker: {response.last_speaker}")
+
+    return "a_run_group_chat Round Robin completed"
+
+
+async def test_scenario_12_a_run_group_chat_auto_pattern():
+    """Test Scenario 12: a_run_group_chat with Auto Pattern"""
+    print("\n=== Scenario 12: a_run_group_chat with Auto Pattern ===")
+
+    # Auto pattern for intelligent routing
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, math_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "what is 10 + 5?"}]
+
+    # Use a_run_group_chat
+    response = a_run_group_chat(pattern=pattern, messages=messages, max_rounds=4)
+
+    # Consume events asynchronously
+    async for event in response.events:
+        print(f"Event: {event.type}")
+
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"a_run_group_chat completed. Last speaker: {response.last_speaker}")
+
+    return "a_run_group_chat Auto Pattern completed"
+
+
+async def test_scenario_13_a_run_single_agent():
+    """Test Scenario 13: a_run method with single agent"""
+    print("\n=== Scenario 13: a_run method with single agent ===")
+
+    # Test a_run method with a single agent
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+
+    # Use a_run method without recipient (single agent)
+    response = await assistant.a_run(message=message, max_turns=1)
+
+    # Consume events asynchronously
+    async for event in response.events:
+        print(f"Event: {event.type}")
+
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"a_run completed. Last speaker: {response.last_speaker}")
+
+    return "a_run single agent completed"
+
+
+async def test_scenario_14_a_run_two_agents():
+    """Test Scenario 14: a_run method with two agents"""
+    print("\n=== Scenario 14: a_run method with two agents ===")
+
+    # Test a_run method with two agents
+    message = [{"content": "Please calculate 10 + 5", "role": "user"}]
+
+    # Register function for execution
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    # Use a_run method with recipient (two agents)
+    response = await user_proxy.a_run(recipient=math_agent, message=message, max_turns=3)
+
+    # Consume events asynchronously
+    async for event in response.events:
+        print(f"Event: {event.type}")
+
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"a_run completed. Last speaker: {response.last_speaker}")
+
+    return "a_run two agents completed"
+
+
 # Main execution
 async def main():
     """Main async execution function"""
@@ -543,6 +647,10 @@ async def main():
         await test_scenario_8_complex_conversation()
         await test_scenario_9_nested_chat_target()
         await test_scenario_10_terminate_target()
+        await test_scenario_11_a_run_group_chat_round_robin()
+        await test_scenario_12_a_run_group_chat_auto_pattern()
+        await test_scenario_13_a_run_single_agent()
+        await test_scenario_14_a_run_two_agents()
 
         print("\n=== All Async Test Scenarios Completed Successfully! ===")
 
