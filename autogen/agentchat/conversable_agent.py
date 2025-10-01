@@ -1582,7 +1582,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1592,7 +1592,7 @@ class ConversableAgent(LLMAgent):
         iostream = ThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = RunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             def initiate_chat(
@@ -1770,7 +1770,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1780,7 +1780,7 @@ class ConversableAgent(LLMAgent):
         iostream = AsyncThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = AsyncRunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             async def initiate_chat(

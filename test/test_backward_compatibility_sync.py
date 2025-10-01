@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 
-import pytest
 from dotenv import load_dotenv
 
 from autogen import LLMConfig
@@ -11,14 +10,14 @@ from autogen.tools import tool
 
 load_dotenv()
 
-pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
+# pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
 
 llm_config = LLMConfig(
     config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
 )
 
 from autogen import AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
-from autogen.agentchat import initiate_group_chat
+from autogen.agentchat import initiate_group_chat, run_group_chat
 from autogen.agentchat.group.llm_condition import StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
 from autogen.agentchat.group.patterns import (
@@ -500,22 +499,132 @@ def test_scenario_10_terminate_target():
     return "Terminate target completed"
 
 
+def test_scenario_11_run_group_chat_round_robin():
+    """Test Scenario 11: run_group_chat with Round Robin Pattern"""
+    print("\n=== Scenario 11: run_group_chat with Round Robin ===")
+
+    # Simple round robin pattern
+    pattern = RoundRobinPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "What is 10 + 5?"}]
+
+    # Use run_group_chat instead of initiate_group_chat
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=5)
+    # response.process()
+    # Consume events
+    for event in response.events:
+        print(f"Event: {event.type}")
+        print(f"Event: {event.content}")
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"run_group_chat completed. Last speaker: {response.last_speaker}")
+
+    return "run_group_chat Round Robin completed"
+
+
+def test_scenario_12_run_group_chat_auto_pattern():
+    """Test Scenario 12: run_group_chat with Auto Pattern"""
+    print("\n=== Scenario 12: run_group_chat with Auto Pattern ===")
+
+    # Auto pattern for intelligent routing
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, math_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "what is 10 + 5?"}]
+
+    # Use run_group_chat
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=4)
+    # response.process()
+    # Consume events
+    for event in response.events:
+        print(f"Event: {event.type}")
+        print(f"Event: {event.content}")
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"run_group_chat completed. Last speaker: {response.last_speaker}")
+
+    return "run_group_chat Auto Pattern completed"
+
+
+def test_scenario_13_run_single_agent():
+    """Test Scenario 13: run method with single agent"""
+    print("\n=== Scenario 13: run method with single agent ===")
+
+    # Test run method with a single agent
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+
+    # Use run method without recipient (single agent)
+    response = assistant.run(message=message, max_turns=1)
+    response.process()
+    # Consume events
+    for event in response.events:
+        print(f"Event: {event.type}")
+        # print(f"Event: {event.content}")
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"run completed. Last speaker: {response.last_speaker}")
+
+    return "run single agent completed"
+
+
+def test_scenario_14_run_two_agents():
+    """Test Scenario 14: run method with two agents"""
+    print("\n=== Scenario 14: run method with two agents ===")
+
+    # Test run method with two agents
+    message = [{"content": "Please calculate 10 + 5", "role": "user"}]
+
+    # Register function for execution
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    # Use run method with recipient (two agents)
+    response = user_proxy.run(recipient=math_agent, message=message, max_turns=3)
+    # response.process()
+    # Consume events
+    for event in response.events:
+        print(f"Event: {event.type}")
+        print(f"Event: {event.content}")
+
+    # Verify results
+    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
+    assert response.last_speaker is not None, "Should have a last speaker"
+    print(f"run completed. Last speaker: {response.last_speaker}")
+
+    return "run two agents completed"
+
+
 # Main execution
 if __name__ == "__main__":
     print("Starting AutoGen Test Scenarios...")
 
     try:
         # Run all test scenarios
-        test_scenario_1_one_agent_chat()
-        test_scenario_2_two_agent_chat()
-        test_scenario_3_group_chat_manager()
-        test_scenario_4_patterns()
-        test_scenario_5_handoffs_and_tools()
-        test_scenario_6_mixed_tools_scenario()
-        test_scenario_7_conditional_handoffs()
-        test_scenario_8_complex_conversation()
-        test_scenario_9_nested_chat_target()
-        test_scenario_10_terminate_target()
+        # test_scenario_1_one_agent_chat()
+        # test_scenario_2_two_agent_chat()
+        # test_scenario_3_group_chat_manager()
+        # test_scenario_4_patterns()
+        # test_scenario_5_handoffs_and_tools()
+        # test_scenario_6_mixed_tools_scenario()
+        # test_scenario_7_conditional_handoffs()
+        # test_scenario_8_complex_conversation()
+        # test_scenario_9_nested_chat_target()
+        # test_scenario_10_terminate_target()
+        test_scenario_11_run_group_chat_round_robin()  # process not end
+        test_scenario_12_run_group_chat_auto_pattern()
+        # test_scenario_13_run_single_agent()
+        # test_scenario_14_run_two_agents()
 
         print("\n=== All Test Scenarios Completed Successfully! ===")
 
