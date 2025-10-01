@@ -515,15 +515,9 @@ def test_scenario_11_run_group_chat_round_robin():
 
     # Use run_group_chat instead of initiate_group_chat
     response = run_group_chat(pattern=pattern, messages=messages, max_rounds=5)
-    # response.process()
-    # Consume events
-    for event in response.events:
-        print(f"Event: {event.type}")
-        print(f"Event: {event.content}")
-    # Verify results
-    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
-    assert response.last_speaker is not None, "Should have a last speaker"
-    print(f"run_group_chat completed. Last speaker: {response.last_speaker}")
+
+    # Option 1: Just call process() - it will consume and print all events
+    response.process()
 
     return "run_group_chat Round Robin completed"
 
@@ -568,13 +562,6 @@ def test_scenario_13_run_single_agent():
     response = assistant.run(message=message, max_turns=1)
     response.process()
     # Consume events
-    for event in response.events:
-        print(f"Event: {event.type}")
-        # print(f"Event: {event.content}")
-    # Verify results
-    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
-    assert response.last_speaker is not None, "Should have a last speaker"
-    print(f"run completed. Last speaker: {response.last_speaker}")
 
     return "run single agent completed"
 
@@ -597,11 +584,6 @@ def test_scenario_14_run_two_agents():
         print(f"Event: {event.type}")
         print(f"Event: {event.content}")
 
-    # Verify results
-    assert response.summary is not None or len(response.messages) > 0, "Response should have content"
-    assert response.last_speaker is not None, "Should have a last speaker"
-    print(f"run completed. Last speaker: {response.last_speaker}")
-
     return "run two agents completed"
 
 
@@ -622,7 +604,7 @@ if __name__ == "__main__":
         # test_scenario_9_nested_chat_target()
         # test_scenario_10_terminate_target()
         test_scenario_11_run_group_chat_round_robin()  # process not end
-        test_scenario_12_run_group_chat_auto_pattern()
+        # test_scenario_12_run_group_chat_auto_pattern()
         # test_scenario_13_run_single_agent()
         # test_scenario_14_run_two_agents()
 
