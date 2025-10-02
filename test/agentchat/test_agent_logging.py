@@ -79,7 +79,9 @@ def _test_two_agents_logging(
 
     student.initiate_chat(
         teacher,
-        message="Can you explain the difference between eigenvalues and singular values again?",
+        message=[
+            {"content": "Can you explain the difference between eigenvalues and singular values again?", "role": "user"}
+        ],
     )
 
     # Verify log completions table
@@ -233,7 +235,9 @@ def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials,
 
     student.initiate_chat(
         group_chat_manager,
-        message="Can you explain the difference between eigenvalues and singular values again?",
+        message=[
+            {"content": "Can you explain the difference between eigenvalues and singular values again?", "role": "user"}
+        ],
     )
 
     # Verify chat_completions message

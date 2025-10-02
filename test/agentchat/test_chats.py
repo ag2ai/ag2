@@ -53,7 +53,7 @@ def test_chat_messages_for_summary():
         llm_config=None,
         code_execution_config={"use_docker": False},
     )
-    user.initiate_chat(manager, message="What is the capital of France?")
+    user.initiate_chat(manager, message=[{"content": "What is the capital of France?", "role": "user"}])
     messages = manager.chat_messages_for_summary(user)
     assert len(messages) == 2
 
@@ -531,7 +531,7 @@ def _test_chats_w_func(credentials: Credentials, tasks_work_dir: str):
 
     res = user_proxy.initiate_chat(
         chatbot,
-        message="How much is 123.45 USD in EUR?",
+        message=[{"content": "How much is 123.45 USD in EUR?", "role": "user"}],
         summary_method="reflection_with_llm",
     )
     print(res.summary, res.cost, res.chat_history)

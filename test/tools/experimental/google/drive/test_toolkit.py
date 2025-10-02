@@ -68,9 +68,9 @@ class TestGoogleDriveToolkit:
 
             user_proxy.initiate_chat(
                 recipient=assistant,
-                # message="Get last 3 files from Google Drive",
-                # message="Download second file from Google Drive",
-                # message="Download latest 5 files from Google Drive",
-                message="Download all files from Google Drive 'Test Folder'",
+                # message=[{"content":"Get last 3 files from Google Drive","role":"user"}],
+                # message=[{"content":"Download second file from Google Drive","role":"user"}],
+                # message=[{"content":"Download latest 5 files from Google Drive","role":"user"}],
+                message=[{"content": "Download all files from Google Drive 'Test Folder'", "role": "user"}],
                 max_turns=5,
             )

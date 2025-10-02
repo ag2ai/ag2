@@ -90,7 +90,7 @@ user_proxy = UserProxyAgent(
 
 user_proxy.initiate_chat(
     graph_rag_agent,
-    message="Name a few actors who've played in 'The Matrix'")
+    message=[{"content":"Name a few actors who've played in 'The Matrix'","role":"user"}])
 ```
 
 Here's the output showing the FalkorDB Graph RAG agent, matrix_agent, finding relevant actors and then being able to confirm that there are no other actors in the movie, when queried.

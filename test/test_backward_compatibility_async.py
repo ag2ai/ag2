@@ -619,7 +619,7 @@ async def main():
         # await test_scenario_8_complex_conversation()
         # await test_scenario_9_nested_chat_target()
         # await test_scenario_10_terminate_target()
-        await test_scenario_11_a_run_group_chat_round_robin()
+        # await test_scenario_11_a_run_group_chat_round_robin()
         # await test_scenario_12_a_run_group_chat_auto_pattern()
         # await test_scenario_13_a_run_single_agent()
         # await test_scenario_14_a_run_two_agents()

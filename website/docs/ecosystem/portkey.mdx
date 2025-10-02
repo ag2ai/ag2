@@ -71,7 +71,7 @@ manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
 # Start the conversation
 user_proxy.initiate_chat(
-    manager, message="Build a classic & basic pong game with 2 players in python")
+    manager, message=[{"content":"Build a classic & basic pong game with 2 players in python","role":"user"}])
 ```
 <br />
 Here’s the output from your Agent’s run on Portkey's dashboard<br />

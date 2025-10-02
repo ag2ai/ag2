@@ -265,7 +265,7 @@ Let's continue the meeting with a new topic.
 # Resume the chat using a different agent and message
 result = manager.initiate_chat(
     recipient=cmo,
-    message="Team, let's now think of a name for the next vehicle that embodies that idea. Chief_Marketing_Officer and Product_manager can you both suggest one and then we can conclude.",
+    message=[{"content":"Team, let's now think of a name for the next vehicle that embodies that idea. Chief_Marketing_Officer and Product_manager can you both suggest one and then we can conclude.","role":"user"}],
     clear_history=False,
 )
 

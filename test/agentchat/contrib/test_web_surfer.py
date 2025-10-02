@@ -117,15 +117,18 @@ def test_web_surfer_oai(credentials_gpt_4o_mini: Credentials, credentials_gpt_4o
     )
 
     # Make some requests that should test function calling
-    user_proxy.initiate_chat(web_surfer, message="Please visit the page 'https://en.wikipedia.org/wiki/Microsoft'")
+    user_proxy.initiate_chat(
+        web_surfer,
+        message=[{"content": "Please visit the page 'https://en.wikipedia.org/wiki/Microsoft'", "role": "user"}],
+    )
 
-    user_proxy.initiate_chat(web_surfer, message="Please scroll down.")
+    user_proxy.initiate_chat(web_surfer, message=[{"content": "Please scroll down.", "role": "user"}])
 
-    user_proxy.initiate_chat(web_surfer, message="Please scroll up.")
+    user_proxy.initiate_chat(web_surfer, message=[{"content": "Please scroll up.", "role": "user"}])
 
-    user_proxy.initiate_chat(web_surfer, message="When was it founded?")
+    user_proxy.initiate_chat(web_surfer, message=[{"content": "When was it founded?", "role": "user"}])
 
-    user_proxy.initiate_chat(web_surfer, message="What's this page about?")
+    user_proxy.initiate_chat(web_surfer, message=[{"content": "What's this page about?", "role": "user"}])
 
 
 @pytest.mark.skipif(

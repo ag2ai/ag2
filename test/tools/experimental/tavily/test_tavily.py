@@ -202,7 +202,7 @@ class TestTavilySearchTool:
         search_tool.register_for_llm(assistant)
         with patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query") as mock_execute_query:
             response = assistant.run(
-                message="Get me the latest news on hurricanes",
+                message=[{"content": "Get me the latest news on hurricanes", "role": "user"}],
                 tools=assistant.tools,
                 max_turns=2,
                 user_input=False,

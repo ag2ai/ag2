@@ -179,7 +179,7 @@ class TestYepCodeCodeExecutor:
             Mock(
                 timestamp="2023-01-01T00:00:00Z",
                 level="INFO",
-                message="Starting execution",
+                message=[{"content": "Starting execution", "role": "user"}],
             )
         ]
         mock_runner_instance.run.return_value = mock_execution
@@ -219,7 +219,7 @@ class TestYepCodeCodeExecutor:
             Mock(
                 timestamp="2023-01-01T00:00:00Z",
                 level="ERROR",
-                message="Execution failed",
+                message=[{"content": "Execution failed", "role": "user"}],
             )
         ]
         mock_runner_instance.run.return_value = mock_execution

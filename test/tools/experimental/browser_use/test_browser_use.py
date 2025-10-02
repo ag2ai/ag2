@@ -102,7 +102,7 @@ class TestBrowserUseToolOpenai:
 
         result = user_proxy.initiate_chat(
             recipient=assistant,
-            message="Get info from https://docs.ag2.ai/docs/Home",
+            message=[{"content": "Get info from https://docs.ag2.ai/docs/Home", "role": "user"}],
             max_turns=2,
         )
 

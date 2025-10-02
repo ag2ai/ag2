@@ -67,7 +67,9 @@ class TestLangChainInteroperability:
         self.tool.register_for_execution(user_proxy)
         self.tool.register_for_llm(chatbot)
 
-        user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain", max_turns=5)
+        user_proxy.initiate_chat(
+            recipient=chatbot, message=[{"content": "search for LangChain", "role": "user"}], max_turns=5
+        )
 
         self.mock.assert_called()
 
@@ -120,6 +122,10 @@ When using the search tool, input should be:
         self.tool.register_for_execution(user_proxy)
         self.tool.register_for_llm(chatbot)
 
-        user_proxy.initiate_chat(recipient=chatbot, message="search for LangChain, Use max 100 characters", max_turns=5)
+        user_proxy.initiate_chat(
+            recipient=chatbot,
+            message=[{"content": "search for LangChain, Use max 100 characters", "role": "user"}],
+            max_turns=5,
+        )
 
         self.mock.assert_called()

@@ -177,7 +177,7 @@ assistant_agent = AssistantAgent(
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
-    message="Provide code to count the number of prime numbers from 1 to 10000.",
+    message=[{"content":"Provide code to count the number of prime numbers from 1 to 10000.","role":"user"}],
 )
 ```
 
@@ -395,7 +395,7 @@ board = chess.Board()
 
 chat_result = player_white.initiate_chat(
     player_black,
-    message="Let's play chess! Your move.",
+    message=[{"content":"Let's play chess! Your move.","role":"user"}],
     max_turns=4,
 )
 ```

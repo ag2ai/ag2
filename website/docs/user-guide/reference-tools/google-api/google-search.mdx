@@ -72,7 +72,7 @@ With the setup complete, you can now use the assistant to fetch live web search 
 
 ```python
 response = assistant.run(
-    message="What happened with stock prices after deepseek was launched, please search the web.",
+    message=[{"content":"What happened with stock prices after deepseek was launched, please search the web.","role":"user"}],
     tools=assistant.tools,
     max_turns=2,
     user_input=False,
@@ -170,7 +170,7 @@ With the setup complete, you can now use the assistant to fetch live web search 
 
 ```python
 response = assistant.run(
-    message="What happened with stock prices after deepseek was launched, please search the web.",
+    message=[{"content":"What happened with stock prices after deepseek was launched, please search the web.","role":"user"}],
     tools=assistant.tools,
     max_turns=2,
     user_input=False,

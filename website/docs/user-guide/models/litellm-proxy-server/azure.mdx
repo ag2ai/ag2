@@ -72,7 +72,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 user_proxy.initiate_chat(
     recipient=assistant,
-    message="Solve the following equation: 2x + 3 = 7",
+    message=[{"content":"Solve the following equation: 2x + 3 = 7","role":"user"}],
     max_turns=3,
 )
 ```

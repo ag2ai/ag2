@@ -206,7 +206,7 @@ class TestMCPClient:
             toolkit.register_for_llm(agent)
 
             result = await agent.a_run(
-                message="What is 1234 + 5678?",
+                message=[{"content": "What is 1234 + 5678?", "role": "user"}],
                 tools=toolkit.tools,
                 max_turns=3,
                 user_input=False,

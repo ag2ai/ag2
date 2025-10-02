@@ -135,7 +135,7 @@ human = ConversableAgent(
 # to demonstrate the full workflow is within the one agent
 result = lead_teacher_agent.initiate_chat(
     recipient=human,
-    message="What topic would you like to get a lesson plan for?",
+    message=[{"content":"What topic would you like to get a lesson plan for?","role":"user"}],
     max_turns=2
 )
 

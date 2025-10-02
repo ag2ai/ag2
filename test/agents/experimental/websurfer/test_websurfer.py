@@ -44,7 +44,7 @@ class WebSurferTestHelper:
 
         result = user_proxy.initiate_chat(
             recipient=websurfer,
-            message="Get info from https://docs.ag2.ai/docs/Home",
+            message=[{"content": "Get info from https://docs.ag2.ai/docs/Home", "role": "user"}],
             max_turns=2,
         )
 
@@ -210,7 +210,7 @@ class TestFirecrawlWebSurfer(WebSurferTestHelper):
 
         result = user_proxy.initiate_chat(
             recipient=websurfer,
-            message="Get info from https://docs.ag2.ai/docs/Home",
+            message=[{"content": "Get info from https://docs.ag2.ai/docs/Home", "role": "user"}],
             max_turns=2,
         )
 

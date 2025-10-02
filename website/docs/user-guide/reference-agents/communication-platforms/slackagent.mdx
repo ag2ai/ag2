@@ -133,7 +133,7 @@ register_function(
 # Ask the SlackAgent to get the weather (using the get_weather tool) and then send a message out (using its SlackSendTool tool)
 executor_agent.initiate_chat(
     recipient=slack_agent,
-    message="Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!",
+    message=[{"content":"Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!","role":"user"}],
     max_turns=3,
 )
 

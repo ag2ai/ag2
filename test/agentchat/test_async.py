@@ -83,7 +83,7 @@ async def _test_async_groupchat(credentials: Credentials):
         groupchat=groupchat,
         is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
     )
-    await user_proxy.a_initiate_chat(manager, message="""223434*3422=?.""")
+    await user_proxy.a_initiate_chat(manager, message=[{"content":"","role":"user"}]"223434*3422=?.""")
     assert len(user_proxy.chat_messages) > 0
 
 
@@ -149,7 +149,7 @@ async def _test_stream(credentials: Credentials):
     user_proxy.register_reply(autogen.AssistantAgent, add_data_reply, position=2, config={"news_stream": data})
 
     chat_res = await user_proxy.a_initiate_chat(
-        assistant, message="""Summarize market dynamics in 3 bullet points.""", summary_method="reflection_with_llm"
+        assistant, message=[{"content":"","role":"user"}]"Summarize market dynamics in 3 bullet points.""", summary_method="reflection_with_llm"
     )
 
     print("Chat summary:", chat_res.summary)

@@ -127,7 +127,7 @@ class TestSearxngSearchTool:
         )
         search_tool.register_for_llm(assistant)
         response = assistant.run(
-            message="Get me the latest news on open source search engines",
+            message=[{"content": "Get me the latest news on open source search engines", "role": "user"}],
             tools=assistant.tools,
             max_turns=2,
             user_input=False,

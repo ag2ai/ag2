@@ -249,7 +249,7 @@ class TestGroupToolExecutor:
         """Test _generate_group_tool_reply handling a ReplyResult response."""
         # Create a ReplyResult to be returned by the tool
         result = ReplyResult(
-            message="Tool executed successfully",
+            message=[{"content": "Tool executed successfully", "role": "user"}],
             target=MagicMock(spec=TransitionTarget),
             context_variables=ContextVariables(data={"new_var": "new_value"}),
         )
@@ -290,12 +290,14 @@ class TestGroupToolExecutor:
         """Test _generate_group_tool_reply with multiple tool calls."""
         # Create a ReplyResult to be returned by the first tool
         result1 = ReplyResult(
-            message="Tool 1 executed", target=None, context_variables=ContextVariables(data={"var1": "value1"})
+            message=[{"content": "Tool 1 executed", "role": "user"}],
+            target=None,
+            context_variables=ContextVariables(data={"var1": "value1"}),
         )
 
         # Create a ReplyResult to be returned by the second tool
         result2 = ReplyResult(
-            message="Tool 2 executed",
+            message=[{"content": "Tool 2 executed", "role": "user"}],
             target=MagicMock(spec=TransitionTarget),
             context_variables=ContextVariables(data={"var2": "value2"}),
         )

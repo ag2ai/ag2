@@ -51,7 +51,10 @@ def interact_freely_with_user():
     user = UserProxyAgent("user", human_input_mode="ALWAYS", code_execution_config={})
 
     # Start the chat.
-    teachable_agent.initiate_chat(user, message="Greetings, I'm a teachable user assistant! What's on your mind today?")
+    teachable_agent.initiate_chat(
+        user,
+        message=[{"content": "Greetings, I'm a teachable user assistant! What's on your mind today?", "role": "user"}],
+    )
 
 
 if __name__ == "__main__":

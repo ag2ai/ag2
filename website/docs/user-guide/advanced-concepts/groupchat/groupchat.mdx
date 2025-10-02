@@ -74,7 +74,7 @@ Finally, we have the Number Agent from before to start a two-agent chat with the
 ```python
 chat_result = number_agent.initiate_chat(
     group_chat_manager,
-    message="My number is 3, I want to turn it into 13.",
+    message=[{"content":"My number is 3, I want to turn it into 13.","role":"user"}],
     summary_method="reflection_with_llm",
 )
 
@@ -180,7 +180,7 @@ constrained_group_chat_manager = GroupChatManager(
 
 chat_result = number_agent.initiate_chat(
     constrained_group_chat_manager,
-    message="My number is 3, I want to turn it into 10. Once I get to 10, keep it there.",
+    message=[{"content":"My number is 3, I want to turn it into 10. Once I get to 10, keep it there.","role":"user"}],
     summary_method="reflection_with_llm",
 )
 ```

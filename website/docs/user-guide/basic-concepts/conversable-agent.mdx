@@ -48,7 +48,7 @@ The simplest way to interact with a `ConversableAgent` is to use the [`run()`](/
 ```python hl_lines="2-6 9"
 # Establish the workflow
 response = my_agent.run(
-    message="What's the capital of France?",
+    message=[{"content":"What's the capital of France?","role":"user"}],
     max_turns=2,  # Limit conversation length
     user_input=True  # Allow user to provide input
 )
@@ -105,7 +105,7 @@ finance_agent = ConversableAgent(
 
 # Run the agent with a prompt
 response = finance_agent.run(
-    message="Can you explain what makes a transaction suspicious?",
+    message=[{"content":"Can you explain what makes a transaction suspicious?","role":"user"}],
     max_turns=1
 )
 

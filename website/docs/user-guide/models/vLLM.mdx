@@ -119,7 +119,7 @@ assistant = ConversableAgent("agent", system_message="", llm_config=llm_config)
 user_proxy = UserProxyAgent("user", code_execution_config=False,system_message="")
 
 # Let the assistant start the conversation.  It will end when the user types exit.
-assistant.initiate_chat(user_proxy, message="How can I help you today?")
+assistant.initiate_chat(user_proxy, message=[{"content":"How can I help you today?","role":"user"}])
 ```
 
 ```console

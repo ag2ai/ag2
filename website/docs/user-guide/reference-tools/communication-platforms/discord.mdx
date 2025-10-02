@@ -93,7 +93,7 @@ discord_retrieve_tool.register_for_execution(executor_agent)
 # sending the message to Discord.
 executor_agent.initiate_chat(
     recipient=discord_agent,
-    message="Let's send a message to Discord giving them a paragraph on the highlights of Australia.",
+    message=[{"content":"Let's send a message to Discord giving them a paragraph on the highlights of Australia.","role":"user"}],
     max_turns=2,
 )
 ```
@@ -106,7 +106,7 @@ If you want to retrieve the last two messages from the channel:
 ```python
 executor_agent.initiate_chat(
     recipient=discord_agent,
-    message="Tell me which countries the last two messages on my Discord channel are about and the main differences.",
+    message=[{"content":"Tell me which countries the last two messages on my Discord channel are about and the main differences.","role":"user"}],
     max_turns=2,
 )
 ```

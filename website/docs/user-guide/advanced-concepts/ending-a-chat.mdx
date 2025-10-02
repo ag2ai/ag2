@@ -47,7 +47,7 @@ For `initiate_chat` use `max_turns`. Each turn represents a round trip of both a
 agent_a.initiate_chat(
     recipient=agent_b,
     max_turns=2,
-    message="first message"
+    message=[{"content":"first message","role":"user"}]
 )
 # 1. agent_a with "first message" > 1. agent_b > 2. agent_a > 2. agent_b > end
 ```

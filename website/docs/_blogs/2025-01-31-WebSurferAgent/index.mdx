@@ -90,7 +90,7 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use", llm_config=llm_config)
 
 run_response = websurfer.run(
-    message="Get info from https://docs.ag2.ai/docs/Home",
+    message=[{"content":"Get info from https://docs.ag2.ai/docs/Home","role":"user"}],
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
@@ -116,7 +116,7 @@ for tool in websurfer.tools:
 
 user_proxy.initiate_chat(
     recipient=websurfer,
-    message="Get info from https://docs.ag2.ai/docs/Home",
+    message=[{"content":"Get info from https://docs.ag2.ai/docs/Home","role":"user"}],
     max_turns=2,
 )
 ```
@@ -418,7 +418,7 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai", llm_config=llm_config)
 
 run_response = websurfer.run(
-    message="Get info from https://docs.ag2.ai/docs/Home",
+    message=[{"content":"Get info from https://docs.ag2.ai/docs/Home","role":"user"}],
     tools=websurfer.tools,
     max_turns=2,
     user_input=False,
@@ -446,7 +446,7 @@ for tool in websurfer_tools:
 
 user_proxy.initiate_chat(
     recipient=websurfer,
-    message="Get info from https://docs.ag2.ai/docs/Home",
+    message=[{"content":"Get info from https://docs.ag2.ai/docs/Home","role":"user"}],
     max_turns=2,
 )
 ```

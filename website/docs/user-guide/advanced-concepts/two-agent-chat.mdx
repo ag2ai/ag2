@@ -46,7 +46,7 @@ teacher_agent = ConversableAgent(
 
 chat_result = student_agent.initiate_chat(
     teacher_agent,
-    message="What is triangle inequality?",
+    message=[{"content":"What is triangle inequality?","role":"user"}],
     summary_method="reflection_with_llm",
     max_turns=2,
 )

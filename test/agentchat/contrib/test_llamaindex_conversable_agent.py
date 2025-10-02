@@ -78,7 +78,12 @@ def test_group_chat_with_llama_index_conversable_agent(chat_mock: MagicMock) -> 
     # Initiating the group chat and observing the number of rounds
     user_proxy.initiate_chat(
         group_chat_manager,
-        message="What can i find in Tokyo related to Hayao Miyazaki and its moveis like Spirited Away?.",
+        message=[
+            {
+                "content": "What can i find in Tokyo related to Hayao Miyazaki and its moveis like Spirited Away?.",
+                "role": "user",
+            }
+        ],
     )
 
     # Assertions to check if the number of rounds does not exceed max_round

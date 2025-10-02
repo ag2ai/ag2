@@ -75,7 +75,7 @@ agent_mike.register_hook("process_message_before_send", update_message_before_se
 # Run the chat
 chat_result = agent_mike.initiate_chat(
     recipient=agent_bob,
-    message="Hello Bob, tell me a joke!",
+    message=[{"content":"Hello Bob, tell me a joke!","role":"user"}],
     max_turns=2
 )
 
@@ -212,7 +212,7 @@ agent_calendar.register_hook("update_agent_state", update_my_agent_state)
 
 chat_result = agent_bob.initiate_chat(
     recipient=agent_calendar,
-    message="What's the date today and what's the day?",
+    message=[{"content":"What's the date today and what's the day?","role":"user"}],
     max_turns=1
 )
 
@@ -292,7 +292,7 @@ agent_scientist.register_hook("process_last_received_message", replace_blue_with
 
 chat_result = agent_bob.initiate_chat(
     recipient=agent_scientist,
-    message="In one sentence, why is the sky blue?",
+    message=[{"content":"In one sentence, why is the sky blue?","role":"user"}],
     max_turns=1
 )
 
@@ -374,7 +374,7 @@ agent_mike.register_hook("process_all_messages_before_reply", prepend_name)
 
 chat_result = agent_bob.initiate_chat(
     recipient=agent_mike,
-    message="Let's tell some jokes!",
+    message=[{"content":"Let's tell some jokes!","role":"user"}],
     max_turns=2
 )
 
