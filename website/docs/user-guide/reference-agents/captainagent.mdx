@@ -48,7 +48,7 @@ captain_user_proxy = UserProxyAgent(name="captain_user_proxy", human_input_mode=
 
 result = captain_user_proxy.initiate_chat(
     captain_agent,
-    message="Find a recent paper about large language models on arxiv and find its potential applications in software.",
+    message=[{"content":"Find a recent paper about large language models on arxiv and find its potential applications in software.","role":"user"}],
     max_turns=1,
 )
 ```

@@ -124,7 +124,7 @@ my_agent = ConversableAgent(
 
 # 4. Run the agent with a prompt
 response = my_agent.run(
-    message="In one sentence, what's the big deal about AI?",
+    message=[{"content":"In one sentence, what's the big deal about AI?","role":"user"}],
     max_turns=3,
 )
 
@@ -218,7 +218,7 @@ fact_checker = ConversableAgent(
 # 4. Start the conversation
 assistant.initiate_chat(
     recipient=fact_checker,
-    message="What is AG2?",
+    message=[{"content":"What is AG2?","role":"user"}],
     max_turns=2
 )
 ```
@@ -265,7 +265,7 @@ human = UserProxyAgent(name="human", code_execution_config={"work_dir": "coding"
 # 5. Start the chat
 human.initiate_chat(
     recipient=assistant,
-    message="Hello! What's 2 + 2?"
+    message=[{"content":"Hello! What's 2 + 2?","role":"user"}]
 )
 
 ```
@@ -354,7 +354,7 @@ manager = GroupChatManager(
 # 6. Initiate the chat with the GroupChatManager as the recipient
 teacher.initiate_chat(
     recipient=manager,
-    message="Today, let's introduce our kids to the solar system."
+    message=[{"content":"Today, let's introduce our kids to the solar system.","role":"user"}]
 )
 ```
 
@@ -415,7 +415,7 @@ register_function(
 # 5. Two-way chat ensures the executor agent follows the suggesting agent
 chat_result = executor_agent.initiate_chat(
     recipient=date_agent,
-    message="I was born on the 25th of March 1995, what day was it?",
+    message=[{"content":"I was born on the 25th of March 1995, what day was it?","role":"user"}],
     max_turns=2,
 )
 

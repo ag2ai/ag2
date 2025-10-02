@@ -54,7 +54,9 @@ class TestCosmosDBCache:
         cache.get(key) == value
         cache.container.read_item.assert_called_with(item=key, partition_key=str(self.seed))
 
-        cache.container.read_item.side_effect = CosmosResourceNotFoundError(status_code=404, message="Item not found")
+        cache.container.read_item.side_effect = CosmosResourceNotFoundError(
+            status_code=404, message=[{"content": "Item not found", "role": "user"}]
+        )
         cache.get(key, default=None) is None
 
     def test_set(self):

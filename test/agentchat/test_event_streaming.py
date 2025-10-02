@@ -28,7 +28,9 @@ def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
     )
 
     # 2. Run the agent with a prompt
-    response = my_agent.run(message="In one sentence, what's the big deal about AI?", max_turns=1)
+    response = my_agent.run(
+        message=[{"content": "In one sentence, what's the big deal about AI?", "role": "user"}], max_turns=1
+    )
 
     for event in response.events:
         if event.type == "input_request":
@@ -52,7 +54,9 @@ async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
     )
 
     # 2. Run the agent with a prompt
-    response = await my_agent.a_run(message="In one sentence, what's the big deal about AI?", max_turns=1)
+    response = await my_agent.a_run(
+        message=[{"content": "In one sentence, what's the big deal about AI?", "role": "user"}], max_turns=1
+    )
 
     async for event in response.events:
         if event.type == "input_request":
@@ -85,7 +89,9 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
     )
 
     # 3. Run the chat
-    response = jack.run(emma, message="Emma, tell me a joke about goldfish and peanut butter.")
+    response = jack.run(
+        emma, message=[{"content": "Emma, tell me a joke about goldfish and peanut butter.", "role": "user"}]
+    )
 
     for event in response.events:
         if event.type == "input_request":
@@ -122,7 +128,7 @@ async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
 
     # 4. Run the chat
     response: AsyncRunResponseProtocol = await jack.a_run(
-        emma, message="Emma, tell me a joke about goldfish and peanut butter."
+        emma, message=[{"content": "Emma, tell me a joke about goldfish and peanut butter.", "role": "user"}]
     )
 
     async for event in response.events:
@@ -173,7 +179,9 @@ def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
     )
 
     # Start the conversation
-    response = teacher.run(recipient=manager, message="Let's teach the kids about the solar system.")
+    response = teacher.run(
+        recipient=manager, message=[{"content": "Let's teach the kids about the solar system.", "role": "user"}]
+    )
 
     for event in response.events:
         if event.type == "input_request":
@@ -226,7 +234,9 @@ async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
     )
 
     # Start the conversation
-    response = await teacher.a_run(recipient=manager, message="Let's teach the kids about the solar system.")
+    response = await teacher.a_run(
+        recipient=manager, message=[{"content": "Let's teach the kids about the solar system.", "role": "user"}]
+    )
 
     async for event in response.events:
         if event.type == "input_request":

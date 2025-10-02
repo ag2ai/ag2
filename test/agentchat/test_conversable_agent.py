@@ -68,35 +68,35 @@ def test_sync_trigger():
     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent.register_reply(agent1, lambda recipient, messages, sender, config: (True, "hello"))
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello"
     agent.register_reply("a1", lambda recipient, messages, sender, config: (True, "hello a1"))
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a1"
     agent.register_reply(
         ConversableAgent, lambda recipient, messages, sender, config: (True, "hello conversable agent")
     )
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello conversable agent"
     agent.register_reply(
         lambda sender: sender.name.startswith("a"), lambda recipient, messages, sender, config: (True, "hello a")
     )
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a"
     agent.register_reply(
         lambda sender: sender.name.startswith("b"), lambda recipient, messages, sender, config: (True, "hello b")
     )
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a"
     agent.register_reply(
         ["agent2", agent1], lambda recipient, messages, sender, config: (True, "hello agent2 or agent1")
     )
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
     agent.register_reply(
         ["agent2", "agent3"], lambda recipient, messages, sender, config: (True, "hello agent2 or agent3")
     )
-    agent1.initiate_chat(agent, message="hi")
+    agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
     pytest.raises(ValueError, agent.register_reply, 1, lambda recipient, messages, sender, config: (True, "hi"))
     pytest.raises(ValueError, agent._match_trigger, 1, agent1)
@@ -112,7 +112,7 @@ async def test_async_trigger():
         return (True, "hello")
 
     agent.register_reply(agent1, a_reply)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello"
 
     def a_reply_a1(recipient, messages, sender, config):
@@ -120,7 +120,7 @@ async def test_async_trigger():
         return (True, "hello a1")
 
     agent.register_reply("a1", a_reply_a1)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a1"
 
     def a_reply_conversable_agent(recipient, messages, sender, config):
@@ -128,7 +128,7 @@ async def test_async_trigger():
         return (True, "hello conversable agent")
 
     agent.register_reply(ConversableAgent, a_reply_conversable_agent)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello conversable agent"
 
     def a_reply_a(recipient, messages, sender, config):
@@ -136,7 +136,7 @@ async def test_async_trigger():
         return (True, "hello a")
 
     agent.register_reply(lambda sender: sender.name.startswith("a"), a_reply_a)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a"
 
     def a_reply_b(recipient, messages, sender, config):
@@ -144,7 +144,7 @@ async def test_async_trigger():
         return (True, "hello b")
 
     agent.register_reply(lambda sender: sender.name.startswith("b"), a_reply_b)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello a"
 
     def a_reply_agent2_or_agent1(recipient, messages, sender, config):
@@ -152,7 +152,7 @@ async def test_async_trigger():
         return (True, "hello agent2 or agent1")
 
     agent.register_reply(["agent2", agent1], a_reply_agent2_or_agent1)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
 
     def a_reply_agent2_or_agent3(recipient, messages, sender, config):
@@ -160,7 +160,7 @@ async def test_async_trigger():
         return (True, "hello agent2 or agent3")
 
     agent.register_reply(["agent2", "agent3"], a_reply_agent2_or_agent3)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
 
     with pytest.raises(ValueError):
@@ -185,7 +185,7 @@ def test_async_trigger_in_sync_chat():
     agent.register_reply(agent1, a_reply)
 
     with pytest.raises(RuntimeError) as e:
-        agent1.initiate_chat(agent, message="hi")
+        agent1.initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
 
     assert (
         e.value.args[0] == "Async reply functions can only be used with ConversableAgent.a_initiate_chat(). "
@@ -206,7 +206,7 @@ async def test_sync_trigger_in_async_chat():
         return (True, "hello from reply function")
 
     agent.register_reply(agent1, a_reply)
-    await agent1.a_initiate_chat(agent, message="hi")
+    await agent1.a_initiate_chat(agent, message=[{"content": "hi", "role": "user"}])
     assert agent1.last_message(agent)["content"] == "hello from reply function"
 
 
@@ -365,20 +365,20 @@ def test_max_consecutive_auto_reply():
     agent.update_max_consecutive_auto_reply(1)
     assert agent.max_consecutive_auto_reply() == agent.max_consecutive_auto_reply(agent1) == 1
 
-    agent1.initiate_chat(agent, message="hello")
+    agent1.initiate_chat(agent, message=[{"content": "hello", "role": "user"}])
     assert agent._consecutive_auto_reply_counter[agent1] == 1
-    agent1.initiate_chat(agent, message="hello again")
+    agent1.initiate_chat(agent, message=[{"content": "hello again", "role": "user"}])
     # with auto reply because the counter is reset
     assert agent1.last_message(agent)["role"] == "user"
     assert len(agent1.chat_messages[agent]) == 2
     assert len(agent.chat_messages[agent1]) == 2
 
     assert agent._consecutive_auto_reply_counter[agent1] == 1
-    agent1.send(message="bye", recipient=agent)
+    agent1.send(message=[{"content": "bye", "role": "user"}], recipient=agent)
     # no auto reply
     assert agent1.last_message(agent)["role"] == "assistant"
 
-    agent1.initiate_chat(agent, clear_history=False, message="hi")
+    agent1.initiate_chat(agent, clear_history=False, message=[{"content": "hi", "role": "user"}])
     assert len(agent1.chat_messages[agent]) > 2
     assert len(agent.chat_messages[agent1]) > 2
 
@@ -392,7 +392,7 @@ def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
 
     # max_consecutive_auto_reply parameter on the agent that initiates chat
-    agent1.initiate_chat(agent2, message="hello", max_turns=50)
+    agent1.initiate_chat(agent2, message=[{"content": "hello", "role": "user"}], max_turns=50)
     assert len(agent2.chat_messages[agent1]) == 4
     assert len(agent1.chat_messages[agent2]) == 4
     # checking captured output
@@ -403,7 +403,7 @@ def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture
     _ = capsys.readouterr()  # Explicitly clear buffer
 
     # max_consecutive_auto_reply parameter on the recipient agent
-    agent2.initiate_chat(agent1, message="hello", max_turns=50)
+    agent2.initiate_chat(agent1, message=[{"content": "hello", "role": "user"}], max_turns=50)
     assert len(agent1.chat_messages[agent2]) == 3
     assert len(agent2.chat_messages[agent1]) == 3
     # checking captured output
@@ -544,7 +544,7 @@ async def test_a_initiate_chat_triggers_terminate_chat(monkeypatch):
         return ""
 
     monkeypatch.setattr(ConversableAgent, "a_get_human_input", fake_a_get_human_input)
-    result = await agent.a_initiate_chat(recipient, message="irrelevant", max_turns=2)
+    result = await agent.a_initiate_chat(recipient, message=[{"content": "irrelevant", "role": "user"}], max_turns=2)
     assert len(result.chat_history) == 1
     assert result.chat_history[0]["content"] == "TERMINATE"
 
@@ -1189,7 +1189,7 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
     user_proxy.initiate_chat(
         coder,
-        message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
+        message=[{"content": "Create a timer for 1 second and then a stopwatch for 2 seconds.", "role": "user"}],
     )
 
     timer_mock.assert_called_once_with(num_seconds="1")
@@ -1250,7 +1250,7 @@ async def _test_function_registration_e2e_async(credentials: Credentials) -> Non
     # With 'await', the async function is executed and the current function is paused until the awaited function returns a result.
     await user_proxy.a_initiate_chat(
         coder,
-        message="Create a timer for 1 second and then a stopwatch for 2 seconds.",
+        message=[{"content": "Create a timer for 1 second and then a stopwatch for 2 seconds.", "role": "user"}],
     )
 
     timer_mock.assert_called_once_with(num_seconds="1")
@@ -1283,7 +1283,12 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
 
     # Use MagicMock to create a mock get_human_input function
     user_proxy.get_human_input = MagicMock(return_value="Not funny. Try again.")
-    res = user_proxy.initiate_chat(assistant, clear_history=True, max_turns=3, message="Hello, make a joke about AI.")
+    res = user_proxy.initiate_chat(
+        assistant,
+        clear_history=True,
+        max_turns=3,
+        message=[{"content": "Hello, make a joke about AI.", "role": "user"}],
+    )
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)
     print("history", res.chat_history)
@@ -1386,7 +1391,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
     chat_res_play = user.initiate_chat(
         player,
         message=my_message_play,
-        # message="Make a joke about AI",
+        # message=[{"content":"Make a joke about AI","role":"user"}],
         max_turns=1,
         summary_method="reflection_with_llm",
         summary_args={"summary_prompt": "Summarize the conversation into less than five words."},
@@ -1396,7 +1401,7 @@ def test_summary(credentials_gpt_4o_mini: Credentials):
     chat_res_play = user.initiate_chat(
         player,
         # message=my_message_play,
-        message="Make a joke about AI",
+        message=[{"content": "Make a joke about AI", "role": "user"}],
         max_turns=1,
         summary_method=my_summary,
         summary_args={"prefix": "This is the last message:"},
@@ -1426,7 +1431,7 @@ def test_summarize_chat_with_dict_summary():
 
     chat_res = user.initiate_chat(
         assistant,
-        message="Hello, how are you?",
+        message=[{"content": "Hello, how are you?", "role": "user"}],
         max_turns=1,
         summary_method=my_summary,
         summary_args={"summary_prompt": "Summarize the conversation."},
@@ -1449,9 +1454,9 @@ def test_process_before_send():
     dummy_agent_2 = ConversableAgent(name="dummy_agent_2", llm_config=False, human_input_mode="NEVER")
     dummy_agent_1.register_hook("process_message_before_send", send_to_frontend)
     dummy_agent_1.send("hello", dummy_agent_2)
-    print_mock.assert_called_once_with(message="hello")
+    print_mock.assert_called_once_with(message=[{"content": "hello", "role": "user"}])
     dummy_agent_1.send("silent hello", dummy_agent_2, silent=True)
-    print_mock.assert_called_once_with(message="hello")
+    print_mock.assert_called_once_with(message=[{"content": "hello", "role": "user"}])
 
 
 def test_messages_with_carryover():
@@ -1747,10 +1752,10 @@ def test_conversable_agent_with_whitespaces_in_name_end2end(
             ValueError,
             match="This error typically occurs when the agent name contains invalid characters, such as spaces or special symbols.",
         ):
-            user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
+            user_proxy.initiate_chat(agent, message=[{"content": "Hello, how are you?", "role": "user"}], max_turns=2)
     # anthropic and gemini will not raise an error if agent name contains whitespaces
     else:
-        user_proxy.initiate_chat(agent, message="Hello, how are you?", max_turns=2)
+        user_proxy.initiate_chat(agent, message=[{"content": "Hello, how are you?", "role": "user"}], max_turns=2)
 
 
 @run_for_optional_imports("openai", "openai")
@@ -1812,7 +1817,7 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
         mock()
         return "Login successful."
 
-    user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+    user_proxy.initiate_chat(agent, message=[{"content": "Please login", "role": "user"}], max_turns=2)
 
     mock.assert_called_once()
 
@@ -1835,7 +1840,10 @@ def test_conversable_agent_with_deepseek_reasoner(
     )
 
     result = user_proxy.initiate_chat(
-        agent, message="Hello, how are you?", summary_method="reflection_with_llm", max_turns=2
+        agent,
+        message=[{"content": "Hello, how are you?", "role": "user"}],
+        summary_method="reflection_with_llm",
+        max_turns=2,
     )
     assert isinstance(result.summary, str)
 

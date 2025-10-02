@@ -140,7 +140,7 @@ def get_balance_1(
 Finally, we initiate a chat to retrieve the balance.
 
 ```python
-user_proxy.initiate_chat(assistant, message="Get users balance", max_turns=2)
+user_proxy.initiate_chat(assistant, message=[{"content":"Get users balance","role":"user"}], max_turns=2)
 ```
 
 ```console
@@ -231,7 +231,7 @@ def get_balance_2(
 As before, initiate a chat to test the function.
 
 ```python
-user_proxy.initiate_chat(assistant, message="Get users balance", max_turns=2)
+user_proxy.initiate_chat(assistant, message=[{"content":"Get users balance","role":"user"}], max_turns=2)
 ```
 
 ```console

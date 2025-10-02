@@ -165,7 +165,12 @@ def test_update_tool(credentials_gpt_4o: Credentials):
     )
     res = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message=[
+            {
+                "content": "What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                "role": "user",
+            }
+        ],
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
     print("Summary:", res.summary)
@@ -176,7 +181,12 @@ def test_update_tool(credentials_gpt_4o: Credentials):
     assistant.update_tool_signature("greet_user", is_remove=True)
     res = user_proxy.initiate_chat(
         assistant,
-        message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message=[
+            {
+                "content": "What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                "role": "user",
+            }
+        ],
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]

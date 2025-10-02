@@ -76,7 +76,7 @@ class TestGoogleSearchTool:
             return_value=expected_search_result,
         ) as mock_execute_query:
             run_response = assistant.run(
-                message="Get me the latest news on DeepSeek",
+                message=[{"content": "Get me the latest news on DeepSeek", "role": "user"}],
                 tools=assistant.tools,
                 max_turns=3,
                 user_input=False,

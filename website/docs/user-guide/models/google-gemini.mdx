@@ -107,7 +107,7 @@ user_proxy = UserProxyAgent(
 
 result = user_proxy.initiate_chat(
   recipient=assistant,
-  message="Sort the array with Bubble Sort: [4, 1, 5, 2, 3]"
+  message=[{"content":"Sort the array with Bubble Sort: [4, 1, 5, 2, 3]","role":"user"}]
 )
 ```
 

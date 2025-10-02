@@ -139,7 +139,7 @@ assistant = AssistantAgent(name="assistant", llm_config=llm_config)
 
 ```py
 
-user_proxy.intiate_chat(assistant, message="Write python code to print Hello World!")
+user_proxy.intiate_chat(assistant, message=[{"content":"Write python code to print Hello World!","role":"user"}])
 
 ```
 

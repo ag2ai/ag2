@@ -211,7 +211,7 @@ group_chat_manager = GroupChatManager(
 # Start the examination
 examination = examiner.initiate_chat(
     group_chat_manager,
-    message="I am starting the examination",
+    message=[{"content":"I am starting the examination","role":"user"}],
     summary_method=my_summary_method
 )
 

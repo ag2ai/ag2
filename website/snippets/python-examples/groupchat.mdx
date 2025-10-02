@@ -72,6 +72,6 @@ manager = GroupChatManager(
 # 6. Initiate the chat with the GroupChatManager as the recipient
 teacher.initiate_chat(
     recipient=manager,
-    message="Today, let's introduce our kids to the solar system."
+    message=[{"content":"Today, let's introduce our kids to the solar system.","role":"user"}]
 )
 ```

@@ -121,7 +121,7 @@ assistant = AssistantAgent("assistant", llm_config=llm_config)
 
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False})
 
-user_proxy.run(assistant, message="Summarize the main differences between Python lists and tuples.").process()
+user_proxy.run(assistant, message=[{"content":"Summarize the main differences between Python lists and tuples.","role":"user"}]).process()
 ```
 
 ## Example applications
@@ -177,7 +177,7 @@ reviewer = ConversableAgent(
 # Start a conversation
 response = reviewer.run(
             recipient=coder,
-            message="Write a Python function that computes Fibonacci numbers.",
+            message=[{"content":"Write a Python function that computes Fibonacci numbers.","role":"user"}],
             max_turns=10
         )
 
@@ -365,7 +365,7 @@ register_function(
 # Use tool in chat
 chat_result = executor_agent.initiate_chat(
     recipient=date_agent,
-    message="I was born on 1995-03-25, what day was it?",
+    message=[{"content":"I was born on 1995-03-25, what day was it?","role":"user"}],
     max_turns=2,
 )
 

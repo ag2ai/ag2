@@ -18,7 +18,7 @@ my_agent = ConversableAgent(
 
 # 4. Chat directly with our agent
 response = my_agent.run(
-    message="In one sentence, what's the big deal about AI?",
+    message=[{"content":"In one sentence, what's the big deal about AI?","role":"user"}],
     max_turns=2,
     user_input=True,
 )

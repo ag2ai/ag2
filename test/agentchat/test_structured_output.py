@@ -73,7 +73,7 @@ def test_structured_output(credentials_from_test_param, response_format):
 
     chat_result = user_proxy.initiate_chat(
         assistant,
-        message="What is the air-speed velocity of an unladen swallow?",
+        message=[{"content": "What is the air-speed velocity of an unladen swallow?", "role": "user"}],
         max_turns=1,
         summary_method="last_msg",
     )
@@ -113,7 +113,7 @@ def test_structured_output_global(credentials_from_test_param, response_format):
 
     chat_result = user_proxy.initiate_chat(
         assistant,
-        message="What is the air-speed velocity of an unladen swallow?",
+        message=[{"content": "What is the air-speed velocity of an unladen swallow?", "role": "user"}],
         max_turns=1,
         summary_method="last_msg",
     )
@@ -188,7 +188,7 @@ def test_structured_output_formatting(mock_assistant: autogen.AssistantAgent) ->
 
     chat_result = user_proxy.initiate_chat(
         mock_assistant,
-        message="What is the square root of 4?",
+        message=[{"content": "What is the square root of 4?", "role": "user"}],
         max_turns=1,
         summary_method="last_msg",
     )

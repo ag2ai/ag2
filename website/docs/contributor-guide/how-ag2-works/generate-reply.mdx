@@ -124,7 +124,7 @@ agent_calendar.register_reply(
 
 chat_result = agent_bob.initiate_chat(
     recipient=agent_calendar,
-    message="Hi Calendar Agent!",
+    message=[{"content":"Hi Calendar Agent!","role":"user"}],
     max_turns=2
 )
 

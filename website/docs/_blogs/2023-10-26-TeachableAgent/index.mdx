@@ -90,7 +90,7 @@ user = UserProxyAgent("user", human_input_mode="ALWAYS")
 
 ```python
 # This function will return once the user types 'exit'.
-teachable_agent.initiate_chat(user, message="Hi, I'm a teachable user assistant! What's on your mind?")
+teachable_agent.initiate_chat(user, message=[{"content":"Hi, I'm a teachable user assistant! What's on your mind?","role":"user"}])
 ```
 
 ## Example 1 - Learning user info

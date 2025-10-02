@@ -64,7 +64,7 @@ user_proxy = UserProxyAgent(name="user_proxy",
     },
     human_input_mode="NEVER")
 
-user_proxy.initiate_chat(gpt_assistant, message="Print hello world")
+user_proxy.initiate_chat(gpt_assistant, message=[{"content":"Print hello world","role":"user"}])
 ```
 
 `GPTAssistantAgent` supports both creating new OpenAI assistants or reusing existing assistants
@@ -97,7 +97,7 @@ user_proxy = UserProxyAgent(name="user_proxy",
     },
     human_input_mode="NEVER")
 
-user_proxy.initiate_chat(gpt_assistant, message="Print hello world")
+user_proxy.initiate_chat(gpt_assistant, message=[{"content":"Print hello world","role":"user"}])
 ```
 
 Checkout more examples [here](https://github.com/ag2ai/ag2/tree/main/notebook).

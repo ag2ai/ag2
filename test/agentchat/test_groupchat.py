@@ -114,7 +114,7 @@ def test_chat_manager(monkeypatch: MonkeyPatch):
 
     groupchat = autogen.GroupChat(agents=[agent1, agent2], messages=[], max_round=2)
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
-    agent1.initiate_chat(group_chat_manager, message="hello")
+    agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
 
     assert len(agent1.chat_messages[group_chat_manager]) == 2
     assert len(groupchat.messages) == 2
@@ -123,7 +123,7 @@ def test_chat_manager(monkeypatch: MonkeyPatch):
     assert len(groupchat.messages) == 0
     agent1.reset()
     agent2.reset()
-    agent2.initiate_chat(group_chat_manager, message="hello")
+    agent2.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
     assert len(groupchat.messages) == 2
 
     with pytest.raises(ValueError):
@@ -166,7 +166,7 @@ def _test_selection_method(method: str, monkeypatch: MonkeyPatch):
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
     if method == "round_robin":
-        agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}])
         assert len(agent1.chat_messages[group_chat_manager]) == 6
         assert len(groupchat.messages) == 6
         assert [msg["content"] for msg in agent1.chat_messages[group_chat_manager]] == [
@@ -175,7 +175,7 @@ def _test_selection_method(method: str, monkeypatch: MonkeyPatch):
             "This is charlie speaking.",
         ] * 2
     elif method == "auto" or method == "random":
-        agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}])
         assert len(agent1.chat_messages[group_chat_manager]) == 6
         assert len(groupchat.messages) == 6
     elif method == "manual":
@@ -185,7 +185,9 @@ def _test_selection_method(method: str, monkeypatch: MonkeyPatch):
                 agent1.reset()
                 agent2.reset()
                 agent3.reset()
-                agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+                agent1.initiate_chat(
+                    group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}]
+                )
                 if user_input == "1":
                     assert len(agent1.chat_messages[group_chat_manager]) == 6
                     assert len(groupchat.messages) == 6
@@ -202,7 +204,7 @@ def _test_selection_method(method: str, monkeypatch: MonkeyPatch):
                     assert len(groupchat.messages) == 6
     elif method == "wrong":
         with pytest.raises(ValueError):
-            agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+            agent1.initiate_chat(group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}])
 
 
 def test_speaker_selection_method(monkeypatch: MonkeyPatch):
@@ -234,7 +236,7 @@ def _test_n_agents_less_than_3(method):
         allow_repeat_speaker=[agent1, agent2] if method == "random" else False,
     )
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
-    agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+    agent1.initiate_chat(group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}])
     assert len(agent1.chat_messages[group_chat_manager]) == 6
     assert len(groupchat.messages) == 6
     if method != "random" or method.lower() == "round_robin":
@@ -249,7 +251,7 @@ def _test_n_agents_less_than_3(method):
             agents=[], messages=[], max_round=6, speaker_selection_method="round_robin", allow_repeat_speaker=False
         )
         group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
-        agent1.initiate_chat(group_chat_manager, message="This is alice speaking.")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "This is alice speaking.", "role": "user"}])
 
 
 def test_invalid_allow_repeat_speaker():
@@ -312,7 +314,7 @@ def test_plugin(monkeypatch: MonkeyPatch):
         config=groupchat,
         reset_config=autogen.GroupChat.reset,
     )
-    agent1.initiate_chat(group_chat_manager, message="hello")
+    agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
 
     assert len(agent1.chat_messages[group_chat_manager]) == 2
     assert len(groupchat.messages) == 2
@@ -419,7 +421,9 @@ def test_termination():
 
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False, is_termination_msg=None)
 
-    agent1.initiate_chat(group_chat_manager, message="'None' is_termination_msg function.")
+    agent1.initiate_chat(
+        group_chat_manager, message=[{"content": "'None' is_termination_msg function.", "role": "user"}]
+    )
     assert len(groupchat.messages) == 10
 
     # Test user-provided is_termination_msg function
@@ -437,7 +441,9 @@ def test_termination():
         is_termination_msg=lambda x: x.get("content", "").rstrip().find("TERMINATE") >= 0,
     )
 
-    agent1.initiate_chat(group_chat_manager, message="User-provided is_termination_msg function.")
+    agent1.initiate_chat(
+        group_chat_manager, message=[{"content": "User-provided is_termination_msg function.", "role": "user"}]
+    )
     assert len(groupchat.messages) == 3
 
 
@@ -551,7 +557,9 @@ def test_send_intros():
         is_termination_msg=lambda x: x.get("content", "").rstrip().find("TERMINATE") >= 0,
     )
 
-    group_chat_manager.initiate_chat(group_chat_manager, message="The initiating message.")
+    group_chat_manager.initiate_chat(
+        group_chat_manager, message=[{"content": "The initiating message.", "role": "user"}]
+    )
     for a in [agent1, agent2, agent3]:
         messages = agent1.chat_messages[group_chat_manager]
         assert len(messages) == 3
@@ -578,7 +586,9 @@ def test_send_intros():
         is_termination_msg=lambda x: x.get("content", "").rstrip().find("TERMINATE") >= 0,
     )
 
-    group_chat_manager2.initiate_chat(group_chat_manager2, message="The initiating message.")
+    group_chat_manager2.initiate_chat(
+        group_chat_manager2, message=[{"content": "The initiating message.", "role": "user"}]
+    )
     for a in [agent1, agent2, agent3]:
         messages = agent1.chat_messages[group_chat_manager2]
         assert len(messages) == 2
@@ -712,7 +722,7 @@ def test_graceful_exit_before_max_round():
 
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False, is_termination_msg=None)
 
-    agent1.initiate_chat(group_chat_manager, message="")
+    agent1.initiate_chat(group_chat_manager, message=[{"content": "", "role": "user"}])
 
     # Note that 3 is much lower than 10 (max_round), so the conversation should end before 10 rounds.
     assert len(groupchat.messages) == 3
@@ -754,7 +764,9 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
 
     # testing pure "clear history" statement
     with mock.patch.object(builtins, "input", lambda _: "clear history. How you doing?"):
-        res = agent1.initiate_chat(group_chat_manager, message="hello", summary_method="last_msg")
+        res = agent1.initiate_chat(
+            group_chat_manager, message=[{"content": "hello", "role": "user"}], summary_method="last_msg"
+        )
     agent1_history = list(agent1._oai_messages.values())[0]
     agent2_history = list(agent2._oai_messages.values())[0]
     assert agent1_history == [{"content": "How you doing?", "name": "sam", "role": "user"}]
@@ -766,7 +778,7 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
 
     # testing clear history for defined agent
     with mock.patch.object(builtins, "input", lambda _: "clear history bob. How you doing?"):
-        agent1.initiate_chat(group_chat_manager, message="hello")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
     agent1_history = list(agent1._oai_messages.values())[0]
     agent2_history = list(agent2._oai_messages.values())[0]
     assert agent1_history == [
@@ -783,7 +795,7 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
 
     # testing clear history with defined nr of messages to preserve
     with mock.patch.object(builtins, "input", lambda _: "clear history 1. How you doing?"):
-        agent1.initiate_chat(group_chat_manager, message="hello")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
     agent1_history = list(agent1._oai_messages.values())[0]
     agent2_history = list(agent2._oai_messages.values())[0]
     assert agent1_history == [
@@ -801,7 +813,7 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
 
     # testing clear history with defined agent and nr of messages to preserve
     with mock.patch.object(builtins, "input", lambda _: "clear history bob 1. How you doing?"):
-        agent1.initiate_chat(group_chat_manager, message="hello")
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
     agent1_history = list(agent1._oai_messages.values())[0]
     agent2_history = list(agent2._oai_messages.values())[0]
     assert agent1_history == [
@@ -859,7 +871,7 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
     groupchat.max_round = 3
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
     with mock.patch.object(builtins, "input", lambda _: "clear history alice 1. How you doing?"):
-        agent1.initiate_chat(group_chat_manager, message="hello", clear_history=False)
+        agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}], clear_history=False)
 
     agent1_history = list(agent1._oai_messages.values())[0]
     assert agent1_history == [
@@ -917,7 +929,7 @@ def test_clear_agents_history(monkeypatch: MonkeyPatch):
     groupchat.max_round = 2
     group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=None)
 
-    agent1.initiate_chat(group_chat_manager, message="hello")
+    agent1.initiate_chat(group_chat_manager, message=[{"content": "hello", "role": "user"}])
     agent1_history = list(agent1._oai_messages.values())[0]
     assert agent1_history == [
         {
@@ -1099,7 +1111,7 @@ def test_custom_speaker_selection():
     )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
-    result = a1.initiate_chat(manager, message="Hello, this is a1 speaking.")
+    result = a1.initiate_chat(manager, message=[{"content": "Hello, this is a1 speaking.", "role": "user"}])
     assert len(result.chat_history) == 3
 
 
@@ -1166,7 +1178,7 @@ def test_custom_speaker_selection_with_transition_graph():
     )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
-    results = agents[0].initiate_chat(manager, message="My name is a")
+    results = agents[0].initiate_chat(manager, message=[{"content": "My name is a", "role": "user"}])
     actual_sequence = []
 
     # Append to actual_sequence using results.chat_history[idx]['content'][-1]
@@ -1223,7 +1235,7 @@ def test_custom_speaker_selection_overrides_transition_graph():
         speaker_transitions_type="allowed",
     )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
-    results = agents[0].initiate_chat(manager, message="My name is teamA_engineer")
+    results = agents[0].initiate_chat(manager, message=[{"content": "My name is teamA_engineer", "role": "user"}])
 
     speakers = []
     for idx in range(len(results.chat_history)):
@@ -1530,7 +1542,7 @@ def test_role_for_reflection_summary():
         agent1.initiate_chat(
             group_chat_manager,
             max_turns=2,
-            message="hello",
+            message=[{"content": "hello", "role": "user"}],
             summary_method="reflection_with_llm",
             summary_args={"summary_role": role_name},
         )
@@ -2321,7 +2333,7 @@ def test_groupchatmanager_no_llm_config():
             "the select_speaker_auto_llm_config parameter."
         ),
     ):
-        agent_a.initiate_chat(manager, message="Hello")
+        agent_a.initiate_chat(manager, message=[{"content": "Hello", "role": "user"}])
 
 
 if __name__ == "__main__":

@@ -604,7 +604,7 @@ if __name__ == "__main__":
         # test_scenario_8_complex_conversation()
         # test_scenario_9_nested_chat_target()
         # test_scenario_10_terminate_target()
-        test_scenario_11_run_group_chat_round_robin()  # process not end
+        # test_scenario_11_run_group_chat_round_robin()
         # test_scenario_12_run_group_chat_auto_pattern()
         # test_scenario_13_run_single_agent()
         # test_scenario_14_run_two_agents()
