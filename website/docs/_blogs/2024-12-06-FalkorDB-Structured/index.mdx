@@ -143,7 +143,7 @@ class MathReasoning(BaseModel):
     final_answer: str
 
 # response_format is added to our configuration
-llm_config = autogen.LLMConfig({
+llm_config = autogen.LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.getenv("OPENAI_API_KEY"),

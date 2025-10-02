@@ -18,9 +18,12 @@ Once you've set up your LLM configuration, creating a `ConversableAgent` is stra
 
 ```python hl_lines="7-11"
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Create LLM configuration first
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Create the agent using the context manager approach
 my_agent = ConversableAgent(
@@ -67,7 +70,7 @@ from autogen import ConversableAgent, LLMConfig
 import os
 
 # Configure the LLM (we created this in the previous section)
-llm_config = LLMConfig({
+llm_config = LLMConfig(config_list={
     "api_type": "openai",
     "model": "gpt-5-nano",
     "api_key": os.environ["OPENAI_API_KEY"],

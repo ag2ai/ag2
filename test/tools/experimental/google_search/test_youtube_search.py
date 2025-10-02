@@ -13,8 +13,7 @@ from autogen.tools.experimental import YoutubeSearchTool
 from autogen.tools.experimental.google_search.youtube_search import (
     _youtube_search,
 )
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestYoutubeSearchTool:
