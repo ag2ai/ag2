@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 
+import pytest
 from dotenv import load_dotenv
 
 from autogen import LLMConfig
@@ -10,7 +11,7 @@ from autogen.tools import tool
 
 load_dotenv()
 
-# pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
+pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
 
 llm_config = LLMConfig(
     config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": os.getenv("OPENAI_API_KEY")}
