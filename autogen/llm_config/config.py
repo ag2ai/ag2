@@ -12,26 +12,12 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing_extensions import deprecated
+from typing_extensions import Self, deprecated
 
 from autogen.doc_utils import export_module
-from autogen.oai.anthropic import AnthropicLLMConfigEntry
-from autogen.oai.bedrock import BedrockLLMConfigEntry
-from autogen.oai.cerebras import CerebrasLLMConfigEntry
-from autogen.oai.client import (
-    AzureOpenAILLMConfigEntry,
-    DeepSeekLLMConfigEntry,
-    OpenAILLMConfigEntry,
-    OpenAIResponsesLLMConfigEntry,
-)
-from autogen.oai.cohere import CohereLLMConfigEntry
-from autogen.oai.gemini import GeminiLLMConfigEntry
-from autogen.oai.groq import GroqLLMConfigEntry
-from autogen.oai.mistral import MistralLLMConfigEntry
-from autogen.oai.ollama import OllamaLLMConfigEntry
-from autogen.oai.together import TogetherLLMConfigEntry
 
 from .entry import ApplicationConfig, LLMConfigEntry
+from .types import ConfigEntries
 from .utils import config_list_from_json, filter_config
 
 
@@ -62,28 +48,13 @@ class MetaLLMConfig(type):
         return cls.current
 
 
-ConfigEntries = (
-    AnthropicLLMConfigEntry
-    | CerebrasLLMConfigEntry
-    | BedrockLLMConfigEntry
-    | AzureOpenAILLMConfigEntry
-    | DeepSeekLLMConfigEntry
-    | OpenAILLMConfigEntry
-    | OpenAIResponsesLLMConfigEntry
-    | CohereLLMConfigEntry
-    | GeminiLLMConfigEntry
-    | GroqLLMConfigEntry
-    | MistralLLMConfigEntry
-    | OllamaLLMConfigEntry
-    | TogetherLLMConfigEntry
-)
-
 ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 
 
 @export_module("autogen")
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
+    config_list: list[ConfigEntries]
 
     def __init__(
         self,
@@ -331,8 +302,9 @@ class LLMConfig(metaclass=MetaLLMConfig):
         env: str | None = None,
         path: str | Path | None = None,
         file_location: str | None = None,
+        filter_dict: dict[str, list[str | None] | set[str | None]] | None = None,
         **kwargs: Any,
-    ) -> "LLMConfig":
+    ) -> Self:
         if env is None and path is None:
             raise ValueError("Either 'env' or 'path' must be provided")
 
@@ -340,13 +312,19 @@ class LLMConfig(metaclass=MetaLLMConfig):
             raise ValueError("Only one of 'env' or 'path' can be provided")
 
         config_list = config_list_from_json(
-            env_or_file=env if env is not None else str(path), file_location=file_location
+            env_or_file=env if env is not None else str(path),
+            file_location=file_location,
+            filter_dict=filter_dict,
         )
 
-        return LLMConfig(*config_list, **kwargs)
+        return cls(*config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
-        filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
+        filtered_config_list = filter_config(
+            config_list=[c.model_dump() for c in self.config_list],
+            filter_dict=kwargs,
+            exclude=exclude,
+        )
 
         if len(filtered_config_list) == 0:
             raise ValueError(f"No config found that satisfies the filter criteria: {kwargs}")

@@ -246,7 +246,7 @@ class GeminiClient:
 
         if model_name == "gemini-pro-vision":
             raise ValueError(
-                "Gemini 1.0 Pro vision ('gemini-pro-vision') has been deprecated, please consider switching to a different model, for example 'gemini-1.5-flash'."
+                "Gemini 1.0 Pro vision ('gemini-pro-vision') has been deprecated, please consider switching to a different model, for example 'gemini-2.5-flash'."
             )
         elif not model_name:
             raise ValueError(
