@@ -4,6 +4,7 @@
 import asyncio
 import os
 
+import pytest
 from dotenv import load_dotenv
 
 from autogen import LLMConfig
@@ -12,7 +13,7 @@ from autogen.tools import tool
 load_dotenv()
 
 # Check for OpenAI API key
-# pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
+pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 

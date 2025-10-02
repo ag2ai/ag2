@@ -1420,7 +1420,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Initiate a chat with the recipient agent.
@@ -1692,7 +1692,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """(async) Initiate a chat with the recipient agent.
