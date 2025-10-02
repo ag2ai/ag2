@@ -71,6 +71,6 @@ class TestGoogleDriveToolkit:
                 # message=[{"content":"Get last 3 files from Google Drive","role":"user"}],
                 # message=[{"content":"Download second file from Google Drive","role":"user"}],
                 # message=[{"content":"Download latest 5 files from Google Drive","role":"user"}],
-                message=[{"content": "Download all files from Google Drive 'Test Folder'", "role": "user"}],
+                message=[{"content": "Download all files from Google Drive 'Test Folder'", "role": "user"}],  # type: ignore[arg-type]
                 max_turns=5,
             )

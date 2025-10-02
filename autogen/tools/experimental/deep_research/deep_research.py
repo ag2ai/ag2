@@ -149,7 +149,10 @@ class DeepResearchTool(Tool):
 
             result = self.critic_agent.initiate_chat(
                 self.summarizer_agent,
-                message=[{"content": "Please answer the following question: ", "role": "user"}] + task,
+                message=[
+                    {"content": "Please answer the following question: ", "role": "user"},  # type: ignore[arg-type]
+                    {"content": task, "role": "user"},  # type: ignore[arg-type]
+                ],
                 # This outer chat should preserve the history of the conversation
                 clear_history=False,
             )
@@ -225,8 +228,10 @@ class DeepResearchTool(Tool):
 
             result = decomposition_critic.initiate_chat(
                 decomposition_agent,
-                message=[{"content": "Analyse and gather subqestions for the following question: ", "role": "user"}]
-                + question,
+                message=[
+                    {"content": "Analyse and gather subqestions for the following question: ", "role": "user"},  # type: ignore[arg-type]
+                    {"content": question, "role": "user"},  # type: ignore[arg-type]
+                ],
             )
 
             return result.summary
@@ -324,7 +329,10 @@ class DeepResearchTool(Tool):
 
         result = websurfer_critic.initiate_chat(
             websurfer_agent,
-            message=[{"content": "Please find the answer to this question: ", "role": "user"}] + question,
+            message=[
+                {"content": "Please find the answer to this question: ", "role": "user"},  # type: ignore[arg-type]
+                {"content": question, "role": "user"},  # type: ignore[arg-type]
+            ],
         )
 
         return result.summary
