@@ -12,6 +12,7 @@ import pytest
 from autogen import ConversableAgent, UserProxyAgent
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.code_utils import content_str
+from autogen.import_utils import run_for_optional_imports
 from test.credentials import Credentials
 
 
@@ -75,7 +76,7 @@ def _verify_content_str_processing(content: Any) -> None:
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_conversable_agent_multimodal_message_handling(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent can handle multimodal content in real conversations."""
 
@@ -121,7 +122,7 @@ def test_conversable_agent_multimodal_message_handling(credentials_responses_gpt
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_two_agent_multimodal_conversation(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test two-agent conversation with multimodal content exchange."""
 
@@ -173,7 +174,7 @@ def test_two_agent_multimodal_conversation(credentials_responses_gpt_4o_mini: Cr
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_group_chat_multimodal_content(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test group chat with multimodal content sharing."""
 
@@ -244,7 +245,7 @@ def test_group_chat_multimodal_content(credentials_responses_gpt_4o_mini: Creden
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_sequential_chat_multimodal_carryover(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test sequential chats with multimodal content and carryover."""
 
@@ -317,7 +318,7 @@ def test_sequential_chat_multimodal_carryover(credentials_responses_gpt_4o_mini:
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_multimodal_content_str_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test content_str function with actual multimodal responses from agents."""
 
@@ -397,7 +398,7 @@ def test_multimodal_content_str_integration(credentials_responses_gpt_4o_mini: C
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_multimodal_backwards_compatibility_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test that multimodal changes don't break existing string/dict message patterns."""
 
@@ -457,7 +458,7 @@ def test_multimodal_backwards_compatibility_integration(credentials_responses_gp
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_error_handling_multimodal_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test error handling with malformed multimodal content in real scenarios."""
 
@@ -527,7 +528,7 @@ def test_error_handling_multimodal_integration(credentials_responses_gpt_4o_mini
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_conversable_agent_run_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent::run method with multimodal content via agent.run()."""
 
@@ -590,7 +591,7 @@ def test_conversable_agent_run_multimodal(credentials_responses_gpt_4o_mini: Cre
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_initiate_group_chat_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test initiate_group_chat function with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
@@ -663,7 +664,7 @@ def test_initiate_group_chat_multimodal(credentials_responses_gpt_4o_mini: Crede
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_run_group_chat_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test run_group_chat function with multimodal content and streaming."""
     from autogen.agentchat.group.multi_agent_chat import run_group_chat
@@ -730,7 +731,7 @@ def test_run_group_chat_multimodal(credentials_responses_gpt_4o_mini: Credential
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_pattern_based_multimodal_orchestration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test different orchestration patterns with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
@@ -805,7 +806,7 @@ def test_pattern_based_multimodal_orchestration(credentials_responses_gpt_4o_min
 
 
 @pytest.mark.openai
-@pytest.mark.aux_neg_flag
+@run_for_optional_imports("openai", "openai")
 def test_group_chat_context_variables_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test context variables with multimodal content in group chats."""
     from autogen.agentchat.group.context_variables import ContextVariables
