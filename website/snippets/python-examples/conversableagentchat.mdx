@@ -18,11 +18,13 @@ my_agent = ConversableAgent(
 
 # 4. Chat directly with our agent
 response = my_agent.run(
-    message="In one sentence, what's the big deal about AI?",
+    message=[{"content":"In one sentence, what's the big deal about AI?","role":"user"}],
     max_turns=2,
     user_input=True,
 )
 
 # 5. Iterate through the chat automatically with console output
 response.process()
+
+# Note: The agent's generate_reply and a_generate_reply methods now accept the 'messages' parameter as either a single dict or a list of dicts representing conversation history.
 ```

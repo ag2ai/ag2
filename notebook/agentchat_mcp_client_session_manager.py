@@ -111,7 +111,7 @@ async def run_mcp_agent_to_client(query: str, server_name: str) -> ReplyResult:
 
 
 research_assistant.run(
-    message="Also give me the latest news from wikipedia",
+    message=[{"content": "Also give me the latest news from wikipedia", "role": "user"}],
     tools=[run_mcp_agent_to_client],
     max_turns=2,
 ).process()

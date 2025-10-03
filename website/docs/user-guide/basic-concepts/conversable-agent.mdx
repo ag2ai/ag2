@@ -48,7 +48,7 @@ The simplest way to interact with a `ConversableAgent` is to use the [`run()`](/
 ```python hl_lines="2-6 9"
 # Establish the workflow
 response = my_agent.run(
-    message="What's the capital of France?",
+    message=[{"content":"What's the capital of France?","role":"user"}],
     max_turns=2,  # Limit conversation length
     user_input=True  # Allow user to provide input
 )
@@ -60,6 +60,25 @@ response.process()
 import RunMethodHelpMsg from "/snippets/utils/runmethodhelp.mdx";
 
 <RunMethodHelpMsg/>
+
+## Using generate_reply and a_generate_reply
+
+For advanced use cases, you may interact directly with the low-level response generation APIs: `generate_reply` (sync) and `a_generate_reply` (async). Both support the `messages` parameter, which can be either a list of message dicts (the conversation history) or a single message dict.
+
+```python
+# Single message dict usage:
+single_message = {"role": "user", "content": "Hello."}
+reply = my_agent.generate_reply(messages=single_message)
+
+# List of message dicts:
+conversation = [
+    {"role": "user", "content": "Hi there!"},
+    {"role": "assistant", "content": "Hello!"},
+]
+reply = my_agent.generate_reply(messages=conversation)
+```
+
+The `messages` argument can be either a list of dicts or a single dict. The method will handle both forms in accordance with the latest implementation.
 
 ## Financial Compliance Example
 
@@ -86,7 +105,7 @@ finance_agent = ConversableAgent(
 
 # Run the agent with a prompt
 response = finance_agent.run(
-    message="Can you explain what makes a transaction suspicious?",
+    message=[{"content":"Can you explain what makes a transaction suspicious?","role":"user"}],
     max_turns=1
 )
 

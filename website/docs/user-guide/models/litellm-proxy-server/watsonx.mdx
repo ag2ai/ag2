@@ -135,5 +135,5 @@ emma = AssistantAgent(
     system_message="Your name is Emma and you are a comedian in two-person comedy show.",
 )
 
-jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
+jack.initiate_chat(emma, message=[{"content":"Emma, tell me a joke.","role":"user"}], max_turns=2)
 ```

@@ -378,7 +378,10 @@ class DocAgent(ConversableAgent):
                     ignored_queries = ignored_query_texts
 
                 if not ingestions and not queries:
-                    return ReplyResult(message="No new tasks to initiate", context_variables=context_variables)
+                    return ReplyResult(
+                        message=[{"content": "No new tasks to initiate", "role": "user"}],
+                        context_variables=context_variables,
+                    )
 
                 response_message = _build_response_message(
                     added_ingestions_count, ignored_ingestions, added_queries_count, ignored_queries
@@ -426,7 +429,7 @@ class DocAgent(ConversableAgent):
             if len(context_variables["QueriesToRun"]) == 0:
                 return ReplyResult(
                     target=AgentNameTarget(agent_name=TASK_MANAGER_NAME),
-                    message="No queries to run",
+                    message=[{"content": "No queries to run", "role": "user"}],
                     context_variables=context_variables,
                 )
 

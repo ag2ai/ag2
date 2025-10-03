@@ -158,7 +158,7 @@ def run_conversation(
         If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMINATE and that is your last message.""",
         )
 
-        user.initiate_chat(assistant, message="TERMINATE", cache=cache)
+        user.initiate_chat(assistant, message=[{"content": "TERMINATE", "role": "user"}], cache=cache)
         # should terminate without sending any message
         assert assistant.last_message()["content"] == assistant.last_message(user)["content"] == "TERMINATE"
         coding_task = "Print hello world to a file called hello.txt"

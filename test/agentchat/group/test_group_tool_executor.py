@@ -290,7 +290,9 @@ class TestGroupToolExecutor:
         """Test _generate_group_tool_reply with multiple tool calls."""
         # Create a ReplyResult to be returned by the first tool
         result1 = ReplyResult(
-            message="Tool 1 executed", target=None, context_variables=ContextVariables(data={"var1": "value1"})
+            message="Tool 1 executed",
+            target=None,
+            context_variables=ContextVariables(data={"var1": "value1"}),
         )
 
         # Create a ReplyResult to be returned by the second tool

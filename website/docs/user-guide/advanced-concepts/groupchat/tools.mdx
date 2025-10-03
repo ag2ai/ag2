@@ -120,7 +120,7 @@ manager = GroupChatManager(
 
 user_proxy.initiate_chat(
     recipient=manager,
-    message="I need to buy a plane ticket from New York to Los Angeles on 12th of April 2025",
+    message=[{"content":"I need to buy a plane ticket from New York to Los Angeles on 12th of April 2025","role":"user"}],
 )
 ```
 

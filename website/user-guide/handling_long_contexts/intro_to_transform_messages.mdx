@@ -181,7 +181,7 @@ def test(assistant: autogen.ConversableAgent, user_proxy: autogen.UserProxyAgent
         user_proxy.send(user_msg, assistant, request_reply=False, silent=True)
 
     try:
-        user_proxy.initiate_chat(assistant, message="plot and save a graph of x^2 from -10 to 10", clear_history=False)
+        user_proxy.initiate_chat(assistant, message=[{"content":"plot and save a graph of x^2 from -10 to 10","role":"user"}], clear_history=False)
     except Exception as e:
         print(f"Encountered an error with the base assistant: \n{e}")
 ```

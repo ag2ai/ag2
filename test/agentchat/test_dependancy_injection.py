@@ -238,7 +238,7 @@ class TestDependencyInjection:
 
                 return _login(user)
 
-            await user_proxy.a_initiate_chat(agent, message="Please login", max_turns=2)
+            await user_proxy.a_initiate_chat(agent, message=[{"content": "Please login", "role": "user"}], max_turns=2)
         else:
 
             @user_proxy.register_for_execution()
@@ -248,7 +248,7 @@ class TestDependencyInjection:
             ) -> str:
                 return _login(user)
 
-            user_proxy.initiate_chat(agent, message="Please login", max_turns=2)
+            user_proxy.initiate_chat(agent, message=[{"content": "Please login", "role": "user"}], max_turns=2)
 
         mock.assert_called_once_with(
             UserContext(username="user23", password="password23"),

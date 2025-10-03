@@ -65,11 +65,14 @@ Signature of reply function:
 ```python
 def my_reply_function(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[dict[str, Any]] | dict[str, Any]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, dict[str, Any]]:
 ```
+
+> **Note:**
+> The `messages` parameter can now be _either a list of message dicts or a single message dict_. Your reply function should handle both cases as appropriate for your logic.
 
 Here's an example of registering a reply function that returns the date and time as a final reply.
 
@@ -91,7 +94,7 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 # Our reply function
 def get_date_time_reply(
     agent: ConversableAgent,
-    messages: Optional[list[dict[str, Any]]] = None,
+    messages: Optional[list[dict[str, Any]] | dict[str, Any]] = None,
     sender: Optional[Agent] = None,
     config: Optional[OpenAIWrapper] = None,
 ) -> tuple[bool, dict[str, Any]]:
@@ -121,7 +124,7 @@ agent_calendar.register_reply(
 
 chat_result = agent_bob.initiate_chat(
     recipient=agent_calendar,
-    message="Hi Calendar Agent!",
+    message=[{"content":"Hi Calendar Agent!","role":"user"}],
     max_turns=2
 )
 
@@ -161,7 +164,8 @@ Chat History:
     "name": "Bob"
   },
   {
-    "content": "The current date/time is 2025-02-25 12:43:47 and the day is Tuesday.",
+    "content": "The current date/time is 2025-02-25 12:43:47 and the day is Tuesday.
+",
     "role": "user",
     "name": "Calendar_agent"
   },

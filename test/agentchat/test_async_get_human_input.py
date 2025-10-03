@@ -32,7 +32,7 @@ async def _test_async_get_human_input(credentials: Credentials) -> None:
 
     user_proxy.register_reply([autogen.Agent, None], autogen.ConversableAgent.a_check_termination_and_human_reply)
 
-    await user_proxy.a_initiate_chat(assistant, clear_history=True, message="Hello.")
+    await user_proxy.a_initiate_chat(assistant, clear_history=True, message=[{"content": "Hello.", "role": "user"}])
     # Test without message
     res = await user_proxy.a_initiate_chat(assistant, clear_history=True, summary_method="reflection_with_llm")
     # Assert that custom a_get_human_input was called at least once
@@ -68,7 +68,10 @@ async def _test_async_max_turn(credentials: Credentials):
     user_proxy.a_get_human_input = AsyncMock(return_value="Not funny. Try again.")
 
     res = await user_proxy.a_initiate_chat(
-        assistant, clear_history=True, max_turns=3, message="Hello, make a non-offensive joke about AI."
+        assistant,
+        clear_history=True,
+        max_turns=3,
+        message=[{"content": "Hello, make a non-offensive joke about AI.", "role": "user"}],
     )
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)

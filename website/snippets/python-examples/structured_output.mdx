@@ -35,7 +35,7 @@ my_agent = ConversableAgent(
 
 # 4. Chat directly with our agent
 response = my_agent.run(
-    message="Let's learn about the solar system!",
+    message=[{"content":"Let's learn about the solar system!","role":"user"}],
     user_input=True,
     max_turns=1,
 )

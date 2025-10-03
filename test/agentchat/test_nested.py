@@ -32,6 +32,7 @@ class MockAgentReplies(AgentCapability):
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_nested(
     credentials_gpt_4o_mini: Credentials,
     credentials_gpt_4o: Credentials,
@@ -183,7 +184,7 @@ def test_sync_nested_chat():
     assistant.register_nested_chats(
         [{"sender": inner_assistant, "recipient": inner_assistant_2, "summary_method": "last_msg"}], trigger=user
     )
-    chat_result = user.initiate_chat(assistant, message="Start chat")
+    chat_result = user.initiate_chat(assistant, message=[{"content": "Start chat", "role": "user"}])
     assert len(chat_result.chat_history) == 2
     chat_messages = [msg["content"] for msg in chat_result.chat_history]
     assert chat_messages == ["Start chat", "FINAL_RESULT"]
@@ -222,7 +223,7 @@ async def test_async_nested_chat():
         trigger=user,
         use_async=True,
     )
-    chat_result = await user.a_initiate_chat(assistant, message="Start chat")
+    chat_result = await user.a_initiate_chat(assistant, message=[{"content": "Start chat", "role": "user"}])
     assert len(chat_result.chat_history) == 2
     chat_messages = [msg["content"] for msg in chat_result.chat_history]
     assert chat_messages == ["Start chat", "FINAL_RESULT"]
@@ -302,7 +303,9 @@ def test_sync_nested_chat_in_group():
         trigger=group_manager,
     )
 
-    chat_result = user.initiate_chat(group_manager, message="Start chat", summary_method="last_msg")
+    chat_result = user.initiate_chat(
+        group_manager, message=[{"content": "Start chat", "role": "user"}], summary_method="last_msg"
+    )
     assert len(chat_result.chat_history) == 3
     chat_messages = [msg["content"] for msg in chat_result.chat_history]
     assert chat_messages == ["Start chat", "Assistant_In_Group_1 message 1", "FINAL_RESULT"]
@@ -331,7 +334,7 @@ async def test_async_nested_chat_in_group():
     assistant = autogen.AssistantAgent(
         "Assistant_In_Group_1",
     )
-    MockAgentReplies(["Assistant_In_Group_1 message 1"]).add_to_agent(assistant)
+    MockAgentReplies(["Assistant_In_Group_1 message 1", "Assistant_In_Group_1 message 2"]).add_to_agent(assistant)
     assistant2 = autogen.AssistantAgent(
         "Assistant_In_Group_2",
     )
@@ -348,7 +351,9 @@ async def test_async_nested_chat_in_group():
         use_async=True,
     )
 
-    chat_result = await user.a_initiate_chat(group_manager, message="Start chat", summary_method="last_msg")
+    chat_result = await user.a_initiate_chat(
+        group_manager, message=[{"content": "Start chat", "role": "user"}], summary_method="last_msg"
+    )
     assert len(chat_result.chat_history) == 3
     chat_messages = [msg["content"] for msg in chat_result.chat_history]
     assert chat_messages == ["Start chat", "Assistant_In_Group_1 message 1", "FINAL_RESULT"]

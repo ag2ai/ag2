@@ -40,7 +40,7 @@ register_function(
 # 5. Two-way chat ensures the executor agent follows the suggesting agent
 chat_result = executor_agent.initiate_chat(
     recipient=date_agent,
-    message="I was born on the 25th of March 1995, what day was it?",
+    message=[{"content":"I was born on the 25th of March 1995, what day was it?","role":"user"}],
     max_turns=2,
 )
 

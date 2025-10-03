@@ -68,19 +68,28 @@ def use_question_answer_phrasing(credentials: Credentials):
     teachability.prepopulate_db()
 
     # Ask the teachable agent to do something using terminology it doesn't understand.
-    user.initiate_chat(recipient=teachable_agent, message="What is the twist of 5 and 7?")
+    user.initiate_chat(
+        recipient=teachable_agent, message=[{"content": "What is the twist of 5 and 7?", "role": "user"}]
+    )
 
     # Explain the terminology to the teachable agent.
     user.send(
         recipient=teachable_agent,
-        message="Actually, the twist of two or more numbers is their product minus their sum. Try again.",
+        message=[
+            {
+                "content": "Actually, the twist of two or more numbers is their product minus their sum. Try again.",
+                "role": "user",
+            }
+        ],
     )
     num_errors += check_agent_response(teachable_agent, user, "23")
     num_tests += 1
 
     # Now start a new chat to clear the context, and require the teachable agent to use its new knowledge.
     print(colored("\nSTARTING A NEW CHAT WITH EMPTY CONTEXT", "light_cyan"))
-    user.initiate_chat(recipient=teachable_agent, message="What's the twist of 8 and 3 and 2?")
+    user.initiate_chat(
+        recipient=teachable_agent, message=[{"content": "What's the twist of 8 and 3 and 2?", "role": "user"}]
+    )
     num_errors += check_agent_response(teachable_agent, user, "35")
     num_tests += 1
 
@@ -105,14 +114,21 @@ def use_task_advice_pair_phrasing(credentials: Credentials):
     # Ask the teachable agent to do something, and provide some helpful advice.
     user.initiate_chat(
         recipient=teachable_agent,
-        message="Compute the twist of 5 and 7. Here's a hint: The twist of two or more numbers is their product minus their sum.",
+        message=[
+            {
+                "content": "Compute the twist of 5 and 7. Here's a hint: The twist of two or more numbers is their product minus their sum.",
+                "role": "user",
+            }
+        ],
     )
     num_errors += check_agent_response(teachable_agent, user, "23")
     num_tests += 1
 
     # Now start a new chat to clear the context, and require the teachable agent to use its new knowledge.
     print(colored("\nSTARTING A NEW CHAT WITH EMPTY CONTEXT", "light_cyan"))
-    user.initiate_chat(recipient=teachable_agent, message="Please calculate the twist of 8 and 3 and 2.")
+    user.initiate_chat(
+        recipient=teachable_agent, message=[{"content": "Please calculate the twist of 8 and 3 and 2.", "role": "user"}]
+    )
     num_errors += check_agent_response(teachable_agent, user, "35")
     num_tests += 1
 
@@ -168,11 +184,15 @@ def test_teachability_accuracy(credentials_gpt_4o_mini: Credentials):
         teachability.prepopulate_db()
 
         # Tell the teachable agent something it wouldn't already know.
-        user.initiate_chat(recipient=teachable_agent, message="My favorite color is teal.")
+        user.initiate_chat(
+            recipient=teachable_agent, message=[{"content": "My favorite color is teal.", "role": "user"}]
+        )
 
         # Now start a new chat to clear the context, and ask the teachable agent about the new information.
         print(colored("\nSTARTING A NEW CHAT WITH EMPTY CONTEXT", "light_cyan"))
-        user.initiate_chat(recipient=teachable_agent, message="What's my favorite color?")
+        user.initiate_chat(
+            recipient=teachable_agent, message=[{"content": "What's my favorite color?", "role": "user"}]
+        )
         num_errors = check_agent_response(teachable_agent, user, "teal")
 
         print(colored(f"\nTRIAL {trial + 1} OF {num_trials} FINISHED", "light_cyan"))

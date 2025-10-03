@@ -131,7 +131,7 @@ firecrawl_tool.register_for_llm(assistant)
 
 # The assistant can now use Firecrawl in conversations
 response = assistant.run(
-    message="Please scrape the content from https://example.com and summarize it",
+    message=[{"content":"Please scrape the content from https://example.com and summarize it","role":"user"}],
     tools=assistant.tools
 )
 ```

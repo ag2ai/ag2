@@ -150,7 +150,7 @@ user_proxy = autogen.UserProxyAgent(
 
 user_proxy.initiate_chat(
     assistant,
-    message="Write a python program to print the first 10 numbers of the Fibonacci sequence. Just output the python code, no additional information.",
+    message=[{"content":"Write a python program to print the first 10 numbers of the Fibonacci sequence. Just output the python code, no additional information.","role":"user"}],
 )
 ```
 ```console
@@ -313,7 +313,7 @@ def weather_forecast(
 # start the conversation
 res = user_proxy.initiate_chat(
     chatbot,
-    message="What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday?",
+    message=[{"content":"What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday?","role":"user"}],
     summary_method="reflection_with_llm",
 )
 
@@ -646,7 +646,7 @@ user_proxy = autogen.UserProxyAgent(
 # Ask the image_agent to describe the image
 result = user_proxy.initiate_chat(
     image_agent,
-    message="""What's happening in this image?
+    message=[{"content":"","role":"user"}]"What's happening in this image?
 <img https://microsoft.github.io/autogen/assets/images/love-ec54b2666729d3e9d93f91773d1a77cf.png>.""",
 )
 ```

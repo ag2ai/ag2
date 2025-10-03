@@ -177,7 +177,7 @@ user_proxy = autogen.UserProxyAgent(
 )
 
 user_proxy.initiate_chat(
-    assistant, message="Write a python program to print the first 10 numbers of the Fibonacci sequence."
+    assistant, message=[{"content":"Write a python program to print the first 10 numbers of the Fibonacci sequence.","role":"user"}]
 )
 ```
 ```console
@@ -273,7 +273,7 @@ def preprocess(location: Annotated[str, "The city and state, e.g. Toronto, ON."]
 
 user_proxy.initiate_chat(
     assistant,
-    message="What's the weather in Toronto?",
+    message=[{"content":"What's the weather in Toronto?","role":"user"}],
 )
 ```
 
@@ -851,7 +851,7 @@ agent = ConversableAgent(
 
 # Create the run
 response = agent.run(
-    message="Please provide a comparison of JS and TS",
+    message=[{"content":"Please provide a comparison of JS and TS","role":"user"}],
     user_input=False,
     max_turns=1,
 )

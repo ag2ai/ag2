@@ -139,7 +139,7 @@ class TestDuckDuckGoSearchTool:
                 }
             ]
             response = assistant.run(
-                message="Get me the latest news on hurricanes",
+                message=[{"content": "Get me the latest news on hurricanes", "role": "user"}],
                 tools=assistant.tools,
                 max_turns=2,
                 user_input=False,
