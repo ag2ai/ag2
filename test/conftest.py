@@ -14,6 +14,8 @@ from autogen import LLMConfig, UserProxyAgent
 from test.const import KEY_LOC, MOCK_AZURE_API_KEY, MOCK_OPEN_AI_API_KEY, OAI_CONFIG_LIST
 from test.credentials import Credentials, Secrets
 
+__all__ = ["Credentials"]
+
 
 def patch_pytest_terminal_writer() -> None:
     import _pytest._io
