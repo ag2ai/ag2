@@ -63,19 +63,19 @@ chat_results = teacher.initiate_chats(
     [
         {
             "recipient": lesson_curriculum,
-            "message": "Let's create a science lesson, what's a good topic?",
+            "message":[{"content": "Let's create a science lesson, what's a good topic?", "role": "user"}], # type: Ignore
             "max_turns": 1,
             "summary_method": "last_msg",
         },
         {
             "recipient": lesson_planner,
-            "message": "Create a lesson plan.",
+            "message":[{"content" :"Create a lesson plan.","role":"user"}], # type: Ignore
             "max_turns": 2, # One revision
             "summary_method": "last_msg",
         },
         {
             "recipient": lesson_formatter,
-            "message": "Format the lesson plan.",
+            "message": [{"content":"Format the lesson plan.","role":"user"}], # type: Ignore
             "max_turns": 1,
             "summary_method": "last_msg",
         },
