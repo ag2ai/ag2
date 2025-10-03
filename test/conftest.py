@@ -157,7 +157,7 @@ def credentials_gpt_4o_realtime() -> Credentials:
 
 @pytest.fixture
 def credentials_responses_gpt_4o_mini() -> Credentials:
-    return get_credentials_from_env(
+    return get_credentials(
         "OPENAI_API_KEY",
         model="gpt-4.1-mini",
         api_type="responses",

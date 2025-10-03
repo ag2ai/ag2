@@ -76,13 +76,13 @@ def _verify_content_str_processing(content: Any) -> None:
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: Credentials) -> None:
+def test_conversable_agent_multimodal_message_handling(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent can handle multimodal content in real conversations."""
 
     # Create agents with actual LLM configuration
     assistant = ConversableAgent(
         name="multimodal_assistant",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You are helpful assistant that can process text and images.",
     )
@@ -122,13 +122,13 @@ def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: 
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials) -> None:
+def test_two_agent_multimodal_conversation(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test two-agent conversation with multimodal content exchange."""
 
     # Create two agents with different roles
     analyst = ConversableAgent(
         name="data_analyst",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You are a data analyst who processes visualizations and provides insights.",
         max_consecutive_auto_reply=1,
@@ -174,7 +174,7 @@ def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials)
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> None:
+def test_group_chat_multimodal_content(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test group chat with multimodal content sharing."""
 
     # Create specialized agents
@@ -182,7 +182,7 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
 
     analyst = ConversableAgent(
         name="analyst",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You analyze data and charts. Keep responses concise.",
     )
@@ -190,7 +190,7 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
 
     designer = ConversableAgent(
         name="designer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You review visual designs. Keep responses concise.",
     )
@@ -207,7 +207,7 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
     )
 
     manager = GroupChatManager(
-        groupchat=groupchat, llm_config=credentials_gpt_4o_mini.llm_config, human_input_mode="NEVER"
+        groupchat=groupchat, llm_config=credentials_responses_gpt_4o_mini.llm_config, human_input_mode="NEVER"
     )
 
     # Start group conversation with multimodal content
@@ -245,7 +245,7 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentials) -> None:
+def test_sequential_chat_multimodal_carryover(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test sequential chats with multimodal content and carryover."""
 
     # Create agents for sequential workflow
@@ -255,7 +255,7 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
 
     analyst = ConversableAgent(
         name="business_analyst",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You analyze business requirements. Be concise.",
         max_consecutive_auto_reply=1,
@@ -263,7 +263,7 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
 
     reviewer = ConversableAgent(
         name="technical_reviewer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You review technical specifications. Be concise.",
         max_consecutive_auto_reply=1,
@@ -318,12 +318,12 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials) -> None:
+def test_multimodal_content_str_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test content_str function with actual multimodal responses from agents."""
 
     assistant = ConversableAgent(
         name="content_processor",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="Provide detailed responses about visual content.",
     )
@@ -398,12 +398,12 @@ def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini: Credentials) -> None:
+def test_multimodal_backwards_compatibility_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test that multimodal changes don't break existing string/dict message patterns."""
 
     assistant = ConversableAgent(
         name="compatibility_test",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You are a helpful assistant. Keep responses brief.",
     )
@@ -458,12 +458,12 @@ def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini:
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credentials) -> None:
+def test_error_handling_multimodal_integration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test error handling with malformed multimodal content in real scenarios."""
 
     assistant = ConversableAgent(
         name="error_test_agent",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You are a helpful assistant.",
     )
@@ -528,12 +528,12 @@ def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credenti
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_conversable_agent_run_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent::run method with multimodal content via agent.run()."""
 
     assistant = ConversableAgent(
         name="multimodal_runner",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You are a helpful assistant that processes text and images. Keep responses brief.",
     )
@@ -591,7 +591,7 @@ def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) 
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_initiate_group_chat_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test initiate_group_chat function with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
     from autogen.agentchat.group.patterns.auto import AutoPattern
@@ -599,14 +599,14 @@ def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) ->
     # Create agents for group chat
     analyst = ConversableAgent(
         name="data_analyst",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You analyze data and provide insights. Keep responses brief.",
     )
 
     designer = ConversableAgent(
         name="ui_designer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You review designs and interfaces. Keep responses brief.",
     )
@@ -621,7 +621,7 @@ def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) ->
         initial_agent=analyst,
         agents=[analyst, designer],
         user_agent=user_proxy,
-        group_manager_args={"llm_config": credentials_gpt_4o_mini.llm_config},
+        group_manager_args={"llm_config": credentials_responses_gpt_4o_mini.llm_config},
     )
 
     # Test 1: String message
@@ -664,7 +664,7 @@ def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) ->
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_run_group_chat_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test run_group_chat function with multimodal content and streaming."""
     from autogen.agentchat.group.multi_agent_chat import run_group_chat
     from autogen.agentchat.group.patterns.round_robin import RoundRobinPattern
@@ -672,14 +672,14 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
     # Create agents for round-robin group chat
     reviewer = ConversableAgent(
         name="code_reviewer",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You review code and architectures. Keep responses very brief.",
     )
 
     tester = ConversableAgent(
         name="qa_tester",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="You test software and find issues. Keep responses very brief.",
     )
@@ -731,7 +731,7 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credentials) -> None:
+def test_pattern_based_multimodal_orchestration(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test different orchestration patterns with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
     from autogen.agentchat.group.patterns.auto import AutoPattern
@@ -740,14 +740,14 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
     # Create agents
     analyst = ConversableAgent(
         name="analyst",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="Analyze content briefly.",
     )
 
     critic = ConversableAgent(
         name="critic",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="Provide critical feedback briefly.",
     )
@@ -771,7 +771,7 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
         initial_agent=analyst,
         agents=[analyst, critic],
         user_agent=user_proxy,
-        group_manager_args={"llm_config": credentials_gpt_4o_mini.llm_config},
+        group_manager_args={"llm_config": credentials_responses_gpt_4o_mini.llm_config},
     )
 
     result1, _, _ = initiate_group_chat(
@@ -806,7 +806,7 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
 
 @pytest.mark.openai
 @pytest.mark.aux_neg_flag
-def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+def test_group_chat_context_variables_multimodal(credentials_responses_gpt_4o_mini: Credentials) -> None:
     """Test context variables with multimodal content in group chats."""
     from autogen.agentchat.group.context_variables import ContextVariables
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
@@ -815,7 +815,7 @@ def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Creden
     # Create agent
     processor = ConversableAgent(
         name="content_processor",
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials_responses_gpt_4o_mini.llm_config,
         human_input_mode="NEVER",
         system_message="Process content and maintain context. Keep responses brief.",
     )
@@ -836,7 +836,7 @@ def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Creden
         agents=[processor],
         user_agent=user_proxy,
         context_variables=initial_context,
-        group_manager_args={"llm_config": credentials_gpt_4o_mini.llm_config},
+        group_manager_args={"llm_config": credentials_responses_gpt_4o_mini.llm_config},
     )
 
     # Test with multimodal content
