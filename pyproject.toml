@@ -276,14 +276,15 @@ test = [
     "ipykernel==6.30.1",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
-    "pytest-cov==6.3.0",
-    "pytest-asyncio==1.1.0",
-    "pytest==8.4.2",
-    "mock==5.2.0",
     "pandas==2.3.2",
     "fastapi==0.116.1",
+    "mcp>=1.11.0",
+    # test utilities
+    "pytest==8.4.2",
+    "pytest-cov==6.3.0",
+    "pytest-asyncio==1.1.0",
     "dirty-equals==0.9.0",
-    "mcp>=1.11.0"
+    "freezegun==1.5.5",
 ]
 
 docs = [
@@ -503,7 +504,7 @@ python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",
-#    "autogen/agentchat/cenversable_agent.py",
+#    "autogen/agentchat/conversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -526,6 +527,7 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
+    "autogen/remote",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
