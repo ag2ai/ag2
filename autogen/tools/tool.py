@@ -97,6 +97,8 @@ class Tool:
         """
         if self._func_schema:
             agent.update_tool_signature(self._func_schema, is_remove=False)
+            if self not in agent._tools:
+                agent._tools.append(self)
         else:
             agent.register_for_llm()(self)
 
