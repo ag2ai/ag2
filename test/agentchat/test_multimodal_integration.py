@@ -75,6 +75,7 @@ def _verify_content_str_processing(content: Any) -> None:
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent can handle multimodal content in real conversations."""
 
@@ -120,6 +121,7 @@ def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: 
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials) -> None:
     """Test two-agent conversation with multimodal content exchange."""
 
@@ -171,6 +173,7 @@ def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials)
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> None:
     """Test group chat with multimodal content sharing."""
 
@@ -241,6 +244,7 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentials) -> None:
     """Test sequential chats with multimodal content and carryover."""
 
@@ -313,6 +317,7 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test content_str function with actual multimodal responses from agents."""
 
@@ -392,6 +397,7 @@ def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test that multimodal changes don't break existing string/dict message patterns."""
 
@@ -451,6 +457,7 @@ def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini:
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test error handling with malformed multimodal content in real scenarios."""
 
@@ -520,6 +527,7 @@ def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credenti
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent::run method with multimodal content via agent.run()."""
 
@@ -582,6 +590,7 @@ def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) 
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test initiate_group_chat function with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
@@ -654,6 +663,7 @@ def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) ->
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test run_group_chat function with multimodal content and streaming."""
     from autogen.agentchat.group.multi_agent_chat import run_group_chat
@@ -720,6 +730,7 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test different orchestration patterns with multimodal content."""
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
@@ -794,6 +805,7 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
 
 
 @pytest.mark.openai
+@pytest.mark.aux_neg_flag
 def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test context variables with multimodal content in group chats."""
     from autogen.agentchat.group.context_variables import ContextVariables
