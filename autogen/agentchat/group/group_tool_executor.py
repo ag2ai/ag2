@@ -7,6 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
+from ...code_utils import content_str
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -182,11 +183,13 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    if content is not None:
-                        tool_response["content"] = str(content)
+                    normalized_content = (
+                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
+                    )
+                    tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)
-                    contents.append(str(tool_response["content"]))
+                    contents.append(normalized_content)
 
             self._group_next_target = next_target  # type: ignore[attr-defined]
 
