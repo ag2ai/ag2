@@ -107,13 +107,13 @@ class Agent(Protocol):
 
     def generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
     ) -> str | dict[str, Any] | None:
         """Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict[str, Any]] or dict[str, Any]): a list of messages received from other agents. can be a single message.
+            messages (list[dict[str, Any]]): a list of messages received from other agents. can be a single message.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
@@ -125,13 +125,13 @@ class Agent(Protocol):
 
     async def a_generate_reply(
         self,
-        messages: list[dict[str, Any]] | dict[str, Any] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
     ) -> str | dict[str, Any] | None:
         """(Async) Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict[str, Any]] or dict[str, Any]): a list of messages received from other agents. can be a single message.
+            messages (list[dict[str, Any]]): a list of messages received from other agents. can be a single message.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
