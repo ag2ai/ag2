@@ -9,6 +9,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ....code_utils import content_str
 from ....io.base import IOStream
 from ....llm_config import LLMConfig
 from ..guardrails import LLMGuardrail, RegexGuardrail
@@ -18,6 +19,15 @@ from .events import SafeguardEvent
 
 class SafeguardEnforcer:
     """Main safeguard enforcer - executes safeguard policies"""
+
+    @staticmethod
+    def _stringify_content(value: Any) -> str:
+        if isinstance(value, (str, list)) or value is None:
+            try:
+                return content_str(value)
+            except (TypeError, ValueError, AssertionError):
+                pass
+        return "" if value is None else str(value)
 
     def __init__(
         self,
@@ -675,9 +685,12 @@ class SafeguardEnforcer:
             # Handle tool_responses
             if "tool_responses" in masked_content and masked_content["tool_responses"]:
                 if "content" in masked_content:
-                    masked_content["content"] = mask_func(str(masked_content["content"]))
+                    masked_content["content"] = mask_func(self._stringify_content(masked_content.get("content")))
                 masked_content["tool_responses"] = [
-                    {**response, "content": mask_func(str(response.get("content", "")))}
+                    {
+                        **response,
+                        "content": mask_func(self._stringify_content(response.get("content"))),
+                    }
                     for response in masked_content["tool_responses"]
                 ]
             # Handle tool_calls
@@ -687,17 +700,17 @@ class SafeguardEnforcer:
                         **tool_call,
                         "function": {
                             **tool_call["function"],
-                            "arguments": mask_func(str(tool_call["function"].get("arguments", ""))),
+                            "arguments": mask_func(self._stringify_content(tool_call["function"].get("arguments"))),
                         },
                     }
                     for tool_call in masked_content["tool_calls"]
                 ]
             # Handle regular content
             elif "content" in masked_content:
-                masked_content["content"] = mask_func(str(masked_content["content"]))
+                masked_content["content"] = mask_func(self._stringify_content(masked_content.get("content")))
             # Handle arguments
             elif "arguments" in masked_content:
-                masked_content["arguments"] = mask_func(str(masked_content["arguments"]))
+                masked_content["arguments"] = mask_func(self._stringify_content(masked_content.get("arguments")))
 
             return masked_content
 
@@ -708,33 +721,38 @@ class SafeguardEnforcer:
                 if isinstance(item, dict):
                     masked_item = item.copy()
                     if "content" in masked_item:
-                        masked_item["content"] = mask_func(str(masked_item["content"]))
+                        masked_item["content"] = mask_func(self._stringify_content(masked_item.get("content")))
                     if "tool_calls" in masked_item:
                         masked_item["tool_calls"] = [
                             {
                                 **tool_call,
                                 "function": {
                                     **tool_call["function"],
-                                    "arguments": mask_func(str(tool_call["function"].get("arguments", ""))),
+                                    "arguments": mask_func(
+                                        self._stringify_content(tool_call["function"].get("arguments"))
+                                    ),
                                 },
                             }
                             for tool_call in masked_item["tool_calls"]
                         ]
                     if "tool_responses" in masked_item:
                         masked_item["tool_responses"] = [
-                            {**response, "content": mask_func(str(response.get("content", "")))}
+                            {
+                                **response,
+                                "content": mask_func(self._stringify_content(response.get("content"))),
+                            }
                             for response in masked_item["tool_responses"]
                         ]
                     masked_list.append(masked_item)
                 else:
                     # For non-dict items, wrap the masked content in a dict
-                    masked_item_content: str = mask_func(str(item))
+                    masked_item_content: str = mask_func(self._stringify_content(item))
                     masked_list.append({"content": masked_item_content, "role": "function"})
             return masked_list
 
         else:
             # String content
-            return mask_func(str(content))
+            return mask_func(self._stringify_content(content))
 
     def _check_inter_agent_communication(
         self, sender_name: str, recipient_name: str, message: str | dict[str, Any]
