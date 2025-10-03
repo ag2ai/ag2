@@ -74,7 +74,6 @@ def _verify_content_str_processing(content: Any) -> None:
             assert "<image>" in result, "Image content should be converted to <image> placeholder"
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent can handle multimodal content in real conversations."""
@@ -120,7 +119,6 @@ def test_conversable_agent_multimodal_message_handling(credentials_gpt_4o_mini: 
     _verify_content_str_processing(assistant_message["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials) -> None:
     """Test two-agent conversation with multimodal content exchange."""
@@ -172,7 +170,6 @@ def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials)
         _verify_content_str_processing(msg["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> None:
     """Test group chat with multimodal content sharing."""
@@ -243,7 +240,6 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
         _verify_content_str_processing(msg["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentials) -> None:
     """Test sequential chats with multimodal content and carryover."""
@@ -316,7 +312,6 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
             _verify_content_str_processing(msg["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test content_str function with actual multimodal responses from agents."""
@@ -396,7 +391,6 @@ def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials
             _verify_content_str_processing(response_msg["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test that multimodal changes don't break existing string/dict message patterns."""
@@ -456,7 +450,6 @@ def test_multimodal_backwards_compatibility_integration(credentials_gpt_4o_mini:
                 pytest.fail(f"content_str failed on backwards compatibility test {i}: {e}")
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test error handling with malformed multimodal content in real scenarios."""
@@ -526,7 +519,6 @@ def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credenti
     assert len(chat_result.chat_history) >= 2, "Should complete successfully"
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test ConversableAgent::run method with multimodal content via agent.run()."""
@@ -589,7 +581,6 @@ def test_conversable_agent_run_multimodal(credentials_gpt_4o_mini: Credentials) 
     print(f"Test completed successfully with {len(messages_list)} messages")
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test initiate_group_chat function with multimodal content."""
@@ -662,7 +653,6 @@ def test_initiate_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) ->
     assert len(participating_agents) >= 1, f"At least one agent should participate. Found: {participant_names}"
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test run_group_chat function with multimodal content and streaming."""
@@ -729,7 +719,6 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
     time.sleep(2)
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credentials) -> None:
     """Test different orchestration patterns with multimodal content."""
@@ -804,7 +793,6 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
         _verify_content_str_processing(msg["content"])
 
 
-@pytest.mark.integration
 @pytest.mark.openai
 def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
     """Test context variables with multimodal content in group chats."""
