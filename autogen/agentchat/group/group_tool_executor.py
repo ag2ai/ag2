@@ -8,6 +8,7 @@ from copy import deepcopy
 from typing import Annotated, Any
 
 from autogen.agentchat.group.events.handoff_events import OnConditionLLMTransitionEvent
+from autogen.agentchat.group.events.reply_result_events import ReplyResultTransitionEvent
 from autogen.io.base import IOStream
 
 from ...oai import OpenAIWrapper
@@ -198,6 +199,23 @@ class GroupToolExecutor(ConversableAgent):
                     )
                 )
 
+    def _send_reply_result_handoff_event(self, message: dict[str, Any], transition_target: TransitionTarget) -> None:
+        """Send a ReplyResult handoff event.
+
+        Args:
+            message: The message containing the tool call and source agent
+            transition_target: The target to transition to
+        """
+        source_agent = self.get_sender_agent_for_message(message)
+        if source_agent:
+            iostream = IOStream.get_default()
+            iostream.send(
+                ReplyResultTransitionEvent(
+                    source_agent=source_agent,
+                    transition_target=transition_target,
+                )
+            )
+
     def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
@@ -249,7 +267,7 @@ class GroupToolExecutor(ConversableAgent):
                         if content.context_variables and content.context_variables.to_dict() != {}:
                             agent.context_variables.update(content.context_variables.to_dict())
                         if content.target is not None:
-                            self._send_llm_handoff_event(message_copy, content.target)
+                            self._send_reply_result_handoff_event(message_copy, content.target)
                             next_target = content.target
                     elif isinstance(content, TransitionTarget):
                         self._send_llm_handoff_event(message_copy, content)
