@@ -11,7 +11,7 @@ The following figure illustrates how two-agent chat works.
 
 ![Two-agent chat](./assets/two-agent-chat.png)
 
-A two-agent chat takes two inputs: a message, which can either be a string (for convenience) or a dictionary representing a message, and a context, which specifies various parameters of the chat.
+A two-agent chat takes two inputs: a message, which can be a string (for convenience), a dictionary representing a message, **or a list of message dicts** (representing a full conversation history), and a context, which specifies various parameters of the chat.
 
 The sender agent uses its chat initializer method (i.e., `generate_init_message` method of `ConversableAgent`) to generate an initial message from the inputs, and sends it to the recipient agent to start the chat.
 
@@ -74,3 +74,4 @@ import pprint
 
 pprint.pprint(chat_result.chat_history)
 ```
+ 
