@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @export_module("autogen.remote.a2a")
-class A2ARemoteAgent(ConversableAgent):
+class A2aRemoteAgent(ConversableAgent):
     def __init__(
         self,
         url: str,
@@ -46,11 +46,11 @@ class A2ARemoteAgent(ConversableAgent):
 
         self.replace_reply_func(
             ConversableAgent.generate_oai_reply,
-            A2ARemoteAgent.generate_remote_reply,
+            A2aRemoteAgent.generate_remote_reply,
         )
         self.replace_reply_func(
             ConversableAgent.a_generate_oai_reply,
-            A2ARemoteAgent.a_generate_remote_reply,
+            A2aRemoteAgent.a_generate_remote_reply,
         )
 
     def generate_remote_reply(

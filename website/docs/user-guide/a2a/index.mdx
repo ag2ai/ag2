@@ -1,0 +1,84 @@
+```python title="a2a_serve.py
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+
+config = LLMConfig({
+    "model": "gpt-5",
+    "api_key": "...",
+})
+
+agent = ConversableAgent(
+    name="hello_wold_agent",
+    system_message="You are a helpful assistant.",
+    llm_config=config,
+)
+
+app = A2aAgentServer(agent).build()
+```
+
+```shell
+uvicorn a2a_serve:app
+```
+
+Do not forget to set public url for agent card
+
+```python
+server = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
+```
+
+### full-settings example
+
+```python
+from a2a.types import AgentSkill
+from autogen import ConversableAgent
+from autogen.a2a import A2aAgentServer, CardSettings
+
+server = A2aAgentServer(
+    ConversableAgent(...),
+    agent_card=CardSettings(
+        name="hello_wold_agent",
+        description="A helpful assistant",
+    ),
+    extended_agent_card=CardSettings(
+        skills=[AgentSkill(
+            name="hello_world",
+            id="hello_world",
+            description="Say hello to the world!",
+        )],
+    ),
+).build()
+```
+
+### custom request handler
+
+```python
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from autogen import ConversableAgent
+from autogen.a2a import A2aAgentServer
+
+server = A2aAgentServer(ConversableAgent(...))
+
+request_handler = DefaultRequestHandler(
+    agent_executor=server.executor,  # use autogen executor
+    task_store=InMemoryTaskStore(),
+)
+
+app = server.build(request_handler=request_handler)
+```
+
+### custom server
+
+```python
+from a2a.server.apps import A2AFastAPIApplication
+from autogen import ConversableAgent
+from autogen.a2a import A2aAgentServer
+
+server = A2aAgentServer(ConversableAgent(...))
+
+app = A2AFastAPIApplication(
+    agent_card=server.card,
+    extended_agent_card=server.extended_agent_card,
+    http_handler=server.build_request_handler(),
+).build()
+```
