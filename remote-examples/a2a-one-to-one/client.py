@@ -2,7 +2,7 @@ import asyncio
 import os
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.remote.a2a import A2ARemoteAgent
+from autogen.a2a import A2aRemoteAgent
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -31,7 +31,7 @@ review_agent = ConversableAgent(
     llm_config=llm_config,
 )
 
-code_agent = A2ARemoteAgent(
+code_agent = A2aRemoteAgent(
     url="http://localhost:9999",
     name="coder",
 )

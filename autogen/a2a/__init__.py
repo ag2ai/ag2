@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .agent_executor import AutogenAgentExecutor
-from .client import A2ARemoteAgent
+from .client import A2aRemoteAgent
+from .server import A2aAgentServer, CardSettings
 
 __all__ = (
-    "A2ARemoteAgent",
+    "A2aAgentServer",
+    "A2aRemoteAgent",
     "AutogenAgentExecutor",
+    "CardSettings",
 )

@@ -1,13 +1,9 @@
 import os
 
 import uvicorn
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.remote.a2a import AutogenAgentExecutor
+from autogen.a2a import A2aAgentServer
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -35,35 +31,7 @@ code_agent = ConversableAgent(
     silent=True,
 )
 
+
 if __name__ == "__main__":
-    skill = AgentSkill(
-        id="hello_world",
-        name="Returns hello world",
-        description="just returns hello world",
-        tags=["hello world"],
-        examples=["hi", "hello world"],
-    )
-
-    public_agent_card = AgentCard(
-        name="Hello World Agent",
-        description="Just a hello world agent",
-        url="http://magic-useless-url/",
-        version="1.0.0",
-        default_input_modes=["text"],
-        default_output_modes=["text"],
-        capabilities=AgentCapabilities(streaming=True),
-        skills=[skill],
-        supports_authenticated_extended_card=False,
-    )
-
-    request_handler = DefaultRequestHandler(
-        agent_executor=AutogenAgentExecutor(code_agent),
-        task_store=InMemoryTaskStore(),
-    )
-
-    server = A2AStarletteApplication(
-        agent_card=public_agent_card,
-        http_handler=request_handler,
-    )
-
-    uvicorn.run(server.build(), host="0.0.0.0", port=9999)
+    a2a_agent_server = A2aAgentServer(code_agent)
+    uvicorn.run(a2a_agent_server.build(), host="0.0.0.0", port=9999)
