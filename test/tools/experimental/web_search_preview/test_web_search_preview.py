@@ -5,16 +5,10 @@
 
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import WebSearchPreviewTool
+from test.credentials import Credentials
 
-from ....conftest import Credentials
 
-
-@run_for_optional_imports(
-    [
-        "openai",
-    ],
-    "openai",
-)
+@run_for_optional_imports(["openai"], "openai")
 class TestWebSearchPreviewTool:
     def test_init(self, mock_credentials: Credentials) -> None:
         google_search_tool = WebSearchPreviewTool(llm_config=mock_credentials.llm_config)

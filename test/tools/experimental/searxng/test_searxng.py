@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from autogen import AssistantAgent
 from autogen.tools.experimental.searxng import SearxngSearchTool
-from test.conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestSearxngSearchTool:
