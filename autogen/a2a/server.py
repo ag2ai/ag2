@@ -11,6 +11,7 @@ from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 from pydantic import Field
 
 from autogen import ConversableAgent
+from autogen.doc_utils import export_module
 
 from .agent_executor import AutogenAgentExecutor
 
@@ -26,10 +27,11 @@ if TYPE_CHECKING:
     from autogen import ConversableAgent
 
 
+@export_module("autogen.a2a")
 class CardSettings(AgentCard):
-    name: str | None = None
-    description: str | None = None
-    url: str | None = None
+    name: str | None = None  # type: ignore[assignment]
+    description: str | None = None  # type: ignore[assignment]
+    url: str | None = None  # type: ignore[assignment]
 
     version: str = "0.1.0"
 
@@ -39,6 +41,7 @@ class CardSettings(AgentCard):
     skills: list[AgentSkill] = Field(default_factory=list)
 
 
+@export_module("autogen.a2a")
 class A2aAgentServer:
     def __init__(
         self,

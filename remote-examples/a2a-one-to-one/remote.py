@@ -33,5 +33,8 @@ code_agent = ConversableAgent(
 
 
 if __name__ == "__main__":
-    a2a_agent_server = A2aAgentServer(code_agent)
+    a2a_agent_server = A2aAgentServer(
+        code_agent,
+        url="http://0.0.0.0:9999",
+    )
     uvicorn.run(a2a_agent_server.build(), host="0.0.0.0", port=9999)

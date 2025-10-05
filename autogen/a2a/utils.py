@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
-from a2a.utils import new_agent_parts_message, new_artifact
+from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
 
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
@@ -60,6 +60,13 @@ def response_message_from_a2a(artifacts: list[Artifact] | None) -> ResponseMessa
     return ResponseMessage(
         messages=[message_from_part(artifact.parts[-1])],
         context=(artifact.metadata or {}).get(CONTEXT_KEY),
+    )
+
+
+def response_message_from_a2a_message(message: Message) -> ResponseMessage | None:
+    return ResponseMessage(
+        messages=[{"content": get_message_text(message)}],
+        context=(message.metadata or {}).get(CONTEXT_KEY),
     )
 
 

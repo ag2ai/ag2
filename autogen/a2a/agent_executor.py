@@ -17,7 +17,7 @@ from autogen.remote.agent_service import AgentService
 from .utils import request_message_from_a2a, response_message_to_a2a
 
 
-@export_module("autogen.remote.a2a")
+@export_module("autogen.a2a")
 class AutogenAgentExecutor(AgentExecutor):
     def __init__(self, agent: ConversableAgent) -> None:
         self.agent = AgentService(agent)

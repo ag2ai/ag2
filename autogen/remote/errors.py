@@ -14,4 +14,4 @@ class RemoteAgentNotFoundError(RemoteAgentError):
 
     def __init__(self, agent_name: str) -> None:
         self.agent_name = agent_name
-        super().__init__(f"Remote agent {agent_name} not found")
+        super().__init__(f"Remote agent `{agent_name}` not found")
