@@ -16,9 +16,9 @@ Policy-guided safeguards is a policy-driven system-wide safeguard. A policy (sec
 
 ## Safeguards API (Quick Start)
 
-**New Recommended Approach (using `initiate_group_chat`):**
+**New Recommended Approach (using `initiate_group_chat` or `run_group_chat`):**
 ```python
-from autogen.agentchat import initiate_group_chat
+from autogen.agentchat import initiate_group_chat, run_group_chat
 
 result, context, last_agent = initiate_group_chat(
     pattern=pattern,
@@ -28,6 +28,16 @@ result, context, last_agent = initiate_group_chat(
     safeguard_llm_config=llm_config,   # LLM config for safeguard checks
     mask_llm_config=llm_config,        # Optional: separate LLM for masking
 )
+
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern, 
+#     messages=user_query, 
+#     max_rounds=10, 
+#     safeguard_policy=safeguard_policy, 
+#     safeguard_llm_config=llm_config, 
+#     mask_llm_config=llm_config
+# )
 ```
 
 **Legacy Approach (using `apply_safeguard_policy` with `initiate_chat`):**
@@ -229,6 +239,16 @@ result, context, last_agent = initiate_group_chat(
     safeguard_llm_config=llm_config,   # LLM config for safeguard checks
     mask_llm_config=llm_config,        # Optional: separate LLM for masking
 )
+
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern, 
+#     messages=user_query, 
+#     max_rounds=10, 
+#     safeguard_policy=safeguard_policy, 
+#     safeguard_llm_config=llm_config, 
+#     mask_llm_config=llm_config
+# )
 ```
 
 **Legacy Approach:** Use `apply_safeguard_policy()` to enforce a policy on a set of agents or an groupchat. Provide an LLM config when using LLM-based checks, and optionally a separate LLM config for masking.
@@ -396,6 +416,17 @@ result, context, last_agent = initiate_group_chat(
     safeguard_policy=policy,
     safeguard_llm_config={"model": "gpt-4o-mini"},
 )
+
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern, 
+#     messages=user_query, 
+#     max_rounds=10, 
+#     safeguard_policy=safeguard_policy, 
+#     safeguard_llm_config=llm_config, 
+#     mask_llm_config=llm_config
+# )
+
 ```
 
 
