@@ -1,0 +1,408 @@
+---
+title: "A2A Client Usage"
+description: "Learn how to connect to and interact with remote A2A agents from your local applications."
+---
+
+# A2A Client Usage
+
+The A2A client allows you to connect to remote A2A agent servers and interact with them as if they were local agents. This guide covers everything you need to know about using A2A clients.
+
+## Basic Client Setup
+
+### Simple Connection
+
+```python
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Use it like any other agent
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Create a calculator function"}
+)
+```
+
+### With Local Agent
+
+```python
+import asyncio
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+
+# Configure local agent
+llm_config = LLMConfig(
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+# Create local agent
+reviewer = ConversableAgent(
+    name="code_reviewer",
+    system_message="You are a code reviewer...",
+    llm_config=llm_config,
+)
+
+# Connect to remote agent
+coder = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Start conversation
+async def review_code():
+    await reviewer.a_initiate_chat(
+        recipient=coder,
+        message={"role": "user", "content": "Create a Python calculator"}
+    )
+
+    # Process the response
+    messages = reviewer.chat_messages[coder.name]
+    for message in messages:
+        print(f"{message['name']}: {message['content']}")
+
+# Run the conversation
+asyncio.run(review_code())
+```
+
+## Advanced Configuration
+
+### Custom HTTP Client
+
+```python
+import httpx
+from autogen.a2a import A2aRemoteAgent
+
+# Create custom HTTP client
+http_client = httpx.AsyncClient(
+    timeout=30.0,
+    headers={"User-Agent": "MyApp/1.0"}
+)
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client=http_client
+)
+```
+
+### Client Configuration
+
+```python
+from a2a.client import ClientConfig
+from autogen.a2a import A2aRemoteAgent
+
+# Configure client settings
+client_config = ClientConfig(
+    timeout=60.0,
+    retry_attempts=3,
+    retry_delay=1.0
+)
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=client_config
+)
+```
+
+### Authentication
+
+```python
+import httpx
+from autogen.a2a import A2aRemoteAgent
+
+# Create authenticated client
+auth_client = httpx.AsyncClient(
+    headers={"Authorization": f"Bearer {your_token}"}
+)
+
+remote_agent = A2aRemoteAgent(
+    url="https://api.your-domain.com",
+    name="secure_agent",
+    client=auth_client
+)
+```
+
+## Working with Agent Cards
+
+### Discovering Agent Capabilities
+
+```python
+# The agent card is automatically fetched when first used
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Access agent capabilities
+agent_card = await remote_agent._get_agent_card()
+print(f"Agent: {agent_card.name}")
+print(f"Description: {agent_card.description}")
+print(f"Capabilities: {agent_card.capabilities}")
+print(f"Skills: {[skill.name for skill in agent_card.skills]}")
+```
+
+### Checking Streaming Support
+
+```python
+agent_card = await remote_agent._get_agent_card()
+if agent_card.capabilities.streaming:
+    print("Agent supports streaming responses")
+else:
+    print("Agent uses polling for responses")
+```
+
+## Error Handling
+
+### Connection Errors
+
+```python
+from autogen.a2a.errors import A2aClientError, A2aAgentNotFoundError
+
+try:
+    remote_agent = A2aRemoteAgent(
+        url="http://localhost:8000",
+        name="python_coder"
+    )
+
+    await local_agent.a_initiate_chat(
+        recipient=remote_agent,
+        message={"role": "user", "content": "Hello"}
+    )
+
+except A2aAgentNotFoundError as e:
+    print(f"Agent not found: {e}")
+except A2aClientError as e:
+    print(f"Client error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+### Retry Logic
+
+```python
+import asyncio
+from autogen.a2a.errors import A2aClientError
+
+async def robust_chat(agent, message, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            await local_agent.a_initiate_chat(
+                recipient=agent,
+                message=message
+            )
+            break
+        except A2aClientError as e:
+            if attempt == max_retries - 1:
+                raise
+            print(f"Attempt {attempt + 1} failed: {e}")
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+```
+
+## Context and Tools
+
+### Passing Context Variables
+
+```python
+# Set context variables that will be sent to the remote agent
+local_agent.context_variables.update({
+    "project_name": "MyProject",
+    "language": "Python",
+    "framework": "FastAPI"
+})
+
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Create a FastAPI endpoint"}
+)
+```
+
+### Using Tools with Remote Agents
+
+```python
+# Define tools for the remote agent
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
+# Update tool signature
+remote_agent.update_tool_signature(tools[0], is_remove=False)
+
+# Use the remote agent with tools
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Search for Python best practices"}
+)
+```
+
+## Performance Optimization
+
+### Connection Pooling
+
+```python
+import httpx
+from autogen.a2a import A2aRemoteAgent
+
+# Reuse HTTP client across multiple agents
+http_client = httpx.AsyncClient()
+
+agent1 = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="agent1",
+    client=http_client
+)
+
+agent2 = A2aRemoteAgent(
+    url="http://localhost:8001",
+    name="agent2",
+    client=http_client
+)
+
+# Use both agents efficiently
+```
+
+### Async Operations
+
+```python
+import asyncio
+
+async def parallel_requests():
+    # Make multiple requests in parallel
+    tasks = [
+        local_agent.a_initiate_chat(recipient=agent1, message=msg1),
+        local_agent.a_initiate_chat(recipient=agent2, message=msg2),
+        local_agent.a_initiate_chat(recipient=agent3, message=msg3),
+    ]
+
+    results = await asyncio.gather(*tasks)
+    return results
+```
+
+## Monitoring and Debugging
+
+### Enable Debug Logging
+
+```python
+import logging
+
+# Enable debug logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("autogen.a2a")
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+```
+
+### Health Checks
+
+```python
+async def check_agent_health(agent_url):
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{agent_url}/health")
+            return response.status_code == 200
+    except Exception:
+        return False
+
+# Check before using
+if await check_agent_health("http://localhost:8000"):
+    # Agent is healthy, proceed
+    pass
+else:
+    # Handle unhealthy agent
+    pass
+```
+
+## Best Practices
+
+### 1. Connection Management
+
+```python
+# Use context managers for proper cleanup
+async with httpx.AsyncClient() as client:
+    remote_agent = A2aRemoteAgent(
+        url="http://localhost:8000",
+        name="python_coder",
+        client=client
+    )
+    # Use the agent
+    await local_agent.a_initiate_chat(recipient=remote_agent, message=msg)
+```
+
+### 2. Error Handling
+
+```python
+# Always handle potential errors
+try:
+    await local_agent.a_initiate_chat(recipient=remote_agent, message=msg)
+except A2aClientError as e:
+    logger.error(f"Failed to communicate with remote agent: {e}")
+    # Implement fallback logic
+```
+
+### 3. Timeout Configuration
+
+```python
+# Set appropriate timeouts
+client_config = ClientConfig(timeout=30.0)
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=client_config
+)
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Timeout**
+- Check network connectivity
+- Verify server is running
+- Increase timeout values
+
+**Agent Not Found**
+- Verify the URL is correct
+- Check if the server is responding
+- Ensure the agent card endpoint is accessible
+
+**Authentication Errors**
+- Verify API keys and tokens
+- Check authentication headers
+- Ensure proper permissions
+
+### Debug Commands
+
+```python
+# Test basic connectivity
+import httpx
+
+async def test_connection(url):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{url}/agent-card")
+            print(f"Status: {response.status_code}")
+            print(f"Response: {response.json()}")
+        except Exception as e:
+            print(f"Error: {e}")
+```

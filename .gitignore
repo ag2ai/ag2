@@ -154,6 +154,7 @@ logs
 
 .idea/*
 .DS_Store
+.cursor/
 
 output/
 *.pkl

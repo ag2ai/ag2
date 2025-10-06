@@ -1,84 +1,103 @@
-```python title="a2a_serve.py
+---
+title: "A2A (Agent-to-Agent) Communication"
+description: "Learn how to enable agents to communicate across different processes and machines using the A2A protocol."
+---
+
+# A2A (Agent-to-Agent) Communication
+
+The A2A (Agent-to-Agent) communication system in AG2 enables agents to communicate across different processes, machines, or even different applications. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
+
+## What is A2A?
+
+A2A is a protocol that allows AG2 agents to communicate over HTTP using a standardized interface. It enables:
+
+- **Distributed Agent Systems**: Deploy agents as separate services
+- **Cross-Platform Communication**: Agents can run on different machines or environments
+- **Scalable Architecture**: Scale individual agents independently
+- **Service Discovery**: Automatic discovery of agent capabilities through agent cards
+- **Real-time Communication**: Support for both streaming and polling-based communication
+
+## Key Components
+
+### A2aAgentServer
+The server component that exposes an AG2 agent as a web service. It handles incoming requests and executes the agent's logic.
+
+### A2aRemoteAgent
+The client component that connects to a remote A2A agent server. It acts as a proxy, forwarding messages to the remote agent and returning responses.
+
+### Agent Cards
+Metadata that describes an agent's capabilities, including:
+- Name and description
+- Supported input/output modes
+- Available skills and tools
+- Streaming capabilities
+- Authentication requirements
+
+## Quick Start
+
+### 1. Create a Server Agent
+
+```python
+import os
+import uvicorn
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aAgentServer
 
-config = LLMConfig({
-    "model": "gpt-5",
-    "api_key": "...",
-})
+# Configure your LLM
+llm_config = LLMConfig(
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
 
+# Create your agent
 agent = ConversableAgent(
-    name="hello_wold_agent",
-    system_message="You are a helpful assistant.",
-    llm_config=config,
+    name="python_coder",
+    system_message="You are an expert Python developer...",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
 )
 
-app = A2aAgentServer(agent).build()
-```
-
-```shell
-uvicorn a2a_serve:app
-```
-
-Do not forget to set public url for agent card
-
-```python
-server = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
-```
-
-### full-settings example
-
-```python
-from a2a.types import AgentSkill
-from autogen import ConversableAgent
-from autogen.a2a import A2aAgentServer, CardSettings
-
+# Create A2A server
 server = A2aAgentServer(
-    ConversableAgent(...),
-    agent_card=CardSettings(
-        name="hello_wold_agent",
-        description="A helpful assistant",
-    ),
-    extended_agent_card=CardSettings(
-        skills=[AgentSkill(
-            name="hello_world",
-            id="hello_world",
-            description="Say hello to the world!",
-        )],
-    ),
-).build()
-```
-
-### custom request handler
-
-```python
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from autogen import ConversableAgent
-from autogen.a2a import A2aAgentServer
-
-server = A2aAgentServer(ConversableAgent(...))
-
-request_handler = DefaultRequestHandler(
-    agent_executor=server.executor,  # use autogen executor
-    task_store=InMemoryTaskStore(),
+    agent,
+    url="http://0.0.0.0:8000",
 )
 
-app = server.build(request_handler=request_handler)
+# Run the server
+if __name__ == "__main__":
+    uvicorn.run(server.build(), host="0.0.0.0", port=8000)
 ```
 
-### custom server
+### 2. Create a Client Agent
 
 ```python
-from a2a.server.apps import A2AFastAPIApplication
-from autogen import ConversableAgent
-from autogen.a2a import A2aAgentServer
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
 
-server = A2aAgentServer(ConversableAgent(...))
+# Create a local agent
+reviewer = ConversableAgent(
+    name="code_reviewer",
+    system_message="You are a code reviewer...",
+    llm_config=llm_config,
+)
 
-app = A2AFastAPIApplication(
-    agent_card=server.card,
-    extended_agent_card=server.extended_agent_card,
-    http_handler=server.build_request_handler(),
-).build()
+# Create a remote agent connection
+coder = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+)
+
+# Use the remote agent
+await reviewer.a_initiate_chat(
+    recipient=coder,
+    message={"role": "user", "content": "Create a calculator function"},
+)
 ```
+
+## Use Cases
+
+- **Microservices Architecture**: Deploy specialized agents as independent services
+- **Cross-Platform Integration**: Connect agents running in different environments
+- **Load Distribution**: Distribute agent workloads across multiple machines
+- **Service Composition**: Build complex workflows using multiple agent services
+- **API Integration**: Expose agent capabilities as REST APIs
