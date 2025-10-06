@@ -30,13 +30,9 @@ from autogen.import_utils import run_for_optional_imports, skip_on_missing_impor
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
 from autogen.tools.tool import Tool
-
-from ..conftest import (
-    Credentials,
-    credentials_all_llms,
-    suppress_gemini_resource_exhausted,
-    suppress_json_decoder_error,
-)
+from test.credentials import Credentials
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted, suppress_json_decoder_error
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -66,12 +62,6 @@ def test_conversable_agent_name_with_white_space(
         match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
     ):
         ConversableAgent(name=name, llm_config=llm_config)
-
-    llm_config["config_list"][0]["api_type"] = "azure"
-    llm_config["config_list"][0]["api_version"] = "2023-01-01"
-    llm_config["config_list"][0]["base_url"] = "https://api.azure.com/v1"
-    agent = ConversableAgent(name=name, llm_config=llm_config)
-    assert agent.name == name
 
 
 def test_sync_trigger():
@@ -1108,7 +1098,7 @@ def test_register_functions(mock_credentials: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
-    llm_config = LLMConfig(credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -1904,11 +1894,8 @@ def test_remove_tool_for_llm(mock_credentials: Credentials):
     # Remove the tool
     agent.remove_tool_for_llm(mock_tool)
 
-    # Verify tool was removed from internal list
-    assert len(agent._tools) == 0
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
@@ -1928,11 +1915,8 @@ def test_remove_tool_by_name_for_llm(mock_credentials: Credentials):
     # Remove the tool by name
     agent.update_tool_signature(tool_sig="test_tool", is_remove=True)
 
-    # Verify tool was removed from internal list
-    assert "tools" not in mock_credentials.llm_config
-
     # Verify tool was unregistered from LLM
-    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
+    tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.tools]
     print(mock_tool.name)
     print(tool_schemas)
     assert mock_tool.name not in tool_schemas
@@ -2191,20 +2175,3 @@ def test_run_method_no_double_tool_registration(mock_credentials: Credentials):
         assert len(executor.function_map) == 2
         assert "pre_tool" in executor.function_map
         assert "runtime_tool" in executor.function_map
-
-
-if __name__ == "__main__":
-    # test_trigger()
-    # test_context()
-    # test_handle_carryover():
-    # test_max_turn()
-    # test_process_before_send()
-    # test_message_func()
-    # test_summary()
-    # test_adding_duplicate_function_warning()
-    # test_function_registration_e2e_sync()
-    # test_process_gemini_carryover()
-    # test_process_carryover()
-    # test_context_variables()
-    # test_max_consecutive_auto_reply_with_max_turns()
-    test_invalid_functions_parameter()

@@ -14,8 +14,7 @@ from autogen.agentchat.contrib.agent_eval.agent_eval import generate_criteria, q
 from autogen.agentchat.contrib.agent_eval.criterion import Criterion
 from autogen.agentchat.contrib.agent_eval.task import Task
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 def remove_ground_truth(test_case: str):

@@ -16,8 +16,9 @@ import autogen
 from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials, credentials_all_llms, suppress_gemini_resource_exhausted
+from test.credentials import Credentials
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted
 
 
 @pytest.fixture
