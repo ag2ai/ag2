@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+
+# Documentation
+
+- Documentation navigation placed in `website/mint-json-template.json.jinja`.
+- `website/docs` directory is a source of truth for the documentation. Please, use it to create any new documentation pages (in `.mdx` format)
+- All files located in `website/mkdocs/docs` are automatically generated. Do not edit them manually.
