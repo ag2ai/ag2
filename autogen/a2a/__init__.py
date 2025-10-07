@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from a2a.types import AgentCard
+try:
+    from a2a.types import AgentCard
+except ImportError as e:
+    raise ImportError("a2a-sdk is not installed. Please install it with:\npip install ag2[a2a]") from e
 
 from .agent_executor import AutogenAgentExecutor
 from .client import A2aRemoteAgent
