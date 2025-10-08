@@ -89,7 +89,7 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
     from anthropic import __version__ as anthropic_version
-    from anthropic.types import Message, TextBlock, ToolUseBlock
+    from anthropic.types import Message, TextBlock, ToolUseBlock,ThinkingBlock
 
     TOOL_ENABLED = anthropic_version >= "0.23.1"
     if TOOL_ENABLED:
@@ -486,7 +486,14 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
             return response
 
         # Extract content from response
-        content = response.content[0].text if response.content else ""
+        if response.content:
+            if type(response.content[0]) == TextBlock:
+                content = response.content[0].text
+
+            elif type(response.content[0]) == ThinkingBlock:
+                content = response.content[0].thinking
+        else:
+            content = ""
 
         # Try to extract JSON from tags first
         json_match = re.search(r"<json_response>(.*?)</json_response>", content, re.DOTALL)
