@@ -89,7 +89,7 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
     from anthropic import __version__ as anthropic_version
-    from anthropic.types import Message, TextBlock, ToolUseBlock,ThinkingBlock
+    from anthropic.types import Message, TextBlock, ThinkingBlock, ToolUseBlock
 
     TOOL_ENABLED = anthropic_version >= "0.23.1"
     if TOOL_ENABLED:
