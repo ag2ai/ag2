@@ -9,70 +9,59 @@ The A2A server allows you to expose your AG2 agents as web services that can be 
 
 ## Basic Server Setup
 
-### Simple Server
-
-```python
-import os
-import uvicorn
+```python title="server.py" linenums="1" hl_lines="16-19"
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aAgentServer
 
-# Configure your agent
-llm_config = LLMConfig(
-    model="gpt-4o-mini",
-    api_key=os.getenv("OPENAI_API_KEY"),
-)
+# Create your regular agent
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
 
 agent = ConversableAgent(
     name="python_coder",
     system_message="You are an expert Python developer...",
     llm_config=llm_config,
+    # set human_input_mode "NEVER" to avoid asking for human input on server side
     human_input_mode="NEVER",
 )
 
-# Create and run server
-server = A2aAgentServer(agent, url="http://0.0.0.0:8000")
-uvicorn.run(server.build(), host="0.0.0.0", port=8000)
-```
-
-## Advanced Configuration
-
-### Custom Agent Card
-
-The agent card describes your agent's capabilities and is automatically discovered by clients:
-
-```python
-from autogen.a2a import A2aAgentServer, CardSettings
-
+# Create A2A server
 server = A2aAgentServer(
     agent,
-    url="http://0.0.0.0:8000",
-    agent_card=CardSettings(
-        name="Advanced Python Coder",
-        description="An expert Python developer with advanced debugging skills",
-        version="1.2.0",
-        capabilities=AgentCapabilities(streaming=True),
-        skills=[
-            AgentSkill(
-                name="code_generation",
-                id="code_gen",
-                description="Generate Python code based on requirements"
-            ),
-            AgentSkill(
-                name="debugging",
-                id="debug",
-                description="Debug and fix Python code issues"
-            )
-        ]
-    )
-)
+    url="http://0.0.0.0:8000"
+).build()
 ```
 
-### Extended Agent Card
+Now you can start it using any ASGI server, for example:
 
-For authenticated access with additional capabilities:
+```bash
+uvicorn server:server --host 0.0.0.0 --port 8000
+```
 
-```python
+!!! tip
+    Do not forget to set `url` parameter to your server URL. It will be used to build public agent card.
+
+## Capabilities
+
+### Tools
+### Context Variables
+### Guardrails
+
+## Advanced A2A Configuration
+
+Also, AG2 do not limit you with our default implementation. You can specify any parts of the server you need.
+This reason we provide a way to use native [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to fully customize your server.
+
+### Agent Card
+
+The Agent Card describes your agent's capabilities and is [automatically discovered by clients](https://a2a-protocol.org/latest/topics/agent-discovery/){.external-link target="_blank"}.
+
+To configure it, you can use `agent_card` and `extended_agent_card` parameters.
+
+* `agent_card` - basic agent card, describes basic capabilities of your agent and is available to all clients
+* `extended_agent_card` - extended agent card, for authenticated access with additional capabilities
+
+```python title="server.py" linenums="1" hl_lines="7 11"
+from autogen.a2a import A2aAgentServer, CardSettings
 from a2a.types import AgentSkill
 
 server = A2aAgentServer(
@@ -96,175 +85,48 @@ server = A2aAgentServer(
 )
 ```
 
+!!! note
+    By default `A2aAgentServer` uses agent's name and description to build agent card.
+    You can override it by passing `agent_card` and `extended_agent_card` parameters.
+
 ### Custom Request Handler
 
-For advanced use cases, you can customize the request handling:
+For advanced use cases, you can customize the request handling.
+It allows you to use your own task store, queue manager, configure push notifications, etc. By default, `A2aAgentServer` uses the simplest `InMemoryTaskStore` to store tasks.
 
-```python
+```python title="server.py" linenums="1" hl_lines="7-10"
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
+from autogen.a2a import A2aAgentServer
 
 server = A2aAgentServer(agent)
 
-# Create custom request handler
 request_handler = DefaultRequestHandler(
-    agent_executor=server.executor,
+    agent_executor=server.executor,  # use autogen executor
     task_store=InMemoryTaskStore(),
-    # Add custom queue manager, push notifications, etc.
 )
 
 app = server.build(request_handler=request_handler)
 ```
 
-## Server Configuration Options
+### Custom Server Application
 
-### A2aAgentServer Parameters
+Also, you can use your own server application. For example, `A2AFastAPIApplication` is a FastAPI application that can be used to serve your agent.
 
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `agent` | `ConversableAgent` | The agent to expose | Required |
-| `url` | `str` | Public URL for the agent | `"http://localhost:8000"` |
-| `agent_card` | `CardSettings` | Basic agent metadata | Auto-generated |
-| `card_modifier` | `Callable` | Function to modify agent card | `None` |
-| `extended_agent_card` | `CardSettings` | Extended capabilities | `None` |
-| `extended_card_modifier` | `Callable` | Function to modify extended card | `None` |
-
-### CardSettings Parameters
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `name` | `str` | Agent name | From agent.name |
-| `description` | `str` | Agent description | From agent.description |
-| `url` | `str` | Agent URL | From server URL |
-| `version` | `str` | Agent version | `"0.1.0"` |
-| `default_input_modes` | `list[str]` | Supported input modes | `["text"]` |
-| `default_output_modes` | `list[str]` | Supported output modes | `["text"]` |
-| `capabilities` | `AgentCapabilities` | Agent capabilities | Streaming enabled |
-| `skills` | `list[AgentSkill]` | Available skills | `[]` |
-
-## Production Deployment
-
-### Using Uvicorn
-
-```python
-# production_server.py
-import uvicorn
+```python title="server.py" linenums="1" hl_lines="7-13"
+from a2a.server.apps import A2AFastAPIApplication
+from autogen import ConversableAgent
 from autogen.a2a import A2aAgentServer
 
-# Your server setup
-server = A2aAgentServer(agent, url="https://your-domain.com")
-
-if __name__ == "__main__":
-    uvicorn.run(
-        server.build(),
-        host="0.0.0.0",
-        port=8000,
-        workers=4,  # Multiple workers for production
-        log_level="info"
-    )
-```
-
-### Using Gunicorn
-
-```bash
-gunicorn production_server:app -w 4 -k uvicorn.workers.UvicornWorker
-```
-
-### Environment Variables
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-export AGENT_URL="https://your-domain.com"
-export AGENT_PORT="8000"
-```
-
-## Security Considerations
-
-### Authentication
-
-For production deployments, consider implementing authentication:
-
-```python
-def authenticate_request(request):
-    # Implement your authentication logic
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not validate_token(auth_header):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return True
-
-# Use in your server setup
-server = A2aAgentServer(
-    agent,
-    url="https://your-domain.com",
-    # Add authentication middleware
-)
-```
-
-### HTTPS
-
-Always use HTTPS in production:
-
-```python
-server = A2aAgentServer(
-    agent,
-    url="https://your-secure-domain.com"
-)
-```
-
-## Monitoring and Logging
-
-### Basic Logging
-
-```python
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Your server setup with logging
 server = A2aAgentServer(agent)
-logger.info(f"Starting A2A server at {server.card.url}")
+
+app = A2AFastAPIApplication(
+    agent_card=server.card,
+    extended_agent_card=server.extended_agent_card,
+    # use default request handler or
+    # your own request handler from the previous example
+    http_handler=server.build_request_handler(),
+).build()
 ```
 
-### Health Checks
-
-```python
-from fastapi import FastAPI
-
-# Add health check endpoint
-app = server.build()
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "agent": agent.name}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Connection Refused**
-- Check if the server is running
-- Verify the URL and port
-- Ensure firewall allows connections
-
-**Agent Card Not Found**
-- Verify the URL is accessible
-- Check if the server is responding to `/agent-card` endpoint
-- Ensure proper CORS configuration
-
-**Authentication Errors**
-- Verify API keys are correct
-- Check authentication headers
-- Ensure proper token validation
-
-### Debug Mode
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Your server setup
-server = A2aAgentServer(agent, url="http://localhost:8000")
-```
+Please refer to [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} documentation for more details on how to use it.

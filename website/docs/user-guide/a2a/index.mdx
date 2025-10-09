@@ -100,7 +100,10 @@ As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pyd
 ```python title="server.py" linenums="1"
 from pydantic_ai import Agent
 
-agent = Agent("openai:gpt-4.1", instructions="You are an expert Python developer...")
+agent = Agent(
+    "openai:gpt-4.1",
+    instructions="You are an expert Python developer...",
+)
 app = agent.to_a2a()
 ```
 
