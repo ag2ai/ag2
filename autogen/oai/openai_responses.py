@@ -228,8 +228,15 @@ class OpenAIResponsesClient:
                         for c in content:
                             if c.get("type") in ["input_text", "text"]:
                                 blocks.append({"type": "input_text", "text": c.get("text")})
-                            elif c.get("type") == "input_image":
-                                blocks.append({"type": "input_image", "image_url": c.get("image_url")})
+                            elif c.get("type") in ["input_image", "image_url"]:
+                                # Handle both input_image and standard image_url formats
+                                image_url = c.get("image_url")
+                                if isinstance(image_url, dict):
+                                    # Standard OpenAI format: {"type": "image_url", "image_url": {"url": "..."}}
+                                    blocks.append({"type": "input_image", "image_url": image_url.get("url")})
+                                else:
+                                    # Direct format: {"type": "input_image", "image_url": "..."}
+                                    blocks.append({"type": "input_image", "image_url": image_url})
                             elif c.get("type") == "image_params":
                                 for k, v in c.get("image_params", {}).items():
                                     if k in self.image_output_params:

@@ -149,7 +149,7 @@ def test_two_agent_multimodal_conversation(credentials_responses_gpt_4o_mini: Cr
         },
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {"url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4aBhloyMLx5qA6G6wSEi0s9AvDu1r7utrbQ&s"},
         },
     ]
 
