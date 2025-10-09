@@ -1,0 +1,132 @@
+---
+title: "A2A Server Setup"
+description: "Learn how to set up and configure A2A agent servers for distributed communication."
+---
+
+# A2A Server Setup
+
+The A2A server allows you to expose your AG2 agents as web services that can be accessed by remote clients. This guide covers everything you need to know about setting up and configuring A2A servers.
+
+## Basic Server Setup
+
+```python title="server.py" linenums="1" hl_lines="16-19"
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+
+# Create your regular agent
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
+
+agent = ConversableAgent(
+    name="python_coder",
+    system_message="You are an expert Python developer...",
+    llm_config=llm_config,
+    # set human_input_mode "NEVER" to avoid asking for human input on server side
+    human_input_mode="NEVER",
+)
+
+# Create A2A server
+server = A2aAgentServer(
+    agent,
+    url="http://0.0.0.0:8000"
+).build()
+```
+
+Now you can start it using any ASGI server, for example:
+
+```bash
+uvicorn server:server --host 0.0.0.0 --port 8000
+```
+
+!!! tip
+    Do not forget to set `url` parameter to your server URL. It will be used to build public agent card.
+
+## Capabilities
+
+### Tools
+### Context Variables
+### Guardrails
+
+## Advanced A2A Configuration
+
+Also, AG2 do not limit you with our default implementation. You can specify any parts of the server you need.
+This reason we provide a way to use native [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to fully customize your server.
+
+### Agent Card
+
+The Agent Card describes your agent's capabilities and is [automatically discovered by clients](https://a2a-protocol.org/latest/topics/agent-discovery/){.external-link target="_blank"}.
+
+To configure it, you can use `agent_card` and `extended_agent_card` parameters.
+
+* `agent_card` - basic agent card, describes basic capabilities of your agent and is available to all clients
+* `extended_agent_card` - extended agent card, for authenticated access with additional capabilities
+
+```python title="server.py" linenums="1" hl_lines="7 11"
+from autogen.a2a import A2aAgentServer, CardSettings
+from a2a.types import AgentSkill
+
+server = A2aAgentServer(
+    agent,
+    url="http://0.0.0.0:8000",
+    agent_card=CardSettings(
+        name="Public Python Coder",
+        description="Basic Python coding assistance",
+    ),
+    extended_agent_card=CardSettings(
+        name="Premium Python Coder",
+        description="Advanced Python coding with premium features",
+        skills=[
+            AgentSkill(
+                name="advanced_optimization",
+                id="opt",
+                description="Advanced code optimization techniques"
+            )
+        ]
+    )
+)
+```
+
+!!! note
+    By default `A2aAgentServer` uses agent's name and description to build agent card.
+    You can override it by passing `agent_card` and `extended_agent_card` parameters.
+
+### Custom Request Handler
+
+For advanced use cases, you can customize the request handling.
+It allows you to use your own task store, queue manager, configure push notifications, etc. By default, `A2aAgentServer` uses the simplest `InMemoryTaskStore` to store tasks.
+
+```python title="server.py" linenums="1" hl_lines="7-10"
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from autogen.a2a import A2aAgentServer
+
+server = A2aAgentServer(agent)
+
+request_handler = DefaultRequestHandler(
+    agent_executor=server.executor,  # use autogen executor
+    task_store=InMemoryTaskStore(),
+)
+
+app = server.build(request_handler=request_handler)
+```
+
+### Custom Server Application
+
+Also, you can use your own server application. For example, `A2AFastAPIApplication` is a FastAPI application that can be used to serve your agent.
+
+```python title="server.py" linenums="1" hl_lines="7-13"
+from a2a.server.apps import A2AFastAPIApplication
+from autogen import ConversableAgent
+from autogen.a2a import A2aAgentServer
+
+server = A2aAgentServer(agent)
+
+app = A2AFastAPIApplication(
+    agent_card=server.card,
+    extended_agent_card=server.extended_agent_card,
+    # use default request handler or
+    # your own request handler from the previous example
+    http_handler=server.build_request_handler(),
+).build()
+```
+
+Please refer to [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} documentation for more details on how to use it.

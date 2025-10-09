@@ -1,0 +1,193 @@
+---
+title: "A2A Client Usage"
+description: "Learn how to connect to and interact with remote A2A agents from your local applications."
+---
+
+# A2A Client Usage
+
+The A2A client allows you to connect to remote A2A agent servers and interact with them as if they were local agents. This guide covers everything you need to know about using A2A clients.
+
+## Basic Client Setup
+
+### Simple Connection
+
+```python
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Use it like any other agent
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Create a calculator function"}
+)
+```
+
+### With Local Agent
+
+```python
+import asyncio
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+
+# Configure local agent
+llm_config = LLMConfig(
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+# Create local agent
+reviewer = ConversableAgent(
+    name="code_reviewer",
+    system_message="You are a code reviewer...",
+    llm_config=llm_config,
+)
+
+# Connect to remote agent
+coder = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Start conversation
+async def review_code():
+    await reviewer.a_initiate_chat(
+        recipient=coder,
+        message={"role": "user", "content": "Create a Python calculator"}
+    )
+
+    # Process the response
+    messages = reviewer.chat_messages[coder.name]
+    for message in messages:
+        print(f"{message['name']}: {message['content']}")
+
+# Run the conversation
+asyncio.run(review_code())
+```
+
+## Advanced Configuration
+
+### Custom HTTP Client
+
+```python
+import httpx
+from autogen.a2a import A2aRemoteAgent
+
+# Create custom HTTP client
+http_client = httpx.AsyncClient(
+    timeout=30.0,
+    headers={"User-Agent": "MyApp/1.0"}
+)
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client=http_client
+)
+```
+
+### Client Configuration
+
+```python
+from a2a.client import ClientConfig
+from autogen.a2a import A2aRemoteAgent
+
+# Configure client settings
+client_config = ClientConfig(
+    timeout=60.0,
+    retry_attempts=3,
+    retry_delay=1.0
+)
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=client_config
+)
+```
+
+### Authentication
+
+```python
+import httpx
+from autogen.a2a import A2aRemoteAgent
+
+# Create authenticated client
+auth_client = httpx.AsyncClient(
+    headers={"Authorization": f"Bearer {your_token}"}
+)
+
+remote_agent = A2aRemoteAgent(
+    url="https://api.your-domain.com",
+    name="secure_agent",
+    client=auth_client
+)
+```
+
+## Context and Tools
+
+### Passing Context Variables
+
+```python
+# Set context variables that will be sent to the remote agent
+local_agent.context_variables.update({
+    "project_name": "MyProject",
+    "language": "Python",
+    "framework": "FastAPI"
+})
+
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Create a FastAPI endpoint"}
+)
+```
+
+### Using Tools with Remote Agents
+
+```python
+# Define tools for the remote agent
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
+# Update tool signature
+remote_agent.update_tool_signature(tools[0], is_remove=False)
+
+# Use the remote agent with tools
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={"role": "user", "content": "Search for Python best practices"}
+)
+```
+
+## Best Practices
+
+
+### 3. Timeout Configuration
+
+```python
+# Set appropriate timeouts
+client_config = ClientConfig(timeout=30.0)
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=client_config
+)
+```
