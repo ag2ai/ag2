@@ -7,6 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
+from ...code_utils import content_str
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -146,14 +147,15 @@ class GroupToolExecutor(ConversableAgent):
             messages = agent._oai_messages[sender]
 
         message = messages[-1]
-        if "tool_calls" in message:
+        if message.get("tool_calls"):
             tool_call_count = len(message["tool_calls"])
-
+            # tool_message = None
             # Loop through tool calls individually (so context can be updated after each function call)
             next_target: TransitionTarget | None = None
             tool_responses_inner = []
             contents = []
-            for index in range(tool_call_count):
+            tool_message = None
+            for index in range(tool_call_count):  # type: ignore[union-attr]
                 message_copy = deepcopy(message)
 
                 # 1. add context_variables to the tool call arguments
@@ -182,11 +184,13 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    if content is not None:
-                        tool_response["content"] = str(content)
+                    normalized_content = (
+                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
+                    )
+                    tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)
-                    contents.append(str(tool_response["content"]))
+                    contents.append(normalized_content)
 
             self._group_next_target = next_target  # type: ignore[attr-defined]
 
