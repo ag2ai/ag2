@@ -255,6 +255,7 @@ yepcode = [
     "yepcode-run>=1.6.1",
     "python-dotenv",
 ]
+remyx = ["remyxai>=0.2.0", "docker>=6.0.0"]
 mistral = ["mistralai>=1.0.1"]
 groq = ["groq>=0.9.0"]
 cohere = ["cohere>=5.13.5"]

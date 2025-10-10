@@ -54,3 +54,16 @@ class CodeExecutorFactory:
             return YepCodeCodeExecutor(**code_execution_config.get("yepcode", {}))
         else:
             raise ValueError(f"Unknown code executor {executor}")
+
+        elif executor == "remyx":
+            try:
+                from .remyx_code_executor import RemyxCodeExecutor
+            except ImportError as e:
+                raise ImportError(
+                    "Missing dependencies for RemyxCodeExecutor. Please install with: pip install ag2[remyx]"
+                ) from e
+
+            return RemyxCodeExecutor(**code_execution_config.get("remyx", {}))
+
+        else:
+            raise ValueError(f"Unknown code executor {executor}")
