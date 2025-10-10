@@ -20,9 +20,6 @@ class TestInteroperability:
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
 
-        if sys.version_info >= (3, 9) and sys.version_info < (3, 10):
-            assert actual == ["langchain", "pydanticai"]
-
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
             assert actual == ["crewai", "langchain", "pydanticai"]
 

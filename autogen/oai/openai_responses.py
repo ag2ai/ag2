@@ -224,10 +224,11 @@ class OpenAIResponsesClient:
                 content = m.get("content")
                 blocks = []
                 if role != "tool":
+                    text_type = "output_text" if role == "assistant" else "input_text"
                     if isinstance(content, list):
                         for c in content:
                             if c.get("type") in ["input_text", "text"]:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
+                                blocks.append({"type": text_type, "text": c.get("text")})
                             elif c.get("type") in ["input_image", "image_url"]:
                                 # Handle both input_image and standard image_url formats
                                 image_url = c.get("image_url")
@@ -244,7 +245,7 @@ class OpenAIResponsesClient:
                             else:
                                 raise ValueError(f"Invalid content type: {c.get('type')}")
                     else:
-                        blocks.append({"type": "input_text", "text": content})
+                        blocks.append({"type": text_type, "text": content})
                     input_items.append({"role": role, "content": blocks})
 
                 else:

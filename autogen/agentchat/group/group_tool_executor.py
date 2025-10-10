@@ -149,12 +149,12 @@ class GroupToolExecutor(ConversableAgent):
         message = messages[-1]
         if message.get("tool_calls"):
             tool_call_count = len(message["tool_calls"])
-            tool_message = None
+            # tool_message = None
             # Loop through tool calls individually (so context can be updated after each function call)
             next_target: TransitionTarget | None = None
             tool_responses_inner = []
             contents = []
-            for index in range(tool_call_count):
+            for index in range(tool_call_count) and len(message["tool_calls"]) > 0:  # type: ignore[union-attr]
                 message_copy = deepcopy(message)
 
                 # 1. add context_variables to the tool call arguments
