@@ -19,12 +19,22 @@ with optional_import_block():
 class TestInteroperability:
     def test_supported_types(self) -> None:
         actual = Interoperability.get_supported_types()
+        assert "langchain" in actual
 
         if sys.version_info >= (3, 10) and sys.version_info < (3, 13):
-            assert actual == ["crewai", "langchain", "pydanticai"]
+            # crewai may or may not be installed
+            if "crewai" in actual:
+                assert actual == ["crewai", "langchain", "pydanticai"] or actual == ["crewai", "langchain"]
+            else:
+                assert actual == ["langchain", "pydanticai"] or actual == ["langchain"]
 
+        # On Python 3.13+, crewai is not supported
         if sys.version_info >= (3, 13):
-            assert actual == ["langchain", "pydanticai"]
+            # pydanticai may or may not be installed
+            if "pydanticai" in actual:
+                assert actual == ["langchain", "pydanticai"]
+            else:
+                assert actual == ["langchain"]
 
     @pytest.mark.skipif(
         sys.version_info < (3, 10) or sys.version_info >= (3, 13),

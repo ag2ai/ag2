@@ -154,7 +154,8 @@ class GroupToolExecutor(ConversableAgent):
             next_target: TransitionTarget | None = None
             tool_responses_inner = []
             contents = []
-            for index in range(tool_call_count) and len(message["tool_calls"]) > 0:  # type: ignore[union-attr]
+            tool_message = None
+            for index in range(tool_call_count):  # type: ignore[union-attr]
                 message_copy = deepcopy(message)
 
                 # 1. add context_variables to the tool call arguments
