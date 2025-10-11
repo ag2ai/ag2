@@ -52,8 +52,6 @@ class CodeExecutorFactory:
                 ) from e
 
             return YepCodeCodeExecutor(**code_execution_config.get("yepcode", {}))
-        else:
-            raise ValueError(f"Unknown code executor {executor}")
 
         elif executor == "remyx":
             try:
