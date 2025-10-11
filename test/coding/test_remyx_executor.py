@@ -270,9 +270,7 @@ class TestRemyxCodeExecutor:
         mock_agent.side_effect = [mock_executor_agent, mock_writer_agent]
 
         executor_agent, writer_agent = executor.create_agents(
-            goal="Test goal",
-            llm_model="gpt-4o",
-            human_input_mode="NEVER"
+            goal="Test goal", llm_model="gpt-4o", human_input_mode="NEVER"
         )
 
         assert executor_agent == mock_executor_agent
