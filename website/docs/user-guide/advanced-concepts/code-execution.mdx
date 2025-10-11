@@ -12,6 +12,7 @@ For each type of executor, AG2 provides two ways to execute code: locally and in
 | ---------------------------- | ----------- | -------- |
 | [`LocalCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)  | Shell       | Local  |
 | [`DockerCommandLineCodeExecutor`](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor) | Shell       | Docker |
+| [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor) | Pre-built Docker | Remyx Cloud |
 | [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor) | Serverless | YepCode Cloud |
 | [`jupyter.JupyterCodeExecutor`](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)           | Jupyter Kernel (e.g., python3) | Local/Docker |
 
@@ -403,6 +404,127 @@ temp_dir.cleanup()
 executor.stop()
 ```
 
+## Research Paper Execution with Remyx
+
+For executing code from research papers, AG2 supports [Remyx's](https://remyx.ai) pre-built Docker environments through the [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor). This executor provides instant access to reproducible environments for 1000+ ArXiv papers with all dependencies pre-installed and tested.
+
+### Key Benefits of Remyx Execution
+
+- **📄 Research-Focused**: Pre-built environments specifically for ArXiv papers
+- **⚡ Zero Setup**: No dependency resolution or environment configuration
+- **🔍 Searchable**: Discover papers with executable Docker environments
+- **🤖 AI-Guided**: Agents can explore and explain research code
+- **✅ Reproducible**: Tested, version-locked environments
+- **🐳 Docker-Based**: Isolated execution with hardware compatibility
+
+### Prerequisites
+
+1. **Get a Remyx API key** from [remyx.ai](https://remyx.ai)
+2. **Install Remyx dependencies**:
+```bash
+   pip install "ag2[remyx]"
+```
+3. Set your API key:
+```bash
+export REMYXAI_API_KEY=your_remyx_api_key
+```
+
+### Basic Usage
+```python
+from autogen import ConversableAgent, LLMConfig
+from autogen.coding import RemyxCodeExecutor
+from remyxai.client.search import SearchClient
+
+# Search for papers with Docker environments
+papers = SearchClient().search("diffusion models", has_docker=True)
+paper = papers[0]
+
+# Create Remyx executor for the paper
+remyx_executor = RemyxCodeExecutor(
+    arxiv_id=paper.arxiv_id,
+    timeout=300,  # Timeout in seconds
+)
+
+# Create an agent with Remyx executor
+code_executor_agent = ConversableAgent(
+    "code_executor_agent",
+    llm_config=False,  # Turn off LLM for this agent
+    code_execution_config={
+        "executor": remyx_executor
+    },
+    human_input_mode="NEVER",
+)
+```
+
+### Configuration Options
+The `RemyxCodeExecutor` supports several configuration options:
+
+arxiv_id: ArXiv paper ID (required, e.g., "2301.12345")
+api_key: Remyx API key (or set REMYX_API_KEY environment variable)
+timeout: Execution timeout in seconds (default: 300)
+work_dir: Local directory for code files (optional)
+
+### AI-Guided Exploration
+RemyxCodeExecutor includes specialized exploration capabilities through the `explore()` method:
+```python
+# Quick start - AI explores with defaults
+remyx_executor.explore()
+
+# Interactive learning mode
+remyx_executor.explore(
+    goal="Explain the main finding",
+    interactive=True  # Step-by-step with explanations
+)
+
+# Batch processing mode
+remyx_executor.explore(
+    goal="Run a test with my model remyxai/SpaceThinker-Qwen2.5VL-3B",
+    interactive=False  # Automated exploration
+)
+```
+### Use Cases
+Remyx execution is ideal for:
+
+🔬 Research Exploration: Quickly test and understand paper implementations
+📊 Reproducibility: Validate research results with original environments
+🎓 Learning: Interactive exploration of research codebases with AI guidance
+⚡ Rapid Prototyping: Build on existing research without environment setup
+🔄 Systematic Testing: Batch experiments across multiple papers
+
+### Paper Discovery
+Use Remyx's search API to find papers with Docker environments:
+```python
+from remyxai.client.search import SearchClient
+
+# Search by topic
+papers = SearchClient().search(
+    "data synthesis strategies",
+    has_docker=True,  # Only papers with pre-built environments
+    limit=10
+)
+
+# Explore each paper
+for paper in papers:
+    print(f"Paper: {paper.title}")
+    print(f"ArXiv ID: {paper.arxiv_id}")
+    print(f"Docker available: {paper.has_docker}")
+    
+    # Create executor for this paper
+    executor = RemyxCodeExecutor(arxiv_id=paper.arxiv_id)
+    # ... execute code
+```
+
+### How It Works
+`RemyxCodeExecutor` solves the reproducibility problem for research code:
+
+* Search: Find papers with pre-built Docker environments
+* Instantiate: Create executor with paper's ArXiv ID
+* Execute: Run code in isolated, pre-configured environment
+* Explore: Use AI agents to understand and modify the code
+
+All dependencies, CUDA versions, and system libraries are pre-installed and tested, eliminating hours of environment debugging.
+For more examples and interactive exploration, see the [Remyx Executor Notebook](notebook/agentchat_remyx_executor.ipynb).
+
 ## Serverless Execution with YepCode
 
 For production-grade serverless code execution, AG2 supports [YepCode's](https://yepcode.io) serverless runtime through the [`YepCodeCodeExecutor`](/docs/api-reference/autogen/coding/YepCodeCodeExecutor). This executor runs code in secure, isolated sandboxes with automatic dependency management.
@@ -548,11 +670,13 @@ The choice between command line and Jupyter code executor depends on the nature 
 ### More Code Execution examples
 - [Task Solving with Code Generation, Execution, and Debugging](/docs/use-cases/notebooks/notebooks/agentchat_auto_feedback_from_code_execution)
 - [Auto-Generated Agent Chat: Task Solving with Code Gen, Execution, Debugging & Human Feedback](/docs/use-cases/notebooks/notebooks/agentchat_human_feedback)
+- [Research Paper Execution with Remyx](/docs/use-cases/notebooks/notebooks/agentchat_remyx_executor)
 - [YepCode Serverless Code Execution](/docs/use-cases/notebooks/notebooks/agentchat_yepcode_executor)
 
 ### API
 - [ConversableAgent.code_execution_config](/docs/api-reference/autogen/ConversableAgent#conversableagent)
 - [LocalCommandLineCodeExecutor](/docs/api-reference/autogen/coding/LocalCommandLineCodeExecutor)
 - [DockerCommandLineCodeExecutor](/docs/api-reference/autogen/coding/DockerCommandLineCodeExecutor)
+- [RemyxCodeExecutor](/docs/api-reference/autogen/coding/RemyxCodeExecutor)
 - [YepCodeCodeExecutor](/docs/api-reference/autogen/coding/YepCodeCodeExecutor)
 - [jupyter.JupyterCodeExecutor](/docs/api-reference/autogen/coding/jupyter/JupyterCodeExecutor)
