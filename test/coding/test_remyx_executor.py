@@ -247,7 +247,7 @@ class TestRemyxCodeExecutor:
 
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
-    @patch("autogen.coding.remyx_code_executor.ConversableAgent")
+    @patch("autogen.ConversableAgent")
     @patch.dict(os.environ, {"OPENAI_API_KEY": "test_openai_key"})
     def test_create_agents(self, mock_agent, mock_parent_init, mock_get_asset):
         """Test create_agents method."""
@@ -270,7 +270,9 @@ class TestRemyxCodeExecutor:
         mock_agent.side_effect = [mock_executor_agent, mock_writer_agent]
 
         executor_agent, writer_agent = executor.create_agents(
-            goal="Test goal", llm_model="gpt-4o", human_input_mode="NEVER"
+            goal="Test goal",
+            llm_model="gpt-4o",
+            human_input_mode="NEVER"
         )
 
         assert executor_agent == mock_executor_agent
