@@ -508,7 +508,7 @@ for paper in papers:
     print(f"Paper: {paper.title}")
     print(f"ArXiv ID: {paper.arxiv_id}")
     print(f"Docker available: {paper.has_docker}")
-    
+
     # Create executor for this paper
     executor = RemyxCodeExecutor(arxiv_id=paper.arxiv_id)
     # ... execute code

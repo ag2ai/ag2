@@ -31,8 +31,8 @@ except ImportError:
 
 # Try to import Remyx executor and add to __all__ if available
 try:
-    from .remyx_code_executor import RemyxCodeExecutor, RemyxCodeResult, RemyxSearchClient  # noqa: F401
+    from .remyx_code_executor import RemyxCodeExecutor, RemyxCodeResult  # noqa: F401
 
-    __all__.extend(["RemyxCodeExecutor", "RemyxCodeResult", "RemyxSearchClient"])
+    __all__.extend(["RemyxCodeExecutor", "RemyxCodeResult"])
 except ImportError:
     pass

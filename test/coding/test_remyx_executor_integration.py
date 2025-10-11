@@ -13,13 +13,13 @@ from autogen.coding import CodeBlock
 try:
     import docker
     import dotenv
+    from remyxai.client.search import SearchClient
 
     from autogen.coding import RemyxCodeExecutor
-    from remyxai.client.search import SearchClient
 
     _has_remyx = True
     _has_docker = True
-    
+
     # Check if Docker is actually running
     try:
         docker.from_env().ping()
@@ -29,10 +29,7 @@ except ImportError:
     _has_remyx = False
     _has_docker = False
 
-pytestmark = pytest.mark.skipif(
-    not _has_remyx or not _has_docker,
-    reason="Remyx dependencies or Docker not available"
-)
+pytestmark = pytest.mark.skipif(not _has_remyx or not _has_docker, reason="Remyx dependencies or Docker not available")
 
 
 @pytest.mark.skipif(not _has_remyx or not _has_docker, reason="Remyx/Docker not available")
@@ -54,14 +51,10 @@ class TestRemyxCodeExecutorIntegration:
     def test_search_papers(self):
         """Test searching for papers with Docker environments."""
         client = SearchClient()
-        papers = client.search(
-            query="CLIP",
-            has_docker=True,
-            max_results=5
-        )
+        papers = client.search(query="CLIP", has_docker=True, max_results=5)
 
         assert len(papers) > 0, "Should find at least one paper with Docker"
-        
+
         # Check first paper has required fields
         paper = papers[0]
         assert paper.arxiv_id is not None
@@ -73,7 +66,7 @@ class TestRemyxCodeExecutorIntegration:
         # Search for a paper first
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -92,7 +85,7 @@ class TestRemyxCodeExecutorIntegration:
         assert executor.paper_info["arxiv_id"] == arxiv_id
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()
@@ -104,7 +97,7 @@ class TestRemyxCodeExecutorIntegration:
         # Search for a paper
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -140,7 +133,7 @@ print(f"Working directory: {os.getcwd()}")
         assert "/app" in result.output or "Working directory:" in result.output
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()
@@ -151,7 +144,7 @@ print(f"Working directory: {os.getcwd()}")
         """Test executing bash commands in paper environment."""
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -181,7 +174,7 @@ pwd
         assert "/app" in result.output
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()
@@ -192,7 +185,7 @@ pwd
         """Test getting paper context."""
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -208,7 +201,7 @@ pwd
         assert "arXiv ID:" in context
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()
@@ -219,7 +212,7 @@ pwd
         """Test error handling with invalid code."""
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -247,7 +240,7 @@ print(undefined_variable)
         assert "NameError" in result.output or "undefined_variable" in result.output
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()
@@ -262,7 +255,7 @@ print(undefined_variable)
 
         client = SearchClient()
         papers = client.search(query="CLIP", has_docker=True, max_results=1)
-        
+
         if not papers:
             pytest.skip("No papers found with Docker")
 
@@ -275,9 +268,7 @@ print(undefined_variable)
         )
 
         executor_agent, writer_agent = executor.create_agents(
-            goal="List files in repository",
-            llm_model="gpt-4o-mini",
-            human_input_mode="NEVER"
+            goal="List files in repository", llm_model="gpt-4o-mini", human_input_mode="NEVER"
         )
 
         assert executor_agent is not None
@@ -286,7 +277,7 @@ print(undefined_variable)
         assert writer_agent.name == "research_explorer"
 
         # Clean up
-        if hasattr(executor, '_container') and executor._container:
+        if hasattr(executor, "_container") and executor._container:
             try:
                 executor._container.stop()
                 executor._container.remove()

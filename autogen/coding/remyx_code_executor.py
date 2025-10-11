@@ -7,26 +7,28 @@ import logging
 import os
 from collections.abc import Callable
 from hashlib import md5
-from typing import ClassVar
+from typing import Any, ClassVar, Literal
 
 from pydantic import Field
 
 from ..code_utils import TIMEOUT_MSG, _cmd
 from ..doc_utils import export_module
-from .base import CodeBlock, CodeExecutor, CodeExtractor, CodeResult, CommandLineCodeResult
+from .base import CodeBlock, CodeExtractor, CodeResult, CommandLineCodeResult
 from .docker_commandline_code_executor import DockerCommandLineCodeExecutor
 from .markdown_code_extractor import MarkdownCodeExtractor
 from .utils import _get_file_name_from_content, silence_pip
 
 try:
     from dotenv import load_dotenv
+
     _load_dotenv: Callable[[], bool] | None = load_dotenv
 except ImportError:
     _load_dotenv = None
 
 # Import from remyxai package (installed as dependency)
 try:
-    from remyxai.api.search import Asset, get_asset as remyxai_get_asset
+    from remyxai.api.search import Asset
+    from remyxai.api.search import get_asset as remyxai_get_asset
     from remyxai.client.search import SearchClient as RemyxSearchClient
 except ImportError:
     Asset = None
@@ -85,22 +87,15 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
         >>>
         >>> # Create agent with executor
-        >>> agent = ConversableAgent(
-        ...     "executor",
-        ...     llm_config=False,
-        ...     code_execution_config={"executor": executor}
-        ... )
-        
+        >>> agent = ConversableAgent("executor", llm_config=False, code_execution_config={"executor": executor})
+
         Interactive exploration (recommended):
         >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
-        >>> result = executor.explore(
-        ...     goal="Help me understand the main innovation from this paper",
-        ...     interactive=True
-        ... )
+        >>> result = executor.explore(goal="Help me understand the main innovation from this paper", interactive=True)
     """
 
     SUPPORTED_LANGUAGES: ClassVar[list[str]] = ["python", "bash", "sh"]
-    
+
     # Language to file extension mapping (parent class uses lang name directly as extension)
     _LANG_EXT_MAP: ClassVar[dict[str, str]] = {
         "python": "py",
@@ -118,14 +113,11 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         work_dir: str | None = None,
         auto_remove: bool = True,
         stop_container: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize Remyx Code Executor."""
         if RemyxSearchClient is None or remyxai_get_asset is None:
-            raise ImportError(
-                "Missing dependencies for RemyxCodeExecutor. "
-                "Please install with: pip install ag2[remyx]"
-            )
+            raise ImportError("Missing dependencies for RemyxCodeExecutor. Please install with: pip install ag2[remyx]")
 
         # Load environment variables if dotenv available
         if _load_dotenv is not None:
@@ -134,12 +126,13 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         self.arxiv_id = arxiv_id
         self.api_key = api_key or os.getenv("REMYX_API_KEY")
         self._asset_metadata = None
+        self._executor_image = image
 
         # Fetch asset metadata if arxiv_id provided
         if arxiv_id and not image:
             # Use remyxai package to fetch metadata
             asset = remyxai_get_asset(arxiv_id)
-            
+
             if not asset:
                 raise ValueError(
                     f"Paper {arxiv_id} not found in Remyx catalog. "
@@ -196,13 +189,13 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         return MarkdownCodeExtractor()
 
     @property
-    def paper_info(self) -> dict | None:
+    def paper_info(self) -> dict[str, Any] | None:
         """Get paper metadata if available."""
         return self._asset_metadata
 
     def execute_code_blocks(self, code_blocks: list[CodeBlock]) -> CommandLineCodeResult:
         """Execute code blocks with correct file extensions.
-        
+
         Overrides parent to fix file extension issue where 'python' becomes '.python'
         instead of '.py'.
         """
@@ -212,7 +205,7 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         outputs = []
         files = []
         last_exit_code = 0
-        
+
         for code_block in code_blocks:
             lang = self.LANGUAGE_ALIASES.get(code_block.language.lower(), code_block.language.lower())
             if lang not in self.DEFAULT_EXECUTION_POLICY:
@@ -263,17 +256,17 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
     def get_paper_context(self) -> str:
         """
         Get formatted context about the paper for agent prompts.
-        
+
         This is useful for creating system messages for exploration agents.
         """
         if not self._asset_metadata:
             return "No paper metadata available."
 
         context = f"""Paper Information:
-Title: {self._asset_metadata.get('title', 'Unknown')}
-arXiv ID: {self._asset_metadata.get('arxiv_id', 'Unknown')}
-GitHub: {self._asset_metadata.get('github_url', 'Not available')}
-Working Directory: {self._asset_metadata.get('working_directory', '/app')}"""
+Title: {self._asset_metadata.get("title", "Unknown")}
+arXiv ID: {self._asset_metadata.get("arxiv_id", "Unknown")}
+GitHub: {self._asset_metadata.get("github_url", "Not available")}
+Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
 
         if self._asset_metadata.get("reasoning"):
             context += f"\n\nContext:\n{self._asset_metadata['reasoning']}"
@@ -290,41 +283,40 @@ Working Directory: {self._asset_metadata.get('working_directory', '/app')}"""
         llm_model: str = "gpt-4o-mini",
         max_turns: int | None = None,
         verbose: bool = True,
-    ):
+    ) -> Any:
         """
         Explore this research paper interactively with AI agents.
-        
+
         This is the recommended way to understand and experiment with research code.
         Creates a 2-agent system where one agent proposes experiments and another
         executes them in the paper's Docker environment.
-        
+
         Args:
             goal: Optional custom exploration goal. If None, uses a default exploration plan.
             interactive: If True, pauses for human guidance at each step. If False, runs automatically.
             llm_model: The LLM model to use for the exploring agent. Default is "gpt-4o-mini".
             max_turns: Maximum number of conversation turns. If None, continues until termination.
             verbose: If True, prints session header and summary. If False, runs quietly.
-        
+
         Returns:
             The chat result from the exploration session.
-        
+
         Example:
             >>> # Interactive exploration (recommended for learning)
             >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
             >>> result = executor.explore(
-            ...     goal="Help me understand the main innovation from this paper",
-            ...     interactive=True
+            ...     goal="Help me understand the main innovation from this paper", interactive=True
             ... )
-            
+
             >>> # Automated exploration (good for batch experiments)
             >>> result = executor.explore(
             ...     goal="Run all examples and benchmarks",
             ...     interactive=False,
-            ...     verbose=False  # Quiet mode
+            ...     verbose=False,  # Quiet mode
             ... )
         """
         from autogen import ConversableAgent, LLMConfig
-        
+
         # Default exploration goal
         default_goal = """Perform an interactive exploration of this research paper:
 
@@ -348,7 +340,7 @@ Type TERMINATE when exploration is complete."""
 
         # Get paper context
         paper_context = self.get_paper_context()
-        
+
         # Create system message for writer agent
         system_message = f"""{paper_context}
 
@@ -367,7 +359,7 @@ Type TERMINATE when exploration is complete."""
 
 **What You Can Do:**
 ✓ Read and analyze code
-✓ Execute Python/bash commands  
+✓ Execute Python/bash commands
 ✓ Modify code for experiments
 ✓ Generate plots and visualizations
 ✓ Install additional dependencies
@@ -384,7 +376,7 @@ Begin by exploring the repository structure to understand what's available."""
             human_input_mode="NEVER",
             is_termination_msg=lambda x: "TERMINATE" in x.get("content", "").upper(),
         )
-        
+
         # Create writer agent (has LLM)
         writer_agent = ConversableAgent(
             "research_explorer",
@@ -397,14 +389,14 @@ Begin by exploring the repository structure to understand what's available."""
             max_consecutive_auto_reply=50,
             human_input_mode="ALWAYS" if interactive else "NEVER",
         )
-        
+
         # Print session header
         if verbose:
             print("=" * 80)
             print("🔬 Interactive Research Exploration Session")
             print("=" * 80)
             print(f"📄 Paper: {self.arxiv_id or 'Custom image'}")
-            
+
             if interactive:
                 print("\n💬 INTERACTIVE MODE")
                 print("   - Press ENTER to continue")
@@ -412,77 +404,73 @@ Begin by exploring the repository structure to understand what's available."""
                 print("   - Type 'exit' to end")
             else:
                 print("\n🤖 AUTOMATED MODE")
-            
+
             print("=" * 80)
             print()
-        
+
         # Start exploration
         result = executor_agent.initiate_chat(
             writer_agent,
             message="Let's begin exploring this research paper. Start by examining the directory structure.",
             max_turns=max_turns,
         )
-        
+
         # Print summary
         if verbose:
             print("\n" + "=" * 80)
             print("✅ Exploration Complete!")
             print("=" * 80)
-            print(f"\n📊 Session Summary:")
+            print("\n📊 Session Summary:")
             print(f"   • Total messages: {len(result.chat_history)}")
             print(f"   • Cost: ${result.cost['usage_including_cached_inference']['total_cost']:.4f}")
-            
+
             if result.summary:
-                print(f"\n💬 Final Status:")
+                print("\n💬 Final Status:")
                 # Print first 200 chars of summary
                 summary_preview = result.summary[:200] + "..." if len(result.summary) > 200 else result.summary
                 print(f"   {summary_preview}")
-            
-            print(f"\n💾 Full chat history available in returned object")
-            print(f"   Access with: result.chat_history")
+
+            print("\n💾 Full chat history available in returned object")
+            print("   Access with: result.chat_history")
             print("=" * 80)
-        
+
         return result
 
     def create_agents(
         self,
         goal: str | None = None,
         llm_model: str = "gpt-4o-mini",
-        human_input_mode: str = "ALWAYS",
-    ):
+        human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
+    ) -> tuple[Any, Any]:
         """
         Create the 2-agent system without starting exploration.
-        
+
         Use this if you want more control over the exploration process.
         Most users should use the simpler `explore()` method instead.
-        
+
         Args:
             goal: Optional custom exploration goal.
             llm_model: The LLM model to use.
             human_input_mode: "ALWAYS" for interactive, "NEVER" for automated.
-        
+
         Returns:
             Tuple of (executor_agent, writer_agent)
-        
+
         Example:
             >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
             >>> executor_agent, writer_agent = executor.create_agents()
             >>> # Customize the chat further
-            >>> result = executor_agent.initiate_chat(
-            ...     writer_agent,
-            ...     message="Custom starting message",
-            ...     max_turns=10
-            ... )
+            >>> result = executor_agent.initiate_chat(writer_agent, message="Custom starting message", max_turns=10)
         """
         from autogen import ConversableAgent, LLMConfig
-        
+
         # Default goal
         default_goal = """Explore this research paper interactively.
 Work step-by-step, explain your actions, and wait for guidance."""
 
         # Get paper context
         paper_context = self.get_paper_context()
-        
+
         # Create system message
         system_message = f"""{paper_context}
 
@@ -506,7 +494,7 @@ Begin by exploring the repository structure."""
             human_input_mode="NEVER",
             is_termination_msg=lambda x: "TERMINATE" in x.get("content", "").upper(),
         )
-        
+
         # Create writer agent
         writer_agent = ConversableAgent(
             "research_explorer",
@@ -519,28 +507,28 @@ Begin by exploring the repository structure."""
             max_consecutive_auto_reply=50,
             human_input_mode=human_input_mode,
         )
-        
+
         return executor_agent, writer_agent
 
     def __repr__(self) -> str:
         """String representation."""
         if self.arxiv_id:
             return f"RemyxCodeExecutor(arxiv_id='{self.arxiv_id}')"
-        return f"RemyxCodeExecutor(image='{self._image}')"
+        return f"RemyxCodeExecutor(image='{self._executor_image}')"
 
     @staticmethod
-    def format_chat_result(result) -> str:
+    def format_chat_result(result: Any) -> str:
         """
         Format a ChatResult object into a readable summary.
-        
+
         Useful for displaying exploration results later.
-        
+
         Args:
             result: The ChatResult object from explore() or initiate_chat()
-        
+
         Returns:
             Formatted string summary
-        
+
         Example:
             >>> result = executor.explore(verbose=False)
             >>> print(RemyxCodeExecutor.format_chat_result(result))
@@ -549,32 +537,32 @@ Begin by exploring the repository structure."""
         lines.append("=" * 80)
         lines.append("📊 Exploration Session Summary")
         lines.append("=" * 80)
-        
+
         # Basic stats
         lines.append(f"\n• Total messages: {len(result.chat_history)}")
         lines.append(f"• Chat ID: {result.chat_id}")
-        
+
         # Cost info
-        if hasattr(result, 'cost') and result.cost:
-            total_cost = result.cost.get('usage_including_cached_inference', {}).get('total_cost', 0)
+        if hasattr(result, "cost") and result.cost:
+            total_cost = result.cost.get("usage_including_cached_inference", {}).get("total_cost", 0)
             lines.append(f"• Cost: ${total_cost:.4f}")
-        
+
         # Summary
         if result.summary:
-            lines.append(f"\n💬 Final Status:")
+            lines.append("\n💬 Final Status:")
             summary_preview = result.summary[:300] + "..." if len(result.summary) > 300 else result.summary
-            for line in summary_preview.split('\n'):
+            for line in summary_preview.split("\n"):
                 lines.append(f"   {line}")
-        
+
         # Last few messages
-        lines.append(f"\n📝 Last 3 messages:")
+        lines.append("\n📝 Last 3 messages:")
         for msg in result.chat_history[-3:]:
-            role = msg.get('name', msg.get('role', 'unknown'))
-            content_preview = msg.get('content', '')[:100]
-            if len(msg.get('content', '')) > 100:
+            role = msg.get("name", msg.get("role", "unknown"))
+            content_preview = msg.get("content", "")[:100]
+            if len(msg.get("content", "")) > 100:
                 content_preview += "..."
             lines.append(f"   [{role}]: {content_preview}")
-        
+
         lines.append("\n" + "=" * 80)
-        
+
         return "\n".join(lines)

@@ -8,14 +8,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from autogen.coding import CodeBlock, MarkdownCodeExtractor
+from autogen.coding import MarkdownCodeExtractor
 
 try:
-    from autogen.coding import RemyxCodeExecutor, RemyxCodeResult
-
     # Check that remyxai dependencies are available
     from remyxai.api.search import Asset
     from remyxai.client.search import SearchClient
+
+    from autogen.coding import RemyxCodeExecutor, RemyxCodeResult
 
     _has_remyx = Asset is not None and SearchClient is not None
 except ImportError:
@@ -140,6 +140,7 @@ class TestRemyxCodeExecutor:
         assert "environment" in container_kwargs
         assert container_kwargs["environment"]["HF_TOKEN"] == "test_hf_token"
         assert container_kwargs["environment"]["WANDB_API_KEY"] == "test_wandb_key"
+        assert executor.arxiv_id == "2010.11929v2"
 
     @patch("autogen.coding.remyx_code_executor.remyxai_get_asset")
     @patch("autogen.coding.remyx_code_executor.DockerCommandLineCodeExecutor.__init__")
@@ -263,15 +264,13 @@ class TestRemyxCodeExecutor:
         mock_parent_init.return_value = None
 
         executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
-        
+
         mock_executor_agent = Mock()
         mock_writer_agent = Mock()
         mock_agent.side_effect = [mock_executor_agent, mock_writer_agent]
 
         executor_agent, writer_agent = executor.create_agents(
-            goal="Test goal",
-            llm_model="gpt-4o",
-            human_input_mode="NEVER"
+            goal="Test goal", llm_model="gpt-4o", human_input_mode="NEVER"
         )
 
         assert executor_agent == mock_executor_agent
@@ -298,9 +297,7 @@ class TestRemyxCodeExecutor:
         ]
         mock_result.chat_id = "test_chat_123"
         mock_result.summary = "Test summary"
-        mock_result.cost = {
-            "usage_including_cached_inference": {"total_cost": 0.0123}
-        }
+        mock_result.cost = {"usage_including_cached_inference": {"total_cost": 0.0123}}
 
         formatted = RemyxCodeExecutor.format_chat_result(mock_result)
 
