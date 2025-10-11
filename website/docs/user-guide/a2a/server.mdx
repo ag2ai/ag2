@@ -42,9 +42,111 @@ uvicorn server:server --host 0.0.0.0 --port 8000
 
 ## Capabilities
 
-### Tools
-### Context Variables
-### Guardrails
+### Remote Tools execution details
+
+AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Fortunately, our A2A agent executer allows your remote agent execute any tool by itself. So, if your client calls an agent with a tool, this tool will be executed by the remote agent, process results and return them to the client.
+
+```python title="remote.py" linenums="1" hl_lines="21-27"
+import os
+from datetime import datetime
+from typing import Annotated
+
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+from autogen.agentchat import ReplyResult
+
+llm_config = LLMConfig(
+    model="gpt-4o-mini",
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+agent = ConversableAgent(
+    name="calendar_agent",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+    silent=True,
+)
+
+@agent.register_for_llm(name="get_weekday", description="Get the day of the week for a given date")
+@agent.register_for_execution(name="get_weekday")
+def get_weekday(
+    date_string: Annotated[str, "Format: YYYY-MM-DD"],
+) -> str:
+    date = datetime.strptime(date_string, "%Y-%m-%d")
+    return ReplyResult(message=date.strftime("%A"))
+
+app = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
+```
+
+In this way, processing steps are:
+1. Remote client calls `A2aAgentServer` agent
+2. `A2aAgentServer` agent asks LLM to decide if the tool should be called
+3. `A2aAgentServer` agent calls `get_weekday` tool
+4. `A2aAgentServer` processes the tool result by LLM
+5. `A2aAgentServer` returns the whole local history to the client
+
+Also, remote agents supports another group chat features without any additional configuration.
+
+- [Context Variables](docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/){.internal-link}
+- [Guardrails](docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/){.internal-link}
+
+Just use these features with your remote `ConversableAgent` agent, wrap it in `A2aAgentServer` and let the magic happen.
+
+
+### Multiple agents at one server
+
+A2A protocol assumes single agent per server. But because of `A2aAgentServer` is an full-featured ASGI application, you can combine it with another ASGI apps in a way you need. So, you can insert your server to regular FastAPI application or any other ASGI application. Or you can combine multiple agents into one server, separated by paths.
+
+As an example
+
+```python title="remote.py" linenums="1" hl_lines="9 13 17"
+from autogen.a2a import A2aAgentServer
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
+app = Starlette(
+    routes=[
+        Mount(
+            "/triage",
+            A2aAgentServer(triage_agent, url="http://0.0.0.0:8000/triage/").build(),
+        ),
+        Mount(
+            "/tech",
+            A2aAgentServer(tech_agent, url="http://0.0.0.0:8000/tech/").build(),
+        ),
+        Mount(
+            "/general",
+            A2aAgentServer(general_agent, url="http://0.0.0.0:8000/general/").build(),
+        ),
+    ]
+)
+```
+
+!!! tip
+
+    Be careful with `A2aAgentServer(..., url="...")` parameter. It will be used to build agent card, so you need to add your path with `/` to the end of the server URL.
+
+
+So, your clients for such agents will be:
+
+```python title="client.py" linenums="1" hl_lines="4 9 14"
+from autogen.a2a import A2aRemoteAgent
+
+triage_agent = A2aRemoteAgent(
+    "http://localhost:8000/triage/",
+    name="triage_agent",
+)
+
+tech_agent = A2aRemoteAgent(
+    "http://localhost:8000/tech/",
+    name="tech_agent",
+)
+
+general_agent = A2aRemoteAgent(
+    "http://localhost:8000/general/",
+    name="general_agent",
+)
+```
 
 ## Advanced A2A Configuration
 

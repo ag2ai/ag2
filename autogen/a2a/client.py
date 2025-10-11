@@ -60,7 +60,7 @@ class A2aRemoteAgent(ConversableAgent):
         sender: ConversableAgent | None = None,
         config: OpenAIWrapper | None = None,
     ) -> tuple[bool, dict[str, Any] | None]:
-        raise NotImplementedError("generate_remote_reply is not implemented")
+        raise NotImplementedError(f"{self.__class__.__name__} does not support synchronous reply generation")
 
     async def a_generate_remote_reply(
         self,
@@ -105,6 +105,7 @@ class A2aRemoteAgent(ConversableAgent):
 
         if sender and reply.context:
             context_variables = ContextVariables(reply.context)
+            self.context_variables.update(context_variables.to_dict())
             sender.context_variables.update(context_variables.to_dict())
 
         return True, reply.messages[-1]

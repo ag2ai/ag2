@@ -99,7 +99,7 @@ def response_message_to_a2a(
 
 
 def message_to_part(message: dict[str, Any]) -> Part:
-    text = message.pop("content", "")
+    text = message.pop("content", "") or ""
     return Part(root=TextPart(text=text, metadata=message))
 
 

@@ -1,23 +1,24 @@
+import asyncio
 import os
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat import initiate_group_chat
+from autogen.a2a import A2aRemoteAgent
+from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.patterns import AutoPattern
-from autogen.remote import HTTPRemoteAgent
 
-triage_agent = HTTPRemoteAgent(
-    "http://localhost:8000",
+triage_agent = A2aRemoteAgent(
+    "http://localhost:8000/triage/",
     name="triage_agent",
 )
 
-tech_agent = HTTPRemoteAgent(
-    "http://localhost:8000",
+tech_agent = A2aRemoteAgent(
+    "http://localhost:8000/tech/",
     name="tech_agent",
 )
 
-general_agent = HTTPRemoteAgent(
-    "http://localhost:8000",
+general_agent = A2aRemoteAgent(
+    "http://localhost:8000/general/",
     name="general_agent",
 )
 
@@ -44,8 +45,14 @@ pattern = AutoPattern(
     group_manager_args={"llm_config": llm_config},
 )
 
-result, context, last_agent = initiate_group_chat(
-    pattern=pattern,
-    messages="My laptop keeps shutting down randomly. Can you help?",
-    max_rounds=10,
-)
+
+async def main():
+    result, context, last_agent = await a_initiate_group_chat(
+        pattern=pattern,
+        messages="My laptop keeps shutting down randomly. Can you help?",
+        max_rounds=10,
+    )
+    print(context)
+
+
+asyncio.run(main())

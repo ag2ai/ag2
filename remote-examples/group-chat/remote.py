@@ -1,9 +1,11 @@
 import os
 
+from starlette.applications import Starlette
+from starlette.routing import Mount
+
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat.group import ContextVariables
-from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.remote import HTTPAgentBus
+from autogen.a2a import A2aAgentServer
+from autogen.agentchat import ContextVariables, ReplyResult
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -23,12 +25,9 @@ triage_agent = ConversableAgent(
 
 @triage_agent.register_for_llm(
     name="get_user_context",
-    description="Use `get_user_context` tool to understand the current session before responding",
+    description="Use `get_user_context` tool to understand the current session",
 )
-@triage_agent.register_for_execution(
-    name="get_user_context",
-    description="Use `get_user_context` tool to understand the current session before responding",
-)
+@triage_agent.register_for_execution(name="get_user_context")
 def get_user_context(
     context_variables: ContextVariables,
     # chat_ctx: ChatContext,
@@ -56,6 +55,11 @@ general_agent = ConversableAgent(
     llm_config=llm_config,
 )
 
-app = HTTPAgentBus(
-    agents=[triage_agent, tech_agent, general_agent],
+
+app = Starlette(
+    routes=[
+        Mount("/triage", A2aAgentServer(triage_agent, url="http://0.0.0.0:8000/triage/").build()),
+        Mount("/tech", A2aAgentServer(tech_agent, url="http://0.0.0.0:8000/tech/").build()),
+        Mount("/general", A2aAgentServer(general_agent, url="http://0.0.0.0:8000/general/").build()),
+    ]
 )

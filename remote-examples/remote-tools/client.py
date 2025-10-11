@@ -1,7 +1,8 @@
+import asyncio
 import os
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.remote import HTTPRemoteAgent
+from autogen.a2a import A2aRemoteAgent
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -14,14 +15,14 @@ agent = ConversableAgent(
     llm_config=llm_config,
 )
 
-remote_agent = HTTPRemoteAgent(
+remote_agent = A2aRemoteAgent(
     url="http://localhost:8000",
     name="remote",
 )
 
 
-def generate_code(prompt: str) -> str:
-    agent.initiate_chat(
+async def generate_code(prompt: str) -> str:
+    await agent.a_initiate_chat(
         recipient=remote_agent,
         message={"role": "user", "content": prompt},
     )
@@ -30,5 +31,5 @@ def generate_code(prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    code = generate_code("I was born on 25th of March 1995, what day was it?")
+    code = asyncio.run(generate_code("I was born on 25th of March 1995, what day was it?"))
     print(code)

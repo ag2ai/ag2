@@ -3,9 +3,8 @@ from datetime import datetime
 from typing import Annotated
 
 from autogen import ConversableAgent, LLMConfig
-from autogen.agentchat.group import ContextVariables
-from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.remote import HTTPAgentBus
+from autogen.a2a import A2aAgentServer
+from autogen.agentchat import ContextVariables, ReplyResult
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -24,17 +23,13 @@ agent = ConversableAgent(
 @agent.register_for_execution(name="get_weekday")
 def get_weekday(
     date_string: Annotated[str, "Format: YYYY-MM-DD"],
-    # context: ChatContext,
     context_variables: ContextVariables,
 ) -> str:
-    # print(context.chat_messages)
-    print(context_variables)
-    date = datetime.strptime(date_string, "%Y-%m-%d")
-
+    context_variables["issue_count"] = context_variables.get("issue_count", 0) + 1
     return ReplyResult(
-        # context_variables=context_variables,
-        message=date.strftime("%A"),
+        message=datetime.strptime(date_string, "%Y-%m-%d").strftime("%A"),
+        context_variables=context_variables,
     )
 
 
-app = HTTPAgentBus(agents=[agent])
+app = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
