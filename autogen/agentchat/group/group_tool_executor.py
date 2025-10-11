@@ -164,7 +164,7 @@ class GroupToolExecutor(ConversableAgent):
         message = messages[-1]
         # Track the original agent that initiated this tool call (for safeguard transparency)
         # Use sender.name as fallback when message doesn't have a name field (e.g., for tool_calls messages)
-        agent_name = message.get("name", sender.name if sender else None)
+        agent_name = message.get("name", sender.name if sender else "unknown")
         self.set_tool_call_originator(agent_name)
 
         if "tool_calls" in message:
