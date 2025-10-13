@@ -1,16 +1,13 @@
 .docusaurus/
 node_modules/
+
 # Project
 /.vs
-.vscode
-.ruff_cache/
+.vscode.idea/*
+.DS_Store
 
 # Log files
 *.log
-
-# Python virtualenv
-.venv*
-.env*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -126,6 +123,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.venv*
+.env*
 
 # Spyder project settings
 .spyderproject
@@ -142,6 +141,9 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# ruff
+.ruff_cache/
+
 # Pyre type checker
 .pyre/
 
@@ -152,10 +154,6 @@ dmypy.json
 cython_debug/
 
 logs
-
-.idea/*
-.DS_Store
-.cursor/
 
 output/
 *.pkl
@@ -206,3 +204,4 @@ notebook/mcp/arxiv_papers
 
 
 *CLAUDE.md:
+.cursor/
