@@ -24,8 +24,8 @@ from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials, suppress_json_decoder_error
+from test.credentials import Credentials
+from test.utils import suppress_json_decoder_error
 
 
 def test_groupchat_init():

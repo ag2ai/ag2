@@ -13,8 +13,7 @@ import pytest
 
 from autogen import OpenAIWrapper
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     # raises exception if openai>=1 is installed and something is wrong with imports

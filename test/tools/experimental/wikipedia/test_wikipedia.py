@@ -15,8 +15,7 @@ from autogen.tools.experimental.wikipedia.wikipedia import (
     WikipediaPageLoadTool,
     WikipediaQueryRunTool,
 )
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 # A simple fake page class to simulate a wikipediaapi.WikipediaPage.

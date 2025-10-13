@@ -16,8 +16,8 @@ from autogen import ConversableAgent
 from autogen.agentchat.realtime.experimental import RealtimeAgent, RealtimeObserver, WebSocketAudioAdapter
 from autogen.agentchat.realtime.experimental.realtime_swarm import register_swarm
 from autogen.tools.dependency_injection import Field as AG2Field
+from test.credentials import Credentials
 
-from ...conftest import Credentials
 from .realtime_test_utils import text_to_speech, trace
 
 logger = getLogger(__name__)

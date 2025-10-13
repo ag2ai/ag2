@@ -144,7 +144,7 @@ class ConversableAgent(LLMAgent):
 
     DEFAULT_SUMMARY_PROMPT = "Summarize the takeaway from the conversation. Do not add any introductory phrases."
     DEFAULT_SUMMARY_METHOD = "last_msg"
-    llm_config: dict[str, Any] | Literal[False]
+    llm_config: LLMConfig | Literal[False]
 
     def __init__(
         self,
