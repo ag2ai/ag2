@@ -7,9 +7,14 @@ description: "Learn how to connect to and interact with remote A2A agents from y
 
 The A2A client allows you to connect to remote A2A agent servers and interact with them as if they were local agents. This guide covers everything you need to know about using A2A clients.
 
+!!! warning
+    `A2aRemoteAgent` supports only asynchronous methods - this is the limitation of the A2A client we use.
+
 ## Basic Client Setup
 
 ### Simple Connection
+
+Generally, you can use `A2aRemoteAgent` like any other `ConversableAgent`. In the example below, we create a local agent and connect to a remote agent and use it to generate code.
 
 ```python
 from autogen.a2a import A2aRemoteAgent
@@ -23,11 +28,16 @@ remote_agent = A2aRemoteAgent(
 # Use it like any other agent
 await local_agent.a_initiate_chat(
     recipient=remote_agent,
-    message={"role": "user", "content": "Create a calculator function"}
+    message={
+        "role": "user",
+        "content": "Create a calculator function",
+    }
 )
 ```
 
 ### With Local Agent
+
+In the example below, we create `A2aRemoteAgent` client and use it with a local agent to make them work together.
 
 ```python
 import asyncio
@@ -69,18 +79,23 @@ async def review_code():
 asyncio.run(review_code())
 ```
 
-## Advanced Configuration
+## Advanced Usage
 
 ### Custom HTTP Client
 
+Pretty often you need to pass some custom options to the remote agent http client. It could be headers, timeout, etc. To do this, you can pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
+
 ```python
 import httpx
-from autogen.a2a import A2aRemoteAgent
+from autogen.a2a import A2aRemoteAgent, HttpxClientFactory
 
-# Create custom HTTP client
-http_client = httpx.AsyncClient(
+# Create custom HTTP client factory
+http_client = HttpxClientFactory(
     timeout=30.0,
-    headers={"User-Agent": "MyApp/1.0"}
+    headers={
+        "User-Agent": "MyApp/1.0",
+        "Authorization": f"Bearer {your_token}"
+    }
 )
 
 remote_agent = A2aRemoteAgent(
@@ -92,102 +107,57 @@ remote_agent = A2aRemoteAgent(
 
 ### Client Configuration
 
+A2A client has a few configuration options that you can pass to the `A2aRemoteAgent` constructor.
+
 ```python
 from a2a.client import ClientConfig
 from autogen.a2a import A2aRemoteAgent
 
-# Configure client settings
-client_config = ClientConfig(
-    timeout=60.0,
-    retry_attempts=3,
-    retry_delay=1.0
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=ClientConfig(streaming=True),
 )
+```
+
+### A2aRemoteAgent testing
+
+Also, it could be useful a lot to mock remote agent responses for testing purposes. To do this, you can pass your own `MockClient` instance to the `A2aRemoteAgent` constructor.
+
+```python
+from autogen.a2a import A2aRemoteAgent, MockClient
 
 remote_agent = A2aRemoteAgent(
     url="http://localhost:8000",
     name="python_coder",
-    client_config=client_config
+    client=MockClient(response_message="Hello, user!"),
 )
 ```
 
-### Authentication
+## Other frameworks interoperability
 
-```python
-import httpx
+A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"} as well, so you can use `A2aRemoteAgent` with them as well.
+
+As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
+
+```python title="server.py" linenums="1"
+from pydantic_ai import Agent
+
+agent = Agent(
+    "openai:gpt-4.1",
+    instructions="You are an expert Python developer...",
+)
+app = agent.to_a2a()
+```
+
+Now you can create `A2aRemoteAgent` client without any changes:
+
+```python title="client.py" linenums="1"
 from autogen.a2a import A2aRemoteAgent
 
-# Create authenticated client
-auth_client = httpx.AsyncClient(
-    headers={"Authorization": f"Bearer {your_token}"}
-)
-
-remote_agent = A2aRemoteAgent(
-    url="https://api.your-domain.com",
-    name="secure_agent",
-    client=auth_client
-)
-```
-
-## Context and Tools
-
-### Passing Context Variables
-
-```python
-# Set context variables that will be sent to the remote agent
-local_agent.context_variables.update({
-    "project_name": "MyProject",
-    "language": "Python",
-    "framework": "FastAPI"
-})
-
-await local_agent.a_initiate_chat(
-    recipient=remote_agent,
-    message={"role": "user", "content": "Create a FastAPI endpoint"}
-)
-```
-
-### Using Tools with Remote Agents
-
-```python
-# Define tools for the remote agent
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_web",
-            "description": "Search the web for information",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"}
-                },
-                "required": ["query"]
-            }
-        }
-    }
-]
-
-# Update tool signature
-remote_agent.update_tool_signature(tools[0], is_remove=False)
-
-# Use the remote agent with tools
-await local_agent.a_initiate_chat(
-    recipient=remote_agent,
-    message={"role": "user", "content": "Search for Python best practices"}
-)
-```
-
-## Best Practices
-
-
-### 3. Timeout Configuration
-
-```python
-# Set appropriate timeouts
-client_config = ClientConfig(timeout=30.0)
+# works correctly with other frameworks A2A servers
 remote_agent = A2aRemoteAgent(
     url="http://localhost:8000",
     name="python_coder",
-    client_config=client_config
 )
 ```

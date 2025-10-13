@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
-from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
+from a2a.utils import new_agent_parts_message, new_artifact
 
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
@@ -64,8 +64,28 @@ def response_message_from_a2a(artifacts: list[Artifact] | None) -> ResponseMessa
 
 
 def response_message_from_a2a_message(message: Message) -> ResponseMessage | None:
+    text_parts: list[Part] = []
+    data_parts: list[Part] = []
+    for part in message.parts:
+        if isinstance(part.root, TextPart):
+            text_parts.append(part)
+        elif isinstance(part.root, DataPart):
+            data_parts.append(part)
+        else:
+            raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
+
+    if len(data_parts) > 2:
+        raise NotImplementedError("Multiple data parts are not supported")
+
+    if data_parts:
+        messages = [message_from_part(data_parts[0])]
+    elif len(text_parts) == 1:
+        messages = [message_from_part(text_parts[0])]
+    else:
+        messages = [{"content": "\n".join(t.root.text for t in text_parts)}]  # type: ignore[union-attr]
+
     return ResponseMessage(
-        messages=[{"content": get_message_text(message)}],
+        messages=messages,
         context=(message.metadata or {}).get(CONTEXT_KEY),
     )
 

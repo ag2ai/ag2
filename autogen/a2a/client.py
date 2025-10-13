@@ -9,7 +9,16 @@ from typing import Any, cast
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientConfig, ClientEvent, ClientFactory
+from a2a.client import (
+    A2ACardResolver,
+    A2AClientHTTPError,
+    Client,
+    ClientConfig,
+    ClientEvent,
+)
+from a2a.client import (
+    ClientFactory as A2AClientFactory,
+)
 from a2a.types import AgentCard, Message, Task, TaskQueryParams, TaskState
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
 
@@ -20,6 +29,7 @@ from autogen.oai.client import OpenAIWrapper
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 from .errors import A2aAgentNotFoundError, A2aClientError
+from .httpx_client_factory import ClientFactory, EmptyClientFactory
 from .utils import request_message_to_a2a, response_message_from_a2a, response_message_from_a2a_message
 
 logger = logging.getLogger(__name__)
@@ -33,11 +43,11 @@ class A2aRemoteAgent(ConversableAgent):
         name: str,
         *,
         silent: bool = False,
-        client: httpx.AsyncClient | None = None,
+        client: ClientFactory | None = None,
         client_config: ClientConfig | None = None,
     ) -> None:
         self.url = url
-        self._httpx_client = client
+        self._httpx_client_factory = client or EmptyClientFactory()
         self._client_config = client_config or ClientConfig()
 
         super().__init__(name, silent=silent)
@@ -83,9 +93,9 @@ class A2aRemoteAgent(ConversableAgent):
             context_id=uuid4().hex,
         )
 
-        self._client_config.httpx_client = self._httpx_client or httpx.AsyncClient(timeout=30)
+        self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
-            agent_client = ClientFactory(self._client_config).create(self.__agent_card)
+            agent_client = A2AClientFactory(self._client_config).create(self.__agent_card)
 
             if self.__agent_card.capabilities.streaming:
                 reply = await self._ask_streaming(agent_client, initial_message)
@@ -177,9 +187,7 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
-        client = self._httpx_client or httpx.AsyncClient(timeout=30)
-
-        resolver = A2ACardResolver(httpx_client=client, base_url=self.url)
+        resolver = A2ACardResolver(httpx_client=self._httpx_client_factory(), base_url=self.url)
 
         card: AgentCard | None = None
 

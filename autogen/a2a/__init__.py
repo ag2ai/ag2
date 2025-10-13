@@ -9,12 +9,15 @@ except ImportError as e:
 
 from .agent_executor import AutogenAgentExecutor
 from .client import A2aRemoteAgent
+from .httpx_client_factory import HttpxClientFactory, MockClient
 from .server import A2aAgentServer, CardSettings
 
-__all__ = (  # noqa: RUF022
+__all__ = (
     "A2aAgentServer",
     "A2aRemoteAgent",
-    "AutogenAgentExecutor",
     "AgentCard",
+    "AutogenAgentExecutor",
     "CardSettings",
+    "HttpxClientFactory",
+    "MockClient",
 )
