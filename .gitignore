@@ -3,6 +3,7 @@ node_modules/
 # Project
 /.vs
 .vscode
+.ruff_cache/
 
 # Log files
 *.log
