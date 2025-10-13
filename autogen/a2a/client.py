@@ -30,7 +30,7 @@ from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 from .errors import A2aAgentNotFoundError, A2aClientError
 from .httpx_client_factory import ClientFactory, EmptyClientFactory
-from .utils import request_message_to_a2a, response_message_from_a2a, response_message_from_a2a_message
+from .utils import request_message_to_a2a, response_message_from_a2a_artifacts, response_message_from_a2a_message
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class A2aRemoteAgent(ConversableAgent):
                 ) from e
 
             if _is_task_completed(task):
-                return response_message_from_a2a(task.artifacts)
+                return response_message_from_a2a_artifacts(task.artifacts)
 
             await asyncio.sleep(1)
 
@@ -166,7 +166,7 @@ class A2aRemoteAgent(ConversableAgent):
 
         task, _ = event
         if _is_task_completed(task):
-            return response_message_from_a2a(task.artifacts), None
+            return response_message_from_a2a_artifacts(task.artifacts), None
 
         return None, task
 

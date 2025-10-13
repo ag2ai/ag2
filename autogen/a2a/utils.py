@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
@@ -42,7 +42,7 @@ def request_message_from_a2a(message: Message) -> RequestMessage:
     )
 
 
-def response_message_from_a2a(artifacts: list[Artifact] | None) -> ResponseMessage | None:
+def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> ResponseMessage | None:
     if not artifacts:
         return None
 
@@ -74,15 +74,19 @@ def response_message_from_a2a_message(message: Message) -> ResponseMessage | Non
         else:
             raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
 
-    if len(data_parts) > 2:
-        raise NotImplementedError("Multiple data parts are not supported")
+    tpn = len(text_parts)
+    if dpn := len(data_parts):
+        if dpn > 1:
+            raise NotImplementedError("Multiple data parts are not supported")
 
-    if data_parts:
+        if tpn:
+            raise NotImplementedError("Data parts and text parts are not supported together")
+
         messages = [message_from_part(data_parts[0])]
-    elif len(text_parts) == 1:
+    elif tpn == 1:
         messages = [message_from_part(text_parts[0])]
     else:
-        messages = [{"content": "\n".join(t.root.text for t in text_parts)}]  # type: ignore[union-attr]
+        messages = [{"content": "\n".join(cast(TextPart, t.root).text for t in text_parts)}]
 
     return ResponseMessage(
         messages=messages,
@@ -95,12 +99,20 @@ def response_message_to_a2a(
     context_id: str | None,
     task_id: str | None,
 ) -> tuple[Artifact, list[Message]]:
+    # mypy ignores could be removed after
+    # https://github.com/a2aproject/a2a-python/pull/503
+
     if not result:
-        return new_artifact(name="result", parts=[]), []
+        return new_artifact(
+            name="result",
+            parts=[],
+            description=None,  # type: ignore[arg-type]
+        ), []
 
     artifact = new_artifact(
         name="result",
         parts=[message_to_part(result.messages[-1])],
+        description=None,  # type: ignore[arg-type]
     )
 
     if result.context:
@@ -119,22 +131,35 @@ def response_message_to_a2a(
 
 
 def message_to_part(message: dict[str, Any]) -> Part:
+    message = message.copy()
     text = message.pop("content", "") or ""
-    return Part(root=TextPart(text=text, metadata=message))
+    return Part(
+        root=TextPart(
+            text=text,
+            metadata=message or None,
+        )
+    )
 
 
 def message_from_part(part: Part) -> dict[str, Any]:
-    if isinstance(part.root, TextPart):
+    root = part.root
+
+    if isinstance(root, TextPart):
         return {
-            **(part.root.metadata or {}),
-            "content": part.root.text,
+            **(root.metadata or {}),
+            "content": root.text,
         }
 
-    elif isinstance(part.root, DataPart):
-        if set(part.root.data.keys()) == {"result"} and "":  # pydantic-ai specific
-            return part.root.data["result"]
+    elif isinstance(root, DataPart):
+        if (  # pydantic-ai specific
+            set(root.data.keys()) == {"result"}
+            and root.metadata
+            and "json_schema" in root.metadata
+            and isinstance(data := root.data["result"], dict)
+        ):
+            return data
 
-        return part.root.data
+        return root.data
 
     else:
         raise NotImplementedError(f"Unsupported part type: {type(part.root)}")
