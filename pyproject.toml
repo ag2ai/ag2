@@ -53,7 +53,6 @@ dependencies = [
     "termcolor",
     "python-dotenv",
     "tiktoken",
-    # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
@@ -321,7 +320,7 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
-    "ag2[test, openai]",
+    "ag2[test, openai, a2a]",
 ]
 
 lint = [

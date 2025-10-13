@@ -53,7 +53,7 @@ async def test_agent_not_found() -> None:
         client=client,
     )
 
-    with pytest.raises(RemoteAgentNotFoundError, match="Remote agent wrong not found"):
+    with pytest.raises(RemoteAgentNotFoundError, match="Remote agent `wrong` not found"):
         await remote_agent.a_generate_remote_reply()
 
 
