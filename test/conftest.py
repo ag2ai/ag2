@@ -180,6 +180,8 @@ def get_credentials(
         credentials = get_credentials_from_file(filter_dict, temperature)
         if api_type == "openai":
             credentials.llm_config = credentials.llm_config.where(api_type="openai")
+        elif api_type == "responses":
+            credentials.llm_config = credentials.llm_config.where(api_type="responses")
     except Exception:
         credentials = None
 
