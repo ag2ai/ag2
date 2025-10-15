@@ -5,7 +5,7 @@ description: "Learn how to enable agents to communicate across different process
 
 # A2A (Agent-to-Agent) Communication
 
-The [A2A (Agent-to-Agent)](https://a2a-protocol.org/latest/){.external-link target="_blank"} communication system in AG2 enables agents to communicate across different processes, machines, applications, or even different frameworks and languages. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
+The [A2A (Agent-to-Agent Protocol)](https://a2a-protocol.org/latest/){.external-link target="_blank"} communication system in AG2 enables agents to communicate across different processes, machines, applications, or even different frameworks and languages. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
 
 Consider using A2A when:
 
@@ -17,11 +17,11 @@ Consider using A2A when:
 !!! note
     We are using official [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to implement A2A in AG2.
 
-    So, you can check their documentation for more details on how to use A2A in your own projects.
+    You can check their documentation for more details on how to use A2A in your own projects.
 
-## Create A2A Server
+## Creating an A2A Server
 
-We built a convenience wrapper that expose regular AG2 `ConversableAgent` agents as A2A servers - let's have a quick look at how to use it:
+We've built a convenience wrapper that exposes regular AG2 `ConversableAgent` agents as A2A servers - let's have a quick look at how to use it:
 
 ```python title="server.py" linenums="1" hl_lines="16"
 from autogen import ConversableAgent, LLMConfig
@@ -48,9 +48,9 @@ Now you can start it using any ASGI server, for example:
 uvicorn server:server
 ```
 
-To read more about how to configure A2A server, please refer to [A2A Server Setup](./server){.internal-link} documentation.
+To read more about how to configure an A2A server, please refer to [A2A Server Setup](./server){.internal-link} documentation.
 
-## Create A2A Client
+## Creating an A2A Client
 
 ```python title="client.py" linenums="1" hl_lines="4"
 from autogen.a2a import A2aRemoteAgent
@@ -61,7 +61,7 @@ remote_coding_agent = A2aRemoteAgent(
 )
 ```
 
-Now you can use it like any other `ConversableAgent`:
+Now you can use it just like any other `ConversableAgent`:
 
 ```python linenums="1"
 from autogen import ConversableAgent, LLMConfig
@@ -91,11 +91,11 @@ await review_agent.a_initiate_chat(
 
 To read more about how to use `A2aRemoteAgent`, please refer to [A2A Client Usage](./client){.internal-link} documentation.
 
-## Other frameworks interoperability
+## Interoperability with other frameworks
 
-A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"} as well, so you can use `A2aRemoteAgent` with them as well.
+A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
 
-As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
+As an example, you can easily connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
 
 ```python title="server.py" linenums="1"
 from pydantic_ai import Agent
@@ -107,7 +107,7 @@ agent = Agent(
 app = agent.to_a2a()
 ```
 
-Now you can create `A2aRemoteAgent` client without any changes:
+Now, without any changes, your `A2aRemoteAgent` clients can interact with them:
 
 ```python title="client.py" linenums="1"
 from autogen.a2a import A2aRemoteAgent

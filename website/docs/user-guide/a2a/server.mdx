@@ -7,7 +7,7 @@ description: "Learn how to set up and configure A2A agent servers for distribute
 
 The A2A server allows you to expose your AG2 agents as web services that can be accessed by remote clients. This guide covers everything you need to know about setting up and configuring A2A servers.
 
-## Basic Server Setup
+## Simple Server Setup
 
 ```python title="server.py" linenums="1" hl_lines="16-19"
 from autogen import ConversableAgent, LLMConfig
@@ -38,13 +38,13 @@ uvicorn server:server --host 0.0.0.0 --port 8000
 ```
 
 !!! tip
-    Do not forget to set `url` parameter to your server URL. It will be used to build public agent card.
+    Do not forget to set the `url` parameter to match your server URL. It will be used to build the public agent card.
 
 ## Capabilities
 
 ### Remote Tools execution details
 
-AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Fortunately, our A2A agent executer allows your remote agent execute any tool by itself. So, if your client calls an agent with a tool, this tool will be executed by the remote agent, process results and return them to the client.
+AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and result processed by the remote agent, with a final result returned to the client.
 
 ```python title="remote.py" linenums="1" hl_lines="21-27"
 import os
@@ -78,26 +78,31 @@ def get_weekday(
 app = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
 ```
 
-In this way, processing steps are:
+Here's what the processing steps would be:
+
 1. Remote client calls `A2aAgentServer` agent
+
 2. `A2aAgentServer` agent asks LLM to decide if the tool should be called
+
 3. `A2aAgentServer` agent calls `get_weekday` tool
+
 4. `A2aAgentServer` processes the tool result by LLM
+
 5. `A2aAgentServer` returns the whole local history to the client
 
-Also, remote agents supports another group chat features without any additional configuration.
+Additionally, remote agents support group chat features without needing any additional configuration:
 
-- [Context Variables](docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/){.internal-link}
-- [Guardrails](docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/){.internal-link}
+- [Context Variables](/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/){.internal-link}
+- [Guardrails](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/){.internal-link}
 
-Just use these features with your remote `ConversableAgent` agent, wrap it in `A2aAgentServer` and let the magic happen.
+Just use these features with your remote `ConversableAgent` agent, wrap it in `A2aAgentServer`, and let the magic happen!
 
 
-### Multiple agents at one server
+### Multiple agents on one server
 
-A2A protocol assumes single agent per server. But because of `A2aAgentServer` is an full-featured ASGI application, you can combine it with another ASGI apps in a way you need. So, you can insert your server to regular FastAPI application or any other ASGI application. Or you can combine multiple agents into one server, separated by paths.
+The A2A protocol assumes a single agent per server. However, because `A2aAgentServer` is a full-featured ASGI application, you can combine it with other ASGI apps in any way you need. So, you can add your server to regular FastAPI applications or any other ASGI application. Furthermore, you can combine multiple agents onto one server, separated by paths.
 
-As an example
+An example of multiple agents on one server:
 
 ```python title="remote.py" linenums="1" hl_lines="9 13 17"
 from autogen.a2a import A2aAgentServer
@@ -124,10 +129,10 @@ app = Starlette(
 
 !!! tip
 
-    Be careful with `A2aAgentServer(..., url="...")` parameter. It will be used to build agent card, so you need to add your path with `/` to the end of the server URL.
+    Be careful with the `A2aAgentServer(..., url="...")` parameter. It will be used to build the agent card, so you need to add your path with `/` to the end of the server URL.
 
 
-So, your clients for such agents will be:
+In this case, the clients for these agents would be:
 
 ```python title="client.py" linenums="1" hl_lines="4 9 14"
 from autogen.a2a import A2aRemoteAgent
@@ -150,14 +155,13 @@ general_agent = A2aRemoteAgent(
 
 ## Advanced A2A Configuration
 
-Also, AG2 do not limit you with our default implementation. You can specify any parts of the server you need.
-This reason we provide a way to use native [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to fully customize your server.
+AG2 doesn't limit A2A to a default implementation. You can specify any and all parts of the server that you need. To enable this, we provide a way to use the native [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to fully customize your server.
 
 ### Agent Card
 
 The Agent Card describes your agent's capabilities and is [automatically discovered by clients](https://a2a-protocol.org/latest/topics/agent-discovery/){.external-link target="_blank"}.
 
-To configure it, you can use `agent_card` and `extended_agent_card` parameters.
+To configure an Agent Card, you can use the `agent_card` and `extended_agent_card` parameters.
 
 * `agent_card` - basic agent card, describes basic capabilities of your agent and is available to all clients
 * `extended_agent_card` - extended agent card, for authenticated access with additional capabilities
@@ -189,13 +193,13 @@ server = A2aAgentServer(
 ```
 
 !!! note
-    By default `A2aAgentServer` uses agent's name and description to build agent card.
-    You can override it by passing `agent_card` and `extended_agent_card` parameters.
+    By default `A2aAgentServer` uses the agent's name and description to build their agent card.
+
+    You can override it by passing in the `agent_card` and `extended_agent_card` parameters.
 
 ### Custom Request Handler
 
-For advanced use cases, you can customize the request handling.
-It allows you to use your own task store, queue manager, configure push notifications, etc. By default, `A2aAgentServer` uses the simplest `InMemoryTaskStore` to store tasks.
+For advanced use cases, you can customize the request handling, allowing you to use your own task store, queue manager, or configure push notifications, etc. By default, `A2aAgentServer` uses the simplest `InMemoryTaskStore` to store tasks.
 
 ```python title="server.py" linenums="1" hl_lines="7-10"
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -205,7 +209,7 @@ from autogen.a2a import A2aAgentServer
 server = A2aAgentServer(agent)
 
 request_handler = DefaultRequestHandler(
-    agent_executor=server.executor,  # use autogen executor
+    agent_executor=server.executor,  # use AG2 executor
     task_store=InMemoryTaskStore(),
 )
 
@@ -214,7 +218,7 @@ app = server.build(request_handler=request_handler)
 
 ### Custom Server Application
 
-Also, you can use your own server application. For example, `A2AFastAPIApplication` is a FastAPI application that can be used to serve your agent.
+You can also use your own server application. For example, `A2AFastAPIApplication` is a FastAPI application that can be used to serve your agent.
 
 ```python title="server.py" linenums="1" hl_lines="7-13"
 from a2a.server.apps import A2AFastAPIApplication
@@ -232,4 +236,4 @@ app = A2AFastAPIApplication(
 ).build()
 ```
 
-Please refer to [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} documentation for more details on how to use it.
+Please refer to the [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} documentation for more details on how to use it.

@@ -37,7 +37,7 @@ await local_agent.a_initiate_chat(
 
 ### With Local Agent
 
-In the example below, we create `A2aRemoteAgent` client and use it with a local agent to make them work together.
+In the example below, we create a `A2aRemoteAgent` client and use it with a local agent to make them work together.
 
 ```python
 import asyncio
@@ -83,7 +83,7 @@ asyncio.run(review_code())
 
 ### Custom HTTP Client
 
-Pretty often you need to pass some custom options to the remote agent http client. It could be headers, timeout, etc. To do this, you can pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
+Pretty often you need to pass some custom options to the remote agent HTTP client, such as headers, timeout, etc. To do this, pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
 
 ```python
 import httpx
@@ -122,7 +122,7 @@ remote_agent = A2aRemoteAgent(
 
 ### A2aRemoteAgent testing
 
-Also, it could be useful a lot to mock remote agent responses for testing purposes. To do this, you can pass your own `MockClient` instance to the `A2aRemoteAgent` constructor.
+To help with testing remote clients, you can mock remote agent replies by passing a `MockClient` instance to the `A2aRemoteAgent` constructor.
 
 ```python
 from autogen.a2a import A2aRemoteAgent, MockClient
@@ -134,9 +134,9 @@ remote_agent = A2aRemoteAgent(
 )
 ```
 
-## Other frameworks interoperability
+## Interoperability with other frameworks
 
-A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"} as well, so you can use `A2aRemoteAgent` with them as well.
+A2A is also supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
 
 As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
 
@@ -150,7 +150,7 @@ agent = Agent(
 app = agent.to_a2a()
 ```
 
-Now you can create `A2aRemoteAgent` client without any changes:
+Now, without any changes, your `A2aRemoteAgent` clients can interact with them:
 
 ```python title="client.py" linenums="1"
 from autogen.a2a import A2aRemoteAgent
