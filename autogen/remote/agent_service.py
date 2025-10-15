@@ -80,7 +80,7 @@ class AgentService(RemoteService):
         if not local_history:
             return None
 
-        return ResponseMessage(messages=local_history, context=context_variables.data)
+        return ResponseMessage(messages=local_history, context=context_variables.data or None)
 
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str

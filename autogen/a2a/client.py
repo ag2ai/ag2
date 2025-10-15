@@ -105,8 +105,6 @@ class A2aRemoteAgent(ConversableAgent):
                 reply = await self._ask_polling(agent_client, initial_message)
                 return self._apply_reply(reply, sender)
 
-        return True, None
-
     def _apply_reply(
         self, reply: ResponseMessage | None, sender: ConversableAgent | None
     ) -> tuple[bool, dict[str, Any] | None]:

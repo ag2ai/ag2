@@ -11,13 +11,11 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, HTTPException, Response, status
 
 from autogen.agentchat import ConversableAgent
-from autogen.doc_utils import export_module
 
 from .agent_service import AgentService
 from .protocol import RemoteService, RequestMessage, ResponseMessage
 
 
-@export_module("autogen.remote")
 class HTTPAgentBus:
     def __init__(
         self,

@@ -532,6 +532,7 @@ files = [
     "autogen/_website",
     "autogen/remote",
     "autogen/a2a",
+    "autogen/testing",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",

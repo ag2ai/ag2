@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -58,6 +59,16 @@ class A2aAgentServer:
         if not agent_card:
             agent_card = CardSettings()
 
+        if agent_card.url and url != "http://localhost:8000":
+            warnings.warn(
+                (
+                    "You can't use `agent_card.url` and `url` options in the same time. "
+                    f"`agent_card.url` has a higher priority, so `{agent_card.url}` will be used."
+                ),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
         self.card = AgentCard.model_validate({
             # use agent options by default
             "name": agent.name,
@@ -70,6 +81,16 @@ class A2aAgentServer:
 
         self.extended_agent_card: AgentCard | None = None
         if extended_agent_card:
+            if extended_agent_card.url and url != "http://localhost:8000":
+                warnings.warn(
+                    (
+                        "You can't use `extended_agent_card.url` and `url` options in the same time. "
+                        f"`agent_card.url` has a higher priority, so `{extended_agent_card.url}` will be used."
+                    ),
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
             self.extended_agent_card = AgentCard.model_validate({
                 "name": agent.name,
                 "description": agent.description,

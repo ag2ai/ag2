@@ -186,11 +186,6 @@ test/agentchat/test_agent_scripts/*
 .db
 local_cache
 
-
-notebook/result.png
-
-notebook/coding
-
 chroma
 notebook/reasoning_tree.json
 client_secret*.json
@@ -198,10 +193,13 @@ client_secret*.json
 *credentials.json
 notebook/*_server.py
 
+notebook/result.png
+notebook/coding
 
 notebook/mcp/wikipedia_articles
 notebook/mcp/arxiv_papers
 
+remote-examples
 
 *CLAUDE.md:
 .cursor/

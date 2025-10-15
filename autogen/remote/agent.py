@@ -7,7 +7,6 @@ import httpx
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
-from autogen.doc_utils import export_module
 from autogen.oai.client import OpenAIWrapper
 
 from .errors import RemoteAgentError, RemoteAgentNotFoundError
@@ -15,7 +14,6 @@ from .protocol import RequestMessage, ResponseMessage
 from .retry import EmptyRetryPolicy, RetryPolicy
 
 
-@export_module("autogen.remote")
 class HTTPRemoteAgent(ConversableAgent):
     def __init__(
         self,
