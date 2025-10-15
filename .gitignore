@@ -2,8 +2,9 @@
 node_modules/
 
 # Project
-/.vs
-.vscode.idea/*
+.vs/
+.vscode/
+.idea/
 .DS_Store
 
 # Log files
@@ -74,7 +75,7 @@ db.sqlite3-journal
 
 # Flask stuff:
 instance/
-.webassets-cache
+.webassets-cache/
 
 # Scrapy stuff:
 .scrapy
@@ -153,7 +154,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-logs
+logs/
 
 output/
 *.pkl
@@ -168,7 +169,7 @@ wolfram.txt
 
 # DB on disk for Teachability
 tmp/
-test/my_tmp/*
+test/my_tmp/
 
 # Storage for the AgentEval output
 test/test_files/agenteval-in-out/out/
@@ -179,7 +180,7 @@ local_cache/
 
 # Files created by tests
 *tmp_code_*
-test/agentchat/test_agent_scripts/*
+test/agentchat/test_agent_scripts/
 
 # test cache
 .cache_test
@@ -194,10 +195,10 @@ client_secret*.json
 notebook/*_server.py
 
 notebook/result.png
-notebook/coding
+notebook/coding/
 
-notebook/mcp/wikipedia_articles
-notebook/mcp/arxiv_papers
+notebook/mcp/wikipedia_articles/
+notebook/mcp/arxiv_papers/
 
 remote-examples
 
