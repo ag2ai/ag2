@@ -38,15 +38,109 @@ def patch_pytest_terminal_writer() -> None:
 patch_pytest_terminal_writer()
 
 
+# Mapping pytest markers to their corresponding API types/SDKs
+MARKER_TO_API_TYPES = {
+    "openai": ["openai", "azure", "responses"],  # OpenAI SDK handles all these types
+    "openai_realtime": ["openai", "azure"],  # OpenAI SDK realtime
+    "anthropic": ["anthropic"],  # Anthropic SDK
+    "gemini": ["google"],  # Google GenAI SDK
+    "gemini_realtime": ["google"],  # Google GenAI SDK realtime
+    "deepseek": ["openai"],  # DeepSeek uses OpenAI-compatible API
+    "ollama": ["openai"],  # Ollama uses OpenAI-compatible API
+    "bedrock": ["bedrock"],  # AWS Bedrock SDK
+    "cerebras": ["openai"],  # Cerebras uses OpenAI-compatible API
+    "together": ["openai"],  # Together uses OpenAI-compatible API
+    "groq": ["openai"],  # Groq uses OpenAI-compatible API
+}
+
+
+def get_safe_api_types_from_test_context() -> set[str]:
+    """Extract safe API types from current test's pytest markers to prevent cross-SDK imports."""
+    import inspect
+
+    # Walk up the call stack to find pytest request context
+    frame = inspect.currentframe()
+    try:
+        while frame:
+            frame_locals = frame.f_locals
+            if "request" in frame_locals:
+                pytest_request = frame_locals["request"]
+                if hasattr(pytest_request, "node") and hasattr(pytest_request.node, "iter_markers"):
+                    # Get all markers from the current test
+                    test_markers = {mark.name for mark in pytest_request.node.iter_markers()}
+
+                    # Map markers to allowed API types
+                    safe_api_types = set()
+                    for marker in test_markers:
+                        if marker in MARKER_TO_API_TYPES:
+                            safe_api_types.update(MARKER_TO_API_TYPES[marker])
+
+                    if safe_api_types:
+                        return safe_api_types
+                    # If we found pytest context but no relevant markers, continue searching
+                    break
+            frame = frame.f_back
+    finally:
+        # Clean up frame references to prevent memory leaks
+        del frame
+
+    # Fallback: if no test context or no relevant markers, allow all
+    # This handles non-test usage and ensures backward compatibility
+    return {
+        "openai",
+        "azure",
+        "responses",
+        "anthropic",
+        "google",
+        "bedrock",
+        "deepseek",
+        "ollama",
+        "cerebras",
+        "together",
+        "groq",
+    }
+
+
 def get_credentials_from_file(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
     **kwargs: Any,
 ) -> Credentials:
-    """Fixture to load the LLM config."""
+    """Load LLM config with test-context filtering to prevent cross-SDK imports."""
+
+    # Get safe API types for current test context
+    safe_api_types = get_safe_api_types_from_test_context()
+
+    # Apply safety filter to prevent cross-SDK imports in CI
+    if filter_dict is None:
+        filter_dict = {}
+
+    # Create a copy to avoid modifying the original
+    filtered_dict = filter_dict.copy()
+
+    # Add/update API type filter to only include safe providers
+    existing_api_types = filtered_dict.get("api_type")
+    if existing_api_types is not None:
+        # Handle both string and list formats
+        if isinstance(existing_api_types, str):
+            existing_api_types = [existing_api_types]
+
+        # Intersect requested types with safe types
+        safe_requested_types = [t for t in existing_api_types if t in safe_api_types]
+        if not safe_requested_types:
+            # No safe intersection - this will trigger env fallback
+            raise Exception(
+                f"No safe API types for current test context. Requested: {existing_api_types}, Safe: {list(safe_api_types)}"
+            )
+
+        filtered_dict["api_type"] = safe_requested_types
+    else:
+        # No specific request - filter to only safe types
+        filtered_dict["api_type"] = list(safe_api_types)
+
     llm_config = autogen.LLMConfig.from_json(
         path=str(OAI_CONFIG_LIST),
-        filter_dict=filter_dict,
+        filter_dict=filtered_dict,
         file_location=KEY_LOC,
         temperature=temperature,
     )
@@ -86,6 +180,8 @@ def get_credentials(
         credentials = get_credentials_from_file(filter_dict, temperature)
         if api_type == "openai":
             credentials.llm_config = credentials.llm_config.where(api_type="openai")
+        elif api_type == "responses":
+            credentials.llm_config = credentials.llm_config.where(api_type="responses")
     except Exception:
         credentials = None
 
@@ -152,6 +248,15 @@ def credentials_gpt_4o_realtime() -> Credentials:
         filter_dict={"tags": ["gpt-4o-realtime"]},
         api_type="openai",
         temperature=0.6,
+    )
+
+
+@pytest.fixture
+def credentials_responses_gpt_4o_mini() -> Credentials:
+    return get_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4.1-mini",
+        api_type="responses",
     )
 
 
