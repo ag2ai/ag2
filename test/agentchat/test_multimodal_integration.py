@@ -83,7 +83,7 @@ def _verify_content_str_processing(content: Any) -> None:
                 assert text_item["text"] in result, "Text content should be preserved"
 
         # Should contain image placeholders for image content
-        image_parts = [item for item in content if item.get("type") in ["image_url", "image_url"]]
+        image_parts = [item for item in content if item.get("type") in ["image_url", "input_image"]]
         if image_parts:
             assert "<image>" in result, "Image content should be converted to <image> placeholder"
 
