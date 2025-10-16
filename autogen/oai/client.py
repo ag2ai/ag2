@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
@@ -365,11 +366,12 @@ class OpenAIClient:
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
 
-        def _format_content(content: str) -> str:
+        def _format_content(content: str | list[dict[str, Any]] | None) -> str:
+            normalized_content = content_str(content)
             return (
-                self.response_format.model_validate_json(content).format()
+                self.response_format.model_validate_json(normalized_content).format()
                 if isinstance(self.response_format, FormatterProtocol)
-                else content
+                else normalized_content
             )
 
         if TOOL_ENABLED:
