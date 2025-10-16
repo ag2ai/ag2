@@ -570,7 +570,9 @@ def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
         human_input_mode="NEVER",
         max_consecutive_auto_reply=1,
     )
-    result = user_proxy.initiate_chat(gpt_assistant, message="Write a Joke!", summary_method="reflection_with_llm")
+    result = user_proxy.initiate_chat(
+        gpt_assistant, message=[{"content": "Write a Joke!", "role": "user"}], summary_method="reflection_with_llm"
+    )
     assert result is not None
 
     # use the assistant configuration
@@ -580,7 +582,9 @@ def test_gpt_reflection_with_llm(credentials_gpt_4o_mini: Credentials) -> None:
         assistant_config={"assistant_id": gpt_assistant.assistant_id},
     )
     result = user_proxy.initiate_chat(
-        agent_using_assistant_config, message="Write a Joke!", summary_method="reflection_with_llm"
+        agent_using_assistant_config,
+        message=[{"content": "Write a Joke!", "role": "user"}],
+        summary_method="reflection_with_llm",
     )
     assert result is not None
 

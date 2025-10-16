@@ -66,6 +66,14 @@ class RandomPattern(Pattern):
             Tuple containing all necessary components for the group chat.
         """
         # Use the parent class's implementation to prepare the agents and group chat
+        # Create the random handoffs between agents BEFORE calling parent
+        # This ensures validation passes since handoffs are set up correctly
+        self._generate_handoffs(
+            initial_agent=self.initial_agent,
+            agents=self.agents,
+            user_agent=self.user_agent,
+        )
+
         (
             agents,
             wrapped_agents,
@@ -84,9 +92,6 @@ class RandomPattern(Pattern):
             max_rounds=max_rounds,
             messages=messages,
         )
-
-        # Create the random handoffs between agents
-        self._generate_handoffs(initial_agent=initial_agent, agents=agents, user_agent=user_agent)
 
         # Return all components with our group_after_work
         return (

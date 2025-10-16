@@ -95,7 +95,7 @@ Now that everything is set up, you can initiate a chat between the [`UserProxyAg
 
 ```python
 user_proxy.initiate_chat(
-    recipient=chatbot, message="Get player, for additional information use 'goal keeper'", max_turns=3
+    recipient=chatbot, message=[{"content":"Get player, for additional information use 'goal keeper'","role":"user"}], max_turns=3
 )
 ```
 

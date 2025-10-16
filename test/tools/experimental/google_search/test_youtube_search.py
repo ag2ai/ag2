@@ -160,7 +160,7 @@ class TestYoutubeSearchTool:
             ) as mock_details,
         ):
             run_response = assistant.run(
-                message="Find YouTube videos about machine learning",
+                message=[{"content": "Find YouTube videos about machine learning", "role": "user"}],
                 tools=assistant.tools,
                 max_turns=3,
                 user_input=False,

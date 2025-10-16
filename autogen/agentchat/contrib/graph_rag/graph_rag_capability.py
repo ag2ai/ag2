@@ -38,7 +38,7 @@ class GraphRagCapability(AgentCapability):
         is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
         human_input_mode="ALWAYS",
     )
-    user_proxy.initiate_chat(graph_rag_agent, message="Name a few actors who've played in 'The Matrix'")
+    user_proxy.initiate_chat(graph_rag_agent, message=[{"content":"Name a few actors who've played in 'The Matrix'","role":"user"}])
 
     # ChatResult(
         # chat_id=uuid.uuid4().int,

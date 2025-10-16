@@ -112,7 +112,7 @@ for tool in discord_agent.tools:
 # Let's get the latest message from Discord and send one back as a poem.
 tool_executor.initiate_chat(
     recipient=discord_agent,
-    message="Get the latest message from Discord and send back a message with a poem about it."
+    message=[{"content":"Get the latest message from Discord and send back a message with a poem about it.","role":"user"}]
 )
 ```
 

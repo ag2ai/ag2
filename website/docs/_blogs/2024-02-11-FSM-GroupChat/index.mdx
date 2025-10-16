@@ -169,7 +169,7 @@ pip install autogen[openai,graph]
     # initiate the task
     user_proxy.initiate_chat(
         manager,
-        message="1",
+        message=[{"content":"1","role":"user"}],
         clear_history=True
     )
     ```

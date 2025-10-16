@@ -184,7 +184,7 @@ assistant_agent = AssistantAgent(
 # Start the chat, with the UserProxyAgent asking the AssistantAgent the message
 chat_result = user_proxy_agent.initiate_chat(
     assistant_agent,
-    message="Provide code to count the number of prime numbers from 1 to 10000.",
+    message=[{"content":"Provide code to count the number of prime numbers from 1 to 10000.","role":"user"}],
 )
 ```
 
@@ -407,7 +407,7 @@ def weather_forecast(
 # start the conversation
 res = user_proxy.initiate_chat(
     chatbot,
-    message="What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.",
+    message=[{"content":"What's the weather in New York and can you tell me how much is 123.45 EUR in USD so I can spend it on my holiday? Throw a few holiday tips in as well.","role":"user"}],
     summary_method="reflection_with_llm",
 )
 

@@ -60,7 +60,7 @@ class TestDeepResearchAgent:
         )
 
         run_response = agent.run(
-            message="Who are the founders of the AG2 framework?",
+            message=[{"content": "Who are the founders of the AG2 framework?", "role": "user"}],
             user_input=False,
             tools=agent.tools[0],
         )

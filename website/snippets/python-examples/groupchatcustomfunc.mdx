@@ -118,6 +118,6 @@ manager = GroupChatManager(
 
 user_proxy.initiate_chat(
     manager,
-    message="Find a latest paper about gpt-4 on arxiv and find its potential applications in software."
+    message=[{"content":"Find a latest paper about gpt-4 on arxiv and find its potential applications in software.","role":"user"}]
 )
 ```

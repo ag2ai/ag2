@@ -94,7 +94,7 @@ If so, remind that code blocks need to be enclosed in ``` blocks.
 Reply TERMINATE to end the conversation if the task is finished. Don't say appreciation.
 If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMINATE and that is your last message.""",
     )
-    user.initiate_chat(assistant, message="TERMINATE")
+    user.initiate_chat(assistant, message=[{"content": "TERMINATE", "role": "user"}])
     # should terminate without sending any message
     assert assistant.last_message()["content"] == assistant.last_message(user)["content"] == "TERMINATE"
     coding_task = "Print hello world to a file called hello.txt"
@@ -203,7 +203,9 @@ def test_standalone(credentials_gpt_4o_mini: Credentials):
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
     response = x_assistant.run(
-        message="Find out today's hot topic and an influencer who is talking about it on X",
+        message=[
+            {"content": "Find out today's hot topic and an influencer who is talking about it on X", "role": "user"}
+        ],
         tools=get_twitter_hot_topic,
         user_input=False,
     )
@@ -226,7 +228,9 @@ async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
         return "Hot topic of the day on Twitter is #AI, and an influencer who is talking about it is @elonmusk"
 
     response = await x_assistant.a_run(
-        message="Find out today's hot topic and an influencer who is talking about it on X",
+        message=[
+            {"content": "Find out today's hot topic and an influencer who is talking about it on X", "role": "user"}
+        ],
         tools=get_twitter_hot_topic,
         user_input=False,
     )

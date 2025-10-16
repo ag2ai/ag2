@@ -52,7 +52,7 @@ class TestPydanticAIInteroperabilityWithotContext:
         self.tool.register_for_execution(user_proxy)
         self.tool.register_for_llm(chatbot)
 
-        user_proxy.initiate_chat(recipient=chatbot, message="roll a dice", max_turns=2)
+        user_proxy.initiate_chat(recipient=chatbot, message=[{"content": "roll a dice", "role": "user"}], max_turns=2)  # type: ignore[arg-type]
 
         for message in user_proxy.chat_messages[chatbot]:
             if "tool_responses" in message:
@@ -196,7 +196,9 @@ class TestPydanticAIInteroperabilityWithContext:
         self.tool.register_for_llm(chatbot)
 
         user_proxy.initiate_chat(
-            recipient=chatbot, message="Get player, for additional information use 'goal keeper'", max_turns=3
+            recipient=chatbot,
+            message=[{"content": "Get player, for additional information use 'goal keeper'", "role": "user"}],  # type: ignore[arg-type]
+            max_turns=3,
         )
 
         for message in user_proxy.chat_messages[chatbot]:

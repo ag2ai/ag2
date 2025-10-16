@@ -116,7 +116,7 @@ telegram_retrieve_tool.register_for_execution(executor_agent)
 # sending the message to the Telegram group.
 executor_agent.initiate_chat(
     recipient=telegram_agent,
-    message="Let's send a message to Telegram giving them a joke for the day about AI agentic frameworks",
+    message=[{"content":"Let's send a message to Telegram giving them a joke for the day about AI agentic frameworks","role":"user"}],
     max_turns=2,
 )
 ```
@@ -128,7 +128,7 @@ If you wanted to retrieve the last 10 messages and get their IDs:
 ```python
 executor_agent.initiate_chat(
     recipient=telegram_agent,
-    message="Retrieve the latest 10 messages from Telegram, getting the IDs and a one sentence summary of each.",
+    message=[{"content":"Retrieve the latest 10 messages from Telegram, getting the IDs and a one sentence summary of each.","role":"user"}],
     max_turns=2,
 )
 ```
@@ -138,7 +138,7 @@ If you want to get all messages after a given ID, in this case ID 85. This is us
 ```python
 executor_agent.initiate_chat(
     recipient=telegram_agent,
-    message="Retrieve all messages since message ID 85, summarising each.",
+    message=[{"content":"Retrieve all messages since message ID 85, summarising each.","role":"user"}],
     max_turns=2,
 )
 ```

@@ -339,7 +339,7 @@ class TestFirecrawlTool:
         )
         firecrawl_tool.register_for_llm(assistant)
         response = assistant.run(
-            message="Scrape the content from https://example.com",
+            message=[{"content": "Scrape the content from https://example.com", "role": "user"}],
             tools=assistant.tools,
             max_turns=2,
         )

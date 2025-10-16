@@ -54,7 +54,7 @@ class MockModelClient:
         # Simulate a successful response or raise an exception based on config
         if self.config.get("should_fail", False):
             raise APIError(
-                message="Mock API Error", request=None, body=None
+                message=[{"content": "Mock API Error", "role": "user"}], request=None, body=None
             )  # Use openai.APIError or a general Exception
 
         client_name_to_respond = self.config.get("name", self.name)

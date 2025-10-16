@@ -15,4 +15,4 @@ assistant = AssistantAgent("assistant", llm_config={"config_list": config_list})
 user_proxy = UserProxyAgent(
     "user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False}
 )  # IMPORTANT: set to True to run code in docker, recommended
-user_proxy.initiate_chat(assistant, message="A joke about NYC.")
+user_proxy.initiate_chat(assistant, message=[{"content": "A joke about NYC.", "role": "user"}])

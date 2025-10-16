@@ -76,7 +76,7 @@ emma = ConversableAgent(
 
 # Now we start the conversation.
 
-chat_result = jack.initiate_chat(emma, message="Emma, tell me a joke.", max_turns=2)
+chat_result = jack.initiate_chat(emma, message=[{"content":"Emma, tell me a joke.","role":"user"}], max_turns=2)
 ```
 
 ```console

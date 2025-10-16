@@ -84,7 +84,7 @@ deep_research_tool.register_for_llm(assistant)
 ```python
 result = user_proxy.initiate_chat(
     recipient=assistant,
-    message="What was the impact of DeepSeek on stock prices and why?",
+    message=[{"content":"What was the impact of DeepSeek on stock prices and why?","role":"user"}],
     max_turns=2,
 )
 ```

@@ -32,7 +32,7 @@ def test_get_human_input(credentials_gpt_4o_mini: Credentials):
     # Use MagicMock to create a mock get_human_input function
     user_proxy.get_human_input = MagicMock(return_value="This is a test")
 
-    res = user_proxy.initiate_chat(assistant, clear_history=True, message="Hello.")
+    res = user_proxy.initiate_chat(assistant, clear_history=True, message=[{"content": "Hello.", "role": "user"}])
     print("Result summary:", res.summary)
     print("Human input:", res.human_input)
 

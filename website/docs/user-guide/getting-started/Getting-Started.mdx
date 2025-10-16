@@ -64,7 +64,7 @@ user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
 # Start the chat
 user_proxy.initiate_chat(
     assistant,
-    message="Tell me a joke about NVDA and TESLA stock prices.",
+    message=[{"content":"Tell me a joke about NVDA and TESLA stock prices.","role":"user"}],
 )
 ```
 
@@ -96,7 +96,7 @@ user_proxy = UserProxyAgent(
 # Start the chat
 user_proxy.initiate_chat(
     assistant,
-    message="Plot a chart of NVDA and TESLA stock price change YTD.",
+    message=[{"content":"Plot a chart of NVDA and TESLA stock price change YTD.","role":"user"}],
 )
 ```
 
@@ -124,7 +124,7 @@ with autogen.coding.DockerCommandLineCodeExecutor(work_dir="coding") as code_exe
     # Start the chat
     user_proxy.initiate_chat(
         assistant,
-        message="Plot a chart of NVDA and TESLA stock price change YTD. Save the plot to a file called plot.png",
+        message=[{"content":"Plot a chart of NVDA and TESLA stock price change YTD. Save the plot to a file called plot.png","role":"user"}],
     )
 ```
 
@@ -171,3 +171,5 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
   height="30"
   title="GitHub"
 ></iframe>
+
+</content>

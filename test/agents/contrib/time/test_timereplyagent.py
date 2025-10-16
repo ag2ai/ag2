@@ -37,7 +37,7 @@ class TestTimeReplyAgent:
 
         result = asking_agent.initiate_chat(
             recipient=time_agent,
-            message="What is the current date and time?",
+            message=[{"content": "What is the current date and time?", "role": "user"}],  # type: ignore[arg-type]
             max_turns=1,
         )
 
@@ -52,7 +52,7 @@ class TestTimeReplyAgent:
 
         result = asking_agent.initiate_chat(
             recipient=time_agent,
-            message="What is the current date and time?",
+            message=[{"content": "What is the current date and time?", "role": "user"}],  # type: ignore[arg-type]
             max_turns=1,
         )
 

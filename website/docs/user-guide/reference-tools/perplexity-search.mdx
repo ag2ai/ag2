@@ -98,7 +98,7 @@ With the setup complete, you can now use the assistant to fetch live web search 
 ```python
 response = user_proxy.initiate_chat(
     recipient=assistant,
-    message="What is AG2?",
+    message=[{"content":"What is AG2?","role":"user"}],
     max_turns=2,
 )
 ````

@@ -16,7 +16,7 @@ agent_b = ConversableAgent(name="agent_b", llm_config=llm_config)
 
 agent_a.initiate_chat(
     recipient=agent_b,
-    message="Tell me a joke",
+    message=[{"content":"Tell me a joke","role":"user"}],
     max_turns=2
     )
 ```
@@ -37,7 +37,7 @@ Breakdown of the **first turn**:
 
 5. Now we're on `agent-B` receiving the message (API Reference: [receive](/docs/api-reference/autogen/ConversableAgent#receive)).
 
-6. The agent generates a reply given the message(s) received. This is a critical step in the process, see [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply) for an in-depth look at this step.
+6. The agent generates a reply given the message(s) received. This step now supports passing either a list of message dicts or a single message dict as the 'messages' argument, as both forms are normalized internally. See [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply) for an in-depth look at this step.
 
     - Evaluate our "update_agent_state", "process_last_received_message", and "process_all_messages_before_reply" hooks (see [Hooks](/docs/contributor-guide/how-ag2-works/hooks)). These allow agent and message state to be updated before the following reply functions are evaluated.
 
@@ -56,7 +56,7 @@ Breakdown of **turns 2 onward**:
 
 1. Start by checking if we have reached our maximum turns, if so, summarize and end the chat.
 
-2. The sending agent, `agent_A` generates their reply to the messages (see [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply)).
+2. The sending agent, `agent_A` generates their reply to the messages (which can be a single dict or a list; both are handled), see [Generating a reply](/docs/contributor-guide/how-ag2-works/generate-reply)).
 
 3. If they don't generate a reply, summarize and end the chat.
 

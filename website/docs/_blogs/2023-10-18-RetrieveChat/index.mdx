@@ -123,7 +123,7 @@ AutoGen is a framework that enables the development of large language model (LLM
 ```python
 assistant.reset()
 userproxyagent = autogen.UserProxyAgent(name="userproxyagent")
-userproxyagent.initiate_chat(assistant, message="What is autogen?")
+userproxyagent.initiate_chat(assistant, message=[{"content":"What is autogen?","role":"user"}])
 ```
 
 Output is like:
@@ -294,7 +294,7 @@ manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 # Start chatting with the boss as this is the user proxy agent.
 boss.initiate_chat(
     manager,
-    message="How to use spark for parallel training in FLAML? Give me sample code.",
+    message=[{"content":"How to use spark for parallel training in FLAML? Give me sample code.","role":"user"}],
 )
 ```
 

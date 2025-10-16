@@ -87,10 +87,16 @@ async def test_function_call_groupchat(credentials_gpt_4o_mini: Credentials, key
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config_no_function)
 
     if sync:
-        res = observer.initiate_chat(manager, message="Let's start the game!", summary_method="reflection_with_llm")
+        res = observer.initiate_chat(
+            manager,
+            message=[{"content": "Let's start the game!", "role": "user"}],
+            summary_method="reflection_with_llm",
+        )
     else:
         res = await observer.a_initiate_chat(
-            manager, message="Let's start the game!", summary_method="reflection_with_llm"
+            manager,
+            message=[{"content": "Let's start the game!", "role": "user"}],
+            summary_method="reflection_with_llm",
         )
     assert func.call_count >= 1, "The function get_random_number should be called at least once."
     print("Chat summary:", res.summary)

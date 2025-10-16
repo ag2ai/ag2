@@ -244,7 +244,7 @@ google_drive_toolkit = MyGoogleDriveToolkit(
 google_drive_toolkit.register_for_llm(assistant)
 
 response = assistant.run(
-    message="List the latest 3 files and write a short summary based on the file names and meme types.",
+    message=[{"content":"List the latest 3 files and write a short summary based on the file names and meme types.","role":"user"}],
     max_turns=4,
     tools=google_drive_toolkit.tools,
     user_input=False,

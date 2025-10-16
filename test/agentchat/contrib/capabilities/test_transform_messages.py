@@ -50,7 +50,9 @@ def test_transform_messages_capability(credentials_gpt_4o_mini: Credentials) -> 
         try:
             user.initiate_chat(
                 assistant,
-                message="Plot a chart of nvidia and tesla stock prices for the last 5 years",
+                message=[
+                    {"content": "Plot a chart of nvidia and tesla stock prices for the last 5 years", "role": "user"}
+                ],
                 clear_history=False,
             )
         except Exception as e:

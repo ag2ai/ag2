@@ -79,7 +79,7 @@ With the setup complete, you can now use the assistant to fetch wikipedia search
 ```python
 response = user_proxy.initiate_chat(
     recipient=assistant,
-    message="Who is the father of AI?",
+    message=[{"content":"Who is the father of AI?","role":"user"}],
     max_turns=2,
 )
 ```
@@ -144,7 +144,7 @@ With the setup complete, you can now use the assistant to fetch wikipedia search
 ```python
 response = user_proxy.initiate_chat(
     recipient=assistant,
-    message="Who is the father of AI?",
+    message=[{"content":"Who is the father of AI?","role":"user"}],
     max_turns=2,
 )
 ```

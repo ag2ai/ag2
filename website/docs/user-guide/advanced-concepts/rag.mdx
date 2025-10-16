@@ -101,7 +101,7 @@ human = ConversableAgent(
 
 human.initiate_chat(
     recipient=files_agent,
-    message="Tell me about the files in my directory.",
+    message=[{"content":"Tell me about the files in my directory.","role":"user"}],
     max_turns=1,
     )
 ```

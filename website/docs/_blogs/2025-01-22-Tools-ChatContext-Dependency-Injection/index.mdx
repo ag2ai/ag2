@@ -166,10 +166,10 @@ def get_balance(
 Finally, we initiate a chat to retrieve the balance.
 
 ```python
-user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)
+user_proxy.initiate_chat(agent, message=[{"content":"Get users balance","role":"user"}], max_turns=4)
 ```
 
-When `user_proxy.initiate_chat(agent, message="Get users balance", max_turns=4)` is called, the following happens:
+When `user_proxy.initiate_chat(agent, message=[{"content":"Get users balance","role":"user"}], max_turns=4)` is called, the following happens:
 
 - **User Request**: The user sends the message `"Get users balance"`, prompting the agent to suggest calling `get_balance`.
 - **First Function Call**: The agent attempts to execute `get_balance`, but since the user isn't logged in, it raises an error: `"Please login first"`. The agent then suggests calling `login` to authenticate the user.

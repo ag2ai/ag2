@@ -245,7 +245,12 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     )
     res1 = user_proxy.initiate_chat(
         assistant,
-        message="Do not execute, but tell me what functions, by their names, do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message=[
+            {
+                "content": "Do not execute, but tell me what functions, by their names, do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                "role": "user",
+            }
+        ],
         summary_method="reflection_with_llm",
     )
     messages1 = assistant.chat_messages[user_proxy][-1]["content"]
@@ -254,7 +259,12 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     assistant.update_function_signature("greet_user", is_remove=True)
     res2 = user_proxy.initiate_chat(
         assistant,
-        message="What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+        message=[
+            {
+                "content": "What functions by their names do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                "role": "user",
+            }
+        ],
         summary_method="reflection_with_llm",
     )
     messages2 = assistant.chat_messages[user_proxy][-1]["content"]
@@ -269,7 +279,12 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     ):
         user_proxy.initiate_chat(
             assistant,
-            message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+            message=[
+                {
+                    "content": "What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                    "role": "user",
+                }
+            ],
             summary_method="llm",
         )
 
@@ -279,6 +294,11 @@ def test_update_function(credentials_gpt_4o_mini: Credentials):
     ):
         user_proxy.initiate_chat(
             recipient=user_proxy,
-            message="What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+            message=[
+                {
+                    "content": "What functions do you know about in the context of this conversation? End your response with 'TERMINATE'.",
+                    "role": "user",
+                }
+            ],
             summary_method="reflection_with_llm",
         )

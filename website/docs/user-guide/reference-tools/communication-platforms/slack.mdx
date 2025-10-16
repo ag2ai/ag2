@@ -137,7 +137,7 @@ register_function(
 # while the executor_agent executes the weather tool and the Slack send tool
 executor_agent.initiate_chat(
     recipient=slack_agent,
-    message="Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!",
+    message=[{"content":"Get the latest weather forecast and send it to our Slack channel. Use some emojis to make it fun!","role":"user"}],
     max_turns=3,
 )
 ```
@@ -150,7 +150,7 @@ If you want to retrieve the last 5 messages to give a picture of the weather for
 ```python
 executor_agent.initiate_chat(
     recipient=slack_agent,
-    message="Get the last 5 messages about daily weather from our Slack channel and give me a summary of the week's weather.",
+    message=[{"content":"Get the last 5 messages about daily weather from our Slack channel and give me a summary of the week's weather.","role":"user"}],
     max_turns=2,
 )
 ```
