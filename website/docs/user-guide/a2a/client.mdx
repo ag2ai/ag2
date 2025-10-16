@@ -16,7 +16,7 @@ The A2A client allows you to connect to remote A2A agent servers and interact wi
 
 Generally, you can use `A2aRemoteAgent` like any other `ConversableAgent`. In the example below, we create a local agent and connect to a remote agent and use it to generate code.
 
-```python
+```python linenums="1"
 from autogen.a2a import A2aRemoteAgent
 
 # Connect to a remote agent
@@ -39,7 +39,7 @@ await local_agent.a_initiate_chat(
 
 In the example below, we create a `A2aRemoteAgent` client and use it with a local agent to make them work together.
 
-```python
+```python linenums="1"
 import asyncio
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aRemoteAgent
@@ -85,7 +85,7 @@ asyncio.run(review_code())
 
 Pretty often you need to pass some custom options to the remote agent HTTP client, such as headers, timeout, etc. To do this, pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
 
-```python
+```python linenums="1"
 import httpx
 from autogen.a2a import A2aRemoteAgent, HttpxClientFactory
 
@@ -109,7 +109,7 @@ remote_agent = A2aRemoteAgent(
 
 A2A client has a few configuration options that you can pass to the `A2aRemoteAgent` constructor.
 
-```python
+```python linenums="1"
 from a2a.client import ClientConfig
 from autogen.a2a import A2aRemoteAgent
 
@@ -124,7 +124,7 @@ remote_agent = A2aRemoteAgent(
 
 To help with testing remote clients, you can mock remote agent replies by passing a `MockClient` instance to the `A2aRemoteAgent` constructor.
 
-```python
+```python linenums="1"
 from autogen.a2a import A2aRemoteAgent, MockClient
 
 remote_agent = A2aRemoteAgent(

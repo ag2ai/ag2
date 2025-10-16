@@ -82,7 +82,7 @@ class AutogenAgentExecutor(AgentExecutor):
             )
         )
 
-        # publish the task status completedevent
+        # publish the task status completed event
         await event_queue.enqueue_event(
             TaskStatusUpdateEvent(
                 task_id=task.id,
