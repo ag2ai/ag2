@@ -7,12 +7,12 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
-from ...code_utils import content_str
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
 from ..conversable_agent import ConversableAgent
+from ..utils import normalize_content
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 from .reply_result import ReplyResult
 from .targets.transition_target import TransitionTarget
@@ -205,9 +205,7 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    normalized_content = (
-                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
-                    )
+                    normalized_content = normalize_content(content)
                     tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)

@@ -9,11 +9,11 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from ....code_utils import content_str
 from ....io.base import IOStream
 from ....llm_config import LLMConfig
 from ...conversable_agent import ConversableAgent
 from ...groupchat import GroupChatManager
+from ...utils import normalize_content
 from ..guardrails import LLMGuardrail, RegexGuardrail
 from ..targets.transition_target import TransitionTarget
 from .events import SafeguardEvent
@@ -24,12 +24,10 @@ class SafeguardEnforcer:
 
     @staticmethod
     def _stringify_content(value: Any) -> str:
-        if isinstance(value, (str, list)) or value is None:
-            try:
-                return content_str(value)
-            except (TypeError, ValueError, AssertionError):
-                pass
-        return "" if value is None else str(value)
+        try:
+            return normalize_content(value)
+        except (TypeError, ValueError, AssertionError):
+            return "" if value is None else str(value)
 
     def __init__(
         self,
