@@ -7,8 +7,65 @@
 import re
 from typing import Any
 
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from .agent import Agent
+
+
+def normalize_content(content: Any) -> str:
+    """Normalize content to a string format.
+
+    This function handles various content types commonly used in agent messages:
+    - str, list, or None: Uses content_str() for proper formatting
+    - Any other type: Converts to string using str()
+
+    Args:
+        content: The content to normalize (str, list, dict, or any other type)
+
+    Returns:
+        str: The normalized content as a string
+
+    Example:
+        >>> normalize_content("Hello")
+        'Hello'
+        >>> normalize_content(["text", {"type": "text", "text": "world"}])
+        'text world'
+        >>> normalize_content(None)
+        ''
+        >>> normalize_content({"key": "value"})
+        "{'key': 'value'}"
+    """
+    if isinstance(content, (str, list)) or content is None:
+        return content_str(content)
+    return str(content)
+
+
+def normalize_message_to_dict(message: dict[str, Any] | str) -> dict[str, Any]:
+    """Convert a message to a dictionary format.
+
+    This function normalizes messages that can be either strings or dictionaries:
+    - If str: Wraps in a dict with "content" field
+    - If dict: Returns as-is
+    - Otherwise: Converts to dict using dict() constructor
+
+    Args:
+        message: The message to normalize (str, dict, or dict-like object)
+
+    Returns:
+        dict[str, Any]: The message in dictionary format
+
+    Example:
+        >>> normalize_message_to_dict("Hello")
+        {'content': 'Hello'}
+        >>> normalize_message_to_dict({"role": "user", "content": "Hi"})
+        {'role': 'user', 'content': 'Hi'}
+    """
+    if isinstance(message, str):
+        return {"content": message}
+    elif isinstance(message, dict):
+        return message
+    else:
+        return dict(message)
 
 
 def consolidate_chat_info(
