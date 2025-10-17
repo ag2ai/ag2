@@ -1320,9 +1320,10 @@ class ConversableAgent(LLMAgent):
         Returns:
             bool: True if the chat should be terminated, False otherwise.
         """
+        content = message.get("content")
         return (
             isinstance(recipient, ConversableAgent)
-            and isinstance(message.get("content"), str)
+            and content is not None
             and hasattr(recipient, "_is_termination_msg")
             and recipient._is_termination_msg(message)
         )
@@ -3987,7 +3988,11 @@ class ConversableAgent(LLMAgent):
         if executor_kwargs is None:
             executor_kwargs = {}
         if "is_termination_msg" not in executor_kwargs:
-            executor_kwargs["is_termination_msg"] = lambda x: (x["content"] is not None) and "TERMINATE" in x["content"]
+            executor_kwargs["is_termination_msg"] = lambda x: "TERMINATE" in (
+                content_str(x.get("content"))
+                if isinstance(x.get("content"), (str, list)) or x.get("content") is None
+                else str(x.get("content"))
+            )
 
         try:
             if not self.run_executor:
@@ -4253,7 +4258,12 @@ def normilize_message_to_oai(
         oai_message["role"] = message.get("role")
         if "tool_responses" in oai_message:
             for tool_response in oai_message["tool_responses"]:
-                tool_response["content"] = str(tool_response["content"])
+                content_value = tool_response.get("content")
+                tool_response["content"] = (
+                    content_str(content_value)
+                    if isinstance(content_value, (str, list)) or content_value is None
+                    else str(content_value)
+                )
     elif "override_role" in message:
         # If we have a direction to override the role then set the
         # role accordingly. Used to customise the role for the

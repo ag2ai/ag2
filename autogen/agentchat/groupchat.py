@@ -1295,13 +1295,16 @@ class GroupChatManager(ConversableAgent):
                     reply = guardrails_reply
 
             # check for "clear history" phrase in reply and activate clear history function if found
-            if (
-                groupchat.enable_clear_history
-                and isinstance(reply, dict)
-                and reply["content"]
-                and "CLEAR HISTORY" in reply["content"].upper()
-            ):
-                reply["content"] = self.clear_agents_history(reply, groupchat)
+            if groupchat.enable_clear_history and isinstance(reply, dict) and reply.get("content"):
+                raw_content = reply.get("content")
+                normalized_content = (
+                    content_str(raw_content)
+                    if isinstance(raw_content, (str, list)) or raw_content is None
+                    else str(raw_content)
+                )
+                if "CLEAR HISTORY" in normalized_content.upper():
+                    reply["content"] = normalized_content
+                    reply["content"] = self.clear_agents_history(reply, groupchat)
 
             # The speaker sends the message without requesting a reply
             speaker.send(reply, self, request_reply=False, silent=silent)
@@ -1412,13 +1415,16 @@ class GroupChatManager(ConversableAgent):
                     reply = guardrails_reply
 
             # check for "clear history" phrase in reply and activate clear history function if found
-            if (
-                groupchat.enable_clear_history
-                and isinstance(reply, dict)
-                and reply["content"]
-                and "CLEAR HISTORY" in reply["content"].upper()
-            ):
-                reply["content"] = self.clear_agents_history(reply, groupchat)
+            if groupchat.enable_clear_history and isinstance(reply, dict) and reply.get("content"):
+                raw_content = reply.get("content")
+                normalized_content = (
+                    content_str(raw_content)
+                    if isinstance(raw_content, (str, list)) or raw_content is None
+                    else str(raw_content)
+                )
+                if "CLEAR HISTORY" in normalized_content.upper():
+                    reply["content"] = normalized_content
+                    reply["content"] = self.clear_agents_history(reply, groupchat)
 
             # The speaker sends the message without requesting a reply
             await speaker.a_send(reply, self, request_reply=False, silent=silent)
@@ -1693,7 +1699,13 @@ class GroupChatManager(ConversableAgent):
             _remove_termination_string = remove_termination_string
 
         if _remove_termination_string and messages[-1].get("content"):
-            messages[-1]["content"] = _remove_termination_string(messages[-1]["content"])
+            content_value = messages[-1]["content"]
+            if isinstance(content_value, str):
+                messages[-1]["content"] = _remove_termination_string(content_value)
+            elif isinstance(content_value, list):
+                messages[-1]["content"] = _remove_termination_string(content_str(content_value))
+            else:
+                messages[-1]["content"] = _remove_termination_string(str(content_value))
 
         # Check if the last message meets termination (if it has one)
         if self._is_termination_msg and self._is_termination_msg(last_message):
@@ -1756,7 +1768,15 @@ class GroupChatManager(ConversableAgent):
         """
         iostream = IOStream.get_default()
 
-        reply_content = reply["content"]
+        raw_reply_content = reply.get("content")
+        if isinstance(raw_reply_content, str):
+            reply_content = raw_reply_content
+        elif isinstance(raw_reply_content, (list, type(None))):
+            reply_content = content_str(raw_reply_content)
+            reply["content"] = reply_content
+        else:
+            reply_content = str(raw_reply_content)
+            reply["content"] = reply_content
         # Split the reply into words
         words = reply_content.split()
         # Find the position of "clear" to determine where to start processing
