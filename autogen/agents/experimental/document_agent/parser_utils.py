@@ -22,6 +22,17 @@ with optional_import_block():
     )
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
+    # Import with fallback for potentially unexported attributes
+    try:
+        from docling.datamodel.pipeline_options import (  # type: ignore[attr-defined]
+            AcceleratorDevice,
+            AcceleratorOptions,
+        )
+    except ImportError:
+        # Fallback: define these as Any if not available
+        AcceleratorDevice = None  # type: ignore
+        AcceleratorOptions = None  # type: ignore
+
 __all__ = ["docling_parse_docs"]
 
 logger = logging.getLogger(__name__)
@@ -83,7 +94,9 @@ def docling_parse_docs(  # type: ignore[no-any-unimported]
     pdf_pipeline_options.do_table_structure = True
     pdf_pipeline_options.table_structure_options.do_cell_matching = True
     pdf_pipeline_options.ocr_options.lang = ["en"]
-    pdf_pipeline_options.accelerator_options = AcceleratorOptions(num_threads=4, device=AcceleratorDevice.AUTO)
+    # Use defensive programming for potentially missing attributes
+    if AcceleratorOptions is not None and AcceleratorDevice is not None:
+        pdf_pipeline_options.accelerator_options = AcceleratorOptions(num_threads=4, device=AcceleratorDevice.AUTO)
 
     doc_converter = DocumentConverter(
         format_options={
