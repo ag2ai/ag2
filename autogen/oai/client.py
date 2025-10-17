@@ -1081,9 +1081,10 @@ class OpenAIWrapper:
             self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
 
         for i in ordered_clients_indices:
-            client = self._clients[i]
             # merge the input config with the i-th config in the config list
-            full_config = {**config, **self._config_list[i]}
+            client_config = self._config_list[i]
+            full_config = {**config, **client_config, "tools": config.get("tools", []) + client_config.get("tools", [])}
+
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             # construct the create params
@@ -1114,6 +1115,7 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
+            client = self._clients[i]
             log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:

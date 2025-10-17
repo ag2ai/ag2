@@ -15,6 +15,7 @@ from .contrib.swarm_agent import (
     run_swarm,
 )
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
+from .group import ContextVariables, ReplyResult
 from .group.multi_agent_chat import a_initiate_group_chat, a_run_group_chat, initiate_group_chat, run_group_chat
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
@@ -24,10 +25,12 @@ __all__ = [
     "Agent",
     "AssistantAgent",
     "ChatResult",
+    "ContextVariables",
     "ConversableAgent",
     "GroupChat",
     "GroupChatManager",
     "LLMAgent",
+    "ReplyResult",
     "UpdateSystemMessage",
     "UserProxyAgent",
     "a_initiate_chats",

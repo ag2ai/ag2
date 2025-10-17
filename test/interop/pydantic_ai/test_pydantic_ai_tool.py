@@ -3,17 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from pydantic_ai.tools import Tool as PydanticAITool
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools import Tool
-
-with optional_import_block():
-    from pydantic_ai.tools import Tool as PydanticAITool
 
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAITool:
     def test_register_for_llm(self) -> None:
         def foobar(a: int, b: str, c: dict[str, list[float]]) -> str:  # type: ignore[misc]

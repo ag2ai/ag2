@@ -185,7 +185,6 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         if messages is None:
             if sender is None:
@@ -242,9 +241,8 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
-        return self.generate_reply(messages=messages, sender=sender, **kwargs)
+        return self.generate_reply(messages=messages, sender=sender)
 
     async def a_receive(
         self,

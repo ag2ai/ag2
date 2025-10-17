@@ -8,22 +8,19 @@ from typing import Any
 
 import pytest
 from pydantic import BaseModel
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.tools import Tool as PydanticAITool
+from pydantic_ai.usage import Usage
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
 from test.credentials import Credentials
 
-with optional_import_block():
-    from pydantic_ai import RunContext
-    from pydantic_ai.models.test import TestModel
-    from pydantic_ai.tools import Tool as PydanticAITool
-    from pydantic_ai.usage import Usage
-
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithotContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -63,7 +60,6 @@ class TestPydanticAIInteroperabilityWithotContext:
 
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityDependencyInjection:
     def test_dependency_injection(self) -> None:
         def f(  # type: ignore[no-any-unimported]

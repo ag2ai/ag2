@@ -4,6 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 from ..doc_utils import export_module
@@ -35,7 +36,7 @@ class ModelClient(Protocol):
 
             message: Message
 
-        choices: list[Choice]
+        choices: Sequence[Choice]
         model: str
 
     def create(self, params: dict[str, Any]) -> ModelClientResponseProtocol: ...  # pragma: no cover
