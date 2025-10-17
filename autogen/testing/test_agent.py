@@ -11,6 +11,23 @@ from autogen import ConversableAgent, ModelClient
 
 
 class TestAgent:
+    """A context manager for testing ConversableAgent instances with predefined messages.
+
+    This class allows you to temporarily replace an agent's LLM client with a fake client
+    that returns predefined messages. It's useful for testing agent behavior without
+    making actual API calls.
+
+    Attributes:
+        agent (ConversableAgent): The agent to be tested.
+        messages (Iterable[str  |  dict[str, Any]]): An iterable of messages to be returned by the fake client.
+        suppress_messages_end (bool): Whether to suppress StopIteration exceptions from the fake client.
+
+    Example:
+        >>> with TestAgent(agent, ["Hello", "How are you?"]) as test_agent:
+        ...     # Agent will respond with "Hello" then "How are you?"
+        ...     pass
+    """
+
     def __init__(
         self,
         agent: ConversableAgent,

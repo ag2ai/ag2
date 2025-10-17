@@ -5,3 +5,4 @@
 import pytest
 
 pytest.importorskip("pydantic_ai")
+pytest.importorskip("fasta2a")

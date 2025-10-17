@@ -19,6 +19,12 @@ from .utils import request_message_from_a2a, response_message_to_a2a
 
 @export_module("autogen.a2a")
 class AutogenAgentExecutor(AgentExecutor):
+    """An agent executor that bridges Autogen ConversableAgents with A2A protocols.
+
+    This class wraps an Autogen ConversableAgent to enable it to be executed within
+    the A2A framework, handling message processing, task management, and event publishing.
+    """
+
     def __init__(self, agent: ConversableAgent) -> None:
         self.agent = AgentService(agent)
 

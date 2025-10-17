@@ -7,13 +7,6 @@ from typing import Protocol
 
 import anyio
 
-__all__ = (
-    "EmptyRetryPolicy",
-    "RetryPolicy",
-    "RetryPolicyManager",
-    "SleepRetryPolicy",
-)
-
 
 class RetryPolicyManager(Protocol):
     def __enter__(self) -> None:
@@ -85,7 +78,7 @@ class _SleepRetryPolicy(RetryPolicyManager):
         return None
 
 
-class EmptyRetryPolicy(RetryPolicyManager):
+class NoRetryPolicy(RetryPolicyManager):
     def __enter__(self) -> None:
         pass
 

@@ -8,9 +8,11 @@ except ImportError as e:
     raise ImportError("httpx is not installed. Please install it with:\npip install httpx") from e
 
 from .agent import HTTPRemoteAgent
+from .httpx_client_factory import HttpxClientFactory
 from .runtime import HTTPAgentBus
 
 __all__ = (
     "HTTPAgentBus",
     "HTTPRemoteAgent",
+    "HttpxClientFactory",
 )

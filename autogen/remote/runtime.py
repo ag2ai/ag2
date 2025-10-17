@@ -26,15 +26,13 @@ class HTTPAgentBus:
     ) -> None:
         """Create HTTPAgentBus runtime.
 
-        The runtime make passed agents able to process remote calls.
+        Makes the passed agents capable of processing remote calls.
 
         Args:
-            agents: agents to register as remote services
-            long_polling_interval:
-                timeout to response on task status calls for long living executions.
-                Should be less then clients' HTTP request timeout.
-            additional_services:
-                additional services to register as remote services
+            agents: Agents to register as remote services.
+            long_polling_interval: Timeout to respond on task status calls for long-living executions.
+                Should be less than clients' HTTP request timeout.
+            additional_services: Additional services to register.
         """
         self.app = FastAPI()
 

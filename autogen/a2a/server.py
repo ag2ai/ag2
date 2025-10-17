@@ -30,20 +30,62 @@ if TYPE_CHECKING:
 
 @export_module("autogen.a2a")
 class CardSettings(AgentCard):
+    """Original A2A AgentCard object inheritor making some fields optional."""
+
     name: str | None = None  # type: ignore[assignment]
+    """
+    A human-readable name for the agent. Uses original agent name if not set.
+    """
+
     description: str | None = None  # type: ignore[assignment]
+    """
+    A human-readable description of the agent, assisting users and other agents
+    in understanding its purpose. Uses original agent description if not set.
+    """
+
     url: str | None = None  # type: ignore[assignment]
+    """
+    The preferred endpoint URL for interacting with the agent.
+    This URL MUST support the transport specified by 'preferredTransport'.
+    Uses original A2aAgentServer url if not set.
+    """
 
     version: str = "0.1.0"
+    """
+    The agent's own version number. The format is defined by the provider.
+    """
 
     default_input_modes: list[str] = Field(default_factory=lambda: ["text"])
+    """
+    Default set of supported input MIME types for all skills, which can be
+    overridden on a per-skill basis.
+    """
+
     default_output_modes: list[str] = Field(default_factory=lambda: ["text"])
+    """
+    Default set of supported output MIME types for all skills, which can be
+    overridden on a per-skill basis.
+    """
+
     capabilities: AgentCapabilities = Field(default_factory=lambda: AgentCapabilities(streaming=True))
+    """
+    A declaration of optional capabilities supported by the agent.
+    """
+
     skills: list[AgentSkill] = Field(default_factory=list)
+    """
+    The set of skills, or distinct capabilities, that the agent can perform.
+    """
 
 
 @export_module("autogen.a2a")
 class A2aAgentServer:
+    """A server wrapper for running an AG2 agent via the A2A protocol.
+
+    This class provides functionality to wrap an AG2 ConversableAgent into an A2A server
+    that can be used to interact with the agent through A2A requests.
+    """
+
     def __init__(
         self,
         agent: "ConversableAgent",
@@ -54,6 +96,16 @@ class A2aAgentServer:
         extended_agent_card: CardSettings | None = None,
         extended_card_modifier: Callable[["AgentCard", "ServerCallContext"], "AgentCard"] | None = None,
     ) -> None:
+        """Initialize the A2aAgentServer.
+
+        Args:
+            agent: The Autogen ConversableAgent to serve.
+            url: The base URL for the A2A server.
+            agent_card: Configuration for the base agent card.
+            card_modifier: Function to modify the base agent card.
+            extended_agent_card: Configuration for the extended agent card.
+            extended_card_modifier: Function to modify the extended agent card.
+        """
         self.agent = agent
 
         if not agent_card:
@@ -103,6 +155,7 @@ class A2aAgentServer:
 
     @property
     def executor(self) -> AutogenAgentExecutor:
+        """Get the A2A agent executor."""
         return AutogenAgentExecutor(self.agent)
 
     def build_request_handler(
@@ -114,6 +167,18 @@ class A2aAgentServer:
         push_sender: "PushNotificationSender | None" = None,
         request_context_builder: "RequestContextBuilder | None" = None,
     ) -> "RequestHandler":
+        """Build a request handler for A2A application.
+
+        Args:
+            task_store: The task store to use.
+            queue_manager: The queue manager to use.
+            push_config_store: The push notification config store to use.
+            push_sender: The push notification sender to use.
+            request_context_builder: The request context builder to use.
+
+        Returns:
+            A configured RequestHandler instance.
+        """
         return DefaultRequestHandler(
             agent_executor=self.executor,
             task_store=task_store or InMemoryTaskStore(),
@@ -129,6 +194,15 @@ class A2aAgentServer:
         request_handler: "RequestHandler | None" = None,
         context_builder: "CallContextBuilder | None" = None,
     ) -> "Starlette":
+        """Build a Starlette A2A application for ASGI server.
+
+        Args:
+            request_handler: The request handler to use.
+            context_builder: The context builder to use.
+
+        Returns:
+            A configured Starlette application instance.
+        """
         from a2a.server.apps import A2AStarletteApplication
 
         return A2AStarletteApplication(

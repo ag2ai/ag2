@@ -1,7 +1,7 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
@@ -10,23 +10,44 @@ from autogen.agentchat.group import ContextVariables
 from autogen.oai.client import OpenAIWrapper
 
 from .errors import RemoteAgentError, RemoteAgentNotFoundError
+from .httpx_client_factory import ClientFactory, EmptyClientFactory
 from .protocol import RequestMessage, ResponseMessage
-from .retry import EmptyRetryPolicy, RetryPolicy
+from .retry import NoRetryPolicy, RetryPolicy
 
 
 class HTTPRemoteAgent(ConversableAgent):
+    """A remote agent that communicates with other agents via HTTP long-polling.
+
+    This agent forwards messages to a remote endpoint and handles the response
+    through HTTP requests. It supports both synchronous and asynchronous operations.
+
+    Example:
+        >>> remote_agent = HTTPRemoteAgent(url="http://api.example.com/agents", name="my_remote_agent")
+    """
+
     def __init__(
         self,
         url: str,
         name: str,
         *,
         silent: bool = False,
-        client: httpx.AsyncClient | httpx.Client | None = None,
+        client: ClientFactory | None = None,
         retry_policy: RetryPolicy | None = None,
     ) -> None:
+        """Initialize the HTTPRemoteAgent.
+
+        Args:
+            url (str): The base URL of the remote agent service.
+            name (str): The name of this agent.
+            silent (bool): If True, suppresses logging output.
+            client (ClientFactory | None): HTTP client factory. If None, uses EmptyClientFactory.
+            retry_policy (RetryPolicy | None): Retry policy for HTTP requests. If None, uses NoRetryPolicy.
+        """
+
         self.url = url
-        self.retry_policy: RetryPolicy = retry_policy or EmptyRetryPolicy
-        self._httpx_client = client
+        self.retry_policy: RetryPolicy = retry_policy or NoRetryPolicy
+
+        self._httpx_client_factory = client or EmptyClientFactory()
 
         super().__init__(name, silent=silent)
 
@@ -50,12 +71,10 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        client = cast(httpx.Client, self._httpx_client) or httpx.Client(timeout=30)
-
         retry_policy = self.retry_policy()
 
         task_id: Any = None
-        with client:
+        with self._httpx_client_factory.make_sync() as client:
             while True:
                 with retry_policy:
                     if task_id is None:
@@ -103,12 +122,10 @@ class HTTPRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        client = cast(httpx.AsyncClient, self._httpx_client) or httpx.AsyncClient(timeout=30)
-
         retry_policy = self.retry_policy()
 
         task_id: Any = None
-        async with client:
+        async with self._httpx_client_factory() as client:
             while True:
                 with retry_policy:
                     if task_id is None:

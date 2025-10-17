@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 from freezegun import freeze_time
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport
 
-from autogen.remote import HTTPAgentBus, HTTPRemoteAgent
+from autogen.remote import HTTPAgentBus, HTTPRemoteAgent, HttpxClientFactory
 from autogen.remote.errors import RemoteAgentNotFoundError
 from autogen.remote.protocol import AgentBusMessage
 from autogen.remote.runtime import RemoteService
@@ -31,7 +31,7 @@ async def test_client() -> None:
         additional_services=[TestService(AgentBusMessage(messages=[reply_message]))],
     )
 
-    client = AsyncClient(transport=ASGITransport(remote_app))
+    client = HttpxClientFactory(transport=ASGITransport(remote_app))
 
     remote_agent = HTTPRemoteAgent(
         url="http://localhost:8000",
@@ -45,7 +45,7 @@ async def test_client() -> None:
 
 @pytest.mark.asyncio()
 async def test_agent_not_found() -> None:
-    client = AsyncClient(transport=ASGITransport(HTTPAgentBus()))
+    client = HttpxClientFactory(transport=ASGITransport(HTTPAgentBus()))
 
     remote_agent = HTTPRemoteAgent(
         url="http://localhost:8000",
@@ -71,7 +71,7 @@ async def test_long_living_agent_task() -> None:
         long_polling_interval=1,
     )
 
-    client = AsyncClient(transport=ASGITransport(remote_app))
+    client = HttpxClientFactory(transport=ASGITransport(remote_app))
 
     remote_agent = HTTPRemoteAgent(
         url="http://localhost:8000",
