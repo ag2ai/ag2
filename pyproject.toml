@@ -214,7 +214,7 @@ interop-crewai = [
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==1.0.1", "fasta2a"]
+interop-pydantic-ai = ["pydantic-ai>=1.0.12", "fasta2a"]
 interop =[
     "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
