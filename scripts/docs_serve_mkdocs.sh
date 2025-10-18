@@ -3,4 +3,4 @@
 set -e
 set -x
 
-cd website/mkdocs; python docs.py live "$@"
+cd website/mkdocs; python3 docs.py live "$@"
