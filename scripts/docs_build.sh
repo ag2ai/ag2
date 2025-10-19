@@ -14,7 +14,7 @@ docs_generate() {
             python3 ./generate_api_references.py --force
         else
             python ./generate_api_references.py
-        fi #
+        fi # && \
         # python3 ./process_notebooks.py render
 }
 
