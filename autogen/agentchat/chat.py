@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, TypedDict
 
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.agent_events import PostCarryoverProcessingEvent
 from ..io.base import IOStream
@@ -132,7 +133,10 @@ def _post_process_carryover_item(carryover_item):
     if isinstance(carryover_item, str):
         return carryover_item
     elif isinstance(carryover_item, dict) and "content" in carryover_item:
-        return str(carryover_item["content"])
+        content_value = carryover_item.get("content")
+        if isinstance(content_value, (str, list)) or content_value is None:
+            return content_str(content_value)
+        return str(content_value)
     else:
         return str(carryover_item)
 
