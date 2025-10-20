@@ -1107,19 +1107,53 @@ class ConversableAgent(LLMAgent):
         return True
 
     def _process_message_before_send(
-        self, message: dict[str, Any] | str, recipient: Agent, silent: bool
-    ) -> dict[str, Any] | str:
+        self, message: list[dict[str, Any]], recipient: Agent, silent: bool
+    ) -> dict[str, Any] | str | list[dict[str, Any]]:
         """Process the message before sending it to the recipient."""
         hook_list = self.hook_lists["process_message_before_send"]
-        for hook in hook_list:
-            message = hook(
-                sender=self, message=message, recipient=recipient, silent=ConversableAgent._is_silent(self, silent)
-            )
-        return message
+
+        if isinstance(message, list):
+            # Process each message in the list
+            processed_messages = []
+            for msg in message:
+                processed_msg = msg
+                for hook in hook_list:
+                    processed_msg = hook(
+                        sender=self,
+                        message=processed_msg,
+                        recipient=recipient,
+                        silent=ConversableAgent._is_silent(self, silent),
+                    )
+                processed_messages.append(processed_msg)
+            return processed_messages
+        else:
+            # Handle non-list inputs by converting them to list format
+            # This maintains list[messages] type consistency
+            if isinstance(message, str):
+                # Convert string to message dict format
+                message_dict = {"content": message, "role": "user"}
+            elif isinstance(message, dict):
+                # Use dict as is, but ensure it has proper structure
+                message_dict = message
+            else:
+                # For any other type, convert to string content
+                message_dict = {"content": str(message), "role": "user"}
+
+            # Process the single message through hooks
+            processed_msg = message_dict
+            for hook in hook_list:
+                processed_msg = hook(
+                    sender=self,
+                    message=processed_msg,
+                    recipient=recipient,
+                    silent=ConversableAgent._is_silent(self, silent),
+                )
+            # Return as list to maintain consistency
+            return [processed_msg]
 
     def send(
         self,
-        message: dict[str, Any] | str,
+        message: str | list[dict[str, Any]],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1127,7 +1161,7 @@ class ConversableAgent(LLMAgent):
         """Send a message to another agent.
 
         Args:
-            message (dict or str): message to be sent.
+            message (str or list[messages]): message to be sent. Can also be a list of messages.
                 The message could contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
@@ -1154,20 +1188,26 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        message = self._process_message_before_send(message, recipient, ConversableAgent._is_silent(self, silent))
-        # When the agent composes and sends the message, the role of the message is "assistant"
-        # unless it's "function".
-        valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
-        if valid:
-            recipient.receive(message, self, request_reply, silent)
-        else:
+        # Handle list of messages
+        if isinstance(message, str):
+            message = [message]
+
+        processed_msgs = self._process_message_before_send(
+            message, recipient, ConversableAgent._is_silent(self, silent)
+        )
+
+        # Validate all messages and raise error if any are invalid
+        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
             raise ValueError(
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
 
+        # Send all messages to recipient
+        recipient.receive(processed_msgs, self, request_reply, silent)
+
     async def a_send(
         self,
-        message: dict[str, Any] | str,
+        message: str | list[dict[str, Any]],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1175,7 +1215,7 @@ class ConversableAgent(LLMAgent):
         """(async) Send a message to another agent.
 
         Args:
-            message (dict or str): message to be sent.
+            message (str or list[messages]): message to be sent. Can also be a list of messages.
                 The message could contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
@@ -1202,16 +1242,25 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        message = self._process_message_before_send(message, recipient, ConversableAgent._is_silent(self, silent))
-        # When the agent composes and sends the message, the role of the message is "assistant"
-        # unless it's "function".
-        valid = self._append_oai_message(message, "assistant", recipient, is_sending=True)
-        if valid:
-            await recipient.a_receive(message, self, request_reply, silent)
-        else:
+        # Handle list of messages
+        if isinstance(message, str):
+            message = [message]
+
+        processed_msgs = self._process_message_before_send(
+            message, recipient, ConversableAgent._is_silent(self, silent)
+        )
+
+        # Validate all messages and raise error if any are invalid
+        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
             raise ValueError(
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
+
+        # Send all messages to recipient
+        if hasattr(recipient, "a_receive") and inspect.iscoroutinefunction(recipient.a_receive):
+            await recipient.a_receive(processed_msgs, self, request_reply, silent)
+        else:
+            recipient.receive(processed_msgs, self, request_reply, silent)
 
     def _print_received_message(self, message: dict[str, Any] | str, sender: Agent, skip_head: bool = False):
         message = self._message_to_dict(message)
@@ -1236,18 +1285,18 @@ class ConversableAgent(LLMAgent):
 
     def receive(
         self,
-        message: dict[str, Any] | str,
+        message: list[dict[str, Any]],
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """Receive a message from another agent.
+        """Receive a list[messages] from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided).
+            message (list[messages]): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1264,7 +1313,10 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        self._process_received_message(message, sender, silent)
+        # Handle list of messages
+        if isinstance(message, list):
+            message = [self._process_received_message(msg, sender, silent) for msg in message]
+
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
@@ -1273,7 +1325,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_receive(
         self,
-        message: dict[str, Any] | str,
+        message: dict[str, Any] | list[dict[str, Any]] | str,
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1284,7 +1336,7 @@ class ConversableAgent(LLMAgent):
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided).
+            message (dict or str or list[messages]): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). Can also be a list of messages.
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1301,7 +1353,10 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        self._process_received_message(message, sender, silent)
+        # Handle list of messages
+        if isinstance(message, list):
+            message = [self._process_received_message(msg, sender, silent) for msg in message]
+
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = await self.a_generate_reply(messages=self.chat_messages[sender], sender=sender)
@@ -1371,7 +1426,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Initiate a chat with the recipient agent.
@@ -1533,7 +1588,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1543,7 +1598,7 @@ class ConversableAgent(LLMAgent):
         iostream = ThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = RunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             def initiate_chat(
@@ -1643,7 +1698,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """(async) Initiate a chat with the recipient agent.
@@ -1721,7 +1776,7 @@ class ConversableAgent(LLMAgent):
         max_turns: int | None = None,
         summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
         summary_args: dict[str, Any] | None = {},
-        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        message: list[dict[str, Any]] | str | Callable[..., Any] | None = None,
         executor_kwargs: dict[str, Any] | None = None,
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
@@ -1731,7 +1786,7 @@ class ConversableAgent(LLMAgent):
         iostream = AsyncThreadIOStream()
         agents = [self, recipient] if recipient else [self]
         response = AsyncRunResponse(iostream, agents=agents)
-
+        message = [{"content": message, "role": "user"}] if isinstance(message, str) else message
         if recipient is None:
 
             async def initiate_chat(
@@ -2400,6 +2455,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if message.get("function_call"):
             call_id = message.get("id", None)
@@ -2428,6 +2485,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         if "function_call" in message:
             call_id = message.get("id", None)
@@ -2456,6 +2515,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
@@ -2506,14 +2567,38 @@ class ConversableAgent(LLMAgent):
         return False, None
 
     async def _a_execute_tool_call(self, tool_call):
-        tool_call_id = tool_call["id"]
+        tool_call_id = tool_call.get("id", None)
         function_call = tool_call.get("function", {})
-        _, func_return = await self.a_execute_function(function_call, call_id=tool_call_id)
-        return {
-            "tool_call_id": tool_call_id,
-            "role": "tool",
-            "content": func_return.get("content", ""),
-        }
+
+        # Hook: Process tool input before execution
+        processed_call = self._process_tool_input(function_call)
+        if processed_call is None:
+            raise ValueError("safeguard_tool_inputs hook returned None")
+
+        _, func_return = await self.a_execute_function(processed_call, call_id=tool_call_id)
+
+        # Hook: Process tool output before returning
+        processed_return = self._process_tool_output(func_return)
+        if processed_return is None:
+            raise ValueError("safeguard_tool_outputs hook returned None")
+
+        content = processed_return.get("content", "")
+        if content is None:
+            content = ""
+
+        if tool_call_id is not None:
+            return {
+                "tool_call_id": tool_call_id,
+                "role": "tool",
+                "content": content,
+            }
+        else:
+            # Do not include tool_call_id if it is not present.
+            # This is to make the tool call object compatible with Mistral API.
+            return {
+                "role": "tool",
+                "content": content,
+            }
 
     async def a_generate_tool_calls_reply(
         self,
@@ -2526,6 +2611,8 @@ class ConversableAgent(LLMAgent):
             config = self
         if messages is None:
             messages = self._oai_messages[sender]
+        if not messages:
+            return False, None
         message = messages[-1]
         async_tool_calls = []
         for tool_call in message.get("tool_calls", []):
@@ -2829,7 +2916,7 @@ class ConversableAgent(LLMAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> str | dict[str, Any] | None:
+    ) -> str | dict[str, Any] | list[dict[str, Any]] | None:
         """Reply based on the conversation history and the sender.
 
         Either messages or sender must be provided.
@@ -2848,7 +2935,7 @@ class ConversableAgent(LLMAgent):
         AI replies are generated only when no code execution is performed.
 
         Args:
-            messages: a list of messages in the conversation history.
+            messages: a list of messages in the conversation history or a single message.
             sender: sender of an Agent instance.
             **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
                 - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
@@ -2856,7 +2943,7 @@ class ConversableAgent(LLMAgent):
                 they would normally be triggered.
 
         Returns:
-            str or dict or None: reply. None if no reply is generated.
+            str or dict or list[dict] or None: reply. None if no reply is generated.
         """
         if all((messages is None, sender is None)):
             error_msg = f"Either {messages=} or {sender=} must be provided."
@@ -2867,15 +2954,15 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.update_agent_state_before_reply(messages)
+        self.update_agent_state_before_reply([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_last_received_message(messages)
+        messages = self.process_last_received_message([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_all_messages_before_reply(messages)
+        messages = self.process_all_messages_before_reply([messages] if isinstance(messages, dict) else messages)
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
@@ -2903,7 +2990,7 @@ class ConversableAgent(LLMAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
         **kwargs: Any,
-    ) -> str | dict[str, Any] | None:
+    ) -> str | dict[str, Any] | list[dict[str, Any]] | None:
         """(async) Reply based on the conversation history and the sender.
 
         Either messages or sender must be provided.
@@ -2922,7 +3009,7 @@ class ConversableAgent(LLMAgent):
         AI replies are generated only when no code execution is performed.
 
         Args:
-            messages: a list of messages in the conversation history.
+            messages: a list of messages in the conversation history or a single message.
             sender: sender of an Agent instance.
             **kwargs (Any): Additional arguments to customize reply generation. Supported kwargs:
                 - exclude (List[Callable[..., Any]]): A list of reply functions to exclude from
@@ -2930,7 +3017,7 @@ class ConversableAgent(LLMAgent):
                 they would normally be triggered.
 
         Returns:
-            str or dict or None: reply. None if no reply is generated.
+            str or dict or list[dict] or None: reply. None if no reply is generated.
         """
         if all((messages is None, sender is None)):
             error_msg = f"Either {messages=} or {sender=} must be provided."
@@ -2941,15 +3028,15 @@ class ConversableAgent(LLMAgent):
             messages = self._oai_messages[sender]
 
         # Call the hookable method that gives registered hooks a chance to update agent state, used for their context variables.
-        self.update_agent_state_before_reply(messages)
+        self.update_agent_state_before_reply([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process the last message.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_last_received_message(messages)
+        messages = self.process_last_received_message([messages] if isinstance(messages, dict) else messages)
 
         # Call the hookable method that gives registered hooks a chance to process all messages.
         # Message modifications do not affect the incoming messages or self._oai_messages.
-        messages = self.process_all_messages_before_reply(messages)
+        messages = self.process_all_messages_before_reply([messages] if isinstance(messages, dict) else messages)
 
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]

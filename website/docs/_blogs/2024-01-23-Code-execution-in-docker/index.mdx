@@ -27,7 +27,7 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 llm_config = LLMConfig.from_json(path="OAI_CONFIG_LIST")
 assistant = AssistantAgent("assistant", llm_config=llm_config)
 user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding"})
-user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
+user_proxy.initiate_chat(assistant, message=[{"content":"Plot a chart of NVDA and TESLA stock price change YTD.","role":"user"}])
 ```
 
 To opt out of from this default behaviour there are some options.

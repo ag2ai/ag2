@@ -33,7 +33,7 @@ search_tool = SearxngSearchTool()
 assistant = AssistantAgent(name="assistant")
 search_tool.register_for_llm(assistant)
 response = assistant.run(
-    message="What is SearxNG?",
+    message=[{"content":"What is SearxNG?","role":"user"}],
     tools=assistant.tools,
     max_turns=2,
     user_input=False,

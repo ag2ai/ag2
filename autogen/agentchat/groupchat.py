@@ -1193,7 +1193,9 @@ class GroupChatManager(ConversableAgent):
             allow_repeat_speaker=True,
         )
         chat_manager = GroupChatManager(group_chat)
-        groupchat_result = agent_a.initiate_chat(chat_manager, message="Hi, there, I'm agent A.")
+        groupchat_result = agent_a.initiate_chat(
+            chat_manager, message=[{"content": "Hi, there, I'm agent A.", "role": "user"}]
+        )
         ```
         """
         return self._last_speaker

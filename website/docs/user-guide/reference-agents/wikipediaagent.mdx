@@ -80,7 +80,7 @@ for tool in wiki_agent.tools:
 # Start the conversation
 response = user_proxy.initiate_chat(
     recipient=wiki_agent,
-    message="What's the population of Australia?",
+    message=[{"content":"What's the population of Australia?","role":"user"}],
     max_turns=2,
 )
 ```

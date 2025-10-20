@@ -133,7 +133,7 @@ user_proxy = UserProxyAgent(
 # Start conversation
 user_proxy.initiate_chat(
     assistant,
-    message="What is the current date and what's happening in the tech world today?",
+    message=[{"content":"What is the current date and what's happening in the tech world today?","role":"user"}],
     max_turns=2,
 )
 ```
@@ -193,7 +193,7 @@ user_proxy = UserProxyAgent(
 # Test function calling
 user_proxy.initiate_chat(
     function_assistant,
-    message="What's the weather like in Tokyo? Also, can you calculate 15 * 23 + 7?",
+    message=[{"content":"What's the weather like in Tokyo? Also, can you calculate 15 * 23 + 7?","role":"user"}],
     max_turns=2,
 )
 ```

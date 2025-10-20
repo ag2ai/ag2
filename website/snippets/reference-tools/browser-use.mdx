@@ -101,7 +101,7 @@ Now, let’s run a task where the assistant searches Reddit for “AG2,” click
 ```python
 result = user_proxy.initiate_chat(
     recipient=assistant,
-    message="Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.",
+    message=[{"content":"Go to Reddit, search for 'ag2' in the search bar, click on the first post and return the first comment.","role":"user"}],
     max_turns=2,
 )
 ```

@@ -11,7 +11,7 @@ The following figure illustrates how two-agent chat works.
 
 ![Two-agent chat](../assets/two-agent-chat.png)
 
-A two-agent chats takes two inputs: a message, which is a string provided by the caller; a context, which specifies various parameters of the chat.
+A two-agent chat takes two inputs: a message (which can be either a string or a message dictionary provided by the caller), and a context, which specifies various parameters of the chat.
 
 The sender agent uses its chat initializer method (i.e., `generate_init_message` method of `ConversableAgent`) to generate an initial message from the inputs, and sends it to the recipient agent to start the chat.
 
@@ -41,7 +41,7 @@ teacher_agent = ConversableAgent(
 
 chat_result = student_agent.initiate_chat(
     teacher_agent,
-    message="What is triangle inequality?",
+    message=[{"content":"What is triangle inequality?","role":"user"}],
     summary_method="reflection_with_llm",
     max_turns=2,
 )
@@ -49,9 +49,9 @@ chat_result = student_agent.initiate_chat(
 print(chat_result.summary)
 ```
 
-In the above example, the summary method is set to `reflection_with_llm` which takes a list of messages from the conversation and summarize them  using a call to an LLM.
+In the above example, the summary method is set to `reflection_with_llm` which takes a list of messages from the conversation and summarizes them using a call to an LLM.
 
-The summary method first tries to use the recipient's LLM, if it is not available then it uses the sender's LLM. In this case the recipient is "Teacher_Agent" and the sender is "Student_Agent".
+The summary method first tries to use the recipient's LLM; if it is not available then it uses the sender's LLM. In this case the recipient is "Teacher_Agent" and the sender is "Student_Agent".
 
 The input prompt for the LLM is the following default prompt:
 
@@ -61,7 +61,7 @@ print(ConversableAgent.DEFAULT_SUMMARY_PROMPT)
 
 You can also use a custom prompt by setting the `summary_prompt` argument of `initiate_chat`.
 
-There are some other useful information in the `ChatResult` object, including the conversation history, human input, and token cost.
+There is some other useful information in the `ChatResult` object, including the conversation history, human input, and token cost.
 
 ```python
 # Get the chat history.
