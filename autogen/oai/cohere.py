@@ -99,6 +99,8 @@ class CohereLLMConfigEntry(LLMConfigEntry):
 class CohereClient:
     """Client for Cohere's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[CohereEntryDict]):
         """Requires api_key or environment variable to be set
 

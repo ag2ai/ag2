@@ -97,6 +97,8 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     _retries = 5
 
     def __init__(self, **kwargs: Unpack[BedrockEntryDict]):
