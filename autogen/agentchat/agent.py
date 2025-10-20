@@ -40,11 +40,11 @@ class Agent(Protocol):
 
     def send(
         self,
-        message: list[dict[str, Any]] | str,
+        message: list[dict[str, Any]],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
-        """Send a message to another agent.
+        """Send a list[message] to another agent.
 
         Args:
             message (list[dict[str, Any]] or str): the message to send. If a list of messages, it should be
@@ -56,11 +56,11 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: list[dict[str, Any]] | str,
+        message: list[dict[str, Any]],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
-        """(Async) Send a message to another agent.
+        """(Async) Send a list[message] to another agent.
 
         Args:
             message (list[messages] or str): the message to send. If a list of messages, it should be
@@ -77,7 +77,7 @@ class Agent(Protocol):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ) -> None:
-        """Receive a message from another agent.
+        """Receive a list[message] from another agent.
 
         Args:
             message (list[messages]): the list[messages] received. If a list of messages, it should be
@@ -94,7 +94,7 @@ class Agent(Protocol):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ) -> None:
-        """(Async) Receive a message from another agent.
+        """(Async) Receive a list[message] from another agent.
 
         Args:
             message (list[messages]): the list[messages] received. If a list of messages, it should be
