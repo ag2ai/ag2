@@ -1449,9 +1449,11 @@ def test_process_before_send():
     dummy_agent_2 = ConversableAgent(name="dummy_agent_2", llm_config=False, human_input_mode="NEVER")
     dummy_agent_1.register_hook("process_message_before_send", send_to_frontend)
     dummy_agent_1.send("hello", dummy_agent_2)
-    print_mock.assert_called_once_with(message="hello")
+    # Updated expectation: hooks now receive normalized dict format
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "assistant"})
     dummy_agent_1.send("silent hello", dummy_agent_2, silent=True)
-    print_mock.assert_called_once_with(message="hello")
+    # Still only called once (silent message doesn't trigger print)
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "assistant"})
 
 
 def test_messages_with_carryover():
