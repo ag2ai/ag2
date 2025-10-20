@@ -130,6 +130,12 @@ user = ConversableAgent(
 )
 
 
+def clear_all_agent_handoffs():
+    """Clear handoffs on all agents to ensure test isolation."""
+    for agent in [triage_agent, math_agent, weather_agent, db_agent, file_agent, general_agent, user]:
+        agent.handoffs.clear()
+
+
 def test_scenario_1_one_agent_chat():
     """Test Scenario 1: Single Agent Chat"""
     print("\n=== Scenario 1: Single Agent Chat ===")
@@ -302,6 +308,7 @@ def test_scenario_5_handoffs_and_tools():
 def test_scenario_6_mixed_tools_scenario():
     """Test Scenario 6: Mixed Tools in Group Chat"""
     print("\n=== Scenario 6: Mixed Tools Scenario ===")
+    clear_all_agent_handoffs()
 
     # Create pattern with multiple tool-enabled agents
     mixed_pattern = RoundRobinPattern(
@@ -328,8 +335,7 @@ def test_scenario_7_conditional_handoffs():
     """Test Scenario 7: Advanced Conditional Handoffs"""
     print("\n=== Scenario 7: Advanced Conditional Handoffs ===")
 
-    # Clear any existing handoffs on triage_agent
-    triage_agent.handoffs.clear()
+    clear_all_agent_handoffs()
 
     # Set up handoffs on the triage agent using LLM conditions (simpler and more reliable)
     triage_agent.handoffs.add_llm_conditions([
@@ -375,6 +381,8 @@ def test_scenario_8_complex_conversation():
     """Test Scenario 8: Complex Multi-turn Conversation"""
     print("\n=== Scenario 8: Complex Multi-turn Conversation ===")
 
+    clear_all_agent_handoffs()
+
     # Complex conversation with multiple turns
     complex_messages = [
         {"role": "user", "content": "Hello, I need help with multiple tasks"},
@@ -400,9 +408,7 @@ def test_scenario_8_complex_conversation():
 def test_scenario_9_nested_chat_target():
     """Test Scenario 9: Nested Chat Target"""
     print("\n=== Scenario 9: Nested Chat Target ===")
-
-    # Clear any existing handoffs on triage_agent
-    triage_agent.handoffs.clear()
+    clear_all_agent_handoffs()
 
     # Set up nested chat handoffs on the triage agent
     triage_agent.handoffs.add_llm_conditions([
@@ -460,9 +466,7 @@ def test_scenario_9_nested_chat_target():
 def test_scenario_10_terminate_target():
     """Test Scenario 10: Terminate Target"""
     print("\n=== Scenario 10: Terminate Target ===")
-
-    # Clear any existing handoffs on triage_agent
-    triage_agent.handoffs.clear()
+    clear_all_agent_handoffs()
 
     # Set up handoffs with terminate condition on the triage agent
     triage_agent.handoffs.add_llm_conditions([
@@ -504,6 +508,8 @@ def test_scenario_11_run_group_chat_round_robin():
     """Test Scenario 11: run_group_chat with Round Robin Pattern"""
     print("\n=== Scenario 11: run_group_chat with Round Robin ===")
 
+    clear_all_agent_handoffs()
+
     # Simple round robin pattern
     pattern = RoundRobinPattern(
         initial_agent=math_agent,
@@ -527,6 +533,7 @@ def test_scenario_12_run_group_chat_auto_pattern():
     """Test Scenario 12: run_group_chat with Auto Pattern"""
     print("\n=== Scenario 12: run_group_chat with Auto Pattern ===")
 
+    clear_all_agent_handoffs()
     # Auto pattern for intelligent routing
     pattern = AutoPattern(
         initial_agent=triage_agent,
@@ -604,7 +611,7 @@ if __name__ == "__main__":
         # test_scenario_8_complex_conversation()
         # test_scenario_9_nested_chat_target()
         # test_scenario_10_terminate_target()
-        test_scenario_11_run_group_chat_round_robin()  # process not end
+        # test_scenario_11_run_group_chat_round_robin()  # process not end
         # test_scenario_12_run_group_chat_auto_pattern()
         # test_scenario_13_run_single_agent()
         # test_scenario_14_run_two_agents()
