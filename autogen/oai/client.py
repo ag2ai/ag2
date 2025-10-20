@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
@@ -21,6 +20,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
@@ -366,11 +366,12 @@ class OpenAIClient:
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
 
-        def _format_content(content: str) -> str:
+        def _format_content(content: str | list[dict[str, Any]] | None) -> str:
+            normalized_content = content_str(content)
             return (
-                self.response_format.model_validate_json(content).format()
+                self.response_format.model_validate_json(normalized_content).format()
                 if isinstance(self.response_format, FormatterProtocol)
-                else content
+                else normalized_content
             )
 
         if TOOL_ENABLED:
@@ -884,6 +885,7 @@ class OpenAIWrapper:
             # a config for a custom client is set
             # adding placeholder until the register_model_client is called with the appropriate class
             self._clients.append(PlaceHolderClient(config))
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.info(
                 f"Detected custom model client in config: {model_client_cls_name}, model client can not be used until register_model_client is called."
             )

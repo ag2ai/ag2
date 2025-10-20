@@ -11,8 +11,7 @@ from autogen import ConversableAgent
 from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
 from autogen.import_utils import run_for_optional_imports
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 # Specify the model to use by uncommenting one of the following lines.
 # filter_dict={"model": ["gpt-4-1106-preview"]}
