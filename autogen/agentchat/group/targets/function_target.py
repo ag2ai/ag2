@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -106,6 +107,56 @@ def broadcast(
             raise ValueError("Current agent must have a group manager to broadcast messages.")
 
 
+def validate_fn_sig(
+    incoming_fn: Callable[..., FunctionTargetResult],
+    extra_args: dict[str, Any],
+) -> None:
+    """
+    Validate a user-defined afterwork_function signature.
+
+    Rules:
+    1. Must have at least two positional parameters (whatever their names).
+    2. All provided extra_args must exist in the function signature (unless **kwargs is present).
+    3. All additional required (non-default) params beyond the first two must be satisfied via extra_args.
+    """
+    sig = inspect.signature(incoming_fn)
+    params = list(sig.parameters.values())
+
+    # 1️⃣ Must have at least two positional parameters (whatever names)
+    if len(params) < 2:
+        raise ValueError(
+            f"Function '{incoming_fn.__name__}' must accept at least two positional parameters: "
+            f"(output, ctx). Current: {[p.name for p in params]}"
+        )
+
+    # 2️⃣ Detect **kwargs
+    has_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
+
+    # Build list of extra (non-core) params after the first two
+    extra_params = [
+        p for p in params[2:] if p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    ]
+
+    # 3️⃣ If **kwargs not present, check for invalid extra_args
+    if not has_kwargs:
+        valid_names = {p.name for p in params}
+        invalid_keys = [k for k in extra_args if k not in valid_names]
+        if invalid_keys:
+            raise ValueError(
+                f"Invalid extra_args for function '{incoming_fn.__name__}': {invalid_keys}. "
+                f"Allowed parameters are: {[p.name for p in params]}."
+            )
+
+    # 4️⃣ Check for missing required params (no defaults) among the extra ones
+    missing_keys = [p.name for p in extra_params if p.default is p.empty and p.name not in extra_args]
+
+    if missing_keys:
+        raise ValueError(
+            f"Missing required extra_args for function '{incoming_fn.__name__}': {missing_keys}. "
+            f"You must supply them via `extra_args`."
+        )
+
+
 class FunctionTarget(TransitionTarget):
     """Transition target that invokes a tool function with (prev_output, context).
 
@@ -114,10 +165,21 @@ class FunctionTarget(TransitionTarget):
 
     fn_name: str = Field(...)
     fn: Callable[..., FunctionTargetResult] = Field(..., repr=False)
+    extra_args: dict[str, Any] = Field(default_factory=dict)
 
-    def __init__(self, incoming_fn: Callable[..., FunctionTargetResult], **kwargs: Any) -> None:
+    def __init__(
+        self,
+        incoming_fn: Callable[..., FunctionTargetResult],
+        *,
+        extra_args: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
         if callable(incoming_fn):
-            super().__init__(fn_name=incoming_fn.__name__, fn=incoming_fn, **kwargs)
+            extra_args = extra_args or {}
+
+            validate_fn_sig(incoming_fn, extra_args)
+
+            super().__init__(fn_name=incoming_fn.__name__, fn=incoming_fn, extra_args=extra_args, **kwargs)
         else:
             raise ValueError(
                 "FunctionTarget must be initialized with a callable function as the first argument or 'fn' keyword argument."
@@ -138,7 +200,11 @@ class FunctionTarget(TransitionTarget):
         )
 
         # Run the function to get the FunctionTargetResult
-        function_target_result = self.fn(last_message, current_agent.context_variables, groupchat, current_agent)
+        function_target_result = self.fn(
+            last_message,
+            current_agent.context_variables,
+            **self.extra_args,
+        )
 
         if not isinstance(function_target_result, FunctionTargetResult):
             raise ValueError("FunctionTarget function must return a FunctionTargetResult object.")

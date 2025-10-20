@@ -5,7 +5,6 @@
 Minimal FunctionTarget test wiring for a two-agent group chat.
 """
 
-import os
 from typing import Any
 
 from dotenv import load_dotenv
@@ -19,10 +18,15 @@ from autogen.agentchat.group.targets.transition_target import StayTarget
 
 load_dotenv()
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def main(session_id: str | None = None) -> dict:
     # LLM config
-    cfg = LLMConfig(api_type="openai", model="gpt-4o", api_key=os.environ["OPENAI_API_KEY"])
+    cfg = LLMConfig(api_type="openai", model="gpt-4o-mini")
 
     # Shared context
     ctx = ContextVariables(data={"application": "<empty>"})
@@ -47,10 +51,11 @@ def main(session_id: str | None = None) -> dict:
     )
 
     # After-work hook
-    def afterwork_function(output: str, context_variables: Any, *args) -> FunctionTargetResult:
+    def afterwork_function(output: str, context_variables: Any, next_agent: ConversableAgent) -> FunctionTargetResult:
         """
         Switches a context variable and routes the next turn.
         """
+        logger.info(f"After-work function called. Random param: {next_agent}")
         if context_variables.get("application") == "<empty>":
             context_variables["application"] = output
             return FunctionTargetResult(
@@ -62,10 +67,10 @@ def main(session_id: str | None = None) -> dict:
         return FunctionTargetResult(
             messages=[
                 FunctionTargetMessage(
-                    content=f"Revise the draft written by the first agent: {output}", msg_target=second_agent
+                    content=f"Revise the draft written by the first agent: {output}", msg_target=next_agent
                 )
             ],
-            target=AgentTarget(second_agent),
+            target=AgentTarget(next_agent),
             context_variables=context_variables,
         )
 
@@ -79,7 +84,7 @@ def main(session_id: str | None = None) -> dict:
     )
 
     # Register after-work handoff
-    first_agent.handoffs.set_after_work(FunctionTarget(afterwork_function))
+    first_agent.handoffs.set_after_work(FunctionTarget(afterwork_function, extra_args={"next_agent": second_agent}))
 
     # Run
     initiate_group_chat(
