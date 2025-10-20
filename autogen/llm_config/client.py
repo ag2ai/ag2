@@ -32,7 +32,7 @@ class ModelClient(Protocol):
     class ModelClientResponseProtocol(Protocol):
         class Choice(Protocol):
             class Message(Protocol):
-                content: str | dict[str, Any] | list[dict[str, Any]]
+                content: str | dict[str, Any] | list[dict[str, Any]] | None
 
             message: Message
 

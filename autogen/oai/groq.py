@@ -77,6 +77,8 @@ class GroqLLMConfigEntry(LLMConfigEntry):
 class GroqClient:
     """Client for Groq's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[GroqEntryDict]):
         """Requires api_key or environment variable to be set
 
