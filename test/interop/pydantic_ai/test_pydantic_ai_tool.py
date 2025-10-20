@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic_ai.tools import Tool as PydanticAITool
 
 from autogen import AssistantAgent
@@ -43,14 +44,13 @@ class TestPydanticAITool:
                     "description": "Get me foobar.",
                     "parameters": {
                         "properties": {
-                            "a": {"description": "apple pie", "title": "A", "type": "integer"},
-                            "b": {"description": "banana cake", "title": "B", "type": "string"},
-                            "c": {
+                            "a": IsPartialDict({"description": "apple pie", "type": "integer"}),
+                            "b": IsPartialDict({"description": "banana cake", "type": "string"}),
+                            "c": IsPartialDict({
                                 "additionalProperties": {"items": {"type": "number"}, "type": "array"},
                                 "description": "carrot smoothie",
-                                "title": "C",
                                 "type": "object",
-                            },
+                            }),
                         },
                         "required": ["a", "b", "c"],
                         "type": "object",

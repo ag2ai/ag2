@@ -13,7 +13,7 @@ from autogen.testing import TestAgent, ToolCall, tools_message
 
 
 @pytest.mark.asyncio
-async def test_mock_async_client(async_mock: AsyncMock) -> None:
+async def test_mock_async_client() -> None:
     # arrange
     agent = ConversableAgent(
         name="mock-agent",
@@ -23,8 +23,8 @@ async def test_mock_async_client(async_mock: AsyncMock) -> None:
         }),
     )
 
-    client_agent = async_mock
-    client_agent.__class__ = ConversableAgent
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
     client_agent.name = "original"
 
     # act
@@ -41,7 +41,7 @@ async def test_mock_async_client(async_mock: AsyncMock) -> None:
     assert client_agent.a_receive.call_args[0][0] == {"content": "Hi, I am mock client!"}
 
 
-def test_mock_sync_client(mock: MagicMock) -> None:
+def test_mock_sync_client() -> None:
     # arrange
     agent = ConversableAgent(
         name="mock-agent",
@@ -51,8 +51,8 @@ def test_mock_sync_client(mock: MagicMock) -> None:
         }),
     )
 
-    client_agent = mock
-    client_agent.__class__ = ConversableAgent
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
     client_agent.name = "original"
 
     # act

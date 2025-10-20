@@ -26,12 +26,12 @@ from autogen.a2a import A2aRemoteAgent, MockClient
         ),
     ),
 )
-async def test_answer_with_str(data: str | TextPart, async_mock: AsyncMock) -> None:
+async def test_answer_with_str(data: str | TextPart) -> None:
     # arrange
     remote_agent = A2aRemoteAgent(url="http://fake", name="mock-agent", client=MockClient(data))
 
-    client_agent = async_mock
-    client_agent.__class__ = ConversableAgent
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
     client_agent.name = "original"
 
     # act
@@ -48,7 +48,7 @@ async def test_answer_with_str(data: str | TextPart, async_mock: AsyncMock) -> N
 
 
 @pytest.mark.asyncio
-async def test_answer_with_text_part(async_mock: AsyncMock) -> None:
+async def test_answer_with_text_part() -> None:
     # arrange
     remote_agent = A2aRemoteAgent(
         url="http://fake",
@@ -56,8 +56,8 @@ async def test_answer_with_text_part(async_mock: AsyncMock) -> None:
         client=MockClient(TextPart(text="Hi, I am mock client!")),
     )
 
-    client_agent = async_mock
-    client_agent.__class__ = ConversableAgent
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
     client_agent.name = "original"
 
     # act
@@ -87,12 +87,12 @@ async def test_answer_with_text_part(async_mock: AsyncMock) -> None:
         ),
     ),
 )
-async def test_answer_with_dict(data: dict[str, Any] | DataPart, async_mock: AsyncMock) -> None:
+async def test_answer_with_dict(data: dict[str, Any] | DataPart) -> None:
     # arrange
     remote_agent = A2aRemoteAgent(url="http://fake", name="mock-agent", client=MockClient(data))
 
-    client_agent = async_mock
-    client_agent.__class__ = ConversableAgent
+    client_agent = AsyncMock(spec=ConversableAgent)
+    client_agent.silent = True
     client_agent.name = "original"
 
     # act

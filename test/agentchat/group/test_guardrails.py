@@ -15,34 +15,36 @@ from autogen.agentchat.group.targets.transition_target import TransitionTarget
 class TestGuardrailResult:
     def test_init_default(self) -> None:
         """Test GuardrailResult initialization with default values."""
-        result = GuardrailResult(activated=True, guardrail=MagicMock())
+        result = GuardrailResult(activated=True, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is True
         assert result.justification == "No justification provided"
 
     def test_init_with_justification(self) -> None:
         """Test GuardrailResult initialization with custom justification."""
         justification = "Custom justification message"
-        result = GuardrailResult(activated=False, justification=justification, guardrail=MagicMock())
+        result = GuardrailResult(activated=False, justification=justification, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is False
         assert result.justification == justification
 
     def test_str_representation(self) -> None:
         """Test string representation of GuardrailResult."""
-        result = GuardrailResult(activated=True, justification="Test justification", guardrail=MagicMock())
+        result = GuardrailResult(
+            activated=True, justification="Test justification", guardrail=MagicMock(spec=Guardrail)
+        )
         expected = "Guardrail Result: True\nJustification: Test justification"
         assert str(result) == expected
 
     def test_parse_valid_json(self) -> None:
         """Test parsing valid JSON string to GuardrailResult."""
         json_str = '{"activated": true, "justification": "Test justification"}'
-        result = GuardrailResult.parse(json_str, guardrail=MagicMock())
+        result = GuardrailResult.parse(json_str, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is True
         assert result.justification == "Test justification"
 
     def test_parse_valid_json_minimal(self) -> None:
         """Test parsing minimal valid JSON string."""
         json_str = '{"activated": false}'
-        result = GuardrailResult.parse(json_str, guardrail=MagicMock())
+        result = GuardrailResult.parse(json_str, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is False
         assert result.justification == "No justification provided"
 

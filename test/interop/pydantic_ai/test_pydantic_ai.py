@@ -7,11 +7,12 @@ from inspect import signature
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import Tool as PydanticAITool
-from pydantic_ai.usage import Usage
+from pydantic_ai.usage import RunUsage
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
@@ -72,7 +73,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
@@ -99,7 +100,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
@@ -166,11 +167,10 @@ class TestPydanticAIInteroperabilityWithContext:
                     "description": "Get the player's name.",
                     "parameters": {
                         "properties": {
-                            "additional_info": {
+                            "additional_info": IsPartialDict({
                                 "anyOf": [{"type": "string"}, {"type": "null"}],
                                 "description": "Additional information which can be used.",
-                                "title": "Additional Info",
-                            }
+                            }),
                         },
                         "type": "object",
                         "additionalProperties": False,
