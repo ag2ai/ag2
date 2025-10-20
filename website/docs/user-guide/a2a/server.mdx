@@ -78,17 +78,30 @@ def get_weekday(
 app = A2aAgentServer(agent, url="http://0.0.0.0:8000").build()
 ```
 
-Here's what the processing steps would be:
+Here’s how the sequence looks as a sequence diagram:
 
-1. Remote client calls `A2aAgentServer` agent
+```mermaid
+sequenceDiagram
+    participant Client as A2aRemoteAgent
+    participant Server as A2aAgentServer
+    participant Tool as get_weekday
+    participant LLM as LLM Provider
 
-2. `A2aAgentServer` agent asks LLM to decide if the tool should be called
+    Client->>+Server: Send user prompt (A2A request)
 
-3. `A2aAgentServer` agent calls `get_weekday` tool
+    Server->>LLM: Agent system prompt + user prompt + tools description
+    LLM-->>Server: Tool call decision
 
-4. `A2aAgentServer` processes the tool result by LLM
+    Server-->+Tool: Call get_weekday(date_string)
+    Tool-->>-Server: Return result
 
-5. `A2aAgentServer` returns the whole local history to the client
+    Server-->>LLM: Tool result
+    LLM->>Server: Final response
+
+    Server->>-Client: Return full chat history (A2A response)
+```
+
+### Other features support
 
 Additionally, remote agents support group chat features without needing any additional configuration:
 
