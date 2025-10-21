@@ -45,12 +45,8 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aRemoteAgent
 
 # Configure local agent
-llm_config = LLMConfig(
-    model="gpt-4o-mini",
-    api_key=os.getenv("OPENAI_API_KEY"),
-)
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
 
-# Create local agent
 reviewer = ConversableAgent(
     name="code_reviewer",
     system_message="You are a code reviewer...",

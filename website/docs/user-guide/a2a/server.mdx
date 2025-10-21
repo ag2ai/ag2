@@ -46,8 +46,7 @@ uvicorn server:server --host 0.0.0.0 --port 8000
 
 AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and result processed by the remote agent, with a final result returned to the client.
 
-```python title="remote.py" linenums="1" hl_lines="21-27"
-import os
+```python title="remote.py" linenums="1" hl_lines="17-23"
 from datetime import datetime
 from typing import Annotated
 
@@ -55,10 +54,7 @@ from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aAgentServer
 from autogen.agentchat import ReplyResult
 
-llm_config = LLMConfig(
-    model="gpt-4o-mini",
-    api_key=os.getenv("OPENAI_API_KEY"),
-)
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
 
 agent = ConversableAgent(
     name="calendar_agent",
