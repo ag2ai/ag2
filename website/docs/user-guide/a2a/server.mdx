@@ -44,7 +44,7 @@ uvicorn server:server --host 0.0.0.0 --port 8000
 
 ### Remote Tools execution details
 
-AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and result processed by the remote agent, with a final result returned to the client.
+AG2 has a great feature - [Tools](/docs/user-guide/advanced-concepts/tools){.internal-link}. Our A2A agent executor allows your remote agents to execute any tool by themselves. So, if your client calls an agent with a tool, their tools will be executed and the result processed by the remote agent, with a final result returned to the client.
 
 ```python title="remote.py" linenums="1" hl_lines="17-23"
 from datetime import datetime
@@ -97,9 +97,9 @@ sequenceDiagram
     Server->>-Client: Return full chat history (A2A response)
 ```
 
-### Other features support
+### Support for other features
 
-Additionally, remote agents support group chat features without needing any additional configuration:
+Additionally, remote agents support AG2's Group Chat features without needing any additional configuration:
 
 - [Context Variables](/docs/user-guide/advanced-concepts/orchestration/group-chat/context-variables/){.internal-link}
 - [Guardrails](/docs/user-guide/advanced-concepts/orchestration/group-chat/guardrails/){.internal-link}
@@ -109,7 +109,7 @@ Just use these features with your remote `ConversableAgent` agent, wrap it in `A
 
 ### Multiple agents on one server
 
-The A2A protocol assumes a single agent per server. However, because `A2aAgentServer` is a full-featured ASGI application, you can combine it with other ASGI apps in any way you need. So, you can add your server to regular FastAPI applications or any other ASGI application. Furthermore, you can combine multiple agents onto one server, separated by paths.
+The A2A protocol assumes a single agent per server. However, because `A2aAgentServer` is a full-featured ASGI application, you can combine it with other ASGI apps in any way you need. So, you can add your server to regular FastAPI applications or other ASGI applications. Furthermore, you can combine multiple agents onto one server, separated by paths.
 
 An example of multiple agents on one server:
 
@@ -138,7 +138,7 @@ app = Starlette(
 
 !!! tip
 
-    Be careful with the `A2aAgentServer(..., url="...")` parameter. It will be used to build the agent card, so you need to add your path with `/` to the end of the server URL.
+    Be careful with the `A2aAgentServer(..., url="...")` parameter. It will be used to build the agent card, so you need to add your path with `/` at the end of the server URL.
 
 
 In this case, the clients for these agents would be:
@@ -208,7 +208,7 @@ server = A2aAgentServer(
 
 ### Custom Request Handler
 
-For advanced use cases, you can customize the request handling, allowing you to use your own task store, queue manager, or configure push notifications, etc. By default, `A2aAgentServer` uses the simplest `InMemoryTaskStore` to store tasks.
+For advanced use cases, you can customize the request handling, allowing you to use your own task store, queue manager, or configure push notifications, etc. By default, `A2aAgentServer` uses the simple `InMemoryTaskStore` to store tasks.
 
 ```python title="server.py" linenums="1" hl_lines="7-10"
 from a2a.server.request_handlers import DefaultRequestHandler

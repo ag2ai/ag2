@@ -12,9 +12,7 @@ The A2A client allows you to connect to remote A2A agent servers and interact wi
 
 ## Basic Client Setup
 
-### Simple Connection
-
-Generally, you can use `A2aRemoteAgent` like any other `ConversableAgent`. In the example below, we create a local agent and connect to a remote agent and use it to generate code.
+Generally, you can use `A2aRemoteAgent` like any other `ConversableAgent`. In the example below, we specify a remote agent and start a chat between a local agent and that remote agent, asking them to generate code.
 
 ```python linenums="1"
 from autogen.a2a import A2aRemoteAgent
@@ -35,9 +33,7 @@ await local_agent.a_initiate_chat(
 )
 ```
 
-### With Local Agent
-
-In the example below, we create a `A2aRemoteAgent` client and use it with a local agent to make them work together.
+Here's another example of a `A2aRemoteAgent` client agent working with a local agent, with the conversation printed out afterwards.
 
 ```python linenums="1"
 import asyncio
@@ -79,7 +75,7 @@ asyncio.run(review_code())
 
 ### Custom HTTP Client
 
-Pretty often you need to pass some custom options to the remote agent HTTP client, such as headers, timeout, etc. To do this, pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
+Commonly, you will need to set some custom options on the remote agent's HTTP client, such as headers, timeout, etc. To do this, pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
 
 ```python linenums="1"
 import httpx
@@ -103,7 +99,7 @@ remote_agent = A2aRemoteAgent(
 
 ### Client Configuration
 
-A2A client has a few configuration options that you can pass to the `A2aRemoteAgent` constructor.
+The A2A client has a few configuration options that you can pass to the `A2aRemoteAgent` constructor, use the `client_config` parameter and a `ClientConfig` to do that.
 
 ```python linenums="1"
 from a2a.client import ClientConfig
@@ -134,7 +130,7 @@ remote_agent = A2aRemoteAgent(
 
 A2A is also supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
 
-As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
+As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents. Here we create a Pydantic AI agent:
 
 ```python title="server.py" linenums="1"
 from pydantic_ai import Agent
@@ -146,7 +142,7 @@ agent = Agent(
 app = agent.to_a2a()
 ```
 
-Now, without any changes, your `A2aRemoteAgent` clients can interact with them:
+And now, without any changes, your `A2aRemoteAgent` clients can interact with them:
 
 ```python title="client.py" linenums="1"
 from autogen.a2a import A2aRemoteAgent
