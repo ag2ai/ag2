@@ -3,10 +3,22 @@ name: Claude Code Review
 on:
   # For PRs from the same repository (fast path)
   pull_request:
-    types: [opened, synchronize]
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
   # For PRs from forked repositories (secure path with secrets)
   pull_request_target:
-    types: [opened, synchronize]
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
 
 jobs:
   claude-review:
