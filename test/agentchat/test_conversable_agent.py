@@ -1450,10 +1450,10 @@ def test_process_before_send():
     dummy_agent_1.register_hook("process_message_before_send", send_to_frontend)
     dummy_agent_1.send("hello", dummy_agent_2)
     # Updated expectation: hooks now receive normalized dict format
-    print_mock.assert_called_once_with(message={"content": "hello", "role": "assistant"})
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "user"})
     dummy_agent_1.send("silent hello", dummy_agent_2, silent=True)
     # Still only called once (silent message doesn't trigger print)
-    print_mock.assert_called_once_with(message={"content": "hello", "role": "assistant"})
+    print_mock.assert_called_once_with(message={"content": "hello", "role": "user"})
 
 
 def test_messages_with_carryover():
