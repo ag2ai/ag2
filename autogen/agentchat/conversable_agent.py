@@ -1176,6 +1176,18 @@ class ConversableAgent(LLMAgent):
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
 
+        # Validate hooks didn't break the message
+        if processed_msgs is None:
+            raise ValueError(
+                "Message processing hook returned None. Messages must be a non-empty list of dictionaries."
+            )
+
+        if not isinstance(processed_msgs, list):
+            raise TypeError(f"Message processing hook must return a list, got {type(processed_msgs).__name__}")
+
+        if len(processed_msgs) == 0:
+            return  # Allow empty list as no-op
+
         # Validate all messages and raise error if any are invalid
         if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
             raise ValueError(
@@ -1231,6 +1243,17 @@ class ConversableAgent(LLMAgent):
         processed_msgs = self._process_message_before_send(
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
+
+        if processed_msgs is None:
+            raise ValueError(
+                "Message processing hook returned None. Messages must be a non-empty list of dictionaries."
+            )
+
+        if not isinstance(processed_msgs, list):
+            raise TypeError(f"Message processing hook must return a list, got {type(processed_msgs).__name__}")
+
+        if len(processed_msgs) == 0:
+            return  # Allow empty list as no-op
 
         # Validate all messages and raise error if any are invalid
         if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
@@ -1317,7 +1340,7 @@ class ConversableAgent(LLMAgent):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """(async) Receive a list[messages] from another agent.
+        """(async) Receive a list[message] from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.

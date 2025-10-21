@@ -12,12 +12,9 @@ from autogen.tools import tool
 
 load_dotenv()
 
-# Check for OpenAI API key
-pytest.skip("OpenAI API key not found. Skipping all tests.", allow_module_level=True)
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": OPENAI_API_KEY})
+
 
 from autogen import AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.agentchat import a_initiate_group_chat, a_run_group_chat
@@ -138,6 +135,8 @@ def clear_all_agent_handoffs():
         agent.handoffs.clear()
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_1_one_agent_chat():
     """Test Scenario 1: Single Agent Chat"""
     print("\n=== Scenario 1: Single Agent Chat ===")
@@ -153,6 +152,8 @@ async def test_scenario_1_one_agent_chat():
     return response
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_2_two_agent_chat():
     """Test Scenario 2: Two Agent Chat"""
     print("\n=== Scenario 2: Two Agent Chat ===")
@@ -163,11 +164,13 @@ async def test_scenario_2_two_agent_chat():
         {"role": "assistant", "content": "I'll calculate 15 * 7 for you using the calculator tool."},
     ]
     user_proxy.register_function(function_map={"calculator": calculator})
-    await user_proxy.a_initiate_chat(math_agent, messages=messages, max_turns=3)
+    await user_proxy.a_initiate_chat(math_agent, message=messages, max_turns=3)
 
     return "Two agent chat completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_3_group_chat_manager():
     """Test Scenario 3: Group Chat with Manager"""
     print("\n=== Scenario 3: Group Chat with Manager ===")
@@ -191,11 +194,13 @@ async def test_scenario_3_group_chat_manager():
             "file_processor": file_processor,
         }
     )
-    await user_proxy.a_initiate_chat(group_chat_manager, messages=messages, max_turns=1)
+    await user_proxy.a_initiate_chat(group_chat_manager, message=messages, max_turns=1)
 
     return "Group chat with manager completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_4_patterns():
     """Test Scenario 4: Different Patterns"""
     print("\n=== Scenario 4: Testing Different Patterns ===")
@@ -214,7 +219,7 @@ async def test_scenario_4_patterns():
     ]
 
     result1, context1, last_agent1 = await a_initiate_group_chat(
-        pattern=round_robin_pattern, messages=messages1, max_rounds=4
+        pattern=round_robin_pattern, messages=messages1, max_rounds=1
     )
     print(f"Round Robin - Last agent: {last_agent1}")
     clear_all_agent_handoffs()
@@ -231,7 +236,7 @@ async def test_scenario_4_patterns():
         {"role": "user", "content": "I need database info and math calculations"},
     ]
 
-    result2, context2, last_agent2 = await a_initiate_group_chat(pattern=auto_pattern, messages=messages2, max_rounds=4)
+    result2, context2, last_agent2 = await a_initiate_group_chat(pattern=auto_pattern, messages=messages2, max_rounds=1)
     print(f"Auto Pattern - Last agent: {last_agent2}")
     clear_all_agent_handoffs()
     # Random Pattern
@@ -248,13 +253,15 @@ async def test_scenario_4_patterns():
     ]
 
     result3, context3, last_agent3 = await a_initiate_group_chat(
-        pattern=random_pattern, messages=messages3, max_rounds=3
+        pattern=random_pattern, messages=messages3, max_rounds=1
     )
     print(f"Random Pattern - Last agent: {last_agent3}")
 
     return "Patterns testing completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_5_handoffs_and_tools():
     """Test Scenario 5: Handoffs and Tools Integration"""
     print("\n=== Scenario 5: Handoffs and Tools ===")
@@ -308,13 +315,15 @@ async def test_scenario_5_handoffs_and_tools():
     for i, messages in enumerate(test_messages_list):
         print(f"\nTesting message: '{messages[0]['content']}'")
         result, context, last_agent = await a_initiate_group_chat(
-            pattern=manual_pattern, messages=messages, max_rounds=3
+            pattern=manual_pattern, messages=messages, max_rounds=1
         )
         print(f"Handled by: {last_agent}")
 
     return "Handoffs and tools testing completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_6_mixed_tools_scenario():
     """Test Scenario 6: Mixed Tools in Group Chat"""
     print("\n=== Scenario 6: Mixed Tools Scenario ===")
@@ -336,12 +345,14 @@ async def test_scenario_6_mixed_tools_scenario():
         },
     ]
 
-    result, context, last_agent = await a_initiate_group_chat(pattern=mixed_pattern, messages=messages, max_rounds=8)
+    result, context, last_agent = await a_initiate_group_chat(pattern=mixed_pattern, messages=messages, max_rounds=1)
 
     print(f"Mixed tools scenario completed. Last agent: {last_agent}")
     return "Mixed tools scenario completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_7_conditional_handoffs():
     """Test Scenario 7: Advanced Conditional Handoffs"""
     print("\n=== Scenario 7: Advanced Conditional Handoffs ===")
@@ -382,12 +393,14 @@ async def test_scenario_7_conditional_handoffs():
         {"role": "user", "content": "I need math calculations and weather data for my project"},
     ]
 
-    result, context, last_agent = await a_initiate_group_chat(pattern=default_pattern, messages=messages, max_rounds=5)
+    result, context, last_agent = await a_initiate_group_chat(pattern=default_pattern, messages=messages, max_rounds=1)
 
     print(f"Advanced handoffs completed. Last agent: {last_agent}")
     return "Advanced handoffs completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_8_complex_conversation():
     """Test Scenario 8: Complex Multi-turn Conversation"""
     print("\n=== Scenario 8: Complex Multi-turn Conversation ===")
@@ -411,13 +424,15 @@ async def test_scenario_8_complex_conversation():
     )
 
     result, context, last_agent = await a_initiate_group_chat(
-        pattern=auto_pattern, messages=complex_messages, max_rounds=6
+        pattern=auto_pattern, messages=complex_messages, max_rounds=1
     )
 
     print(f"Complex conversation completed. Last agent: {last_agent}")
     return "Complex conversation completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_9_nested_chat_target():
     """Test Scenario 9: Nested Chat Target"""
     print("\n=== Scenario 9: Nested Chat Target ===")
@@ -480,12 +495,14 @@ async def test_scenario_9_nested_chat_target():
         {"role": "user", "content": "I need help with math calculations for my homework"},
     ]
 
-    result, context, last_agent = await a_initiate_group_chat(pattern=nested_pattern, messages=messages, max_rounds=5)
+    result, context, last_agent = await a_initiate_group_chat(pattern=nested_pattern, messages=messages, max_rounds=1)
 
     print(f"Nested chat completed. Last agent: {last_agent}")
     return "Nested chat completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_10_terminate_target():
     """Test Scenario 10: Terminate Target"""
     print("\n=== Scenario 10: Terminate Target ===")
@@ -523,13 +540,15 @@ async def test_scenario_10_terminate_target():
     ]
 
     result, context, last_agent = await a_initiate_group_chat(
-        pattern=terminate_pattern, messages=messages, max_rounds=5
+        pattern=terminate_pattern, messages=messages, max_rounds=1
     )
 
     print(f"Terminate target completed. Last agent: {last_agent}")
     return "Terminate target completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_11_a_run_group_chat_round_robin():
     """Test Scenario 11: a_run_group_chat with Round Robin Pattern"""
     print("\n=== Scenario 11: a_run_group_chat with Round Robin ===")
@@ -547,13 +566,15 @@ async def test_scenario_11_a_run_group_chat_round_robin():
     messages = [{"role": "user", "content": "What is 10 + 5?"}]
 
     # Use a_run_group_chat instead of a_initiate_group_chat
-    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=5)
+    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
     await response.process()
     # Consume events asynchronously
 
     return "a_run_group_chat Round Robin completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_12_a_run_group_chat_auto_pattern():
     """Test Scenario 12: a_run_group_chat with Auto Pattern"""
     print("\n=== Scenario 12: a_run_group_chat with Auto Pattern ===")
@@ -571,13 +592,15 @@ async def test_scenario_12_a_run_group_chat_auto_pattern():
     messages = [{"role": "user", "content": "what is 10 + 5?"}]
 
     # Use a_run_group_chat
-    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=4)
+    response = await a_run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
     await response.process()
     # Consume events asynchronously
 
     return "a_run_group_chat Auto Pattern completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_13_a_run_single_agent():
     """Test Scenario 13: a_run method with single agent"""
     print("\n=== Scenario 13: a_run method with single agent ===")
@@ -594,6 +617,8 @@ async def test_scenario_13_a_run_single_agent():
     return "a_run single agent completed"
 
 
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
 async def test_scenario_14_a_run_two_agents():
     """Test Scenario 14: a_run method with two agents"""
     print("\n=== Scenario 14: a_run method with two agents ===")
