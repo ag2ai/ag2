@@ -1027,7 +1027,19 @@ class ConversableAgent(LLMAgent):
     def _normalize_message_to_list(
         message: str | dict[str, Any] | list[dict[str, Any]], role: str = "assistant"
     ) -> list[dict[str, Any]]:
-        """Normalize message to list[dict] format for consistent API."""
+        """Normalize message to list[dict] format for consistent API.
+
+        This method ensures all messages are in the standardized list[dict[str, Any]] format:
+        - str inputs are converted to [{"content": str, "role": role}]
+        - dict inputs are converted to [dict]
+        - list inputs are returned as-is
+
+        Args:
+            message: The message to normalize (str, dict, or list of dicts).
+            role: The role of the message, can be "assistant" or "user".
+        Returns:
+            A list of message dictionaries.
+        """
         if isinstance(message, str):
             return [{"content": message, "role": role}]
         elif isinstance(message, dict):
@@ -1086,7 +1098,20 @@ class ConversableAgent(LLMAgent):
     def _process_message_before_send(
         self, message: list[dict[str, Any]], recipient: Agent, silent: bool
     ) -> dict[str, Any] | str | list[dict[str, Any]]:
-        """Process the message before sending it to the recipient."""
+        """Process the message before sending it to the recipient.
+
+        This method calls all registered "process_message_before_send" hooks for each message
+        in the list. Hooks receive individual message dictionaries (not strings) and can
+        modify them before sending.
+
+        Args:
+            message: A list of message dictionaries to process.
+            recipient: The recipient agent.
+            silent: Whether the message is being sent silently.
+
+        Returns:
+            The processed list of message dictionaries.
+        """
         hook_list = self.hook_lists["process_message_before_send"]
 
         if isinstance(message, list):
@@ -1104,29 +1129,6 @@ class ConversableAgent(LLMAgent):
                 processed_messages.append(processed_msg)
             return processed_messages
 
-        # # Handle non-list inputs by converting them to list format
-        # # This maintains list[messages] type consistency
-        # if isinstance(message, str):
-        #     # Convert string to message dict format
-        #     message_dict = {"content": message, "role": "user"}
-        # elif isinstance(message, dict):
-        #     # Use dict as is, but ensure it has proper structure
-        #     message_dict = message
-        # else:
-        #     # For any other type, convert to string content
-        #     message_dict = {"content": str(message), "role": "user"}
-        # # Process the single message through hooks
-        # processed_msg = message_dict
-        # for hook in hook_list:
-        #     processed_msg = hook(
-        #         sender=self,
-        #         message=processed_msg,
-        #         recipient=recipient,
-        #         silent=ConversableAgent._is_silent(self, silent),
-        #     )
-        # # Return as list to maintain consistency
-        # return [processed_msg]
-
     def send(
         self,
         message: list[dict[str, Any]],
@@ -1137,8 +1139,12 @@ class ConversableAgent(LLMAgent):
         """Send a message to another agent.
 
         Args:
-            message (list[messages]): message to be sent. should be a list of messages.
-                The message could contain the following fields:
+            message (list[dict[str, Any]], str, or dict): message to be sent.
+                - If a list of dicts, should be a list of messages following OpenAI's ChatCompletion schema.
+                - If a str, will be automatically converted to [{"content": str, "role": "assistant"}].
+                - If a dict, will be automatically converted to [dict].
+
+                Each message dict can contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
                 - name (str): the name of the function to be called.
@@ -1147,12 +1153,12 @@ class ConversableAgent(LLMAgent):
                 - context (dict): the context of the message, which will be passed to
                     [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
                     For example, one agent can send a message A as:
-        ```python
-        {
-            "content": lambda context: context["use_tool_msg"],
-            "context": {"use_tool_msg": "Use tool X if they are relevant."},
-        }
-        ```
+                ```python
+                {
+                    "content": lambda context: context["use_tool_msg"],
+                    "context": {"use_tool_msg": "Use tool X if they are relevant."},
+                }
+                ```
                     Next time, one agent can send a message B with a different "use_tool_msg".
                     Then the content of message A will be refreshed to the new "use_tool_msg".
                     So effectively, this provides a way for an agent to send a "link" and modify
@@ -1188,9 +1194,13 @@ class ConversableAgent(LLMAgent):
     ):
         """(async) Send a message to another agent.
 
-        Args:
-            message (list[messages]): message to be sent. Should be a list of messages.
-                The message could contain the following fields:
+            Args:
+            message (list[dict[str, Any]], str, or dict): message to be sent.
+                - If a list of dicts, should be a list of messages following OpenAI's ChatCompletion schema.
+                - If a str, will be automatically converted to [{"content": str, "role": "assistant"}].
+                - If a dict, will be automatically converted to [dict].
+
+                Each message dict can contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
                 - function_call (str): the name of the function to be called.
                 - name (str): the name of the function to be called.
@@ -1199,12 +1209,12 @@ class ConversableAgent(LLMAgent):
                 - context (dict): the context of the message, which will be passed to
                     [OpenAIWrapper.create](https://docs.ag2.ai/latest/docs/api-reference/autogen/OpenAIWrapper/#autogen.OpenAIWrapper.create).
                     For example, one agent can send a message A as:
-        ```python
-        {
-            "content": lambda context: context["use_tool_msg"],
-            "context": {"use_tool_msg": "Use tool X if they are relevant."},
-        }
-        ```
+                ```python
+                {
+                    "content": lambda context: context["use_tool_msg"],
+                    "context": {"use_tool_msg": "Use tool X if they are relevant."},
+                }
+                ```
                     Next time, one agent can send a message B with a different "use_tool_msg".
                     Then the content of message A will be refreshed to the new "use_tool_msg".
                     So effectively, this provides a way for an agent to send a "link" and modify
@@ -1307,17 +1317,17 @@ class ConversableAgent(LLMAgent):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """(async) Receive a list[message] from another agent.
+        """(async) Receive a list[messages] from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (dict or str or list[messages]): message from the sender. If the type is dict, it may contain the following reserved fields (either content or function_call need to be provided). Can also be a list of messages.
+            message (list[messages]): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
-                4. "role": role of the message, can be "assistant", "user", "function".
+                4. "role": role of the message, can be "assistant", "user", "function", "tool".
                     This field is only needed to distinguish between "function" or "assistant"/"user".
                 5. "name": In most cases, this field is not needed. When the role is "function", this field is needed to indicate the function name.
                 6. "context" (dict): the context of the message, which will be passed to
@@ -3897,6 +3907,18 @@ class ConversableAgent(LLMAgent):
         Args:
             hookable_method: A hookable method name implemented by ConversableAgent.
             hook: A method implemented by a subclass of AgentCapability.
+
+        Available hookable methods:
+            - "process_message_before_send": Called before sending each message.
+              Signature: hook(sender: Agent, message: dict[str, Any], recipient: Agent, silent: bool) -> dict[str, Any]
+              Note: Receives normalized dict format, not str.
+            - "process_last_received_message": Called to process the last received message.
+            - "process_all_messages_before_reply": Called to process all messages before generating a reply.
+            - "update_agent_state": Called to update agent state before replying.
+            - "safeguard_tool_inputs": Called to validate tool inputs before execution.
+            - "safeguard_tool_outputs": Called to validate tool outputs after execution.
+            - "safeguard_llm_inputs": Called to validate LLM inputs before sending.
+            - "safeguard_llm_outputs": Called to validate LLM outputs after receiving.
         """
         assert hookable_method in self.hook_lists, f"{hookable_method} is not a hookable method."
         hook_list = self.hook_lists[hookable_method]

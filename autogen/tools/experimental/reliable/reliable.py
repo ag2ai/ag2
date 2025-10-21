@@ -803,6 +803,17 @@ class ReliableTool(Tool):
     def _validator_structured_output_hook(
         self, sender: Agent, message: dict[str, Any] | str, recipient: Agent, silent: bool
     ) -> dict[str, Any] | str:
+        """Hook to process the message from the LLM before validating the structured output.
+
+        Args:
+            sender: The agent sending the message.
+            message: The message from the LLM.
+            recipient: The agent receiving the message.
+            silent: Whether the message is being sent silently.
+
+        Returns:
+            The processed message.
+        """
         # Handle both dict and str formats for backward compatibility
         if isinstance(message, dict):
             # Message is already normalized to dict, extract content

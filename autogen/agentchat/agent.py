@@ -47,8 +47,9 @@ class Agent(Protocol):
         """Send a list[message] to another agent.
 
         Args:
-            message (list[dict[str, Any]] or str): the message to send. If a list of messages, it should be
-                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            message (list[dict[str, Any]], str, or dict): the message to send.
+                - If a list of dicts, should be JSON-serializable and follow OpenAI's ChatCompletion schema.
+                - If a str or dict, will be automatically normalized to list format.
             recipient (Agent): the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
@@ -61,10 +62,10 @@ class Agent(Protocol):
         request_reply: bool | None = None,
     ) -> None:
         """(Async) Send a list[message] to another agent.
-
         Args:
-            message (list[messages] or str): the message to send. If a list of messages, it should be
-                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            message (list[dict[str, Any]], str, or dict): the message to send.
+                - If a list of dicts, should be JSON-serializable and follow OpenAI's ChatCompletion schema.
+                - If a str or dict, will be automatically normalized to list format.
             recipient (Agent): the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
