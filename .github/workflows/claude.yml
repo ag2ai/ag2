@@ -30,6 +30,35 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Checkout PR branch (if comment is on a PR)
+        if: github.event.issue.pull_request || github.event.pull_request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ github.event.issue.number }}" ]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+          elif [ -n "${{ github.event.pull_request.number }}" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Detected comment on PR #$PR_NUMBER"
+
+            # Check if it's a forked PR
+            PR_INFO=$(gh pr view $PR_NUMBER --json isCrossRepository,headRepositoryOwner 2>/dev/null || echo '{}')
+            IS_FORK=$(echo "$PR_INFO" | jq -r '.isCrossRepository // false')
+
+            if [ "$IS_FORK" = "true" ]; then
+              echo "⚠️  Forked PR detected - running in secure mode"
+              FORK_OWNER=$(echo "$PR_INFO" | jq -r '.headRepositoryOwner.login')
+              echo "PR from: $FORK_OWNER"
+            fi
+
+            echo "Checking out PR #$PR_NUMBER"
+            gh pr checkout $PR_NUMBER
+            echo "✅ PR branch checked out successfully"
+          fi
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -39,11 +68,3 @@ jobs:
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
