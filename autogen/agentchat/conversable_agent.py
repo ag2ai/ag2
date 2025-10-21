@@ -1024,10 +1024,12 @@ class ConversableAgent(LLMAgent):
             return dict(message)
 
     @staticmethod
-    def _normalize_message_to_list(message: str | dict[str, Any] | list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _normalize_message_to_list(
+        message: str | dict[str, Any] | list[dict[str, Any]], role: str = "assistant"
+    ) -> list[dict[str, Any]]:
         """Normalize message to list[dict] format for consistent API."""
         if isinstance(message, str):
-            return [{"content": message, "role": "assistant"}]
+            return [{"content": message, "role": role}]
         elif isinstance(message, dict):
             return [message]
         return message
@@ -1163,7 +1165,7 @@ class ConversableAgent(LLMAgent):
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
 
-        message = self._normalize_message_to_list(message)
+        message = self._normalize_message_to_list(message, role="user")
         processed_msgs = self._process_message_before_send(
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
@@ -1215,7 +1217,7 @@ class ConversableAgent(LLMAgent):
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
 
-        message = self._normalize_message_to_list(message)
+        message = self._normalize_message_to_list(message, role="user")
         processed_msgs = self._process_message_before_send(
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
@@ -1528,7 +1530,9 @@ class ConversableAgent(LLMAgent):
                     msg2send = self.generate_reply(messages=self.chat_messages[recipient], sender=recipient)
                 if msg2send is None:
                     break
-                self.send(self._normalize_message_to_list(msg2send), recipient, request_reply=True, silent=silent)
+                self.send(
+                    self._normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
+                )
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
                     TerminationEvent(
@@ -1541,7 +1545,7 @@ class ConversableAgent(LLMAgent):
                 msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
             else:
                 msg2send = self.generate_init_message(message, **kwargs)
-            self.send(self._normalize_message_to_list(msg2send), recipient, silent=silent)
+            self.send(self._normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
             summary_args,
@@ -1717,7 +1721,7 @@ class ConversableAgent(LLMAgent):
                     if msg2send is None:
                         break
                 await self.a_send(
-                    self._normalize_message_to_list(msg2send), recipient, request_reply=True, silent=silent
+                    self._normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
                 )
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
@@ -1731,7 +1735,7 @@ class ConversableAgent(LLMAgent):
                 msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
             else:
                 msg2send = await self.a_generate_init_message(message, **kwargs)
-            await self.a_send(self._normalize_message_to_list(msg2send), recipient, silent=silent)
+            await self.a_send(self._normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
             summary_args,
