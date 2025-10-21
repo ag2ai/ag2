@@ -11,7 +11,7 @@ from autogen.tools import tool
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "None")
 llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4o-mini", "api_key": OPENAI_API_KEY})
 
 
@@ -135,7 +135,7 @@ def clear_all_agent_handoffs():
         agent.handoffs.clear()
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_1_one_agent_chat():
     """Test Scenario 1: Single Agent Chat"""
     print("\n=== Scenario 1: Single Agent Chat ===")
@@ -151,7 +151,7 @@ def test_scenario_1_one_agent_chat():
     return response
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_2_two_agent_chat():
     """Test Scenario 2: Two Agent Chat"""
     print("\n=== Scenario 2: Two Agent Chat ===")
@@ -167,7 +167,7 @@ def test_scenario_2_two_agent_chat():
     return "Two agent chat completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_3_group_chat_manager():
     """Test Scenario 3: Group Chat with Manager"""
     print("\n=== Scenario 3: Group Chat with Manager ===")
@@ -196,7 +196,7 @@ def test_scenario_3_group_chat_manager():
     return "Group chat with manager completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_4_patterns():
     """Test Scenario 4: Different Patterns"""
     print("\n=== Scenario 4: Testing Different Patterns ===")
@@ -252,7 +252,7 @@ def test_scenario_4_patterns():
     return "Patterns testing completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_5_handoffs_and_tools():
     """Test Scenario 5: Handoffs and Tools Integration"""
     print("\n=== Scenario 5: Handoffs and Tools ===")
@@ -309,7 +309,7 @@ def test_scenario_5_handoffs_and_tools():
     return "Handoffs and tools testing completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_6_mixed_tools_scenario():
     """Test Scenario 6: Mixed Tools in Group Chat"""
     print("\n=== Scenario 6: Mixed Tools Scenario ===")
@@ -336,7 +336,7 @@ def test_scenario_6_mixed_tools_scenario():
     return "Mixed tools scenario completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_7_conditional_handoffs():
     """Test Scenario 7: Advanced Conditional Handoffs"""
     print("\n=== Scenario 7: Advanced Conditional Handoffs ===")
@@ -383,7 +383,7 @@ def test_scenario_7_conditional_handoffs():
     return "Advanced handoffs completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_8_complex_conversation():
     """Test Scenario 8: Complex Multi-turn Conversation"""
     print("\n=== Scenario 8: Complex Multi-turn Conversation ===")
@@ -412,7 +412,7 @@ def test_scenario_8_complex_conversation():
     return "Complex conversation completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_9_nested_chat_target():
     """Test Scenario 9: Nested Chat Target"""
     print("\n=== Scenario 9: Nested Chat Target ===")
@@ -471,7 +471,7 @@ def test_scenario_9_nested_chat_target():
     return "Nested chat completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_10_terminate_target():
     """Test Scenario 10: Terminate Target"""
     print("\n=== Scenario 10: Terminate Target ===")
@@ -513,7 +513,7 @@ def test_scenario_10_terminate_target():
     return "Terminate target completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_11_run_group_chat_round_robin():
     """Test Scenario 11: run_group_chat with Round Robin Pattern"""
     print("\n=== Scenario 11: run_group_chat with Round Robin ===")
@@ -539,7 +539,7 @@ def test_scenario_11_run_group_chat_round_robin():
     return "run_group_chat Round Robin completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_12_run_group_chat_auto_pattern():
     """Test Scenario 12: run_group_chat with Auto Pattern"""
     print("\n=== Scenario 12: run_group_chat with Auto Pattern ===")
@@ -570,7 +570,7 @@ def test_scenario_12_run_group_chat_auto_pattern():
     return "run_group_chat Auto Pattern completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_13_run_single_agent():
     """Test Scenario 13: run method with single agent"""
     print("\n=== Scenario 13: run method with single agent ===")
@@ -586,7 +586,7 @@ def test_scenario_13_run_single_agent():
     return "run single agent completed"
 
 
-@pytest.mark.skipif(os.getenv("OPENAI_API_KEY") == "None", reason="OpenAI API key not found")
+@pytest.mark.skipif(OPENAI_API_KEY == "None", reason="OpenAI API key not found")
 def test_scenario_14_run_two_agents():
     """Test Scenario 14: run method with two agents"""
     print("\n=== Scenario 14: run method with two agents ===")
