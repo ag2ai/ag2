@@ -13,8 +13,10 @@ docs_generate() {
         if [ "$force" = "--force" ]; then
             python3 ./generate_api_references.py --force
         else
-            python ./generate_api_references.py
-        fi # && \
+            python3 ./generate_api_references.py
+        fi
+        # Note: process_notebooks.py render is not needed for the main docs build.
+        # It's only required for mkdocs builds, which is handled separately in docs_build_mkdocs.sh
         # python3 ./process_notebooks.py render
 }
 

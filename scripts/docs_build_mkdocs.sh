@@ -6,5 +6,5 @@ set -x
 if [ "$1" == "--force" ]; then
     cd website/mkdocs; python3 docs.py build --force
 else
-    cd website/mkdocs; python docs.py build
+    cd website/mkdocs; python3 docs.py build
 fi
