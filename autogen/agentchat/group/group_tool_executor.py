@@ -87,6 +87,9 @@ class GroupToolExecutor(ConversableAgent):
         """
         sig = inspect.signature(f)
 
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return f(*args, **kwargs)
+
         # Check if context_variables parameter exists and update it if so
         if __CONTEXT_VARIABLES_PARAM_NAME__ in sig.parameters:
             new_params = []
@@ -100,13 +103,13 @@ class GroupToolExecutor(ConversableAgent):
 
             # Update signature
             new_sig = sig.replace(parameters=new_params)
-            f.__signature__ = new_sig  # type: ignore[attr-defined]
+            wrapper.__signature__ = new_sig  # type: ignore[attr-defined]
 
-        return f
+        return wrapper
 
-    def _change_tool_context_variables_to_depends(
-        self, agent: ConversableAgent, current_tool: Tool, context_variables: ContextVariables
-    ) -> None:
+    def make_tool_copy_with_context_variables(
+        self, current_tool: Tool, context_variables: ContextVariables
+    ) -> Tool | None:
         """Checks for the context_variables parameter in the tool and updates it to use dependency injection."""
         # If the tool has a context_variables parameter, remove the tool and reregister it without the parameter
         if __CONTEXT_VARIABLES_PARAM_NAME__ in current_tool.tool_schema["function"]["parameters"]["properties"]:
@@ -116,16 +119,19 @@ class GroupToolExecutor(ConversableAgent):
             # Remove the Tool from the agent
             name = current_tool._name
             description = current_tool._description
-            agent.remove_tool_for_llm(current_tool)
 
             # Recreate the tool without the context_variables parameter
-            tool_func = self._modify_context_variables_param(current_tool._func, context_variables)
+            tool_func = self._modify_context_variables_param(tool_func, context_variables)
             tool_func = inject_params(tool_func)
-            new_tool = ConversableAgent._create_tool_if_needed(
-                func_or_tool=tool_func, name=name, description=description
-            )
+            return ConversableAgent._create_tool_if_needed(func_or_tool=tool_func, name=name, description=description)
+        return None
 
-            # Re-register with the agent
+    def _change_tool_context_variables_to_depends(
+        self, agent: ConversableAgent, current_tool: Tool, context_variables: ContextVariables
+    ) -> None:
+        """Checks for the context_variables parameter in the tool and updates it to use dependency injection."""
+        if new_tool := self.make_tool_copy_with_context_variables(current_tool, context_variables):
+            agent.remove_tool_for_llm(current_tool)
             agent.register_for_llm()(new_tool)
 
     def register_agents_functions(self, agents: list[ConversableAgent], context_variables: ContextVariables) -> None:
