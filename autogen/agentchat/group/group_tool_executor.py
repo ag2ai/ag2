@@ -7,6 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
+from ...code_utils import content_str
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -33,6 +34,9 @@ class GroupToolExecutor(ConversableAgent):
         # Store the next target from a tool call
         self._group_next_target: TransitionTarget | None = None
 
+        # Track the original agent that initiated the tool call (for safeguards)
+        self._tool_call_originator: str | None = None
+
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
 
@@ -56,6 +60,18 @@ class GroupToolExecutor(ConversableAgent):
     def clear_next_target(self) -> None:
         """Clears the next target to transition to."""
         self._group_next_target = None
+
+    def set_tool_call_originator(self, agent_name: str) -> None:
+        """Sets the original agent that initiated the tool call (for safeguard transparency)."""
+        self._tool_call_originator = agent_name
+
+    def get_tool_call_originator(self) -> str | None:
+        """Gets the original agent that initiated the tool call."""
+        return self._tool_call_originator
+
+    def clear_tool_call_originator(self) -> None:
+        """Clears the tool call originator."""
+        self._tool_call_originator = None
 
     def _modify_context_variables_param(
         self, f: Callable[..., Any], context_variables: ContextVariables
@@ -140,15 +156,22 @@ class GroupToolExecutor(ConversableAgent):
         2. Generates the tool calls reply.
         3. Updates context_variables and next_agent based on the tool call response.
         """
+
         if config is None:
             config = agent  # type: ignore[assignment]
         if messages is None:
             messages = agent._oai_messages[sender]
 
         message = messages[-1]
-        if "tool_calls" in message:
+        # Track the original agent that initiated this tool call (for safeguard transparency)
+        # Use sender.name as fallback when message doesn't have a name field (e.g., for tool_calls messages)
+        agent_name = message.get("name", sender.name if sender else "unknown")
+        self.set_tool_call_originator(agent_name)
+
+        if message.get("tool_calls"):
             tool_call_count = len(message["tool_calls"])
 
+            tool_message = None
             # Loop through tool calls individually (so context can be updated after each function call)
             next_target: TransitionTarget | None = None
             tool_responses_inner = []
@@ -182,11 +205,13 @@ class GroupToolExecutor(ConversableAgent):
                         next_target = content
 
                     # Serialize the content to a string
-                    if content is not None:
-                        tool_response["content"] = str(content)
+                    normalized_content = (
+                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
+                    )
+                    tool_response["content"] = normalized_content
 
                     tool_responses_inner.append(tool_response)
-                    contents.append(str(tool_response["content"]))
+                    contents.append(normalized_content)
 
             self._group_next_target = next_target  # type: ignore[attr-defined]
 
