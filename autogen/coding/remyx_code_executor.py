@@ -280,61 +280,58 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
         self,
         goal: str | None = None,
         interactive: bool = True,
-        llm_model: str = "gpt-4o-mini",
+        llm_model: str = "gpt-4o",
+        llm_config: dict[str, Any] | None = None,
         max_turns: int | None = None,
         verbose: bool = True,
     ) -> Any:
         """
         Explore this research paper interactively with AI agents.
-
         This is the recommended way to understand and experiment with research code.
         Creates a 2-agent system where one agent proposes experiments and another
         executes them in the paper's Docker environment.
-
         Args:
             goal: Optional custom exploration goal. If None, uses a default exploration plan.
             interactive: If True, pauses for human guidance at each step. If False, runs automatically.
-            llm_model: The LLM model to use for the exploring agent. Default is "gpt-4o-mini".
+            llm_model: The LLM model to use for the exploring agent. Default is "gpt-4o". Ignored if llm_config provided.
+            llm_config: Full LLM config dict. If None, creates default OpenAI config with llm_model.
             max_turns: Maximum number of conversation turns. If None, continues until termination.
             verbose: If True, prints session header and summary. If False, runs quietly.
-
         Returns:
             The chat result from the exploration session.
-
         Example:
             >>> # Interactive exploration (recommended for learning)
-            >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
+            >>> executor = RemyxCodeExecutor(arxiv_id="2508.06434v1")
             >>> result = executor.explore(
             ...     goal="Help me understand the main innovation from this paper", interactive=True
             ... )
-
             >>> # Automated exploration (good for batch experiments)
             >>> result = executor.explore(
             ...     goal="Run all examples and benchmarks",
             ...     interactive=False,
             ...     verbose=False,  # Quiet mode
             ... )
+            >>> # Use different LLM provider
+            >>> result = executor.explore(
+            ...     llm_config={"model": "gemini-2.0-flash-exp", "api_key": os.getenv("GOOGLE_API_KEY"), "api_type": "google"}
+            ... )
         """
         from autogen import ConversableAgent, LLMConfig
 
         # Default exploration goal
         default_goal = """Perform an interactive exploration of this research paper:
-
 **Phase 1: Understanding** (2-3 turns)
 1. Examine the directory structure
 2. Read README and identify key files
 3. Understand the paper's implementation
-
 **Phase 2: Experimentation** (3-5 turns)
 4. Run a minimal working example
 5. Experiment with different parameters
 6. Generate visualizations if applicable
-
 **Phase 3: Analysis** (2-3 turns)
 7. Explain key implementation details
 8. Answer any questions about the code
 9. Suggest possible modifications/experiments
-
 Work step-by-step. Wait for human guidance between phases.
 Type TERMINATE when exploration is complete."""
 
@@ -343,10 +340,8 @@ Type TERMINATE when exploration is complete."""
 
         # Create system message for writer agent
         system_message = f"""{paper_context}
-
 **Your Mission:**
 {goal or default_goal}
-
 **Important Guidelines:**
 - Repository is at /app with all dependencies installed
 - Execute ONE command at a time - don't rush
@@ -356,7 +351,6 @@ Type TERMINATE when exploration is complete."""
 - Wait for human feedback before major actions (if interactive mode)
 - Focus on lightweight demos unless instructed otherwise
 - You can install additional packages if needed
-
 **What You Can Do:**
 ✓ Read and analyze code
 ✓ Execute Python/bash commands
@@ -365,7 +359,6 @@ Type TERMINATE when exploration is complete."""
 ✓ Install additional dependencies
 ✓ Answer questions about implementation
 ✓ Suggest improvements or experiments
-
 Begin by exploring the repository structure to understand what's available."""
 
         # Create executor agent (no LLM)
@@ -377,14 +370,18 @@ Begin by exploring the repository structure to understand what's available."""
             is_termination_msg=lambda x: "TERMINATE" in x.get("content", "").upper(),
         )
 
+        # Use provided config or create default
+        if llm_config is None:
+            llm_config = {
+                "model": llm_model,
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            }
+
         # Create writer agent (has LLM)
         writer_agent = ConversableAgent(
             "research_explorer",
             system_message=system_message,
-            llm_config=LLMConfig(
-                model=llm_model,
-                api_key=os.getenv("OPENAI_API_KEY"),
-            ),
+            llm_config=llm_config,
             code_execution_config=False,
             max_consecutive_auto_reply=50,
             human_input_mode="ALWAYS" if interactive else "NEVER",
@@ -440,22 +437,20 @@ Begin by exploring the repository structure to understand what's available."""
         self,
         goal: str | None = None,
         llm_model: str = "gpt-4o-mini",
+        llm_config: dict[str, Any] | None = None,
         human_input_mode: Literal["ALWAYS", "NEVER", "TERMINATE"] = "ALWAYS",
     ) -> tuple[Any, Any]:
         """
         Create the 2-agent system without starting exploration.
-
         Use this if you want more control over the exploration process.
         Most users should use the simpler `explore()` method instead.
-
         Args:
             goal: Optional custom exploration goal.
-            llm_model: The LLM model to use.
+            llm_model: The LLM model to use. Ignored if llm_config provided.
+            llm_config: Full LLM config dict. If None, creates default OpenAI config with llm_model.
             human_input_mode: "ALWAYS" for interactive, "NEVER" for automated.
-
         Returns:
             Tuple of (executor_agent, writer_agent)
-
         Example:
             >>> executor = RemyxCodeExecutor(arxiv_id="2010.11929v2")
             >>> executor_agent, writer_agent = executor.create_agents()
@@ -473,17 +468,14 @@ Work step-by-step, explain your actions, and wait for guidance."""
 
         # Create system message
         system_message = f"""{paper_context}
-
 **Your Mission:**
 {goal or default_goal}
-
 **Guidelines:**
 - Repository is at /app with all dependencies installed
 - Execute ONE command at a time
 - Use absolute paths starting with /app
 - Be conversational and explain your actions
 - Debug step-by-step if errors occur
-
 Begin by exploring the repository structure."""
 
         # Create executor agent
@@ -495,14 +487,18 @@ Begin by exploring the repository structure."""
             is_termination_msg=lambda x: "TERMINATE" in x.get("content", "").upper(),
         )
 
+        # Use provided config or create default
+        if llm_config is None:
+            llm_config = {
+                "model": llm_model,
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            }
+
         # Create writer agent
         writer_agent = ConversableAgent(
             "research_explorer",
             system_message=system_message,
-            llm_config=LLMConfig(
-                model=llm_model,
-                api_key=os.getenv("OPENAI_API_KEY"),
-            ),
+            llm_config=llm_config,
             code_execution_config=False,
             max_consecutive_auto_reply=50,
             human_input_mode=human_input_mode,

@@ -49,14 +49,15 @@ from autogen import UserProxyAgent
 proxy = UserProxyAgent(name="proxy", code_execution_config={"executor": "ipython-embedded"})
 ```
 
-## Remyx Research Paper Code Executor
+## Remyx Code Executor
 
-To use [Remyx](https://docs.remyx.ai/resources/explore)'s pre-built Docker environments for research papers, install AG2 with the `remyx` option:
+To use [Remyx](https://docs.remyx.ai/resources/explore)'s Docker images for exploring novel codebases, install AG2 with the `remyx` option:
 ```bash
 pip install "ag2[remyx]"
 ```
 
-Remyx provides instant access to reproducible environments for 1000+ ArXiv papers with all dependencies pre-installed and tested. Get your API key from remyx.ai.
+Remyx hosts Docker images that reproduce codebases from 1000+ ArXiv papers (expanding to GitHub and HuggingFace) with dependencies resolved and environments tested. See the [Remyx docs](https://docs.remyx.ai/cli) to get your API key.
+
 To use the Remyx executor:
 ```python
 from autogen.coding import RemyxCodeExecutor
@@ -89,7 +90,7 @@ For AI-guided exploration of research code:
 executor.explore(goal="Understand the main finding", interactive=True)
 
 # Automated batch experiments
-executor.explore(goal="Run the quickstart example with my model", interactive=False)
+executor.explore(goal="Run the quickstart example", interactive=False)
 ```
 Example notebook: [Remyx Executor](/docs/use-cases/notebooks/notebooks/agentchat_remyx_executor)
 

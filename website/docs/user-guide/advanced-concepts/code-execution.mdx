@@ -404,18 +404,18 @@ temp_dir.cleanup()
 executor.stop()
 ```
 
-## Research Paper Execution with Remyx
+## Agentic Code Exploration with Remyx
 
-For executing code from research papers, AG2 supports [Remyx's](https://remyx.ai) pre-built Docker environments through the [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor). This executor provides instant access to reproducible environments for 1000+ ArXiv papers with all dependencies pre-installed and tested.
+For exploring and executing novel codebases, AG2 supports [Remyx's](https://remyx.ai) Docker images through the [`RemyxCodeExecutor`](/docs/api-reference/autogen/coding/RemyxCodeExecutor). This executor provides instant access to Remyx-built images that reproduce codebases from 7000+ ArXiv papers plus other resources, with dependencies resolved and environments reproduced.
 
-### Key Benefits of Remyx Execution
+### Key Benefits
 
-- **📄 Research-Focused**: Pre-built environments specifically for ArXiv papers
-- **⚡ Zero Setup**: No dependency resolution or environment configuration
-- **🔍 Searchable**: Discover papers with executable Docker environments
-- **🤖 AI-Guided**: Agents can explore and explain research code
-- **✅ Reproducible**: Tested, version-locked environments
-- **🐳 Docker-Based**: Isolated execution with hardware compatibility
+- **🚀 Instant Execution**: Pull Remyx-hosted Docker images and run immediately
+- **🔍 Searchable Catalog**: Discover implementations with ready-to-use environments
+- **🤖 AI-Guided Exploration**: Agents navigate repos, explain code, and run experiments
+- **✅ Reproducible**: Codebase replications with version-controlled dependencies
+- **🐳 Isolated Containers**: Safe experimentation without environment conflicts
+- **⚡ Skip Setup**: Zero dependency resolution or configuration required
 
 ### Prerequisites
 
@@ -436,7 +436,11 @@ from autogen.coding import RemyxCodeExecutor
 from remyxai.client.search import SearchClient
 
 # Search for papers with Docker environments
-papers = SearchClient().search("diffusion models", has_docker=True)
+papers = SearchClient().search(
+    query="data synthesis techniques",
+    has_docker=True,
+    max_results=10
+)
 paper = papers[0]
 
 # Create Remyx executor for the paper
@@ -445,15 +449,8 @@ remyx_executor = RemyxCodeExecutor(
     timeout=300,  # Timeout in seconds
 )
 
-# Create an agent with Remyx executor
-code_executor_agent = ConversableAgent(
-    "code_executor_agent",
-    llm_config=False,  # Turn off LLM for this agent
-    code_execution_config={
-        "executor": remyx_executor
-    },
-    human_input_mode="NEVER",
-)
+# Quick start - AI explores with defaults
+remyx_executor.explore()
 ```
 
 ### Configuration Options
@@ -478,18 +475,20 @@ remyx_executor.explore(
 
 # Batch processing mode
 remyx_executor.explore(
-    goal="Run a test with my model remyxai/SpaceThinker-Qwen2.5VL-3B",
+    goal="Run a quick test",
     interactive=False  # Automated exploration
 )
 ```
 ### Use Cases
-Remyx execution is ideal for:
 
-🔬 Research Exploration: Quickly test and understand paper implementations
-📊 Reproducibility: Validate research results with original environments
-🎓 Learning: Interactive exploration of research codebases with AI guidance
-⚡ Rapid Prototyping: Build on existing research without environment setup
-🔄 Systematic Testing: Batch experiments across multiple papers
+RemyxCodeExecutor accelerates experimentation and integration:
+
+🔬 **Technique Exploration**: Test novel implementations without setup overhead
+⚡ **Rapid Prototyping**: Experiment with cutting-edge methods in minutes
+🎓 **Learning**: AI-guided exploration of complex codebases
+🔄 **Integration**: Extract and adapt techniques for your projects
+📊 **Validation**: Reproduce results in original environments
+🧪 **Batch Experimentation**: Run experiments across multiple implementations
 
 ### Paper Discovery
 Use Remyx's search API to find papers with Docker environments:
@@ -515,15 +514,17 @@ for paper in papers:
 ```
 
 ### How It Works
-`RemyxCodeExecutor` solves the reproducibility problem for research code:
 
-* Search: Find papers with pre-built Docker environments
-* Instantiate: Create executor with paper's ArXiv ID
-* Execute: Run code in isolated, pre-configured environment
-* Explore: Use AI agents to understand and modify the code
+`RemyxCodeExecutor` provides instant access to working codebases:
 
-All dependencies, CUDA versions, and system libraries are pre-installed and tested, eliminating hours of environment debugging.
-For more examples and interactive exploration, see the [Remyx Executor Notebook](notebook/agentchat_remyx_executor.ipynb).
+* **Search**: Discover Remyx-built Docker images for arXiv papers
+* **Instantiate**: Create executor with paper's ArXiv ID or image name
+* **Execute**: Run code in isolated containers with dependencies resolved
+* **Explore**: Guide AI agents to navigate, explain, and modify code
+
+Remyx-hosted images replicate codebases with all dependencies, CUDA versions, and system libraries pre-installed, eliminating hours of environment setup and manual exploration.
+
+For interactive examples, see the [Remyx Executor Notebook](notebook/agentchat_remyx_executor.ipynb).
 
 ## Serverless Execution with YepCode
 
