@@ -1,15 +1,14 @@
 .docusaurus/
 node_modules/
+
 # Project
-/.vs
-.vscode
+.vs/
+.vscode/
+.idea/
+.DS_Store
 
 # Log files
 *.log
-
-# Python virtualenv
-.venv*
-.env*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -76,7 +75,7 @@ db.sqlite3-journal
 
 # Flask stuff:
 instance/
-.webassets-cache
+.webassets-cache/
 
 # Scrapy stuff:
 .scrapy
@@ -125,6 +124,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.venv*
+.env*
 
 # Spyder project settings
 .spyderproject
@@ -141,6 +142,9 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# ruff
+.ruff_cache/
+
 # Pyre type checker
 .pyre/
 
@@ -150,11 +154,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-logs
-
-.idea/*
-.DS_Store
-.cursor/
+logs/
 
 output/
 *.pkl
@@ -169,7 +169,7 @@ wolfram.txt
 
 # DB on disk for Teachability
 tmp/
-test/my_tmp/*
+test/my_tmp/
 
 # Storage for the AgentEval output
 test/test_files/agenteval-in-out/out/
@@ -180,17 +180,12 @@ local_cache/
 
 # Files created by tests
 *tmp_code_*
-test/agentchat/test_agent_scripts/*
+test/agentchat/test_agent_scripts/
 
 # test cache
 .cache_test
 .db
 local_cache
-
-
-notebook/result.png
-
-notebook/coding
 
 chroma
 notebook/reasoning_tree.json
@@ -199,9 +194,13 @@ client_secret*.json
 *credentials.json
 notebook/*_server.py
 
+notebook/result.png
+notebook/coding/
 
-notebook/mcp/wikipedia_articles
-notebook/mcp/arxiv_papers
+notebook/mcp/wikipedia_articles/
+notebook/mcp/arxiv_papers/
 
+remote-examples
 
 *CLAUDE.md:
+.cursor/
