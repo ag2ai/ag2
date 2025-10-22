@@ -639,8 +639,11 @@ class OpenAIClient:
                     warnings.warn(
                         f"The {params.get('model')} model does not support streaming. The stream will be set to False."
                     )
-                if params.get("tools", False):
-                    raise ModelToolNotSupportedError(params.get("model"))
+                if "tools" in params:
+                    if params["tools"]:  # If tools exist, raise as unsupported
+                        raise ModelToolNotSupportedError(params.get("model"))
+                    else:
+                        params.pop("tools")  # Remove empty tools list
                 self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
