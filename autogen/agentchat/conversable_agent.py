@@ -79,7 +79,7 @@ from .chat import (
 from .group.context_variables import ContextVariables
 from .group.guardrails import Guardrail, GuardrailResult
 from .group.handoffs import Handoffs
-from .utils import consolidate_chat_info, gather_usage_summary
+from .utils import consolidate_chat_info, gather_usage_summary, normalize_message_to_dict
 
 if TYPE_CHECKING:
     from .group.on_condition import OnCondition
@@ -1016,12 +1016,7 @@ class ConversableAgent(LLMAgent):
 
         The message can be a string or a dictionary. The string will be put in the "content" field of the new dictionary.
         """
-        if isinstance(message, str):
-            return {"content": message}
-        elif isinstance(message, dict):
-            return message
-        else:
-            return dict(message)
+        return normalize_message_to_dict(message)
 
     @staticmethod
     def _normalize_name(name):
