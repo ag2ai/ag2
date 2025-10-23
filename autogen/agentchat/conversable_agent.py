@@ -1131,7 +1131,7 @@ class ConversableAgent(LLMAgent):
 
     def send(
         self,
-        message: list[dict[str, Any]],
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
@@ -1199,7 +1199,7 @@ class ConversableAgent(LLMAgent):
 
     async def a_send(
         self,
-        message: list[dict[str, Any]],
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
