@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, overload, runtime_checkable
 
 from ..doc_utils import export_module
 
@@ -38,9 +38,25 @@ class Agent(Protocol):
         """
         ...
 
+    @overload
     def send(
         self,
         message: list[dict[str, Any]],
+        recipient: "Agent",
+        request_reply: bool | None = None,
+    ) -> None: ...
+
+    @overload
+    def send(
+        self,
+        message: dict[str, Any] | str,
+        recipient: "Agent",
+        request_reply: bool | None = None,
+    ) -> None: ...
+
+    def send(
+        self,
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
@@ -55,9 +71,25 @@ class Agent(Protocol):
         """
         ...
 
+    @overload
     async def a_send(
         self,
         message: list[dict[str, Any]],
+        recipient: "Agent",
+        request_reply: bool | None = None,
+    ) -> None: ...
+
+    @overload
+    async def a_send(
+        self,
+        message: dict[str, Any] | str,
+        recipient: "Agent",
+        request_reply: bool | None = None,
+    ) -> None: ...
+
+    async def a_send(
+        self,
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
