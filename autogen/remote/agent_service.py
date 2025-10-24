@@ -55,7 +55,7 @@ class AgentService(RemoteService):
                     tools=state.client_tools,
                 )
 
-            should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
+            should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")  # type: ignore[arg-type]
             if out_message:
                 local_history.append(out_message)
             if not should_continue:

@@ -103,34 +103,70 @@ class Agent(Protocol):
         """
         ...
 
+    @overload
+    def receive(
+        self,
+        message: dict[str, Any] | str,
+        sender: "Agent",
+        request_reply: bool | None = None,
+        silent: bool | None = False,
+    ) -> None: ...
+
+    @overload
     def receive(
         self,
         message: list[dict[str, Any]],
         sender: "Agent",
         request_reply: bool | None = None,
         silent: bool | None = False,
+    ) -> None: ...
+
+    def receive(
+        self,
+        message: list[dict[str, Any]] | dict[str, Any] | str,
+        sender: "Agent",
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
-        """Receive a list[message] from another agent.
+        """Receive a list[message], dict[str, Any], or str from another agent.
 
         Args:
-            message (list[messages]): the list[messages] received. If a list of messages, it should be
+            message (list[messages], dict[str, Any], or str): the message received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.
             silent (bool): whether to print the message received.
         """
 
+    @overload
+    async def a_receive(
+        self,
+        message: dict[str, Any] | str,
+        sender: "Agent",
+        request_reply: bool | None = None,
+        silent: bool | None = False,
+    ) -> None: ...
+
+    @overload
     async def a_receive(
         self,
         message: list[dict[str, Any]],
         sender: "Agent",
         request_reply: bool | None = None,
         silent: bool | None = False,
+    ) -> None: ...
+
+    async def a_receive(
+        self,
+        message: list[dict[str, Any]] | dict[str, Any] | str,
+        sender: "Agent",
+        request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
-        """(Async) Receive a list[message] from another agent.
+        """(Async) Receive a list[message], dict[str, Any], or str from another agent.
 
         Args:
-            message (list[messages]): the list[messages] received. If a list of messages, it should be
+            message (list[messages], dict[str, Any], or str): the message received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.

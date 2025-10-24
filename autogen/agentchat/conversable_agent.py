@@ -1136,7 +1136,7 @@ class ConversableAgent(LLMAgent):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """Send a message to another agent.
+        """Send a list[message], dict[str, Any], or str to another agent.
 
         Args:
             message (list[dict[str, Any]], str, or dict): message to be sent.
@@ -1189,7 +1189,10 @@ class ConversableAgent(LLMAgent):
             return  # Allow empty list as no-op
 
         # Validate all messages and raise error if any are invalid
-        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
+        if not all(
+            self._append_oai_message(message=msg, role="assistant", conversation_id=recipient, name=self.name)
+            for msg in processed_msgs
+        ):
             raise ValueError(
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
@@ -1204,7 +1207,7 @@ class ConversableAgent(LLMAgent):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """(async) Send a message to another agent.
+        """(async) Send a list[message], dict[str, Any], or str to another agent.
 
             Args:
             message (list[dict[str, Any]], str, or dict): message to be sent.
@@ -1256,7 +1259,10 @@ class ConversableAgent(LLMAgent):
             return  # Allow empty list as no-op
 
         # Validate all messages and raise error if any are invalid
-        if not all(self._append_oai_message(msg, "assistant", recipient, is_sending=True) for msg in processed_msgs):
+        if not all(
+            self._append_oai_message(message=msg, role="assistant", conversation_id=recipient, name=self.name)
+            for msg in processed_msgs
+        ):
             raise ValueError(
                 "Message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
             )
@@ -1290,18 +1296,18 @@ class ConversableAgent(LLMAgent):
 
     def receive(
         self,
-        message: list[dict[str, Any]],
+        message: list[dict[str, Any]] | dict[str, Any] | str,
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """Receive a list[messages] from another agent.
+        """Receive a list[messages], dict[str, Any], or str from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (list[messages]): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
+            message (list[messages], dict[str, Any], or str): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1321,7 +1327,8 @@ class ConversableAgent(LLMAgent):
         # Handle list of messages
         if isinstance(message, list):
             message = [self._process_received_message(msg, sender, silent) for msg in message]
-
+        else:
+            message = [self._process_received_message(message, sender, silent)]
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
@@ -1335,12 +1342,12 @@ class ConversableAgent(LLMAgent):
 
     async def a_receive(
         self,
-        message: list[dict[str, Any]],
+        message: list[dict[str, Any]] | dict[str, Any] | str,
         sender: Agent,
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """(async) Receive a list[message] from another agent.
+        """(async) Receive a list[message], dict[str, Any], or str from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
@@ -1366,6 +1373,8 @@ class ConversableAgent(LLMAgent):
         # Handle list of messages
         if isinstance(message, list):
             message = [self._process_received_message(msg, sender, silent) for msg in message]
+        else:
+            message = [self._process_received_message(message, sender, silent)]
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
