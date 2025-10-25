@@ -10,8 +10,9 @@ from a2a.utils import new_agent_parts_message, new_artifact
 
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
-CLIENT_TOOLS_KEY = "ag2_client_tools"
-CONTEXT_KEY = "ag2_context_update"
+AG2_METADATA_KEY_PREFIX = "ag2_"
+CLIENT_TOOLS_KEY = f"{AG2_METADATA_KEY_PREFIX}client_tools"
+CONTEXT_KEY = f"{AG2_METADATA_KEY_PREFIX}context_update"
 
 
 def request_message_to_a2a(
