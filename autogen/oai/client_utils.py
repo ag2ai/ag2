@@ -132,10 +132,8 @@ def merge_config_with_tools(config: dict[str, Any], client_config: dict[str, Any
     config_tools = config.get("tools", [])
     client_tools = client_config.get("tools", [])
 
-    if config_tools or client_tools:
-        # Don't add tools if functions parameter is present (deprecated API)
-        if "functions" not in full_config:
-            full_config["tools"] = config_tools + client_tools
+    if config_tools or client_tools and "functions" not in full_config:
+        full_config["tools"] = config_tools + client_tools
 
     return full_config
 

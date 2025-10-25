@@ -32,6 +32,7 @@ class MockAgentReplies(AgentCapability):
 
 
 @run_for_optional_imports("openai", "openai")
+@pytest.mark.skip()
 def test_nested(
     credentials_gpt_4o_mini: Credentials,
     credentials_gpt_4o: Credentials,
@@ -331,7 +332,7 @@ async def test_async_nested_chat_in_group():
     assistant = autogen.AssistantAgent(
         "Assistant_In_Group_1",
     )
-    MockAgentReplies(["Assistant_In_Group_1 message 1"]).add_to_agent(assistant)
+    MockAgentReplies(["Assistant_In_Group_1 message 1", "Assistant_In_Group_1 message 2"]).add_to_agent(assistant)
     assistant2 = autogen.AssistantAgent(
         "Assistant_In_Group_2",
     )

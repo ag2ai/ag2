@@ -34,3 +34,100 @@ Inference parameter tuning can be done via [`flaml.tune`](https://microsoft.gith
 - `seed` in autogen is renamed into `cache_seed` to accommodate the newly added `seed` param in openai chat completion api. `use_cache` is removed as a kwarg in `OpenAIWrapper.create()` for being automatically decided by `cache_seed`: int | None. The difference between autogen's `cache_seed` and openai's `seed` is that:
   - autogen uses local disk cache to guarantee the exactly same output is produced for the same input and when cache is hit, no openai api call will be made.
   - openai's `seed` is a best-effort deterministic sampling with no guarantee of determinism. When using openai's `seed` with `cache_seed` set to None, even for the same input, an openai api call will be made and there is no guarantee for getting exactly the same output.
+
+
+## Message Format Standardization (PR #2081)
+
+### Overview
+The agent messaging API has been standardized to use a consistent `list[dict[str, Any]]` format internally, while maintaining full backward compatibility with existing code.
+
+### What Changed
+- `send()` and `receive()` methods now consistently work with lists of message dictionaries
+- All message formats (string, dict, list) are automatically normalized to the standard format
+- Hooks now receive normalized dict messages (never strings)
+
+### Backward Compatibility
+**No changes required to your existing code!** All previous message formats continue to work:
+
+```python
+# All of these still work
+agent.send("Hello", recipient)                          # String
+agent.send({"content": "Hello"}, recipient)            # Single dict
+agent.send([{"content": "Hello"}], recipient)          # List of dicts
+```
+
+### Best Practices for New Code
+
+#### Use Explicit List Format for Multiple Messages
+When sending multiple messages at once, use the list format:
+
+```python
+# ✅ Recommended: Batch multiple messages
+agent.send([
+    {"content": "First message", "role": "user"},
+    {"content": "Second message", "role": "user"}
+], recipient)
+```
+
+#### Single Messages: Use What's Most Readable
+For single messages, all formats are equally efficient:
+
+```python
+# ✅ All equally good for single messages
+agent.send("Simple text message", recipient)
+agent.send({"content": "Message with metadata", "name": "tool_result"}, recipient)
+agent.send([{"content": "Explicit list format"}], recipient)
+```
+
+#### Performance Considerations
+- **Single messages**: All formats have similar performance (automatic normalization is fast)
+- **Multiple messages**: Use list format to send them in one call rather than looping
+- **Hooks**: Called once per message in the list, so batching reduces hook overhead
+
+```python
+# ❌ Less efficient: Multiple sends
+for msg in messages:
+    agent.send(msg, recipient)
+
+# ✅ More efficient: Single batch send
+agent.send(messages, recipient)
+```
+
+### Hook Authors: Important Changes
+
+If you've written custom hooks, note these changes:
+
+#### Hook Input Format
+Hooks registered for `"process_message_before_send"` now **always receive dict messages**:
+
+```python
+def my_hook(sender, message, recipient, silent):
+    # message is ALWAYS a dict (never a string)
+    assert isinstance(message, dict)
+
+    # Modify the message
+    message["custom_field"] = "value"
+
+    # MUST return a dict
+    return message  # ✅ Correct
+    # return None   # ❌ Raises TypeError
+    # return "text" # ❌ Raises TypeError
+```
+
+#### Hook Return Contract
+- **Must return**: `dict[str, Any]`
+- **Cannot return**: `None`, `str`, or `list`
+- **Validation**: The framework validates return types and raises `TypeError` if violated
+
+#### Hook Processing of Lists
+When an agent sends a list of messages, your hook is called **once per message**:
+
+```python
+# If agent sends 3 messages
+agent.send([msg1, msg2, msg3], recipient)
+
+# Your hook is called 3 times:
+# 1. my_hook(..., message=msg1, ...)
+# 2. my_hook(..., message=msg2, ...)
+# 3. my_hook(..., message=msg3, ...)
+```
