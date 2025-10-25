@@ -1147,8 +1147,8 @@ class ConversableAgent(LLMAgent):
         Args:
             message (list[dict[str, Any]], str, or dict): message to be sent.
                 - If a list of dicts, should be a list of messages following OpenAI's ChatCompletion schema.
-                - If a str, will be automatically converted to [{"content": str, "role": "assistant"}].
-                - If a dict, will be automatically converted to [dict].
+                - If a str, will be automatically converted to list[message].
+                - If a dict, will be automatically converted to list[message].
 
                 Each message dict can contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
@@ -1224,8 +1224,8 @@ class ConversableAgent(LLMAgent):
             Args:
             message (list[dict[str, Any]], str, or dict): message to be sent.
                 - If a list of dicts, should be a list of messages following OpenAI's ChatCompletion schema.
-                - If a str, will be automatically converted to [{"content": str, "role": "assistant"}].
-                - If a dict, will be automatically converted to [dict].
+                - If a str, will be automatically converted to list[message].
+                - If a dict, will be automatically converted to list[message].
 
                 Each message dict can contain the following fields:
                 - content (str or List): Required, the content of the message. (Can be None)
@@ -2513,6 +2513,13 @@ class ConversableAgent(LLMAgent):
         config: Any | None = None,
     ) -> tuple[bool, dict[str, Any] | None]:
         """Generate a reply using function call.
+        Args:
+            messages: List of message dictionaries. If None or empty, returns (False, None).
+            sender: The agent that sent the message.
+            config: Configuration for the function call.
+
+        Returns:
+            tuple: (success: bool, response: dict | None)
 
         "function_call" replaced by "tool_calls" as of [OpenAI API v1.1.0](https://github.com/openai/openai-python/releases/tag/v1.1.0)
         See https://platform.openai.com/docs/api-reference/chat/create#chat-create-functions
@@ -3960,8 +3967,20 @@ class ConversableAgent(LLMAgent):
 
         Available hookable methods:
             - "process_message_before_send": Called before sending each message.
-              Signature: hook(sender: Agent, message: dict[str, Any], recipient: Agent, silent: bool) -> dict[str, Any]
-              Note: Receives normalized dict format, not str.
+            Signature: hook(sender: Agent, message: dict[str, Any], recipient: Agent, silent: bool) -> dict[str, Any]
+
+            Important contract requirements:
+            - Input: Receives a normalized message dictionary (never a string, even if send() was called with a string)
+            - Return: MUST return a dict[str, Any]. Returning None, str, or list[dict[str, Any]] will raise TypeError
+            - Multiple messages: If send() is called with a list, the hook is called once per message
+            - Validation: Return values are validated to ensure type safety
+
+            Example:
+                def my_hook(sender, message, recipient, silent):
+                    # message is always a dict
+                    message["timestamp"] = time.time()
+                    return message  # Must return dict
+
             - "process_last_received_message": Called to process the last received message.
             - "process_all_messages_before_reply": Called to process all messages before generating a reply.
             - "update_agent_state": Called to update agent state before replying.
@@ -4415,14 +4434,32 @@ def normilize_message_to_oai(
     message: dict[str, Any] | str,
     name: str,
     role: str = "assistant",
+    preserve_custom_fields: bool = True,
 ) -> tuple[bool, dict[str, Any]]:
+    """normalize a message to an oai message.
+
+    Args:
+        message: the message to normalize.
+        name: the name of the message author.
+        role: the role of the message.
+        preserve_custom_fields: whether to preserve custom fields. example: tool_calls, tool_responses, tool_call_id, name, context, etc.
+
+    Returns:
+        A tuple containing a boolean indicating whether the message is valid and the normalized oai message.
+    """
     message = message_to_dict(message)
     # create oai message to be appended to the oai conversation that can be passed to oai directly.
-    oai_message = {
-        k: message[k]
-        for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
-        if k in message and message[k] is not None
-    }
+
+    if preserve_custom_fields:
+        # Preserve all fields for local storage (hooks can add metadata)
+        oai_message = message.copy()
+    else:
+        # Strict whitelist for remote/serialization contexts
+        oai_message = {
+            k: message[k]
+            for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
+            if k in message and message[k] is not None
+        }
 
     if tools := message.get("tool_calls"):  # check for [], None and missed key
         oai_message["tool_calls"] = tools

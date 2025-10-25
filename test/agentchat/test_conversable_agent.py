@@ -2436,6 +2436,392 @@ def test_process_message_before_send_with_empty_list(mock_credentials: Credentia
     assert len(processed_messages) == 0
 
 
+# ============================================================================
+# Test 1: Hook Behavior with List Messages
+# ============================================================================
+
+
+def test_hook_processes_multiple_messages():
+    """Test that hooks receive and can modify each message in a list"""
+    # Track how many times the hook is called
+    hook_calls = []
+
+    def tracking_hook(sender, message, recipient, silent):
+        # Verify message is always a dict
+        assert isinstance(message, dict), f"Hook received non-dict: {type(message)}"
+
+        # Track this call
+        hook_calls.append({
+            "sender": sender.name,
+            "content": message.get("content"),
+            "recipient": recipient.name,
+        })
+
+        # Modify the message
+        message["modified"] = True
+        message["hook_processed"] = len(hook_calls)
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", tracking_hook)
+
+    # Send multiple messages at once
+    messages = [
+        {"content": "First message", "role": "user"},
+        {"content": "Second message", "role": "user"},
+        {"content": "Third message", "role": "user"},
+    ]
+    agent1.send(messages, agent2)
+
+    # Verify hook was called exactly 3 times (once per message)
+    assert len(hook_calls) == 3, f"Expected 3 hook calls, got {len(hook_calls)}"
+
+    # Verify each call had correct content
+    assert hook_calls[0]["content"] == "First message"
+    assert hook_calls[1]["content"] == "Second message"
+    assert hook_calls[2]["content"] == "Third message"
+
+    # Verify all messages were modified
+    received_messages = agent2.chat_messages[agent1]
+    assert len(received_messages) == 3
+    for i, msg in enumerate(received_messages):
+        assert msg.get("modified") is True, f"Message {i} was not modified"
+        assert msg.get("hook_processed") == i + 1, f"Message {i} has wrong processing order"
+
+
+def test_hook_receives_dict_for_string_input():
+    """Test that hooks receive normalized dict even when string is sent"""
+    received_messages = []
+
+    def capturing_hook(sender, message, recipient, silent):
+        received_messages.append(message)
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", capturing_hook)
+
+    # Send a string message
+    agent1.send("Hello world", agent2)
+
+    # Hook should have received a dict, not a string
+    assert len(received_messages) == 1
+    assert isinstance(received_messages[0], dict)
+    assert received_messages[0]["content"] == "Hello world"
+    assert received_messages[0]["role"] == "user"
+
+
+def test_multiple_hooks_process_list_messages():
+    """Test that multiple hooks all process each message in a list"""
+    hook1_calls = []
+    hook2_calls = []
+
+    def hook1(sender, message, recipient, silent):
+        hook1_calls.append(message.get("content"))
+        message["hook1_processed"] = True
+        return message
+
+    def hook2(sender, message, recipient, silent):
+        # Verify hook1 already processed it
+        assert message.get("hook1_processed") is True
+        hook2_calls.append(message.get("content"))
+        message["hook2_processed"] = True
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", hook1)
+    agent1.register_hook("process_message_before_send", hook2)
+
+    messages = [
+        {"content": "Message 1"},
+        {"content": "Message 2"},
+    ]
+    agent1.send(messages, agent2)
+
+    # Both hooks should have been called for both messages
+    assert hook1_calls == ["Message 1", "Message 2"]
+    assert hook2_calls == ["Message 1", "Message 2"]
+
+    # Verify both hooks processed all messages
+    received = agent2.chat_messages[agent1]
+    for msg in received:
+        assert msg.get("hook1_processed") is True
+        assert msg.get("hook2_processed") is True
+
+
+def test_hook_return_validation_with_list():
+    """Test that hook return value validation works for list messages"""
+
+    def bad_hook_returns_none(sender, message, recipient, silent):
+        return None  # Invalid!
+
+    def bad_hook_returns_string(sender, message, recipient, silent):
+        return "invalid"  # Invalid!
+
+    def bad_hook_returns_list(sender, message, recipient, silent):
+        return [message]  # Invalid! Should return dict, not list
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Test None return
+    agent1.register_hook("process_message_before_send", bad_hook_returns_none)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+    # Clear hooks and test string return
+    agent1.hook_lists["process_message_before_send"].clear()
+    agent1.register_hook("process_message_before_send", bad_hook_returns_string)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+    # Clear hooks and test list return
+    agent1.hook_lists["process_message_before_send"].clear()
+    agent1.register_hook("process_message_before_send", bad_hook_returns_list)
+    with pytest.raises(TypeError, match="Hook must return a dict"):
+        agent1.send([{"content": "test"}], agent2)
+
+
+# ============================================================================
+# Test 2: Empty Message Edge Cases
+# ============================================================================
+
+
+def test_send_empty_list_shows_warning():
+    """Test that sending an empty message list triggers a warning"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Send empty list should trigger warning
+    with pytest.warns(UserWarning, match="Attempted to send empty message list"):
+        agent1.send([], agent2)
+
+    # Verify no messages were actually sent
+    assert agent1 not in agent2.chat_messages or len(agent2.chat_messages.get(agent1, [])) == 0
+
+
+def test_hook_cannot_create_empty_list():
+    """Test behavior when hook would create an empty message scenario"""
+    # Note: Currently hooks process individual messages, so they can't create an empty list
+    # But they could return an empty dict which should be validated
+
+    def hook_returns_empty_dict(sender, message, recipient, silent):
+        return {}  # Empty dict - technically valid but might be problematic
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", hook_returns_empty_dict)
+
+    # This should work but might fail validation at _append_oai_message
+    # because empty dict has no content/function_call/tool_calls
+    with pytest.raises(ValueError, match="can't be converted into a valid ChatCompletion message"):
+        agent1.send({"content": "test"}, agent2)
+
+
+def test_empty_string_message():
+    """Test behavior with empty string message"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Empty string should still be sent (it's not an empty list)
+    agent1.send("", agent2)
+
+    # Should have created a message with empty content
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] == ""
+
+
+def test_message_with_none_content():
+    """Test sending message with None content (valid for function/tool calls)"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Message with None content but with tool_calls should be valid
+    message = {
+        "content": None,
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {"name": "test_func", "arguments": "{}"},
+            }
+        ],
+    }
+
+    agent1.send(message, agent2)
+
+    # Should have been sent successfully
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] is None
+    assert received[0]["tool_calls"] is not None
+
+
+def test_mixed_valid_and_empty_messages():
+    """Test sending a list with mix of valid and questionable messages"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    # Mix of valid messages
+    messages = [
+        {"content": "Valid message 1"},
+        {"content": ""},  # Empty content but still valid
+        {"content": "Valid message 2"},
+    ]
+
+    agent1.send(messages, agent2)
+
+    # All three should be received
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 3
+    assert received[0]["content"] == "Valid message 1"
+    assert received[1]["content"] == ""
+    assert received[2]["content"] == "Valid message 2"
+
+
+def test_hook_modifies_content_to_empty():
+    """Test hook that modifies content to empty string"""
+
+    def empty_content_hook(sender, message, recipient, silent):
+        message["content"] = ""
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", empty_content_hook)
+    agent1.send("Original content", agent2)
+
+    # Should receive message with empty content
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 1
+    assert received[0]["content"] == ""
+
+
+# ============================================================================
+# Test 3: Async versions of the above tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_hook_processes_multiple_messages_async():
+    """Async version: Test that hooks receive and can modify each message in a list"""
+    hook_calls = []
+
+    def tracking_hook(sender, message, recipient, silent):
+        assert isinstance(message, dict)
+        hook_calls.append(message.get("content"))
+        message["modified"] = True
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", tracking_hook)
+
+    messages = [
+        {"content": "First async"},
+        {"content": "Second async"},
+        {"content": "Third async"},
+    ]
+    await agent1.a_send(messages, agent2)
+
+    assert len(hook_calls) == 3
+    assert hook_calls == ["First async", "Second async", "Third async"]
+
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 3
+    for msg in received:
+        assert msg.get("modified") is True
+
+
+@pytest.mark.asyncio
+async def test_send_empty_list_shows_warning_async():
+    """Async version: Test that sending empty list triggers warning"""
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    with pytest.warns(UserWarning, match="Attempted to send empty message list"):
+        await agent1.a_send([], agent2)
+
+    assert agent1 not in agent2.chat_messages or len(agent2.chat_messages.get(agent1, [])) == 0
+
+
+# ============================================================================
+# Test 4: Integration tests combining hooks with list messages
+# ============================================================================
+
+
+def test_hook_adds_metadata_to_list_messages():
+    """Test realistic scenario: hook adds metadata/tracking to all messages"""
+    import time
+
+    def add_timestamp_hook(sender, message, recipient, silent):
+        message["timestamp"] = time.time()
+        message["sender_name"] = sender.name
+        message["recipient_name"] = recipient.name
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", add_timestamp_hook)
+
+    messages = [{"content": f"Message {i}"} for i in range(5)]
+    agent1.send(messages, agent2)
+
+    received = agent2.chat_messages[agent1]
+    assert len(received) == 5
+
+    for msg in received:
+        assert "timestamp" in msg
+        assert msg["sender_name"] == "agent1"
+        assert msg["recipient_name"] == "agent2"
+        assert isinstance(msg["timestamp"], float)
+
+
+def test_hook_filters_sensitive_content():
+    """Test realistic scenario: hook sanitizes messages"""
+
+    def sanitize_hook(sender, message, recipient, silent):
+        content = message.get("content", "")
+        if isinstance(content, str):
+            # Remove sensitive patterns
+            content = content.replace("SECRET", "[REDACTED]")
+            content = content.replace("PASSWORD", "[REDACTED]")
+            message["content"] = content
+        return message
+
+    agent1 = ConversableAgent(name="agent1", llm_config=False, human_input_mode="NEVER")
+    agent2 = ConversableAgent(name="agent2", llm_config=False, human_input_mode="NEVER")
+
+    agent1.register_hook("process_message_before_send", sanitize_hook)
+
+    messages = [
+        {"content": "This is a SECRET message"},
+        {"content": "My PASSWORD is 12345"},
+        {"content": "Normal message"},
+    ]
+    agent1.send(messages, agent2)
+
+    received = agent2.chat_messages[agent1]
+    assert received[0]["content"] == "This is a [REDACTED] message"
+    assert received[1]["content"] == "My [REDACTED] is 12345"
+    assert received[2]["content"] == "Normal message"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
+
+
 if __name__ == "__main__":
     # test_trigger()
     # test_context()

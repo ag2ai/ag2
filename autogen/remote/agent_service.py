@@ -24,7 +24,9 @@ class AgentService(RemoteService):
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
-            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role="assistant")
+            _, out_message = normilize_message_to_oai(
+                guardrail_result.reply, self.agent.name, role="assistant", preserve_custom_fields=False
+            )
             return ResponseMessage(messages=[out_message], context=state.context)
 
         context_variables = ContextVariables(state.context)
@@ -89,10 +91,12 @@ class AgentService(RemoteService):
             return False, None  # output message is empty, interrupt the loop
 
         if guardrail_result := self.agent.run_output_guardrails(message):
-            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role=role)
+            _, out_message = normilize_message_to_oai(
+                guardrail_result.reply, self.agent.name, role=role, preserve_custom_fields=False
+            )
             return False, out_message  # output guardrail activated, interrupt the loop
 
-        valid, out_message = normilize_message_to_oai(message, self.agent.name, role=role)
+        valid, out_message = normilize_message_to_oai(message, self.agent.name, role=role, preserve_custom_fields=False)
         if not valid:
             return False, None  # tool result is not valid OAI message, interrupt the loop
 

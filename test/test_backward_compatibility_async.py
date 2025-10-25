@@ -646,20 +646,20 @@ async def main():
 
     try:
         # Run all test scenarios
-        # await test_scenario_1_one_agent_chat()
-        # await test_scenario_2_two_agent_chat()
+        await test_scenario_1_one_agent_chat()
+        await test_scenario_2_two_agent_chat()
         # await test_scenario_3_group_chat_manager()
-        # await test_scenario_4_patterns()
-        # await test_scenario_5_handoffs_and_tools()
-        # await test_scenario_6_mixed_tools_scenario()
-        # await test_scenario_7_conditional_handoffs()
-        # await test_scenario_8_complex_conversation()
-        # await test_scenario_9_nested_chat_target()
-        # await test_scenario_10_terminate_target()
-        # await test_scenario_11_a_run_group_chat_round_robin()
-        # await test_scenario_12_a_run_group_chat_auto_pattern()
-        # await test_scenario_13_a_run_single_agent()
-        # await test_scenario_14_a_run_two_agents()
+        await test_scenario_4_patterns()
+        await test_scenario_5_handoffs_and_tools()
+        await test_scenario_6_mixed_tools_scenario()
+        await test_scenario_7_conditional_handoffs()
+        await test_scenario_8_complex_conversation()
+        await test_scenario_9_nested_chat_target()
+        await test_scenario_10_terminate_target()
+        await test_scenario_11_a_run_group_chat_round_robin()
+        await test_scenario_12_a_run_group_chat_auto_pattern()
+        await test_scenario_13_a_run_single_agent()
+        await test_scenario_14_a_run_two_agents()
 
         print("\n=== All Async Test Scenarios Completed Successfully! ===")
 
