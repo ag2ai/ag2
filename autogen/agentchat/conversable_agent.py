@@ -4452,7 +4452,8 @@ def normilize_message_to_oai(
 
     if preserve_custom_fields:
         # Preserve all fields for local storage (hooks can add metadata)
-        oai_message = message.copy()
+        # but filter out None values (except content) to avoid breaking code that checks "if key in dict"
+        oai_message = {k: v for k, v in message.items() if v is not None or k == "content"}
     else:
         # Strict whitelist for remote/serialization contexts
         oai_message = {
