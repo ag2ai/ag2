@@ -87,6 +87,17 @@ class AgentService(RemoteService):
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str
     ) -> tuple[Literal[True], dict[str, Any]] | tuple[Literal[False], dict[str, Any] | None]:
+        """add a message to the local history.
+
+        Args:
+            message: the message to add to the local history.
+            role: the role of the message.
+
+        Returns:
+            A tuple containing a boolean indicating whether the message is valid and the normalized oai message.
+            If the message is not valid, the boolean is False and the oai message is None.
+            If the message is valid, the boolean is True and the oai message is the normalized oai message.
+        """
         if message is None:
             return False, None  # output message is empty, interrupt the loop
 
