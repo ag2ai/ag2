@@ -1097,7 +1097,7 @@ class ConversableAgent(LLMAgent):
 
     def _process_message_before_send(
         self, message: list[dict[str, Any]], recipient: Agent, silent: bool
-    ) -> dict[str, Any] | str | list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:  # Fixed: was dict[str, Any] | str | list[dict[str, Any]]
         """Process the message before sending it to the recipient.
 
         This method calls all registered "process_message_before_send" hooks for each message
@@ -1126,6 +1126,12 @@ class ConversableAgent(LLMAgent):
                         recipient=recipient,
                         silent=ConversableAgent._is_silent(self, silent),
                     )
+                    # Add validation for hook return value
+                    if not isinstance(processed_msg, dict):
+                        raise TypeError(
+                            f"Hook must return a dict, got {type(processed_msg).__name__}. "
+                            f"Hooks should modify and return the message dictionary."
+                        )
                 processed_messages.append(processed_msg)
             return processed_messages
 
@@ -1186,7 +1192,13 @@ class ConversableAgent(LLMAgent):
             raise TypeError(f"Message processing hook must return a list, got {type(processed_msgs).__name__}")
 
         if len(processed_msgs) == 0:
-            return  # Allow empty list as no-op
+            warnings.warn(
+                "Attempted to send empty message list - no action taken. "
+                "This may indicate a hook removed all messages.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return processed_msgs
 
         # Validate all messages and raise error if any are invalid
         if not all(
@@ -1256,7 +1268,13 @@ class ConversableAgent(LLMAgent):
             raise TypeError(f"Message processing hook must return a list, got {type(processed_msgs).__name__}")
 
         if len(processed_msgs) == 0:
-            return  # Allow empty list as no-op
+            warnings.warn(
+                "Attempted to send empty message list - no action taken. "
+                "This may indicate a hook removed all messages.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return processed_msgs
 
         # Validate all messages and raise error if any are invalid
         if not all(
