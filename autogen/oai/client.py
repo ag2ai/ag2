@@ -357,13 +357,12 @@ class OpenAIClient:
                 "The API key specified is not a valid OpenAI format; it won't work with the OpenAI-hosted model."
             )
 
-    def message_retrieval(
-        self, response: ModelClient.ModelClientResponseProtocol
-    ) -> list[str] | list[ModelClient.ModelClientResponseProtocol.Choice.Message]:
+    def message_retrieval(self, response: ChatCompletion | Completion) -> list[str] | list[ChatCompletionMessage]:
         """Retrieve the messages from the response.
 
         Args:
-            response: The response from openai.
+            response (ChatCompletion | Completion): The response from openai.
+
 
         Returns:
             The message from the response.
@@ -479,7 +478,7 @@ class OpenAIClient:
             if msg.get("role", "") == "system":
                 msg["role"] = "user"
 
-    def create(self, params: dict[str, Any]) -> ModelClient.ModelClientResponseProtocol:
+    def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
         Args:
@@ -697,7 +696,7 @@ class OpenAIClient:
                     msg["role"] = "user"
                     msg["content"] = f"System message: {msg['content']}"
 
-    def cost(self, response: ModelClient.ModelClientResponseProtocol) -> float:
+    def cost(self, response: ChatCompletion | Completion) -> float:
         """Calculate the cost of the response."""
         model = response.model
         if model not in OAI_PRICE1K:
@@ -720,10 +719,10 @@ class OpenAIClient:
     @staticmethod
     def get_usage(response: ChatCompletion | Completion) -> dict[str, Any]:
         return {
-            "prompt_tokens": response.usage.prompt_tokens if response.usage is not None else 0,  # type: ignore [union-attr]
-            "completion_tokens": response.usage.completion_tokens if response.usage is not None else 0,  # type: ignore [union-attr]
-            "total_tokens": response.usage.total_tokens if response.usage is not None else 0,  # type: ignore [union-attr]
-            "cost": response.cost if hasattr(response, "cost") else 0,  # type: ignore [attr-defined]
+            "prompt_tokens": response.usage.prompt_tokens if response.usage is not None else 0,
+            "completion_tokens": response.usage.completion_tokens if response.usage is not None else 0,
+            "total_tokens": response.usage.total_tokens if response.usage is not None else 0,
+            "cost": response.cost if hasattr(response, "cost") else 0,
             "model": response.model,
         }
 
