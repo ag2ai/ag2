@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from a2a.types import DataPart, TextPart
+from a2a.types import AgentCapabilities, AgentCard, DataPart, TextPart  # type: ignore
 
 from autogen import ConversableAgent
 from autogen.a2a import A2aRemoteAgent, MockClient
@@ -110,3 +110,22 @@ async def test_answer_with_dict(data: dict[str, Any] | DataPart) -> None:
         "role": "assistant",
         "name": "test-agent",
     }
+
+
+def test_build_agent_from_card() -> None:
+    card = AgentCard(
+        name="Test Agent",
+        description="A test agent",
+        url="http://test.example.com",
+        version="0.1.0",
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        capabilities=AgentCapabilities(streaming=False),
+        skills=[],
+        supports_authenticated_extended_card=False,
+    )
+    agent = A2aRemoteAgent.from_card(card)
+
+    assert agent.name == "Test Agent"
+    assert agent.url == "UNKNOWN"
+    assert agent._agent_card == card
