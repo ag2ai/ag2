@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
-from a2a.types import TaskArtifactUpdateEvent, TaskState, TaskStatus, TaskStatusUpdateEvent
-from a2a.utils import new_task
+from a2a.types import Task, TaskArtifactUpdateEvent, TaskState, TaskStatus, TaskStatusUpdateEvent
 from a2a.utils.message import new_agent_text_message
 
 from autogen import ConversableAgent
@@ -33,8 +33,17 @@ class AutogenAgentExecutor(AgentExecutor):
 
         task = context.current_task
         if not task:
-            task = new_task(context.message)
-            task.status.timestamp = datetime.now(timezone.utc).isoformat()
+            request = context.message
+            # build task object manually to allow empty messages
+            task = Task(
+                status=TaskStatus(
+                    state=TaskState.submitted,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                ),
+                id=request.task_id or str(uuid4()),
+                context_id=request.context_id or str(uuid4()),
+                history=[request],
+            )
             # publish the task status submitted event
             await event_queue.enqueue_event(task)
 
