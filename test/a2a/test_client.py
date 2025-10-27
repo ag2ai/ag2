@@ -127,5 +127,5 @@ def test_build_agent_from_card() -> None:
     agent = A2aRemoteAgent.from_card(card)
 
     assert agent.name == "Test Agent"
-    assert agent.url == "http://test.example.com"
+    assert agent.url == "UNKNOWN"
     assert agent._agent_card == card

@@ -56,9 +56,14 @@ class A2aRemoteAgent(ConversableAgent):
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
     ) -> None:
-        self.url = url
+        self.url = url  # make it public for backward compatibility
 
         self._httpx_client_factory = client or EmptyClientFactory()
+        self._card_resolver = A2ACardResolver(
+            httpx_client=self._httpx_client_factory(),
+            base_url=url,
+        )
+
         self._max_reconnects = max_reconnects
         self._polling_interval = polling_interval
 
@@ -89,8 +94,27 @@ class A2aRemoteAgent(ConversableAgent):
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
     ) -> Self:
+        """Creates an A2aRemoteAgent instance from an existing AgentCard.
+
+        This method allows you to instantiate an A2aRemoteAgent directly using a pre-existing
+        AgentCard, such as one retrieved from a discovery service or constructed manually.
+        The resulting agent will use the data from the given card and avoid redundant card
+        fetching. The agent's registryURL is set to "UNKNOWN" since it is assumed to be derived
+        from the card.
+
+        Args:
+            card: The agent card containing metadata and configuration for the remote agent.
+            silent: whether to print the message sent. If None, will use the value of silent in each function.
+            client: An optional HTTPX client instance factory.
+            client_config: A2A Client configuration options.
+            max_reconnects: Maximum number of reconnection attempts before giving up.
+            polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
+
+        Returns:
+            Self: An instance of the A2aRemoteAgent configured with the provided card.
+        """
         instance = cls(
-            url=card.url,
+            url="UNKNOWN",
             name=card.name,
             silent=silent,
             client=client,
@@ -253,27 +277,27 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
-        resolver = A2ACardResolver(httpx_client=self._httpx_client_factory(), base_url=self.url)
-
         card: AgentCard | None = None
 
         try:
-            logger.info(f"Attempting to fetch public agent card from: {self.url}{AGENT_CARD_WELL_KNOWN_PATH}")
+            logger.info(
+                f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            )
 
             try:
-                card = await resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
+                card = await self._card_resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
             except A2AClientHTTPError as e_public:
                 if e_public.status_code == 404:
                     logger.info(
-                        f"Attempting to fetch public agent card from: {self.url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
+                        f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
                     )
-                    card = await resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
+                    card = await self._card_resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
                 else:
                     raise e_public
 
             if card.supports_authenticated_extended_card:
                 try:
-                    card = await resolver.get_agent_card(
+                    card = await self._card_resolver.get_agent_card(
                         relative_card_path=EXTENDED_AGENT_CARD_PATH,
                         http_kwargs=auth_http_kwargs,
                     )
