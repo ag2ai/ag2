@@ -7,24 +7,21 @@ from inspect import signature
 from typing import Any
 
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic import BaseModel
+from pydantic_ai import RunContext
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.tools import Tool as PydanticAITool
+from pydantic_ai.usage import RunUsage
 
 from autogen import AssistantAgent, UserProxyAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports
+from autogen.import_utils import run_for_optional_imports
 from autogen.interop import Interoperable
 from autogen.interop.pydantic_ai import PydanticAIInteroperability
-
-from ...conftest import Credentials
-
-with optional_import_block():
-    from pydantic_ai import RunContext
-    from pydantic_ai.models.test import TestModel
-    from pydantic_ai.tools import Tool as PydanticAITool
-    from pydantic_ai.usage import Usage
+from test.credentials import Credentials
 
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityWithotContext:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -64,7 +61,6 @@ class TestPydanticAIInteroperabilityWithotContext:
 
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAIInteroperabilityDependencyInjection:
     def test_dependency_injection(self) -> None:
         def f(  # type: ignore[no-any-unimported]
@@ -77,7 +73,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
@@ -104,7 +100,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
@@ -171,11 +167,10 @@ class TestPydanticAIInteroperabilityWithContext:
                     "description": "Get the player's name.",
                     "parameters": {
                         "properties": {
-                            "additional_info": {
+                            "additional_info": IsPartialDict({
                                 "anyOf": [{"type": "string"}, {"type": "null"}],
                                 "description": "Additional information which can be used.",
-                                "title": "Additional Info",
-                            }
+                            }),
                         },
                         "type": "object",
                         "additionalProperties": False,

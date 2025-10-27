@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
@@ -21,6 +20,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
 from ..cache import Cache
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
@@ -31,7 +31,7 @@ from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
-from .client_utils import FormatterProtocol, logging_formatter
+from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
@@ -366,11 +366,12 @@ class OpenAIClient:
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
 
-        def _format_content(content: str) -> str:
+        def _format_content(content: str | list[dict[str, Any]] | None) -> str:
+            normalized_content = content_str(content)
             return (
-                self.response_format.model_validate_json(content).format()
+                self.response_format.model_validate_json(normalized_content).format()
                 if isinstance(self.response_format, FormatterProtocol)
-                else content
+                else normalized_content
             )
 
         if TOOL_ENABLED:
@@ -638,8 +639,11 @@ class OpenAIClient:
                     warnings.warn(
                         f"The {params.get('model')} model does not support streaming. The stream will be set to False."
                     )
-                if params.get("tools", False):
-                    raise ModelToolNotSupportedError(params.get("model"))
+                if "tools" in params:
+                    if params["tools"]:  # If tools exist, raise as unsupported
+                        raise ModelToolNotSupportedError(params.get("model"))
+                    else:
+                        params.pop("tools")  # Remove empty tools list
                 self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
@@ -884,6 +888,7 @@ class OpenAIWrapper:
             # a config for a custom client is set
             # adding placeholder until the register_model_client is called with the appropriate class
             self._clients.append(PlaceHolderClient(config))
+            # codeql[py/clear-text-logging-sensitive-data]
             logger.info(
                 f"Detected custom model client in config: {model_client_cls_name}, model client can not be used until register_model_client is called."
             )
@@ -1079,9 +1084,10 @@ class OpenAIWrapper:
             self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
 
         for i in ordered_clients_indices:
-            client = self._clients[i]
             # merge the input config with the i-th config in the config list
-            full_config = {**config, **self._config_list[i]}
+            client_config = self._config_list[i]
+            full_config = merge_config_with_tools(config, client_config)
+
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             # construct the create params
@@ -1112,6 +1118,7 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
+            client = self._clients[i]
             log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:

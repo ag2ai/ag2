@@ -5,7 +5,7 @@
 import base64
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, Union
 from unittest.mock import MagicMock
 
 from anyio import Event
@@ -25,7 +25,7 @@ def text_to_speech(
     openai_api_key: str,
     model: str = "tts-1",
     voice: Literal["alloy", "echo", "fable", "onyx", "nova", "shimmer"] = "alloy",
-    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] | Omit = "pcm",
+    response_format: Union[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"], "Omit"] = "pcm",
 ) -> str:
     """Convert text to voice using OpenAI API.
 
@@ -40,7 +40,7 @@ def text_to_speech(
         str: Base64 encoded audio.
     """
     tts_client = OpenAI(api_key=openai_api_key)
-    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)
+    response = tts_client.audio.speech.create(model=model, voice=voice, input=text, response_format=response_format)  # type: ignore[arg-type]
     return base64.b64encode(response.content).decode("utf-8")
 
 

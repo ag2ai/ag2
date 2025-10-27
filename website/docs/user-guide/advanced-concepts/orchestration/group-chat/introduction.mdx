@@ -43,8 +43,11 @@ We start by importing necessary modules and setting up the language model config
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
-llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 ```
 
 ### 2. Create Specialized Agents
@@ -113,26 +116,8 @@ The following diagram illustrates how the triage example unfolds. The user submi
 
 We are using the `AutoPattern` in this example, where the next speaker is automatically selected for based on the context of the conversation.
 
-```mermaid
-flowchart TD
-    User([User]) --> GroupManager[Group Manager]
+![groupchat_manager](../assets/groupchat_manager.png)
 
-    GroupManager -->  Triage[Triage Agent]
-    Triage -->  GroupManager
-
-    GroupManager -->  Tech[Tech Agent]
-    Tech -->  GroupManager
-
-    GroupManager -->  General[General Agent]
-    General -->  GroupManager
-
-    GroupManager -->  User
-
-    style GroupManager fill:#ffebee,stroke:#f44336
-    style Triage fill:#e1f5fe,stroke:#0288d1
-    style Tech fill:#f1f8e9,stroke:#689f38
-    style General fill:#fce4ec,stroke:#d81b60
-```
 
 ### Complete Code Example
 
@@ -144,8 +129,11 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     from autogen import ConversableAgent, LLMConfig
     from autogen.agentchat import initiate_group_chat
     from autogen.agentchat.group.patterns import AutoPattern
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
-    llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

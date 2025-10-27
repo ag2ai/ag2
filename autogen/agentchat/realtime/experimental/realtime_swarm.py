@@ -7,6 +7,7 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import anyio
@@ -184,7 +185,6 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         if messages is None:
             if sender is None:
@@ -241,9 +241,8 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
-        return self.generate_reply(messages=messages, sender=sender, **kwargs)
+        return self.generate_reply(messages=messages, sender=sender)
 
     async def a_receive(
         self,
@@ -455,12 +454,16 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
         async def on_observers_ready() -> None:
             self._realtime_agent._tg.start_soon(
-                asyncify(initiate_swarm_chat),
-                initial_agent=self._initial_agent,
-                agents=self._agents,
-                user_agent=self,  # type: ignore[arg-type]
-                messages="Find out what the user wants.",
-                after_work=AfterWorkOption.REVERT_TO_USER,
+                asyncify(
+                    partial(
+                        initiate_swarm_chat,
+                        initial_agent=self._initial_agent,
+                        agents=self._agents,
+                        user_agent=self,  # type: ignore[arg-type]
+                        messages="Find out what the user wants.",
+                        after_work=AfterWorkOption.REVERT_TO_USER,
+                    )
+                )
             )
 
         self._realtime_agent.callbacks.on_observers_ready = on_observers_ready

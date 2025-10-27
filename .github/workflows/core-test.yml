@@ -80,11 +80,17 @@ jobs:
         shell: bash
       - name: Install packages and dependencies
         run: |
-          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs]
+          uv pip install --system -e .[test,cosmosdb,interop,redis,websockets,openai,docs,a2a]
       - name: Install optional dependencies for code executors
         run: |
-          uv pip install --system -e ".[jupyter-executor,yepcode]"
+          uv pip install --system -e ".[jupyter-executor]"
           python -m ipykernel install --user --name python3
+        shell: bash
+      - name: Install yepcode dependencies (Python 3.11+ only)
+        if: matrix.python-version != '3.10'
+        run: |
+          uv pip install --system -e ".[yepcode]"
+        shell: bash
       - name: Set AUTOGEN_USE_DOCKER based on OS
         shell: bash
         run: |

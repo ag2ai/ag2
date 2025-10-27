@@ -118,7 +118,13 @@ jobs:
       - name: Install packages and dependencies
         run: |
           docker --version
-          uv pip install --system -e ".[test,openai,autobuild,captainagent]"
+          uv pip install --system -e ".[test,openai,autobuild,captainagent,gemini]"
+      - name: Create OAI_CONFIG_LIST from Secret
+        run: |
+          cat > OAI_CONFIG_LIST << 'EOF'
+          ${{ secrets.OAI_CONFIG_LIST }}
+          EOF
+        shell: bash
       - name: Run tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
