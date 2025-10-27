@@ -105,7 +105,6 @@ class Agent(Protocol):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         """Generate a reply based on the received messages.
 
@@ -124,7 +123,6 @@ class Agent(Protocol):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         """(Async) Generate a reply based on the received messages.
 

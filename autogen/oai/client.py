@@ -33,7 +33,7 @@ from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
-from .client_utils import FormatterProtocol, logging_formatter
+from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
@@ -643,8 +643,11 @@ class OpenAIClient:
                     warnings.warn(
                         f"The {params.get('model')} model does not support streaming. The stream will be set to False."
                     )
-                if params.get("tools", False):
-                    raise ModelToolNotSupportedError(params.get("model"))
+                if "tools" in params:
+                    if params["tools"]:  # If tools exist, raise as unsupported
+                        raise ModelToolNotSupportedError(params.get("model"))
+                    else:
+                        params.pop("tools")  # Remove empty tools list
                 self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
@@ -1085,9 +1088,10 @@ class OpenAIWrapper:
             self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
 
         for i in ordered_clients_indices:
-            client = self._clients[i]
             # merge the input config with the i-th config in the config list
-            full_config = {**config, **self._config_list[i]}
+            client_config = self._config_list[i]
+            full_config = merge_config_with_tools(config, client_config)
+
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             # construct the create params
@@ -1118,6 +1122,7 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
+            client = self._clients[i]
             log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:

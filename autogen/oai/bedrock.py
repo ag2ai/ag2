@@ -200,21 +200,8 @@ class BedrockClient:
         if "top_p" in params:
             base_params["topP"] = validate_parameter(params, "top_p", (float, int), False, None, None, None)
 
-        if "topP" in params:
-            warnings.warn(
-                ("topP is deprecated, use top_p instead. Scheduled for removal in 0.10.0 version."), DeprecationWarning
-            )
-            base_params["topP"] = validate_parameter(params, "topP", (float, int), False, None, None, None)
-
         if "max_tokens" in params:
             base_params["maxTokens"] = validate_parameter(params, "max_tokens", (int,), False, None, None, None)
-
-        if "maxTokens" in params:
-            warnings.warn(
-                ("maxTokens is deprecated, use max_tokens instead. Scheduled for removal in 0.10.0 version."),
-                DeprecationWarning,
-            )
-            base_params["maxTokens"] = validate_parameter(params, "maxTokens", (int,), False, None, None, None)
 
         # Here are the possible "model-specific" parameters and their suitable types, known as additional parameters
         additional_params = {}

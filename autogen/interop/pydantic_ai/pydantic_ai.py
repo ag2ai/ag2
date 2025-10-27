@@ -78,7 +78,7 @@ class PydanticAIInteroperability:
                     result = f(**kwargs)  # type: ignore[call-arg]
             except Exception as e:
                 if ctx_typed is not None:
-                    ctx_typed.retries[tool_typed.name] += 1  # type: ignore[attr-defined]
+                    ctx_typed.retries[tool_typed.name] = ctx_typed.retries.get(tool_typed.name, 0) + 1  # type: ignore[attr-defined]
                 raise e
 
             return result
