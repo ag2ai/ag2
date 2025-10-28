@@ -6,7 +6,7 @@
 Unified message format supporting all provider features.
 """
 
-from typing import Any, Literal
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -31,9 +31,17 @@ class UnifiedMessage(BaseModel):
     - Citations (web search results)
     - Tool calls and results
     - Any future content types via GenericContent
+    - Any future role types via extensible role field
+
+    The role field is extensible to support future provider-specific roles.
+    Standard roles are: "user", "assistant", "system", "tool"
+    But any string value is accepted for forward compatibility.
     """
 
-    role: Literal["user", "assistant", "system", "tool"]
+    # Known standard roles (for reference and validation)
+    STANDARD_ROLES: ClassVar[list[str]] = ["user", "assistant", "system", "tool"]
+
+    role: str  # Extensible - accepts any string, not just standard roles
     content: list[ContentBlock]  # Rich, typed content blocks
 
     # Metadata
@@ -80,3 +88,12 @@ class UnifiedMessage(BaseModel):
             List of content blocks matching the type
         """
         return [b for b in self.content if b.type == content_type]
+
+    def is_standard_role(self) -> bool:
+        """Check if this message uses a standard role.
+
+        Returns:
+            True if role is one of the standard roles (user, assistant, system, tool),
+            False if it's a custom/future role
+        """
+        return self.role in self.STANDARD_ROLES

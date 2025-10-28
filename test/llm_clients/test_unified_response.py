@@ -77,6 +77,46 @@ class TestUnifiedResponseCreation:
 
         assert response.status == "completed"
 
+    def test_create_response_with_custom_status(self):
+        """Test creating response with custom/future status (extensibility)."""
+        message = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="Hello")])
+        # Future providers might introduce new status values
+        custom_statuses = ["streaming", "rate_limited", "queued", "processing"]
+        for status in custom_statuses:
+            response = UnifiedResponse(
+                id="resp-123", model="gpt-4", provider="openai", messages=[message], status=status
+            )
+            assert response.status == status
+
+    def test_standard_statuses_constant(self):
+        """Test that STANDARD_STATUSES constant is defined."""
+        assert hasattr(UnifiedResponse, "STANDARD_STATUSES")
+        assert "completed" in UnifiedResponse.STANDARD_STATUSES
+        assert "in_progress" in UnifiedResponse.STANDARD_STATUSES
+        assert "failed" in UnifiedResponse.STANDARD_STATUSES
+
+    def test_is_standard_status_method(self):
+        """Test is_standard_status() method."""
+        message = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="test")])
+
+        # Standard statuses
+        for status in ["completed", "in_progress", "failed"]:
+            response = UnifiedResponse(
+                id="resp-123", model="gpt-4", provider="openai", messages=[message], status=status
+            )
+            assert response.is_standard_status() is True
+
+        # Custom statuses
+        for status in ["streaming", "queued", "custom"]:
+            response = UnifiedResponse(
+                id="resp-123", model="gpt-4", provider="openai", messages=[message], status=status
+            )
+            assert response.is_standard_status() is False
+
+        # None status
+        response = UnifiedResponse(id="resp-123", model="gpt-4", provider="openai", messages=[message], status=None)
+        assert response.is_standard_status() is False
+
     def test_create_response_different_providers(self):
         """Test creating responses for different providers."""
         providers = ["openai", "anthropic", "gemini", "bedrock"]
