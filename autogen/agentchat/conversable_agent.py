@@ -1089,7 +1089,7 @@ class ConversableAgent(LLMAgent):
         Returns:
             bool: whether the message is appended to the ChatCompletion conversation.
         """
-        valid, oai_message = normilize_message_to_oai(message, role=role, name=name or self.name)
+        valid, oai_message = normalize_message_to_oai(message, role=role, name=name or self.name)
         if not valid:
             return False
         self._oai_messages[conversation_id].append(oai_message)
@@ -4430,7 +4430,7 @@ def register_function(
     executor.register_for_execution(name=name)(f)
 
 
-def normilize_message_to_oai(
+def normalize_message_to_oai(
     message: dict[str, Any] | str,
     name: str,
     role: str = "assistant",

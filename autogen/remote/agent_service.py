@@ -6,7 +6,7 @@ import warnings
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
-from autogen.agentchat.conversable_agent import normilize_message_to_oai
+from autogen.agentchat.conversable_agent import normalize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
@@ -24,7 +24,7 @@ class AgentService(RemoteService):
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
-            _, out_message = normilize_message_to_oai(
+            _, out_message = normalize_message_to_oai(
                 guardrail_result.reply, self.agent.name, role="assistant", preserve_custom_fields=False
             )
             return ResponseMessage(messages=[out_message], context=state.context)
@@ -102,12 +102,12 @@ class AgentService(RemoteService):
             return False, None  # output message is empty, interrupt the loop
 
         if guardrail_result := self.agent.run_output_guardrails(message):
-            _, out_message = normilize_message_to_oai(
+            _, out_message = normalize_message_to_oai(
                 guardrail_result.reply, self.agent.name, role=role, preserve_custom_fields=False
             )
             return False, out_message  # output guardrail activated, interrupt the loop
 
-        valid, out_message = normilize_message_to_oai(message, self.agent.name, role=role, preserve_custom_fields=False)
+        valid, out_message = normalize_message_to_oai(message, self.agent.name, role=role, preserve_custom_fields=False)
         if not valid:
             return False, None  # tool result is not valid OAI message, interrupt the loop
 
