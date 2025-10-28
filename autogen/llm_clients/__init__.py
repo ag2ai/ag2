@@ -16,18 +16,19 @@ Key Features:
 - Extensible content type registry
 
 Usage:
-    from autogen.llm_clients import ModelClientV2, UnifiedResponse
+    from autogen.llm_clients import OpenAIResponsesClient, UnifiedResponse
     from autogen.llm_clients.models import ContentParser, ReasoningContent
 
-    # Implement ModelClientV2
-    class MyClient:
-        def create(self, params: dict) -> UnifiedResponse:
-            # Return rich responses with reasoning, thinking, etc.
-            ...
+    # Use OpenAI Responses Client
+    client = OpenAIResponsesClient(api_key="...")
+    response = client.create({
+        "model": "o1-preview",
+        "messages": [{"role": "user", "content": "Explain quantum computing"}]
+    })
 
-        def create_v1_compatible(self, params: dict) -> ChatCompletionExtended:
-            # Backward compatible legacy format
-            ...
+    # Access reasoning blocks
+    for reasoning in response.reasoning:
+        print(reasoning.reasoning)
 
     # Register custom content types
     ContentParser.register("custom_type", CustomContent)
@@ -51,10 +52,13 @@ from .models import (
     UnifiedResponse,
     VideoContent,
 )
+from .openai_responses_client import OpenAIResponsesClient
 
 __all__ = [
     # Protocol
     "ModelClientV2",
+    # Clients
+    "OpenAIResponsesClient",
     # Content blocks
     "AudioContent",
     "BaseContent",
