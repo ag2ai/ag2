@@ -64,8 +64,10 @@ def construct_broadcast_messages_list(
             next_target = target.agent_name
             for agent in group_chat.agents:
                 if agent.name == next_target:
-                    messages = [FunctionTargetMessage(content=messages, msg_target=agent)]
+                    messages_list = [FunctionTargetMessage(content=messages, msg_target=agent)]
                     break
+            else:
+                raise ValueError(f"No agent found with in the group chat matching the target agent name {next_target}.")
         elif isinstance(target, RevertToUserTarget) and user_agent is not None:
             messages_list = [FunctionTargetMessage(content=messages, msg_target=user_agent)]
         elif isinstance(target, StayTarget):
