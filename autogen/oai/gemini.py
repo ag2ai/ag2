@@ -139,6 +139,8 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
 class GeminiClient:
     """Client for Google's Gemini API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     # Mapping, where Key is a term used by Autogen, and Value is a term used by Gemini
     PARAMS_MAPPING = {
         "max_tokens": "max_output_tokens",
