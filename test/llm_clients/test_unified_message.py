@@ -66,6 +66,35 @@ class TestUnifiedMessageCreation:
             message = UnifiedMessage(role=role, content=[content])
             assert message.role == role
 
+    def test_create_message_with_custom_role(self):
+        """Test creating message with custom/future role (extensibility)."""
+        # Future provider might introduce new roles
+        custom_roles = ["moderator", "reviewer", "observer", "agent_internal"]
+        for role in custom_roles:
+            content = TextContent(type="text", text=f"Message from {role}")
+            message = UnifiedMessage(role=role, content=[content])
+            assert message.role == role
+
+    def test_standard_roles_constant(self):
+        """Test that STANDARD_ROLES constant is defined."""
+        assert hasattr(UnifiedMessage, "STANDARD_ROLES")
+        assert "user" in UnifiedMessage.STANDARD_ROLES
+        assert "assistant" in UnifiedMessage.STANDARD_ROLES
+        assert "system" in UnifiedMessage.STANDARD_ROLES
+        assert "tool" in UnifiedMessage.STANDARD_ROLES
+
+    def test_is_standard_role_method(self):
+        """Test is_standard_role() method."""
+        # Standard roles
+        for role in ["user", "assistant", "system", "tool"]:
+            message = UnifiedMessage(role=role, content=[TextContent(type="text", text="test")])
+            assert message.is_standard_role() is True
+
+        # Custom roles
+        for role in ["moderator", "reviewer", "custom"]:
+            message = UnifiedMessage(role=role, content=[TextContent(type="text", text="test")])
+            assert message.is_standard_role() is False
+
 
 class TestUnifiedMessageTextExtraction:
     """Test get_text() method."""
