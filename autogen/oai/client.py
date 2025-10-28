@@ -22,6 +22,8 @@ from pydantic.type_adapter import TypeAdapter
 
 from autogen.oai.oai_models.chat_completion import ChatCompletionExtended
 
+from autogen.oai.oai_models.chat_completion import ChatCompletionExtended
+
 from ..cache import Cache
 from ..code_utils import content_str
 from ..doc_utils import export_module

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import Tool as PydanticAITool
-from pydantic_ai.usage import RunUsage
+from pydantic_ai.usage import Usage
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
@@ -73,7 +73,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=RunUsage(),
+            usage=Usage(),
             prompt="",
             deps=123,
             retry=0,
@@ -101,7 +101,7 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=RunUsage(),
+            usage=Usage(),
             prompt="",
             deps=123,
             retry=0,
