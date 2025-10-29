@@ -150,6 +150,8 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
 
 @require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[AnthropicEntryDict]):
         """Initialize the Anthropic API client.
 
