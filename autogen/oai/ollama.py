@@ -80,6 +80,8 @@ class OllamaLLMConfigEntry(LLMConfigEntry):
 class OllamaClient:
     """Client for Ollama's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     # Defaults for manual tool calling
     # Instruction is added to the first system message and provides directions to follow a two step
     # process
