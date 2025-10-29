@@ -24,6 +24,7 @@ from .targets.group_manager_target import (
     GroupManagerTarget,
 )
 """
+from .targets.function_target import FunctionTarget, FunctionTargetResult
 from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
@@ -44,6 +45,8 @@ __all__ = [
     "ContextVariables",
     "ExpressionAvailableCondition",
     "ExpressionContextCondition",
+    "FunctionTarget",
+    "FunctionTargetResult",
     "GroupChatConfig",
     "GroupChatTarget",
     # "GroupManagerSelectionMessageContextStr",
