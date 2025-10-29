@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import Tool as PydanticAITool
-from pydantic_ai.usage import Usage
+from pydantic_ai.usage import RunUsage
 
 from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
@@ -73,14 +73,13 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
             tool_name=f.__name__,
         )
-        ctx.retries = {}  # type: ignore[attr-defined]
         pydantic_ai_tool = PydanticAITool(f, takes_ctx=True)  # type: ignore[var-annotated]
         g = PydanticAIInteroperability.inject_params(
             ctx=ctx,
@@ -101,14 +100,13 @@ class TestPydanticAIInteroperabilityDependencyInjection:
 
         ctx = RunContext(
             model=TestModel(),
-            usage=Usage(),
+            usage=RunUsage(),
             prompt="",
             deps=123,
             retry=0,
             messages=None,  # type: ignore[arg-type]
             tool_name=f.__name__,
         )
-        ctx.retries = {}  # type: ignore[attr-defined]
 
         pydantic_ai_tool = PydanticAITool(f, takes_ctx=True, max_retries=3)  # type: ignore[var-annotated]
         g = PydanticAIInteroperability.inject_params(
@@ -119,12 +117,12 @@ class TestPydanticAIInteroperabilityDependencyInjection:
         for i in range(3):
             with pytest.raises(ValueError, match="Retry"):
                 g(city="Zagreb", date="2021-01-01")
-                assert ctx.retries[pydantic_ai_tool.name] == i + 1  # type: ignore[attr-defined]
+                assert ctx.retries[pydantic_ai_tool.name] == i + 1
                 assert ctx.retry == i
 
         with pytest.raises(ValueError, match="f failed after 3 retries"):
             g(city="Zagreb", date="2021-01-01")
-            assert ctx.retries[pydantic_ai_tool.name] == 3  # type: ignore[attr-defined]
+            assert ctx.retries[pydantic_ai_tool.name] == 3
 
 
 @pytest.mark.interop

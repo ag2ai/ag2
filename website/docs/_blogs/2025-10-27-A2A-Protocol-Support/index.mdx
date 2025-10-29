@@ -51,7 +51,7 @@ import os
 import tempfile
 from mypy import api
 from autogen import ConversableAgent
-from autogen.a2a.server import A2aServer
+from autogen.a2a.server import A2aAgentServer
 
 def mypy_check(code: str) -> str:
     """
@@ -101,11 +101,8 @@ reviewer.register_for_llm(
 reviewer.register_for_execution(name="mypy_check")(mypy_check)
 
 # Wrap in A2A server
-server = A2aServer(
-    agent=reviewer,
-    name="Python Code Reviewer",
-    description="Analyzes Python code for type safety issues using mypy",
-)
+server_wrapper = A2aAgentServer(agent=reviewer)
+server = server_wrapper.build()
 ```
 
 Start the server with any ASGI server, like [uvicorn](https://www.uvicorn.org/):
@@ -394,7 +391,7 @@ On the server side, implement authentication middleware:
 
 ```python
 from fastapi import Request, HTTPException
-from autogen.a2a.server import A2aServer
+from autogen.a2a.server import A2aAgentServer
 
 async def auth_middleware(request: Request, call_next):
     token = request.headers.get("Authorization")
@@ -483,20 +480,17 @@ async def monitored_a2a_call(agent, remote_agent, message):
 For production A2A servers, consider these configuration options:
 
 ```python
-from autogen.a2a.server import A2aServer
+from autogen.a2a.server import A2aAgentServer, CardSettings
 
-server = A2aServer(
+server_wrapper = A2aAgentServer(
     agent=reviewer,
-    name="Production Reviewer",
-    description="Production code review service",
-    # Additional config
-    version="1.0.0",
-    metadata={
-        "supported_languages": ["python"],
-        "max_code_size": 10000,
-        "analysis_types": ["type_checking", "style"],
-    },
+    agent_card=CardSettings(
+        name="Production Reviewer",
+        description="Production code review service supporting Python with type checking and style analysis",
+        version="1.0.0",
+    ),
 )
+server = server_wrapper.build()
 ```
 
 Configure the ASGI server appropriately:

@@ -28,7 +28,7 @@ class TestPydanticAITool:
             name=tool.name,
             description=tool.description,
             func_or_tool=tool.function,
-            parameters_json_schema=tool.function_schema.json_schema,  # type: ignore[attr-defined]
+            parameters_json_schema=tool.function_schema.json_schema,
         )
         config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
