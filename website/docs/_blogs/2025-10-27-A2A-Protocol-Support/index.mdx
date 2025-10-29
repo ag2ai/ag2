@@ -8,7 +8,7 @@ AG2 v0.10 introduces native support for the [Agent2Agent (A2A) Protocol](https:/
 
 This article walks through implementing A2A in AG2, with a focus on practical patterns for building distributed agent systems.
 
-\<!-- more -->
+<!-- more -->
 
 ## What is A2A?
 
@@ -87,7 +87,7 @@ reviewer = ConversableAgent(
 
     Be concise but thorough.""",
     llm_config={
-        "model": "gpt-4",
+        "model": "gpt-4.1",
         "temperature": 0.1,  # Low temperature for consistent reviews
     },
 )
@@ -108,7 +108,7 @@ server = A2aServer(
 )
 ```
 
-Start the server with any ASGI server:
+Start the server with any ASGI server, like [uvicorn](https://www.uvicorn.org/):
 
 ```bash
 uvicorn server:server --host 0.0.0.0 --port 8000
@@ -133,7 +133,7 @@ async def generate_and_review():
         name="Coder",
         system_message="""Generate Python code with type hints.
         After generation, ask the reviewer to check it.""",
-        llm_config={"model": "gpt-4"},
+        llm_config={"model": "gpt-4.1"},
     )
 
     # Remote reviewer via A2A
@@ -144,13 +144,15 @@ async def generate_and_review():
     )
 
     # Two-agent conversation
-    result = await coder.a_initiate_chat(
-        reviewer,
+    response = await coder.a_run(
+        recipient=reviewer,
         message="Generate a function to compute fibonacci numbers with full type hints",
         max_turns=3,
+        summary_method="reflection_with_llm",
     )
 
-    print(result.summary)
+    await response.process()
+    print(response.summary)
 
 asyncio.run(generate_and_review())
 ```
@@ -181,7 +183,7 @@ async def review_code(request: CodeReviewRequest):
         submitter = ConversableAgent(
             name="Submitter",
             system_message="Submit code for review",
-            llm_config={"model": "gpt-4"},
+            llm_config={"model": "gpt-4.1"},
             max_consecutive_auto_reply=0,  # Don't auto-reply
         )
 
@@ -189,12 +191,14 @@ async def review_code(request: CodeReviewRequest):
         if request.context:
             message += f"\n\nContext: {request.context}"
 
-        result = await submitter.a_initiate_chat(
-            reviewer,
+        response = await submitter.a_run(
+            recipient=reviewer,
             message=message,
+            summary_method="reflection_with_llm",
         )
 
-        return {"review": result.summary}
+        await response.process()
+        return {"review": response.summary}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -236,7 +240,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
 
 agent = Agent(
-    model=OpenAIModel('gpt-4'),
+    model=OpenAIModel('gpt-4.1'),
     system_prompt='You are a data analysis expert.',
 )
 
@@ -258,10 +262,13 @@ data_analyst = A2aRemoteAgent(
 )
 
 # Use it like any AG2 agent
-result = await my_ag2_agent.a_initiate_chat(
-    data_analyst,
+response = await my_ag2_agent.a_run(
+    recipient=data_analyst,
     message="Analyze quarterly sales trends",
+    summary_method="reflection_with_llm",
 )
+
+await response.process()
 ```
 
 The implementation framework is completely abstracted—your AG2 agent doesn't know or care that it's talking to a Pydantic AI agent.
@@ -306,10 +313,11 @@ report_generator = A2aRemoteAgent(
 
 ```python
 # This works
-result = await agent.a_initiate_chat(remote_agent, message="...")
+response = await agent.a_run(recipient=remote_agent, message="...")
+await response.process()
 
 # This will fail
-result = agent.initiate_chat(remote_agent, message="...")  # ❌
+result = agent.run(recipient=remote_agent, message="...")  # ❌
 ```
 
 If you need synchronous interfaces, wrap async calls:
@@ -317,10 +325,17 @@ If you need synchronous interfaces, wrap async calls:
 ```python
 import asyncio
 
-def sync_wrapper(agent, remote_agent, message):
-    return asyncio.run(
-        agent.a_initiate_chat(remote_agent, message=message)
+async def async_chat(agent, remote_agent, message):
+    response = await agent.a_run(
+        recipient=remote_agent,
+        message=message,
+        summary_method="reflection_with_llm"
     )
+    await response.process()
+    return response
+
+def sync_wrapper(agent, remote_agent, message):
+    return asyncio.run(async_chat(agent, remote_agent, message))
 ```
 
 ### Error Handling
@@ -333,12 +348,14 @@ from httpx import HTTPError, TimeoutException
 async def robust_a2a_call(agent, remote_agent, message, max_retries=3):
     for attempt in range(max_retries):
         try:
-            result = await agent.a_initiate_chat(
-                remote_agent,
+            response = await agent.a_run(
+                recipient=remote_agent,
                 message=message,
+                summary_method="reflection_with_llm",
                 timeout=30,  # Set appropriate timeouts
             )
-            return result
+            await response.process()
+            return response
 
         except TimeoutException:
             if attempt == max_retries - 1:
@@ -446,10 +463,15 @@ logger = logging.getLogger(__name__)
 async def monitored_a2a_call(agent, remote_agent, message):
     start = time.time()
     try:
-        result = await agent.a_initiate_chat(remote_agent, message=message)
+        response = await agent.a_run(
+            recipient=remote_agent,
+            message=message,
+            summary_method="reflection_with_llm"
+        )
+        await response.process()
         duration = time.time() - start
         logger.info(f"A2A call succeeded in {duration:.2f}s")
-        return result
+        return response
     except Exception as e:
         duration = time.time() - start
         logger.error(f"A2A call failed after {duration:.2f}s: {e}")
@@ -495,7 +517,7 @@ uvicorn server:server \
 
 1. **Install AG2 v0.10+**:
    ```bash
-   pip install autogen>=0.10.0
+   pip install ag2
    ```
 
 2. **Review the documentation**: [AG2 A2A Guide](https://docs.ag2.ai/latest/docs/user-guide/a2a/)
