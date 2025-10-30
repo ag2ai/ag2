@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-OpenAI Responses API Client implementing ModelClientV2.
+OpenAI Responses API Client implementing ModelClientV2 and ModelClient protocols.
 
 This client handles the OpenAI Responses API which returns rich responses with:
 - Reasoning blocks (o1, o3 models)
@@ -11,7 +11,8 @@ This client handles the OpenAI Responses API which returns rich responses with:
 - File search results
 - Standard chat messages
 
-The client preserves all provider-specific features in UnifiedResponse format.
+The client preserves all provider-specific features in UnifiedResponse format
+and is compatible with AG2's agent system through ModelClient protocol.
 """
 
 from typing import Any
@@ -21,6 +22,7 @@ try:
 except ImportError:
     OpenAI = None  # Will raise error in __init__ if not installed
 
+from ..llm_config.client import ModelClient
 from .models import (
     CitationContent,
     ReasoningContent,
@@ -31,7 +33,7 @@ from .models import (
 )
 
 
-class OpenAIResponsesClient:
+class OpenAIResponsesClient(ModelClient):
     """
     OpenAI Responses API client implementing ModelClientV2 protocol.
 
@@ -93,9 +95,13 @@ class OpenAIResponsesClient:
             "gpt-4-turbo": {"prompt": 0.01 / 1000, "completion": 0.03 / 1000},
         }
 
-    def create(self, params: dict[str, Any]) -> UnifiedResponse:
+    def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[override]
         """
         Create a completion and return UnifiedResponse with all features preserved.
+
+        This method implements ModelClient.create() but returns UnifiedResponse instead
+        of ModelClientResponseProtocol. The rich UnifiedResponse structure is compatible
+        via duck typing - it has .model attribute and works with message_retrieval().
 
         Args:
             params: Request parameters including:
@@ -264,9 +270,11 @@ class OpenAIResponsesClient:
             "cost": unified_response.cost,
         }
 
-    def cost(self, response: UnifiedResponse) -> float:
+    def cost(self, response: UnifiedResponse) -> float:  # type: ignore[override]
         """
         Calculate cost from response usage.
+
+        Implements ModelClient.cost() but accepts UnifiedResponse via duck typing.
 
         Args:
             response: UnifiedResponse with usage information
@@ -295,9 +303,11 @@ class OpenAIResponsesClient:
         return (prompt_tokens * pricing["prompt"]) + (completion_tokens * pricing["completion"])
 
     @staticmethod
-    def get_usage(response: UnifiedResponse) -> dict[str, Any]:
+    def get_usage(response: UnifiedResponse) -> dict[str, Any]:  # type: ignore[override]
         """
         Extract usage statistics from response.
+
+        Implements ModelClient.get_usage() but accepts UnifiedResponse via duck typing.
 
         Args:
             response: UnifiedResponse from create()
@@ -313,9 +323,11 @@ class OpenAIResponsesClient:
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:
+    def message_retrieval(self, response: UnifiedResponse) -> list[str]:  # type: ignore[override]
         """
         Retrieve text content from response messages.
+
+        Implements ModelClient.message_retrieval() but accepts UnifiedResponse via duck typing.
 
         Args:
             response: UnifiedResponse from create()

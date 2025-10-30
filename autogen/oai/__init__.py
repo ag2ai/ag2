@@ -13,6 +13,7 @@ from .client import (
     DeepSeekLLMConfigEntry,
     OpenAILLMConfigEntry,
     OpenAIResponsesLLMConfigEntry,
+    OpenAIV2LLMConfigEntry,
     OpenAIWrapper,
 )
 from .cohere import CohereLLMConfigEntry
@@ -46,6 +47,7 @@ __all__ = [
     "OllamaLLMConfigEntry",
     "OpenAILLMConfigEntry",
     "OpenAIResponsesLLMConfigEntry",
+    "OpenAIV2LLMConfigEntry",
     "OpenAIWrapper",
     "TogetherLLMConfigEntry",
     "config_list_from_dotenv",
