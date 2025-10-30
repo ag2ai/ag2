@@ -76,12 +76,12 @@ import random
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ.get("OPENAI_API_KEY"),
-    temperature=0.2,
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ.get("OPENAI_API_KEY"),
+    "temperature": 0.2,
+})
 
 # Define the system message for our finance bot
 finance_system_message = """
@@ -95,11 +95,11 @@ When all transactions are processed, summarize the results and say "You can type
 """
 
 # Create the finance agent with LLM intelligence
-with llm_config:
-    finance_bot = ConversableAgent(
-        name="finance_bot",
-        system_message=finance_system_message,
-    )
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    llm_config=llm_config,
+    system_message=finance_system_message,
+)
 
 # Create the human agent for oversight
 human = ConversableAgent(
@@ -174,12 +174,12 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
-    )
+    llm_config = LLMConfig(config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "temperature": 0.2,
+    })
 
     # Define the system message for our finance bot
     finance_system_message = """
@@ -193,11 +193,11 @@ Here's the complete, ready-to-run code for our financial compliance Human in the
     """
 
     # Create the finance agent with LLM intelligence
-    with llm_config:
-        finance_bot = ConversableAgent(
-            name="finance_bot",
-            system_message=finance_system_message,
-        )
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        llm_config=llm_config,
+        system_message=finance_system_message,
+    )
 
     # Create the human agent for oversight
     human = ConversableAgent(

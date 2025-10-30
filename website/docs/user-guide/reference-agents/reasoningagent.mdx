@@ -49,9 +49,12 @@ import random
 
 from autogen.agents.experimental import ReasoningAgent, ThinkNode
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 verbose = True
 
@@ -106,15 +109,15 @@ Note 2: To enable the execution of each selected step before generating the next
 `"interim_execution": True` in reason_config.
 
 ```python
-with llm_config:
-    reason_agent = ReasoningAgent(
-        name="reason_agent",
-        system_message="answer math questions",
-        reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
-        silent=False,
-        # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
-        # reason_config={"method": "beam_search", "beam_size": 1, "max_depth": 3},
-    )
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    system_message="answer math questions",
+    reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+    silent=False,
+    # NOTE: it is equivalent to use beam size 1 for O1-style reasoning
+    # reason_config={"method": "beam_search", "beam_size": 1, "max_depth": 3},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -178,11 +181,11 @@ Beam Search is a powerful technique used in tree-based reasoning that allows the
 In this approach, the agent generates multiple reasoning steps in parallel, allowing it to compare different trajectories and select the most promising ones for further exploration. This can lead to more robust and accurate conclusions, especially in scenarios where intermediate evaluations are critical to the final outcome.
 
 ```python
-with llm_config:
-    reason_agent = ReasoningAgent(
-        name="reason_agent",
-        reason_config={"method": "beam_search", "beam_size": 3}
-    )
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "beam_search", "beam_size": 3},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -245,10 +248,11 @@ To enable batch grading, set `"batch_grading": True` in the `reason_config`. By 
 
 
 ```python
-with llm_config:
-    reason_agent = ReasoningAgent(
-        name="reason_agent", reason_config={"method": "beam_search", "beam_size": 3, "batch_grading": True}
-    )
+  reason_agent = ReasoningAgent(
+      name="reason_agent",
+      reason_config={"method": "beam_search", "beam_size": 3, "batch_grading": True},
+      llm_config=llm_config,
+  )
 
 ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -305,13 +309,13 @@ This section demonstrates how to use Monte Carlo Tree Search (MCTS) with [`Reaso
 3. You want to generate diverse, high-quality training data
 
 ```python
-with llm_config:
-    mcts_agent = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        # setup small depth and simulations for conciseness.
-        reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
-    )
+mcts_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(mcts_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -389,13 +393,13 @@ The expected maximum value when rolling a 6-sided die three times is approximate
 It is important to note that our reasoning agent operates based on "process" and lacks direct access to the environment. In contrast, the LATS approach relies on feedback from the environment. To address this, we utilize our existing grader agent to generate pseudo-rewards and provide feedback. The major difference between our LATS implementation and our MCTS implementation is that the LATS approach incorporate the reflection into prompt context before next round of simulation. You can define the agent using the LATS approach as follows.
 
 ```python
-with llm_config:
-    lats_agent = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        # setup small depth and simulations for conciseness.
-        reason_config={"method": "lats", "nsim": 3, "max_depth": 4},
-    )
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(lats_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -473,12 +477,12 @@ You can enable `interim_execution` by setting it to `True` in `reason_config`. T
 By default `interim_execution` is `False` which means that the selected steps won't be executed during reasoning.
 
 ```python
-with llm_config:
-    lats_agent = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        reason_config={"method": "lats", "nsim": 3, "max_depth": 4, "interim_execution": True},
-    )
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4, "interim_execution": True},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(lats_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -579,14 +583,14 @@ You can setup the parameter `code_execution_config` in reasoning agent to enable
 By default, `code_execution_config=False`, which means it will not execute code for reasoning. Note that to allow for code execution, `interim_execution` must be set to `True` at `reason_config`.
 
 ```python
-with llm_config:
-    lats_agent = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        reason_config={"method": "lats", "nsim": 3, "max_depth": 4, 'interim_execution': True},
-        code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
-        # Enable Code execution. We skip docker here for simplicity
-    )
+lats_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    reason_config={"method": "lats", "nsim": 3, "max_depth": 4, 'interim_execution': True},
+    code_execution_config={"use_docker": False, "work_dir": "mypy_cache"},
+    # Enable Code execution. We skip docker here for simplicity
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(
     lats_agent,
@@ -664,19 +668,19 @@ The goal is to generate a concise yet engaging blog post about NVIDIA. The proce
 
 
 ```python
-with llm_config:
-    writer = AssistantAgent(
-        name="Writer",
-        system_message="""You are a professional writer, known for your insightful and engaging articles.
+writer = AssistantAgent(
+    name="Writer",
+    system_message="""You are a professional writer, known for your insightful and engaging articles.
 You transform complex concepts into compelling narratives.
 You should improve the quality of the content based on the feedback from the user.
-    """,
-    )
-    reason_agent_for_writer = ReasoningAgent(
-        name="reason_agent",
-        reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
-    )
-
+""",
+    llm_config=llm_config,
+)
+reason_agent_for_writer = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+    llm_config=llm_config,
+)
 
 def reflection_message(recipient, messages, sender, config):
     print("Reflecting...", "yellow")
@@ -729,25 +733,26 @@ The narrative of Nvidia is one of relentless innovation and vision. We find ours
 
 ## Use a different Model for Grading
 
-To use a different model for grading instead of gpt-4o, pass the `grader_llm_config` argument when initializing the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent). This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
+To use a different model for grading instead of gpt-5, pass the `grader_llm_config` argument when initializing the [`ReasoningAgent`](/docs/api-reference/autogen/agents/experimental/ReasoningAgent). This ensures that the grading of trajectories is performed using the specified configuration from the `config_list`, separate from the main `llm_config`.
 
 ```python
 # Put your key in the OPENAI_API_KEY environment variable
-grader_llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+grader_llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
-with llm_config:
-    writer = AssistantAgent(
-        name="Writer",
-        system_message="""You are a professional writer, known for your insightful and engaging articles.
+writer = AssistantAgent(
+    name="Writer",
+    system_message="""You are a professional writer, known for your insightful and engaging articles.
 You transform complex concepts into compelling narratives.
 You should improve the quality of the content based on the feedback from the user.
-        """,
-    )
-    reason_agent_for_writer = ReasoningAgent(
-        name="reason_agent",
-        grader_llm_config=grader_llm_config,
-        reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
-    )
+    """,
+    llm_config=llm_config,
+)
+reason_agent_for_writer = ReasoningAgent(
+    name="reason_agent",
+    grader_llm_config=grader_llm_config,
+    reason_config={"method": "lats", "nsim": 2, "max_depth": 3},
+    llm_config=llm_config,
+)
 ```
 
 ## Save data to future training
@@ -791,13 +796,13 @@ Therefore, the expected maximum value when rolling a six-sided die three times i
 """
 random.seed(1)  # setup seed for reproducibility
 
-with llm_config:
-    mcts_agent2 = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        # setup small depth and simulations for conciseness.
-        reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
-    )
+mcts_agent2 = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "mcts", "nsim": 3, "max_depth": 4},
+    llm_config=llm_config,
+)
 
 
 ans = user_proxy.initiate_chat(mcts_agent2, message=prompt, summary_method=last_meaningful_msg)
@@ -876,13 +881,13 @@ The expected maximum value when rolling a 6-sided die three times is approximate
 The concept of a "Forest of Thoughts" allows us to leverage bootstrapping techniques to execute the tree of thoughts multiple times, creating a diverse set of answers. After running these independent reasoning processes, we can aggregate them to form our final answer.
 
 ```python
-with llm_config:
-    forest_agent = ReasoningAgent(
-        name="mcts_agent",
-        system_message="answer math questions",
-        # setup small depth and simulations for conciseness.
-        reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},
-    )
+forest_agent = ReasoningAgent(
+    name="mcts_agent",
+    system_message="answer math questions",
+    # setup small depth and simulations for conciseness.
+    reason_config={"method": "dfs", "max_depth": 4, "forest_size": 3},
+    llm_config=llm_config,
+)
 
 ans = user_proxy.initiate_chat(forest_agent, message=question, summary_method=last_meaningful_msg)
 
@@ -932,13 +937,13 @@ Begin by identifying stakeholders and their interests.
 Then, evaluate potential ethical risks (bias, transparency, impact).
 Finally, suggest mitigation strategies and ethical safeguards"""
 
-with llm_config:
-    reason_agent = ReasoningAgent(
-        name="reason_agent",
-        reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
-        silent=False,
-        scope=scope,
-    )
+reason_agent = ReasoningAgent(
+    name="reason_agent",
+    reason_config={"method": "dfs", "max_depth": 3},  # Using DFS
+    silent=False,
+    scope=scope,
+    llm_config=llm_config,
+)
 
 question = "What are the ethical risks of using AI in healthcare?"
 ans = user_proxy.initiate_chat(reason_agent, message=question, summary_method=last_meaningful_msg)

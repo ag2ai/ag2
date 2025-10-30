@@ -11,7 +11,9 @@ import subprocess
 
 import pytest
 
-from .conftest import Credentials, Secrets, credentials_all_llms, suppress_gemini_resource_exhausted
+from test.credentials import Credentials, Secrets
+from test.marks import credentials_all_llms
+from test.utils import suppress_gemini_resource_exhausted
 
 
 @pytest.mark.parametrize("credentials_from_test_param", credentials_all_llms, indirect=True)

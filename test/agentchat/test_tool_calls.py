@@ -16,8 +16,7 @@ import autogen
 from autogen.import_utils import run_for_optional_imports
 from autogen.math_utils import eval_math_responses
 from autogen.oai.client import TOOL_ENABLED
-
-from ..conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")

@@ -28,11 +28,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ github.event.inputs.node-version }}
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ github.event.inputs.python-version }}
 

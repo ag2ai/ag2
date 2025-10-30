@@ -18,9 +18,12 @@ Once you've set up your LLM configuration, creating a `ConversableAgent` is stra
 
 ```python hl_lines="7-11"
 from autogen import ConversableAgent, LLMConfig
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Create LLM configuration first
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Create the agent using the context manager approach
 my_agent = ConversableAgent(
@@ -67,19 +70,19 @@ from autogen import ConversableAgent, LLMConfig
 import os
 
 # Configure the LLM (we created this in the previous section)
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ["OPENAI_API_KEY"],
-    temperature=0.2
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+    "temperature": 0.2,
+})
 
 # Create a basic financial agent
-with llm_config:
-    finance_agent = ConversableAgent(
-        name="finance_agent",
-        system_message="You are a financial assistant who helps analyze financial data and transactions."
-    )
+finance_agent = ConversableAgent(
+    name="finance_agent",
+    system_message="You are a financial assistant who helps analyze financial data and transactions.",
+    llm_config=llm_config,
+)
 
 # Run the agent with a prompt
 response = finance_agent.run(

@@ -73,7 +73,7 @@ We had great experience with `OpenAI`, `Anthropic`, and `Gemini`. However, `Deep
 </Tip>
 
 ```python
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "api_key": os.environ["OPENAI_API_KEY"]})
 ````
 
 [`WebSurferAgent`](/docs/api-reference/autogen/agents/experimental/WebSurferAgent) is the one responsible for browsing the web and retrieving information. The `web_tool="browser_use"` tells the agent to use the [`BrowserUseTool`](/docs/api-reference/autogen/tools/experimental/BrowserUseTool) to surf the web.
@@ -87,8 +87,7 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 - ✅ **Easier setup** – No need to manually register tools
 
 ```python
-with llm_config:
-    websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
+websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use", llm_config=llm_config)
 
 run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
@@ -108,8 +107,7 @@ This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/
 - ⚠️ **Must manually register tools**
 
 ```python
-with llm_config:
-    websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use")
+websurfer = WebSurferAgent(name="WebSurfer", web_tool="browser_use", llm_config=llm_config)
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
 # WebSurferAgent has a list of tools which are registered for LLM
 # We need to register the tools for execution with the UserProxyAgent
@@ -397,11 +395,11 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
 </Tip>
 
 ```python
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ["OPENAI_API_KEY"],
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+})
 ```
 
 The only difference from the previous example is that the `web_tool` parameter must be set to `crawl4ai` in order for the [`Crawl4AITool`](/docs/api-reference/autogen/tools/experimental/Crawl4AITool) to be used.
@@ -417,8 +415,7 @@ The new [`run`](/docs/api-reference/autogen/ConversableAgent#run) method simplif
 
 ```python
 # `web_tool` parameter must be set to `crawl4ai` in order for the `Crawl4AITool` to be used.
-with llm_config:
-    websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
+websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai", llm_config=llm_config)
 
 run_response = websurfer.run(
     message="Get info from https://docs.ag2.ai/docs/Home",
@@ -439,8 +436,7 @@ This method requires manually creating a [`UserProxyAgent`](/docs/api-reference/
 
 ```python
 user_proxy = UserProxyAgent(name="user_proxy", human_input_mode="NEVER")
-with llm_config:
-    websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai")
+websurfer = WebSurferAgent(name="WebSurfer", web_tool="crawl4ai", llm_config=llm_config)
 
 websurfer_tools = websurfer.tools
 # WebSurferAgent has a list of tools which are registered for LLM
@@ -484,9 +480,9 @@ INFO:httpx:HTTP Request: GET https://raw.githubusercontent.com/BerriAI/litellm/m
 * 'fields' has been removed
   warnings.warn(message, UserWarning)
 14:23:43 - LiteLLM:INFO: utils.py:2825 -
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:LiteLLM:
-LiteLLM completion() model= gpt-4o-mini; provider = openai
+LiteLLM completion() model= gpt-5-nano; provider = openai
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 14:23:57 - LiteLLM:INFO: utils.py:1030 - Wrapper: Completed Call, calling success_handler
 INFO:LiteLLM:Wrapper: Completed Call, calling success_handler

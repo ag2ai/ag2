@@ -92,12 +92,12 @@ from autogen.agentchat.group.patterns import AutoPattern
 # Note: Make sure to set your API key in your environment first
 
 # Configure the LLM
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ.get("OPENAI_API_KEY"),
-    temperature=0.2,
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ.get("OPENAI_API_KEY"),
+    "temperature": 0.2,
+})
 
 # Mock database of previous transactions
 def get_previous_transactions() -> list[dict[str, Any]]:
@@ -214,16 +214,18 @@ Next, we need to register our duplicate detection function as a tool:
 
 ```python hl_lines="19-24"
 # Create the finance agent with LLM intelligence
-with llm_config:
-    finance_bot = ConversableAgent(
-        name="finance_bot",
-        system_message=finance_system_message,
-        functions=[check_duplicate_payment],
-    )
-    summary_bot = ConversableAgent(
-        name="summary_bot",
-        system_message=summary_system_message,
-    )
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    llm_config=llm_config,
+    system_message=finance_system_message,
+    functions=[check_duplicate_payment],
+)
+
+summary_bot = ConversableAgent(
+    name="summary_bot",
+    llm_config=llm_config,
+    system_message=summary_system_message,
+)
 
 # Create the human agent for oversight
 human = ConversableAgent(
@@ -330,12 +332,12 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     # Note: Make sure to set your API key in your environment first
 
     # Configure the LLM
-    llm_config = LLMConfig(
-        api_type="openai",
-        model="gpt-4o-mini",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.2,
-    )
+    llm_config = LLMConfig(config_list={
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "temperature": 0.2,
+    })
 
     # Mock database of previous transactions
     def get_previous_transactions() -> list[dict[str, Any]]:
@@ -428,16 +430,17 @@ Here's the complete, ready-to-run code for our enhanced financial compliance sys
     """
 
     # Create the finance agent with LLM intelligence
-    with llm_config:
-        finance_bot = ConversableAgent(
-            name="finance_bot",
-            system_message=finance_system_message,
-            functions=[check_duplicate_payment],
-        )
-        summary_bot = ConversableAgent(
-            name="summary_bot",
-            system_message=summary_system_message,
-        )
+    finance_bot = ConversableAgent(
+        name="finance_bot",
+        system_message=finance_system_message,
+        functions=[check_duplicate_payment],
+        llm_config=llm_config,
+    )
+    summary_bot = ConversableAgent(
+        name="summary_bot",
+        system_message=summary_system_message,
+        llm_config=llm_config,
+    )
 
     # Create the human agent for oversight
     human = ConversableAgent(

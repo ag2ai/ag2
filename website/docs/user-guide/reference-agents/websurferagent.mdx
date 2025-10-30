@@ -70,32 +70,38 @@ We had great experience with `OpenAI`, `Anthropic`, `Gemini` and `Ollama`. Howev
     ```python
     from autogen import LLMConfig
     from autogen.agents.experimental import WebSurferAgent
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
-    with llm_config:
-      websurfer = WebSurferAgent(
-          name="WebSurfer",
-          web_tool="browser_use",
-      )
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        web_tool="browser_use",
+        llm_config=llm_config,
+    )
     ```
   </Tab>
   <Tab title="crawl4ai">
     ```python
     from autogen import LLMConfig
     from autogen.agents.experimental import WebSurferAgent
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
 
     # Put your key in the OPENAI_API_KEY environment variable
-    llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     # Create our agent
-    with llm_config:
-      websurfer = WebSurferAgent(
-          name="WebSurfer",
-          web_tool="crawl4ai",
-      )
+    websurfer = WebSurferAgent(
+        name="WebSurfer",
+        web_tool="crawl4ai",
+        llm_config=llm_config,
+    )
     ```
   </Tab>
 </Tabs>

@@ -6,8 +6,8 @@ import os
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent.captainagent import CaptainAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ...conftest import KEY_LOC, OAI_CONFIG_LIST, Credentials
+from test.const import KEY_LOC, OAI_CONFIG_LIST
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import chromadb  # noqa: F401

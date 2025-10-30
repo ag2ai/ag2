@@ -11,6 +11,7 @@ from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
+from ...llm_config import LLMConfig
 from ..chat import ChatResult
 from .context_variables import ContextVariables
 from .group_utils import cleanup_temp_user_messages
@@ -32,6 +33,9 @@ def initiate_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
+    safeguard_policy: dict[str, Any] | str | None = None,
+    safeguard_llm_config: LLMConfig | None = None,
+    mask_llm_config: LLMConfig | None = None,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration.
 
@@ -39,6 +43,9 @@ def initiate_group_chat(
         pattern: Pattern object that encapsulates the chat configuration.
         messages: Initial message(s).
         max_rounds: Maximum number of conversation rounds.
+        safeguard_policy: Optional safeguard policy dict or path to JSON file.
+        safeguard_llm_config: Optional LLM configuration for safeguard checks.
+        mask_llm_config: Optional LLM configuration for masking.
 
     Returns:
         ChatResult:         Conversations chat history.
@@ -65,6 +72,17 @@ def initiate_group_chat(
         max_rounds=max_rounds,
         messages=messages,
     )
+
+    # Apply safeguards if provided
+    if safeguard_policy:
+        from .safeguards import apply_safeguard_policy
+
+        apply_safeguard_policy(
+            groupchat_manager=manager,
+            policy=safeguard_policy,
+            safeguard_llm_config=safeguard_llm_config,
+            mask_llm_config=mask_llm_config,
+        )
 
     # Start or resume the conversation
     if len(processed_messages) > 1:
@@ -94,6 +112,9 @@ async def a_initiate_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
+    safeguard_policy: dict[str, Any] | str | None = None,
+    safeguard_llm_config: LLMConfig | None = None,
+    mask_llm_config: LLMConfig | None = None,
 ) -> tuple[ChatResult, ContextVariables, "Agent"]:
     """Initialize and run a group chat using a pattern for configuration, asynchronously.
 
@@ -101,6 +122,9 @@ async def a_initiate_group_chat(
         pattern: Pattern object that encapsulates the chat configuration.
         messages: Initial message(s).
         max_rounds: Maximum number of conversation rounds.
+        safeguard_policy: Optional safeguard policy dict or path to JSON file.
+        safeguard_llm_config: Optional LLM configuration for safeguard checks.
+        mask_llm_config: Optional LLM configuration for masking.
 
     Returns:
         ChatResult:         Conversations chat history.
@@ -127,6 +151,17 @@ async def a_initiate_group_chat(
         max_rounds=max_rounds,
         messages=messages,
     )
+
+    # Apply safeguards if provided
+    if safeguard_policy:
+        from .safeguards import apply_safeguard_policy
+
+        apply_safeguard_policy(
+            groupchat_manager=manager,
+            policy=safeguard_policy,
+            safeguard_llm_config=safeguard_llm_config,
+            mask_llm_config=mask_llm_config,
+        )
 
     # Start or resume the conversation
     if len(processed_messages) > 1:
@@ -156,6 +191,9 @@ def run_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
+    safeguard_policy: dict[str, Any] | str | None = None,
+    safeguard_llm_config: LLMConfig | None = None,
+    mask_llm_config: LLMConfig | None = None,
 ) -> RunResponseProtocol:
     iostream = ThreadIOStream()
     # todo: add agents
@@ -165,6 +203,9 @@ def run_group_chat(
         pattern: "Pattern" = pattern,
         messages: list[dict[str, Any]] | str = messages,
         max_rounds: int = max_rounds,
+        safeguard_policy: dict[str, Any] | str | None = safeguard_policy,
+        safeguard_llm_config: LLMConfig | None = safeguard_llm_config,
+        mask_llm_config: LLMConfig | None = mask_llm_config,
         iostream: ThreadIOStream = iostream,
         response: RunResponse = response,
     ) -> None:
@@ -174,6 +215,9 @@ def run_group_chat(
                     pattern=pattern,
                     messages=messages,
                     max_rounds=max_rounds,
+                    safeguard_policy=safeguard_policy,
+                    safeguard_llm_config=safeguard_llm_config,
+                    mask_llm_config=mask_llm_config,
                 )
 
                 IOStream.get_default().send(
@@ -200,6 +244,9 @@ async def a_run_group_chat(
     pattern: "Pattern",
     messages: list[dict[str, Any]] | str,
     max_rounds: int = 20,
+    safeguard_policy: dict[str, Any] | str | None = None,
+    safeguard_llm_config: LLMConfig | None = None,
+    mask_llm_config: LLMConfig | None = None,
 ) -> AsyncRunResponseProtocol:
     iostream = AsyncThreadIOStream()
     # todo: add agents
@@ -209,6 +256,9 @@ async def a_run_group_chat(
         pattern: "Pattern" = pattern,
         messages: list[dict[str, Any]] | str = messages,
         max_rounds: int = max_rounds,
+        safeguard_policy: dict[str, Any] | str | None = safeguard_policy,
+        safeguard_llm_config: LLMConfig | None = safeguard_llm_config,
+        mask_llm_config: LLMConfig | None = mask_llm_config,
         iostream: AsyncThreadIOStream = iostream,
         response: AsyncRunResponse = response,
     ) -> None:
@@ -218,6 +268,9 @@ async def a_run_group_chat(
                     pattern=pattern,
                     messages=messages,
                     max_rounds=max_rounds,
+                    safeguard_policy=safeguard_policy,
+                    safeguard_llm_config=safeguard_llm_config,
+                    mask_llm_config=mask_llm_config,
                 )
 
                 IOStream.get_default().send(
@@ -232,6 +285,7 @@ async def a_run_group_chat(
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
-    asyncio.create_task(_initiate_group_chat())
-
+    task = asyncio.create_task(_initiate_group_chat())
+    # prevent the task from being garbage collected
+    response._task_ref = task  # type: ignore[attr-defined]
     return response

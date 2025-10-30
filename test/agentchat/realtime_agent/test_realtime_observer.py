@@ -6,7 +6,7 @@ from asyncio import sleep
 from unittest.mock import MagicMock
 
 import pytest
-from asyncer import create_task_group
+from anyio import create_task_group
 
 from autogen.agentchat.realtime.experimental import RealtimeObserver
 from autogen.agentchat.realtime.experimental.realtime_events import RealtimeEvent
@@ -46,7 +46,7 @@ class TestRealtimeObserver:
 
         try:
             async with create_task_group() as tg:
-                tg.soonify(observer.run)(agent)
+                tg.start_soon(observer.run, agent)
                 await sleep(1.0)
                 tg.cancel_scope.cancel()
 

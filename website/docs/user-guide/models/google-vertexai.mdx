@@ -162,11 +162,11 @@ for llm_config in [llm_config_gemini, llm_config_gemini_vision]:
     for config_list_item in llm_config.config_list:
         config_list_item.safety_settings = safety_settings
 
-with llm_config_gemini:
-    assistant = AssistantAgent(
-        "assistant",
-        max_consecutive_auto_reply=3
-    )
+assistant = AssistantAgent(
+    "assistant",
+    max_consecutive_auto_reply=3,
+    llm_config=llm_config_gemini,
+)
 
 user_proxy = UserProxyAgent(
     "user_proxy",
@@ -262,21 +262,21 @@ scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
 credentials, project_id = google.auth.default(scopes)
 
-llm_config_gemini_vision = LLMConfig(
-    model="gemini-pro-vision",
-    api_type="google",
-    project_id=project_id,
-    credentials=credentials,
-    location="us-west1",
-    safety_settings=safety_settings,
-    seed=seed,
-)
+llm_config_gemini_vision = LLMConfig(config_list={
+    "model": "gemini-pro-vision",
+    "api_type": "google",
+    "project_id": project_id,
+    "credentials": credentials,
+    "location": "us-west1",
+    "safety_settings": safety_settings,
+    "seed": seed,
+})
 
-with llm_config_gemini_vision:
-    image_agent = MultimodalConversableAgent(
-        "Gemini Vision",
-        max_consecutive_auto_reply=1,
-    )
+image_agent = MultimodalConversableAgent(
+    "Gemini Vision",
+    max_consecutive_auto_reply=1,
+    llm_config=llm_config_gemini_vision,
+)
 
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER", max_consecutive_auto_reply=0)
 
@@ -335,16 +335,19 @@ completion_token_price_per_1k = (
     0.000375  # For more up-to-date prices see https://cloud.google.com/vertex-ai/generative-ai/pricing
 )
 
-llm_config_openai_gemini = LLMConfig(
-    model="google/gemini-1.5-pro-001",
-    api_type="openai",
-    base_url=f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/endpoints/openapi",
-    api_key=creds.token,
-    price=[prompt_price_per_1k, completion_token_price_per_1k],
-)
+llm_config_openai_gemini = LLMConfig(config_list={
+    "model": "google/gemini-1.5-pro-001",
+    "api_type": "openai",
+    "base_url": f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/endpoints/openapi",
+    "api_key": creds.token,
+    "price": [prompt_price_per_1k, completion_token_price_per_1k],
+})
 
-with llm_config_openai_gemini:
-    assistant = AssistantAgent("assistant", max_consecutive_auto_reply=3)
+assistant = AssistantAgent(
+    "assistant",
+    max_consecutive_auto_reply=3,
+    llm_config=llm_config_openai_gemini,
+)
 
 user_proxy = UserProxyAgent(
     "user_proxy",

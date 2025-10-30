@@ -24,8 +24,8 @@ from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 from autogen.import_utils import run_for_optional_imports
-
-from ..conftest import Credentials, suppress_json_decoder_error
+from test.credentials import Credentials
+from test.utils import suppress_json_decoder_error
 
 
 def test_groupchat_init():
@@ -1271,48 +1271,45 @@ def test_role_for_select_speaker_messages():
     # into a message attribute called 'override_role'. This is evaluated in Conversable Agent's _append_oai_message function
     # e.g.: message={'content':self.select_speaker_prompt(agents),'override_role':self.role_for_select_speaker_messages},
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
-
+    checking_agent._append_oai_message(message, conversation_id=speaker_selection_agent)
     # Test default is "system"
     assert len(checking_agent.chat_messages) == 1
-    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "system"
+    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "system", checking_agent.chat_messages
 
     # Test as "user"
     groupchat.role_for_select_speaker_messages = "user"
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
+    checking_agent._append_oai_message(message, conversation_id=speaker_selection_agent)
 
     assert len(checking_agent.chat_messages) == 1
-    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "user"
+    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "user", checking_agent.chat_messages
 
     # Test as something unusual
     groupchat.role_for_select_speaker_messages = "SockS"
     message = {"content": "A prompt goes here.", "override_role": groupchat.role_for_select_speaker_messages}
-    checking_agent._append_oai_message(message, "assistant", speaker_selection_agent, is_sending=True)
+    checking_agent._append_oai_message(message, conversation_id=speaker_selection_agent)
 
     assert len(checking_agent.chat_messages) == 1
-    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "SockS"
+    assert checking_agent.chat_messages[speaker_selection_agent][-1]["role"] == "SockS", checking_agent.chat_messages
 
     # Test empty string and None isn't accepted
 
     # Test with empty strings
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="role_for_select_speaker_messages cannot be empty or None."):
         groupchat = autogen.GroupChat(
             agents=[agent1, agent2],
             messages=[{"role": "user", "content": "Let's have a chat!"}],
             max_round=3,
             role_for_select_speaker_messages="",
         )
-    assert "role_for_select_speaker_messages cannot be empty or None." in str(e.value)
 
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="role_for_select_speaker_messages cannot be empty or None."):
         groupchat = autogen.GroupChat(
             agents=[agent1, agent2],
             messages=[{"role": "user", "content": "Let's have a chat!"}],
             max_round=3,
             role_for_select_speaker_messages=None,
         )
-    assert "role_for_select_speaker_messages cannot be empty or None." in str(e.value)
 
 
 def test_select_speaker_message_and_prompt_templates():
@@ -1565,7 +1562,6 @@ def test_speaker_selection_auto_process_result():
     groupchat = autogen.GroupChat(agents=agent_list, messages=[], max_round=3)
 
     chat_result = autogen.ChatResult(
-        chat_id=None,
         chat_history=[
             {
                 "content": "Let's get this meeting started. First the Product_Manager will create 3 new product ideas.",
@@ -2323,37 +2319,3 @@ def test_groupchatmanager_no_llm_config():
         ),
     ):
         agent_a.initiate_chat(manager, message="Hello")
-
-
-if __name__ == "__main__":
-    # test_func_call_groupchat()
-    # test_broadcast()
-    # test_chat_manager()
-    # test_plugin()
-    # test_speaker_selection_method()
-    # test_n_agents_less_than_3()
-    # test_agent_mentions()
-    # test_termination()
-    # test_next_agent()
-    # test_send_intros()
-    # test_invalid_allow_repeat_speaker()
-    # test_graceful_exit_before_max_round()
-    # test_clear_agents_history()
-    # test_custom_speaker_selection_overrides_transition_graph()
-    # test_role_for_select_speaker_messages()
-    # test_select_speaker_message_and_prompt_templates()
-    # test_speaker_selection_agent_name_match()
-    # test_role_for_reflection_summary()
-    # test_speaker_selection_auto_process_result()
-    # test_speaker_selection_validate_speaker_name()
-    # test_select_speaker_auto_messages()
-    # test_select_speaker_auto_messages()
-    # test_manager_messages_to_string()
-    # test_manager_messages_from_string()
-    # test_manager_resume_functions()
-    # test_manager_resume_returns()
-    # test_manager_resume_messages()
-    # test_select_speaker_transform_messages()
-    # test_manager_resume_message_assignment()
-    test_custom_model_client()
-    pass

@@ -5,34 +5,20 @@
 import functools
 import json
 import re
+import warnings
 from collections.abc import Iterable
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import Self, deprecated
 
-from autogen.oai.anthropic import AnthropicEntryDict, AnthropicLLMConfigEntry
-from autogen.oai.bedrock import BedrockEntryDict, BedrockLLMConfigEntry
-from autogen.oai.cerebras import CerebrasEntryDict, CerebrasLLMConfigEntry
-from autogen.oai.client import (
-    AzureOpenAIEntryDict,
-    AzureOpenAILLMConfigEntry,
-    DeepSeekEntyDict,
-    DeepSeekLLMConfigEntry,
-    OpenAIEntryDict,
-    OpenAILLMConfigEntry,
-    OpenAIResponsesLLMConfigEntry,
-)
-from autogen.oai.cohere import CohereEntryDict, CohereLLMConfigEntry
-from autogen.oai.gemini import GeminiEntryDict, GeminiLLMConfigEntry
-from autogen.oai.groq import GroqEntryDict, GroqLLMConfigEntry
-from autogen.oai.mistral import MistralEntryDict, MistralLLMConfigEntry
-from autogen.oai.ollama import OllamaEntryDict, OllamaLLMConfigEntry
-from autogen.oai.together import TogetherEntryDict, TogetherLLMConfigEntry
+from autogen.doc_utils import export_module
 
-from ..doc_utils import export_module
 from .entry import ApplicationConfig, LLMConfigEntry
+from .types import ConfigEntries
+from .utils import config_list_from_json, filter_config
 
 
 # Meta class to allow LLMConfig.current and LLMConfig.default to be used as class properties
@@ -41,6 +27,11 @@ class MetaLLMConfig(type):
         pass
 
     @property
+    @deprecated(
+        "`LLMConfig.current / .default` properties are deprecated. "
+        "Pass config object to usage explicitly instead. "
+        "Scheduled for removal in 0.11.0 version."
+    )
     def current(cls) -> "LLMConfig":
         current_llm_config = LLMConfig.get_current_llm_config(llm_config=None)
         if current_llm_config is None:
@@ -48,39 +39,29 @@ class MetaLLMConfig(type):
         return current_llm_config  # type: ignore[return-value]
 
     @property
+    @deprecated(
+        "`LLMConfig.current / .default` properties are deprecated. "
+        "Pass config object to usage explicitly instead. "
+        "Scheduled for removal in 0.11.0 version."
+    )
     def default(cls) -> "LLMConfig":
         return cls.current
 
 
-ConfigItem: TypeAlias = (
-    LLMConfigEntry
-    | AnthropicEntryDict
-    | BedrockEntryDict
-    | CerebrasEntryDict
-    | CohereEntryDict
-    | AzureOpenAIEntryDict
-    | OpenAIEntryDict
-    | DeepSeekEntyDict
-    | MistralEntryDict
-    | GroqEntryDict
-    | OllamaEntryDict
-    | GeminiEntryDict
-    | TogetherEntryDict
-    | dict[str, Any]
-)
+ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 
 
 @export_module("autogen")
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
+    config_list: list[ConfigEntries]
 
     def __init__(
         self,
-        *,
+        *configs: ConfigItem,
         top_p: float | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        config_list: Iterable[ConfigItem] | dict[str, Any] = (),
         check_every_ms: int | None = None,
         allow_format_str_template: bool | None = None,
         response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
@@ -91,11 +72,27 @@ class LLMConfig(metaclass=MetaLLMConfig):
         tools: Iterable[Any] = (),
         functions: Iterable[Any] = (),
         routing_method: Literal["fixed_order", "round_robin"] | None = None,
-        **kwargs: Any,
+        config_list: Annotated[
+            Iterable[ConfigItem] | dict[str, Any],
+            deprecated(
+                "`LLMConfig(config_list=[{'model': ..., 'api_key': ...}, ...])` syntax is deprecated. "
+                "Use `LLMConfig({'api_key': ..., 'model': ...}, ...)` instead. "
+                "Scheduled for removal in 0.11.0 version."
+            ),
+        ] = (),
+        **kwargs: Annotated[
+            Any,
+            deprecated(
+                "`LLMConfig(api_key=..., model=...)` syntax is deprecated. "
+                "Use `LLMConfig({'api_key': ..., 'model': ...})` instead. "
+                "Scheduled for removal in 0.11.0 version."
+            ),
+        ],
     ) -> None:
-        """Initializes the LLMConfig object.
+        r"""Initializes the LLMConfig object.
 
         Args:
+            *configs: A list of LLM configuration entries or dictionaries.
             config_list: A list of LLM configuration entries or dictionaries.
             temperature: The sampling temperature for LLM generation.
             check_every_ms: The interval (in milliseconds) to check for updates
@@ -110,39 +107,80 @@ class LLMConfig(metaclass=MetaLLMConfig):
             max_tokens: The maximum number of tokens to generate.
             top_p: The nucleus sampling probability.
             routing_method: The method used to route requests (e.g., fixed_order, round_robin).
-            **kwargs: Additional keyword arguments for future extensions.
+            **kwargs: Additional keyword arguments for\ future extensions.
 
         Examples:
             ```python
-            # Example 1: create config from `kwargs` options
+            # Example 1: create config from one model dictionary
+            config = LLMConfig({
+                "model": "gpt-5-mini",
+                "api_key": os.environ["OPENAI_API_KEY"],
+            })
+
+            # Example 2: create config from list of dictionaries
             config = LLMConfig(
-                model="gpt-4o-mini",
+                {
+                    "model": "gpt-5-mini",
+                    "api_key": os.environ["OPENAI_API_KEY"],
+                },
+                {
+                    "model": "gpt-4",
+                    "api_key": os.environ["OPENAI_API_KEY"],
+                },
+            )
+
+            # Example 3 (deprecated): create config from `kwargs` options
+            config = LLMConfig(
+                model="gpt-5-mini",
                 api_key=os.environ["OPENAI_API_KEY"],
             )
 
-            # Example 2: create config from `config_list` dictionary
+            # Example 4 (deprecated): create config from `config_list` dictionary
             config = LLMConfig(
                 config_list={
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-5-mini",
                     "api_key": os.environ["OPENAI_API_KEY"],
                 }
             )
 
-            # Example 3: create config from `config_list` list
+            # Example 5 (deprecated): create config from `config_list` list
             config = LLMConfig(
                 config_list=[
                     {
-                        "model": "gpt-4o-mini",
+                        "model": "gpt-5-mini",
                         "api_key": os.environ["OPENAI_API_KEY"],
                     },
                     {
-                        "model": "gpt-4",
+                        "model": "gpt-5",
                         "api_key": os.environ["OPENAI_API_KEY"],
                     },
                 ]
             )
             ```
         """
+        if isinstance(config_list, dict):
+            config_list = [config_list]
+
+        if kwargs:
+            warnings.warn(
+                (
+                    "`LLMConfig(api_key=..., model=...)` syntax is deprecated. "
+                    "Use `LLMConfig({'api_key': ..., 'model': ...})` instead. "
+                    "Scheduled for removal in 0.11.0 version."
+                ),
+                DeprecationWarning,
+            )
+
+        if config_list:
+            warnings.warn(
+                (
+                    "`LLMConfig(config_list=[{'model': ..., 'api_key': ...}, ...])` syntax is deprecated. "
+                    "Use `LLMConfig({'api_key': ..., 'model': ...}, ...)` instead. "
+                    "Scheduled for removal in 0.11.0 version."
+                ),
+                DeprecationWarning,
+            )
+
         app_config = ApplicationConfig(
             max_tokens=max_tokens,
             top_p=top_p,
@@ -152,11 +190,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         application_level_options = app_config.model_dump(exclude_none=True)
 
         final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
-
-        if isinstance(config_list, dict):
-            config_list = [config_list]
-
-        for c in filter(bool, (*config_list, kwargs)):
+        for c in filter(bool, (*configs, *config_list, kwargs)):
             if isinstance(c, LLMConfigEntry):
                 final_config_list.append(c.apply_application_config(app_config))
                 continue
@@ -183,9 +217,55 @@ class LLMConfig(metaclass=MetaLLMConfig):
             routing_method=routing_method,
         )
 
-    # used by BaseModel to create instance variables
+    @classmethod
+    def ensure_config(cls, config: "LLMConfig | ConfigItem | Iterable[ConfigItem]", /) -> "LLMConfig":
+        """Transforms passed objects to LLMConfig object.
+
+        Method to use for `Agent(llm_config={...})` cases.
+
+        >>> LLMConfig.ensure_config(LLMConfig(...))
+        LLMConfig(...)
+
+        >>> LLMConfig.ensure_config(LLMConfigEntry(...))
+        LLMConfig(LLMConfigEntry(...))
+
+        >>> LLMConfig.ensure_config({"model": "gpt-o3"})
+        LLMConfig(OpenAILLMConfigEntry(model="o3"))
+
+        >>> LLMConfig.ensure_config([{"model": "gpt-o3"}, ...])
+        LLMConfig(OpenAILLMConfigEntry(model="o3"), ...)
+
+        >>> (deprecated) LLMConfig.ensure_config({"config_list": [{ "model": "gpt-o3" }, ...]})
+        LLMConfig(OpenAILLMConfigEntry(model="o3"), ...)
+        """
+        if isinstance(config, LLMConfig):
+            return config.copy()
+
+        if isinstance(config, LLMConfigEntry):
+            return LLMConfig(config)
+
+        if isinstance(config, dict):
+            if "config_list" in config:  # backport compatibility
+                return LLMConfig(**config)
+            return LLMConfig(config)
+
+        return LLMConfig(*config)
+
+    @deprecated(
+        "`with llm_config: ...` context manager is deprecated. "
+        "Pass config object to usage explicitly instead. "
+        "Scheduled for removal in 0.11.0 version."
+    )
     def __enter__(self) -> "LLMConfig":
-        # Store previous context and set self as current
+        warnings.warn(
+            (
+                "`with llm_config: ...` context manager is deprecated. "
+                "Pass config object to usage explicitly instead. "
+                "Scheduled for removal in 0.11.0 version."
+            ),
+            DeprecationWarning,
+        )
+
         self._token = LLMConfig._current_llm_config.set(self)
         return self
 
@@ -193,22 +273,27 @@ class LLMConfig(metaclass=MetaLLMConfig):
         LLMConfig._current_llm_config.reset(self._token)
 
     @classmethod
+    @deprecated(
+        "`LLMConfig.current / .default` properties are deprecated. "
+        "Pass config object to usage explicitly instead. "
+        "Scheduled for removal in 0.11.0 version."
+    )
     def get_current_llm_config(cls, llm_config: "LLMConfig | None" = None) -> "LLMConfig | None":
+        warnings.warn(
+            (
+                "`LLMConfig.current / .default` properties are deprecated. "
+                "Pass config object to usage explicitly instead. "
+                "Scheduled for removal in 0.11.0 version."
+            ),
+            DeprecationWarning,
+        )
+
         if llm_config is not None:
             return llm_config
         try:
             return (LLMConfig._current_llm_config.get()).copy()
         except LookupError:
             return None
-
-    def _satisfies_criteria(self, value: Any, criteria_values: Any) -> bool:
-        if value is None:
-            return False
-
-        if isinstance(value, list):
-            return bool(set(value) & set(criteria_values))  # Non-empty intersection
-        else:
-            return value in criteria_values
 
     @classmethod
     def from_json(
@@ -217,44 +302,47 @@ class LLMConfig(metaclass=MetaLLMConfig):
         env: str | None = None,
         path: str | Path | None = None,
         file_location: str | None = None,
+        filter_dict: dict[str, list[str | None] | set[str | None]] | None = None,
         **kwargs: Any,
-    ) -> "LLMConfig":
-        from autogen.oai.openai_utils import config_list_from_json
-
+    ) -> Self:
         if env is None and path is None:
             raise ValueError("Either 'env' or 'path' must be provided")
+
         if env is not None and path is not None:
             raise ValueError("Only one of 'env' or 'path' can be provided")
 
         config_list = config_list_from_json(
-            env_or_file=env if env is not None else str(path), file_location=file_location
+            env_or_file=env if env is not None else str(path),
+            file_location=file_location,
+            filter_dict=filter_dict,
         )
-        return LLMConfig(config_list=config_list, **kwargs)
+
+        return cls(*config_list, **kwargs)
 
     def where(self, *, exclude: bool = False, **kwargs: Any) -> "LLMConfig":
-        from autogen.oai.openai_utils import filter_config
+        filtered_config_list = filter_config(
+            config_list=[c.model_dump() for c in self.config_list],
+            filter_dict=kwargs,
+            exclude=exclude,
+        )
 
-        filtered_config_list = filter_config(config_list=self.config_list, filter_dict=kwargs, exclude=exclude)
         if len(filtered_config_list) == 0:
             raise ValueError(f"No config found that satisfies the filter criteria: {kwargs}")
 
         kwargs = self.model_dump()
-        kwargs["config_list"] = filtered_config_list
+        del kwargs["config_list"]
 
-        return LLMConfig(**kwargs)
+        return LLMConfig(*filtered_config_list, **kwargs)
 
-    # @functools.wraps(BaseModel.model_dump)
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
         d = self._model.model_dump(*args, exclude_none=exclude_none, **kwargs)
         return {k: v for k, v in d.items() if not (isinstance(v, list) and len(v) == 0)}
 
-    # @functools.wraps(BaseModel.model_dump_json)
     def model_dump_json(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> str:
         # return self._model.model_dump_json(*args, exclude_none=exclude_none, **kwargs)
         d = self.model_dump(*args, exclude_none=exclude_none, **kwargs)
         return json.dumps(d)
 
-    # @functools.wraps(BaseModel.model_validate)
     def model_validate(self, *args: Any, **kwargs: Any) -> Any:
         return self._model.model_validate(*args, **kwargs)
 
@@ -318,7 +406,8 @@ class LLMConfig(metaclass=MetaLLMConfig):
         return s
 
     def __copy__(self) -> "LLMConfig":
-        return LLMConfig(**self.model_dump())
+        options = self._model.model_dump(exclude={"config_list"})
+        return LLMConfig(*self._model.config_list, **options)
 
     def __deepcopy__(self, memo: dict[int, Any] | None = None) -> "LLMConfig":
         return self.__copy__()
@@ -359,21 +448,9 @@ class _LLMConfig(ApplicationConfig):
     tools: list[Any]
     functions: list[Any]
 
-    config_list: list[  # type: ignore[valid-type]
+    config_list: list[
         Annotated[
-            AnthropicLLMConfigEntry
-            | CerebrasLLMConfigEntry
-            | BedrockLLMConfigEntry
-            | AzureOpenAILLMConfigEntry
-            | DeepSeekLLMConfigEntry
-            | OpenAILLMConfigEntry
-            | OpenAIResponsesLLMConfigEntry
-            | CohereLLMConfigEntry
-            | GeminiLLMConfigEntry
-            | GroqLLMConfigEntry
-            | MistralLLMConfigEntry
-            | OllamaLLMConfigEntry
-            | TogetherLLMConfigEntry,
+            ConfigEntries,
             Field(discriminator="api_type"),
         ],
     ] = Field(..., min_length=1)

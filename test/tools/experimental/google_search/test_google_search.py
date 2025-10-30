@@ -11,8 +11,7 @@ from autogen import AssistantAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.tools.experimental import GoogleSearchTool
 from autogen.tools.experimental.google_search.google_search import _google_search
-
-from ....conftest import Credentials
+from test.credentials import Credentials
 
 
 class TestGoogleSearchTool:

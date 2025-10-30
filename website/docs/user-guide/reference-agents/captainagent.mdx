@@ -26,7 +26,7 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 
 ## Using CaptainAgent without libraries
 
-We begin with demonstrating how to use [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-4o`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](/docs/user-guide/reference-agents/captainagent).
+We begin with demonstrating how to use [`CaptainAgent`](/docs/api-reference/autogen/agentchat/contrib/captainagent/CaptainAgent) without retrieving from libraries. In this case, CaptainAgent will automatically generate a set of experts according to its identified subtask and initiate the group chat. By default, the backbone of the LLM is set to `gpt-5`. For instructions on configuring the backbone, refer to docs on [`nested_mode`](/docs/user-guide/reference-agents/captainagent).
 
 ```python
 import autogen
@@ -35,15 +35,15 @@ from autogen.agentchat.contrib.captainagent import CaptainAgent
 
 config_path = "OAI_CONFIG_LIST"
 # You can modify the parameters of where method to select your model
-llm_config = LLMConfig.from_json(path=config_path, temperature=0).where(model="gpt-4o")
+llm_config = LLMConfig.from_json(path=config_path, temperature=0).where(model="gpt-5")
 
 ## build agents
-with llm_config:
-  captain_agent = CaptainAgent(
-      name="captain_agent",
-      code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-      agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
-  )
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
+    llm_config=llm_config,
+)
 captain_user_proxy = UserProxyAgent(name="captain_user_proxy", human_input_mode="NEVER")
 
 result = captain_user_proxy.initiate_chat(
@@ -463,13 +463,13 @@ from autogen import UserProxyAgent
 from autogen.agentchat.contrib.captainagent import CaptainAgent
 
 # build agents
-with llm_config:
-  captain_agent = CaptainAgent(
-      name="captain_agent",
-      code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-      agent_lib="captainagent_expert_library.json",
-      agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
-  )
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    agent_lib="captainagent_expert_library.json",
+    agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
+    llm_config=llm_config,
+)
 captain_user_proxy = UserProxyAgent(name="captain_user_proxy", human_input_mode="NEVER")
 
 query = "find papers on LLM applications from arxiv in the last week, create a markdown table of different domains. After collecting the data, point out future research directions in light of the collected data."
@@ -1382,14 +1382,14 @@ os.environ["RAPID_API_KEY"] = (
 )
 
 ## build agents
-with llm_config:
-  captain_agent = CaptainAgent(
-      name="captain_agent",
-      code_execution_config={"use_docker": False, "work_dir": "groupchat"},
-      agent_lib="captainagent_expert_library.json",
-      tool_lib="default",
-      agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
-  )
+captain_agent = CaptainAgent(
+    name="captain_agent",
+    code_execution_config={"use_docker": False, "work_dir": "groupchat"},
+    agent_lib="captainagent_expert_library.json",
+    tool_lib="default",
+    agent_config_save_path=None,  # If you'd like to save the created agents in nested chat for further use, specify the save directory here
+    llm_config=llm_config,
+)
 captain_user_proxy = UserProxyAgent(name="captain_user_proxy", human_input_mode="NEVER")
 
 query = """# Task

@@ -3,17 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
+from pydantic_ai.tools import Tool as PydanticAITool
 
 from autogen import AssistantAgent
-from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.tools import Tool
-
-with optional_import_block():
-    from pydantic_ai.tools import Tool as PydanticAITool
 
 
 @pytest.mark.interop
-@run_for_optional_imports("pydantic_ai", "interop-pydantic-ai")
 class TestPydanticAITool:
     def test_register_for_llm(self) -> None:
         def foobar(a: int, b: str, c: dict[str, list[float]]) -> str:  # type: ignore[misc]
@@ -31,7 +28,7 @@ class TestPydanticAITool:
             name=tool.name,
             description=tool.description,
             func_or_tool=tool.function,
-            parameters_json_schema=tool._parameters_json_schema,
+            parameters_json_schema=tool.function_schema.json_schema,  # type: ignore[attr-defined]
         )
         config_list = [{"api_type": "openai", "model": "gpt-4o", "api_key": "abc"}]
         chatbot = AssistantAgent(
@@ -47,14 +44,13 @@ class TestPydanticAITool:
                     "description": "Get me foobar.",
                     "parameters": {
                         "properties": {
-                            "a": {"description": "apple pie", "title": "A", "type": "integer"},
-                            "b": {"description": "banana cake", "title": "B", "type": "string"},
-                            "c": {
+                            "a": IsPartialDict({"description": "apple pie", "type": "integer"}),
+                            "b": IsPartialDict({"description": "banana cake", "type": "string"}),
+                            "c": IsPartialDict({
                                 "additionalProperties": {"items": {"type": "number"}, "type": "array"},
                                 "description": "carrot smoothie",
-                                "title": "C",
                                 "type": "object",
-                            },
+                            }),
                         },
                         "required": ["a", "b", "c"],
                         "type": "object",

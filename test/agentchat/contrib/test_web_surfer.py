@@ -14,9 +14,8 @@ import pytest
 from autogen import UserProxyAgent
 from autogen.agentchat.contrib.web_surfer import WebSurferAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-
-from ...conftest import MOCK_OPEN_AI_API_KEY, Credentials
-from ...test_browser_utils import BING_QUERY, BLOG_POST_TITLE, BLOG_POST_URL
+from test.const import BING_QUERY, BLOG_POST_TITLE, BLOG_POST_URL, MOCK_OPEN_AI_API_KEY
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import markdownify  # noqa: F401

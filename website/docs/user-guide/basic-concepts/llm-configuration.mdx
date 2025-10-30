@@ -41,11 +41,11 @@ The simplest approach is to directly specify the model provider, model name, and
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(
-    api_type="openai",                      # The provider
-    model="gpt-4o-mini",                    # The specific model
-    api_key=os.environ["OPENAI_API_KEY"],   # Authentication
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",                      # The provider
+    "model": "gpt-5-nano",                    # The specific model
+    "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
+})
 ```
 
 ### Method 2: Using the `config_list` Parameter
@@ -57,18 +57,16 @@ import os
 from autogen import LLMConfig
 
 llm_config = LLMConfig(
-    config_list=[
-        {
-            "api_type": "openai",
-            "model": "gpt-4o-mini",
-            "api_key": os.environ["OPENAI_API_KEY"]
-        },
-        {
-            "api_type": "openai",
-            "model": "gpt-4o",
-            "api_key": os.environ["OPENAI_API_KEY"]
-        }
-    ],
+    {
+        "api_type": "openai",
+        "model": "gpt-5-nano",
+        "api_key": os.environ["OPENAI_API_KEY"]
+    },
+    {
+        "api_type": "openai",
+        "model": "gpt-5",
+        "api_key": os.environ["OPENAI_API_KEY"]
+    }
 )
 ```
 
@@ -114,16 +112,17 @@ The context manager approach applies the LLM configuration to all agents created
 ```python hl_lines="3-12"
 from autogen import ConversableAgent
 
-with llm_config:
-    finance_bot = ConversableAgent(
-        name="finance_bot",
-        system_message="You are a financial compliance assistant",
-    )
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    system_message="You are a financial compliance assistant",
+    llm_config=llm_config,
+)
 
-    analysis_bot = ConversableAgent(
-        name="analysis_bot",
-        system_message="You analyze financial data for anomalies",
-    )
+analysis_bot = ConversableAgent(
+    name="analysis_bot",
+    system_message="You analyze financial data for anomalies",
+    llm_config=llm_config,
+)
 ```
 
 ## Financial Compliance Example: LLM Configuration
@@ -135,17 +134,17 @@ from autogen import LLMConfig
 import os
 
 # Basic configuration using environment variable
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-4o-mini",
-    api_key=os.environ["OPENAI_API_KEY"],
-    temperature=0.2  # Lower temperature for more consistent financial analysis
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+    "temperature": 0.2  # Lower temperature for more consistent financial analysis
+})
 ```
 
 **Code walkthrough**:
 
-- We're using OpenAI's `GPT-4o-mini` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
+- We're using OpenAI's `gpt-5-nano` model because our financial bot needs smarts without breaking the bank. You can use a different model if you prefer.
 - We've set temperature to 0.2 because when it comes to financial compliance, creativity is NOT what we want (sorry, creative accountants!)
 - We're keeping our API key in an environment variable because security first, folks!
 

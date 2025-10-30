@@ -15,11 +15,11 @@ from autogen.oai.cohere import CohereClient, CohereLLMConfigEntry, calculate_coh
 
 
 @pytest.fixture
-def cohere_client():
+def cohere_client() -> CohereClient:
     return CohereClient(api_key="dummy_api_key")
 
 
-def test_cohere_llm_config_entry():
+def test_cohere_llm_config_entry() -> None:
     cohere_llm_config = CohereLLMConfigEntry(
         model="command-r-plus",
         api_key="dummy_api_key",
@@ -39,18 +39,15 @@ def test_cohere_llm_config_entry():
         "temperature": 0.3,
     }
     actual = cohere_llm_config.model_dump()
-    assert actual == expected, actual
+    assert actual == expected
 
-    llm_config = LLMConfig(
-        config_list=[cohere_llm_config],
-    )
-    assert llm_config.model_dump() == {
+    assert LLMConfig(cohere_llm_config).model_dump() == {
         "config_list": [expected],
     }
 
 
 @run_for_optional_imports(["cohere"], "cohere")
-def test_initialization_missing_api_key(monkeypatch):
+def test_initialization_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     with pytest.raises(
         AssertionError,
@@ -62,12 +59,12 @@ def test_initialization_missing_api_key(monkeypatch):
 
 
 @run_for_optional_imports(["cohere"], "cohere")
-def test_intialization(cohere_client):
+def test_intialization(cohere_client: CohereClient) -> None:
     assert cohere_client.api_key == "dummy_api_key", "`api_key` should be correctly set in the config"
 
 
 @run_for_optional_imports(["cohere"], "cohere")
-def test_calculate_cohere_cost():
+def test_calculate_cohere_cost() -> None:
     assert calculate_cohere_cost(0, 0, model="command-r") == 0.0, (
         "Cost should be 0 for 0 input_tokens and 0 output_tokens"
     )
@@ -75,19 +72,16 @@ def test_calculate_cohere_cost():
 
 
 @run_for_optional_imports(["cohere"], "cohere")
-def test_load_config(cohere_client):
-    params = {
+def test_load_config(cohere_client: CohereClient) -> None:
+    assert cohere_client.parse_params({
         "model": "command-r-plus",
         "stream": False,
         "temperature": 1,
-        "p": 0.8,
+        "top_p": 0.8,
         "max_tokens": 100,
-    }
-    expected_params = {
+    }) == {
         "model": "command-r-plus",
         "temperature": 1,
         "p": 0.8,
         "max_tokens": 100,
-    }
-    result = cohere_client.parse_params(params)
-    assert result == expected_params, "Config should be correctly loaded"
+    }, "Config should be correctly loaded"

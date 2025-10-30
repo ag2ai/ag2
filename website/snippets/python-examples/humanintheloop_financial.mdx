@@ -1,9 +1,12 @@
 ```python
 from autogen import ConversableAgent, LLMConfig
 import random
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Put your key in the OPENAI_API_KEY environment variable
-llm_config = LLMConfig(api_type="openai", model="gpt-4o-mini")
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Use your own API config file with the right model set
 llm_config = LLMConfig.from_json(
@@ -25,11 +28,11 @@ After all transactions, provide a final report in this format:
 """
 
 # Define the finance agent with task-specific reasoning
-with llm_config:
-    finance_bot = ConversableAgent(
-        name="finance_bot",
-        system_message=finance_system_message,
-    )
+finance_bot = ConversableAgent(
+    name="finance_bot",
+    system_message=finance_system_message,
+    llm_config=llm_config,
+)
 
 # Human-in-the-loop agent
 human = ConversableAgent(

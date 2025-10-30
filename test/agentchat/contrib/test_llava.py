@@ -12,8 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.agentchat.contrib.llava_agent import LLaVAAgent, _llava_call_binary_with_config, llava_call
-
-from ...conftest import MOCK_OPEN_AI_API_KEY
+from test.const import MOCK_OPEN_AI_API_KEY
 
 
 @pytest.mark.lmm

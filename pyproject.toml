@@ -24,7 +24,7 @@ keywords = [
     "agentic"
 ]
 
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 
 dynamic = ["version"]
 
@@ -53,17 +53,18 @@ dependencies = [
     "termcolor",
     "python-dotenv",
     "tiktoken",
-    # Disallowing 2.6.0 can be removed when this is fixed https://github.com/pydantic/pydantic/issues/8705
     "pydantic>=2.6.1,<3",
     "docker",
     "packaging",
-    "asyncer==0.0.8",
 #    "fast-depends>=2.4.12,<3",  # integrated into the package
     "httpx>=0.28.1,<1",
     "anyio>=3.0.0,<5.0.0"  # needed by the internal fast-depends
 ]
 
 [project.optional-dependencies]
+a2a = [
+    "a2a-sdk[http-server]>=0.3.7,<0.4",
+]
 
 flaml = [
     "flaml",
@@ -92,7 +93,7 @@ jupyter-executor = [
 ]
 
 retrievechat = [
-    "protobuf==6.31.1",
+    "protobuf==6.32.0",
     "chromadb==1.0.20",
     "sentence_transformers<=5.1.0",
     "pypdf",
@@ -136,11 +137,14 @@ rag = [
     "selenium>=4.28.1,<5",
     "webdriver-manager==4.0.2",
     "chromadb>=0.5,<2",
-    "llama-index>=0.12,<1",
-    "llama-index-vector-stores-chroma==0.5.1",
-    "llama-index-vector-stores-mongodb==0.8.0",
-    "llama-index-embeddings-huggingface==0.6.0",
-    "llama-index-llms-langchain==0.7.0",
+    "llama-index>=0.12,<0.14",
+    "llama-index-core>=0.12,<0.14",
+    "llama-index-vector-stores-chroma>=0.4,<0.6",
+    "llama-index-vector-stores-mongodb>=0.6,<0.9",
+    "llama-index-embeddings-huggingface>=0.5,<0.7",
+    "llama-index-llms-langchain>=0.6,<0.8",
+    "llama-index-embeddings-openai>=0.3,<0.6",
+    "llama-index-llms-openai>=0.4,<0.6",
     "requests>=2.32.3,<3",
 ]
 
@@ -175,9 +179,11 @@ wikipedia = [
 
 neo4j = [
     "docx2txt==0.9",
-    "llama-index>=0.12,<1",
-    "llama-index-graph-stores-neo4j==0.5.0",
-    "llama-index-readers-web==0.5.0",
+    # Updated llama-index constraints
+    "llama-index>=0.12,<0.14",
+    "llama-index-core>=0.12,<0.14",
+    "llama-index-graph-stores-neo4j>=0.4,<0.6",
+    "llama-index-readers-web>=0.4,<0.6",
 ]
 
 # used for agentchat_realtime_swarm notebook and realtime agent twilio demo
@@ -204,11 +210,11 @@ interop-crewai = [
     "crewai[tools]>=0.76,<1; python_version>='3.10' and python_version<'3.13'",
     # TODO: crewai needs litellm and litellm version above 1.67.1 has problem in windows.
     # TODO: Remove the below line once the problem is fixed
-    "litellm<=1.76.0",
+    "litellm<=1.76.3",
     "weaviate-client>=4,<5; python_version>='3.10' and python_version<'3.13'",
 ]
 interop-langchain = ["langchain-community>=0.3.12,<1"]
-interop-pydantic-ai = ["pydantic-ai==0.7.4"]
+interop-pydantic-ai = ["pydantic-ai>=1.0.12", "fasta2a"]
 interop =[
     "ag2[interop-crewai, interop-langchain, interop-pydantic-ai]"
 ]
@@ -272,28 +278,30 @@ test = [
     "ipykernel==6.30.1",
     "nbconvert==7.16.6",
     "nbformat==5.10.4",
-    "pytest-cov==6.2.1",
-    "pytest-asyncio==1.1.0",
-    "pytest==8.4.1",
-    "mock==5.2.0",
     "pandas==2.3.2",
     "fastapi==0.116.1",
+    "mcp>=1.11.0",
+    # test utilities
+    "pytest==8.4.2",
+    "pytest-cov==6.3.0",
+    "pytest-asyncio==1.1.0",
     "dirty-equals==0.9.0",
-    "mcp>=1.11.0"
+    "freezegun==1.5.5",
 ]
 
 docs = [
-    "mkdocs-material==9.6.18",
+    "ag2[a2a]",  # A2A is exposed in the public API by the optional `autogen.a2a` module
+    "mkdocs-material==9.6.19",
     "mkdocstrings[python]==0.30.0",
     "mkdocs-literate-nav==0.6.2",
     "mdx-include==1.4.2",
     # ToDo: currently problematic and cannot be upgraded
     "mkdocs-git-revision-date-localized-plugin==1.4.7",
     "mike==2.1.3",
-    "typer==0.16.1",
+    "typer==0.17.4",
     "mkdocs-minify-plugin==0.8.0",
     "mkdocs-macros-plugin==1.3.9",  # includes with variables
-    "mkdocs-glightbox==0.4.0",  # img zoom
+    "mkdocs-glightbox==0.5.1",  # img zoom
     "mkdocs-redirects==1.2.2",  # required for handling redirects natively
     "pillow",  # required for mkdocs-glightbo
     "cairosvg",  # required for mkdocs-glightbo
@@ -313,11 +321,11 @@ types = [
     "types-python-dateutil",
     "types-requests",
     "types-ujson",
-    "ag2[test, openai]",
+    "ag2[test, openai, a2a]",
 ]
 
 lint = [
-    "ruff==0.12.10",
+    "ruff==0.12.12",
     "codespell==2.4.1",
     "pyupgrade-directories==0.3.0",
 ]
@@ -327,7 +335,7 @@ dev = [
     "ag2[lint,test,types,docs]",
     "pre-commit==4.3.0",
     "detect-secrets==1.5.0",
-    "uv==0.8.13",
+    "uv==0.8.15",
 ]
 
 
@@ -458,7 +466,7 @@ select = [
 #    "PERF",  # Perflint               https://docs.astral.sh/ruff/rules/#perflint-perf
     "RUF022", # Sort __all__           https://docs.astral.sh/ruff/rules/unsorted-dunder-all/
     "UP",     # pyupgrade              https://docs.astral.sh/ruff/rules/#pydocstyle-d
-    "D417",   # undocumented-param https://docs.astral.sh/ruff/rules/undocumented-param/
+    "D417",   # undocumented-param     https://docs.astral.sh/ruff/rules/undocumented-param/
 ]
 
 ignore = [
@@ -473,7 +481,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"notebook/agentchat_webscraping_with_oxylabs.ipynb" = ["E226", "E303", "F811", "F821", "F706"]
+"notebook/agentchat_webscraping_with_oxylabs.ipynb" = [
+    "E226",
+    "E303",
+    "F811",
+    "F821",
+    "F706",
+]
 
 [tool.ruff.lint.mccabe]
 # Unlike Flake8, default to a complexity level of 10.
@@ -488,13 +502,12 @@ docstring-code-format = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-
 [tool.mypy]
 python_version = "3.10"
 
 files = [
     "autogen/agentchat/agent.py",
-#    "autogen/agentchat/cenversable_agent.py",
+#    "autogen/agentchat/conversable_agent.py",
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
     "autogen/agentchat/contrib/swarm_agent.py",
@@ -517,6 +530,9 @@ files = [
     "autogen/oai/openai_utils.py",
     "autogen/tools",
     "autogen/_website",
+    "autogen/remote",
+    "autogen/a2a",
+    "autogen/testing",
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
