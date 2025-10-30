@@ -28,3 +28,11 @@ try:
     __all__.extend(["YepCodeCodeExecutor", "YepCodeCodeResult"])
 except ImportError:
     pass
+
+# Try to import Remyx executor and add to __all__ if available
+try:
+    from .remyx_code_executor import RemyxCodeExecutor, RemyxCodeResult  # noqa: F401
+
+    __all__.extend(["RemyxCodeExecutor", "RemyxCodeResult"])
+except ImportError:
+    pass
