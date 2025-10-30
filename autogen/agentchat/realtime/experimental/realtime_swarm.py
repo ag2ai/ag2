@@ -7,15 +7,17 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING, Any, Optional, TypeVar
 
 import anyio
-from asyncer import asyncify, create_task_group, syncify
+from anyio import create_task_group, from_thread
 
 from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
 from ....doc_utils import export_module
+from ....fast_depends.utils import asyncify
 from ... import Agent, ChatResult, ConversableAgent, LLMAgent
 from ...utils import consolidate_chat_info, gather_usage_summary
 
@@ -183,7 +185,6 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         if messages is None:
             if sender is None:
@@ -240,9 +241,8 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
-        return self.generate_reply(messages=messages, sender=sender, **kwargs)
+        return self.generate_reply(messages=messages, sender=sender)
 
     async def a_receive(
         self,
@@ -352,7 +352,7 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         self._agents = agents
         self._realtime_agent = realtime_agent
 
-        self._answer_event: anyio.Event = anyio.Event()
+        self._answer_event = anyio.Event()
         self._answer: str = ""
         self.question_message = question_message or QUESTION_MESSAGE
 
@@ -422,12 +422,13 @@ class SwarmableRealtimeAgent(SwarmableAgent):
 
         async def get_input() -> None:
             async with create_task_group() as tg:
-                tg.soonify(self.ask_question)(
+                tg.start_soon(
+                    self.ask_question,
                     self.question_message.format(messages[-1]["content"]),
                     question_timeout=QUESTION_TIMEOUT_SECONDS,
                 )
 
-        syncify(get_input)()
+        from_thread.run_sync(get_input)
 
         return True, {"role": "user", "content": self._answer}  # type: ignore[return-value]
 
@@ -452,12 +453,17 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         )(self.set_answer)
 
         async def on_observers_ready() -> None:
-            self._realtime_agent._tg.soonify(asyncify(initiate_swarm_chat))(
-                initial_agent=self._initial_agent,
-                agents=self._agents,
-                user_agent=self,  # type: ignore[arg-type]
-                messages="Find out what the user wants.",
-                after_work=AfterWorkOption.REVERT_TO_USER,
+            self._realtime_agent._tg.start_soon(
+                asyncify(
+                    partial(
+                        initiate_swarm_chat,
+                        initial_agent=self._initial_agent,
+                        agents=self._agents,
+                        user_agent=self,  # type: ignore[arg-type]
+                        messages="Find out what the user wants.",
+                        after_work=AfterWorkOption.REVERT_TO_USER,
+                    )
+                )
             )
 
         self._realtime_agent.callbacks.on_observers_ready = on_observers_ready

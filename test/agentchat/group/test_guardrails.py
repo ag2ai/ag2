@@ -15,34 +15,36 @@ from autogen.agentchat.group.targets.transition_target import TransitionTarget
 class TestGuardrailResult:
     def test_init_default(self) -> None:
         """Test GuardrailResult initialization with default values."""
-        result = GuardrailResult(activated=True)
+        result = GuardrailResult(activated=True, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is True
         assert result.justification == "No justification provided"
 
     def test_init_with_justification(self) -> None:
         """Test GuardrailResult initialization with custom justification."""
         justification = "Custom justification message"
-        result = GuardrailResult(activated=False, justification=justification)
+        result = GuardrailResult(activated=False, justification=justification, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is False
         assert result.justification == justification
 
     def test_str_representation(self) -> None:
         """Test string representation of GuardrailResult."""
-        result = GuardrailResult(activated=True, justification="Test justification")
+        result = GuardrailResult(
+            activated=True, justification="Test justification", guardrail=MagicMock(spec=Guardrail)
+        )
         expected = "Guardrail Result: True\nJustification: Test justification"
         assert str(result) == expected
 
     def test_parse_valid_json(self) -> None:
         """Test parsing valid JSON string to GuardrailResult."""
         json_str = '{"activated": true, "justification": "Test justification"}'
-        result = GuardrailResult.parse(json_str)
+        result = GuardrailResult.parse(json_str, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is True
         assert result.justification == "Test justification"
 
     def test_parse_valid_json_minimal(self) -> None:
         """Test parsing minimal valid JSON string."""
         json_str = '{"activated": false}'
-        result = GuardrailResult.parse(json_str)
+        result = GuardrailResult.parse(json_str, guardrail=MagicMock(spec=Guardrail))
         assert result.activated is False
         assert result.justification == "No justification provided"
 
@@ -51,7 +53,7 @@ class TestGuardrailResult:
         invalid_json = '{"activated": true, "justification": "Test"'  # Missing closing brace
 
         with pytest.raises(ValueError) as excinfo:
-            GuardrailResult.parse(invalid_json)
+            GuardrailResult.parse(invalid_json, guardrail=MagicMock())
 
         assert "Failed to parse GuardrailResult from text" in str(excinfo.value)
 
@@ -60,7 +62,7 @@ class TestGuardrailResult:
         invalid_structure = '{"invalid_field": true}'
 
         with pytest.raises(ValueError) as excinfo:
-            GuardrailResult.parse(invalid_structure)
+            GuardrailResult.parse(invalid_structure, guardrail=MagicMock())
 
         assert "Failed to parse GuardrailResult from text" in str(excinfo.value)
 
@@ -77,7 +79,7 @@ class TestGuardrail:
 
         class ConcreteGuardrail(Guardrail):
             def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
-                return GuardrailResult(activated=True, justification="Test check")
+                return GuardrailResult(activated=True, justification="Test check", guardrail=self)
 
         return ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
 
@@ -86,7 +88,7 @@ class TestGuardrail:
 
         class ConcreteGuardrail(Guardrail):
             def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
-                return GuardrailResult(activated=True)
+                return GuardrailResult(activated=True, guardrail=self)
 
         guardrail = ConcreteGuardrail(name="test_guardrail", condition="test condition", target=mock_target)
 
@@ -100,7 +102,7 @@ class TestGuardrail:
 
         class ConcreteGuardrail(Guardrail):
             def check(self, context: str | list[dict[str, Any]]) -> GuardrailResult:
-                return GuardrailResult(activated=True)
+                return GuardrailResult(activated=True, guardrail=self)
 
         custom_message = "Custom activation message"
         guardrail = ConcreteGuardrail(

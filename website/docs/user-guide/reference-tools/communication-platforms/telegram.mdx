@@ -78,7 +78,7 @@ from autogen.tools.experimental import TelegramRetrieveTool, TelegramSendTool
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = LLMConfig(model="gpt-5-nano", api_type="openai")
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 # Our tool executor agent, which will run the tools once recommended by the telegram_agent, no LLM required
 executor_agent = ConversableAgent(
@@ -86,8 +86,10 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-with llm_config:
-    telegram_agent = ConversableAgent(name="telegram_agent")
+telegram_agent = ConversableAgent(
+    name="telegram_agent",
+    llm_config=llm_config,
+)
 
 # Authentication and target Chat ID (in this case a Group chat)
 api_id = "123....."

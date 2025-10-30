@@ -95,7 +95,7 @@ from autogen.agents.experimental import SlackAgent
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = LLMConfig(model="gpt-5-nano", api_type="openai")
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 # Our Slack credentials
 _bot_token = "xoxo..."  # OAuth token
@@ -107,12 +107,12 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-with llm_config:
-    slack_agent = SlackAgent(
-        name="slack_agent",
-        bot_token=_bot_token,
-        channel_id=_channel_id,
-    )
+slack_agent = SlackAgent(
+    name="slack_agent",
+    bot_token=_bot_token,
+    channel_id=_channel_id,
+    llm_config=llm_config,
+)
 
 # We get the registered tools and register them for execution with the tool executor
 for tool in slack_agent.tools:

@@ -96,6 +96,9 @@ sequenceDiagram
     Note over User: Hierarchical pattern with information flowing up and down the chain
 ```
 
+![hierarchical example](./assets/hierarchy_example.png)
+
+
 ## Code
 
 <Tip>
@@ -121,7 +124,7 @@ from autogen.agentchat import initiate_group_chat
 
 # Setup LLM configuration
 # Note that we turn parallel tool calling off for OpenAI so we only get one tool call at a time.
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", parallel_tool_calls=False)
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False})
 
 # Shared context for all agents in the group chat
 shared_context = ContextVariables(data={
@@ -238,82 +241,85 @@ def complete_biofuel_research(research_content: str, context_variables: ContextV
 # ========================
 # SPECIALIST AGENTS
 # ========================
+specialist_a1 = ConversableAgent(
+    name="solar_specialist",
+    system_message="""You are a specialist in solar energy technologies.
+    Your task is to research and provide concise information about:
+    1. Current state of solar technology
+    2. Efficiency rates of different types of solar panels
+    3. Cost comparison with fossil fuels
+    4. Major companies and countries leading in solar energy
 
-with llm_config:
-    specialist_a1 = ConversableAgent(
-        name="solar_specialist",
-        system_message="""You are a specialist in solar energy technologies.
-        Your task is to research and provide concise information about:
-        1. Current state of solar technology
-        2. Efficiency rates of different types of solar panels
-        3. Cost comparison with fossil fuels
-        4. Major companies and countries leading in solar energy
+    Be thorough but concise. Your research will be used as part of a larger report.
 
-        Be thorough but concise. Your research will be used as part of a larger report.
+    Use your tools only one at a time.""",
+    functions = [complete_solar_research],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [complete_solar_research],
-    )
+specialist_a2 = ConversableAgent(
+    name="wind_specialist",
+    system_message="""You are a specialist in wind energy technologies.
+    Your task is to research and provide concise information about:
+    1. Current state of wind technology (onshore/offshore)
+    2. Efficiency rates of modern wind turbines
+    3. Cost comparison with fossil fuels
+    4. Major companies and countries leading in wind energy
 
-    specialist_a2 = ConversableAgent(
-        name="wind_specialist",
-        system_message="""You are a specialist in wind energy technologies.
-        Your task is to research and provide concise information about:
-        1. Current state of wind technology (onshore/offshore)
-        2. Efficiency rates of modern wind turbines
-        3. Cost comparison with fossil fuels
-        4. Major companies and countries leading in wind energy
+    Be thorough but concise. Your research will be used as part of a larger report.
 
-        Be thorough but concise. Your research will be used as part of a larger report.
+    Use your tools only one at a time.""",
+    functions = [complete_wind_research],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [complete_wind_research],
-    )
+specialist_b1 = ConversableAgent(
+    name="hydro_specialist",
+    system_message="""You are a specialist in hydroelectric energy technologies.
+    Your task is to research and provide concise information about:
+    1. Current state of hydroelectric technology
+    2. Types of hydroelectric generation (dams, run-of-river, pumped storage)
+    3. Cost comparison with fossil fuels
+    4. Major companies and countries leading in hydroelectric energy
 
-    specialist_b1 = ConversableAgent(
-        name="hydro_specialist",
-        system_message="""You are a specialist in hydroelectric energy technologies.
-        Your task is to research and provide concise information about:
-        1. Current state of hydroelectric technology
-        2. Types of hydroelectric generation (dams, run-of-river, pumped storage)
-        3. Cost comparison with fossil fuels
-        4. Major companies and countries leading in hydroelectric energy
+    Be thorough but concise. Your research will be used as part of a larger report.
 
-        Be thorough but concise. Your research will be used as part of a larger report.
+    Use your tools only one at a time.""",
+    functions = [complete_hydro_research],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [complete_hydro_research],
-    )
+specialist_b2 = ConversableAgent(
+    name="geothermal_specialist",
+    system_message="""You are a specialist in geothermal energy technologies.
+    Your task is to research and provide concise information about:
+    1. Current state of geothermal technology
+    2. Types of geothermal systems and efficiency rates
+    3. Cost comparison with fossil fuels
+    4. Major companies and countries leading in geothermal energy
 
-    specialist_b2 = ConversableAgent(
-        name="geothermal_specialist",
-        system_message="""You are a specialist in geothermal energy technologies.
-        Your task is to research and provide concise information about:
-        1. Current state of geothermal technology
-        2. Types of geothermal systems and efficiency rates
-        3. Cost comparison with fossil fuels
-        4. Major companies and countries leading in geothermal energy
+    Be thorough but concise. Your research will be used as part of a larger report.
 
-        Be thorough but concise. Your research will be used as part of a larger report.
+    Use your tools only one at a time.""",
+    functions = [complete_geothermal_research],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [complete_geothermal_research],
-    )
+specialist_c1 = ConversableAgent(
+    name="biofuel_specialist",
+    system_message="""You are a specialist in biofuel technologies.
+    Your task is to research and provide concise information about:
+    1. Current state of biofuel technology
+    2. Types of biofuels and their applications
+    3. Cost comparison with fossil fuels
+    4. Major companies and countries leading in biofuel production
 
-    specialist_c1 = ConversableAgent(
-        name="biofuel_specialist",
-        system_message="""You are a specialist in biofuel technologies.
-        Your task is to research and provide concise information about:
-        1. Current state of biofuel technology
-        2. Types of biofuels and their applications
-        3. Cost comparison with fossil fuels
-        4. Major companies and countries leading in biofuel production
+    Be thorough but concise. Your research will be used as part of a larger report.
 
-        Be thorough but concise. Your research will be used as part of a larger report.
-
-        Use your tools only one at a time.""",
-        functions = [complete_biofuel_research],
-    )
+    Use your tools only one at a time.""",
+    functions = [complete_biofuel_research],
+    llm_config=llm_config
+)
 
 # ========================
 # MANAGER FUNCTIONS
@@ -379,50 +385,51 @@ def compile_alternative_section(section_content: str, context_variables: Context
 # ========================
 # MANAGER AGENTS
 # ========================
+renewable_manager = ConversableAgent(
+    name="renewable_manager",
+    system_message="""You are the manager for renewable energy research, specifically overseeing solar and wind energy specialists.
+    Your responsibilities include:
+    1. Reviewing the research from your specialists
+    2. Ensuring the information is accurate and comprehensive
+    3. Synthesizing the information into a cohesive section on renewable energy
+    4. Submitting the compiled research to the executive for final report creation
 
-with llm_config:
-    renewable_manager = ConversableAgent(
-        name="renewable_manager",
-        system_message="""You are the manager for renewable energy research, specifically overseeing solar and wind energy specialists.
-        Your responsibilities include:
-        1. Reviewing the research from your specialists
-        2. Ensuring the information is accurate and comprehensive
-        3. Synthesizing the information into a cohesive section on renewable energy
-        4. Submitting the compiled research to the executive for final report creation
+    You should wait until both specialists have completed their research before compiling your section.
 
-        You should wait until both specialists have completed their research before compiling your section.
+    Use your tools only one at a time.""",
+    functions = [compile_renewable_section],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [compile_renewable_section]
-    )
+storage_manager = ConversableAgent(
+    name="storage_manager",
+    system_message="""You are the manager for energy storage and hydroelectric technologies, overseeing hydroelectric and geothermal energy specialists.
+    Your responsibilities include:
+    1. Reviewing the research from your specialists
+    2. Ensuring the information is accurate and comprehensive
+    3. Synthesizing the information into a cohesive section on energy storage and hydroelectric solutions
+    4. Submitting the compiled research to the executive for final report creation
 
-    storage_manager = ConversableAgent(
-        name="storage_manager",
-        system_message="""You are the manager for energy storage and hydroelectric technologies, overseeing hydroelectric and geothermal energy specialists.
-        Your responsibilities include:
-        1. Reviewing the research from your specialists
-        2. Ensuring the information is accurate and comprehensive
-        3. Synthesizing the information into a cohesive section on energy storage and hydroelectric solutions
-        4. Submitting the compiled research to the executive for final report creation
+    You should wait until both specialists have completed their research before compiling your section.
 
-        You should wait until both specialists have completed their research before compiling your section.
+    Use your tools only one at a time.""",
+    functions = [compile_storage_section],
+    llm_config=llm_config
+)
 
-        Use your tools only one at a time.""",
-        functions = [compile_storage_section]
-    )
+alternative_manager = ConversableAgent(
+    name="alternative_manager",
+    system_message="""You are the manager for alternative energy solutions, overseeing biofuel research.
+    Your responsibilities include:
+    1. Reviewing the research from your specialist
+    2. Ensuring the information is accurate and comprehensive
+    3. Synthesizing the information into a cohesive section on alternative energy solutions
+    4. Submitting the compiled research to the executive for final report creation
 
-    alternative_manager = ConversableAgent(
-        name="alternative_manager",
-        system_message="""You are the manager for alternative energy solutions, overseeing biofuel research.
-        Your responsibilities include:
-        1. Reviewing the research from your specialist
-        2. Ensuring the information is accurate and comprehensive
-        3. Synthesizing the information into a cohesive section on alternative energy solutions
-        4. Submitting the compiled research to the executive for final report creation
-
-        Use your tools only one at a time.""",
-        functions = [compile_alternative_section]
-    )
+    Use your tools only one at a time.""",
+    functions = [compile_alternative_section],
+    llm_config=llm_config
+)
 
 # ========================
 # EXECUTIVE FUNCTIONS
@@ -451,37 +458,36 @@ def compile_final_report(report_content: str, context_variables: ContextVariable
 # ========================
 # EXECUTIVE AGENT
 # ========================
+executive_agent = ConversableAgent(
+    name="executive_agent",
+    system_message="""You are the executive overseeing the creation of a comprehensive report on renewable energy technologies.
 
-with llm_config:
-    executive_agent = ConversableAgent(
-        name="executive_agent",
-        system_message="""You are the executive overseeing the creation of a comprehensive report on renewable energy technologies.
+    You have exactly three manager agents reporting to you, each responsible for specific technology domains:
+    1. Renewable Manager - Oversees solar and wind energy research
+    2. Storage Manager - Oversees hydroelectric and geothermal energy research
+    3. Alternative Manager - Oversees biofuel research
 
-        You have exactly three manager agents reporting to you, each responsible for specific technology domains:
-        1. Renewable Manager - Oversees solar and wind energy research
-        2. Storage Manager - Oversees hydroelectric and geothermal energy research
-        3. Alternative Manager - Oversees biofuel research
+    Your responsibilities include:
+    1. Delegating research tasks to these three specific manager agents
+    2. Providing overall direction and ensuring alignment with the project goals
+    3. Reviewing the compiled sections from each manager
+    4. Synthesizing all sections into a cohesive final report with executive summary
+    5. Ensuring the report is comprehensive, balanced, and meets high-quality standards
 
-        Your responsibilities include:
-        1. Delegating research tasks to these three specific manager agents
-        2. Providing overall direction and ensuring alignment with the project goals
-        3. Reviewing the compiled sections from each manager
-        4. Synthesizing all sections into a cohesive final report with executive summary
-        5. Ensuring the report is comprehensive, balanced, and meets high-quality standards
+    Do not create or attempt to delegate to managers that don't exist in this structure.
 
-        Do not create or attempt to delegate to managers that don't exist in this structure.
-
-        The final report should include:
-        - Executive Summary
-        - Introduction to Renewable Energy
-        - Three main sections:
-        * Solar and Wind Energy (from Renewable Manager)
-        * Hydroelectric and Geothermal Energy (from Storage Manager)
-        * Biofuel Technologies (from Alternative Manager)
-        - Comparison of technologies
-        - Future outlook and recommendations""",
-        functions = [initiate_research, compile_final_report],
-    )
+    The final report should include:
+    - Executive Summary
+    - Introduction to Renewable Energy
+    - Three main sections:
+    * Solar and Wind Energy (from Renewable Manager)
+    * Hydroelectric and Geothermal Energy (from Storage Manager)
+    * Biofuel Technologies (from Alternative Manager)
+    - Comparison of technologies
+    - Future outlook and recommendations""",
+    functions = [initiate_research, compile_final_report],
+    llm_config=llm_config
+)
 
 # ========================
 # HANDOFFS REGISTRATION

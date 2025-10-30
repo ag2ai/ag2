@@ -43,16 +43,14 @@ The [`GroupChat`](/docs/api-reference/autogen/GroupChat) will contain three agen
 - `user_proxy` - Acts as an intermediary between the user and other agents.
 
 ```python
-llm_config = LLMConfig(
-    api_type="openai",
-    model="gpt-5-nano",
-    api_key=os.environ["OPENAI_API_KEY"],
-)
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.environ["OPENAI_API_KEY"],
+})
 
-with llm_config:
-    sales_agent = ConversableAgent(name="SalesAgent")
-
-    cancellation_agent = ConversableAgent(name="CanelationAgent")
+sales_agent = ConversableAgent(name="SalesAgent", llm_config=llm_config)
+cancellation_agent = ConversableAgent(name="CanelationAgent", llm_config=llm_config)
 
 user_proxy = UserProxyAgent(
     name="user_proxy",

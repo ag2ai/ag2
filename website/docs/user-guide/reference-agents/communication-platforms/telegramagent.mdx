@@ -92,7 +92,7 @@ from autogen.agents.experimental import TelegramAgent
 #import nest_asyncio
 #nest_asyncio.apply()
 
-llm_config = LLMConfig(model="gpt-5-nano", api_type="openai")
+llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
 # Authentication and target Chat ID (in this case a Group chat)
 api_id = "123....."
@@ -105,13 +105,13 @@ executor_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-with llm_config:
-    telegram_agent = TelegramAgent(
-        name="telegram_agent",
-        api_id=api_id,
-        api_hash=api_hash,
-        chat_id=_chat_id_group
-    )
+telegram_agent = TelegramAgent(
+    name="telegram_agent",
+    api_id=api_id,
+    api_hash=api_hash,
+    chat_id=_chat_id_group,
+    llm_config=llm_config,
+)
 
 # We get the registered tools and register them for execution with the tool executor
 for tool in telegram_agent.tools

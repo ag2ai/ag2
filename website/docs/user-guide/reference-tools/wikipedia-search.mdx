@@ -37,6 +37,9 @@ import os
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.tools.experimental import WikipediaQueryRunTool, WikipediaPageLoadTool
+from dotenv import load_dotenv
+import os
+load_dotenv()
 ```
 
 
@@ -45,7 +48,7 @@ from autogen.tools.experimental import WikipediaQueryRunTool, WikipediaPageLoadT
 Configure an assistant agent and user proxy to be used for LLM recommendation and execution respectively.
 
 ```python
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano")
+llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 assistant = AssistantAgent(
     name="assistant",

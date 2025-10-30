@@ -10,7 +10,7 @@ from autogen import (
     LLMConfig,
 )
 
-llm_config = LLMConfig(api_type="openai", model="gpt-5", cache_seed=None)
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "cache_seed": None})
 
 # 1. Context
 shared_context = {
@@ -62,12 +62,25 @@ and reviewer to create and finalise lesson plans.
 """
 
 # 3. Our agents now have tools to use (functions above)
-with llm_config:
-    lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message, functions=[record_plan])
+lesson_planner = ConversableAgent(
+    name="planner_agent",
+    system_message=planner_message,
+    functions=[record_plan],
+    llm_config=llm_config,
+)
 
-    lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message, functions=[record_review])
+lesson_reviewer = ConversableAgent(
+    name="reviewer_agent",
+    system_message=reviewer_message,
+    functions=[record_review],
+    llm_config=llm_config,
+)
 
-    teacher = ConversableAgent(name="teacher_agent", system_message=teacher_message)
+teacher = ConversableAgent(
+    name="teacher_agent",
+    system_message=teacher_message,
+    llm_config=llm_config,
+)
 
 # 4. Transitions using hand-offs
 

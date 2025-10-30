@@ -101,6 +101,9 @@ sequenceDiagram
     Note over User, Tool: The pattern ensures research tasks are completed before writing tasks begin
 ```
 
+![triage task example](./assets/triage_tasks_example.png)
+
+
 ## Code
 
 <Tip>
@@ -397,7 +400,7 @@ def create_research_writing_group_chat(llm_config_base: dict[str, Any]):
         ),
     )
 
-    llm_config_with_tools = LLMConfig(model="gpt-4.1-mini", api_type="openai", parallel_tool_calls=False)
+    llm_config_with_tools = LLMConfig(config_list={"model": "gpt-4.1-mini", "api_type": "openai", "parallel_tool_calls": False})
 
 
     # Task Manager agent

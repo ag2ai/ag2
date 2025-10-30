@@ -345,68 +345,70 @@ def track_itinerary_status(
     )
 
 # Configure LLM
-llm_config = LLMConfig(api_type="openai", model="gpt-5-nano", parallel_tool_calls=False)
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano", "parallel_tool_calls": False})
 
 # Create agents
-with llm_config:
-    concierge = ConversableAgent(
-        name="concierge",
-        system_message="""You are a travel concierge who verifies membership and collects travel information.
-        Ask for the user for the below information without fail if not already provided. You can ask only one question at a time:
-            - users's member ID,
-            - destination they wish to travel,
-            - number of travel days
-        Do not proceed unless you have all the above information.
-        Use the collect_user_info function to verify their membership and route them appropriately.""",
-        functions=[collect_user_info],
-    )
+concierge = ConversableAgent(
+    name="concierge",
+    system_message="""You are a travel concierge who verifies membership and collects travel information.
+    Ask for the user for the below information without fail if not already provided. You can ask only one question at a time:
+        - users's member ID,
+        - destination they wish to travel,
+        - number of travel days
+    Do not proceed unless you have all the above information.
+    Use the collect_user_info function to verify their membership and route them appropriately.""",
+    functions=[collect_user_info],
+    llm_config=llm_config,
+)
 
-    premium_advisor = ConversableAgent(
-        name="premium_advisor",
-        system_message="""You are a premium travel advisor who creates luxury itineraries.
-        Check the user's preferences in the context variables and customize their itinerary accordingly.
-        When you need specific destination information, consult the destination specialist.
+premium_advisor = ConversableAgent(
+    name="premium_advisor",
+    system_message="""You are a premium travel advisor who creates luxury itineraries.
+    Check the user's preferences in the context variables and customize their itinerary accordingly.
+    When you need specific destination information, consult the destination specialist.
 
-        For premium members, ALWAYS include:
-        - Their preferred accommodation type (usually 5-star or boutique hotels)
-        - Their dining preferences (often fine dining or local cuisine)
-        - Exclusive experiences not available to standard members
-        - Private transportation options
+    For premium members, ALWAYS include:
+    - Their preferred accommodation type (usually 5-star or boutique hotels)
+    - Their dining preferences (often fine dining or local cuisine)
+    - Exclusive experiences not available to standard members
+    - Private transportation options
 
-        Propose the itinerary to the user and track the status using the track_itinerary_status function.
-        If the user requires more information about a destination, use the get_more_destination_info function.
-        If the user approves or accepts the itinerary, set the status to "approved".
-        """,
-        functions=[track_itinerary_status, get_more_destination_info],
-    )
+    Propose the itinerary to the user and track the status using the track_itinerary_status function.
+    If the user requires more information about a destination, use the get_more_destination_info function.
+    If the user approves or accepts the itinerary, set the status to "approved".
+    """,
+    functions=[track_itinerary_status, get_more_destination_info],
+    llm_config=llm_config,
+)
 
-    standard_advisor = ConversableAgent(
-        name="standard_advisor",
-        system_message="""You are a standard travel advisor who creates basic itineraries.
-        Check the user's preferences in the context variables.
-        When you need specific destination information, consult the destination specialist.
+standard_advisor = ConversableAgent(
+    name="standard_advisor",
+    system_message="""You are a standard travel advisor who creates basic itineraries.
+    Check the user's preferences in the context variables.
+    When you need specific destination information, consult the destination specialist.
 
-        For standard members, include:
-        - Affordable accommodation options
-        - Popular restaurants at various price points
-        - Standard tourist attractions
-        - Public transportation or group tour options
+    For standard members, include:
+    - Affordable accommodation options
+    - Popular restaurants at various price points
+    - Standard tourist attractions
+    - Public transportation or group tour options
 
-        Propose the itinerary to the user and track the status using the track_itinerary_status function.
-        If the user requires more information about a destination, use the get_more_destination_info function.
-        If the user approves or accepts the itinerary, set the status to "approved".
-        """,
-        functions=[track_itinerary_status, get_more_destination_info],
-    )
+    Propose the itinerary to the user and track the status using the track_itinerary_status function.
+    If the user requires more information about a destination, use the get_more_destination_info function.
+    If the user approves or accepts the itinerary, set the status to "approved".
+    """,
+    functions=[track_itinerary_status, get_more_destination_info],
+)
 
-    destination_specialist = ConversableAgent(
-        name="destination_specialist",
-        system_message="""You are a destination specialist with detailed knowledge about travel locations.
-        When asked by an advisor, provide comprehensive information about the requested destination.
-        Include details about attractions, local customs, best times to visit, and insider tips.
-        Use the provide_destination_info function to respond.""",
-        functions=[provide_destination_info],
-    )
+destination_specialist = ConversableAgent(
+    name="destination_specialist",
+    system_message="""You are a destination specialist with detailed knowledge about travel locations.
+    When asked by an advisor, provide comprehensive information about the requested destination.
+    Include details about attractions, local customs, best times to visit, and insider tips.
+    Use the provide_destination_info function to respond.""",
+    functions=[provide_destination_info],
+    llm_config=llm_config,
+)
 
 # Create user agent
 user = ConversableAgent(name="user", human_input_mode="ALWAYS")

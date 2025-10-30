@@ -7,7 +7,6 @@
 
 import importlib
 import importlib.metadata
-import inspect
 import json
 import logging
 import os
@@ -22,6 +21,10 @@ from typing import TYPE_CHECKING, Any, Union
 from dotenv import find_dotenv, load_dotenv
 from packaging.version import parse
 from pydantic_core import to_jsonable_python
+from typing_extensions import deprecated
+
+from ..llm_config.utils import config_list_from_json as latest_config_list_from_json
+from ..llm_config.utils import filter_config as latest_filter
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -472,6 +475,11 @@ def config_list_gpt4_gpt35(
 
 
 @export_module("autogen")
+@deprecated(
+    "`autogen.filter_config(...)` is deprecated. "
+    'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead. '
+    "Scheduled for removal in 0.11.0 version."
+)
 def filter_config(
     config_list: list[dict[str, Any]],
     filter_dict: dict[str, list[str | None] | set[str | None]] | None,
@@ -489,7 +497,9 @@ def filter_config(
 
         filter_dict (dict, optional): A dictionary specifying filter criteria where:
             - Keys are field names to check in each configuration dictionary
-            - Values are lists/sets of acceptable values for that field
+            - Values can be:
+                * a single string value (e.g., {"model": "gpt-4o"})
+                * a list or set of acceptable values for that field (e.g., {"model": ["gpt-4o", "gpt-4o-mini"]})
             - A configuration matches if ALL filter keys are satisfied AND for each key,
               the config's field value matches at least one acceptable value
             - If a filter value includes None, configurations missing that field will match
@@ -517,22 +527,27 @@ def filter_config(
             {"model": "gpt-4", "tags": ["premium", "latest"]},
         ]
 
-        # Example 1: Single criterion - matches any model in the list
+        # Example 1: Single criterion with single string
+        filter_dict = {"model": "gpt-4o"}
+        result = filter_config(configs, filter_dict)
+        # Returns: [{"model": "gpt-4o", "api_type": "openai"}] if present
+
+        # Example 2: Single criterion - matches any model in the list
         filter_dict = {"model": ["gpt-4", "gpt-4o"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4", "api_type": "openai"}, {"model": "gpt-4", "tags": ["premium", "latest"]}]
 
-        # Example 2: Multiple criteria - must satisfy ALL conditions
+        # Example 3: Multiple criteria - must satisfy ALL the conditions
         filter_dict = {"model": ["gpt-3.5-turbo"], "api_type": ["azure"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-3.5-turbo", "api_type": "azure", "api_version": "2024-02-01"}]
 
-        # Example 3: Tag filtering with list intersection
+        # Example 4: Tag filtering with list intersection
         filter_dict = {"tags": ["premium"]}
         result = filter_config(configs, filter_dict)
         # Returns: [{"model": "gpt-4", "tags": ["premium", "latest"]}]
 
-        # Example 4: Exclude matching configurations
+        # Example 5: Exclude matching configurations
         filter_dict = {"api_type": ["openai"]}
         result = filter_config(configs, filter_dict, exclude=True)
         # Returns configs that do NOT have api_type="openai"
@@ -543,92 +558,22 @@ def filter_config(
           it is considered a non-match and is excluded from the result.
 
     """
-    if inspect.stack()[1].function != "where":
-        warnings.warn(
-            "filter_config is deprecated and will be removed in a future release. "
-            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead.',
-            DeprecationWarning,
-        )
+    warnings.warn(
+        "`autogen.filter_config(...)` is deprecated. "
+        'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(model="gpt-4o")" method instead. '
+        "Scheduled for removal in 0.11.0 version.",
+        DeprecationWarning,
+    )
 
-    if filter_dict:
-        return [
-            item
-            for item in config_list
-            if all(_satisfies_criteria(item.get(key), values) != exclude for key, values in filter_dict.items())
-        ]
-    return config_list
-
-
-def _satisfies_criteria(config_value: Any, criteria_values: Any) -> bool:
-    """Check if a configuration field value satisfies the filter criteria.
-
-    This helper function implements the matching logic between a single configuration
-    field value and the acceptable values specified in the filter criteria. It handles
-    both scalar and list-type configuration values with appropriate matching strategies.
-
-    Args:
-        config_value (Any): The value from a configuration dictionary field.
-                           Can be None, a scalar value, or a list of values.
-        criteria_values (Any): The acceptable values from the filter dictionary.
-                              Can be a single value or a list/set of acceptable values.
-
-    Returns:
-        bool: True if the config_value satisfies the criteria, False otherwise.
-
-    Matching Logic:
-        - **None config values**: Always return False (missing fields don't match)
-        - **List config values**:
-            - If criteria is a list: Match if there's any intersection (set overlap)
-            - If criteria is scalar: Match if the scalar is contained in the config list
-        - **Scalar config values**:
-            - If criteria is a list: Match if the config value is in the criteria list
-            - If criteria is scalar: Match if the values are exactly equal
-
-    Examples:
-        ```python
-        # List config value with list criteria (intersection matching)
-        _satisfies_criteria(["gpt-4", "gpt-3.5"], ["gpt-4", "claude"])  # True (gpt-4 intersects)
-        _satisfies_criteria(["tag1", "tag2"], ["tag3", "tag4"])  # False (no intersection)
-
-        # List config value with scalar criteria (containment matching)
-        _satisfies_criteria(["premium", "latest"], "premium")  # True (premium is in list)
-        _satisfies_criteria(["tag1", "tag2"], "tag3")  # False (tag3 not in list)
-
-        # Scalar config value with list criteria (membership matching)
-        _satisfies_criteria("gpt-4", ["gpt-4", "gpt-3.5"])  # True (gpt-4 in criteria)
-        _satisfies_criteria("claude", ["gpt-4", "gpt-3.5"])  # False (claude not in criteria)
-
-        # Scalar config value with scalar criteria (equality matching)
-        _satisfies_criteria("openai", "openai")  # True (exact match)
-        _satisfies_criteria("openai", "azure")  # False (different values)
-
-        # None config values (missing fields)
-        _satisfies_criteria(None, ["gpt-4"])  # False (missing field)
-        _satisfies_criteria(None, "gpt-4")  # False (missing field)
-        ```
-
-    Note:
-        This is an internal helper function used by `filter_config()`. The function
-        assumes that both parameters can be of various types and handles type
-        checking internally to determine the appropriate matching strategy.
-    """
-    if config_value is None:
-        return False
-
-    if isinstance(config_value, list):
-        if isinstance(criteria_values, list):
-            return bool(set(config_value) & set(criteria_values))  # Non-empty intersection
-        else:
-            return criteria_values in config_value
-    else:
-        # In filter_dict, filter could be either a list of values or a single value.
-        # For example, filter_dict = {"model": ["gpt-3.5-turbo"]} or {"model": "gpt-3.5-turbo"}
-        if isinstance(criteria_values, list):
-            return config_value in criteria_values
-        return bool(config_value == criteria_values)
+    return latest_filter(config_list=config_list, filter_dict=filter_dict, exclude=exclude)
 
 
 @export_module("autogen")
+@deprecated(
+    "`autogen.config_list_from_json(...)` is deprecated. "
+    'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead. '
+    "Scheduled for removal in 0.11.0 version."
+)
 def config_list_from_json(
     env_or_file: str,
     file_location: str | None = "",
@@ -669,34 +614,18 @@ def config_list_from_json(
     Raises:
         FileNotFoundError: if env_or_file is neither found as an environment variable nor a file
     """
-    if inspect.stack()[1].function != "from_json":
-        warnings.warn(
-            "config_list_from_json is deprecated and will be removed in a future release. "
-            'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead.',
-            DeprecationWarning,
-        )
+    warnings.warn(
+        "`autogen.config_list_from_json(...)` is deprecated. "
+        'Please use the "autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST")" method instead. '
+        "Scheduled for removal in 0.11.0 version.",
+        DeprecationWarning,
+    )
 
-    env_str = os.environ.get(env_or_file)
-
-    if env_str:
-        # The environment variable exists. We should use information from it.
-        if os.path.exists(env_str):
-            # It is a file location, and we need to load the json from the file.
-            with open(env_str) as file:
-                json_str = file.read()
-        else:
-            # Else, it should be a JSON string by itself.
-            json_str = env_str
-        config_list = json.loads(json_str)
-    else:
-        # The environment variable does not exist.
-        # So, `env_or_file` is a filename. We should use the file location.
-        config_list_path = os.path.join(file_location, env_or_file) if file_location is not None else env_or_file
-
-        with open(config_list_path) as json_file:
-            config_list = json.load(json_file)
-
-    return filter_config(config_list, filter_dict)
+    return latest_config_list_from_json(
+        env_or_file=env_or_file,
+        file_location=file_location,
+        filter_dict=filter_dict,
+    )
 
 
 def get_config(

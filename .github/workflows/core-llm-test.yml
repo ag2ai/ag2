@@ -60,12 +60,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install packages for ${{ matrix.llm }}
@@ -76,6 +76,12 @@ jobs:
         if: ${{ matrix.llm == 'gemini-realtime' }}
         run: |
           uv pip install --system -e ".[openai]"
+      - name: Create OAI_CONFIG_LIST from Secret
+        run: |
+          cat > OAI_CONFIG_LIST << 'EOF'
+          ${{ secrets.OAI_CONFIG_LIST }}
+          EOF
+        shell: bash
       - name: LLM tests using ${{ matrix.llm }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

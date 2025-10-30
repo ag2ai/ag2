@@ -14,19 +14,18 @@ from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.io.run_response import AsyncRunResponseProtocol, Cost
-from autogen.llm_config import LLMConfig
-from test.conftest import Credentials
+from test.credentials import Credentials
 
 
 @run_for_optional_imports("openai", "openai")
 def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        my_agent = ConversableAgent(
-            name="helpful_agent",
-            system_message="You are a poetic AI assistant, respond in rhyme.",
-        )
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+        llm_config=llm_config,
+    )
 
     # 2. Run the agent with a prompt
     response = my_agent.run(message="In one sentence, what's the big deal about AI?", max_turns=1)
@@ -44,13 +43,13 @@ def test_single_agent_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        my_agent = ConversableAgent(
-            name="helpful_agent",
-            system_message="You are a poetic AI assistant, respond in rhyme.",
-        )
+    my_agent = ConversableAgent(
+        name="helpful_agent",
+        system_message="You are a poetic AI assistant, respond in rhyme.",
+        llm_config=llm_config,
+    )
 
     # 2. Run the agent with a prompt
     response = await my_agent.a_run(message="In one sentence, what's the big deal about AI?", max_turns=1)
@@ -67,22 +66,23 @@ async def test_single_agent_async(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        jack = ConversableAgent(
-            "Jack",
-            system_message=("Your name is Jack and you are a comedian in a two-person comedy show."),
-            is_termination_msg=lambda x: "FINISH" in x["content"],
-        )
-        emma = ConversableAgent(
-            "Emma",
-            system_message=(
-                "Your name is Emma and you are a comedian "
-                "in a two-person comedy show. Say the word FINISH "
-                "ONLY AFTER you've heard 2 of Jack's jokes."
-            ),
-        )
+    jack = ConversableAgent(
+        "Jack",
+        system_message=("Your name is Jack and you are a comedian in a two-person comedy show."),
+        is_termination_msg=lambda x: "FINISH" in x["content"],
+        llm_config=llm_config,
+    )
+    emma = ConversableAgent(
+        "Emma",
+        system_message=(
+            "Your name is Emma and you are a comedian "
+            "in a two-person comedy show. Say the word FINISH "
+            "ONLY AFTER you've heard 2 of Jack's jokes."
+        ),
+        llm_config=llm_config,
+    )
 
     # 3. Run the chat
     response = jack.run(emma, message="Emma, tell me a joke about goldfish and peanut butter.")
@@ -100,24 +100,25 @@ def test_two_agents_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        jack = ConversableAgent(
-            "Jack",
-            system_message=("Your name is Jack and you are a comedian in a two-person comedy show."),
-            is_termination_msg=lambda x: "FINISH" in x["content"],
-            human_input_mode="NEVER",
-        )
-        emma = ConversableAgent(
-            "Emma",
-            system_message=(
-                "Your name is Emma and you are a comedian "
-                "in a two-person comedy show. Say the word FINISH "
-                "ONLY AFTER you've heard 2 of Jack's jokes."
-            ),
-            human_input_mode="NEVER",
-        )
+    jack = ConversableAgent(
+        "Jack",
+        system_message=("Your name is Jack and you are a comedian in a two-person comedy show."),
+        is_termination_msg=lambda x: "FINISH" in x["content"],
+        human_input_mode="NEVER",
+        llm_config=llm_config,
+    )
+    emma = ConversableAgent(
+        "Emma",
+        system_message=(
+            "Your name is Emma and you are a comedian "
+            "in a two-person comedy show. Say the word FINISH "
+            "ONLY AFTER you've heard 2 of Jack's jokes."
+        ),
+        human_input_mode="NEVER",
+        llm_config=llm_config,
+    )
 
     # 4. Run the chat
     response: AsyncRunResponseProtocol = await jack.a_run(
@@ -136,27 +137,27 @@ async def test_two_agents_async(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        # Planner agent setup
-        planner_message = "Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>"
-        planner = ConversableAgent(
-            name="planner_agent", system_message=planner_message, description="Creates lesson plans"
-        )
+    planner = ConversableAgent(
+        name="planner_agent",
+        system_message="Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>",
+        description="Creates lesson plans",
+        llm_config=llm_config,
+    )
 
-        # Reviewer agent setup
-        reviewer_message = "Review lesson plans against 4th grade curriculum. Provide max 3 changes."
-        reviewer = ConversableAgent(
-            name="reviewer_agent", system_message=reviewer_message, description="Reviews lesson plans"
-        )
+    reviewer = ConversableAgent(
+        name="reviewer_agent",
+        system_message="Review lesson plans against 4th grade curriculum. Provide max 3 changes.",
+        description="Reviews lesson plans",
+        llm_config=llm_config,
+    )
 
-        # Teacher agent setup
-        teacher_message = "Choose topics and work with planner and reviewer. Say DONE! when finished."
-        teacher = ConversableAgent(
-            name="teacher_agent",
-            system_message=teacher_message,
-        )
+    teacher = ConversableAgent(
+        name="teacher_agent",
+        system_message="Choose topics and work with planner and reviewer. Say DONE! when finished.",
+        llm_config=llm_config,
+    )
 
     # Setup group chat
     groupchat = GroupChat(agents=[teacher, planner, reviewer], speaker_selection_method="auto", messages=[])
@@ -189,27 +190,27 @@ def test_group_chat_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        # Planner agent setup
-        planner_message = "Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>"
-        planner = ConversableAgent(
-            name="planner_agent", system_message=planner_message, description="Creates lesson plans"
-        )
+    planner = ConversableAgent(
+        name="planner_agent",
+        system_message="Create lesson plans for 4th grade. Use format: <title>, <learning_objectives>, <script>",
+        description="Creates lesson plans",
+        llm_config=llm_config,
+    )
 
-        # Reviewer agent setup
-        reviewer_message = "Review lesson plans against 4th grade curriculum. Provide max 3 changes."
-        reviewer = ConversableAgent(
-            name="reviewer_agent", system_message=reviewer_message, description="Reviews lesson plans"
-        )
+    reviewer = ConversableAgent(
+        name="reviewer_agent",
+        system_message="Review lesson plans against 4th grade curriculum. Provide max 3 changes.",
+        description="Reviews lesson plans",
+        llm_config=llm_config,
+    )
 
-        # Teacher agent setup
-        teacher_message = "Choose topics and work with planner and reviewer. Say DONE! when finished."
-        teacher = ConversableAgent(
-            name="teacher_agent",
-            system_message=teacher_message,
-        )
+    teacher = ConversableAgent(
+        name="teacher_agent",
+        system_message="Choose topics and work with planner and reviewer. Say DONE! when finished.",
+        llm_config=llm_config,
+    )
 
     # Setup group chat
     groupchat = GroupChat(agents=[teacher, planner, reviewer], speaker_selection_method="auto", messages=[])
@@ -241,7 +242,7 @@ async def test_group_chat_async(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     planner_message = """You are a classroom lesson planner.
     Given a topic, write a lesson plan for a fourth grade class.
@@ -263,15 +264,11 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
     and reviewer to create and finalise lesson plans.
     """
 
-    with llm_config:
-        lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message)
+    lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message, llm_config=llm_config)
 
-        lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message)
+    lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message, llm_config=llm_config)
 
-        teacher = ConversableAgent(
-            name="teacher_agent",
-            system_message=teacher_message,
-        )
+    teacher = ConversableAgent(name="teacher_agent", system_message=teacher_message, llm_config=llm_config)
 
     # 2. Initiate the swarm chat using a swarm manager who will
     # select agents automatically
@@ -299,7 +296,7 @@ def test_swarm_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     # 1. Create our agents
     planner_message = """You are a classroom lesson planner.
@@ -322,15 +319,11 @@ async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
     and reviewer to create and finalise lesson plans.
     """
 
-    with llm_config:
-        lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message)
+    lesson_planner = ConversableAgent(name="planner_agent", system_message=planner_message, llm_config=llm_config)
 
-        lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message)
+    lesson_reviewer = ConversableAgent(name="reviewer_agent", system_message=reviewer_message, llm_config=llm_config)
 
-        teacher = ConversableAgent(
-            name="teacher_agent",
-            system_message=teacher_message,
-        )
+    teacher = ConversableAgent(name="teacher_agent", system_message=teacher_message, llm_config=llm_config)
 
     # 2. Initiate the swarm chat using a swarm manager who will
     # select agents automatically
@@ -357,7 +350,7 @@ async def test_swarm_async(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     financial_tasks = [
         """What are the current stock prices of NVDA and TESLA, and how is the performance over the past month in terms of percentage change?""",
@@ -366,38 +359,38 @@ def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
 
     writing_tasks = ["""Develop an engaging blog post using any information provided."""]
 
-    with llm_config:
-        financial_assistant = ConversableAgent(
-            name="Financial_assistant",
-            system_message="You are a financial assistant, helping with stock market analysis. Reply 'TERMINATE' when financial tasks are done.",
-            llm_config=llm_config,
-        )
-        research_assistant = ConversableAgent(
-            name="Researcher",
-            system_message="You are a research assistant, helping with stock market analysis. Reply 'TERMINATE' when research tasks are done.",
-            llm_config=llm_config,
-        )
-        writer = ConversableAgent(
-            name="writer",
-            llm_config=llm_config,
-            system_message="""
-                You are a professional writer, known for
-                your insightful and engaging articles.
-                You transform complex concepts into compelling narratives.
-                Reply "TERMINATE" in the end when everything is done.
-                """,
-        )
+    financial_assistant = ConversableAgent(
+        name="Financial_assistant",
+        system_message="You are a financial assistant, helping with stock market analysis. Reply 'TERMINATE' when financial tasks are done.",
+        llm_config=llm_config,
+    )
+    research_assistant = ConversableAgent(
+        name="Researcher",
+        system_message="You are a research assistant, helping with stock market analysis. Reply 'TERMINATE' when research tasks are done.",
+        llm_config=llm_config,
+    )
+    writer = ConversableAgent(
+        name="writer",
+        llm_config=llm_config,
+        system_message="""
+            You are a professional writer, known for
+            your insightful and engaging articles.
+            You transform complex concepts into compelling narratives.
+            Reply "TERMINATE" in the end when everything is done.
+            """,
+    )
 
-        user = UserProxyAgent(
-            name="User",
-            human_input_mode="NEVER",
-            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-            code_execution_config={
-                "last_n_messages": 1,
-                "work_dir": "tasks",
-                "use_docker": False,
-            },
-        )
+    user = UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        code_execution_config={
+            "last_n_messages": 1,
+            "work_dir": "tasks",
+            "use_docker": False,
+        },
+        llm_config=llm_config,
+    )
 
     responses = user.sequential_run([
         {
@@ -435,7 +428,7 @@ def test_sequential_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
     financial_tasks = [
         """What are the current stock prices of NVDA and TESLA, and how is the performance over the past month in terms of percentage change?""",
@@ -444,38 +437,38 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
 
     writing_tasks = ["""Develop an engaging blog post using any information provided."""]
 
-    with llm_config:
-        financial_assistant = ConversableAgent(
-            name="Financial_assistant",
-            system_message="You are a financial assistant, helping with stock market analysis. Reply 'TERMINATE' when financial tasks are done.",
-            llm_config=llm_config,
-        )
-        research_assistant = ConversableAgent(
-            name="Researcher",
-            system_message="You are a research assistant, helping with stock market analysis. Reply 'TERMINATE' when research tasks are done.",
-            llm_config=llm_config,
-        )
-        writer = ConversableAgent(
-            name="writer",
-            llm_config=llm_config,
-            system_message="""
-                You are a professional writer, known for
-                your insightful and engaging articles.
-                You transform complex concepts into compelling narratives.
-                Reply "TERMINATE" in the end when everything is done.
-                """,
-        )
+    financial_assistant = ConversableAgent(
+        name="Financial_assistant",
+        system_message="You are a financial assistant, helping with stock market analysis. Reply 'TERMINATE' when financial tasks are done.",
+        llm_config=llm_config,
+    )
+    research_assistant = ConversableAgent(
+        name="Researcher",
+        system_message="You are a research assistant, helping with stock market analysis. Reply 'TERMINATE' when research tasks are done.",
+        llm_config=llm_config,
+    )
+    writer = ConversableAgent(
+        name="writer",
+        system_message="""
+            You are a professional writer, known for
+            your insightful and engaging articles.
+            You transform complex concepts into compelling narratives.
+            Reply "TERMINATE" in the end when everything is done.
+            """,
+        llm_config=llm_config,
+    )
 
-        user = UserProxyAgent(
-            name="User",
-            human_input_mode="NEVER",
-            is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
-            code_execution_config={
-                "last_n_messages": 1,
-                "work_dir": "tasks",
-                "use_docker": False,
-            },
-        )
+    user = UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        code_execution_config={
+            "last_n_messages": 1,
+            "work_dir": "tasks",
+            "use_docker": False,
+        },
+        llm_config=llm_config,
+    )
 
     responses = await user.a_sequential_run([
         {
@@ -511,26 +504,29 @@ async def test_sequential_async(credentials_gpt_4o_mini: Credentials):
 
 @run_for_optional_imports("openai", "openai")
 def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query.""",
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config,
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues.""",
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config,
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent", system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config,
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 
@@ -559,26 +555,29 @@ def test_run_group_chat_sync(credentials_gpt_4o_mini: Credentials):
 @pytest.mark.asyncio
 @run_for_optional_imports("openai", "openai")
 async def test_run_group_chat_async(credentials_gpt_4o_mini: Credentials):
-    llm_config = LLMConfig(**credentials_gpt_4o_mini.llm_config)
+    llm_config = credentials_gpt_4o_mini.llm_config
 
-    with llm_config:
-        triage_agent = ConversableAgent(
-            name="triage_agent",
-            system_message="""You are a triage agent. For each user query,
-            identify whether it is a technical issue or a general question. Route
-            technical issues to the tech agent and general questions to the general agent.
-            Do not provide suggestions or answers, only route the query.""",
-        )
+    triage_agent = ConversableAgent(
+        name="triage_agent",
+        system_message="""You are a triage agent. For each user query,
+        identify whether it is a technical issue or a general question. Route
+        technical issues to the tech agent and general questions to the general agent.
+        Do not provide suggestions or answers, only route the query.""",
+        llm_config=llm_config,
+    )
 
-        tech_agent = ConversableAgent(
-            name="tech_agent",
-            system_message="""You solve technical problems like software bugs
-            and hardware issues.""",
-        )
+    tech_agent = ConversableAgent(
+        name="tech_agent",
+        system_message="""You solve technical problems like software bugs
+        and hardware issues.""",
+        llm_config=llm_config,
+    )
 
-        general_agent = ConversableAgent(
-            name="general_agent", system_message="You handle general, non-technical support questions."
-        )
+    general_agent = ConversableAgent(
+        name="general_agent",
+        system_message="You handle general, non-technical support questions.",
+        llm_config=llm_config,
+    )
 
     user = ConversableAgent(name="user", human_input_mode="ALWAYS")
 

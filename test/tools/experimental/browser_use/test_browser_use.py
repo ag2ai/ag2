@@ -11,8 +11,8 @@ from autogen import AssistantAgent, UserProxyAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.experimental.browser_use import BrowserUseResult, BrowserUseTool, ExtractedContent
-
-from ....conftest import Credentials, credentials_browser_use
+from test.credentials import Credentials
+from test.marks import credentials_browser_use
 
 with optional_import_block():
     from browser_use import Controller
@@ -121,20 +121,17 @@ class TestBrowserUseToolOpenai:
         """Test that BrowserUseTool correctly uses LLMConfig.current property when llm_config is None."""
         # Create a default LLMConfig
         llm_config = LLMConfig(
-            config_list=mock_credentials.config_list,
+            *mock_credentials.config_list,
             timeout=60,
             cache_seed=42,
         )
 
-        # Set it as the current LLMConfig
-        with llm_config:
-            # Create BrowserUseTool without passing llm_config
-            browser_use_tool = BrowserUseTool()
+        browser_use_tool = BrowserUseTool(llm_config=llm_config)
 
-            # Verify that the tool was created successfully
-            assert browser_use_tool.name == "browser_use"
-            assert browser_use_tool.description == "Use the browser to perform a task."
-            assert isinstance(browser_use_tool.func, Callable)  # type: ignore[arg-type]
+        # Verify that the tool was created successfully
+        assert browser_use_tool.name == "browser_use"
+        assert browser_use_tool.description == "Use the browser to perform a task."
+        assert isinstance(browser_use_tool.func, Callable)  # type: ignore[arg-type]
 
 
 def test_browser_use_llm_config_without_context() -> None:

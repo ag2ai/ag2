@@ -75,6 +75,8 @@ class CerebrasLLMConfigEntry(LLMConfigEntry):
 class CerebrasClient:
     """Client for Cerebras's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, api_key=None, **kwargs: Unpack[CerebrasEntryDict]):
         """Requires api_key or environment variable to be set
 

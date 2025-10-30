@@ -143,16 +143,15 @@ class MathReasoning(BaseModel):
     final_answer: str
 
 # response_format is added to our configuration
-llm_config = autogen.LLMConfig(
-    api_type="openai",
-    model="gpt-5-nano",
-    api_key=os.getenv("OPENAI_API_KEY"),
-    response_format=MathReasoning
-)
+llm_config = autogen.LLMConfig(config_list={
+    "api_type": "openai",
+    "model": "gpt-5-nano",
+    "api_key": os.getenv("OPENAI_API_KEY"),
+    "response_format": MathReasoning
+})
 
 # This agent's responses will now be based on the MathReasoning model
-with llm_config:
-    assistant = autogen.AssistantAgent(name="Math_solver")
+assistant = autogen.AssistantAgent(name="Math_solver", llm_config=llm_config)
 ```
 
 A sample response to `how can I solve 8x + 7 = -23` would be:
