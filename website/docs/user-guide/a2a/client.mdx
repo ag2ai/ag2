@@ -71,6 +71,30 @@ async def review_code():
 asyncio.run(review_code())
 ```
 
+### Creating from AgentCard
+
+If you already have an `AgentCard` (e.g., fetched from a discovery service or another source), you can create an `A2aRemoteAgent` instance directly from it using the `from_card` classmethod. This avoids redundant fetching of the agent card and allows you to use pre-validated card information.
+
+```python linenums="1"
+from a2a.types import AgentCard, AgentCapabilities
+
+# Create or fetch an AgentCard
+card = AgentCard(
+    name="python_coder",
+    url="http://localhost:8000",
+    description="A Python coding assistant",
+    version="0.1.0",
+    default_input_modes=["text"],
+    default_output_modes=["text"],
+    capabilities=AgentCapabilities(streaming=True),
+    skills=[],
+    supports_authenticated_extended_card=False,
+)
+
+# Create the remote agent from the card
+remote_agent = A2aRemoteAgent.from_card(card)
+```
+
 ## Advanced Usage
 
 ### Custom HTTP Client

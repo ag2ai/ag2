@@ -13,6 +13,7 @@ from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientConfig
 from a2a.client import ClientFactory as A2AClientFactory
 from a2a.types import AgentCard, Message, Task, TaskIdParams, TaskQueryParams, TaskState
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
+from typing_extensions import Self
 
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
@@ -55,9 +56,14 @@ class A2aRemoteAgent(ConversableAgent):
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
     ) -> None:
-        self.url = url
+        self.url = url  # make it public for backward compatibility
 
         self._httpx_client_factory = client or EmptyClientFactory()
+        self._card_resolver = A2ACardResolver(
+            httpx_client=self._httpx_client_factory(),
+            base_url=url,
+        )
+
         self._max_reconnects = max_reconnects
         self._polling_interval = polling_interval
 
@@ -66,7 +72,7 @@ class A2aRemoteAgent(ConversableAgent):
         self.__llm_config: dict[str, Any] = {}
 
         self._client_config = client_config or ClientConfig()
-        self.__agent_card: AgentCard | None = None
+        self._agent_card: AgentCard | None = None
 
         self.replace_reply_func(
             ConversableAgent.generate_oai_reply,
@@ -76,6 +82,48 @@ class A2aRemoteAgent(ConversableAgent):
             ConversableAgent.a_generate_oai_reply,
             A2aRemoteAgent.a_generate_remote_reply,
         )
+
+    @classmethod
+    def from_card(
+        cls,
+        card: AgentCard,
+        *,
+        silent: bool | None = None,
+        client: ClientFactory | None = None,
+        client_config: ClientConfig | None = None,
+        max_reconnects: int = 3,
+        polling_interval: float = 0.5,
+    ) -> Self:
+        """Creates an A2aRemoteAgent instance from an existing AgentCard.
+
+        This method allows you to instantiate an A2aRemoteAgent directly using a pre-existing
+        AgentCard, such as one retrieved from a discovery service or constructed manually.
+        The resulting agent will use the data from the given card and avoid redundant card
+        fetching. The agent's registryURL is set to "UNKNOWN" since it is assumed to be derived
+        from the card.
+
+        Args:
+            card: The agent card containing metadata and configuration for the remote agent.
+            silent: whether to print the message sent. If None, will use the value of silent in each function.
+            client: An optional HTTPX client instance factory.
+            client_config: A2A Client configuration options.
+            max_reconnects: Maximum number of reconnection attempts before giving up.
+            polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
+
+        Returns:
+            Self: An instance of the A2aRemoteAgent configured with the provided card.
+        """
+        instance = cls(
+            url="UNKNOWN",
+            name=card.name,
+            silent=silent,
+            client=client,
+            client_config=client_config,
+            max_reconnects=max_reconnects,
+            polling_interval=polling_interval,
+        )
+        instance._agent_card = card
+        return instance
 
     def generate_remote_reply(
         self,
@@ -94,8 +142,8 @@ class A2aRemoteAgent(ConversableAgent):
         if messages is None:
             messages = self._oai_messages[sender]
 
-        if not self.__agent_card:
-            self.__agent_card = await self._get_agent_card()
+        if not self._agent_card:
+            self._agent_card = await self._get_agent_card()
 
         initial_message = request_message_to_a2a(
             request_message=RequestMessage(
@@ -108,9 +156,9 @@ class A2aRemoteAgent(ConversableAgent):
 
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
-            agent_client = A2AClientFactory(self._client_config).create(self.__agent_card)
+            agent_client = A2AClientFactory(self._client_config).create(self._agent_card)
 
-            if self.__agent_card.capabilities.streaming:
+            if self._agent_card.capabilities.streaming:
                 reply = await self._ask_streaming(agent_client, initial_message)
                 return self._apply_reply(reply, sender)
 
@@ -142,9 +190,9 @@ class A2aRemoteAgent(ConversableAgent):
             if task and connection_attemps < self._max_reconnects:
                 pass
 
-            if not self.__agent_card:
+            if not self._agent_card:
                 raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-            raise A2aClientError(f"Failed to connect to the agent: {pformat(self.__agent_card.model_dump())}") from e
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         task = cast(Task, task)
         while connection_attemps < self._max_reconnects:
@@ -159,11 +207,9 @@ class A2aRemoteAgent(ConversableAgent):
                 if connection_attemps < self._max_reconnects:
                     pass
 
-                if not self.__agent_card:
+                if not self._agent_card:
                     raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-                raise A2aClientError(
-                    f"Failed to connect to the agent: {pformat(self.__agent_card.model_dump())}"
-                ) from e
+                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         return None
 
@@ -175,9 +221,9 @@ class A2aRemoteAgent(ConversableAgent):
                     return result
                 break
         except httpx.ConnectError as e:
-            if not self.__agent_card:
+            if not self._agent_card:
                 raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-            raise A2aClientError(f"Failed to connect to the agent: {pformat(self.__agent_card.model_dump())}") from e
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         started_task, connection_attemps = cast(Task, started_task), 0
         while connection_attemps < self._max_reconnects:
@@ -190,10 +236,10 @@ class A2aRemoteAgent(ConversableAgent):
                     if connection_attemps < self._max_reconnects:
                         pass
 
-                    if not self.__agent_card:
+                    if not self._agent_card:
                         raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                     raise A2aClientError(
-                        f"Failed to connect to the agent: {pformat(self.__agent_card.model_dump())}"
+                        f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}"
                     ) from e
 
                 else:
@@ -231,27 +277,27 @@ class A2aRemoteAgent(ConversableAgent):
         self,
         auth_http_kwargs: dict[str, Any] | None = None,
     ) -> AgentCard:
-        resolver = A2ACardResolver(httpx_client=self._httpx_client_factory(), base_url=self.url)
-
         card: AgentCard | None = None
 
         try:
-            logger.info(f"Attempting to fetch public agent card from: {self.url}{AGENT_CARD_WELL_KNOWN_PATH}")
+            logger.info(
+                f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            )
 
             try:
-                card = await resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
+                card = await self._card_resolver.get_agent_card(relative_card_path=AGENT_CARD_WELL_KNOWN_PATH)
             except A2AClientHTTPError as e_public:
                 if e_public.status_code == 404:
                     logger.info(
-                        f"Attempting to fetch public agent card from: {self.url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
+                        f"Attempting to fetch public agent card from: {self._card_resolver.base_url}{PREV_AGENT_CARD_WELL_KNOWN_PATH}"
                     )
-                    card = await resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
+                    card = await self._card_resolver.get_agent_card(relative_card_path=PREV_AGENT_CARD_WELL_KNOWN_PATH)
                 else:
                     raise e_public
 
             if card.supports_authenticated_extended_card:
                 try:
-                    card = await resolver.get_agent_card(
+                    card = await self._card_resolver.get_agent_card(
                         relative_card_path=EXTENDED_AGENT_CARD_PATH,
                         http_kwargs=auth_http_kwargs,
                     )
