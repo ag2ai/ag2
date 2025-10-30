@@ -10,6 +10,7 @@ from autogen.oai.client import (
     DeepSeekLLMConfigEntry,
     OpenAILLMConfigEntry,
     OpenAIResponsesLLMConfigEntry,
+    OpenAIV2LLMConfigEntry,
 )
 from autogen.oai.cohere import CohereLLMConfigEntry
 from autogen.oai.gemini import GeminiLLMConfigEntry
@@ -26,6 +27,7 @@ ConfigEntries = (
     | DeepSeekLLMConfigEntry
     | OpenAILLMConfigEntry
     | OpenAIResponsesLLMConfigEntry
+    | OpenAIV2LLMConfigEntry
     | CohereLLMConfigEntry
     | GeminiLLMConfigEntry
     | GroqLLMConfigEntry
