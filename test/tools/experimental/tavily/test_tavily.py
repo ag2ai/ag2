@@ -41,12 +41,9 @@ class TestTavilySearchTool:
         Test the initialization of TavilySearchTool.
         """
         if use_internal_auth:
-            with patch.dict(os.environ, {}, clear=False):
-                # Remove TAVILY_API_KEY from environment if it exists
-                os.environ.pop("TAVILY_API_KEY", None)
-                with pytest.raises(ValueError) as exc_info:
-                    TavilySearchTool(tavily_api_key=None)
-                assert "tavily_api_key must be provided" in str(exc_info.value)
+            with pytest.raises(ValueError) as exc_info:
+                TavilySearchTool(tavily_api_key=None)
+            assert "tavily_api_key must be provided" in str(exc_info.value)
         else:
             tool = TavilySearchTool(tavily_api_key="valid_key")
             assert tool.name == "tavily_search"
