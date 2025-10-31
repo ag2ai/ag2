@@ -314,7 +314,8 @@ class GroupChat:
             message["name"] = speaker.name
         if not isinstance(message["content"], str) and not isinstance(message["content"], list):
             message["content"] = str(message["content"])
-        message["content"] = content_str(message["content"])
+        if not isinstance(message["content"], list):
+            message["content"] = content_str(message["content"])
         self.messages.append(message)
 
     def agent_by_name(self, name: str, recursive: bool = False, raise_on_name_conflict: bool = False) -> Agent | None:
