@@ -44,7 +44,7 @@ async def test_answer_with_str(data: str | TextPart) -> None:
     ]
 
     # assert correct answer
-    assert client_agent.a_receive.call_args[0][0] == {"content": "Hi, I am mock client!", "role": "assistant"}
+    assert client_agent.a_receive.call_args[0][0] == [{"content": "Hi, I am mock client!", "role": "assistant"}]
 
 
 @pytest.mark.asyncio
@@ -70,7 +70,7 @@ async def test_answer_with_text_part() -> None:
     ]
 
     # assert correct answer
-    assert client_agent.a_receive.call_args[0][0] == {"content": "Hi, I am mock client!"}
+    assert client_agent.a_receive.call_args[0][0] == [{"content": "Hi, I am mock client!"}]
 
 
 @pytest.mark.asyncio
@@ -105,11 +105,13 @@ async def test_answer_with_dict(data: dict[str, Any] | DataPart) -> None:
     ]
 
     # assert correct answer
-    assert client_agent.a_receive.call_args[0][0] == {
-        "content": "Hi, I am mock client!",
-        "role": "assistant",
-        "name": "test-agent",
-    }
+    assert client_agent.a_receive.call_args[0][0] == [
+        {
+            "content": "Hi, I am mock client!",
+            "role": "assistant",
+            "name": "test-agent",
+        }
+    ]
 
 
 def test_build_agent_from_card() -> None:

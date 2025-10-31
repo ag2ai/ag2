@@ -6,7 +6,7 @@ import warnings
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
-from autogen.agentchat.conversable_agent import normilize_message_to_oai
+from autogen.agentchat.conversable_agent import normalize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
@@ -24,7 +24,9 @@ class AgentService(RemoteService):
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
-            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role="assistant")
+            _, out_message = normalize_message_to_oai(
+                guardrail_result.reply, self.agent.name, role="assistant", preserve_custom_fields=False
+            )
             return ResponseMessage(messages=[out_message], context=state.context)
 
         context_variables = ContextVariables(state.context)
@@ -55,7 +57,7 @@ class AgentService(RemoteService):
                     tools=state.client_tools,
                 )
 
-            should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")
+            should_continue, out_message = self._add_message_to_local_history(reply, role="assistant")  # type: ignore[arg-type]
             if out_message:
                 local_history.append(out_message)
             if not should_continue:
@@ -85,14 +87,27 @@ class AgentService(RemoteService):
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str
     ) -> tuple[Literal[True], dict[str, Any]] | tuple[Literal[False], dict[str, Any] | None]:
+        """add a message to the local history.
+
+        Args:
+            message: the message to add to the local history.
+            role: the role of the message.
+
+        Returns:
+            A tuple containing a boolean indicating whether the message is valid and the normalized oai message.
+            If the message is not valid, the boolean is False and the oai message is None.
+            If the message is valid, the boolean is True and the oai message is the normalized oai message.
+        """
         if message is None:
             return False, None  # output message is empty, interrupt the loop
 
         if guardrail_result := self.agent.run_output_guardrails(message):
-            _, out_message = normilize_message_to_oai(guardrail_result.reply, self.agent.name, role=role)
+            _, out_message = normalize_message_to_oai(
+                guardrail_result.reply, self.agent.name, role=role, preserve_custom_fields=False
+            )
             return False, out_message  # output guardrail activated, interrupt the loop
 
-        valid, out_message = normilize_message_to_oai(message, self.agent.name, role=role)
+        valid, out_message = normalize_message_to_oai(message, self.agent.name, role=role, preserve_custom_fields=False)
         if not valid:
             return False, None  # tool result is not valid OAI message, interrupt the loop
 

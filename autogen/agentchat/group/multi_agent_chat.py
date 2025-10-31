@@ -97,7 +97,7 @@ def initiate_group_chat(
 
     chat_result = last_agent.initiate_chat(
         manager,
-        message=last_message,
+        message=[last_message],
         clear_history=clear_history,
         summary_method=pattern.summary_method,
     )
@@ -176,7 +176,7 @@ async def a_initiate_group_chat(
 
     chat_result = await last_agent.a_initiate_chat(
         manager,
-        message=last_message,  # type: ignore[arg-type]
+        message=[last_message],  # type: ignore[arg-type]
         clear_history=clear_history,
         summary_method=pattern.summary_method,
     )
