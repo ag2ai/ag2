@@ -11,8 +11,7 @@ The following figure illustrates how two-agent chat works.
 
 ![Two-agent chat](./assets/two-agent-chat.png)
 
-A two-agent chat takes two inputs: a message, which can be a string (for convenience), a dictionary representing a message, **or a list of message dicts** (representing a full conversation history), and a context, which specifies various parameters of the chat.
-Once the chat terminates, the history of the chat is processed by a chat summarizer. The summarizer summarizes the chat history and calculates the token usage of the chat. You can configure the type of summary using the `summary_method` parameter of the `initiate_chat` method. By default, it is the last message of the chat (i.e., `summary_method='last_msg'`).
+A two-agent chat takes two inputs: a message (which can be a string, a message dictionary, or a list of message dicts provided by the caller), and a context, which specifies various parameters of the chat.
 
 The example below is a two-agent chat between a student agent and a teacher agent. Its summarizer uses an LLM-based summary.
 
