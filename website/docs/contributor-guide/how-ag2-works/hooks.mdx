@@ -24,13 +24,16 @@ This hook is the only hook not in ConversableAgent's [generate_reply](/docs/api-
 
 You can change the message with the hook and the change will be permanent. This is because this hook is called before a message is displayed or added to the message list.
 
+**Important:** As of the latest update, hooks registered for "process_message_before_send" are always called with a single message dict (never a string, even if send() was called with a string). Your hook must return a dict as well. Returning a str, None, or list will raise a TypeError.
+
 Signature:
 ```python
 def your_function_name(
     sender: ConversableAgent,
-    message: Union[dict[str, Any], str],
+    message: dict[str, Any],  # always a dict
     recipient: Agent,
-    silent: bool) -> Union[dict[str, Any], str]:
+    silent: bool
+) -> dict[str, Any]:  # must return a dict, NOT str or None
 ```
 
 Let's look at how we could prepend a message with who is sending the message (sender) and to whom it's going (recipient).
@@ -39,7 +42,7 @@ In this example, our `Mike` agent will have this hook registered, so all their m
 
 ```python
 from autogen import ConversableAgent, Agent, LLMConfig
-from typing import Any, Union
+from typing import Any
 
 llm_config = LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
 
@@ -49,25 +52,16 @@ agent_bob = ConversableAgent(name="Bob", llm_config=llm_config)
 # Our function associated with the hook
 def update_message_before_send(
     sender: ConversableAgent,
-    message: Union[dict[str, Any], str],
+    message: dict[str, Any],  # always a dict now
     recipient: Agent,
-    silent: bool) -> Union[dict[str, Any], str]:
+    silent: bool
+) -> dict[str, Any]:  # must return a dict
 
-    if isinstance(message, dict):
-        msg_text = message.get("content", message)
-    else:
-        msg_text = message
-
+    msg_text = message.get("content", "")
     # Here we prepend the message with "<Mike said to Bob>"
     msg_text = f"<{sender.name} said to {recipient.name}> " + msg_text
-
-    if isinstance(message, dict):
-        message["content"] = msg_text
-    else:
-        message = msg_text
-
-    # Return the updated message, this will be a permanent change to the message
-    return message
+    message["content"] = msg_text
+    return message  # Must always return a dict
 
 # Register the hook with the Mike agent
 agent_mike.register_hook("process_message_before_send", update_message_before_send)
@@ -148,6 +142,12 @@ Chat History:
   }
 ]
 ```
+
+> **Note:**
+> - Your hook will be called **once per message** if a list of messages is sent. 
+> - The `message` argument will **always be a single dict**, never a string or list.
+> - **You must return a dict**; returning a string, list, or None will raise a `TypeError`.
+> - If you want to filter out messages, raise an exception (do not return None).
 
 This is a good hook if you need to edit the message before it is added to the messages list, such as for redacting text.
 
@@ -486,3 +486,4 @@ Chat Result messages:
   }
 ]
 ```
+ 
