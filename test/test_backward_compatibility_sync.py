@@ -191,7 +191,27 @@ def test_scenario_3_group_chat_manager():
             "file_processor": file_processor,
         }
     )
+
+    # Store initial message count for verification
+    initial_message_count = len(messages)
+
     user_proxy.initiate_chat(group_chat_manager, message=messages, max_turns=1)
+
+    # NEW: Verify message count in groupchat.messages
+    # The group chat should have at least as many messages as we sent initially
+    # In practice, it will have more due to agent responses
+    assert len(group_chat.messages) >= initial_message_count, (
+        f"Group chat should have at least {initial_message_count} messages, but has {len(group_chat.messages)}"
+    )
+
+    # Additional verification: ensure our initial message is in the history
+    initial_content = messages[0]["content"]
+    message_contents = [msg.get("content", "") for msg in group_chat.messages]
+    assert any(initial_content in content for content in message_contents), (
+        "Initial message should be present in group chat history"
+    )
+
+    print(f"✓ Message verification passed: {len(group_chat.messages)} messages in history")
 
     return "Group chat with manager completed"
 

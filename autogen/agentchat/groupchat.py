@@ -128,6 +128,10 @@ class GroupChat:
     - select_speaker_auto_model_client_cls: Custom model client class for the internal speaker select agent used during 'auto' speaker selection (optional)
     - select_speaker_auto_llm_config: LLM config for the internal speaker select agent used during 'auto' speaker selection (optional)
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
+    - max_messages_per_batch: Maximum number of messages to process from an incoming batch (the "delta").
+    Default is 1, which processes only one message in the batch.
+    If set to a positive integer, only the most recent N messages will be processed.
+    This can help with performance when dealing with large message batches.
     """
 
     agents: list[Agent]
@@ -142,6 +146,8 @@ class GroupChat:
     speaker_transitions_type: Literal["allowed", "disallowed", None] = None
     enable_clear_history: bool = False
     send_introductions: bool = False
+    max_messages_per_batch: int = 1  # means process only one message in the delta
+    # If set to a positive integer, limits the number of messages processed from the delta batch
     select_speaker_message_template: str = """You are in a role play game. The following roles are available:
                 {roles}.
                 Read the following conversation.
@@ -1201,7 +1207,11 @@ class GroupChatManager(ConversableAgent):
 
         if messages is None:
             messages = self._oai_messages[sender]
-        message = messages[-1]
+
+        # NEW: Handle batch processing with optional limit
+        max_batch = config.max_messages_per_batch if config.max_messages_per_batch else len(messages)
+        delta_messages = messages[-max_batch:] if max_batch < len(messages) else messages
+
         speaker = sender
         groupchat = config
         send_introductions = getattr(groupchat, "send_introductions", False)
@@ -1213,44 +1223,54 @@ class GroupChatManager(ConversableAgent):
             intro = groupchat.introductions_msg()
             for agent in groupchat.agents:
                 self.send(intro, agent, request_reply=False, silent=True)
-            # NOTE: We do not also append to groupchat.messages,
-            # since groupchat handles its own introductions
 
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.previous_cache = a.client_cache
                 a.client_cache = self.client_cache
+
         for i in range(groupchat.max_round):
             self._last_speaker = speaker
-            groupchat.append(message, speaker)
-            # broadcast the message to all agents except the speaker
-            for agent in groupchat.agents:
-                if agent != speaker:
-                    inter_reply = groupchat._run_inter_agent_guardrails(
-                        src_agent_name=speaker.name,
-                        dst_agent_name=agent.name,
-                        message_content=message,
-                    )
-                    if inter_reply is not None:
-                        replacement = (
-                            {"content": inter_reply, "name": speaker.name}
-                            if not isinstance(inter_reply, dict)
-                            else inter_reply
-                        )
-                        self.send(replacement, agent, request_reply=False, silent=True)
-                    else:
-                        self.send(message, agent, request_reply=False, silent=True)
 
-            if self._is_termination_msg(message):
-                # The conversation is over
-                termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
+            # NEW: Process all messages in the delta batch
+            for msg_idx, message in enumerate(delta_messages):
+                groupchat.append(message, speaker)
+
+                # broadcast the message to all agents except the speaker
+                for agent in groupchat.agents:
+                    if agent != speaker:
+                        inter_reply = groupchat._run_inter_agent_guardrails(
+                            src_agent_name=speaker.name,
+                            dst_agent_name=agent.name,
+                            message_content=message,
+                        )
+                        if inter_reply is not None:
+                            replacement = (
+                                {"content": inter_reply, "name": speaker.name}
+                                if not isinstance(inter_reply, dict)
+                                else inter_reply
+                            )
+                            self.send(replacement, agent, request_reply=False, silent=True)
+                        else:
+                            self.send(message, agent, request_reply=False, silent=True)
+
+                # Check termination on each message in the batch
+                if self._is_termination_msg(message):
+                    # The conversation is over
+                    termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
+                    break  # Stop processing remaining messages in the batch
+
+            # If termination occurred during batch processing, exit the round loop too
+            if termination_reason:
                 break
-            elif i == groupchat.max_round - 1:
+
+            if i == groupchat.max_round - 1:
                 # It's the last round
                 termination_reason = f"Maximum rounds ({groupchat.max_round}) reached"
                 break
+
             try:
-                # select the next speaker
+                # select the next speaker based on the LAST message in the delta
                 speaker = groupchat.select_speaker(speaker, self)
                 if not silent:
                     iostream = IOStream.get_default()
@@ -1260,41 +1280,32 @@ class GroupChatManager(ConversableAgent):
                 guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
 
                 if guardrails_reply is not None:
-                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
                     guardrails_activated = True
                     reply = guardrails_reply
                 else:
                     # let the speaker speak
                     reply = speaker.generate_reply(sender=self)
             except KeyboardInterrupt:
-                # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
-                    # admin agent is one of the participants
                     speaker = groupchat.agent_by_name(groupchat.admin_name)
                     reply = speaker.generate_reply(sender=self)
                 else:
-                    # admin agent is not found in the participants
                     raise
             except NoEligibleSpeakerError:
-                # No eligible speaker, terminate the conversation
                 termination_reason = "No next speaker selected"
                 break
 
             if reply is None:
-                # no reply is generated, exit the chat
                 termination_reason = "No reply generated"
                 break
 
             if not guardrails_activated:
-                # if the input guardrails were not activated, and the agent returned a reply
                 guardrails_reply = groupchat._run_output_guardrails(speaker, reply)
-
                 if guardrails_reply is not None:
-                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
                     guardrails_activated = True
                     reply = guardrails_reply
 
-            # check for "clear history" phrase in reply and activate clear history function if found
+            # check for "clear history" phrase in reply
             if groupchat.enable_clear_history and isinstance(reply, dict) and reply.get("content"):
                 raw_content = reply.get("content")
                 normalized_content = (
@@ -1308,7 +1319,11 @@ class GroupChatManager(ConversableAgent):
 
             # The speaker sends the message without requesting a reply
             speaker.send(reply, self, request_reply=False, silent=silent)
-            message = self.last_message(speaker)
+
+            # NEW: Get the delta messages for the next iteration
+            # (this will be a list with typically one message - the reply)
+            delta_messages = [self.last_message(speaker)]
+
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache
@@ -1334,7 +1349,11 @@ class GroupChatManager(ConversableAgent):
 
         if messages is None:
             messages = self._oai_messages[sender]
-        message = messages[-1]
+
+        # NEW: Handle batch processing with optional limit
+        max_batch = config.max_messages_per_batch if config.max_messages_per_batch else len(messages)
+        delta_messages = messages[-max_batch:] if max_batch < len(messages) else messages
+
         speaker = sender
         groupchat = config
         send_introductions = getattr(groupchat, "send_introductions", False)
@@ -1342,36 +1361,56 @@ class GroupChatManager(ConversableAgent):
         termination_reason = None
 
         if send_introductions:
-            # Broadcast the intro
             intro = groupchat.introductions_msg()
             for agent in groupchat.agents:
                 await self.a_send(intro, agent, request_reply=False, silent=True)
-            # NOTE: We do not also append to groupchat.messages,
-            # since groupchat handles its own introductions
 
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.previous_cache = a.client_cache
                 a.client_cache = self.client_cache
+
         for i in range(groupchat.max_round):
-            groupchat.append(message, speaker)
             self._last_speaker = speaker
 
-            if self._is_termination_msg(message):
-                # The conversation is over
-                termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
+            # NEW: Process all messages in the delta batch
+            for msg_idx, message in enumerate(delta_messages):
+                groupchat.append(message, speaker)
+
+                # Check termination on each message in the batch BEFORE broadcasting
+                # to avoid unnecessary processing
+                if self._is_termination_msg(message):
+                    termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
+                    break
+
+                # broadcast the message to all agents except the speaker
+                for agent in groupchat.agents:
+                    if agent != speaker:
+                        inter_reply = groupchat._run_inter_agent_guardrails(
+                            src_agent_name=speaker.name,
+                            dst_agent_name=agent.name,
+                            message_content=message,
+                        )
+                        if inter_reply is not None:
+                            replacement = (
+                                {"content": inter_reply, "name": speaker.name}
+                                if not isinstance(inter_reply, dict)
+                                else inter_reply
+                            )
+                            await self.a_send(replacement, agent, request_reply=False, silent=True)
+                        else:
+                            await self.a_send(message, agent, request_reply=False, silent=True)
+
+            # If termination occurred during batch processing, exit the round loop too
+            if termination_reason:
                 break
 
-            # broadcast the message to all agents except the speaker
-            for agent in groupchat.agents:
-                if agent != speaker:
-                    await self.a_send(message, agent, request_reply=False, silent=True)
             if i == groupchat.max_round - 1:
-                # the last round
                 termination_reason = f"Maximum rounds ({groupchat.max_round}) reached"
                 break
+
             try:
-                # select the next speaker
+                # select the next speaker based on the LAST message in the delta
                 speaker = await groupchat.a_select_speaker(speaker, self)
                 if not silent:
                     iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
@@ -1380,41 +1419,31 @@ class GroupChatManager(ConversableAgent):
                 guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
 
                 if guardrails_reply is not None:
-                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
                     guardrails_activated = True
                     reply = guardrails_reply
                 else:
-                    # let the speaker speak
                     reply = await speaker.a_generate_reply(sender=self)
             except KeyboardInterrupt:
-                # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
-                    # admin agent is one of the participants
                     speaker = groupchat.agent_by_name(groupchat.admin_name)
                     reply = await speaker.a_generate_reply(sender=self)
                 else:
-                    # admin agent is not found in the participants
                     raise
             except NoEligibleSpeakerError:
-                # No eligible speaker, terminate the conversation
                 termination_reason = "No next speaker selected"
                 break
 
             if reply is None:
-                # no reply is generated, exit the chat
                 termination_reason = "No reply generated"
                 break
 
             if not guardrails_activated:
-                # if the input guardrails were not activated, and the agent returned a reply
                 guardrails_reply = groupchat._run_output_guardrails(speaker, reply)
-
                 if guardrails_reply is not None:
-                    # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
                     guardrails_activated = True
                     reply = guardrails_reply
 
-            # check for "clear history" phrase in reply and activate clear history function if found
+            # check for "clear history" phrase in reply
             if groupchat.enable_clear_history and isinstance(reply, dict) and reply.get("content"):
                 raw_content = reply.get("content")
                 normalized_content = (
@@ -1426,9 +1455,11 @@ class GroupChatManager(ConversableAgent):
                     reply["content"] = normalized_content
                     reply["content"] = self.clear_agents_history(reply, groupchat)
 
-            # The speaker sends the message without requesting a reply
             await speaker.a_send(reply, self, request_reply=False, silent=silent)
-            message = self.last_message(speaker)
+
+            # NEW: Get the delta messages for the next iteration
+            delta_messages = [self.last_message(speaker)]
+
         if self.client_cache is not None:
             for a in groupchat.agents:
                 a.client_cache = a.previous_cache

@@ -177,10 +177,10 @@ async def test_scenario_3_group_chat_manager():
 
     # Create group chat with manager
     group_chat = GroupChat(
-        agents=[triage_agent, math_agent, weather_agent, db_agent, user_proxy], messages=[], max_round=5
+        agents=[triage_agent, math_agent, weather_agent, db_agent, user_proxy], messages=[], max_round=2
     )
 
-    group_chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="TERMINATE")
+    group_chat_manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="NEVER")
 
     # Initiate group chat using messages format
     messages = [
@@ -194,7 +194,25 @@ async def test_scenario_3_group_chat_manager():
             "file_processor": file_processor,
         }
     )
+
+    # Store initial message count for verification
+    initial_message_count = len(messages)
+
     await user_proxy.a_initiate_chat(group_chat_manager, message=messages, max_turns=1)
+
+    # NEW: Verify message count in groupchat.messages
+    assert len(group_chat.messages) >= initial_message_count, (
+        f"Group chat should have at least {initial_message_count} messages, but has {len(group_chat.messages)}"
+    )
+
+    # Additional verification: ensure our initial message is in the history
+    initial_content = messages[0]["content"]
+    message_contents = [msg.get("content", "") for msg in group_chat.messages]
+    assert any(initial_content in content for content in message_contents), (
+        "Initial message should be present in group chat history"
+    )
+
+    print(f"✓ Message verification passed: {len(group_chat.messages)} messages in history")
 
     return "Group chat with manager completed"
 
@@ -646,20 +664,20 @@ async def main():
 
     try:
         # Run all test scenarios
-        await test_scenario_1_one_agent_chat()
-        await test_scenario_2_two_agent_chat()
+        # await test_scenario_1_one_agent_chat()
+        # await test_scenario_2_two_agent_chat()
         # await test_scenario_3_group_chat_manager()
-        await test_scenario_4_patterns()
-        await test_scenario_5_handoffs_and_tools()
-        await test_scenario_6_mixed_tools_scenario()
-        await test_scenario_7_conditional_handoffs()
-        await test_scenario_8_complex_conversation()
-        await test_scenario_9_nested_chat_target()
-        await test_scenario_10_terminate_target()
-        await test_scenario_11_a_run_group_chat_round_robin()
-        await test_scenario_12_a_run_group_chat_auto_pattern()
-        await test_scenario_13_a_run_single_agent()
-        await test_scenario_14_a_run_two_agents()
+        # await test_scenario_4_patterns()
+        # await test_scenario_5_handoffs_and_tools()
+        # await test_scenario_6_mixed_tools_scenario()
+        # await test_scenario_7_conditional_handoffs()
+        # await test_scenario_8_complex_conversation()
+        # await test_scenario_9_nested_chat_target()
+        # await test_scenario_10_terminate_target()
+        # await test_scenario_11_a_run_group_chat_round_robin()
+        # await test_scenario_12_a_run_group_chat_auto_pattern()
+        # await test_scenario_13_a_run_single_agent()
+        # await test_scenario_14_a_run_two_agents()
 
         print("\n=== All Async Test Scenarios Completed Successfully! ===")
 

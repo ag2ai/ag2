@@ -2319,3 +2319,227 @@ def test_groupchatmanager_no_llm_config():
         ),
     ):
         agent_a.initiate_chat(manager, message="Hello")
+
+
+def test_delta_message_processing(monkeypatch: MonkeyPatch):
+    """Test that GroupChat processes all messages in a delta batch."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+    agent3 = autogen.ConversableAgent(
+        "charlie",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is charlie speaking.",
+    )
+
+    # Mock speaker selection to prevent further rounds
+    def mock_select_speaker(last_speaker, manager):
+        # Just return agent2 once, then this will be called again but we limit max_rounds
+        return agent2
+
+    monkeypatch.setattr(GroupChat, "select_speaker", mock_select_speaker)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2, agent3],
+        messages=[],
+        max_round=1,  # Only process the initial batch, no additional rounds
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,  # Process all messages in the batch
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch of multiple messages
+    delta_messages = [
+        {"role": "user", "content": "First message in batch"},
+        {"role": "user", "content": "Second message in batch"},
+        {"role": "user", "content": "Third message in batch"},
+    ]
+
+    # Initiate chat with the delta batch (this triggers run_chat)
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # Verify all messages were appended to groupchat.messages
+    assert len(groupchat.messages) >= 3, f"Expected at least 3 messages, got {len(groupchat.messages)}"
+
+    # Find the three messages we sent in the groupchat history
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "First message in batch" in message_contents
+    assert "Second message in batch" in message_contents
+    assert "Third message in batch" in message_contents
+
+
+def test_delta_with_termination(monkeypatch: MonkeyPatch):
+    """Test termination check on each message in delta."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Mock speaker selection
+    monkeypatch.setattr(GroupChat, "select_speaker", lambda *args, **kwargs: agent2)
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=10,
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,  # Process all messages
+    )
+
+    # Set up termination condition
+    group_chat_manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config=False,
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
+    )
+
+    # Create a batch where the second message has TERMINATE
+    # The third message should NOT be processed
+    delta_messages = [
+        {"role": "user", "content": "First message"},
+        {"role": "user", "content": "Second message with TERMINATE"},
+        {"role": "user", "content": "Third message should not be processed"},
+    ]
+
+    # Initiate chat with the delta batch
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # With delta processing, messages should be processed in order
+    # and stop at the termination message
+    assert len(groupchat.messages) >= 2, "At least two messages should be processed"
+
+    # Verify that the third message was NOT processed (it comes after TERMINATE)
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "First message" in message_contents, "First message should be processed"
+    assert "TERMINATE" in str(message_contents), "Second message with TERMINATE should be processed"
+    assert "Third message should not be processed" not in message_contents, "Third message should NOT be processed"
+
+
+def test_delta_with_guardrails():
+    """Test that delta messages are processed through the system."""
+
+    # Track how many times messages are processed
+    message_count = {"count": 0}
+
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Hook into agent2's receive to count messages
+    original_receive = agent2.receive
+
+    def counted_receive(message, sender, request_reply=None, silent=False):
+        if isinstance(message, list):
+            message_count["count"] += len(message)
+        else:
+            message_count["count"] += 1
+        return original_receive(message, sender, request_reply, silent)
+
+    agent2.receive = counted_receive
+
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=1,
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=10,
+    )
+
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch with multiple messages
+    delta_messages = [
+        {"role": "user", "content": "First message is fine"},
+        {"role": "user", "content": "Second message"},
+        {"role": "user", "content": "Third message is also fine"},
+    ]
+
+    # Initiate chat - messages should be processed
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # Verify that messages were processed
+    assert len(groupchat.messages) >= 3, f"Expected at least 3 messages, got {len(groupchat.messages)}"
+
+    # Verify that agent2 received messages (broadcast from alice)
+    assert message_count["count"] >= 3, f"Agent2 should have received at least 3 messages, got {message_count['count']}"
+
+
+def test_batch_size_limit():
+    """Test max_messages_per_batch configuration."""
+    agent1 = autogen.ConversableAgent(
+        "alice",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is alice speaking.",
+    )
+    agent2 = autogen.ConversableAgent(
+        "bob",
+        max_consecutive_auto_reply=10,
+        human_input_mode="NEVER",
+        llm_config=False,
+        default_auto_reply="This is bob speaking.",
+    )
+
+    # Create groupchat with batch size limit of 3
+    groupchat = autogen.GroupChat(
+        agents=[agent1, agent2],
+        messages=[],
+        max_round=1,  # Only one round to just process the initial batch
+        speaker_selection_method="round_robin",
+        max_messages_per_batch=3,  # Only process last 3 messages from the delta
+    )
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    # Create a batch of 10 messages
+    delta_messages = [{"role": "user", "content": f"Message {i}"} for i in range(10)]
+
+    # Initiate chat with all 10 messages
+    agent1.initiate_chat(group_chat_manager, message=delta_messages, max_turns=1)
+
+    # With max_messages_per_batch=3, should process only the last 3 messages (7, 8, 9)
+    assert len(groupchat.messages) >= 3, f"Should have at least 3 messages, got {len(groupchat.messages)}"
+
+    # Verify that only messages 7, 8, 9 were processed (the last 3 from the batch)
+    message_contents = [msg.get("content", "") for msg in groupchat.messages]
+    assert "Message 7" in message_contents, "Message 7 should be processed"
+    assert "Message 8" in message_contents, "Message 8 should be processed"
+    assert "Message 9" in message_contents, "Message 9 should be processed"
+
+    # Earlier messages should NOT be in the groupchat (they were skipped due to batch limit)
+    assert "Message 0" not in message_contents, "Message 0 should NOT be processed (beyond batch limit)"
+    assert "Message 1" not in message_contents, "Message 1 should NOT be processed (beyond batch limit)"
