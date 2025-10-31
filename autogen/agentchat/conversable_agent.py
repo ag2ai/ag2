@@ -1120,26 +1120,24 @@ class ConversableAgent(LLMAgent):
         """
         hook_list = self.hook_lists["process_message_before_send"]
 
-        if isinstance(message, list):
-            # Process each message in the list
-            processed_messages = []
-            for msg in message:
-                processed_msg = msg
-                for hook in hook_list:
-                    processed_msg = hook(
-                        sender=self,
-                        message=processed_msg,
-                        recipient=recipient,
-                        silent=ConversableAgent._is_silent(self, silent),
+        processed_messages = []
+        for msg in message:
+            processed_msg = msg
+            for hook in hook_list:
+                processed_msg = hook(
+                    sender=self,
+                    message=processed_msg,
+                    recipient=recipient,
+                    silent=ConversableAgent._is_silent(self, silent),
+                )
+                # Add validation for hook return value
+                if not isinstance(processed_msg, dict):
+                    raise TypeError(
+                        f"Hook must return a dict, got {type(processed_msg).__name__}. "
+                        f"Hooks should modify and return the message dictionary."
                     )
-                    # Add validation for hook return value
-                    if not isinstance(processed_msg, dict):
-                        raise TypeError(
-                            f"Hook must return a dict, got {type(processed_msg).__name__}. "
-                            f"Hooks should modify and return the message dictionary."
-                        )
-                processed_messages.append(processed_msg)
-            return processed_messages
+            processed_messages.append(processed_msg)
+        return processed_messages
 
     def send(
         self,
@@ -1304,19 +1302,32 @@ class ConversableAgent(LLMAgent):
         # message_model.print(iostream.print)
         iostream.send(message_model)
 
-    def _process_received_message(self, message: dict[str, Any] | str, sender: Agent, silent: bool):
-        # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
-        valid = self._append_oai_message(message, sender, role="user", name=sender.name)
-        if logging_enabled():
-            log_event(self, "received_message", message=message, sender=sender.name, valid=valid)
+    def _process_received_message(
+        self, message: list[dict[str, Any]] | dict[str, Any] | str, sender: Agent, silent: bool
+    ) -> None:
+        """Process received message(s) by appending to history and optionally printing.
 
-        if not valid:
-            raise ValueError(
-                "Received message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
-            )
+        This method modifies self._oai_messages in place and doesn't return anything.
+        """
+        if isinstance(message, list):
+            for msg in message:
+                valid = self._append_oai_message(msg, sender, role="user", name=sender.name)
 
-        if not ConversableAgent._is_silent(sender, silent):
-            self._print_received_message(message, sender)
+                if not valid:
+                    raise ValueError(
+                        "Received message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
+                    )
+                if not ConversableAgent._is_silent(sender, silent):
+                    self._print_received_message(msg, sender)
+        else:
+            # if message is single message
+            valid = self._append_oai_message(message, sender, role="user", name=sender.name)
+            if not valid:
+                raise ValueError(
+                    "Received message can't be converted into a valid ChatCompletion message. Either content or function_call must be provided."
+                )
+            if not ConversableAgent._is_silent(sender, silent):
+                self._print_received_message(message, sender)
 
     def receive(
         self,
@@ -1348,11 +1359,9 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        # Handle list of messages
-        if isinstance(message, list):
-            message = [self._process_received_message(msg, sender, silent) for msg in message]
-        else:
-            message = [self._process_received_message(message, sender, silent)]
+        # Process the received message(s) - appends to history and prints
+        self._process_received_message(message, sender, silent)
+
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
         reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
@@ -1371,13 +1380,13 @@ class ConversableAgent(LLMAgent):
         request_reply: bool | None = None,
         silent: bool | None = False,
     ):
-        """(async) Receive a list[message], dict[str, Any], or str from another agent.
+        """(async)Receive a list[messages], dict[str, Any], or str from another agent.
 
         Once a message is received, this function sends a reply to the sender or stop.
         The reply can be generated automatically or entered manually by a human.
 
         Args:
-            message (list[messages]): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
+            message (list[messages], dict[str, Any], or str): message from the sender. It may contain the following reserved fields (either content or function_call need to be provided).
                 1. "content": content of the message, can be None.
                 2. "function_call": a dictionary containing the function name and arguments. (deprecated in favor of "tool_calls")
                 3. "tool_calls": a list of dictionaries containing the function name and arguments.
@@ -1394,11 +1403,8 @@ class ConversableAgent(LLMAgent):
         Raises:
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
-        # Handle list of messages
-        if isinstance(message, list):
-            message = [self._process_received_message(msg, sender, silent) for msg in message]
-        else:
-            message = [self._process_received_message(message, sender, silent)]
+        # Process the received message(s) - appends to history and prints
+        self._process_received_message(message, sender, silent)
 
         if request_reply is False or (request_reply is None and self.reply_at_receive[sender] is False):
             return
