@@ -79,7 +79,13 @@ from .chat import (
 from .group.context_variables import ContextVariables
 from .group.guardrails import Guardrail, GuardrailResult
 from .group.handoffs import Handoffs
-from .utils import consolidate_chat_info, gather_usage_summary
+from .utils import (
+    consolidate_chat_info,
+    gather_usage_summary,
+    message_to_dict,
+    normalize_message_to_list,
+    normalize_message_to_oai,
+)
 
 if TYPE_CHECKING:
     from .group.on_condition import OnCondition
@@ -1023,28 +1029,28 @@ class ConversableAgent(LLMAgent):
         else:
             return dict(message)
 
-    @staticmethod
-    def _normalize_message_to_list(
-        message: str | dict[str, Any] | list[dict[str, Any]], role: str = "assistant"
-    ) -> list[dict[str, Any]]:
-        """Normalize message to list[dict] format for consistent API.
+    # @staticmethod
+    # def _normalize_message_to_list(
+    #     message: str | dict[str, Any] | list[dict[str, Any]], role: str = "assistant"
+    # ) -> list[dict[str, Any]]:
+    #     """Normalize message to list[dict] format for consistent API.
 
-        This method ensures all messages are in the standardized list[dict[str, Any]] format:
-        - str inputs are converted to [{"content": str, "role": role}]
-        - dict inputs are converted to [dict]
-        - list inputs are returned as-is
+    #     This method ensures all messages are in the standardized list[dict[str, Any]] format:
+    #     - str inputs are converted to [{"content": str, "role": role}]
+    #     - dict inputs are converted to [dict]
+    #     - list inputs are returned as-is
 
-        Args:
-            message: The message to normalize (str, dict, or list of dicts).
-            role: The role of the message, can be "assistant" or "user".
-        Returns:
-            A list of message dictionaries.
-        """
-        if isinstance(message, str):
-            return [{"content": message, "role": role}]
-        elif isinstance(message, dict):
-            return [message]
-        return message
+    #     Args:
+    #         message: The message to normalize (str, dict, or list of dicts).
+    #         role: The role of the message, can be "assistant" or "user".
+    #     Returns:
+    #         A list of message dictionaries.
+    #     """
+    #     if isinstance(message, str):
+    #         return [{"content": message, "role": role}]
+    #     elif isinstance(message, dict):
+    #         return [message]
+    #     return message
 
     @staticmethod
     def _normalize_name(name):
@@ -1177,7 +1183,7 @@ class ConversableAgent(LLMAgent):
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
 
-        message = self._normalize_message_to_list(message, role="user")
+        message = normalize_message_to_list(message, role="user")
         processed_msgs = self._process_message_before_send(
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
@@ -1254,7 +1260,7 @@ class ConversableAgent(LLMAgent):
             ValueError: if the message can't be converted into a valid ChatCompletion message.
         """
 
-        message = self._normalize_message_to_list(message, role="user")
+        message = normalize_message_to_list(message, role="user")
         processed_msgs = self._process_message_before_send(
             message, recipient, ConversableAgent._is_silent(self, silent)
         )
@@ -1591,7 +1597,7 @@ class ConversableAgent(LLMAgent):
                 if msg2send is None:
                     break
                 self.send(
-                    self._normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
+                    normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
                 )
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
@@ -1605,7 +1611,7 @@ class ConversableAgent(LLMAgent):
                 msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
             else:
                 msg2send = self.generate_init_message(message, **kwargs)
-            self.send(self._normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
+            self.send(normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
             summary_args,
@@ -1781,7 +1787,7 @@ class ConversableAgent(LLMAgent):
                     if msg2send is None:
                         break
                 await self.a_send(
-                    self._normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
+                    normalize_message_to_list(msg2send, role="user"), recipient, request_reply=True, silent=silent
                 )
             else:  # No breaks in the for loop, so we have reached max turns
                 iostream.send(
@@ -1795,7 +1801,7 @@ class ConversableAgent(LLMAgent):
                 msg2send = message(_chat_info["sender"], _chat_info["recipient"], kwargs)
             else:
                 msg2send = await self.a_generate_init_message(message, **kwargs)
-            await self.a_send(self._normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
+            await self.a_send(normalize_message_to_list(msg2send, role="user"), recipient, silent=silent)
         summary = self._summarize_chat(
             summary_method,
             summary_args,
@@ -4428,84 +4434,3 @@ def register_function(
     """
     f = caller.register_for_llm(name=name, description=description)(f)
     executor.register_for_execution(name=name)(f)
-
-
-def normalize_message_to_oai(
-    message: dict[str, Any] | str,
-    name: str,
-    role: str = "assistant",
-    preserve_custom_fields: bool = True,
-) -> tuple[bool, dict[str, Any]]:
-    """normalize a message to an oai message.
-
-    Args:
-        message: the message to normalize.
-        name: the name of the message author.
-        role: the role of the message.
-        preserve_custom_fields: whether to preserve custom fields. example: tool_calls, tool_responses, tool_call_id, name, context, etc.
-
-    Returns:
-        A tuple containing a boolean indicating whether the message is valid and the normalized oai message.
-    """
-    message = message_to_dict(message)
-    # create oai message to be appended to the oai conversation that can be passed to oai directly.
-
-    if preserve_custom_fields:
-        # Preserve all fields for local storage (hooks can add metadata)
-        # but filter out None values (except content) to avoid breaking code that checks "if key in dict"
-        oai_message = {k: v for k, v in message.items() if v is not None or k == "content"}
-    else:
-        # Strict whitelist for remote/serialization contexts
-        oai_message = {
-            k: message[k]
-            for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
-            if k in message and message[k] is not None
-        }
-
-    if tools := message.get("tool_calls"):  # check for [], None and missed key
-        oai_message["tool_calls"] = tools
-
-    if "content" not in oai_message:
-        if "function_call" in oai_message or "tool_calls" in oai_message:
-            oai_message["content"] = None  # if only function_call is provided, content will be set to None.
-        else:
-            return False, oai_message
-
-    if message.get("role") in ["function", "tool"]:
-        oai_message["role"] = message.get("role")
-        if "tool_responses" in oai_message:
-            for tool_response in oai_message["tool_responses"]:
-                content_value = tool_response.get("content")
-                tool_response["content"] = (
-                    content_str(content_value)
-                    if isinstance(content_value, (str, list)) or content_value is None
-                    else str(content_value)
-                )
-    elif "override_role" in message:
-        # If we have a direction to override the role then set the
-        # role accordingly. Used to customise the role for the
-        # select speaker prompt.
-        oai_message["role"] = message.get("override_role")
-    else:
-        oai_message["role"] = role
-
-    if oai_message.get("function_call", False) or oai_message.get("tool_calls", False):
-        oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
-    elif "name" not in oai_message:
-        # If we don't have a name field, append it
-        oai_message["name"] = name
-
-    return True, oai_message
-
-
-def message_to_dict(message: dict[str, Any] | str) -> dict:
-    """Convert a message to a dictionary.
-
-    The message can be a string or a dictionary. The string will be put in the "content" field of the new dictionary.
-    """
-    if isinstance(message, str):
-        return {"content": message}
-    elif isinstance(message, dict):
-        return message
-    else:
-        return dict(message)

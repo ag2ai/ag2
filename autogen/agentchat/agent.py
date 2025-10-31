@@ -4,7 +4,7 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, runtime_checkable
 
 from ..doc_utils import export_module
 
@@ -38,22 +38,6 @@ class Agent(Protocol):
         """
         ...
 
-    @overload
-    def send(
-        self,
-        message: list[dict[str, Any]],
-        recipient: "Agent",
-        request_reply: bool | None = None,
-    ) -> None: ...
-
-    @overload
-    def send(
-        self,
-        message: dict[str, Any] | str,
-        recipient: "Agent",
-        request_reply: bool | None = None,
-    ) -> None: ...
-
     def send(
         self,
         message: list[dict[str, Any]] | str | dict[str, Any],
@@ -71,22 +55,6 @@ class Agent(Protocol):
         """
         ...
 
-    @overload
-    async def a_send(
-        self,
-        message: list[dict[str, Any]],
-        recipient: "Agent",
-        request_reply: bool | None = None,
-    ) -> None: ...
-
-    @overload
-    async def a_send(
-        self,
-        message: dict[str, Any] | str,
-        recipient: "Agent",
-        request_reply: bool | None = None,
-    ) -> None: ...
-
     async def a_send(
         self,
         message: list[dict[str, Any]] | str | dict[str, Any],
@@ -102,24 +70,6 @@ class Agent(Protocol):
             request_reply (bool): whether to request a reply from the recipient.
         """
         ...
-
-    @overload
-    def receive(
-        self,
-        message: dict[str, Any] | str,
-        sender: "Agent",
-        request_reply: bool | None = None,
-        silent: bool | None = False,
-    ) -> None: ...
-
-    @overload
-    def receive(
-        self,
-        message: list[dict[str, Any]],
-        sender: "Agent",
-        request_reply: bool | None = None,
-        silent: bool | None = False,
-    ) -> None: ...
 
     def receive(
         self,
@@ -137,24 +87,6 @@ class Agent(Protocol):
             request_reply (bool): whether the sender requests a reply.
             silent (bool): whether to print the message received.
         """
-
-    @overload
-    async def a_receive(
-        self,
-        message: dict[str, Any] | str,
-        sender: "Agent",
-        request_reply: bool | None = None,
-        silent: bool | None = False,
-    ) -> None: ...
-
-    @overload
-    async def a_receive(
-        self,
-        message: list[dict[str, Any]],
-        sender: "Agent",
-        request_reply: bool | None = None,
-        silent: bool | None = False,
-    ) -> None: ...
 
     async def a_receive(
         self,

@@ -6,11 +6,11 @@ import warnings
 from typing import Any, Literal, cast
 
 from autogen.agentchat import ConversableAgent
-from autogen.agentchat.conversable_agent import normalize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.agentchat.utils import normalize_message_to_oai
 
 from .protocol import RemoteService, RequestMessage, ResponseMessage, get_tool_names
 
