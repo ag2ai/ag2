@@ -43,8 +43,10 @@ def test_chat_messages_for_summary():
     assistant = UserProxyAgent(name="assistant", human_input_mode="NEVER", code_execution_config={"use_docker": False})
     user = UserProxyAgent(name="user", human_input_mode="NEVER", code_execution_config={"use_docker": False})
     user.send([{"content": "What is the capital of France?", "role": "user"}], assistant)
+    user.send("What is the capital of France?", assistant)
+    user.send({"content": "What is the capital of France?", "role": "user"}, assistant)
     messages = assistant.chat_messages_for_summary(user)
-    assert len(messages) == 1
+    assert len(messages) == 3
 
     groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2, speaker_selection_method="round_robin")
     manager = GroupChatManager(
