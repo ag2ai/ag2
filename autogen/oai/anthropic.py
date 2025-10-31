@@ -489,11 +489,14 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
 
         # Extract content from response
         if response.content:
-            if type(response.content[0]) == TextBlock:
+            if isinstance(response.content[0]) == TextBlock:
                 content = response.content[0].text
 
-            elif type(response.content[0]) == ThinkingBlock:
+            elif isinstance(response.content[0]) == ThinkingBlock:
                 content = response.content[0].thinking
+
+            else:
+                content = ""
         else:
             content = ""
 
