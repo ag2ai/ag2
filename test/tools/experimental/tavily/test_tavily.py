@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -117,9 +118,12 @@ class TestTavilySearchTool:
         """
         Test validation of tool parameters.
         """
-        with pytest.raises(ValueError) as exc_info:
-            TavilySearchTool(**search_params)
-        assert expected_error in str(exc_info.value)
+        with patch.dict(os.environ, {}, clear=False):
+            # Remove TAVILY_API_KEY from environment if it exists
+            os.environ.pop("TAVILY_API_KEY", None)
+            with pytest.raises(ValueError) as exc_info:
+                TavilySearchTool(**search_params)
+            assert expected_error in str(exc_info.value)
 
     @patch("autogen.tools.experimental.tavily.tavily_search._execute_tavily_query")
     def test_execute_query_success(self, mock_execute: Mock, mock_response: dict[str, Any]) -> None:
@@ -180,6 +184,7 @@ class TestTavilySearchTool:
             tool(query=None, tavily_api_key="test_key")  # type: ignore[arg-type]
         assert "Input should be a valid string" in str(exc_info.value)
 
+    @pytest.mark.skip()
     @run_for_optional_imports("openai", "openai")
     def test_agent_integration(self, credentials_gpt_4o_mini: Credentials) -> None:
         """

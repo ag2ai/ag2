@@ -11,13 +11,7 @@ The following figure illustrates how two-agent chat works.
 
 ![Two-agent chat](./assets/two-agent-chat.png)
 
-A two-agent chats takes two inputs: a message, which is a string provided by the caller; a context, which specifies various parameters of the chat.
-
-The sender agent uses its chat initializer method (i.e., `generate_init_message` method of `ConversableAgent`) to generate an initial message from the inputs, and sends it to the recipient agent to start the chat.
-
-The sender agent is the agent whose `initiate_chat` method is called, and the recipient agent is the other agent.
-
-Once the chat terminates, the history of the chat is processed by a chat summarizer. The summarizer summarizes the chat history and calculates the token usage of the chat. You can configure the type of summary using the `summary_method` parameter of the `initiate_chat` method. By default, it is the last message of the chat (i.e., `summary_method='last_msg'`).
+A two-agent chat takes two inputs: a message (which can be a string, a message dictionary, or a list of message dicts provided by the caller), and a context, which specifies various parameters of the chat.
 
 The example below is a two-agent chat between a student agent and a teacher agent. Its summarizer uses an LLM-based summary.
 
@@ -57,7 +51,7 @@ chat_result = student_agent.initiate_chat(
 print(chat_result.summary)
 ```
 
-In the above example, the summary method is set to `reflection_with_llm` which takes a list of messages from the conversation and summarize them  using a call to an LLM.
+In the above example, the summary method is set to `reflection_with_llm` which takes a list of messages from the conversation and summarizes them using a call to an LLM.
 
 The summary method first tries to use the recipient's LLM, if it is not available then it uses the sender's LLM. In this case the recipient is "Teacher_Agent" and the sender is "Student_Agent".
 
