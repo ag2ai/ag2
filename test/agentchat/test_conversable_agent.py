@@ -3006,8 +3006,379 @@ async def test_agent_a_run_method_two_agents_async_integration(credentials_gpt_4
     assert len(await response.messages) > 0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_run_basic(mock_credentials: Credentials):
+    """Test basic run functionality with a recipient agent."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply function for the recipient
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Run the conversation
+    response = agent.run(
+        recipient=recipient,
+        message="Hello, how are you?",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the thread complete
+    time.sleep(0.5)
+
+
+def test_run_no_recipient(mock_credentials: Credentials):
+    """Test run functionality without a recipient (creates executor internally)."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+
+    # Run without recipient
+    response = agent.run(
+        message="Hello, please respond",
+        max_turns=1,
+        clear_history=True,
+        user_input=False,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the thread complete
+    time.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_a_run_basic(mock_credentials: Credentials):
+    """Test async run functionality with a recipient agent."""
+    agent = ConversableAgent(
+        "assistant",
+        llm_config=mock_credentials.llm_config,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply function for the recipient
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Run the async conversation
+    response = await agent.a_run(
+        recipient=recipient,
+        message="Hello, how are you?",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify response object
+    assert response is not None
+    assert hasattr(response, "iostream")
+
+    # Let the task complete
+    await asyncio.sleep(0.5)
+
+
+def test_initiate_chat_basic():
+    """Test basic initiate_chat functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Initiate chat
+    result = agent.initiate_chat(
+        recipient,
+        message="Hello",
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert hasattr(result, "chat_history")
+    assert hasattr(result, "summary")
+    assert len(result.chat_history) > 0
+
+
+def test_initiate_chat_with_max_turns():
+    """Test initiate_chat with max_turns parameter."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Response"))
+    agent.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "Counter response"))
+
+    # Initiate chat with max_turns
+    result = agent.initiate_chat(
+        recipient,
+        message="Hello",
+        max_turns=2,
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert len(result.chat_history) <= 5  # Initial message + 2 turns (4 messages max)
+
+
+@pytest.mark.asyncio
+async def test_a_initiate_chat_basic():
+    """Test async basic initiate_chat functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient = ConversableAgent(
+        "recipient",
+        llm_config=False,
+        human_input_mode="NEVER",
+        is_termination_msg=lambda msg: msg.get("content") == "TERMINATE",
+    )
+
+    # Register a simple reply
+    recipient.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Initiate async chat
+    result = await agent.a_initiate_chat(
+        recipient,
+        message="Hello",
+        clear_history=True,
+    )
+
+    # Verify result
+    assert result is not None
+    assert hasattr(result, "chat_history")
+    assert hasattr(result, "summary")
+    assert len(result.chat_history) > 0
+
+
+def test_initiate_chats_basic():
+    """Test basic initiate_chats functionality with multiple chats."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Initiate chats
+    results = agent.initiate_chats(chat_queue)
+
+    # Verify results
+    assert results is not None
+    assert isinstance(results, list)
+    assert len(results) == 2
+    assert all(hasattr(r, "chat_history") for r in results)
+
+
+@pytest.mark.asyncio
+async def test_a_initiate_chats_basic():
+    """Test async basic initiate_chats functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue with chat_id for async
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+            "chat_id": 0,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+            "chat_id": 1,
+        },
+    ]
+
+    # Initiate async chats
+    results = await agent.a_initiate_chats(chat_queue)
+
+    # Verify results
+    assert results is not None
+    assert isinstance(results, dict)
+    assert len(results) == 2
+
+
+def test_sequential_run_basic():
+    """Test basic sequential_run functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Run sequential chats
+    responses = agent.sequential_run(chat_queue)
+
+    # Verify responses
+    assert responses is not None
+    assert isinstance(responses, list)
+    assert len(responses) == 2
+    assert all(hasattr(r, "iostream") for r in responses)
+
+    # Let threads complete
+    time.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_a_sequential_run_basic():
+    """Test async basic sequential_run functionality."""
+    agent = ConversableAgent(
+        "agent",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient1 = ConversableAgent(
+        "recipient1",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    recipient2 = ConversableAgent(
+        "recipient2",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+
+    # Register simple replies
+    recipient1.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+    recipient2.register_reply([ConversableAgent, None], lambda *args, **kwargs: (True, "TERMINATE"))
+
+    # Create chat queue
+    chat_queue = [
+        {
+            "recipient": recipient1,
+            "message": "Hello recipient 1",
+            "clear_history": True,
+        },
+        {
+            "recipient": recipient2,
+            "message": "Hello recipient 2",
+            "clear_history": True,
+        },
+    ]
+
+    # Run async sequential chats
+    responses = await agent.a_sequential_run(chat_queue)
+
+    # Verify responses
+    assert responses is not None
+    assert isinstance(responses, list)
+    assert len(responses) == 2
+    assert all(hasattr(r, "iostream") for r in responses)
+
+    # Let tasks complete
+    await asyncio.sleep(0.5)
 
 
 if __name__ == "__main__":
