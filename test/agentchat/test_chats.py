@@ -675,6 +675,40 @@ def test_complex_multi_turn_conversation_integration(credentials_gpt_4o_mini: Cr
     assert last_agent is not None
 
 
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_complex_multi_turn_conversation_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: complex multi-turn conversation with a_initiate_group_chat."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    complex_messages = [
+        {"role": "user", "content": "Hello, I need help with multiple tasks"},
+        {"role": "assistant", "content": "I'm here to help!"},
+        {"role": "user", "content": "Calculate 50 * 8 and check weather in New York"},
+    ]
+
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=complex_messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
 if __name__ == "__main__":
     test_chats()
     # test_chats_general()

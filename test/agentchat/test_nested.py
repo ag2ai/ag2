@@ -506,5 +506,155 @@ def test_terminate_target_functionality_integration(credentials_gpt_4o_mini: Cre
     assert result is not None
 
 
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_conditional_handoffs_with_llm_conditions_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: advanced conditional handoffs using LLM conditions."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.llm_condition import StringLLMCondition
+    from autogen.agentchat.group.on_condition import OnCondition
+    from autogen.agentchat.group.patterns import DefaultPattern
+    from autogen.agentchat.group.targets.transition_target import AgentTarget
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            condition=StringLLMCondition("contains math or calculations"),
+            target=AgentTarget(math_agent),
+            condition_llm_config=llm_config,
+        ),
+    ])
+
+    triage_agent.handoffs.set_after_work(target=AgentTarget(general_agent))
+
+    pattern = DefaultPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "I need math calculations"}]
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    triage_agent.handoffs.clear()
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_nested_chat_target_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: NestedChatTarget functionality."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.llm_condition import StringLLMCondition
+    from autogen.agentchat.group.on_condition import OnCondition
+    from autogen.agentchat.group.patterns import ManualPattern
+    from autogen.agentchat.group.targets.transition_target import AgentTarget, NestedChatTarget
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+    from uuid import uuid4
+
+    chat_id = str(uuid4())
+    triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            condition=StringLLMCondition("contains math"),
+            target=NestedChatTarget(
+                target=AgentTarget(general_agent),
+                max_turns=2,
+                nested_chat_config={
+                    "chat_queue": [
+                        {"recipient": math_agent, "message": "Help with math", "max_turns": 1, "chat_id": chat_id}
+                    ],
+                    "use_async": True,
+                },
+            ),
+            condition_llm_config=llm_config,
+        ),
+    ])
+
+    triage_agent.handoffs.set_after_work(target=AgentTarget(general_agent))
+
+    pattern = ManualPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "I need help with math calculations"}]
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    triage_agent.handoffs.clear()
+
+    assert result is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_terminate_target_functionality_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: TerminateTarget with conditional handoffs."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.llm_condition import StringLLMCondition
+    from autogen.agentchat.group.on_condition import OnCondition
+    from autogen.agentchat.group.patterns import ManualPattern
+    from autogen.agentchat.group.targets.transition_target import AgentTarget, TerminateTarget
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    triage_agent.handoffs.add_llm_conditions([
+        OnCondition(
+            condition=StringLLMCondition("contains goodbye or exit"),
+            target=TerminateTarget(),
+            condition_llm_config=llm_config,
+        ),
+        OnCondition(
+            condition=StringLLMCondition("contains help"),
+            target=AgentTarget(general_agent),
+            condition_llm_config=llm_config,
+        ),
+    ])
+
+    triage_agent.handoffs.set_after_work(target=AgentTarget(triage_agent))
+
+    pattern = ManualPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [
+        {"role": "user", "content": "Hello, I need help"},
+        {"role": "assistant", "content": "I'm here to help you!"},
+        {"role": "user", "content": "Thank you, goodbye!"},
+    ]
+
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    triage_agent.handoffs.clear()
+
+    assert result is not None
+
+
 if __name__ == "__main__":
     test_nested()

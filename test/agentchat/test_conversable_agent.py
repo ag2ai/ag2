@@ -20,7 +20,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 import autogen
-from autogen.agentchat import ConversableAgent, UpdateSystemMessage, UserProxyAgent
+from autogen.agentchat import AssistantAgent, ConversableAgent, UpdateSystemMessage, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
@@ -2913,6 +2913,97 @@ def test_agent_run_method_two_agents_integration(credentials_gpt_4o_mini: Creden
         pass
 
     assert len(response.messages) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_single_agent_generate_reply_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: single agent generate_reply with OpenAI."""
+    assistant = AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a helpful assistant. Keep responses concise.",
+    )
+
+    messages = [{"role": "user", "content": "What is 2+2?"}]
+    response = await assistant.a_generate_reply(messages)
+
+    assert response is not None
+    assert isinstance(response, (str, dict))
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_two_agent_chat_with_calculator_tool_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: two agent chat with calculator tool."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert. Use calculator tool for calculations.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    await user_proxy.a_initiate_chat(math_agent, message="Calculate 15 * 7 using your calculator tool", max_turns=3)
+
+    assert len(user_proxy.chat_messages[math_agent]) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_agent_a_run_method_single_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run() method with single agent."""
+    assistant = AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+    )
+
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+    response = await assistant.a_run(message=message, max_turns=1)
+    await response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_agent_a_run_method_two_agents_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: a_run() method with two agents."""
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a math expert.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    message = [{"content": "Calculate 10 + 5", "role": "user"}]
+    response = await user_proxy.a_run(recipient=math_agent, message=message, max_turns=3)
+
+    # Consume events
+    async for event in response.events:
+        pass
+
+    assert len(await response.messages) > 0
 
 
 if __name__ == "__main__":
