@@ -33,8 +33,8 @@ class MockAgentReplies(AgentCapability):
         agent.register_reply([autogen.Agent, None], mock_reply, position=2)
 
 
-# @run_for_optional_imports("openai", "openai")
-# @pytest.mark.skip()
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
 def test_nested(
     credentials_gpt_4o_mini: Credentials,
     credentials_gpt_4o: Credentials,

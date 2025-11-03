@@ -20,6 +20,8 @@ from autogen.tools import tool
 from test.credentials import Credentials
 
 
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
 def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     tools = [
@@ -72,6 +74,8 @@ def test_eval_math_responses(credentials_gpt_4o_mini: Credentials):
     print(eval_math_responses(**arguments))
 
 
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
 def test_eval_math_responses_api_style_function(credentials_gpt_4o_mini: Credentials):
     config_list = credentials_gpt_4o_mini.config_list
     functions = [
