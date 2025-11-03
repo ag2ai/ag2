@@ -241,7 +241,7 @@ class TestRemyxCodeExecutor:
         mock_parent_init.return_value = None
 
         executor = RemyxCodeExecutor(image="remyxai/test:latest")
-        executor._image = "remyxai/test:latest"
+        executor._executor_image = "remyxai/test:latest"
 
         assert repr(executor) == "RemyxCodeExecutor(image='remyxai/test:latest')"
 

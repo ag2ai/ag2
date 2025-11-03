@@ -66,7 +66,7 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
         arxiv_id (Optional[str]): arXiv ID to search and execute (e.g., "2010.11929v2").
             If provided, will fetch paper metadata and Docker image from Remyx API.
         image (Optional[str]): Docker image to use (overrides arxiv_id lookup).
-        api_key (Optional[str]): Remyx API key. If None, will try REMYX_API_KEY env var.
+        api_key (Optional[str]): Remyx API key. If None, will try REMYXAI_API_KEY env var.
         timeout (int): Code execution timeout in seconds. Default is 300.
         work_dir (Optional[str]): Working directory for code execution.
         auto_remove (bool): Remove container after execution. Default is True.
@@ -124,7 +124,7 @@ class RemyxCodeExecutor(DockerCommandLineCodeExecutor):
             _load_dotenv()
 
         self.arxiv_id = arxiv_id
-        self.api_key = api_key or os.getenv("REMYX_API_KEY")
+        self.api_key = api_key or os.getenv("REMYXAI_API_KEY")
         self._asset_metadata = None
         self._executor_image = image
 
@@ -313,10 +313,14 @@ Working Directory: {self._asset_metadata.get("working_directory", "/app")}"""
             ... )
             >>> # Use different LLM provider
             >>> result = executor.explore(
-            ...     llm_config={"model": "gemini-2.0-flash-exp", "api_key": os.getenv("GOOGLE_API_KEY"), "api_type": "google"}
+            ...     llm_config={
+            ...         "model": "gemini-2.0-flash-exp",
+            ...         "api_key": os.getenv("GOOGLE_API_KEY"),
+            ...         "api_type": "google",
+            ...     }
             ... )
         """
-        from autogen import ConversableAgent, LLMConfig
+        from autogen import ConversableAgent
 
         # Default exploration goal
         default_goal = """Perform an interactive exploration of this research paper:
@@ -457,7 +461,7 @@ Begin by exploring the repository structure to understand what's available."""
             >>> # Customize the chat further
             >>> result = executor_agent.initiate_chat(writer_agent, message="Custom starting message", max_turns=10)
         """
-        from autogen import ConversableAgent, LLMConfig
+        from autogen import ConversableAgent
 
         # Default goal
         default_goal = """Explore this research paper interactively.
@@ -540,7 +544,7 @@ Begin by exploring the repository structure."""
 
         # Cost info
         if hasattr(result, "cost") and result.cost:
-            total_cost = result.cost.get("usage_including_cached_inference", {}).get("total_cost", 0)
+            total_cost = (result.cost or {}).get("usage_including_cached_inference", {}).get("total_cost", 0)
             lines.append(f"• Cost: ${total_cost:.4f}")
 
         # Summary
