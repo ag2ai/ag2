@@ -29,6 +29,7 @@ from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry
+from autogen.tools import tool
 from autogen.tools.tool import Tool
 from test.credentials import Credentials
 from test.marks import credentials_all_llms
@@ -2808,6 +2809,110 @@ def test_hook_filters_sensitive_content():
     assert received[0]["content"] == "This is a [REDACTED] message"
     assert received[1]["content"] == "My [REDACTED] is 12345"
     assert received[2]["content"] == "Normal message"
+
+
+# Add at the end of the file
+
+
+@tool(name="calculator", description="Basic calculator for math operations")
+def calculator(operation: str, a: float, b: float) -> float:
+    """Basic calculator function"""
+    if operation == "add":
+        return a + b
+    elif operation == "subtract":
+        return a - b
+    elif operation == "multiply":
+        return a * b
+    elif operation == "divide":
+        return a / b if b != 0 else 0
+    return 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_single_agent_generate_reply_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: single agent generate_reply with OpenAI."""
+    assistant = autogen.AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a helpful assistant. Keep responses concise.",
+    )
+
+    messages = [{"role": "user", "content": "What is 2+2?"}]
+    response = assistant.generate_reply(messages)
+
+    assert response is not None
+    assert isinstance(response, (str, dict))
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_two_agent_chat_with_calculator_tool_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: two agent chat with calculator tool."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert. Use calculator tool for calculations.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    user_proxy.initiate_chat(math_agent, message="Calculate 15 * 7 using your calculator tool", max_turns=2)
+
+    assert len(user_proxy.chat_messages[math_agent]) > 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_agent_run_method_single_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run() method with single agent."""
+    assistant = autogen.AssistantAgent(
+        "assistant",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+    )
+
+    message = [{"content": "What is the capital of France?", "role": "user"}]
+    response = assistant.run(message=message, max_turns=1)
+    response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_agent_run_method_two_agents_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run() method with two agents."""
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=credentials_gpt_4o_mini.llm_config,
+        system_message="You are a math expert.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(function_map={"calculator": calculator})
+
+    message = [{"content": "Calculate 10 + 5", "role": "user"}]
+    response = user_proxy.run(recipient=math_agent, message=message, max_turns=3)
+
+    # Consume events
+    for event in response.events:
+        pass
+
+    assert len(response.messages) > 0
 
 
 if __name__ == "__main__":

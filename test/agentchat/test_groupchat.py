@@ -20,10 +20,11 @@ import pytest
 from pytest import MonkeyPatch
 
 import autogen
-from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager
+from autogen import Agent, AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
 from autogen.agentchat.contrib.capabilities import transform_messages, transforms
 from autogen.exception_utils import AgentNameConflictError, UndefinedNextAgentError
 from autogen.import_utils import run_for_optional_imports
+from autogen.tools import tool
 from test.credentials import Credentials
 from test.utils import suppress_json_decoder_error
 
@@ -2543,3 +2544,189 @@ def test_batch_size_limit():
     # Earlier messages should NOT be in the groupchat (they were skipped due to batch limit)
     assert "Message 0" not in message_contents, "Message 0 should NOT be processed (beyond batch limit)"
     assert "Message 1" not in message_contents, "Message 1 should NOT be processed (beyond batch limit)"
+
+
+# Add at the end of the file
+
+
+@tool(name="calculator", description="Basic calculator")
+def calculator(operation: str, a: float, b: float) -> float:
+    """Calculator function"""
+    ops = {"add": a + b, "subtract": a - b, "multiply": a * b, "divide": a / b if b != 0 else 0}
+    return ops.get(operation, 0)
+
+
+@tool(name="weather_check", description="Check weather")
+def weather_check(location: str) -> str:
+    """Mock weather check"""
+    return f"Weather in {location}: Sunny, 25°C"
+
+
+@tool(name="database_query", description="Query database")
+def database_query(user_id: str) -> str:
+    """Mock database query"""
+    return f"User {user_id}: Active, Premium member"
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_manager_with_multiple_agents_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: GroupChat with GroupChatManager and multiple agents."""
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent(
+        "triage_agent",
+        llm_config=llm_config,
+        system_message="You route requests to appropriate agents.",
+    )
+
+    math_agent = ConversableAgent(
+        "math_agent",
+        llm_config=llm_config,
+        system_message="You are a math expert.",
+    )
+
+    weather_agent = ConversableAgent(
+        "weather_agent",
+        llm_config=llm_config,
+        system_message="You provide weather information.",
+    )
+
+    user_proxy = UserProxyAgent(
+        "user_proxy",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    user_proxy.register_function(
+        function_map={
+            "calculator": calculator,
+            "weather_check": weather_check,
+            "database_query": database_query,
+        }
+    )
+
+    group_chat = GroupChat(agents=[triage_agent, math_agent, weather_agent, user_proxy], messages=[], max_round=2)
+
+    manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config, human_input_mode="NEVER")
+
+    messages = [{"role": "user", "content": "Calculate 10+5 and check weather in Paris."}]
+    initial_count = len(messages)
+
+    user_proxy.initiate_chat(manager, message=messages, max_turns=1)
+
+    # Verify messages were added
+    assert len(group_chat.messages) >= initial_count
+    assert any(messages[0]["content"] in msg.get("content", "") for msg in group_chat.messages)
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_round_robin_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: RoundRobinPattern with initiate_group_chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "Help me with my task"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_group_chat_auto_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: AutoPattern with initiate_group_chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    agent1 = ConversableAgent("agent1", llm_config=llm_config)
+    agent2 = ConversableAgent("agent2", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=agent1,
+        agents=[agent1, agent2, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "I need database info and math calculations"}]
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_run_group_chat_round_robin_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run_group_chat with RoundRobinPattern."""
+    from autogen.agentchat import run_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = RoundRobinPattern(
+        initial_agent=math_agent,
+        agents=[math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "What is 10 + 5?"}]
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+    response.process()
+
+    assert response.summary is not None or len(response.messages) > 0
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_run_group_chat_auto_pattern_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: run_group_chat with AutoPattern."""
+    from autogen.agentchat import run_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    general_agent = ConversableAgent("general_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, general_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    messages = [{"role": "user", "content": "what is 10 + 5?"}]
+    response = run_group_chat(pattern=pattern, messages=messages, max_rounds=1)
+
+    # Consume events
+    for event in response.events:
+        pass
+
+    assert response.summary is not None or len(response.messages) > 0
+    assert response.last_speaker is not None
