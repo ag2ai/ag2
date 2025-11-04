@@ -3,18 +3,13 @@ title: OpenAI Responses API
 sidebarTitle: OpenAI Responses
 ---
 
-[OpenAI](https://openai.com/)'s Responses API represents a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations. 
+[OpenAI](https://openai.com/)'s Responses API is a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations.
 
 Additionally, it includes built-in tools for web search, file search, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
 
-<Warning>
-There are two main OpenAI client interfaces:
-
-- **Legacy** (`api_type: "responses"`): supports OpenAI's legacy /responses endpoint with some feature limitations.
-- **Recommended** (`api_type: "openai_v2"`): supports the next-generation OpenAIResponsesClient with full UnifiedResponse, group chat, rich multimodal, and compatibility with `run()` and pattern-based workflows.
-
-We now recommend using the `openai_v2` client for all new applications. See examples below for configuration.
-</Warning>
+<Tip>
+With the new OpenAI V2 client (api_type: "openai_v2") in AG2/autogen, you get full support for group chat, run interfaces, and advanced multimodal capabilities. This client is recommended for all new usage, including multi-agent and pattern-based chats. See the [notebook examples](/docs/use-cases/notebooks/Notebooks/?tags=responses) for current up-to-date usage patterns.
+</Tip>
 
 ## Installation
 
@@ -38,35 +33,28 @@ as `autogen` and `ag2` are aliases for the same PyPI package.
 
 See the [LLM Configuration](/docs/user-guide/basic-concepts/llm-configuration) for further details on setting and creating an LLM configuration.
 
-### Using the New `openai_v2` Client (Recommended)
+The below examples show how to use the OpenAI client classes for the Responses API. For legacy-style access, use `api_type: "responses"`; for full feature support (including group chat, `run`, vision, and future-proof multimodal interaction), use `api_type: "openai_v2"`.
 
-Set `api_type` to `openai_v2` to activate the next-generation OpenAI V2 client, which supports group chat, the `run()` API, full multimodal images, and rich UnifiedResponse content:
+**Recommended (V2 client, full feature support):**
 
 ```python
 [
     {
-        "api_type": "openai_v2",  # use OpenAI V2 client
-        "model": "gpt-4o-mini",   # or "o1-preview", "o3-mini", etc. (vision and reasoning models)
+        "api_type": "openai_v2", # recommended: full support for group/run/multimodal
+        "model": "gpt-4o-mini",
         "api_key": "your OpenAI Key goes here",
-        # optional: other model or API parameters
-    }
+
+        # Optional: vision, advanced features, and future content handled automatically
+    },
 ]
 ```
 
-- This client works with all autogen/AG2 agent workflows, including:
-    - two-agent chat (`initiate_chat`) and multi-agent group chat
-    - the modern `run()` interface
-    - pattern-based group orchestrations
-- It returns rich UnifiedResponse objects (see the [notebook example](https://github.com/microsoft/autogen/tree/main/notebook/agentchat_openai_v2_client_image.ipynb)), supporting typed content blocks (reasoning, citations, thinking, tool calls, and forward-compatible content types).
-
-### Using the Legacy `responses` API (For Reference)
-
-As before, you may use the legacy `/responses` endpoint by setting `api_type` to `responses`:
+**Legacy Responses API (basic two-agent chat):**
 
 ```python
 [
     {
-        "api_type": "responses", # legacy OpenAI Responses API
+        "api_type": "responses", # use OpenAI Responses API
         "model": "gpt-5",
         "api_key": "your OpenAI Key goes here",
 
@@ -77,9 +65,7 @@ As before, you may use the legacy `/responses` endpoint by setting `api_type` to
 ]
 ```
 
-### Environment Variable for API Key
-
-As an alternative to including your API key in the config, you can set the environment variable `OPENAI_API_KEY` as usual:
+As an alternative to the `api_key` key and value in the config, you can set the environment variable `OPENAI_API_KEY` to your OpenAI key.
 
 Linux/Mac:
 ``` bash
@@ -91,24 +77,4 @@ Windows:
 set OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-## Feature Support Matrix
-
-| Feature                                       | `openai_v2` (Recommended) | Legacy `responses` |
-|----------------------------------------------- |:-------------------------:|:------------------:|
-| Group chat                                    |        ✅ Yes              |   ❌               |
-| Modern run() API / pattern-based orchestration |        ✅ Yes              |   ❌               |
-| Rich multimodal content (images, vision)       |        ✅ Yes              |   ⚠ partial        |
-| Reasoning, thinking blocks                     |        ✅ Yes              |   ⚠ partial        |
-| Typed UnifiedResponse                         |        ✅ Yes              |   ❌               |
-| Forward compatibility (future types)           |        ✅ Yes              |   ❌               |
-| Backward compatibility                        |        ✅ Yes              |   ⚠ some           |
-
-See the examples in the [Notebook section](/docs/use-cases/notebooks/Notebooks/?tags=responses) of the documentation for how to use both clients, with an emphasis on the V2 client for new and advanced workflows.
-
-<Migrate>
-**Migrating from 'responses' to 'openai_v2':**
-- Simply change `"api_type": "responses"` to `"api_type": "openai_v2"` in your config.
-- All functionality will remain, but you'll gain support for modern features and richer agent behaviors.
-</Migrate>
-
-  
+__Note__: The OpenAI V2 client (api_type: "openai_v2") is now fully integrated with group chat and `run` APIs, as well as advanced multimodal/vision. See the [notebook](/docs/use-cases/notebooks/agentchat_openai_v2_client_image) for example workflows and migration tips.
