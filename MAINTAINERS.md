@@ -1,5 +1,23 @@
 # Maintainers
+## Here is a list of maintainers for the AG2 project.
 
+| Name              | GitHub Handle                                              | Organization             | Features                                |
+|-------------------|------------------------------------------------------------|--------------------------|-----------------------------------------|
+| Qingyun Wu        | [qingyun-wu](https://github.com/qingyun-wu)                | ag2.ai    | all, alt-models, autobuilder            |
+| Chi Wang          | [sonichi](https://github.com/sonichi)                      | -                        | all                                     |
+| Yixuan Zhai       | [randombet](https://github.com/randombet)                  | Meta                     | group chat, sequential_chats, rag, LLM clients       |
+| Mark Sze          | [marklysze](https://github.com/marklysze)                  | ag2.ai                        | alt-models, group chat                  |
+| Hrushikesh Dokala | [Hk669](https://github.com/Hk669)                          | -                        | alt-models, swebench, logging, rag      |
+| Shaokun Zhang     | [skzhang1](https://github.com/skzhang1)                    | Penn State University    | AgentOptimizer, Teachability            |
+| Yiran Wu          | [yiranwu0](https://github.com/yiranwu0)                    | Penn State University    | alt-models, group chat, logging, infra  |
+ Davor Runje       | [davorrunje](https://github.com/davorrunje)                | airt.ai                  | Tool calling, I/O                       |
+| Eric Moore        | [emooreatx](https://github.com/emooreatx)                  | IBM                      | all                                     |
+| Tvrtko Sternak    | [sternakt](https://github.com/sternakt)                    | airt.ai                  | structured output                       |
+| Marc Willhaus     | [willhama](https://github.com/willhama)                    | -                        | build-with-ag2                                       |
+| Beibin Li         | [BeibinLi](https://github.com/BeibinLi)                    | GenAI, Meta              | multimodal, reasoning, optiguide        |
+| George Sideris    | [giorgossideris](https://github.com/giorgossideris)        | -                        | reasoning, RAG, guardrails                          |
+| Vasiliy Radostev  | [Vasiliy](https://github.com/VasiliyRad)                   | ag2.ai          | -        |
+| Nikita Pastukhov  | [Lancetnik](https://github.com/lancetnik)                  | -                        | A2A                                     |
 ## Please refer to the github team page for the list of [active maintainers](https://github.com/orgs/ag2ai/teams/maintainer/members) for the AG2 project.
 The @active-maintainer role on AG2 discord server is in sync with this list.
 For current maintainers, please follow [maintainers manual](https://docs.google.com/document/d/18g3DVoXNB-MuOQrLDnKfoP7EZ18wtzONdA2USX2Er_s/edit?usp=sharing)
