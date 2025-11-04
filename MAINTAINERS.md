@@ -4,14 +4,7 @@
 The @active-maintainer role on AG2 discord server is in sync with this list.
 For current maintainers, please follow [maintainers manual](https://docs.google.com/document/d/18g3DVoXNB-MuOQrLDnKfoP7EZ18wtzONdA2USX2Er_s/edit?usp=sharing)
 and [maintainer guide](https://docs.ag2.ai/latest/docs/contributor-guide/maintainer/)
-
-
-**Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
-
-| Name            | GitHub Handle                                              | Organization           | Features                                |
-|-----------------|------------------------------------------------------------|------------------------|-----------------------------------------|
-| Olaoluwa Ademola Salami * | [olaoluwasalami](https://github.com/olaoluwasalami)  | DevOps Engineer        |                                          |
-| Rajan Chari *    | [rajan-chari](https://github.com/rajan-chari)                | Microsoft Research                | CAP                        |
+                 |
 
 **Past Maintainers list**
 
