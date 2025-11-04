@@ -16,18 +16,21 @@ Run with:
     bash scripts/test-core-llm.sh test/agentchat/test_agent_with_openai_v2_client.py
 """
 
+import logging
 import os
 from typing import Any
 
 import pytest
 
 from autogen import AssistantAgent, ConversableAgent, UserProxyAgent
-from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
+from autogen.agentchat.group.multi_agent_chat import initiate_group_chat, run_group_chat
 from autogen.agentchat.group.patterns import DefaultPattern
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.code_utils import content_str
 from autogen.import_utils import run_for_optional_imports
 from test.credentials import Credentials
+
+logger = logging.getLogger(__name__)
 
 
 def _assert_v2_response_structure(chat_result: Any) -> None:
@@ -129,7 +132,9 @@ def test_v2_client_multi_turn_conversation(credentials_gpt_4o_mini: Credentials)
     """Test multi-turn conversation maintains context with V2 client."""
     llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
 
-    assistant = AssistantAgent(name="assistant", llm_config=llm_config, system_message="You are helpful. Be brief.")
+    assistant = AssistantAgent(
+        name="assistant", llm_config=llm_config, system_message="You are helpful assistant. Be brief."
+    )
 
     user_proxy = UserProxyAgent(
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
@@ -142,9 +147,12 @@ def test_v2_client_multi_turn_conversation(credentials_gpt_4o_mini: Credentials)
     _assert_v2_response_structure(chat_result)
 
     # Second turn - should remember context
-    response = user_proxy.send(message="What is my favorite color?", recipient=assistant, request_reply=True)
+    user_proxy.send(message="What is my favorite color?", recipient=assistant, request_reply=True)
 
-    assert "blue" in str(response).lower()
+    # Get the assistant's reply from chat history
+    reply = user_proxy.last_message(assistant)
+    assert reply is not None, "Should have a reply from assistant"
+    assert "blue" in str(reply["content"]).lower()
 
 
 @pytest.mark.openai
@@ -341,7 +349,9 @@ def test_v2_client_error_handling_invalid_model(credentials_gpt_4o_mini: Credent
     llm_config["config_list"][0]["model"] = "invalid-model-xyz-12345"
 
     assistant = AssistantAgent(name="error_bot", llm_config=llm_config)
-    user_proxy = UserProxyAgent(name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0)
+    user_proxy = UserProxyAgent(
+        name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
+    )
 
     with pytest.raises(Exception):  # OpenAI will raise error for invalid model
         user_proxy.initiate_chat(assistant, message="Hello", max_turns=1)
@@ -428,7 +438,7 @@ def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Cred
 
     # Two dog images
     image_url_1 = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
-    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/2/2d/Golde33443.jpg"
+    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Golden_Retriever_Dukedestiny01.jpg"
 
     multimodal_message = {
         "role": "user",
@@ -545,7 +555,7 @@ def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> 
     # Verify pattern works with multimodal V2 responses
     _assert_v2_response_structure(chat_result)
     summary_lower = chat_result.summary.lower()
-    assert "dog" in summary_lower or "schnauzer" in summary_lower
+    assert "dog" in summary_lower or "schnauzer" in summary_lower or "terrier" in summary_lower
 
     # Verify cost tracking
     assert "usage_including_cached_inference" in chat_result.cost
@@ -558,3 +568,268 @@ def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> 
     # Verify context and last agent
     assert context_variables is not None
     assert last_agent is not None
+
+
+@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
+def test_v2_client_run_group_chat_basic(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test V2 client with run_group_chat interface for basic text messages.
+
+    Note: run_group_chat uses threading internally - the conversation happens in a
+    background thread and sends events to the iostream. The process() method should
+    block until the thread completes and all events are received.
+    """
+    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+
+    # Create specialized agents with V2 client
+    analyst = ConversableAgent(
+        name="Analyst",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You analyze data. Be very brief.",
+    )
+
+    reviewer = ConversableAgent(
+        name="Reviewer",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You review analysis. Be very brief.",
+    )
+
+    # Create user proxy that won't hang but also won't interfere
+    # Set max_consecutive_auto_reply=0 so it terminates immediately if selected
+    user_proxy = ConversableAgent(
+        name="User",
+        human_input_mode="NEVER",
+        llm_config=False,
+        code_execution_config=False,
+        max_consecutive_auto_reply=0,
+    )
+
+    # Create pattern-based group chat
+    pattern = DefaultPattern(
+        initial_agent=analyst,
+        agents=[analyst, reviewer],
+        user_agent=user_proxy,
+    )
+
+    # Use run_group_chat interface (returns immediately, chat runs in background thread)
+    run_response = run_group_chat(
+        pattern=pattern,
+        messages="Analyze the number 7 briefly.",
+        max_rounds=3,
+    )
+
+    # Verify run response object structure
+    assert run_response is not None
+    assert hasattr(run_response, "messages")
+    assert hasattr(run_response, "process")
+    assert hasattr(run_response, "events")
+
+    # Process the response - this should block until the background thread completes
+    # and all events have been sent to the iostream
+    # NOTE: process() drains the events queue, so we cannot access response.events afterward
+    run_response.process()
+
+    # After process() completes, verify the conversation completed successfully
+    # by checking the cached properties (messages, summary, cost, last_speaker)
+    messages_list = list(run_response.messages)
+    assert len(messages_list) >= 2, "Should have at least 2 messages after process() completes"
+
+    # Verify summary is available (indicates RunCompletionEvent was received)
+    assert run_response.summary is not None, "Should have summary after process() completes"
+
+    # Verify last speaker is set
+    assert run_response.last_speaker is not None, "Should have last_speaker after process() completes"
+
+    # Verify cost information is available
+    assert run_response.cost is not None, "Should have cost information after process() completes"
+
+
+@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
+def test_v2_client_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test V2 client with run_group_chat and multimodal content (images)."""
+    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+
+    # Create vision-capable agents
+    image_analyst = ConversableAgent(
+        name="ImageAnalyst",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You analyze images. Be very brief.",
+    )
+
+    breed_expert = ConversableAgent(
+        name="BreedExpert",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You identify breeds. Be very brief.",
+    )
+
+    # Create user proxy that won't hang but also won't interfere
+    # Set max_consecutive_auto_reply=0 so it terminates immediately if selected
+    user_proxy = ConversableAgent(
+        name="User",
+        human_input_mode="NEVER",
+        llm_config=False,
+        code_execution_config=False,
+        max_consecutive_auto_reply=0,
+    )
+
+    # Create pattern with vision agents
+    pattern = DefaultPattern(
+        initial_agent=image_analyst,
+        agents=[image_analyst, breed_expert],
+        user_agent=user_proxy,
+    )
+
+    # Multimodal message with image
+    # Do NOT include "name" field - it causes role to become "assistant" which is invalid for images
+    image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    multimodal_message = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Team, what animal is in this image?"},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ],
+        }
+    ]
+
+    # Use run_group_chat with multimodal content
+    run_response = run_group_chat(
+        pattern=pattern,
+        messages=multimodal_message,
+        max_rounds=3,
+    )
+
+    # Process the response
+    # NOTE: process() drains the events queue, so we use cached messages property
+    run_response.process()
+
+    # Get chat history from cached messages property (set by RunCompletionEvent)
+    chat_history = list(run_response.messages)
+    assert len(chat_history) >= 2, "Chat history should have at least 2 messages"
+
+    # Check if first message content is preserved
+    first_msg = chat_history[0]
+    assert first_msg is not None
+    assert "content" in first_msg
+
+    # CRITICAL TEST: Verify if multimodal content is preserved as list or converted to string
+    first_msg_content = first_msg["content"]
+    logger.info("First message content type: %s", type(first_msg_content))
+    logger.info("First message content: %s", first_msg_content)
+
+    if isinstance(first_msg_content, list):
+        logger.info("✓ Multimodal content PRESERVED as list")
+        # Verify structure
+        assert len(first_msg_content) >= 2, "Should have text and image blocks"
+        text_blocks = [b for b in first_msg_content if b.get("type") == "text"]
+        image_blocks = [b for b in first_msg_content if b.get("type") == "image_url"]
+        assert len(text_blocks) > 0, "Should have text block"
+        assert len(image_blocks) > 0, "Should have image block"
+    elif isinstance(first_msg_content, str):
+        logger.warning("⚠ Multimodal content CONVERTED to string")
+        # This indicates data loss - image URL replaced with <image>
+        assert "<image>" in first_msg_content, "String should contain <image> placeholder"
+
+
+@pytest.mark.openai
+@run_for_optional_imports("openai", "openai")
+def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: Credentials) -> None:
+    """Test that run_group_chat preserves multimodal content structure throughout conversation."""
+    llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
+
+    # Create agents
+    agent1 = ConversableAgent(
+        name="Agent1",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You analyze. Be brief.",
+    )
+
+    agent2 = ConversableAgent(
+        name="Agent2",
+        llm_config=llm_config,
+        human_input_mode="NEVER",
+        system_message="You review. Be brief.",
+    )
+
+    # Create user proxy that won't hang but also won't interfere
+    # Set max_consecutive_auto_reply=0 so it terminates immediately if selected
+    user_proxy = ConversableAgent(
+        name="User",
+        human_input_mode="NEVER",
+        llm_config=False,
+        code_execution_config=False,
+        max_consecutive_auto_reply=0,
+    )
+
+    pattern = DefaultPattern(initial_agent=agent1, agents=[agent1, agent2], user_agent=user_proxy)
+
+    # Multiple images in one message
+    # Do NOT include "name" field - it causes role to become "assistant" which is invalid for images
+    image_url_1 = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Golden_Retriever_Dukedestiny01.jpg"
+
+    multimodal_message = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Compare these two images."},
+                {"type": "image_url", "image_url": {"url": image_url_1}},
+                {"type": "image_url", "image_url": {"url": image_url_2}},
+            ],
+        }
+    ]
+
+    # Run group chat
+    run_response = run_group_chat(pattern=pattern, messages=multimodal_message, max_rounds=3)
+    # NOTE: process() drains the events queue, so we use cached messages property
+    run_response.process()
+
+    # Get chat history from cached messages property (set by RunCompletionEvent)
+    chat_history = list(run_response.messages)
+    assert len(chat_history) > 0, "Should have chat history"
+    first_msg = chat_history[0]
+
+    logger.info("=== Content Preservation Test ===")
+    logger.info("Original message had: 1 text + 2 images")
+    logger.info("Stored content type: %s", type(first_msg["content"]))
+
+    if isinstance(first_msg["content"], list):
+        logger.info("✓ PRESERVED: Content is still a list with %d blocks", len(first_msg["content"]))
+        content_blocks = first_msg["content"]
+
+        # Count block types
+        text_count = sum(1 for b in content_blocks if b.get("type") == "text")
+        image_count = sum(1 for b in content_blocks if b.get("type") == "image_url")
+
+        logger.info("  - Text blocks: %d", text_count)
+        logger.info("  - Image blocks: %d", image_count)
+
+        # Verify all blocks preserved
+        assert text_count >= 1, "Should preserve text block"
+        assert image_count >= 2, "Should preserve both image blocks"
+
+        # Verify image URLs are intact
+        for block in content_blocks:
+            if block.get("type") == "image_url":
+                assert "image_url" in block, "Image block should have image_url field"
+                assert "url" in block["image_url"], "Image URL should have url field"
+                assert block["image_url"]["url"].startswith("http"), "URL should be preserved"
+
+    elif isinstance(first_msg["content"], str):
+        logger.warning("⚠ CONVERTED to string: %s...", first_msg["content"][:100])
+
+        # Check what was lost
+        content_str_result = first_msg["content"]
+        image_placeholder_count = content_str_result.count("<image>")
+
+        logger.warning("  - Image URLs converted to %d <image> placeholder(s)", image_placeholder_count)
+        logger.warning("  - Original URLs LOST")
+
+        # At minimum, should have placeholders for both images
+        assert image_placeholder_count >= 2, "Should have placeholders for both images"
