@@ -9,6 +9,7 @@ These tests require:
 - OPENAI_API_KEY environment variable set
 - OpenAI account with access to Chat Completions API models
 - pytest markers: @pytest.mark.openai
+- @run_for_optional_imports decorator to handle optional dependencies
 
 Run with:
     bash scripts/test-core-llm.sh test/llm_clients/test_openai_completions_client_integration.py
@@ -18,31 +19,25 @@ import os
 
 import pytest
 
+from autogen.import_utils import run_for_optional_imports
 from autogen.llm_clients import OpenAICompletionsClient
+from test.credentials import Credentials
 
 
 @pytest.fixture
-def openai_api_key():
-    """Get OpenAI API key from environment."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        pytest.skip("OPENAI_API_KEY not set")
-    return api_key
-
-
-@pytest.fixture
-def openai_responses_client(openai_api_key):
-    """Create OpenAICompletionsClient with real API key."""
-    return OpenAICompletionsClient(api_key=openai_api_key)
+def openai_completions_client(credentials_gpt_4o_mini: Credentials) -> OpenAICompletionsClient:
+    """Create OpenAICompletionsClient with credentials from AG2 test framework."""
+    return OpenAICompletionsClient(api_key=credentials_gpt_4o_mini.api_key)
 
 
 class TestOpenAICompletionsClientBasicChat:
     """Test basic chat functionality with real API calls."""
 
     @pytest.mark.openai
-    def test_simple_chat_gpt4(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_simple_chat_gpt4(self, openai_completions_client):
         """Test simple chat with GPT-4."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "What is 2+2? Answer with just the number."}],
             "temperature": 0,
@@ -66,9 +61,10 @@ class TestOpenAICompletionsClientBasicChat:
         assert response.cost > 0
 
     @pytest.mark.openai
-    def test_chat_with_system_message(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_chat_with_system_message(self, openai_completions_client):
         """Test chat with system message."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [
                 {"role": "system", "content": "You are a helpful math tutor. Be concise."},
@@ -86,12 +82,22 @@ class TestOpenAICompletionsClientReasoningModels:
     """Test reasoning models (o1, o3 series) with real API calls."""
 
     @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.skipif(
-        os.getenv("SKIP_O1_TESTS") == "1", reason="o1 models are expensive and may not be available to all accounts"
+        os.getenv("ENABLE_O1_TESTS") != "1",
+        reason="o1 models require special access and are expensive. Set ENABLE_O1_TESTS=1 to run this test.",
     )
-    def test_o1_model_with_reasoning(self, openai_responses_client):
-        """Test o1 model extracts reasoning blocks."""
-        response = openai_responses_client.create({
+    def test_o1_model_with_reasoning(self, openai_completions_client):
+        """Test o1 model extracts reasoning blocks.
+
+        Note: This test is skipped by default because:
+        - o1-preview requires special API access
+        - o1 models are significantly more expensive than standard models
+        - Not all OpenAI accounts have access to o1 models
+
+        To enable: export ENABLE_O1_TESTS=1
+        """
+        response = openai_completions_client.create({
             "model": "o1-preview",
             "messages": [{"role": "user", "content": "What is 15 factorial? Show your reasoning."}],
         })
@@ -118,7 +124,8 @@ class TestOpenAICompletionsClientToolCalling:
     """Test function/tool calling with real API calls (from agentchat_oai_responses_api_tool_call.ipynb)."""
 
     @pytest.mark.openai
-    def test_tool_calling_basic(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_tool_calling_basic(self, openai_completions_client):
         """Test basic tool calling functionality."""
         # Define a simple tool
         tools = [
@@ -139,7 +146,7 @@ class TestOpenAICompletionsClientToolCalling:
             }
         ]
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Please add 42 and 58 using the add_numbers function."}],
             "tools": tools,
@@ -162,7 +169,8 @@ class TestOpenAICompletionsClientToolCalling:
         assert args.get("b") == 58 or args.get("b") == 42
 
     @pytest.mark.openai
-    def test_tool_calling_with_result(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_tool_calling_with_result(self, openai_completions_client):
         """Test tool calling with result returned."""
         # First request: Ask to use tool
         tools = [
@@ -182,7 +190,7 @@ class TestOpenAICompletionsClientToolCalling:
             }
         ]
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "What's the weather like in San Francisco?"}],
             "tools": tools,
@@ -199,7 +207,8 @@ class TestOpenAICompletionsClientStructuredOutput:
     """Test structured output with real API calls (from agentchat_oai_responses_api_structured_output.ipynb)."""
 
     @pytest.mark.openai
-    def test_structured_output_json_schema(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_structured_output_json_schema(self, openai_completions_client):
         """Test structured output with JSON schema."""
         # Define response schema
         response_format = {
@@ -220,7 +229,7 @@ class TestOpenAICompletionsClientStructuredOutput:
             },
         }
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support JSON schema
             "messages": [
                 {
@@ -247,9 +256,10 @@ class TestOpenAICompletionsClientStructuredOutput:
         assert "season" in result["answer"].lower() or "season" in result["reasoning"].lower()
 
     @pytest.mark.openai
-    def test_structured_output_simple_json(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_structured_output_simple_json(self, openai_completions_client):
         """Test structured output with simple JSON mode."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support JSON mode
             "messages": [
                 {
@@ -276,15 +286,16 @@ class TestOpenAICompletionsClientImageInput:
     """Test image input/vision capabilities (from agentchat_oai_responses_image.ipynb)."""
 
     @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.skipif(
         os.getenv("SKIP_VISION_TESTS") == "1", reason="Vision tests may not be available to all accounts"
     )
-    def test_image_url_input(self, openai_responses_client):
+    def test_image_url_input(self, openai_completions_client):
         """Test image input with URL."""
         # Use a public domain image URL
         image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support vision
             "messages": [
                 {
@@ -303,14 +314,15 @@ class TestOpenAICompletionsClientImageInput:
         assert "dog" in response.text.lower() or "schnauzer" in response.text.lower()
 
     @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
     @pytest.mark.skipif(
         os.getenv("SKIP_VISION_TESTS") == "1", reason="Vision tests may not be available to all accounts"
     )
-    def test_image_description(self, openai_responses_client):
+    def test_image_description(self, openai_completions_client):
         """Test detailed image description."""
         image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support vision
             "messages": [
                 {
@@ -333,19 +345,20 @@ class TestOpenAICompletionsClientUsageAndCost:
     """Test usage tracking and cost calculation."""
 
     @pytest.mark.openai
-    def test_usage_tracking(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_usage_tracking(self, openai_completions_client):
         """Test that usage is properly tracked."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Count from 1 to 5."}],
             "temperature": 0,
         })
 
         # Get usage via client method
-        usage = openai_responses_client.get_usage(response)
+        usage = openai_completions_client.get_usage(response)
 
         # Verify all keys present
-        for key in openai_responses_client.RESPONSE_USAGE_KEYS:
+        for key in openai_completions_client.RESPONSE_USAGE_KEYS:
             assert key in usage
 
         # Verify values are reasonable
@@ -356,9 +369,10 @@ class TestOpenAICompletionsClientUsageAndCost:
         assert usage["model"].startswith("gpt")
 
     @pytest.mark.openai
-    def test_cost_calculation_accuracy(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_cost_calculation_accuracy(self, openai_completions_client):
         """Test that cost calculation is accurate."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Say 'hello' in 5 different languages."}],
             "temperature": 0,
@@ -369,20 +383,21 @@ class TestOpenAICompletionsClientUsageAndCost:
         assert response.cost > 0
 
         # Verify cost matches manual calculation
-        calculated_cost = openai_responses_client.cost(response)
+        calculated_cost = openai_completions_client.cost(response)
         assert calculated_cost == response.cost
 
     @pytest.mark.openai
-    def test_message_retrieval(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_message_retrieval(self, openai_completions_client):
         """Test message retrieval method."""
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Say exactly: 'Integration test successful'"}],
             "temperature": 0,
         })
 
         # Retrieve messages
-        messages = openai_responses_client.message_retrieval(response)
+        messages = openai_completions_client.message_retrieval(response)
 
         assert len(messages) > 0
         assert isinstance(messages[0], str)
@@ -393,10 +408,11 @@ class TestOpenAICompletionsClientV1Compatibility:
     """Test backward compatibility with v1 format."""
 
     @pytest.mark.openai
-    def test_v1_compatible_format(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_v1_compatible_format(self, openai_completions_client):
         """Test v1 compatible response format."""
         # Get v1 compatible response
-        v1_response = openai_responses_client.create_v1_compatible({
+        v1_response = openai_completions_client.create_v1_compatible({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "What is 10 + 10?"}],
             "temperature": 0,
@@ -424,19 +440,21 @@ class TestOpenAICompletionsClientErrorHandling:
     """Test error handling with real API calls."""
 
     @pytest.mark.openai
-    def test_invalid_model_error(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_invalid_model_error(self, openai_completions_client):
         """Test error handling for invalid model."""
         with pytest.raises(Exception):  # OpenAI SDK will raise an error
-            openai_responses_client.create({
+            openai_completions_client.create({
                 "model": "invalid-model-name-that-does-not-exist",
                 "messages": [{"role": "user", "content": "Hello"}],
             })
 
     @pytest.mark.openai
-    def test_empty_messages_error(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_empty_messages_error(self, openai_completions_client):
         """Test error handling for empty messages."""
         with pytest.raises(Exception):  # OpenAI SDK will raise an error
-            openai_responses_client.create({
+            openai_completions_client.create({
                 "model": "gpt-4",
                 "messages": [],
             })
@@ -446,17 +464,18 @@ class TestOpenAICompletionsClientMultiTurnConversation:
     """Test multi-turn conversations."""
 
     @pytest.mark.openai
-    def test_multi_turn_conversation(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_multi_turn_conversation(self, openai_completions_client):
         """Test multi-turn conversation maintains context."""
         # First turn
-        response1 = openai_responses_client.create({
+        response1 = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "My favorite color is blue."}],
             "temperature": 0,
         })
 
         # Second turn - reference first turn
-        response2 = openai_responses_client.create({
+        response2 = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [
                 {"role": "user", "content": "My favorite color is blue."},
@@ -470,11 +489,12 @@ class TestOpenAICompletionsClientMultiTurnConversation:
         assert "blue" in response2.text.lower()
 
     @pytest.mark.openai
-    def test_conversation_with_system_message(self, openai_responses_client):
+    @run_for_optional_imports("openai", "openai")
+    def test_conversation_with_system_message(self, openai_completions_client):
         """Test conversation with persistent system message."""
         system_msg = "You are a pirate. Always respond in pirate speak."
 
-        response = openai_responses_client.create({
+        response = openai_completions_client.create({
             "model": "gpt-4",
             "messages": [
                 {"role": "system", "content": system_msg},
