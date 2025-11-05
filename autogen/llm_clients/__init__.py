@@ -16,11 +16,11 @@ Key Features:
 - Extensible content type registry
 
 Usage:
-    from autogen.llm_clients import OpenAIResponsesClient, UnifiedResponse
+    from autogen.llm_clients import OpenAICompletionsClient, UnifiedResponse
     from autogen.llm_clients.models import ContentParser, ReasoningContent
 
-    # Use OpenAI Responses Client
-    client = OpenAIResponsesClient(api_key="...")
+    # Use OpenAI Chat Completions Client
+    client = OpenAICompletionsClient(api_key="...")
     response = client.create({
         "model": "o1-preview",
         "messages": [{"role": "user", "content": "Explain quantum computing"}]
@@ -52,13 +52,13 @@ from .models import (
     UnifiedResponse,
     VideoContent,
 )
-from .openai_responses_client import OpenAIResponsesClient
+from .openai_completions_client import OpenAICompletionsClient
 
 __all__ = [
     # Protocol
     "ModelClientV2",
     # Clients
-    "OpenAIResponsesClient",
+    "OpenAICompletionsClient",
     # Content blocks
     "AudioContent",
     "BaseContent",

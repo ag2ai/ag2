@@ -3,16 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-OpenAI Responses API Client implementing ModelClientV2 and ModelClient protocols.
+OpenAI Chat Completions API Client implementing ModelClientV2 and ModelClient protocols.
 
-This client handles the OpenAI Responses API which returns rich responses with:
-- Reasoning blocks (o1, o3 models)
-- Web search citations
-- File search results
+This client handles the OpenAI Chat Completions API (client.chat.completions.create)
+which returns rich responses with:
+- Reasoning blocks (o1, o3 models with 'reasoning' field)
+- Tool calls and function execution
+- Multimodal content (text, images)
 - Standard chat messages
 
 The client preserves all provider-specific features in UnifiedResponse format
 and is compatible with AG2's agent system through ModelClient protocol.
+
+Note: This uses the Chat Completions API, NOT the newer Responses API (client.responses.create).
 """
 
 from typing import Any
@@ -33,21 +36,21 @@ from .models import (
 )
 
 
-class OpenAIResponsesClient(ModelClient):
+class OpenAICompletionsClient(ModelClient):
     """
-    OpenAI Responses API client implementing ModelClientV2 protocol.
+    OpenAI Chat Completions API client implementing ModelClientV2 protocol.
 
-    This client works with OpenAI's Responses API (used by o1, o3 models) which
-    returns structured output with reasoning blocks, web search results, and more.
+    This client works with OpenAI's Chat Completions API (client.chat.completions.create)
+    which returns structured output with reasoning blocks (o1/o3 models), tool calls, and more.
 
     Key Features:
-    - Preserves reasoning blocks as ReasoningContent
-    - Extracts web search citations as CitationContent
+    - Preserves reasoning blocks as ReasoningContent (o1/o3 models)
     - Handles tool calls and results
+    - Supports multimodal content
     - Provides backward compatibility via create_v1_compatible()
 
     Example:
-        client = OpenAIResponsesClient(api_key="...")
+        client = OpenAICompletionsClient(api_key="...")
 
         # Get rich response with reasoning
         response = client.create({
@@ -73,7 +76,7 @@ class OpenAIResponsesClient(ModelClient):
         **kwargs: Any,
     ):
         """
-        Initialize OpenAI Responses API client.
+        Initialize OpenAI Chat Completions API client.
 
         Args:
             api_key: OpenAI API key (or set OPENAI_API_KEY env var)
@@ -123,10 +126,10 @@ class OpenAIResponsesClient(ModelClient):
 
     def _transform_response(self, openai_response: Any, model: str) -> UnifiedResponse:
         """
-        Transform OpenAI response to UnifiedResponse.
+        Transform OpenAI ChatCompletion response to UnifiedResponse.
 
-        This handles both the standard ChatCompletion format and the Responses API
-        format with reasoning blocks and web search results.
+        This handles the standard ChatCompletion format including o1/o3 models
+        which include a 'reasoning' field in the message object.
 
         Args:
             openai_response: Raw OpenAI API response
@@ -176,8 +179,8 @@ class OpenAIResponsesClient(ModelClient):
                         )
                     )
 
-            # Extract web search citations if present
-            # Note: This is a placeholder for when OpenAI adds web search
+            # Extract citations if present (future-proofing)
+            # Note: Not currently available in Chat Completions API
             if hasattr(message_obj, "citations") and message_obj.citations:
                 for citation in message_obj.citations:
                     content_blocks.append(

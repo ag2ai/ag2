@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for OpenAIResponsesClient."""
+"""Tests for OpenAICompletionsClient."""
 
 from unittest.mock import Mock, patch
 
 import pytest
 
-from autogen.llm_clients import OpenAIResponsesClient
+from autogen.llm_clients import OpenAICompletionsClient
 from autogen.llm_clients.models import ReasoningContent, TextContent, ToolCallContent, UnifiedResponse
 
 
@@ -76,30 +76,30 @@ class MockToolCall:
 def mock_openai_client():
     """Create mock OpenAI client."""
     # Mock the OpenAI import
-    with patch("autogen.llm_clients.openai_responses_client.OpenAI") as mock_openai_class:
+    with patch("autogen.llm_clients.openai_completions_client.OpenAI") as mock_openai_class:
         # Create a mock instance that will be returned when OpenAI() is called
         mock_client_instance = Mock()
         mock_openai_class.return_value = mock_client_instance
         yield mock_client_instance
 
 
-class TestOpenAIResponsesClientCreation:
+class TestOpenAICompletionsClientCreation:
     """Test client initialization."""
 
     def test_create_client_with_api_key(self, mock_openai_client):
         """Test creating client with API key."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         assert client is not None
         assert client.client is not None
 
     def test_create_client_with_base_url(self, mock_openai_client):
         """Test creating client with custom base URL."""
-        client = OpenAIResponsesClient(api_key="test-key", base_url="https://custom.api.com")
+        client = OpenAICompletionsClient(api_key="test-key", base_url="https://custom.api.com")
         assert client is not None
 
     def test_client_has_required_methods(self, mock_openai_client):
         """Test that client has all ModelClientV2 methods."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         assert hasattr(client, "create")
         assert hasattr(client, "create_v1_compatible")
         assert hasattr(client, "cost")
@@ -108,7 +108,7 @@ class TestOpenAIResponsesClientCreation:
         assert hasattr(client, "RESPONSE_USAGE_KEYS")
 
 
-class TestOpenAIResponsesClientCreate:
+class TestOpenAICompletionsClientCreate:
     """Test create() method."""
 
     def test_create_simple_response(self, mock_openai_client):
@@ -118,7 +118,7 @@ class TestOpenAIResponsesClientCreate:
         mock_choice = MockChoice(message=mock_message)
         mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
 
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         client.client.chat.completions.create = Mock(return_value=mock_response)
 
         # Test
@@ -143,7 +143,7 @@ class TestOpenAIResponsesClientCreate:
         mock_choice = MockChoice(message=mock_message)
         mock_response = MockOpenAIResponse(model="o1-preview", choices=[mock_choice], usage=MockUsage())
 
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         client.client.chat.completions.create = Mock(return_value=mock_response)
 
         # Test
@@ -169,7 +169,7 @@ class TestOpenAIResponsesClientCreate:
         mock_choice = MockChoice(message=mock_message)
         mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
 
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         client.client.chat.completions.create = Mock(return_value=mock_response)
 
         # Test
@@ -195,7 +195,7 @@ class TestOpenAIResponsesClientCreate:
             choices=[mock_choice], usage=MockUsage(prompt_tokens=100, completion_tokens=200)
         )
 
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
         client.client.chat.completions.create = Mock(return_value=mock_response)
 
         # Test
@@ -207,12 +207,12 @@ class TestOpenAIResponsesClientCreate:
         assert response.usage["total_tokens"] == 300
 
 
-class TestOpenAIResponsesClientCost:
+class TestOpenAICompletionsClientCost:
     """Test cost() method."""
 
     def test_cost_calculation_o1_preview(self, mock_openai_client):
         """Test cost calculation for o1-preview model."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         # Create response with known usage
         mock_message = MockMessage(content="Test")
@@ -233,7 +233,7 @@ class TestOpenAIResponsesClientCost:
 
     def test_cost_calculation_unknown_model(self, mock_openai_client):
         """Test cost calculation falls back for unknown models."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Test")
         mock_choice = MockChoice(message=mock_message)
@@ -248,12 +248,12 @@ class TestOpenAIResponsesClientCost:
         assert response.cost > 0
 
 
-class TestOpenAIResponsesClientGetUsage:
+class TestOpenAICompletionsClientGetUsage:
     """Test get_usage() method."""
 
     def test_get_usage_returns_all_keys(self, mock_openai_client):
         """Test that get_usage() returns all required keys."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Test")
         mock_choice = MockChoice(message=mock_message)
@@ -276,12 +276,12 @@ class TestOpenAIResponsesClientGetUsage:
         assert usage["cost"] > 0
 
 
-class TestOpenAIResponsesClientMessageRetrieval:
+class TestOpenAICompletionsClientMessageRetrieval:
     """Test message_retrieval() method."""
 
     def test_message_retrieval_simple_text(self, mock_openai_client):
         """Test retrieving text from simple response."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Hello world")
         mock_choice = MockChoice(message=mock_message)
@@ -296,7 +296,7 @@ class TestOpenAIResponsesClientMessageRetrieval:
 
     def test_message_retrieval_with_reasoning(self, mock_openai_client):
         """Test retrieving text from response with reasoning."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Answer: 42", reasoning="Let me think... 40 + 2 = 42")
         mock_choice = MockChoice(message=mock_message)
@@ -312,12 +312,12 @@ class TestOpenAIResponsesClientMessageRetrieval:
         assert "Answer: 42" in messages[0]
 
 
-class TestOpenAIResponsesClientV1Compatible:
+class TestOpenAICompletionsClientV1Compatible:
     """Test create_v1_compatible() method."""
 
     def test_create_v1_compatible_format(self, mock_openai_client):
         """Test backward compatible response format."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Test response")
         mock_choice = MockChoice(message=mock_message)
@@ -338,7 +338,7 @@ class TestOpenAIResponsesClientV1Compatible:
 
     def test_v1_compatible_loses_reasoning(self, mock_openai_client):
         """Test that v1 compatible format loses reasoning blocks."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         mock_message = MockMessage(content="Answer: 42", reasoning="Step 1: ... Step 2: ...")
         mock_choice = MockChoice(message=mock_message)
@@ -355,12 +355,12 @@ class TestOpenAIResponsesClientV1Compatible:
         assert "message" in v1_response["choices"][0]
 
 
-class TestOpenAIResponsesClientIntegration:
+class TestOpenAICompletionsClientIntegration:
     """Integration tests for complete workflows."""
 
     def test_full_workflow_with_reasoning(self, mock_openai_client):
         """Test complete workflow with reasoning blocks."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         # Mock o1 model response with reasoning
         mock_message = MockMessage(
@@ -402,7 +402,7 @@ class TestOpenAIResponsesClientIntegration:
 
     def test_protocol_compliance(self, mock_openai_client):
         """Test that client implements ModelClientV2 protocol."""
-        client = OpenAIResponsesClient(api_key="test-key")
+        client = OpenAICompletionsClient(api_key="test-key")
 
         # Check protocol compliance
         assert hasattr(client, "RESPONSE_USAGE_KEYS")

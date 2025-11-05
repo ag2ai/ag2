@@ -3,14 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Integration tests for OpenAIResponsesClient V2 with AG2 agents.
+Integration tests for OpenAICompletionsClient V2 with AG2 agents.
 
 These tests verify that the ModelClientV2 architecture works seamlessly with
 AG2's agent system, including AssistantAgent, UserProxyAgent, multi-turn conversations,
 and group chat scenarios.
 
-The V2 client returns rich UnifiedResponse objects with typed content blocks while
-maintaining full compatibility with existing agent infrastructure via duck typing.
+The V2 client uses OpenAI Chat Completions API and returns rich UnifiedResponse objects
+with typed content blocks while maintaining full compatibility with existing agent
+infrastructure via duck typing.
 
 Run with:
     bash scripts/test-core-llm.sh test/agentchat/test_agent_with_openai_v2_client.py

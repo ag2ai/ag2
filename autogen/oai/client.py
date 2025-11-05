@@ -994,7 +994,7 @@ class OpenAIWrapper:
                 self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("openai_v2"):
                 # OpenAI V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
-                from autogen.llm_clients import OpenAIResponsesClient as V2Client
+                from autogen.llm_clients import OpenAICompletionsClient as V2Client
 
                 v2_client = V2Client(
                     api_key=openai_config.get("api_key"),

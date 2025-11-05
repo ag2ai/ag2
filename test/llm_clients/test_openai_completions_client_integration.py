@@ -3,22 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Integration tests for OpenAIResponsesClient with real API calls.
+Integration tests for OpenAICompletionsClient with real API calls.
 
 These tests require:
 - OPENAI_API_KEY environment variable set
-- OpenAI account with access to Responses API models
+- OpenAI account with access to Chat Completions API models
 - pytest markers: @pytest.mark.openai
 
 Run with:
-    bash scripts/test-core-llm.sh test/llm_clients/test_openai_responses_client_integration.py
+    bash scripts/test-core-llm.sh test/llm_clients/test_openai_completions_client_integration.py
 """
 
 import os
 
 import pytest
 
-from autogen.llm_clients import OpenAIResponsesClient
+from autogen.llm_clients import OpenAICompletionsClient
 
 
 @pytest.fixture
@@ -32,11 +32,11 @@ def openai_api_key():
 
 @pytest.fixture
 def openai_responses_client(openai_api_key):
-    """Create OpenAIResponsesClient with real API key."""
-    return OpenAIResponsesClient(api_key=openai_api_key)
+    """Create OpenAICompletionsClient with real API key."""
+    return OpenAICompletionsClient(api_key=openai_api_key)
 
 
-class TestOpenAIResponsesClientBasicChat:
+class TestOpenAICompletionsClientBasicChat:
     """Test basic chat functionality with real API calls."""
 
     @pytest.mark.openai
@@ -82,7 +82,7 @@ class TestOpenAIResponsesClientBasicChat:
         assert "prime" in response.text.lower()
 
 
-class TestOpenAIResponsesClientReasoningModels:
+class TestOpenAICompletionsClientReasoningModels:
     """Test reasoning models (o1, o3 series) with real API calls."""
 
     @pytest.mark.openai
@@ -114,7 +114,7 @@ class TestOpenAIResponsesClientReasoningModels:
         assert response.cost > 0
 
 
-class TestOpenAIResponsesClientToolCalling:
+class TestOpenAICompletionsClientToolCalling:
     """Test function/tool calling with real API calls (from agentchat_oai_responses_api_tool_call.ipynb)."""
 
     @pytest.mark.openai
@@ -195,7 +195,7 @@ class TestOpenAIResponsesClientToolCalling:
         assert tool_calls[0].name == "get_weather"
 
 
-class TestOpenAIResponsesClientStructuredOutput:
+class TestOpenAICompletionsClientStructuredOutput:
     """Test structured output with real API calls (from agentchat_oai_responses_api_structured_output.ipynb)."""
 
     @pytest.mark.openai
@@ -272,7 +272,7 @@ class TestOpenAIResponsesClientStructuredOutput:
         assert len(result) > 0
 
 
-class TestOpenAIResponsesClientImageInput:
+class TestOpenAICompletionsClientImageInput:
     """Test image input/vision capabilities (from agentchat_oai_responses_image.ipynb)."""
 
     @pytest.mark.openai
@@ -329,7 +329,7 @@ class TestOpenAIResponsesClientImageInput:
         assert response.cost > 0  # Vision tokens cost more
 
 
-class TestOpenAIResponsesClientUsageAndCost:
+class TestOpenAICompletionsClientUsageAndCost:
     """Test usage tracking and cost calculation."""
 
     @pytest.mark.openai
@@ -389,7 +389,7 @@ class TestOpenAIResponsesClientUsageAndCost:
         assert len(messages[0]) > 0
 
 
-class TestOpenAIResponsesClientV1Compatibility:
+class TestOpenAICompletionsClientV1Compatibility:
     """Test backward compatibility with v1 format."""
 
     @pytest.mark.openai
@@ -420,7 +420,7 @@ class TestOpenAIResponsesClientV1Compatibility:
         assert "20" in v1_response["choices"][0]["message"]["content"]
 
 
-class TestOpenAIResponsesClientErrorHandling:
+class TestOpenAICompletionsClientErrorHandling:
     """Test error handling with real API calls."""
 
     @pytest.mark.openai
@@ -442,7 +442,7 @@ class TestOpenAIResponsesClientErrorHandling:
             })
 
 
-class TestOpenAIResponsesClientMultiTurnConversation:
+class TestOpenAICompletionsClientMultiTurnConversation:
     """Test multi-turn conversations."""
 
     @pytest.mark.openai
