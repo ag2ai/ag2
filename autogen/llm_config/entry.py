@@ -97,7 +97,8 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     def check_base_url(cls, v: HttpUrl | str | None, info: ValidationInfo) -> str | None:
         if v is None:  # Handle None case explicitly
             return None
-        if not str(v).startswith("https://") and not str(v).startswith("http://"):
+        # Allow WebSocket URLs as well as HTTP(S)
+        if not str(v).startswith(("https://", "http://", "wss://", "ws://")):
             return f"http://{str(v)}"
         return str(v)
 

@@ -166,6 +166,10 @@ def get_credentials_from_env(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> Credentials:
+    # Check if environment variable exists, otherwise skip test
+    if env_var_name not in os.environ:
+        pytest.skip(f"Skipping test: {env_var_name} environment variable not set and OAI_CONFIG_LIST file not found")
+
     return Credentials(
         LLMConfig(
             {

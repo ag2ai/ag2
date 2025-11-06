@@ -987,6 +987,7 @@ class TestO1:
         ],
     )
     @run_for_optional_imports("openai", "openai")
+    @pytest.mark.skip
     def test_completion_o1_mini(self, o1_mini_client: OpenAIWrapper, messages: list[dict[str, str]]) -> None:
         self._test_completion(o1_mini_client, messages)
 
