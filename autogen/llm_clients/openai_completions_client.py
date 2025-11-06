@@ -162,10 +162,9 @@ class OpenAICompletionsClient(ModelClient):
                 elif isinstance(message_obj.content, list):
                     # Multimodal content
                     for item in message_obj.content:
-                        if isinstance(item, dict):
-                            if item.get("type") == "text":
-                                content_blocks.append(TextContent(type="text", text=item.get("text", "")))
-                            # Add other multimodal types as needed
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            content_blocks.append(TextContent(type="text", text=item.get("text", "")))
+                    # Add other multimodal types as needed
 
             # Extract tool calls
             if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:

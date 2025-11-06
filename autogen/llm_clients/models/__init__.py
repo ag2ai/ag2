@@ -44,8 +44,8 @@ __all__ = [
     "ThinkingContent",
     "ToolCallContent",
     "ToolResultContent",
-    "VideoContent",
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    "VideoContent",
 ]

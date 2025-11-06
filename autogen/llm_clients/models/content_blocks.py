@@ -12,7 +12,7 @@ This module provides an extensible content block architecture that supports:
 """
 
 import warnings
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -263,18 +263,18 @@ class ContentParser:
 # ============================================================================
 
 # Union of all content types
-ContentBlock = Union[
-    TextContent,
-    ImageContent,
-    AudioContent,
-    VideoContent,
-    ReasoningContent,
-    ThinkingContent,
-    CitationContent,
-    ToolCallContent,
-    ToolResultContent,
-    GenericContent,  # Always last - catches unknown types!
-]
+ContentBlock = (
+    TextContent
+    | ImageContent
+    | AudioContent
+    | VideoContent
+    | ReasoningContent
+    | ThinkingContent
+    | CitationContent
+    | ToolCallContent
+    | ToolResultContent
+    | GenericContent,
+)  # Always last - catches unknown types!
 
 # Note: GenericContent must be last in the Union so that specific types
 # are matched first during isinstance checks
