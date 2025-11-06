@@ -1,0 +1,98 @@
+{
+  "basic_text": {
+    "id": "WUkMaZ7aA-uCz7IPw7COgQc",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "thinking_tokens": 0
+    },
+    "cost": 3e-06,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello, World!\n"
+          }
+        ]
+      }
+    ]
+  },
+  "thinking_mode": {
+    "id": "XkkMadP9E5yiqtsPgoLIiAw",
+    "model": "gemini-2.5-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 13,
+      "completion_tokens": 618,
+      "total_tokens": 731,
+      "thinking_tokens": 100
+    },
+    "cost": 0.0015489,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "**Deconstructing the Factorial of 15**\n\nAlright, let's break this down. My mind immediately goes to the definition of a factorial.  I know *n* factorial, denoted as *n*!, is essentially the multiplication of all positive integers from 1 up to *n*. In this case, we're talking about 15! - so, I need to multiply all the integers from 1 to 15 together.  The crucial part is remembering that it's a *product* of all those integers. That sets the stage for the calculation itself.\n"
+          },
+          {
+            "type": "text",
+            "text": "Let's calculate 15 factorial (15!) step by step.\n\n**Understanding Factorial:**\n\"n factorial\" (n!) is the product of all positive integers less than or equal to n.\nSo, 15! = 15 \u00d7 14 \u00d7 13 \u00d7 12 \u00d7 11 \u00d7 10 \u00d7 9 \u00d7 8 \u00d7 7 \u00d7 6 \u00d7 5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1\n\n**Step-by-step Calculation:**\n\n1.  **15 \u00d7 14 = 210**\n2.  **210 \u00d7 13 = 2,730**\n3.  **2,730 \u00d7 12 = 32,760**\n4.  **32,760 \u00d7 11 = 360,360**\n5.  **360,360 \u00d7 10 = 3,603,600**\n6.  **3,603,600 \u00d7 9 = 32,432,400**\n7.  **32,432,400 \u00d7 8 = 259,459,200**\n8.  **259,459,200 \u00d7 7 = 1,816,214,400**\n9.  **1,816,214,400 \u00d7 6 = 10,897,286,400**\n10. **10,897,286,400 \u00d7 5 = 54,486,432,000**\n11. **54,486,432,000 \u00d7 4 = 217,945,728,000**\n12. **217,945,728,000 \u00d7 3 = 653,837,184,000**\n13. **653,837,184,000 \u00d7 2 = 1,307,674,368,000**\n14. **1,307,674,368,000 \u00d7 1 = 1,307,674,368,000**\n\n**Result:**\n\n15 factorial is **1,307,674,368,000** (one trillion, three hundred seven billion, six hundred seventy-four million, three hundred sixty-eight thousand)."
+          }
+        ]
+      }
+    ]
+  },
+  "multimodal": {
+    "id": "ZUkMafTXCPysz7IPhcf9-A4",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 6,
+      "completion_tokens": 42,
+      "total_tokens": 48,
+      "thinking_tokens": 0
+    },
+    "cost": 1.7400000000000003e-05,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "To tell you the color of the image, I need you to provide me with the image. I am a text-based AI and cannot see images. Please upload the image or describe it to me.\n"
+          }
+        ]
+      }
+    ]
+  },
+  "structured_output": {
+    "id": "ZkkMaeRHsqSq2w_a5p_oCw",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 37,
+      "completion_tokens": 90,
+      "total_tokens": 127,
+      "thinking_tokens": 0
+    },
+    "cost": 3.97e-05,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"colors\": [\n    {\n      \"name\": \"red\",\n      \"hex\": \"#FF0000\"\n    },\n    {\n      \"name\": \"green\",\n      \"hex\": \"#00FF00\"\n    },\n    {\n      \"name\": \"blue\",\n      \"hex\": \"#0000FF\"\n    }\n  ]\n}"
+          }
+        ]
+      }
+    ]
+  }
+}
