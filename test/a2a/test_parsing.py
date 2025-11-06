@@ -217,7 +217,7 @@ class TestResponseMessageFromA2AArtifacts:
 
 
 class TestResponseMessageFromA2ATask:
-    def test_task_with_input_required_state(self) -> None:
+    def test_task_input_required_with_history(self) -> None:
         task = Task(
             id=str(uuid4()),
             context_id=str(uuid4()),
@@ -225,7 +225,7 @@ class TestResponseMessageFromA2ATask:
             history=[
                 Message(
                     role=Role.agent,
-                    parts=[Part(root=TextPart(text="Please provide input"))],
+                    parts=[Part(root=TextPart(text="Hi, user! Please provide input"))],
                     message_id=str(uuid4()),
                 )
             ],
@@ -234,9 +234,9 @@ class TestResponseMessageFromA2ATask:
 
         result = response_message_from_a2a_task(task)
 
-        assert result == ResponseMessage(input_required="Please provide input")
+        assert result == ResponseMessage(input_required="Hi, user! Please provide input")
 
-    def test_task_with_input_required_empty_history(self) -> None:
+    def test_task_input_required_with_empty_history(self) -> None:
         task = Task(
             id=str(uuid4()),
             context_id=str(uuid4()),
@@ -247,10 +247,9 @@ class TestResponseMessageFromA2ATask:
 
         result = response_message_from_a2a_task(task)
 
-        # get_message_text returns empty string for empty history
-        assert result == ResponseMessage(input_required="")
+        assert result == ResponseMessage(input_required="Please provide input:")
 
-    def test_task_with_completed_state_and_artifacts(self) -> None:
+    def test_task_completed_with_artifacts(self) -> None:
         artifact = Artifact(
             artifact_id=str(uuid4()),
             name="result",
@@ -268,7 +267,7 @@ class TestResponseMessageFromA2ATask:
 
         assert result == ResponseMessage(messages=[{"content": "Task completed"}])
 
-    def test_task_with_completed_state_no_artifacts(self) -> None:
+    def test_task_completed_with_no_artifacts(self) -> None:
         task = Task(
             id=str(uuid4()),
             context_id=str(uuid4()),
@@ -281,7 +280,7 @@ class TestResponseMessageFromA2ATask:
 
         assert result is None
 
-    def test_task_with_artifact_context(self) -> None:
+    def test_task_completed_with_artifact_context(self) -> None:
         artifact = Artifact(
             artifact_id=str(uuid4()),
             name="result",

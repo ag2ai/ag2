@@ -151,8 +151,7 @@ class A2aRemoteAgent(ConversableAgent):
         async with self._client_config.httpx_client:
             agent_client = A2AClientFactory(self._client_config).create(self._agent_card)
 
-            is_final = False
-            while not is_final:
+            while True:
                 initial_message = request_message_to_a2a(
                     request_message=RequestMessage(
                         messages=messages,
@@ -167,26 +166,20 @@ class A2aRemoteAgent(ConversableAgent):
                 else:
                     reply = await self._ask_polling(agent_client, initial_message)
 
-                if reply and reply.input_required is not None:
+                if not reply:
+                    return True, None
+
+                if reply.input_required is not None:
                     user_input = await self.a_get_human_input(prompt=reply.input_required)
                     messages.append({"content": user_input, "role": "user"})
-                else:
-                    is_final = True
+                    continue
 
-            return await self._apply_reply(reply, sender)
+                if sender and reply.context:
+                    context_variables = ContextVariables(reply.context)
+                    self.context_variables.update(context_variables.to_dict())
+                    sender.context_variables.update(context_variables.to_dict())
 
-    async def _apply_reply(
-        self, reply: ResponseMessage | None, sender: ConversableAgent | None
-    ) -> tuple[bool, dict[str, Any] | None]:
-        if not reply:
-            return True, None
-
-        if sender and reply.context:
-            context_variables = ContextVariables(reply.context)
-            self.context_variables.update(context_variables.to_dict())
-            sender.context_variables.update(context_variables.to_dict())
-
-        return True, reply.messages[-1]
+                return True, reply.messages[-1]
 
     async def _ask_streaming(self, client: Client, message: Message) -> ResponseMessage | None:
         connection_attemps = 1
