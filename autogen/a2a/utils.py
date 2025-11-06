@@ -5,8 +5,8 @@
 from typing import Any, cast
 from uuid import uuid4
 
-from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
-from a2a.utils import new_agent_parts_message, new_artifact
+from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TextPart
+from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
 
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
@@ -41,6 +41,17 @@ def request_message_from_a2a(message: Message) -> RequestMessage:
         context=metadata.get(CONTEXT_KEY),
         client_tools=metadata.get(CLIENT_TOOLS_KEY, []),
     )
+
+
+def response_message_from_a2a_task(task: Task) -> ResponseMessage | None:
+    if task.status.state is TaskState.input_required:
+        if not task.history:
+            message: str | None = None
+        else:
+            message = get_message_text(task.history[-1])
+        return ResponseMessage(input_required=message or "Please provide input:")
+
+    return response_message_from_a2a_artifacts(task.artifacts)
 
 
 def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> ResponseMessage | None:

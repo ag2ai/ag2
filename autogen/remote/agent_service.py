@@ -11,6 +11,7 @@ from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
 from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.io.base import AsyncIOStreamProtocol
 
 from .protocol import RemoteService, RequestMessage, ResponseMessage, get_tool_names
 
@@ -20,7 +21,10 @@ class AgentService(RemoteService):
         self.name = agent.name
         self.agent = agent
 
-    async def __call__(self, state: RequestMessage) -> ResponseMessage | None:
+    async def __call__(
+        self,
+        state: RequestMessage,
+    ) -> ResponseMessage | None:
         out_message: dict[str, Any] | None
         if guardrail_result := self.agent.run_input_guardrails(state.messages):
             # input guardrail activated by initial messages
@@ -34,10 +38,10 @@ class AgentService(RemoteService):
         while True:
             messages = state.messages + local_history
 
-            # TODO: catch ask user input event
-            is_final, _ = await self.agent.a_check_termination_and_human_reply(messages)
-            if is_final:
-                break
+            stream = HITLStream()
+            await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
+            if stream.is_input_required:
+                return ResponseMessage(input_required=stream.input_prompt)
 
             reply = await self.agent.a_generate_reply(
                 messages,
@@ -140,3 +144,22 @@ class AgentService(RemoteService):
                             tool_response["content"] = content.message
 
         return tool_result, updated_context_variables
+
+
+class HITLStream(AsyncIOStreamProtocol):
+    def __init__(self) -> None:
+        self.input_prompt = ""
+
+    @property
+    def is_input_required(self) -> bool:
+        return bool(self.input_prompt)
+
+    async def input(self, prompt: str = "", *, password: bool = False) -> str:
+        self.input_prompt = prompt
+        return ""
+
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+        raise NotImplementedError("HITLStream does not support printing")
+
+    def send(self, message: Any) -> None:
+        raise NotImplementedError("HITLStream does not support sending messages")

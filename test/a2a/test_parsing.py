@@ -5,7 +5,7 @@
 from uuid import uuid4
 
 import pytest
-from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
+from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TaskStatus, TextPart
 
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
@@ -16,6 +16,7 @@ from autogen.a2a.utils import (
     request_message_to_a2a,
     response_message_from_a2a_artifacts,
     response_message_from_a2a_message,
+    response_message_from_a2a_task,
     response_message_to_a2a,
 )
 from autogen.remote.protocol import RequestMessage, ResponseMessage
@@ -213,6 +214,94 @@ class TestResponseMessageFromA2AArtifacts:
 
         with pytest.raises(NotImplementedError, match="Multiple parts are not supported"):
             response_message_from_a2a_artifacts([artifact])
+
+
+class TestResponseMessageFromA2ATask:
+    def test_task_with_input_required_state(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.input_required),
+            history=[
+                Message(
+                    role=Role.agent,
+                    parts=[Part(root=TextPart(text="Please provide input"))],
+                    message_id=str(uuid4()),
+                )
+            ],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(input_required="Please provide input")
+
+    def test_task_with_input_required_empty_history(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.input_required),
+            history=[],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        # get_message_text returns empty string for empty history
+        assert result == ResponseMessage(input_required="")
+
+    def test_task_with_completed_state_and_artifacts(self) -> None:
+        artifact = Artifact(
+            artifact_id=str(uuid4()),
+            name="result",
+            parts=[Part(root=TextPart(text="Task completed"))],
+        )
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[artifact],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(messages=[{"content": "Task completed"}])
+
+    def test_task_with_completed_state_no_artifacts(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result is None
+
+    def test_task_with_artifact_context(self) -> None:
+        artifact = Artifact(
+            artifact_id=str(uuid4()),
+            name="result",
+            parts=[Part(root=TextPart(text="Result with context"))],
+            metadata={CONTEXT_KEY: {"session": "xyz"}},
+        )
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[artifact],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(
+            messages=[{"content": "Result with context"}],
+            context={"session": "xyz"},
+        )
 
 
 class TestResponseMessageFromA2AMessage:

@@ -23,7 +23,7 @@ from autogen.remote.httpx_client_factory import ClientFactory, EmptyClientFactor
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 from .errors import A2aAgentNotFoundError, A2aClientError
-from .utils import request_message_to_a2a, response_message_from_a2a_artifacts, response_message_from_a2a_message
+from .utils import request_message_to_a2a, response_message_from_a2a_message, response_message_from_a2a_task
 
 logger = logging.getLogger(__name__)
 
@@ -145,28 +145,37 @@ class A2aRemoteAgent(ConversableAgent):
         if not self._agent_card:
             self._agent_card = await self._get_agent_card()
 
-        initial_message = request_message_to_a2a(
-            request_message=RequestMessage(
-                messages=messages,
-                context=self.context_variables.data,
-                client_tools=self.__llm_config.get("tools", []),
-            ),
-            context_id=uuid4().hex,
-        )
+        context_id = uuid4().hex
 
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
             agent_client = A2AClientFactory(self._client_config).create(self._agent_card)
 
-            if self._agent_card.capabilities.streaming:
-                reply = await self._ask_streaming(agent_client, initial_message)
-                return self._apply_reply(reply, sender)
+            is_final = False
+            while not is_final:
+                initial_message = request_message_to_a2a(
+                    request_message=RequestMessage(
+                        messages=messages,
+                        context=self.context_variables.data,
+                        client_tools=self.__llm_config.get("tools", []),
+                    ),
+                    context_id=context_id,
+                )
 
-            else:
-                reply = await self._ask_polling(agent_client, initial_message)
-                return self._apply_reply(reply, sender)
+                if self._agent_card.capabilities.streaming:
+                    reply = await self._ask_streaming(agent_client, initial_message)
+                else:
+                    reply = await self._ask_polling(agent_client, initial_message)
 
-    def _apply_reply(
+                if reply and reply.input_required is not None:
+                    user_input = await self.a_get_human_input(prompt=reply.input_required)
+                    messages.append({"content": user_input, "role": "user"})
+                else:
+                    is_final = True
+
+            return await self._apply_reply(reply, sender)
+
+    async def _apply_reply(
         self, reply: ResponseMessage | None, sender: ConversableAgent | None
     ) -> tuple[bool, dict[str, Any] | None]:
         if not reply:
@@ -244,7 +253,7 @@ class A2aRemoteAgent(ConversableAgent):
 
                 else:
                     if _is_task_completed(task):
-                        return response_message_from_a2a_artifacts(task.artifacts)
+                        return response_message_from_a2a_task(task)
 
                     await asyncio.sleep(self._polling_interval)
 
@@ -256,7 +265,7 @@ class A2aRemoteAgent(ConversableAgent):
 
         task, _ = event
         if _is_task_completed(task):
-            return response_message_from_a2a_artifacts(task.artifacts), None
+            return response_message_from_a2a_task(task), None
 
         return None, task
 
@@ -323,4 +332,5 @@ def _is_task_completed(task: Task) -> bool:
     return task.status.state in (
         TaskState.completed,
         TaskState.canceled,
+        TaskState.input_required,
     )
