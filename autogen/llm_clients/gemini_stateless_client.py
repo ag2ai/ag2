@@ -83,6 +83,7 @@ with optional_import_block():
         Part,
         Schema,
         Tool,
+        ToolCodeExecution,
         Type,
     )
     from vertexai.generative_models import Content as VertexAIContent
@@ -252,13 +253,15 @@ class GeminiStatelessClient(ModelClient):
         # Convert AG2 messages to Gemini Contents
         contents = self._ag2_messages_to_gemini_contents(messages)
 
-        # Build generation config
-        config = self._build_generation_config(params, system_instruction)
-
-        # Convert tools if provided
+        # Convert tools if provided (must be done before building config)
         tools = None
         if "tools" in params and params["tools"]:
             tools = self._convert_tools(params["tools"])
+
+        # Build generation config (includes tools for Gemini Developer API)
+        config = self._build_generation_config(
+            params, system_instruction, tools=tools if not self.use_vertexai else None
+        )
 
         # Call API
         try:
@@ -450,8 +453,19 @@ class GeminiStatelessClient(ModelClient):
 
         return None
 
-    def _build_generation_config(self, params: dict[str, Any], system_instruction: str | None) -> GenerateContentConfig:
-        """Build Gemini GenerateContentConfig from AG2 parameters."""
+    def _build_generation_config(
+        self, params: dict[str, Any], system_instruction: str | None, tools: list[Tool] | None = None
+    ) -> GenerateContentConfig:
+        """Build Gemini GenerateContentConfig from AG2 parameters.
+
+        Args:
+            params: Request parameters
+            system_instruction: System instruction string
+            tools: Converted tool declarations (for Gemini Developer API)
+
+        Returns:
+            GenerateContentConfig with all parameters including tools
+        """
         config_args = {}
 
         # Map standard parameters
@@ -488,10 +502,29 @@ class GeminiStatelessClient(ModelClient):
                 if "schema" in response_format:
                     config_args["response_schema"] = response_format["schema"]
 
+        # Tools (Gemini Developer API requires tools in config)
+        if tools:
+            config_args["tools"] = tools
+
         return GenerateContentConfig(**config_args)
 
-    def _convert_tools(self, tools: list[dict[str, Any]]) -> list[Tool]:
-        """Convert AG2 tool format to Gemini Tool format."""
+    def _convert_tools(self, tools: list[dict[str, Any]]) -> list[Any]:
+        """Convert AG2 tool format to Gemini Tool format.
+
+        Supports:
+        - Function tools: {"type": "function", "function": {...}}
+        - Code execution: {"code_execution": {}}
+        - Google Search: {"type": "google_search"}
+
+        Returns:
+            list[Tool] for Gemini Developer API or list[vaiTool] for Vertex AI
+        """
+        # Check for code execution tool
+        for tool in tools:
+            if "code_execution" in tool:
+                # Both Gemini Developer API and Vertex AI use the same format with google.genai SDK
+                return [Tool(code_execution=ToolCodeExecution())]
+
         # Check for built-in Google Search tool
         for tool in tools:
             if tool.get("type") == "google_search" and not self.use_vertexai:

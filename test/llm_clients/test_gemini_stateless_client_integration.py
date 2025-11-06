@@ -10,6 +10,7 @@ Run with: bash scripts/test-core-llm.sh test/llm_clients/test_gemini_stateless_c
 """
 
 import json
+import logging
 import os
 
 import pytest
@@ -18,6 +19,8 @@ from autogen.import_utils import run_for_optional_imports
 from autogen.llm_clients import GeminiStatelessClient
 from autogen.llm_clients.models import UnifiedResponse
 from test.credentials import Credentials
+
+logger = logging.getLogger(__name__)
 
 # Sample responses will be stored here for unit test fixtures
 SAMPLE_RESPONSES = {}
@@ -104,9 +107,9 @@ class TestGeminiStatelessClientIntegration:
         # Store complete response structure for unit tests
         SAMPLE_RESPONSES["basic_text"] = serialize_response(response)
 
-        print(f"\n✅ Basic text generation: {response.text}")
-        print(f"   Usage: {response.usage}")
-        print(f"   Cost: ${response.cost:.6f}")
+        logger.info(f"✅ Basic text generation: {response.text}")
+        logger.info(f"   Usage: {response.usage}")
+        logger.info(f"   Cost: ${response.cost:.6f}")
 
     @pytest.mark.gemini
     @run_for_optional_imports(["google.genai"], "gemini")
@@ -125,19 +128,19 @@ class TestGeminiStatelessClientIntegration:
         thinking_content = [block for block in response.messages[0].content if block.type == "thinking"]
 
         if thinking_content:  # Thinking may or may not be present
-            print("\n✅ Thinking mode enabled:")
+            logger.info("✅ Thinking mode enabled:")
             for thinking in thinking_content:
-                print(f"   Thought: {thinking.thinking[:100]}...")
+                logger.info(f"   Thought: {thinking.thinking[:100]}...")
 
             # Verify thinking tokens tracked
             assert "thinking_tokens" in response.usage
             if response.usage["thinking_tokens"] > 0:
-                print(f"   Thinking tokens: {response.usage['thinking_tokens']}")
+                logger.info(f"   Thinking tokens: {response.usage['thinking_tokens']}")
 
         # Verify answer exists
         text_content = [block for block in response.messages[0].content if block.type == "text"]
         assert len(text_content) > 0
-        print(f"   Answer: {text_content[0].text[:200]}")
+        logger.info(f"   Answer: {text_content[0].text[:200]}")
 
         # Store complete response structure
         SAMPLE_RESPONSES["thinking_mode"] = serialize_response(response)
@@ -146,7 +149,7 @@ class TestGeminiStatelessClientIntegration:
         """Test function/tool calling with Gemini."""
         client = GeminiStatelessClient(api_key=credentials_gemini_flash.api_key)
 
-        # Simple calculator tool - model is very likely to call this
+        # Simple calculator tool - model should reliably call this
         tools = [
             {
                 "type": "function",
@@ -177,33 +180,32 @@ class TestGeminiStatelessClientIntegration:
             "temperature": 0.0,
         })
 
-        # Verify tool calls
+        # Verify tool calls - STRICT: Should always get tool call with explicit instruction
         tool_calls = [block for block in response.messages[0].content if block.type == "tool_call"]
+        assert len(tool_calls) > 0, "Model should call the calculate function when explicitly instructed"
 
-        if tool_calls:  # Tool call may or may not be made
-            print("\n✅ Tool calling works:")
-            for tool_call in tool_calls:
-                print(f"   Tool: {tool_call.name}")
-                print(f"   Args: {tool_call.arguments}")
+        logger.info("✅ Tool calling works:")
+        tool_call = tool_calls[0]
+        logger.info(f"   Tool: {tool_call.name}")
+        logger.info(f"   Args: {tool_call.arguments}")
 
-                # Verify structure
-                assert tool_call.id  # Should have generated UUID
-                assert tool_call.name == "calculate"
+        # Verify structure
+        assert tool_call.id, "Tool call should have generated UUID"
+        assert tool_call.name == "calculate", f"Expected 'calculate' but got '{tool_call.name}'"
 
-                # Parse arguments
-                args = json.loads(tool_call.arguments)
-                assert "operation" in args
-                assert "a" in args
-                assert "b" in args
-                print(f"   Parsed: {args['operation']}({args['a']}, {args['b']})")
+        # Parse and verify arguments
+        args = json.loads(tool_call.arguments)
+        assert "operation" in args, "Tool call should have 'operation' argument"
+        assert "a" in args, "Tool call should have 'a' argument"
+        assert "b" in args, "Tool call should have 'b' argument"
+        assert args["operation"] == "add", f"Expected operation='add' but got '{args['operation']}'"
+        assert args["a"] == 123, f"Expected a=123 but got {args['a']}"
+        assert args["b"] == 456, f"Expected b=456 but got {args['b']}"
 
-            # Store complete response structure
-            SAMPLE_RESPONSES["tool_calling"] = serialize_response(response)
-        else:
-            # Model might respond with text instead of tool call
-            text_content = [block for block in response.messages[0].content if block.type == "text"]
-            print("\n⚠️  Model responded with text instead of tool call:")
-            print(f"   {text_content[0].text[:200]}")
+        logger.info(f"   Parsed: {args['operation']}({args['a']}, {args['b']})")
+
+        # Store complete response structure
+        SAMPLE_RESPONSES["tool_calling"] = serialize_response(response)
 
     @pytest.mark.gemini
     @run_for_optional_imports(["google.genai"], "gemini")
@@ -223,15 +225,15 @@ class TestGeminiStatelessClientIntegration:
         result_blocks = [block for block in response.messages[0].content if block.type == "code_execution_result"]
 
         if code_blocks:
-            print("\n✅ Code execution enabled:")
+            logger.info("✅ Code execution enabled:")
             for code_block in code_blocks:
-                print(f"   Language: {code_block.content.get('language', 'unknown')}")
-                print(f"   Code:\n{code_block.content.get('code', '')[:200]}")
+                logger.info(f"   Language: {code_block.content.get('language', 'unknown')}")
+                logger.info(f"   Code:\n{code_block.content.get('code', '')[:200]}")
 
         if result_blocks:
             for result_block in result_blocks:
-                print(f"   Outcome: {result_block.content.get('outcome', 'unknown')}")
-                print(f"   Output: {result_block.content.get('output', '')[:200]}")
+                logger.info(f"   Outcome: {result_block.content.get('outcome', 'unknown')}")
+                logger.info(f"   Output: {result_block.content.get('output', '')[:200]}")
 
             # Store complete response structure
             SAMPLE_RESPONSES["code_execution"] = serialize_response(response)
@@ -264,8 +266,8 @@ class TestGeminiStatelessClientIntegration:
         text_content = [block for block in response.messages[0].content if block.type == "text"]
         assert len(text_content) > 0
 
-        print("\n✅ Multimodal image analysis:")
-        print(f"   Response: {text_content[0].text[:200]}")
+        logger.info("✅ Multimodal image analysis:")
+        logger.info(f"   Response: {text_content[0].text[:200]}")
 
         # Store complete response structure
         SAMPLE_RESPONSES["multimodal"] = serialize_response(response)
@@ -312,8 +314,8 @@ class TestGeminiStatelessClientIntegration:
         assert isinstance(json_response["colors"], list)
         assert len(json_response["colors"]) >= 3
 
-        print("\n✅ Structured output:")
-        print(f"   Colors: {json.dumps(json_response, indent=2)[:200]}")
+        logger.info("✅ Structured output:")
+        logger.info(f"   Colors: {json.dumps(json_response, indent=2)[:200]}")
 
         # Store complete response structure
         SAMPLE_RESPONSES["structured_output"] = serialize_response(response)
@@ -348,12 +350,12 @@ class TestGeminiStatelessClientIntegration:
         cost_from_method = client.cost(response)
         assert cost_from_method == response.cost
 
-        print("\n✅ Usage tracking:")
-        print(f"   Prompt tokens: {response.usage['prompt_tokens']}")
-        print(f"   Completion tokens: {response.usage['completion_tokens']}")
-        print(f"   Thinking tokens: {response.usage['thinking_tokens']}")
-        print(f"   Total tokens: {response.usage['total_tokens']}")
-        print(f"   Cost: ${response.cost:.6f}")
+        logger.info("✅ Usage tracking:")
+        logger.info(f"   Prompt tokens: {response.usage['prompt_tokens']}")
+        logger.info(f"   Completion tokens: {response.usage['completion_tokens']}")
+        logger.info(f"   Thinking tokens: {response.usage['thinking_tokens']}")
+        logger.info(f"   Total tokens: {response.usage['total_tokens']}")
+        logger.info(f"   Cost: ${response.cost:.6f}")
 
 
 @pytest.mark.gemini
@@ -371,10 +373,10 @@ def test_vertex_ai_mode():
             location="us-central1",
         )
         assert client.use_vertexai is True
-        print("\n✅ Vertex AI mode initialization successful")
+        logger.info("✅ Vertex AI mode initialization successful")
     except Exception as e:
         # Expected if no GCP credentials
-        print(f"\n⚠️  Vertex AI initialization failed (expected without credentials): {e}")
+        logger.warning(f"⚠️  Vertex AI initialization failed (expected without credentials): {e}")
 
 
 def test_save_sample_responses():
@@ -386,4 +388,4 @@ def test_save_sample_responses():
         with open(output_file, "w") as f:
             json.dump(SAMPLE_RESPONSES, f, indent=2)
 
-        print(f"\n✅ Saved {len(SAMPLE_RESPONSES)} sample responses to {output_file}")
+        logger.info(f"✅ Saved {len(SAMPLE_RESPONSES)} sample responses to {output_file}")
