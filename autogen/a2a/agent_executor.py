@@ -10,7 +10,6 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import InternalError, Task, TaskState, TaskStatus
 from a2a.utils.errors import ServerError
-from a2a.utils.message import new_agent_text_message
 
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
@@ -57,18 +56,7 @@ class AutogenAgentExecutor(AgentExecutor):
         except Exception as e:
             raise ServerError(error=InternalError()) from e
 
-        if result and result.input_required is not None:
-            await updater.requires_input(
-                message=new_agent_text_message(
-                    text=result.input_required,
-                    context_id=task.context_id,
-                    task_id=task.id,
-                ),
-                final=True,
-            )
-            return
-
-        artifact, messages = response_message_to_a2a(result, context.context_id, task.id)
+        artifact, messages, input_required_msg = response_message_to_a2a(result, context.context_id, task.id)
 
         # publish local chat history events
         for message in messages:
@@ -77,16 +65,22 @@ class AutogenAgentExecutor(AgentExecutor):
                 message=message,
             )
 
-        # publish the task final result event
-        await updater.add_artifact(
-            artifact_id=artifact.artifact_id,
-            name=artifact.name,
-            parts=artifact.parts,
-            metadata=artifact.metadata,
-            extensions=artifact.extensions,
-        )
+        # publish input required event
+        if input_required_msg:
+            await updater.requires_input(message=input_required_msg, final=True)
+            return
 
-        await updater.complete()
+        # publish the task final result event
+        if artifact:
+            await updater.add_artifact(
+                artifact_id=artifact.artifact_id,
+                name=artifact.name,
+                parts=artifact.parts,
+                metadata=artifact.metadata,
+                extensions=artifact.extensions,
+            )
+
+            await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TextPart
 from a2a.utils import get_message_text, new_agent_parts_message, new_artifact
+from a2a.utils.message import new_agent_text_message
 
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
@@ -44,14 +45,32 @@ def request_message_from_a2a(message: Message) -> RequestMessage:
 
 
 def response_message_from_a2a_task(task: Task) -> ResponseMessage | None:
-    if task.status.state is TaskState.input_required:
-        if not task.history:
-            message: str | None = None
-        else:
-            message = get_message_text(task.history[-1])
-        return ResponseMessage(input_required=message or "Please provide input:")
+    history = [message_from_part(p) for m in (task.history or []) for p in m.parts]
 
-    return response_message_from_a2a_artifacts(task.artifacts)
+    if task.status.state is TaskState.input_required:
+        message: str | None = None
+        context: dict[str, Any] | None = None
+
+        if task.history:
+            input_message = task.history[-1]
+            message = get_message_text(input_message)
+
+            if input_message.metadata:
+                context = input_message.metadata.get(CONTEXT_KEY)
+
+            if "role" not in history[-1]:
+                history[-1]["role"] = "assistant"
+
+        return ResponseMessage(
+            messages=history,
+            input_required=message or "Please provide input:",
+            context=context,
+        )
+
+    response = response_message_from_a2a_artifacts(task.artifacts)
+    if response:
+        response.messages = history + response.messages
+    return response
 
 
 def response_message_from_a2a_artifacts(artifacts: list[Artifact] | None) -> ResponseMessage | None:
@@ -110,16 +129,39 @@ def response_message_to_a2a(
     result: ResponseMessage | None,
     context_id: str | None,
     task_id: str | None,
-) -> tuple[Artifact, list[Message]]:
+) -> tuple[Artifact | None, list[Message], Message | None]:
     # mypy ignores could be removed after
     # https://github.com/a2aproject/a2a-python/pull/503
 
     if not result:
-        return new_artifact(
-            name="result",
-            parts=[],
-            description=None,  # type: ignore[arg-type]
-        ), []
+        return (
+            new_artifact(
+                name="result",
+                parts=[],
+                description=None,  # type: ignore[arg-type]
+            ),
+            [],
+            None,
+        )
+
+    message_history = [
+        new_agent_parts_message(
+            parts=[message_to_part(m) for m in result.messages],
+            context_id=context_id,
+            task_id=task_id,
+        ),
+    ]
+
+    if result.input_required is not None:
+        input_message = new_agent_text_message(
+            text=result.input_required,
+            context_id=context_id,
+            task_id=task_id,
+        )
+        if result.context:
+            input_message.metadata = {CONTEXT_KEY: result.context}
+
+        return None, message_history, input_message
 
     artifact = new_artifact(
         name="result",
@@ -130,16 +172,7 @@ def response_message_to_a2a(
     if result.context:
         artifact.metadata = {CONTEXT_KEY: result.context}
 
-    return (
-        artifact,
-        [
-            new_agent_parts_message(
-                parts=[message_to_part(m) for m in result.messages],
-                context_id=context_id,
-                task_id=task_id,
-            ),
-        ],
-    )
+    return artifact, message_history, None
 
 
 def message_to_part(message: dict[str, Any]) -> Part:

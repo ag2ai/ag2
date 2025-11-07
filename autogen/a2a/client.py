@@ -18,12 +18,18 @@ from typing_extensions import Self
 from autogen import ConversableAgent
 from autogen.agentchat.group import ContextVariables
 from autogen.doc_utils import export_module
+from autogen.events.agent_events import TerminationEvent
+from autogen.io.base import IOStream
 from autogen.oai.client import OpenAIWrapper
 from autogen.remote.httpx_client_factory import ClientFactory, EmptyClientFactory
 from autogen.remote.protocol import RequestMessage, ResponseMessage
 
 from .errors import A2aAgentNotFoundError, A2aClientError
-from .utils import request_message_to_a2a, response_message_from_a2a_message, response_message_from_a2a_task
+from .utils import (
+    request_message_to_a2a,
+    response_message_from_a2a_message,
+    response_message_from_a2a_task,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,8 +175,20 @@ class A2aRemoteAgent(ConversableAgent):
                 if not reply:
                     return True, None
 
+                messages = reply.messages
                 if reply.input_required is not None:
-                    user_input = await self.a_get_human_input(prompt=reply.input_required)
+                    user_input = await self.a_get_human_input(prompt=f"Input for `{self.name}`\n{reply.input_required}")
+
+                    if user_input == "exit":
+                        IOStream.get_default().send(
+                            TerminationEvent(
+                                termination_reason="User requested to end the conversation",
+                                sender=self,
+                                recipient=sender,
+                            )
+                        )
+                        return True, None
+
                     messages.append({"content": user_input, "role": "user"})
                     continue
 

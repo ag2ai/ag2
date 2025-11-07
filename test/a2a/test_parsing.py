@@ -234,7 +234,10 @@ class TestResponseMessageFromA2ATask:
 
         result = response_message_from_a2a_task(task)
 
-        assert result == ResponseMessage(input_required="Hi, user! Please provide input")
+        assert result == ResponseMessage(
+            messages=[{"content": "Hi, user! Please provide input", "role": "assistant"}],
+            input_required="Hi, user! Please provide input",
+        )
 
     def test_task_input_required_with_empty_history(self) -> None:
         task = Task(
@@ -393,8 +396,9 @@ class TestResponseMessageFromA2AMessage:
 
 class TestResponseMessageToA2A:
     def test_none_response(self) -> None:
-        artifact, messages = response_message_to_a2a(None, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(None, "ctx-123", "task-456")
 
+        assert not input_required
         assert artifact == Artifact(
             name="result",
             parts=[],
@@ -408,7 +412,9 @@ class TestResponseMessageToA2A:
             messages=[{"content": "Hello"}],
             context={"key": "value"},
         )
-        artifact, messages = response_message_to_a2a(response, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
+
+        assert not input_required
 
         assert artifact == Artifact(
             name="result",
@@ -439,7 +445,9 @@ class TestResponseMessageToA2A:
                 {"content": "Message 3"},
             ]
         )
-        artifact, messages = response_message_to_a2a(response, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
+
+        assert not input_required
 
         # Artifact should contain only the last message
         assert artifact == Artifact(
@@ -474,7 +482,7 @@ class TestRoundTripConversions:
         )
 
         # Convert to A2A and back
-        artifact, _ = response_message_to_a2a(original_response, "ctx-123", "task-456")
+        artifact, _, _ = response_message_to_a2a(original_response, "ctx-123", "task-456")
         converted_response = response_message_from_a2a_artifacts([artifact])
 
         assert converted_response == original_response
