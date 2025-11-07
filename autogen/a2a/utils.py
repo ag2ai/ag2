@@ -130,15 +130,12 @@ def response_message_to_a2a(
     context_id: str | None,
     task_id: str | None,
 ) -> tuple[Artifact | None, list[Message], Message | None]:
-    # mypy ignores could be removed after
-    # https://github.com/a2aproject/a2a-python/pull/503
-
     if not result:
         return (
             new_artifact(
                 name="result",
                 parts=[],
-                description=None,  # type: ignore[arg-type]
+                description=None,
             ),
             [],
             None,
@@ -166,7 +163,7 @@ def response_message_to_a2a(
     artifact = new_artifact(
         name="result",
         parts=[message_to_part(result.messages[-1])],
-        description=None,  # type: ignore[arg-type]
+        description=None,
     )
 
     if result.context:
