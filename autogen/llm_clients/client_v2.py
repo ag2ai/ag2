@@ -103,17 +103,18 @@ class ModelClientV2(Protocol):
         """
         ...
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:
-        """Retrieve text content from response messages.
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:
+        """Retrieve text content or rich multimodal content from response messages.
 
-        This is a convenience method for extracting simple text content
-        from UnifiedResponse. For rich content (reasoning, citations, etc.),
-        access response.messages directly.
+        This method extracts content from UnifiedResponse. For text-only responses,
+        returns a list of text strings. For responses containing images, audio, video,
+        or tool calls, returns message dicts with structured content blocks.
 
         Args:
             response: UnifiedResponse from create()
 
         Returns:
-            List of text strings from message content blocks
+            list[str]: For text-only responses
+            list[dict[str, Any]]: For responses with multimodal content or tool calls
         """
         ...

@@ -730,13 +730,14 @@ class GeminiStatelessClient(ModelClient):
             um = gemini_response.usage_metadata
             thinking_tokens = getattr(um, "thoughts_token_count", 0) or 0
             usage = {
-                "prompt_tokens": getattr(um, "prompt_token_count", 0),
-                "completion_tokens": getattr(um, "candidates_token_count", 0),
-                "total_tokens": getattr(um, "total_token_count", 0),
+                "prompt_tokens": getattr(um, "prompt_token_count", 0) or 0,
+                "completion_tokens": getattr(um, "candidates_token_count", 0) or 0,
+                "total_tokens": getattr(um, "total_token_count", 0) or 0,
                 "thinking_tokens": thinking_tokens,  # Gemini 2.5+ thinking mode
             }
 
         # Calculate cost (thinking tokens may be priced differently)
+        # Note: For image/audio generation models, completion_tokens may be 0
         cost = self._calculate_cost(
             model, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0), thinking_tokens
         )
@@ -832,12 +833,49 @@ class GeminiStatelessClient(ModelClient):
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:
         """
         Retrieve text content from response messages.
 
-        For rich content (thinking, tool calls, etc.), access response.messages directly.
+        For rich content (thinking, tool calls, images, audio, etc.), returns message dicts.
+        For text-only responses, returns list of strings.
         """
+        # Check if response contains only text
+        has_non_text_content = False
+        for message in response.messages:
+            for block in message.content:
+                if block.type not in ("text", "thinking"):
+                    has_non_text_content = True
+                    break
+            if has_non_text_content:
+                break
+
+        # If response has images, audio, video, or tool calls, return full message dicts
+        if has_non_text_content:
+            messages = []
+            for message in response.messages:
+                # Convert UnifiedMessage to dict format for AG2 compatibility
+                content_blocks = []
+                for block in message.content:
+                    if block.type == "text":
+                        content_blocks.append({"type": "text", "text": block.text})
+                    elif block.type == "image":
+                        content_blocks.append({"type": "image_url", "image_url": {"url": block.image_url}})
+                    elif block.type == "audio":
+                        content_blocks.append({"type": "audio_url", "audio_url": {"url": block.audio_url}})
+                    elif block.type == "video":
+                        content_blocks.append({"type": "video_url", "video_url": {"url": block.video_url}})
+                    elif block.type == "thinking":
+                        content_blocks.append({"type": "text", "text": f"[Thinking: {block.thinking}]"})
+
+                # For multimodal content, use list format; for empty, use empty string
+                if content_blocks:
+                    messages.append({"role": message.role, "content": content_blocks})
+                else:
+                    messages.append({"role": message.role, "content": ""})
+            return messages
+
+        # Text-only response: extract text strings
         texts = []
         for message in response.messages:
             for block in message.content:
