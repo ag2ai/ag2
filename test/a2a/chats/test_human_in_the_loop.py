@@ -38,6 +38,4 @@ async def test_get_remote_human_input() -> None:
 
     # assert
     mock.assert_awaited_once()
-    assert result.chat_history == [
-        IsPartialDict({"content": "Hi!"})
-    ]
+    assert result.chat_history == [IsPartialDict({"content": "Hi!"})]
