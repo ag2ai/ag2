@@ -500,7 +500,19 @@ class GeminiStatelessClient(ModelClient):
             if isinstance(response_format, dict) and response_format.get("type") == "json_object":
                 config_args["response_mime_type"] = "application/json"
                 if "schema" in response_format:
-                    config_args["response_schema"] = response_format["schema"]
+                    config_args["response_json_schema"] = response_format["schema"]
+
+        # Image generation config (gemini-2.5-flash-image)
+        if "image_config" in params:
+            config_args["image_config"] = params["image_config"]
+
+        # Response modalities (for image-only or audio output)
+        if "response_modalities" in params:
+            config_args["response_modalities"] = params["response_modalities"]
+
+        # Speech config (for TTS models)
+        if "speech_config" in params:
+            config_args["speech_config"] = params["speech_config"]
 
         # Tools (Gemini Developer API requires tools in config)
         if tools:
@@ -834,3 +846,50 @@ class GeminiStatelessClient(ModelClient):
                 elif block.type == "thinking":
                     texts.append(f"[Thinking: {block.thinking}]")
         return texts
+
+
+# LLMConfigEntry for Gemini Stateless Client
+try:
+    from typing import Literal
+
+    from ..llm_config.entry import LLMConfigEntry
+
+    class GeminiStatelessLLMConfigEntry(LLMConfigEntry):
+        """Configuration entry for GeminiStatelessClient with ModelClientV2 architecture."""
+
+        api_type: Literal["google_stateless"] = "google_stateless"
+
+        # Gemini-specific optional parameters
+        thinking_config: dict[str, Any] | None = None
+        """Thinking mode configuration for Gemini 2.5+ models."""
+
+        vertexai: bool | None = None
+        """Whether to use Vertex AI mode instead of Gemini Developer API."""
+
+        project: str | None = None
+        """GCP project ID for Vertex AI mode."""
+
+        location: str | None = None
+        """GCP location for Vertex AI mode (e.g., 'us-central1')."""
+
+        proxy: str | None = None
+        """HTTP proxy for API requests."""
+
+        # Media generation config (NEW)
+        image_config: dict[str, Any] | None = None
+        """Image generation configuration (aspect_ratio, etc.) for gemini-2.5-flash-image."""
+
+        response_modalities: list[str] | None = None
+        """Output modalities: ['Text', 'Image'] for image generation or ['AUDIO'] for TTS."""
+
+        speech_config: dict[str, Any] | None = None
+        """Text-to-speech configuration (voice_config, etc.) for TTS models."""
+
+        def create_client(self) -> ModelClient:
+            """Create GeminiStatelessClient from this configuration."""
+            config_dict = self.model_dump(exclude={"api_type"}, exclude_none=True)
+            return GeminiStatelessClient(**config_dict)
+
+except ImportError:
+    # If pydantic or llm_config not available, skip config entry class
+    pass

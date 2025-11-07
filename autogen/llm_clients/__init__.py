@@ -47,7 +47,7 @@ Usage:
 """
 
 from .client_v2 import ModelClientV2
-from .gemini_stateless_client import GeminiStatelessClient
+from .gemini_stateless_client import GeminiStatelessClient, GeminiStatelessLLMConfigEntry
 from .models import (
     AudioContent,
     BaseContent,
@@ -76,6 +76,7 @@ __all__ = [
     "ContentParser",
     # Clients
     "GeminiStatelessClient",
+    "GeminiStatelessLLMConfigEntry",
     "GenericContent",
     "ImageContent",
     # Protocol

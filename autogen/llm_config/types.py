@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from autogen.llm_clients import GeminiStatelessLLMConfigEntry
 from autogen.oai.anthropic import AnthropicLLMConfigEntry
 from autogen.oai.bedrock import BedrockLLMConfigEntry
 from autogen.oai.cerebras import CerebrasLLMConfigEntry
@@ -30,6 +31,7 @@ ConfigEntries = (
     | OpenAIV2LLMConfigEntry
     | CohereLLMConfigEntry
     | GeminiLLMConfigEntry
+    | GeminiStatelessLLMConfigEntry
     | GroqLLMConfigEntry
     | MistralLLMConfigEntry
     | OllamaLLMConfigEntry

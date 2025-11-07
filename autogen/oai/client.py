@@ -88,14 +88,18 @@ with optional_import_block() as gemini_result:
         InternalServerError as gemini_InternalServerError,
         ResourceExhausted as gemini_ResourceExhausted,
     )
+    from google.genai.errors import ClientError as gemini_ClientError  # noqa
 
     from .gemini import GeminiClient
 
 if gemini_result.is_successful:
     gemini_import_exception: ImportError | None = None
+    # Import GeminiStatelessClient only if google.genai is available
+    from autogen.llm_clients import GeminiStatelessClient
 else:
-    gemini_InternalServerError = gemini_ResourceExhausted = Exception  # type: ignore[assignment,misc]  # noqa: N816
+    gemini_InternalServerError = gemini_ResourceExhausted = gemini_ClientError = Exception  # type: ignore[assignment,misc]  # noqa: N816
     gemini_import_exception = ImportError("google-genai not found")
+    GeminiStatelessClient = None  # type: ignore[assignment,misc]
 
 with optional_import_block() as anthropic_result:
     from anthropic import (  # noqa
@@ -946,6 +950,31 @@ class OpenAIWrapper:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
                 client = CerebrasClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("google_stateless"):
+                # Google Gemini Stateless Client (ModelClientV2 architecture)
+                if gemini_import_exception:
+                    raise ImportError("Please install `google-genai` to use Google's Gemini API.")
+                if GeminiStatelessClient is None:
+                    raise ImportError("GeminiStatelessClient is not available. Please install `google-genai`.")
+
+                # Extract relevant config
+                gemini_config = {
+                    "api_key": openai_config.get("api_key"),
+                    "base_url": openai_config.get("base_url"),
+                    "timeout": openai_config.get("timeout", 60.0),
+                }
+
+                # Handle Vertex AI mode
+                if "vertexai" in config or "project" in config:
+                    gemini_config["vertexai"] = config.get("vertexai", True)
+                    if "project" in config:
+                        gemini_config["project"] = config["project"]
+                    if "location" in config:
+                        gemini_config["location"] = config["location"]
+
+                stateless_client = GeminiStatelessClient(**gemini_config)
+                self._clients.append(stateless_client)  # type: ignore[arg-type]
+                client = stateless_client
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
@@ -1266,6 +1295,7 @@ class OpenAIWrapper:
             except (
                 gemini_InternalServerError,
                 gemini_ResourceExhausted,
+                gemini_ClientError,
                 anthorpic_InternalServerError,
                 anthorpic_RateLimitError,
                 mistral_SDKError,

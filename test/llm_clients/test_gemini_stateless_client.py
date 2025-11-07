@@ -65,10 +65,16 @@ class MockGenerateContentResponse:
 @pytest.fixture
 def mock_genai_client():
     """Create mock Google GenAI client."""
-    with patch("autogen.llm_clients.gemini_stateless_client.genai") as mock_genai:
+    # Patch at the import location, not the module attribute
+    with patch("google.genai.Client") as mock_client_class:
         # Create mock client instance
         mock_client = Mock()
-        mock_genai.Client.return_value = mock_client
+        mock_client_class.return_value = mock_client
+
+        # Mock the models.generate_content method
+        mock_client.models = Mock()
+        mock_client.models.generate_content = Mock()
+
         yield mock_client
 
 
