@@ -4259,11 +4259,15 @@ def normilize_message_to_oai(
         if "tool_responses" in oai_message:
             for tool_response in oai_message["tool_responses"]:
                 content_value = tool_response.get("content")
-                tool_response["content"] = (
-                    content_str(content_value)
-                    if isinstance(content_value, (str, list)) or content_value is None
-                    else str(content_value)
-                )
+
+                # Preserve multimodal content in tool responses
+                # OpenAI API accepts content: str | list[dict]
+                if isinstance(content_value, (str, list, type(None))):
+                    # Keep as-is - no conversion needed
+                    pass
+                else:
+                    # Non-standard type - convert to string
+                    tool_response["content"] = str(content_value)
     elif "override_role" in message:
         # If we have a direction to override the role then set the
         # role accordingly. Used to customise the role for the

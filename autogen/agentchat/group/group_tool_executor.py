@@ -210,11 +210,17 @@ class GroupToolExecutor(ConversableAgent):
                     elif isinstance(content, TransitionTarget):
                         next_target = content
 
-                    # Serialize the content to a string
-                    normalized_content = (
-                        content_str(content) if isinstance(content, (str, list)) or content is None else str(content)
-                    )
-                    tool_response["content"] = normalized_content
+                    # Preserve multimodal content in tool responses
+                    # OpenAI API accepts content: str | list[dict]
+                    if isinstance(content, (str, list, type(None))):
+                        # Keep as-is - no conversion needed
+                        tool_response["content"] = content
+                        # For contents list (used for logging), convert to string
+                        normalized_content = content_str(content) if isinstance(content, list) else (content or "")
+                    else:
+                        # Non-standard type - convert to string
+                        tool_response["content"] = str(content)
+                        normalized_content = str(content)
 
                     tool_responses_inner.append(tool_response)
                     contents.append(normalized_content)

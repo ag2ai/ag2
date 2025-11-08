@@ -305,17 +305,27 @@ class GroupChat:
 
     def append(self, message: dict[str, Any], speaker: Agent):
         """Append a message to the group chat.
-        We cast the content to str here so that it can be managed by text-based
-        model.
+
+        Preserves multimodal content (images, audio, video) as list of content blocks
+        per OpenAI ChatCompletion format. The content field can be:
+        - str: Plain text message
+        - list[dict]: Multimodal content with text, images, audio, video
+        - None: Empty content
         """
         # set the name to speaker's name if the role is not function
         # if the role is tool, it is OK to modify the name
         if message["role"] != "function":
             message["name"] = speaker.name
-        if not isinstance(message["content"], str) and not isinstance(message["content"], list):
+
+        # Convert non-standard content types to string
+        # But preserve str and list (both valid per OpenAI ChatCompletion spec)
+        if not isinstance(message["content"], (str, list, type(None))):
             message["content"] = str(message["content"])
-        if not isinstance(message["content"], list):
-            message["content"] = content_str(message["content"])
+
+        # DO NOT call content_str() - preserve multimodal content
+        # List content is already in correct format for OpenAI API
+        # String content is already in correct format
+
         self.messages.append(message)
 
     def agent_by_name(self, name: str, recursive: bool = False, raise_on_name_conflict: bool = False) -> Agent | None:
@@ -1704,7 +1714,18 @@ class GroupChatManager(ConversableAgent):
             if isinstance(content_value, str):
                 messages[-1]["content"] = _remove_termination_string(content_value)
             elif isinstance(content_value, list):
-                messages[-1]["content"] = _remove_termination_string(content_str(content_value))
+                # Preserve multimodal content - only remove termination from text blocks
+                new_content = []
+                for block in content_value:
+                    if block.get("type") in ["text", "input_text"]:
+                        # Remove termination string from text blocks
+                        new_block = block.copy()
+                        new_block["text"] = _remove_termination_string(block.get("text", ""))
+                        new_content.append(new_block)
+                    else:
+                        # Preserve media blocks (image_url, audio_url, video_url) unchanged
+                        new_content.append(block)
+                messages[-1]["content"] = new_content
             else:
                 messages[-1]["content"] = _remove_termination_string(str(content_value))
 
@@ -1772,10 +1793,16 @@ class GroupChatManager(ConversableAgent):
         raw_reply_content = reply.get("content")
         if isinstance(raw_reply_content, str):
             reply_content = raw_reply_content
-        elif isinstance(raw_reply_content, (list, type(None))):
+            # No modification to reply["content"] needed
+        elif isinstance(raw_reply_content, list):
+            # Extract text for reply_content variable (used locally for pattern matching)
             reply_content = content_str(raw_reply_content)
-            reply["content"] = reply_content
+            # DO NOT modify reply["content"] - preserve original multimodal data
+        elif raw_reply_content is None:
+            reply_content = ""
+            # No modification needed
         else:
+            # Non-standard type - convert to string
             reply_content = str(raw_reply_content)
             reply["content"] = reply_content
         # Split the reply into words
