@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
 from fast_depends.dependencies import model
+from fast_depends.pydantic import PydanticSerializer
 from fast_depends.utils import is_coroutine_callable
 
 from ..agentchat import Agent
@@ -244,7 +245,6 @@ def inject_params(f: Callable[..., Any]) -> Callable[..., Any]:
     f = _fix_staticmethod(f)
     f = _string_metadata_to_description_field(f)
     f = _set_return_annotation_to_any(f)
-    f = inject(f)
+    f = inject(f, serializer_cls=PydanticSerializer(use_fastdepends_errors=False))
     f = _remove_injected_params_from_signature(f)
-
     return f
