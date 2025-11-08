@@ -12,9 +12,9 @@ from enum import Enum
 from typing import Annotated, Any, Literal
 
 import pytest
+from fast_depends.utils import is_coroutine_callable
 from pydantic import BaseModel, Field
 
-from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.tools.dependency_injection import Field as AG2Field
 from autogen.tools.function_utils import (
     get_default_values,

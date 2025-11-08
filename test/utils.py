@@ -12,8 +12,8 @@ from json.decoder import JSONDecodeError
 from typing import Any, TypeVar
 
 import pytest
+from fast_depends.utils import is_coroutine_callable
 
-from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import optional_import_block
 
 T = TypeVar("T", bound=Callable[..., Any])

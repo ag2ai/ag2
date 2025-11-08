@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fast_depends.utils import is_coroutine_callable
 from pydantic import BaseModel, Field
 
 import autogen
@@ -25,7 +26,6 @@ from autogen.agentchat.conversable_agent import register_function
 from autogen.agentchat.group import ContextVariables
 from autogen.cache.cache import Cache
 from autogen.exception_utils import InvalidCarryOverTypeError, SenderRequiredError
-from autogen.fast_depends.utils import is_coroutine_callable
 from autogen.import_utils import run_for_optional_imports, skip_on_missing_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.client import OpenAILLMConfigEntry

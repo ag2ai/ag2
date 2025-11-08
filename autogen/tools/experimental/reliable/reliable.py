@@ -17,6 +17,7 @@ import warnings
 from collections.abc import Callable
 from typing import Annotated, Any
 
+from fast_depends.utils import is_coroutine_callable
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ....agentchat import ChatResult, initiate_group_chat
@@ -26,7 +27,6 @@ from ....agentchat.group import AgentTarget, ReplyResult, TerminateTarget
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.patterns import DefaultPattern
 from ....doc_utils import export_module
-from ....fast_depends.utils import is_coroutine_callable
 from ....llm_config import LLMConfig
 from ....tools.dependency_injection import Field as AG2Field
 from ....tools.tool import Tool

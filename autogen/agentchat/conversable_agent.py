@@ -27,6 +27,8 @@ from typing import (
     Union,
 )
 
+from fast_depends.utils import is_coroutine_callable
+
 from ..cache.cache import AbstractCache, Cache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -59,7 +61,6 @@ from ..events.agent_events import (
     create_received_event_model,
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
-from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import IOStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream

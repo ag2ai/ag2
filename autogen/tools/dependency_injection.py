@@ -10,12 +10,13 @@ from collections.abc import Callable, Iterable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints
 
+from fast_depends import Depends as FastDepends
+from fast_depends import inject
+from fast_depends.dependencies import model
+from fast_depends.utils import is_coroutine_callable
+
 from ..agentchat import Agent
 from ..doc_utils import export_module
-from ..fast_depends import Depends as FastDepends
-from ..fast_depends import inject
-from ..fast_depends.dependencies import model
-from ..fast_depends.utils import is_coroutine_callable
 
 if TYPE_CHECKING:
     from ..agentchat.conversable_agent import ConversableAgent
@@ -128,10 +129,10 @@ def _is_context_param(param: inspect.Parameter, subclass: type[BaseContext] | ty
 
 
 def _is_depends_param(param: inspect.Parameter) -> bool:
-    return isinstance(param.default, model.Depends) or (
+    return isinstance(param.default, model.Dependant) or (
         hasattr(param.annotation, "__metadata__")
         and type(param.annotation.__metadata__) == tuple
-        and isinstance(param.annotation.__metadata__[0], model.Depends)
+        and isinstance(param.annotation.__metadata__[0], model.Dependant)
     )
 
 

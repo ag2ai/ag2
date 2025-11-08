@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
-from ....doc_utils import export_module
-from ....fast_depends.utils import asyncify
+from autogen.doc_utils import export_module
+from autogen.tools.function_utils import asyncify
+
 from .realtime_events import FunctionCall, RealtimeEvent
 from .realtime_observer import RealtimeObserver
 

@@ -14,9 +14,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
+from fast_depends.utils import is_coroutine_callable
 from packaging import version
-
-from .fast_depends.utils import is_coroutine_callable
 
 __all__ = [
     "optional_import_block",

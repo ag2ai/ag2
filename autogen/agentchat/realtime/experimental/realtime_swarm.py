@@ -13,13 +13,13 @@ from typing import TYPE_CHECKING, Any, Optional, TypeVar
 import anyio
 from anyio import create_task_group, from_thread
 
-from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
-from ....cache import AbstractCache
-from ....code_utils import content_str
-from ....doc_utils import export_module
-from ....fast_depends.utils import asyncify
-from ... import Agent, ChatResult, ConversableAgent, LLMAgent
-from ...utils import consolidate_chat_info, gather_usage_summary
+from autogen.agentchat import Agent, ChatResult, ConversableAgent, LLMAgent
+from autogen.agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
+from autogen.agentchat.utils import consolidate_chat_info, gather_usage_summary
+from autogen.cache import AbstractCache
+from autogen.code_utils import content_str
+from autogen.doc_utils import export_module
+from autogen.tools.function_utils import asyncify
 
 if TYPE_CHECKING:
     from .clients import Role

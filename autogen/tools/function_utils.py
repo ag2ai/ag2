@@ -7,17 +7,17 @@
 import functools
 import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from logging import getLogger
-from typing import Annotated, Any, ForwardRef, Literal, TypeVar, get_args, get_origin
+from typing import Annotated, Any, ForwardRef, Literal, ParamSpec, TypeVar, cast, get_args, get_origin
 
+from fast_depends.utils import is_coroutine_callable, run_in_threadpool
 from packaging.version import parse
 from pydantic import BaseModel, Field, TypeAdapter
 from pydantic import __version__ as pydantic_version
 from pydantic.json_schema import JsonSchemaValue
 
 from ..doc_utils import export_module
-from ..fast_depends.utils import is_coroutine_callable
 from .dependency_injection import Field as AG2Field
 
 if parse(pydantic_version) < parse("2.10.2"):
@@ -31,6 +31,7 @@ __all__ = ["get_function_schema", "load_basemodels_if_needed", "serialize_to_str
 logger = getLogger(__name__)
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def get_typed_annotation(annotation: Any, globalns: dict[str, Any]) -> Any:
@@ -410,3 +411,13 @@ def serialize_to_str(x: Any) -> str:
         return json.dumps(x, ensure_ascii=False)
     except Exception:
         return str(x)
+
+
+def asyncify(func: Callable[P, T]) -> Callable[P, Awaitable[T]]:
+    if is_coroutine_callable(func):
+        return cast(Callable[P, Awaitable[T]], func)
+
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return await run_in_threadpool(func, *args, **kwargs)
+
+    return wrapper
