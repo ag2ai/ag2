@@ -1565,7 +1565,21 @@ class OpenAIWrapper:
         if hasattr(response, "id") and response.id in self._response_metadata:
             metadata = self._response_metadata[response.id]
             client = metadata["client"]
-            return client.message_retrieval(response)
+            try:
+                result = client.message_retrieval(response)
+                # Validate that we got a non-empty result (check specifically for empty list)
+                if isinstance(result, list) and len(result) == 0:
+                    raise ValueError(
+                        f"Client {type(client).__name__} returned empty result from message_retrieval(). "
+                        f"Response ID: {response.id}, Model: {getattr(response, 'model', 'unknown')}"
+                    )
+                return result
+            except ValueError:
+                # Re-raise ValueError as-is (already has good error messages)
+                raise
+            except Exception as e:
+                # Re-raise other exceptions with more context
+                raise type(e)(f"Error extracting messages from {type(client).__name__} response: {str(e)}") from e
 
         # Option 3: Fallback - try to extract from response structure directly
         # This handles cases where response is not in buffer

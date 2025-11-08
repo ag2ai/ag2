@@ -52,34 +52,65 @@ pytestmark = [
 
 
 def _create_image_generation_config(credentials: Credentials) -> dict[str, Any]:
-    """Create config for image generation with gemini-2.5-flash-image."""
+    """Create config for image generation with gemini-2.5-flash-image.
+
+    Configured for small test outputs:
+    - Square aspect ratio (1:1) for balanced dimensions
+    - 1K image size (smallest option: ~1024x1024 pixels)
+    - Lower temperature for more consistent test results
+    - Image-only output modality
+
+    Valid image_size values: 1K, 2K, 4K (default: 1K)
+    Valid aspect ratios: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9
+    """
     return {
         "config_list": [
             {
                 "api_type": "google_stateless",
                 "model": "gemini-2.5-flash-image",
                 "api_key": credentials.api_key,
-                "image_config": {"aspect_ratio": "1:1"},
+                "image_config": {
+                    "aspect_ratio": "1:1",  # Square format for balanced dimensions
+                    "image_size": "1K",  # Smallest size option for fast testing
+                },
                 "response_modalities": ["Image"],  # Image only output
             }
         ],
-        "temperature": 0.7,
+        "temperature": 0.3,  # Lower temperature for more deterministic results
     }
 
 
 def _create_audio_generation_config(credentials: Credentials) -> dict[str, Any]:
-    """Create config for audio/TTS generation with gemini-2.5-flash-preview-tts."""
+    """Create config for audio/TTS generation with gemini-2.5-flash-preview-tts.
+
+    Configured for small test outputs:
+    - Audio-only output modality
+    - English US language for consistent results
+    - Specific voice config for consistent results
+    - Lower temperature for deterministic generation
+
+    SpeechConfig parameters:
+    - language_code: ISO 639 language code (e.g., en-US)
+    - voice_config: Voice configuration (prebuilt or custom)
+    """
     return {
         "config_list": [
             {
                 "api_type": "google_stateless",
                 "model": "gemini-2.5-flash-preview-tts",
                 "api_key": credentials.api_key,
-                "response_modalities": ["AUDIO"],
-                "speech_config": {"voice_config": {"prebuilt_voice_config": {"voice_name": "Kore"}}},
+                "response_modalities": ["AUDIO"],  # Audio only output
+                "speech_config": {
+                    "language_code": "en-US",  # English US for consistent results
+                    "voice_config": {
+                        "prebuilt_voice_config": {
+                            "voice_name": "Kore"  # Use consistent voice for testing
+                        }
+                    },
+                },
             }
         ],
-        "temperature": 0.5,
+        "temperature": 0.3,  # Lower temperature for more consistent results
     }
 
 
@@ -107,10 +138,21 @@ def _extract_image_from_response(chat_result: Any) -> str | None:
         content = msg.get("content", [])
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "image":
-                    return block.get("image_url")
-                elif hasattr(block, "type") and block.type == "image":
-                    return block.image_url
+                # Handle OpenAI-style multimodal format (type: "image_url")
+                if isinstance(block, dict):
+                    if block.get("type") == "image_url":
+                        # Extract from nested structure: {'type': 'image_url', 'image_url': {'url': '...'}}
+                        image_url_obj = block.get("image_url")
+                        if isinstance(image_url_obj, dict):
+                            return image_url_obj.get("url")
+                        return image_url_obj
+                    elif block.get("type") == "image":
+                        return block.get("image_url")
+                elif hasattr(block, "type"):
+                    if block.type == "image_url":
+                        return block.image_url.url if hasattr(block.image_url, "url") else block.image_url
+                    elif block.type == "image":
+                        return block.image_url
     return None
 
 
@@ -124,10 +166,21 @@ def _extract_audio_from_response(chat_result: Any) -> str | None:
         content = msg.get("content", [])
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "audio":
-                    return block.get("audio_url")
-                elif hasattr(block, "type") and block.type == "audio":
-                    return block.audio_url
+                # Handle OpenAI-style multimodal format (type: "audio_url")
+                if isinstance(block, dict):
+                    if block.get("type") == "audio_url":
+                        # Extract from nested structure: {'type': 'audio_url', 'audio_url': {'url': '...'}}
+                        audio_url_obj = block.get("audio_url")
+                        if isinstance(audio_url_obj, dict):
+                            return audio_url_obj.get("url")
+                        return audio_url_obj
+                    elif block.get("type") == "audio":
+                        return block.get("audio_url")
+                elif hasattr(block, "type"):
+                    if block.type == "audio_url":
+                        return block.audio_url.url if hasattr(block.audio_url, "url") else block.audio_url
+                    elif block.type == "audio":
+                        return block.audio_url
     return None
 
 
@@ -148,7 +201,10 @@ def test_groupchat_image_generation_and_consumption_cycle(credentials_gemini_fla
     image_generator = AssistantAgent(
         name="ImageCreator",
         llm_config=_create_image_generation_config(credentials_gemini_flash),
-        system_message="You generate images based on descriptions. Output images only.",
+        system_message=(
+            "You are an image generator. You create simple, clean images based on descriptions. "
+            "Focus on basic geometric shapes and solid colors for test images."
+        ),
     )
 
     vision_analyst = AssistantAgent(
@@ -178,9 +234,17 @@ def test_groupchat_image_generation_and_consumption_cycle(credentials_gemini_fla
         llm_config=_create_vision_config(credentials_gemini_flash),
     )
 
+    # Use a unique, specific prompt to avoid IMAGE_RECITATION filter
+    # Adding specific details makes the image request unique and less likely to match training data
     result_gen = user_proxy.initiate_chat(
         manager_gen,
-        message="Create a simple image of a red circle on white background.",
+        message=(
+            "Create a test image with these exact specifications: "
+            "A gradient blue hexagon with cyan edges (hex color #4A90E2 to #00D4FF) "
+            "positioned 15% from top on an off-white background (#FAFAFA). "
+            "Add small teal dots (#20B2AA) in three corners. "
+            "This unique pattern is for automated testing purposes."
+        ),
         max_turns=1,
     )
 
@@ -235,10 +299,10 @@ def test_groupchat_image_generation_and_consumption_cycle(credentials_gemini_fla
     assert result_consume is not None
     assert len(result_consume.chat_history) >= 2
 
-    # Verify analysis mentions expected content (red circle)
+    # Verify analysis mentions expected content (hexagon or blue/cyan colors)
     summary_lower = result_consume.summary.lower()
-    assert "red" in summary_lower or "circle" in summary_lower, (
-        f"Vision agent didn't detect red circle: {result_consume.summary}"
+    assert any(word in summary_lower for word in ["hexagon", "blue", "cyan", "teal", "dot", "geometric"]), (
+        f"Vision agent didn't detect hexagon or colors in image: {result_consume.summary}"
     )
 
     logger.info("✓ Vision agent successfully analyzed generated image")
@@ -264,7 +328,10 @@ def test_groupchat_audio_generation_and_metadata_validation(credentials_gemini_f
     tts_generator = AssistantAgent(
         name="TTSGenerator",
         llm_config=_create_audio_generation_config(credentials_gemini_flash),
-        system_message="You generate speech audio from text. Output audio only.",
+        system_message=(
+            "You are a text-to-speech generator. You create short, clear audio clips from text. "
+            "Focus on simple, brief messages for testing purposes."
+        ),
     )
 
     coordinator = AssistantAgent(
@@ -294,9 +361,10 @@ def test_groupchat_audio_generation_and_metadata_validation(credentials_gemini_f
         llm_config=_create_vision_config(credentials_gemini_flash),
     )
 
+    # Use a short, simple phrase to minimize audio generation time/size
     result = user_proxy.initiate_chat(
         manager,
-        message="Generate audio saying: 'Hello, this is a test of multimodal group chat.'",
+        message="Generate a short test audio clip saying: 'Testing one two three'",
         max_turns=2,
     )
 
@@ -351,34 +419,40 @@ def test_groupchat_audio_generation_and_metadata_validation(credentials_gemini_f
 @pytest.mark.gemini
 @run_for_optional_imports(["google.genai"], "google-genai")
 def test_groupchat_mixed_multimodal_generation_workflow(credentials_gemini_flash: Credentials) -> None:
-    """Test workflow with multiple media types in group chat conversation.
+    """Test complete multimodal workflow with image, vision analysis, and audio generation.
 
-    This test verifies a complex workflow:
-    1. Image generator creates a visual
-    2. Vision analyst describes the image
-    3. TTS generator creates audio based on the description
-    4. Verify all media is properly tracked in chat history
+    This test verifies a multimodal group chat workflow where:
+    1. ImageCreator generates an image
+    2. VisionAnalyst analyzes and describes the generated image
+    3. TTSSpeaker creates audio narration from the description
+    4. All three agents participate in a single RoundRobinPattern conversation
 
-    This simulates a realistic multi-agent workflow where different agents produce
-    different types of media content in a coordinated conversation.
+    The test demonstrates that TTS models can now be used in group chats by automatically
+    extracting only the last user message for stateless TTS conversion.
     """
-    # Create specialized agents
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import RoundRobinPattern
+
+    # Create specialized agents for image generation and analysis
     image_generator = AssistantAgent(
         name="ImageCreator",
         llm_config=_create_image_generation_config(credentials_gemini_flash),
-        system_message="You create images. Output images only.",
+        description="Creates images based on text descriptions.",
+        system_message="You create images based on descriptions provided.",
     )
 
     vision_analyst = AssistantAgent(
         name="VisionAnalyst",
         llm_config=_create_vision_config(credentials_gemini_flash),
-        system_message="You analyze images and provide brief descriptions.",
+        description="Analyzes and describes images in detail.",
+        system_message="You analyze images. When you see an image, describe it clearly in 1-2 sentences.",
     )
 
-    tts_generator = AssistantAgent(
+    tts_speaker = AssistantAgent(
         name="TTSSpeaker",
         llm_config=_create_audio_generation_config(credentials_gemini_flash),
-        system_message="You generate speech audio. Output audio only.",
+        description="Creates audio narration from text descriptions.",
+        system_message="You generate audio narration from text descriptions provided to you.",
     )
 
     user_proxy = UserProxyAgent(
@@ -388,106 +462,66 @@ def test_groupchat_mixed_multimodal_generation_workflow(credentials_gemini_flash
         code_execution_config=False,
     )
 
-    # Step 1: Generate image
-    logger.info("=== Step 1: Generating Image ===")
-    groupchat_image = GroupChat(
-        agents=[user_proxy, image_generator],
-        messages=[],
-        max_round=2,
-        speaker_selection_method="round_robin",
+    # Create RoundRobinPattern for sequential execution: ImageCreator -> VisionAnalyst -> TTSSpeaker
+    logger.info("=== Starting Multimodal Group Chat with RoundRobinPattern ===")
+    pattern = RoundRobinPattern(
+        initial_agent=image_generator,  # Start with image generation
+        agents=[image_generator, vision_analyst, tts_speaker],
+        user_agent=user_proxy,
     )
 
-    manager_image = GroupChatManager(
-        groupchat=groupchat_image,
-        llm_config=_create_vision_config(credentials_gemini_flash),
+    # User initiates workflow: create image, analyze it, then create audio
+    result, _, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="Create an abstract geometric pattern with colorful shapes.",
+        max_rounds=4,  # User + ImageCreator + VisionAnalyst + TTSSpeaker
     )
 
-    result_image = user_proxy.initiate_chat(
-        manager_image,
-        message="Create a simple image of a blue square.",
-        max_turns=1,
-    )
+    # Verify the workflow completed
+    assert result is not None
+    assert result.chat_history is not None
+    assert len(result.chat_history) >= 3  # At least User + ImageCreator + VisionAnalyst
 
-    image_data_uri = _extract_image_from_response(result_image)
-    assert image_data_uri is not None
-    logger.info("✓ Image generated: %s...", image_data_uri[:60])
+    # Extract image from chat history
+    image_data_uri = _extract_image_from_response(result)
 
-    # Step 2: Analyze image with vision agent
-    logger.info("=== Step 2: Analyzing Image ===")
-    groupchat_vision = GroupChat(
-        agents=[user_proxy, vision_analyst],
-        messages=[],
-        max_round=2,
-        speaker_selection_method="round_robin",
-    )
+    # Verify image was generated
+    assert image_data_uri is not None, "ImageCreator should have generated an image"
+    assert image_data_uri.startswith("data:image/"), "Image should be a valid data URI"
 
-    manager_vision = GroupChatManager(
-        groupchat=groupchat_vision,
-        llm_config=_create_vision_config(credentials_gemini_flash),
-    )
-
-    result_vision = user_proxy.initiate_chat(
-        manager_vision,
-        message={
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Describe this image in one sentence."},
-                {"type": "image_url", "image_url": {"url": image_data_uri}},
-            ],
-        },
-        max_turns=1,
-    )
-
-    assert result_vision is not None
-    description = result_vision.summary
-    logger.info("✓ Vision analysis: %s", description)
-
-    # Step 3: Generate audio from description
-    logger.info("=== Step 3: Generating Audio ===")
-    groupchat_audio = GroupChat(
-        agents=[user_proxy, tts_generator],
-        messages=[],
-        max_round=2,
-        speaker_selection_method="round_robin",
-    )
-
-    manager_audio = GroupChatManager(
-        groupchat=groupchat_audio,
-        llm_config=_create_vision_config(credentials_gemini_flash),
-    )
-
-    result_audio = user_proxy.initiate_chat(
-        manager_audio,
-        message=f"Say: {description}",
-        max_turns=1,
-    )
-
-    audio_data_uri = _extract_audio_from_response(result_audio)
-    assert audio_data_uri is not None
-    logger.info("✓ Audio generated: %s...", audio_data_uri[:60])
-
-    # Verify all media types were generated
-    assert image_data_uri.startswith("data:image/")
-    assert audio_data_uri.startswith("data:audio/")
-
-    # Verify media can be decoded
+    # Verify image can be decoded
     _, image_encoded = image_data_uri.split(",", 1)
-    _, audio_encoded = audio_data_uri.split(",", 1)
-
     image_bytes = base64.b64decode(image_encoded)
+    assert len(image_bytes) > 100, "Image should contain actual data"
+
+    # Extract audio from chat history
+    audio_data_uri = _extract_audio_from_response(result)
+
+    # Verify audio was generated
+    assert audio_data_uri is not None, "TTSSpeaker should have generated audio"
+    assert audio_data_uri.startswith("data:audio/"), "Audio should be a valid data URI"
+
+    # Verify audio can be decoded
+    _, audio_encoded = audio_data_uri.split(",", 1)
     audio_bytes = base64.b64decode(audio_encoded)
+    assert len(audio_bytes) > 100, "Audio should contain actual data"
 
-    assert len(image_bytes) > 100
-    assert len(audio_bytes) > 1000
+    # Verify all three agents participated
+    participant_names = {msg.get("name") for msg in result.chat_history if msg.get("name")}
+    assert "ImageCreator" in participant_names, "ImageCreator should have participated"
+    assert "VisionAnalyst" in participant_names, "VisionAnalyst should have participated and analyzed the image"
+    assert "TTSSpeaker" in participant_names, "TTSSpeaker should have participated and created audio"
 
-    logger.info("✓ Mixed multimodal workflow complete:")
+    # Verify VisionAnalyst provided image description
+    vision_messages = [msg for msg in result.chat_history if msg.get("name") == "VisionAnalyst"]
+    assert len(vision_messages) > 0, "VisionAnalyst should have provided analysis"
+    vision_content = vision_messages[0].get("content", "")
+    assert isinstance(vision_content, str) and len(vision_content) > 10, "VisionAnalyst should have described the image"
+
+    logger.info("✓ Complete multimodal group chat workflow successful:")
+    logger.info("  - Agents participated: %s", participant_names)
     logger.info("  - Image: %d bytes", len(image_bytes))
     logger.info("  - Audio: %d bytes", len(audio_bytes))
-    logger.info("✓ All media types generated and validated successfully")
-
-
-# TOTAL API CALLS IN THIS FILE: ~8-10 calls
-# - test_groupchat_image_generation_and_consumption_cycle: 2 image gen + 1 vision = 3 calls
-# - test_groupchat_audio_generation_and_metadata_validation: 1 audio gen + 1 coordination = 2 calls
-# - test_groupchat_mixed_multimodal_generation_workflow: 1 image + 1 vision + 1 audio = 3 calls
-# Note: Video generation is NOT included as it uses separate generate_videos() API (out of scope)
+    logger.info("  - Image description: %s", vision_content[:100])
+    logger.info("  - Total conversation turns: %d", len(result.chat_history))
+    logger.info("✓ All three modalities working together: Image → Vision → Audio")

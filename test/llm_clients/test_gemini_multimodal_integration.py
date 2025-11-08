@@ -245,11 +245,3 @@ class TestConfigurationEdgeCases:
         except Exception as e:
             # If it fails, ensure it's not a configuration error
             assert "speech_config" not in str(e).lower(), f"Configuration rejected: {e}"
-
-
-# TOTAL API CALLS IN THIS FILE: 4 (down from 15+)
-# - test_image_generation_comprehensive: 1 image generation call
-# - test_image_generation_with_image_only_modality: 1 image generation call
-# - test_audio_generation_comprehensive: 1 audio generation call
-# - test_audio_generation_with_style: 1 audio generation call
-# - Config tests: 0 (may attempt but fail early, not counted as usage)

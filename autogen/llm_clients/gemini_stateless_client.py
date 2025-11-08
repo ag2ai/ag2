@@ -250,6 +250,12 @@ class GeminiStatelessClient(ModelClient):
         # Extract system instruction (if first message is system)
         system_instruction = self._extract_system_instruction(messages)
 
+        # Handle TTS models: Extract only the last user message for stateless TTS
+        # TTS is a single-turn service that converts text to audio
+        is_tts_model = any(keyword in model.lower() for keyword in ["tts", "preview-tts"])
+        if is_tts_model:
+            messages = self._extract_last_user_message_for_tts(messages)
+
         # Convert AG2 messages to Gemini Contents
         contents = self._ag2_messages_to_gemini_contents(messages)
 
@@ -323,6 +329,46 @@ class GeminiStatelessClient(ModelClient):
                 texts = [item["text"] for item in content if item.get("type") == "text"]
                 return "\n".join(texts) if texts else None
         return None
+
+    def _extract_last_user_message_for_tts(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Extract only the last user message for TTS models.
+
+        TTS (Text-to-Speech) is a stateless, single-turn service that converts
+        text to audio. It doesn't handle conversation history - only the last
+        user message should be sent to the API.
+
+        Args:
+            messages: Full conversation history
+
+        Returns:
+            List containing only the last user message (and optionally system message)
+        """
+        # Preserve system message if present (though TTS models may ignore it)
+        system_message = None
+        if messages and messages[0].get("role") == "system":
+            system_message = messages[0]
+
+        # Find last user message
+        last_user_message = None
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                last_user_message = message
+                break
+
+        # Build single-turn message list for TTS
+        result = []
+        if system_message:
+            result.append(system_message)
+        if last_user_message:
+            result.append(last_user_message)
+
+        logger.debug(
+            f"TTS mode: Extracted last user message from conversation with {len(messages)} messages. "
+            f"Sending {len(result)} messages to TTS API."
+        )
+
+        return result
 
     def _ag2_messages_to_gemini_contents(self, messages: list[dict[str, Any]]) -> list[Content]:
         """
@@ -482,9 +528,20 @@ class GeminiStatelessClient(ModelClient):
         if "stop_sequences" in params:
             config_args["stop_sequences"] = params["stop_sequences"]
 
-        # System instruction
-        if system_instruction:
+        # System instruction (not supported by TTS models)
+        # TTS models only accept text input and produce audio output
+        # They don't support system instructions and will return 500 errors if provided
+        # Note: Image generation models DO support system_instruction
+        model_name = params.get("model", "")
+        is_tts_model = any(keyword in model_name.lower() for keyword in ["tts", "preview-tts"])
+
+        if system_instruction and not is_tts_model:
             config_args["system_instruction"] = system_instruction
+        elif system_instruction and is_tts_model:
+            logger.warning(
+                f"Skipping system_instruction for TTS model '{model_name}'. "
+                "TTS models do not support system instructions."
+            )
 
         # Thinking config (Gemini 2.5+)
         if "thinking_config" in params:
@@ -637,6 +694,7 @@ class GeminiStatelessClient(ModelClient):
 
             # Process all parts in the candidate's content
             content = candidate.content if hasattr(candidate, "content") else None
+
             if content and hasattr(content, "parts"):
                 for part in content.parts:
                     # Text content (not thinking)
@@ -699,28 +757,119 @@ class GeminiStatelessClient(ModelClient):
 
                         if mime_type.startswith("image/"):
                             # Convert to base64 data URI
+                            # Handle both old format (data attribute) and new SDK (Blob object)
                             data = getattr(inline_data, "data", b"")
-                            if isinstance(data, bytes):
+
+                            # Debug: Log inline_data structure if data is empty
+                            if not data or len(data) == 0:
+                                logger.warning(
+                                    f"Image inline_data has no data. Attributes: "
+                                    f"{[attr for attr in dir(inline_data) if not attr.startswith('_')]}"
+                                )
+                                # Try alternate attribute names
+                                if hasattr(inline_data, "bytes"):
+                                    data = inline_data.bytes
+                                    logger.info(f"Found data in 'bytes' attribute: {len(data)} bytes")
+                                elif hasattr(inline_data, "content"):
+                                    data = inline_data.content
+                                    logger.info(f"Found data in 'content' attribute: {len(data)} bytes")
+
+                            if isinstance(data, bytes) and len(data) > 0:
                                 b64_data = base64.b64encode(data).decode("utf-8")
                                 data_uri = f"data:{mime_type};base64,{b64_data}"
                                 content_blocks.append(ImageContent(type="image", image_url=data_uri))
+                                logger.debug(f"Extracted image with mime_type={mime_type}, size={len(data)} bytes")
+                            else:
+                                # Debug: log all attributes of inline_data
+                                attrs = {
+                                    k: type(getattr(inline_data, k, None))
+                                    for k in dir(inline_data)
+                                    if not k.startswith("_")
+                                }
+                                logger.warning(
+                                    f"Image inline_data.data is not bytes or is empty. "
+                                    f"Type: {type(data)}, Value: {data!r}, "
+                                    f"Available attributes: {attrs}"
+                                )
 
                         elif mime_type.startswith("audio/"):
+                            # Convert to base64 data URI
+                            # Handle both old format (data attribute) and new SDK (Blob object)
                             data = getattr(inline_data, "data", b"")
-                            if isinstance(data, bytes):
+
+                            # Debug: Log inline_data structure if data is empty
+                            if not data or len(data) == 0:
+                                logger.warning(
+                                    f"Audio inline_data has no data. Attributes: "
+                                    f"{[attr for attr in dir(inline_data) if not attr.startswith('_')]}"
+                                )
+                                # Try alternate attribute names
+                                if hasattr(inline_data, "bytes"):
+                                    data = inline_data.bytes
+                                    logger.info(f"Found data in 'bytes' attribute: {len(data)} bytes")
+                                elif hasattr(inline_data, "content"):
+                                    data = inline_data.content
+                                    logger.info(f"Found data in 'content' attribute: {len(data)} bytes")
+
+                            if isinstance(data, bytes) and len(data) > 0:
                                 b64_data = base64.b64encode(data).decode("utf-8")
                                 data_uri = f"data:{mime_type};base64,{b64_data}"
                                 content_blocks.append(AudioContent(type="audio", audio_url=data_uri))
+                                logger.debug(f"Extracted audio with mime_type={mime_type}, size={len(data)} bytes")
+                            else:
+                                # Debug: log all attributes of inline_data
+                                attrs = {
+                                    k: type(getattr(inline_data, k, None))
+                                    for k in dir(inline_data)
+                                    if not k.startswith("_")
+                                }
+                                logger.warning(
+                                    f"Audio inline_data.data is not bytes or is empty. "
+                                    f"Type: {type(data)}, Value: {data!r}, "
+                                    f"Available attributes: {attrs}"
+                                )
 
                         elif mime_type.startswith("video/"):
+                            # Convert to base64 data URI
+                            # Handle both old format (data attribute) and new SDK (Blob object)
                             data = getattr(inline_data, "data", b"")
-                            if isinstance(data, bytes):
+                            if isinstance(data, bytes) and len(data) > 0:
                                 b64_data = base64.b64encode(data).decode("utf-8")
                                 data_uri = f"data:{mime_type};base64,{b64_data}"
                                 content_blocks.append(VideoContent(type="video", video_url=data_uri))
+                                logger.debug(f"Extracted video with mime_type={mime_type}, size={len(data)} bytes")
+                            else:
+                                # Debug: log all attributes of inline_data
+                                attrs = {
+                                    k: type(getattr(inline_data, k, None))
+                                    for k in dir(inline_data)
+                                    if not k.startswith("_")
+                                }
+                                logger.warning(
+                                    f"Video inline_data.data is not bytes or is empty. "
+                                    f"Type: {type(data)}, Value: {data!r}, "
+                                    f"Available attributes: {attrs}"
+                                )
+                        else:
+                            logger.warning(f"Unknown inline_data mime_type: {mime_type}")
+
+                    # Catch-all for unhandled part types (helps debug new content types)
+                    else:
+                        part_attrs = [attr for attr in dir(part) if not attr.startswith("_")]
+                        if "image" in model.lower() or "audio" in model.lower():
+                            logger.debug(f"Unhandled part type with attributes: {part_attrs}")
 
             # Create unified message
             role = "assistant" if (content and getattr(content, "role", "model") == "model") else "user"
+
+            # Warn if no content blocks were extracted (indicates parsing issue)
+            if not content_blocks and content and hasattr(content, "parts") and content.parts:
+                logger.warning(
+                    f"No content blocks extracted from Gemini response for model {model}. "
+                    f"Response had {len(content.parts)} parts but none matched known content types. "
+                    f"This may indicate an unsupported content format or API change."
+                )
+
             messages.append(UnifiedMessage(role=role, content=content_blocks))
 
         # Extract usage (including thinking tokens for Gemini 2.5+)
@@ -753,8 +902,14 @@ class GeminiStatelessClient(ModelClient):
             provider_metadata["model_version"] = gemini_response.model_version
         if hasattr(gemini_response, "prompt_feedback"):
             provider_metadata["prompt_feedback"] = str(gemini_response.prompt_feedback)
-        if candidates and hasattr(candidates[0], "safety_ratings"):
-            provider_metadata["safety_ratings"] = str(candidates[0].safety_ratings)
+        if candidates:
+            if hasattr(candidates[0], "safety_ratings"):
+                provider_metadata["safety_ratings"] = str(candidates[0].safety_ratings)
+            if hasattr(candidates[0], "finish_message") and candidates[0].finish_message:
+                provider_metadata["finish_message"] = candidates[0].finish_message
+            # Include raw finish_reason for media generation failures
+            if hasattr(candidates[0], "finish_reason"):
+                provider_metadata["finish_reason_raw"] = str(candidates[0].finish_reason)
 
         return UnifiedResponse(
             id=getattr(gemini_response, "response_id", None) or str(uuid.uuid4()),
@@ -781,6 +936,9 @@ class GeminiStatelessClient(ModelClient):
         elif "MAX_TOKENS" in reason_str or "LENGTH" in reason_str:
             return "length"
         elif "SAFETY" in reason_str or "RECITATION" in reason_str:
+            return "content_filter"
+        elif "NO_IMAGE" in reason_str or "NO_AUDIO" in reason_str or "NO_VIDEO" in reason_str:
+            # Media generation failed
             return "content_filter"
         else:
             return "stop"
@@ -839,16 +997,58 @@ class GeminiStatelessClient(ModelClient):
 
         For rich content (thinking, tool calls, images, audio, etc.), returns message dicts.
         For text-only responses, returns list of strings.
+
+        Raises:
+            ValueError: If response contains no messages or all messages have empty content
         """
+        # Early validation: Check if response has any messages
+        if not response.messages:
+            raise ValueError(
+                f"Gemini response contains no messages. Model: {response.model}, "
+                f"Finish reason: {response.finish_reason}. This may indicate an API error or "
+                f"unsupported model configuration."
+            )
+
         # Check if response contains only text
         has_non_text_content = False
+        has_any_content = False
         for message in response.messages:
-            for block in message.content:
-                if block.type not in ("text", "thinking"):
-                    has_non_text_content = True
-                    break
+            if message.content:  # Check if content list is not empty
+                has_any_content = True
+                for block in message.content:
+                    if block.type not in ("text", "thinking"):
+                        has_non_text_content = True
+                        break
             if has_non_text_content:
                 break
+
+        # Early validation: Check if all messages have empty content
+        if not has_any_content:
+            # Check if this is a media generation failure (NO_IMAGE, NO_AUDIO, etc.)
+            finish_reason_raw = response.provider_metadata.get("finish_reason_raw", "")
+            is_media_failure = any(x in finish_reason_raw for x in ["NO_IMAGE", "NO_AUDIO", "NO_VIDEO"])
+
+            if is_media_failure:
+                error_msg = (
+                    f"Gemini {response.model} failed to generate media content. "
+                    f"Finish reason: {finish_reason_raw}. "
+                    f"This typically indicates:\n"
+                    f"1. Content policy violation (prompt may violate safety guidelines)\n"
+                    f"2. Prompt not suitable for media generation\n"
+                    f"3. Model limitations or temporary API issues\n"
+                    f"Provider metadata: {response.provider_metadata}"
+                )
+            else:
+                error_msg = (
+                    f"Gemini response contains only empty messages. Model: {response.model}, "
+                    f"Messages: {len(response.messages)}, Finish reason: {response.finish_reason}. "
+                    f"This may indicate:\n"
+                    f"1. Image/audio generation model returning unsupported format\n"
+                    f"2. Safety filter blocking all content\n"
+                    f"3. Model configuration error\n"
+                    f"Provider metadata: {response.provider_metadata}"
+                )
+            raise ValueError(error_msg)
 
         # If response has images, audio, video, or tool calls, return full message dicts
         if has_non_text_content:
