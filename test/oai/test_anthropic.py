@@ -291,7 +291,7 @@ def test_extract_json_response(anthropic_client):
 
     with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
         anthropic_client._extract_json_response(no_json_response)
-        
+
     # Test case 5: Plain JSON without tags, using ThinkingBlock - SHOULD STILL PASS
     plain_response = Message(
         id="msg_123",
