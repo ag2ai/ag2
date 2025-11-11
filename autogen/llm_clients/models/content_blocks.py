@@ -146,13 +146,6 @@ class ReasoningContent(BaseContent):
     summary: str | None = None
 
 
-class ThinkingContent(BaseContent):
-    """Thinking process content (e.g., Anthropic thinking mode)."""
-
-    type: Literal["thinking"] = "thinking"
-    thinking: str
-
-
 class CitationContent(BaseContent):
     """Web search citation or reference."""
 
@@ -289,7 +282,6 @@ class ContentParser:
         "audio": AudioContent,
         "video": VideoContent,
         "reasoning": ReasoningContent,
-        "thinking": ThinkingContent,
         "citation": CitationContent,
         "tool_call": ToolCallContent,
         "tool_result": ToolResultContent,
@@ -354,7 +346,6 @@ ContentBlock = (
     | AudioContent
     | VideoContent
     | ReasoningContent
-    | ThinkingContent
     | CitationContent
     | ToolCallContent
     | ToolResultContent

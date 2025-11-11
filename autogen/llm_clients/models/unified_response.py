@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from .content_blocks import BaseContent, ReasoningContent, ThinkingContent
+from .content_blocks import BaseContent, ReasoningContent
 from .unified_message import UnifiedMessage
 
 
@@ -59,11 +59,6 @@ class UnifiedResponse(BaseModel):
     def reasoning(self) -> list[ReasoningContent]:
         """Quick access to reasoning blocks from all messages."""
         return [block for msg in self.messages for block in msg.get_reasoning()]
-
-    @property
-    def thinking(self) -> list[ThinkingContent]:
-        """Quick access to thinking blocks from all messages."""
-        return [block for msg in self.messages for block in msg.get_thinking()]
 
     def get_content_by_type(self, content_type: str) -> list[BaseContent]:
         """Get all content blocks of a specific type across all messages.

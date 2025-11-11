@@ -7,7 +7,7 @@ Unified message format supporting all provider features.
 """
 
 from enum import Enum
-from typing import Any, ClassVar
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,6 @@ from .content_blocks import (
     ContentBlock,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
 )
 
@@ -76,8 +75,7 @@ class UnifiedMessage(BaseModel):
 
     This message format can represent:
     - Text, images, audio, video
-    - Reasoning blocks (OpenAI o1/o3)
-    - Thinking blocks (Anthropic)
+    - Reasoning blocks (OpenAI o1/o3, Anthropic)
     - Citations (web search results)
     - Tool calls and results
     - Any future content types via GenericContent
@@ -88,9 +86,6 @@ class UnifiedMessage(BaseModel):
     - String literal typing for known roles ("user", "assistant", "system", "tool")
     - Flexible string fallback for unknown/future provider-specific roles
     """
-
-    # Known standard roles (for reference and validation)
-    STANDARD_ROLES: ClassVar[list[str]] = ["user", "assistant", "system", "tool"]
 
     role: UserRoleType  # Type-safe for known roles, flexible for unknown
     content: list[ContentBlock]  # Rich, typed content blocks
@@ -107,17 +102,11 @@ class UnifiedMessage(BaseModel):
                 text_parts.append(block.text)
             elif isinstance(block, ReasoningContent):
                 text_parts.append(block.reasoning)
-            elif isinstance(block, ThinkingContent):
-                text_parts.append(block.thinking)
         return " ".join(text_parts)
 
     def get_reasoning(self) -> list[ReasoningContent]:
         """Extract reasoning blocks."""
         return [b for b in self.content if isinstance(b, ReasoningContent)]
-
-    def get_thinking(self) -> list[ThinkingContent]:
-        """Extract thinking blocks."""
-        return [b for b in self.content if isinstance(b, ThinkingContent)]
 
     def get_citations(self) -> list[CitationContent]:
         """Extract citations."""
@@ -150,4 +139,5 @@ class UnifiedMessage(BaseModel):
         # Handle both UserRoleEnum and string types
         if isinstance(self.role, UserRoleEnum):
             return True  # All enum values are standard roles
-        return self.role in self.STANDARD_ROLES
+        # Check if string role matches any enum value
+        return self.role in [e.value for e in UserRoleEnum]

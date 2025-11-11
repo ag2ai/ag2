@@ -17,7 +17,6 @@ from autogen.llm_clients.models import (
     ImageContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
     ToolResultContent,
     VideoContent,
@@ -184,16 +183,6 @@ class TestReasoningContent:
         assert content.summary == "Analyzed systematically"
 
 
-class TestThinkingContent:
-    """Test ThinkingContent block."""
-
-    def test_create_thinking_content(self):
-        """Test creating a thinking content block."""
-        content = ThinkingContent(type="thinking", thinking="Hmm, interesting question...")
-        assert content.type == "thinking"
-        assert content.thinking == "Hmm, interesting question..."
-
-
 class TestCitationContent:
     """Test CitationContent block."""
 
@@ -348,13 +337,6 @@ class TestContentParser:
         assert content.reasoning == "Let me think..."
         assert content.summary == "Analyzed"
 
-    def test_parse_known_thinking_type(self):
-        """Test parsing known thinking type."""
-        data = {"type": "thinking", "thinking": "Hmm..."}
-        content = ContentParser.parse(data)
-        assert isinstance(content, ThinkingContent)
-        assert content.thinking == "Hmm..."
-
     def test_parse_known_citation_type(self):
         """Test parsing known citation type."""
         data = {"type": "citation", "url": "https://example.com", "title": "Title", "snippet": "Snippet"}
@@ -417,7 +399,6 @@ class TestContentParser:
             ({"type": "audio", "audio_url": "url"}, AudioContent),
             ({"type": "video", "video_url": "url"}, VideoContent),
             ({"type": "reasoning", "reasoning": "test"}, ReasoningContent),
-            ({"type": "thinking", "thinking": "test"}, ThinkingContent),
             (
                 {"type": "citation", "url": "url", "title": "title", "snippet": "snippet"},
                 CitationContent,
@@ -442,7 +423,6 @@ class TestContentBlockInteroperability:
             AudioContent(type="audio", audio_url="url"),
             VideoContent(type="video", video_url="url"),
             ReasoningContent(type="reasoning", reasoning="test"),
-            ThinkingContent(type="thinking", thinking="test"),
             CitationContent(type="citation", url="url", title="title", snippet="snippet"),
             ToolCallContent(type="tool_call", id="id", name="name", arguments="{}"),
             ToolResultContent(type="tool_result", tool_call_id="id", output="output"),

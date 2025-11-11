@@ -9,7 +9,6 @@ from autogen.llm_clients.models import (
     GenericContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
     UnifiedMessage,
 )
@@ -75,14 +74,6 @@ class TestUnifiedMessageCreation:
             message = UnifiedMessage(role=role, content=[content])
             assert message.role == role
 
-    def test_standard_roles_constant(self):
-        """Test that STANDARD_ROLES constant is defined."""
-        assert hasattr(UnifiedMessage, "STANDARD_ROLES")
-        assert "user" in UnifiedMessage.STANDARD_ROLES
-        assert "assistant" in UnifiedMessage.STANDARD_ROLES
-        assert "system" in UnifiedMessage.STANDARD_ROLES
-        assert "tool" in UnifiedMessage.STANDARD_ROLES
-
     def test_is_standard_role_method(self):
         """Test is_standard_role() method."""
         # Standard roles
@@ -125,16 +116,6 @@ class TestUnifiedMessageTextExtraction:
         message = UnifiedMessage(role="assistant", content=contents)
 
         assert message.get_text() == "Step 1: analyze Conclusion"
-
-    def test_get_text_from_thinking_content(self):
-        """Test extracting text from thinking content."""
-        contents = [
-            ThinkingContent(type="thinking", thinking="Hmm, interesting..."),
-            TextContent(type="text", text="Answer"),
-        ]
-        message = UnifiedMessage(role="assistant", content=contents)
-
-        assert message.get_text() == "Hmm, interesting... Answer"
 
     def test_get_text_ignores_non_text_content(self):
         """Test that get_text() ignores non-text content blocks."""
@@ -190,38 +171,6 @@ class TestUnifiedMessageReasoningExtraction:
 
         reasoning_blocks = message.get_reasoning()
         assert len(reasoning_blocks) == 0
-
-
-class TestUnifiedMessageThinkingExtraction:
-    """Test get_thinking() method."""
-
-    def test_get_thinking_single_block(self):
-        """Test extracting a single thinking block."""
-        thinking = ThinkingContent(type="thinking", thinking="Hmm...")
-        message = UnifiedMessage(role="assistant", content=[thinking])
-
-        thinking_blocks = message.get_thinking()
-        assert len(thinking_blocks) == 1
-        assert thinking_blocks[0].thinking == "Hmm..."
-
-    def test_get_thinking_multiple_blocks(self):
-        """Test extracting multiple thinking blocks."""
-        contents = [
-            ThinkingContent(type="thinking", thinking="First thought"),
-            ThinkingContent(type="thinking", thinking="Second thought"),
-        ]
-        message = UnifiedMessage(role="assistant", content=contents)
-
-        thinking_blocks = message.get_thinking()
-        assert len(thinking_blocks) == 2
-
-    def test_get_thinking_no_blocks(self):
-        """Test get_thinking() when no thinking blocks present."""
-        content = TextContent(type="text", text="No thinking")
-        message = UnifiedMessage(role="assistant", content=[content])
-
-        thinking_blocks = message.get_thinking()
-        assert len(thinking_blocks) == 0
 
 
 class TestUnifiedMessageCitationExtraction:

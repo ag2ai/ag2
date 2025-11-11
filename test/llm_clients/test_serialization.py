@@ -11,7 +11,6 @@ from autogen.llm_clients.models import (
     GenericContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
@@ -37,14 +36,6 @@ class TestContentBlockSerialization:
         assert content_dict["type"] == "reasoning"
         assert content_dict["reasoning"] == "Step 1: analyze"
         assert content_dict["summary"] == "Analysis"
-
-    def test_thinking_content_serialization(self):
-        """Test ThinkingContent serialization."""
-        content = ThinkingContent(type="thinking", thinking="Hmm...")
-        content_dict = content.model_dump()
-
-        assert content_dict["type"] == "thinking"
-        assert content_dict["thinking"] == "Hmm..."
 
     def test_citation_content_serialization(self):
         """Test CitationContent serialization."""
