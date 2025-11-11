@@ -482,6 +482,15 @@ class SwarmableRealtimeAgent(SwarmableAgent):
             name="answer_task_question", description="Answer question from the task"
         )(self.set_answer)
 
+        registered_tool_names = set()
+        all_agents = [self._initial_agent] + self._agents
+
+        for agent in all_agents:
+            for tool in agent.tools:
+                if tool.name not in registered_tool_names:
+                    realtime_agent.register_realtime_function(name=tool.name, description=tool.description)(tool.func)
+                    registered_tool_names.add(tool.name)
+
         async def on_observers_ready() -> None:
             self._realtime_agent._tg.start_soon(
                 asyncify(
