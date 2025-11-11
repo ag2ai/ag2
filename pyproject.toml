@@ -63,7 +63,7 @@ dependencies = [
 
 [project.optional-dependencies]
 a2a = [
-    "a2a-sdk[http-server]>=0.3.7,<0.4",
+    "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
 
 flaml = [

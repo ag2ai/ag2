@@ -13,6 +13,7 @@ Consider using A2A when:
 * The agent is maintained by a **different team or organization**
 * You need to connect agents written in **different programming languages or agent frameworks**
 * You want to enforce a **strong, formal contract** (the A2A protocol) between your system's components
+* You need **Human in the Loop (HITL)** support for interactive workflows across distributed agents
 
 !!! note
     We are using official [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to implement A2A in AG2.
@@ -34,8 +35,6 @@ agent = ConversableAgent(
     name="python_coder",
     system_message="You are an expert Python developer...",
     llm_config=llm_config,
-    # set human_input_mode "NEVER" to avoid asking for human input on server side
-    human_input_mode="NEVER",
 )
 
 # Create A2A server

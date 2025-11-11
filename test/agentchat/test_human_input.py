@@ -43,7 +43,3 @@ def test_get_human_input(credentials_gpt_4o_mini: Credentials):
 
     # Assert that custom_a_get_human_input was called at least once
     user_proxy.get_human_input.assert_called()
-
-
-if __name__ == "__main__":
-    test_get_human_input()
