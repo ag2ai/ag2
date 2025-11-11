@@ -67,19 +67,6 @@ class ImageContent(BaseContent):
     data_uri: str | None = None
     detail: Literal["auto", "low", "high"] | None = None
 
-    def model_post_init(self, _context: Any) -> None:
-        """Validate that either image_url or data_uri is provided."""
-        if self.image_url is None and self.data_uri is None:
-            raise ValueError("Either image_url or data_uri must be provided")
-        if self.image_url is not None and self.data_uri is not None:
-            # If both provided, prioritize data_uri and clear image_url
-            warnings.warn(
-                "Both image_url and data_uri provided. Using data_uri and ignoring image_url.",
-                UserWarning,
-                stacklevel=2,
-            )
-            self.image_url = None
-
 
 class AudioContent(BaseContent):
     """Audio content with optional transcript.
@@ -96,19 +83,6 @@ class AudioContent(BaseContent):
     data_uri: str | None = None
     transcript: str | None = None
 
-    def model_post_init(self, _context: Any) -> None:
-        """Validate that either audio_url or data_uri is provided."""
-        if self.audio_url is None and self.data_uri is None:
-            raise ValueError("Either audio_url or data_uri must be provided")
-        if self.audio_url is not None and self.data_uri is not None:
-            # If both provided, prioritize data_uri and clear audio_url
-            warnings.warn(
-                "Both audio_url and data_uri provided. Using data_uri and ignoring audio_url.",
-                UserWarning,
-                stacklevel=2,
-            )
-            self.audio_url = None
-
 
 class VideoContent(BaseContent):
     """Video content block.
@@ -123,19 +97,6 @@ class VideoContent(BaseContent):
     type: Literal["video"] = "video"
     video_url: str | None = None
     data_uri: str | None = None
-
-    def model_post_init(self, _context: Any) -> None:
-        """Validate that either video_url or data_uri is provided."""
-        if self.video_url is None and self.data_uri is None:
-            raise ValueError("Either video_url or data_uri must be provided")
-        if self.video_url is not None and self.data_uri is not None:
-            # If both provided, prioritize data_uri and clear video_url
-            warnings.warn(
-                "Both video_url and data_uri provided. Using data_uri and ignoring video_url.",
-                UserWarning,
-                stacklevel=2,
-            )
-            self.video_url = None
 
 
 class ReasoningContent(BaseContent):

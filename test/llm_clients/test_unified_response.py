@@ -147,13 +147,13 @@ class TestUnifiedResponseTextProperty:
         assert response.text == "Let me think... The answer is 42"
 
     def test_text_property_multiple_messages(self):
-        """Test text property with multiple messages (returns first message text)."""
+        """Test text property with multiple messages (returns text from all messages)."""
         message1 = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="First message")])
         message2 = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="Second message")])
         response = UnifiedResponse(id="resp-123", model="gpt-4", provider="openai", messages=[message1, message2])
 
-        # Should return text from first message only
-        assert response.text == "First message"
+        # Should return text from all messages joined with space
+        assert response.text == "First message Second message"
 
     def test_text_property_empty_messages(self):
         """Test text property with no messages."""

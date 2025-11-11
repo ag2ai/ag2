@@ -5,11 +5,13 @@
 """Tests for UnifiedMessage."""
 
 from autogen.llm_clients.models import (
+    AudioContent,
     CitationContent,
     GenericContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
+    ToolResultContent,
     UnifiedMessage,
 )
 
@@ -117,8 +119,8 @@ class TestUnifiedMessageTextExtraction:
 
         assert message.get_text() == "Step 1: analyze Conclusion"
 
-    def test_get_text_ignores_non_text_content(self):
-        """Test that get_text() ignores non-text content blocks."""
+    def test_get_text_extracts_from_multiple_content_types(self):
+        """Test that get_text() extracts text from various content types."""
         contents = [
             TextContent(type="text", text="Hello"),
             CitationContent(type="citation", url="url", title="title", snippet="snippet"),
@@ -126,16 +128,31 @@ class TestUnifiedMessageTextExtraction:
         ]
         message = UnifiedMessage(role="assistant", content=contents)
 
-        assert message.get_text() == "Hello"
+        assert message.get_text() == "Hello citation: title tool call name: name tool call arguments: {}"
 
     def test_get_text_empty_content(self):
-        """Test get_text() with no text content blocks."""
+        """Test get_text() with content blocks that don't provide text."""
         contents = [
-            CitationContent(type="citation", url="url", title="title", snippet="snippet"),
+            CitationContent(type="citation", url="url", title="", snippet="snippet"),  # Empty title
         ]
         message = UnifiedMessage(role="assistant", content=contents)
 
         assert message.get_text() == ""
+
+    def test_get_text_from_all_content_types(self):
+        """Test get_text() extracts from all supported content types."""
+        contents = [
+            TextContent(type="text", text="Plain text"),
+            ReasoningContent(type="reasoning", reasoning="Reasoning step", summary="Summary"),
+            AudioContent(type="audio", audio_url="url", transcript="Audio transcript"),
+            CitationContent(type="citation", url="url", title="Citation title", snippet="snippet"),
+            ToolResultContent(type="tool_result", tool_call_id="id", output="Tool output"),
+            ToolCallContent(type="tool_call", id="id", name="tool_name", arguments='{"arg": "value"}'),
+        ]
+        message = UnifiedMessage(role="assistant", content=contents)
+
+        expected = 'Plain text Reasoning step audio transcript:Audio transcript citation: Citation title tool result: Tool output tool call name: tool_name tool call arguments: {"arg": "value"}'
+        assert message.get_text() == expected
 
 
 class TestUnifiedMessageReasoningExtraction:

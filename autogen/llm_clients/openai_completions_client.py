@@ -20,10 +20,18 @@ Note: This uses the Chat Completions API, NOT the newer Responses API (client.re
 
 from typing import Any
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as openai_result:
     from openai import OpenAI
-except ImportError:
-    OpenAI = None  # Will raise error in __init__ if not installed
+
+if openai_result.is_successful:
+    openai_import_exception: ImportError | None = None
+else:
+    OpenAI = None  # type: ignore[assignment]
+    openai_import_exception = ImportError(
+        "Please install openai to use OpenAICompletionsClient. Install with: pip install openai"
+    )
 
 from ..llm_config.client import ModelClient
 from .models import (
@@ -88,10 +96,10 @@ class OpenAICompletionsClient(ModelClient):
             timeout: Request timeout in seconds
             **kwargs: Additional arguments passed to OpenAI client
         """
-        if OpenAI is None:
-            raise ImportError("OpenAI package not installed. Install with: pip install openai")
+        if openai_import_exception is not None:
+            raise openai_import_exception
 
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)  # type: ignore[misc]
         self._cost_per_token = {
             # GPT-5 series - Latest flagship models (per million tokens)
             "gpt-5": {"prompt": 1.25 / 1_000_000, "completion": 10.00 / 1_000_000},
@@ -168,10 +176,9 @@ class OpenAICompletionsClient(ModelClient):
             message_obj = choice.message
 
             # Extract reasoning if present (o1/o3 models)
-            if hasattr(message_obj, "reasoning") and message_obj.reasoning:
+            if getattr(message_obj, "reasoning", None):
                 content_blocks.append(
                     ReasoningContent(
-                        type="reasoning",
                         reasoning=message_obj.reasoning,
                         summary=None,
                     )
@@ -194,7 +201,6 @@ class OpenAICompletionsClient(ModelClient):
                 for tool_call in message_obj.tool_calls:
                     content_blocks.append(
                         ToolCallContent(
-                            type="tool_call",
                             id=tool_call.id,
                             name=tool_call.function.name,
                             arguments=tool_call.function.arguments,
@@ -207,7 +213,6 @@ class OpenAICompletionsClient(ModelClient):
                 for citation in message_obj.citations:
                     content_blocks.append(
                         CitationContent(
-                            type="citation",
                             url=citation.get("url", ""),
                             title=citation.get("title", ""),
                             snippet=citation.get("snippet", ""),

@@ -12,12 +12,14 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .content_blocks import (
+    AudioContent,
     BaseContent,
     CitationContent,
     ContentBlock,
     ReasoningContent,
     TextContent,
     ToolCallContent,
+    ToolResultContent,
 )
 
 
@@ -102,6 +104,16 @@ class UnifiedMessage(BaseModel):
                 text_parts.append(block.text)
             elif isinstance(block, ReasoningContent):
                 text_parts.append(block.reasoning)
+            elif isinstance(block, AudioContent) and block.transcript:
+                text_parts.append("audio transcript:" + block.transcript)
+            elif isinstance(block, CitationContent) and block.title:
+                text_parts.append("citation: " + block.title)
+            elif isinstance(block, ToolResultContent):
+                text_parts.append("tool result: " + block.output)
+            elif isinstance(block, ToolCallContent):
+                text_parts.append("tool call name: " + block.name)
+                text_parts.append("tool call arguments: " + block.arguments)
+
         return " ".join(text_parts)
 
     def get_reasoning(self) -> list[ReasoningContent]:

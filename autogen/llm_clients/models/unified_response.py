@@ -18,11 +18,11 @@ class UnifiedResponse(BaseModel):
     """Provider-agnostic response format.
 
     This response format can represent responses from any LLM provider while
-    preserving all provider-specific features (reasoning, thinking, citations, etc.).
+    preserving all provider-specific features (reasoning, citations, etc.).
 
     Features:
     - Provider agnostic (OpenAI, Anthropic, Gemini, etc.)
-    - Rich content blocks (text, images, reasoning, thinking, citations)
+    - Rich content blocks (text, images, reasoning, citations)
     - Usage tracking and cost calculation
     - Provider-specific metadata preservation
     - Serializable (no attached functions)
@@ -50,9 +50,9 @@ class UnifiedResponse(BaseModel):
 
     @property
     def text(self) -> str:
-        """Quick access to text content from first message."""
+        """Quick access to text content from all messages."""
         if self.messages:
-            return self.messages[0].get_text()
+            return " ".join([msg.get_text() for msg in self.messages])
         return ""
 
     @property
