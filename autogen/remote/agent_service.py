@@ -10,7 +10,10 @@ from autogen.agentchat.conversable_agent import normilize_message_to_oai
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.agentchat.group.targets.transition_target import TransitionTarget
+from autogen.agentchat.group.targets.transition_target import AskUserTarget, TransitionTarget
+from autogen.events.agent_events import TerminationAndHumanReplyNoInputEvent, TerminationEvent, UsingAutoReplyEvent
+from autogen.events.base_event import BaseEvent
+from autogen.io.base import AsyncIOStreamProtocol
 
 from .protocol import RemoteService, RequestMessage, ResponseMessage, get_tool_names
 
@@ -34,10 +37,14 @@ class AgentService(RemoteService):
         while True:
             messages = state.messages + local_history
 
-            # TODO: catch ask user input event
-            is_final, _ = await self.agent.a_check_termination_and_human_reply(messages)
-            if is_final:
-                break
+            stream = HITLStream()
+            await self.agent.a_check_termination_and_human_reply(messages, iostream=stream)
+            if stream.is_input_required:
+                return ResponseMessage(
+                    messages=local_history,
+                    context=context_variables.data or None,
+                    input_required=stream.input_prompt,
+                )
 
             reply = await self.agent.a_generate_reply(
                 messages,
@@ -66,7 +73,9 @@ class AgentService(RemoteService):
             if state.client_tool_names.intersection(called_tools):
                 break  # return client tool execution command back to client
 
-            tool_result, updated_context_variables = self._try_execute_local_tool(tool_executor, out_message)
+            tool_result, updated_context_variables, return_to_user = self._try_execute_local_tool(
+                tool_executor, out_message
+            )
 
             if updated_context_variables:
                 context_variables.update(updated_context_variables.to_dict())
@@ -74,13 +83,24 @@ class AgentService(RemoteService):
             should_continue, out_message = self._add_message_to_local_history(tool_result, role="tool")
             if out_message:
                 local_history.append(out_message)
+
+            if return_to_user:
+                return ResponseMessage(
+                    messages=local_history,
+                    context=context_variables.data or None,
+                    input_required="Please, provide additional information:\n",
+                )
+
             if not should_continue:
                 break
 
         if not local_history:
             return None
 
-        return ResponseMessage(messages=local_history, context=context_variables.data or None)
+        return ResponseMessage(
+            messages=local_history,
+            context=context_variables.data or None,
+        )
 
     def _add_message_to_local_history(
         self, message: str | dict[str, Any] | None, role: str
@@ -110,19 +130,22 @@ class AgentService(RemoteService):
         self,
         tool_executor: GroupToolExecutor,
         tool_message: dict[str, Any],
-    ) -> tuple[dict[str, Any] | None, ContextVariables | None]:
+    ) -> tuple[dict[str, Any] | None, ContextVariables | None, bool]:
         tool_result: dict[str, Any] | None = None
         updated_context_variables: ContextVariables | None = None
 
         if "tool_calls" in tool_message:
             _, tool_result = tool_executor.generate_tool_calls_reply([tool_message])
             if tool_result is None:
-                return tool_result, updated_context_variables
+                return tool_result, updated_context_variables, False
 
             if "tool_responses" in tool_result:
                 # TODO: catch handoffs
                 for tool_response in tool_result["tool_responses"]:
                     content = tool_response["content"]
+
+                    if isinstance(content, AskUserTarget):
+                        return tool_result, updated_context_variables, True
 
                     if isinstance(content, TransitionTarget):
                         warnings.warn(
@@ -130,13 +153,45 @@ class AgentService(RemoteService):
                         )
 
                     elif isinstance(content, ReplyResult):
+                        if content.context_variables:
+                            updated_context_variables = content.context_variables
+                            tool_response["content"] = content.message
+
+                        if isinstance(content.target, AskUserTarget):
+                            return tool_result, updated_context_variables, True
+
                         if content.target:
                             warnings.warn(
                                 f"Tool {self.agent.name} returned a target, which is not supported in remote mode"
                             )
 
-                        if content.context_variables:
-                            updated_context_variables = content.context_variables
-                            tool_response["content"] = content.message
+        return tool_result, updated_context_variables, False
 
-        return tool_result, updated_context_variables
+
+class HITLStream(AsyncIOStreamProtocol):
+    def __init__(self) -> None:
+        self.input_prompt = ""
+
+    @property
+    def is_input_required(self) -> bool:
+        return bool(self.input_prompt)
+
+    async def input(self, prompt: str = "", *, password: bool = False) -> str:
+        self.input_prompt = prompt
+        return ""
+
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+        raise NotImplementedError("HITLStream does not support printing")
+
+    def send(self, message: BaseEvent) -> None:
+        if isinstance(
+            message,
+            (
+                UsingAutoReplyEvent,
+                TerminationAndHumanReplyNoInputEvent,
+                TerminationEvent,
+            ),
+        ):
+            return
+
+        raise NotImplementedError("HITLStream does not support sending messages")

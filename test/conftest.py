@@ -296,7 +296,7 @@ def credentials_gemini_flash_exp() -> Credentials:
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_credentials(
         "ANTHROPIC_API_KEY",
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         api_type="anthropic",
         filter_dict={"tags": ["anthropic-claude-sonnet"]},
     )
