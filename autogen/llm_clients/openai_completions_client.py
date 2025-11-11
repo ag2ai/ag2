@@ -191,7 +191,7 @@ class OpenAICompletionsClient(ModelClient):
                 content_blocks.append(TextContent(type="text", text=message_obj.content))
 
             # Extract tool calls
-            if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:
+            if getattr(message_obj, "tool_calls", None):
                 for tool_call in message_obj.tool_calls:
                     content_blocks.append(
                         ToolCallContent(
@@ -203,7 +203,7 @@ class OpenAICompletionsClient(ModelClient):
 
             # Extract citations if present (future-proofing)
             # Note: Not currently available in Chat Completions API
-            if hasattr(message_obj, "citations") and message_obj.citations:
+            if getattr(message_obj, "citations", None):
                 for citation in message_obj.citations:
                     content_blocks.append(
                         CitationContent(
@@ -234,7 +234,7 @@ class OpenAICompletionsClient(ModelClient):
 
         # Extract usage information
         usage = {}
-        if hasattr(openai_response, "usage") and openai_response.usage:
+        if getattr(message_obj, "usage", None):
             usage = {
                 "prompt_tokens": openai_response.usage.prompt_tokens,
                 "completion_tokens": openai_response.usage.completion_tokens,
