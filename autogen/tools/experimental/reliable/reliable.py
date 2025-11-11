@@ -803,14 +803,30 @@ class ReliableTool(Tool):
     def _validator_structured_output_hook(
         self, sender: Agent, message: dict[str, Any] | str, recipient: Agent, silent: bool
     ) -> dict[str, Any] | str:
-        if not isinstance(message, str):
-            logger.error(
-                f"Validator Hook: Expected a JSON string message from LLM, but got {type(message)}. Content: {str(message)[:200]}"
-            )
-            # This indicates a misconfiguration or unexpected LLM output format.
-            raise TypeError(f"Validator hook expected str from LLM, got {type(message)}")
+        """Hook to process the message from the LLM before validating the structured output.
 
-        validation_result_obj: ValidationResult = ValidationResult.model_validate_json(message)
+        Args:
+            sender: The agent sending the message.
+            message: The message from the LLM.
+            recipient: The agent receiving the message.
+            silent: Whether the message is being sent silently.
+
+        Returns:
+            The processed message.
+        """
+        # Handle both dict and str formats for backward compatibility
+        if isinstance(message, dict):
+            # Message is already normalized to dict, extract content
+            content = message.get("content", "")
+            if not isinstance(content, str):
+                raise TypeError(f"Validator hook expected str content in dict message, got {type(content)}")
+            message_str = content
+        elif isinstance(message, str):
+            message_str = message
+        else:
+            raise TypeError(f"Validator hook expected str or dict from LLM, got {type(message)}")
+
+        validation_result_obj: ValidationResult = ValidationResult.model_validate_json(message_str)
         status = "PASSED" if validation_result_obj.validation_result else "FAILED"
         log_level = logging.INFO if status == "PASSED" else logging.WARNING
         logger.log(

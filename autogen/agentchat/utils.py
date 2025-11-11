@@ -7,6 +7,7 @@
 import re
 from typing import Any
 
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from .agent import Agent
 
@@ -204,3 +205,112 @@ def _reconstruct_attributes(attrs: list[str]) -> list[str]:
             else:
                 reconstructed.append(attr)
     return reconstructed
+
+
+def normalize_message_to_list(
+    message: str | dict[str, Any] | list[dict[str, Any]], role: str = "assistant"
+) -> list[dict[str, Any]]:
+    """Normalize message to list[dict] format for consistent API.
+
+    This method ensures all messages are in the standardized list[dict[str, Any]] format:
+    - str inputs are converted to [{"content": str, "role": role}]
+    - dict inputs are converted to [dict]
+    - list inputs are returned as-is
+
+    Args:
+        message: The message to normalize (str, dict, or list of dicts).
+        role: The role of the message, can be "assistant" or "user".
+    Returns:
+        A list of message dictionaries.
+    """
+    if isinstance(message, str):
+        return [{"content": message, "role": role}]
+    elif isinstance(message, dict):
+        return [message]
+    return message
+
+
+def normalize_message_to_oai(
+    message: dict[str, Any] | str,
+    name: str,
+    role: str = "assistant",
+    preserve_custom_fields: bool = True,
+) -> tuple[bool, dict[str, Any]]:
+    """normalize a message to an oai message.
+
+    Args:
+        message: the message to normalize.
+        name: the name of the message author.
+        role: the role of the message.
+        preserve_custom_fields: whether to preserve custom fields. example: tool_calls, tool_responses, tool_call_id, name, context, etc.
+
+    Returns:
+        A tuple containing a boolean indicating whether the message is valid and the normalized oai message.
+    """
+    message = message_to_dict(message)
+    # create oai message to be appended to the oai conversation that can be passed to oai directly.
+
+    if preserve_custom_fields:
+        # Preserve all fields for local storage (hooks can add metadata)
+        # but filter out None values (except content) to avoid breaking code that checks "if key in dict"
+        oai_message = {k: v for k, v in message.items() if v is not None or k == "content"}
+    else:
+        # Strict whitelist for remote/serialization contexts
+        oai_message = {
+            k: message[k]
+            for k in ("content", "function_call", "tool_responses", "tool_call_id", "name", "context")
+            if k in message and message[k] is not None
+        }
+
+    if tools := message.get("tool_calls"):  # check for [], None and missed key
+        oai_message["tool_calls"] = tools
+
+    if "content" not in oai_message:
+        if "function_call" in oai_message or "tool_calls" in oai_message:
+            oai_message["content"] = None  # if only function_call is provided, content will be set to None.
+        else:
+            return False, oai_message
+
+    if message.get("role") in ["function", "tool"]:
+        oai_message["role"] = message.get("role")
+        if "tool_responses" in oai_message:
+            for tool_response in oai_message["tool_responses"]:
+                content_value = tool_response.get("content")
+                tool_response["content"] = (
+                    content_str(content_value)
+                    if isinstance(content_value, (str, list)) or content_value is None
+                    else str(content_value)
+                )
+    elif "override_role" in message:
+        # If we have a direction to override the role then set the
+        # role accordingly. Used to customise the role for the
+        # select speaker prompt.
+        oai_message["role"] = message.get("override_role")
+    else:
+        oai_message["role"] = role
+
+    if oai_message.get("function_call", False) or oai_message.get("tool_calls", False):
+        oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
+    elif "name" not in oai_message:
+        # If we don't have a name field, append it
+        oai_message["name"] = name
+
+    return True, oai_message
+
+
+def message_to_dict(message: dict[str, Any] | str) -> dict:  # type: ignore[type-arg]
+    """Convert a message to a dictionary.
+
+    Args:
+        message(dict[str, Any] | str): The message to convert to a dictionary.
+
+    Returns:
+        A dictionary representing the message.
+    The message can be a string or a dictionary. The string will be put in the "content" field of the new dictionary.
+    """
+    if isinstance(message, str):
+        return {"content": message}
+    elif isinstance(message, dict):
+        return message
+    else:
+        return dict(message)

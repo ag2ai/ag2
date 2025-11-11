@@ -40,15 +40,16 @@ class Agent(Protocol):
 
     def send(
         self,
-        message: dict[str, Any] | str,
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
-        """Send a message to another agent.
+        """Send a list[message] to another agent.
 
         Args:
-            message (dict or str): the message to send. If a dict, it should be
-                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            message (list[dict[str, Any]], str, or dict): the message to send.
+                - If a list of dicts, should be JSON-serializable and follow OpenAI's ChatCompletion schema.
+                - If a str or dict, will be automatically normalized to list format.
             recipient (Agent): the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
@@ -56,15 +57,15 @@ class Agent(Protocol):
 
     async def a_send(
         self,
-        message: dict[str, Any] | str,
+        message: list[dict[str, Any]] | str | dict[str, Any],
         recipient: "Agent",
         request_reply: bool | None = None,
     ) -> None:
-        """(Async) Send a message to another agent.
-
+        """(Async) Send a list[message] to another agent.
         Args:
-            message (dict or str): the message to send. If a dict, it should be
-                a JSON-serializable and follows the OpenAI's ChatCompletion schema.
+            message (list[dict[str, Any]], str, or dict): the message to send.
+                - If a list of dicts, should be JSON-serializable and follow OpenAI's ChatCompletion schema.
+                - If a str or dict, will be automatically normalized to list format.
             recipient (Agent): the recipient of the message.
             request_reply (bool): whether to request a reply from the recipient.
         """
@@ -72,32 +73,36 @@ class Agent(Protocol):
 
     def receive(
         self,
-        message: dict[str, Any] | str,
+        message: list[dict[str, Any]] | dict[str, Any] | str,
         sender: "Agent",
         request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
-        """Receive a message from another agent.
+        """Receive a list[message], dict[str, Any], or str from another agent.
 
         Args:
-            message (dict or str): the message received. If a dict, it should be
+            message (list[messages], dict[str, Any], or str): the message received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.
+            silent (bool): whether to print the message received.
         """
 
     async def a_receive(
         self,
-        message: dict[str, Any] | str,
+        message: list[dict[str, Any]] | dict[str, Any] | str,
         sender: "Agent",
         request_reply: bool | None = None,
+        silent: bool | None = False,
     ) -> None:
-        """(Async) Receive a message from another agent.
+        """(Async) Receive a list[message], dict[str, Any], or str from another agent.
 
         Args:
-            message (dict or str): the message received. If a dict, it should be
+            message (list[messages], dict[str, Any], or str): the message received. If a list of messages, it should be
                 a JSON-serializable and follows the OpenAI's ChatCompletion schema.
             sender (Agent): the sender of the message.
             request_reply (bool): whether the sender requests a reply.
+            silent (bool): whether to print the message received.
         """
         ...
 
@@ -109,7 +114,7 @@ class Agent(Protocol):
         """Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict[str, Any]]): a list of messages received from other agents.
+            messages (list[dict[str, Any]]): a list of messages received from other agents. can be a single message.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.
@@ -127,7 +132,7 @@ class Agent(Protocol):
         """(Async) Generate a reply based on the received messages.
 
         Args:
-            messages (list[dict[str, Any]]): a list of messages received from other agents.
+            messages (list[dict[str, Any]]): a list of messages received from other agents. can be a single message.
                 The messages are dictionaries that are JSON-serializable and
                 follows the OpenAI's ChatCompletion schema.
             sender: sender of an Agent instance.

@@ -13,9 +13,10 @@ from typing import Annotated, Literal, TypeVar
 import pytest
 
 import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
+from autogen import AssistantAgent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent, initiate_chats
 from autogen.agentchat.chat import _post_process_carryover_item
 from autogen.import_utils import run_for_optional_imports
+from autogen.tools import tool
 from test.credentials import Credentials
 from test.marks import credentials_all_llms
 from test.utils import suppress_gemini_resource_exhausted
@@ -42,9 +43,11 @@ def tasks_work_dir() -> Generator[str, None, None]:
 def test_chat_messages_for_summary():
     assistant = UserProxyAgent(name="assistant", human_input_mode="NEVER", code_execution_config={"use_docker": False})
     user = UserProxyAgent(name="user", human_input_mode="NEVER", code_execution_config={"use_docker": False})
+    user.send([{"content": "What is the capital of France?", "role": "user"}], assistant)
     user.send("What is the capital of France?", assistant)
+    user.send({"content": "What is the capital of France?", "role": "user"}, assistant)
     messages = assistant.chat_messages_for_summary(user)
-    assert len(messages) == 1
+    assert len(messages) == 3
 
     groupchat = GroupChat(agents=[user, assistant], messages=[], max_round=2, speaker_selection_method="round_robin")
     manager = GroupChatManager(
@@ -631,6 +634,79 @@ def test_post_process_carryover_item():
     )
     carryover_item = "How can I help you?"
     assert _post_process_carryover_item(carryover_item) == carryover_item, "Incorrect carryover postprocessing"
+
+
+# Add at the end of the file
+@tool(name="calculator", description="Calculator")
+def calculator(operation: str, a: float, b: float) -> float:
+    ops = {"add": a + b, "multiply": a * b}
+    return ops.get(operation, 0)
+
+
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+def test_complex_multi_turn_conversation_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Integration test: complex multi-turn conversation with initiate_group_chat."""
+    from autogen.agentchat import initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    complex_messages = [
+        {"role": "user", "content": "Hello, I need help with multiple tasks"},
+        {"role": "assistant", "content": "I'm here to help!"},
+        {"role": "user", "content": "Calculate 50 * 8"},
+    ]
+
+    result, context, last_agent = initiate_group_chat(pattern=pattern, messages=complex_messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@run_for_optional_imports("openai", "openai")
+async def test_complex_multi_turn_conversation_async_integration(credentials_gpt_4o_mini: Credentials) -> None:
+    """Async integration test: complex multi-turn conversation with a_initiate_group_chat."""
+    from autogen.agentchat import a_initiate_group_chat
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    llm_config = credentials_gpt_4o_mini.llm_config
+
+    triage_agent = ConversableAgent("triage_agent", llm_config=llm_config)
+    math_agent = ConversableAgent("math_agent", llm_config=llm_config)
+    weather_agent = ConversableAgent("weather_agent", llm_config=llm_config)
+    user = ConversableAgent("user", llm_config=llm_config, human_input_mode="NEVER")
+
+    pattern = AutoPattern(
+        initial_agent=triage_agent,
+        agents=[triage_agent, math_agent, weather_agent, user],
+        user_agent=user,
+        group_manager_args={"llm_config": llm_config},
+    )
+
+    complex_messages = [
+        {"role": "user", "content": "Hello, I need help with multiple tasks"},
+        {"role": "assistant", "content": "I'm here to help!"},
+        {"role": "user", "content": "Calculate 50 * 8 and check weather in New York"},
+    ]
+
+    result, context, last_agent = await a_initiate_group_chat(pattern=pattern, messages=complex_messages, max_rounds=1)
+
+    assert result is not None
+    assert last_agent is not None
 
 
 if __name__ == "__main__":
