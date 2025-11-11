@@ -30,7 +30,7 @@ from .content_blocks import (
 from .unified_message import UnifiedMessage
 from .unified_response import UnifiedResponse
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     # Content blocks
     "AudioContent",
     "BaseContent",

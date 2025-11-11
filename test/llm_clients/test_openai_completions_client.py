@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from autogen.llm_clients import OpenAICompletionsClient
-from autogen.llm_clients.models import ReasoningContent, TextContent, ToolCallContent, UnifiedResponse
+from autogen.llm_clients.models import GenericContent, ReasoningContent, TextContent, ToolCallContent, UnifiedResponse
 
 
 class MockOpenAIResponse:
@@ -411,3 +411,223 @@ class TestOpenAICompletionsClientIntegration:
         assert callable(client.cost)
         assert callable(client.get_usage)
         assert callable(client.message_retrieval)
+
+
+class TestOpenAICompletionsClientGenericContent:
+    """Test GenericContent handling for unknown OpenAI response types."""
+
+    def test_multimodal_content_with_unknown_type(self, mock_openai_client):
+        """Test that unknown content types in multimodal content are handled as GenericContent."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Mock message with unknown content type in multimodal list
+        mock_message = MockMessage(
+            role="assistant",
+            content=[
+                {"type": "text", "text": "Here's the result:"},
+                {"type": "reflection", "reflection": "Upon reviewing...", "confidence": 0.87},  # Unknown type
+            ],
+        )
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Verify both content blocks are preserved
+        assert len(response.messages[0].content) == 2
+
+        # First should be TextContent
+        assert isinstance(response.messages[0].content[0], TextContent)
+        assert response.messages[0].content[0].text == "Here's the result:"
+
+        # Second should be GenericContent (unknown type)
+        assert isinstance(response.messages[0].content[1], GenericContent)
+        assert response.messages[0].content[1].type == "reflection"
+        assert response.messages[0].content[1].reflection == "Upon reviewing..."
+        assert response.messages[0].content[1].confidence == 0.87
+
+    def test_unknown_message_field_as_generic_content(self, mock_openai_client):
+        """Test that unknown fields in message object are captured as GenericContent."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Create a mock message with unknown field
+        mock_message = MockMessage(role="assistant", content="Test response")
+        # Add unknown field via model_dump simulation
+        mock_message.model_dump = Mock(
+            return_value={
+                "role": "assistant",
+                "content": "Test response",
+                "thinking": "Let me analyze this step by step...",  # Unknown field
+                "confidence_score": 0.92,  # Another unknown field
+            }
+        )
+
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Should have text + 2 generic content blocks for unknown fields
+        content_blocks = response.messages[0].content
+        generic_blocks = [b for b in content_blocks if isinstance(b, GenericContent)]
+
+        assert len(generic_blocks) == 2
+
+        # Find thinking block
+        thinking_blocks = [b for b in generic_blocks if b.type == "thinking"]
+        assert len(thinking_blocks) == 1
+        assert thinking_blocks[0].thinking == "Let me analyze this step by step..."
+
+        # Find confidence_score block
+        confidence_blocks = [b for b in generic_blocks if b.type == "confidence_score"]
+        assert len(confidence_blocks) == 1
+        assert confidence_blocks[0].confidence_score == 0.92
+
+    def test_generic_content_serialization(self, mock_openai_client):
+        """Test that GenericContent can be serialized properly."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Mock message with unknown content type
+        mock_message = MockMessage(
+            role="assistant", content=[{"type": "custom_analysis", "analysis": "Deep dive...", "score": 9.5}]
+        )
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Get GenericContent block
+        generic_block = response.messages[0].content[0]
+        assert isinstance(generic_block, GenericContent)
+
+        # Test serialization
+        serialized = generic_block.model_dump()
+        assert serialized["type"] == "custom_analysis"
+        assert serialized["analysis"] == "Deep dive..."
+        assert serialized["score"] == 9.5
+
+    def test_generic_content_attribute_access(self, mock_openai_client):
+        """Test that GenericContent supports attribute access for unknown fields."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Mock message with unknown content type
+        mock_message = MockMessage(
+            role="assistant",
+            content=[
+                {
+                    "type": "advanced_reasoning",
+                    "reasoning_steps": ["Step 1", "Step 2"],
+                    "confidence": 0.95,
+                    "citations": [{"url": "https://example.com"}],
+                }
+            ],
+        )
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Get GenericContent block
+        generic_block = response.messages[0].content[0]
+        assert isinstance(generic_block, GenericContent)
+
+        # Test attribute access (Pydantic native extra='allow')
+        assert generic_block.type == "advanced_reasoning"
+        assert generic_block.reasoning_steps == ["Step 1", "Step 2"]
+        assert generic_block.confidence == 0.95
+        assert generic_block.citations == [{"url": "https://example.com"}]
+
+    def test_generic_content_helper_methods(self, mock_openai_client):
+        """Test that GenericContent helper methods work correctly."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Mock message with unknown content type
+        mock_message = MockMessage(
+            role="assistant",
+            content=[{"type": "evaluation", "score": 8.5, "feedback": "Good work", "tags": ["A", "B"]}],
+        )
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Get GenericContent block
+        generic_block = response.messages[0].content[0]
+
+        # Test get() method
+        assert generic_block.get("score") == 8.5
+        assert generic_block.get("feedback") == "Good work"
+        assert generic_block.get("missing", "default") == "default"
+
+        # Test get_all_fields()
+        all_fields = generic_block.get_all_fields()
+        assert "type" in all_fields
+        assert "score" in all_fields
+        assert "feedback" in all_fields
+        assert "tags" in all_fields
+
+        # Test get_extra_fields()
+        extra_fields = generic_block.get_extra_fields()
+        assert "score" in extra_fields
+        assert "feedback" in extra_fields
+        # Should not include base field 'type'
+        assert "type" not in extra_fields or extra_fields["type"] == "evaluation"
+
+        # Test has_field()
+        assert generic_block.has_field("score") is True
+        assert generic_block.has_field("type") is True
+        assert generic_block.has_field("missing") is False
+
+    def test_mixed_known_and_unknown_content(self, mock_openai_client):
+        """Test response with both known content types and GenericContent."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Mock message with mixed content
+        mock_message = MockMessage(
+            role="assistant",
+            content=[
+                {"type": "text", "text": "Answer is 42"},
+                {"type": "reflection", "reflection": "I calculated...", "confidence": 0.9},  # Unknown
+                {"type": "text", "text": "Hope this helps!"},
+            ],
+        )
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Verify content blocks
+        content_blocks = response.messages[0].content
+        assert len(content_blocks) == 3
+
+        # First text block
+        assert isinstance(content_blocks[0], TextContent)
+        assert content_blocks[0].text == "Answer is 42"
+
+        # Unknown reflection block
+        assert isinstance(content_blocks[1], GenericContent)
+        assert content_blocks[1].type == "reflection"
+        assert content_blocks[1].reflection == "I calculated..."
+
+        # Second text block
+        assert isinstance(content_blocks[2], TextContent)
+        assert content_blocks[2].text == "Hope this helps!"
+
+        # Test message retrieval combines all text
+        messages = client.message_retrieval(response)
+        assert len(messages) == 1
+        # Should include text from TextContent blocks and GenericContent
+        assert "Answer is 42" in messages[0]
+        assert "Hope this helps!" in messages[0]

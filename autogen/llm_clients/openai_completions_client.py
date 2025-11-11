@@ -28,6 +28,8 @@ except ImportError:
 from ..llm_config.client import ModelClient
 from .models import (
     CitationContent,
+    ContentParser,
+    GenericContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
@@ -89,13 +91,23 @@ class OpenAICompletionsClient(ModelClient):
 
         self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)
         self._cost_per_token = {
-            # o1 series pricing (example - update with actual pricing)
+            # GPT-5 series - Latest flagship models (per million tokens)
+            "gpt-5": {"prompt": 1.25 / 1_000_000, "completion": 10.00 / 1_000_000},
+            "gpt-5-mini": {"prompt": 0.25 / 1_000_000, "completion": 2.00 / 1_000_000},
+            "gpt-5-nano": {"prompt": 0.05 / 1_000_000, "completion": 0.40 / 1_000_000},
+            # GPT-4o series - Multimodal flagship (per million tokens)
+            "gpt-4o": {"prompt": 2.50 / 1_000_000, "completion": 10.00 / 1_000_000},
+            "gpt-4o-mini": {"prompt": 0.15 / 1_000_000, "completion": 0.60 / 1_000_000},
+            # GPT-4 Turbo (per million tokens)
+            "gpt-4-turbo": {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000},
+            # GPT-4 legacy (per million tokens)
+            "gpt-4": {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000},
+            # GPT-3.5 Turbo (per million tokens)
+            "gpt-3.5-turbo": {"prompt": 0.50 / 1_000_000, "completion": 1.50 / 1_000_000},
+            # o1 series - Reasoning models (keep existing if still valid)
             "o1-preview": {"prompt": 0.015 / 1000, "completion": 0.060 / 1000},
             "o1-mini": {"prompt": 0.003 / 1000, "completion": 0.012 / 1000},
             "o3-mini": {"prompt": 0.003 / 1000, "completion": 0.012 / 1000},
-            # GPT-4 series
-            "gpt-4": {"prompt": 0.03 / 1000, "completion": 0.06 / 1000},
-            "gpt-4-turbo": {"prompt": 0.01 / 1000, "completion": 0.03 / 1000},
         }
 
     def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[override]
@@ -131,6 +143,14 @@ class OpenAICompletionsClient(ModelClient):
         This handles the standard ChatCompletion format including o1/o3 models
         which include a 'reasoning' field in the message object.
 
+        Content handling:
+        - Known types (text, reasoning, tool_calls, citations) → Specific content blocks
+        - Multimodal content (list) → Parsed via ContentParser (supports extensibility)
+        - Unknown response fields → GenericContent (forward compatibility)
+
+        This ensures that new OpenAI features are preserved even if we don't have
+        specific content types defined yet.
+
         Args:
             openai_response: Raw OpenAI API response
             model: Model name
@@ -160,12 +180,12 @@ class OpenAICompletionsClient(ModelClient):
                 if isinstance(message_obj.content, str):
                     content_blocks.append(TextContent(type="text", text=message_obj.content))
                 elif isinstance(message_obj.content, list):
-                    # Multimodal content
+                    # Multimodal content - use ContentParser for extensibility
                     for item in message_obj.content:
                         if isinstance(item, dict):
-                            if item.get("type") == "text":
-                                content_blocks.append(TextContent(type="text", text=item.get("text", "")))
-                            # Add other multimodal types as needed
+                            # Use ContentParser to handle known and unknown types
+                            parsed_content = ContentParser.parse(item)
+                            content_blocks.append(parsed_content)
 
             # Extract tool calls
             if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:
@@ -192,6 +212,15 @@ class OpenAICompletionsClient(ModelClient):
                             relevance_score=citation.get("relevance_score"),
                         )
                     )
+
+            # Handle any other unknown fields from OpenAI response as GenericContent
+            # This ensures forward compatibility with new OpenAI features
+            known_fields = {"role", "content", "reasoning", "tool_calls", "citations", "name", "function_call"}
+            message_dict = message_obj.model_dump() if hasattr(message_obj, "model_dump") else {}
+            for field_name, field_value in message_dict.items():
+                if field_name not in known_fields and field_value is not None:
+                    # Create GenericContent for unknown field
+                    content_blocks.append(GenericContent(type=field_name, **{field_name: field_value}))
 
             # Create unified message
             messages.append(
@@ -300,8 +329,8 @@ class OpenAICompletionsClient(ModelClient):
                 break
 
         if not pricing:
-            # Unknown model - use default pricing (gpt-4 level)
-            pricing = {"prompt": 0.03 / 1000, "completion": 0.06 / 1000}
+            # Unknown model - use default pricing (GPT-4 Turbo level, per million tokens)
+            pricing = {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000}
 
         return (prompt_tokens * pricing["prompt"]) + (completion_tokens * pricing["completion"])
 

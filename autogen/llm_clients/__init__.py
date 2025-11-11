@@ -54,7 +54,7 @@ from .models import (
 )
 from .openai_completions_client import OpenAICompletionsClient
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     # Protocol
     "ModelClientV2",
     # Clients
