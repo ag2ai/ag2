@@ -9,7 +9,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 from autogen.llm_clients import OpenAICompletionsClient
-from autogen.llm_clients.models import GenericContent, ReasoningContent, TextContent, ToolCallContent, UnifiedResponse
+from autogen.llm_clients.models import (
+    GenericContent,
+    ReasoningContent,
+    TextContent,
+    ToolCallContent,
+    UnifiedResponse,
+    UserRoleEnum,
+)
 
 
 class MockOpenAIResponse:
@@ -91,6 +98,23 @@ class TestOpenAICompletionsClientCreation:
         client = OpenAICompletionsClient(api_key="test-key")
         assert client is not None
         assert client.client is not None
+
+    def test_role_normalization_to_enum(self, mock_openai_client):
+        """Test that known roles are normalized to UserRoleEnum."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Create response with known role
+        mock_message = MockMessage(role="assistant", content="Test")
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Verify role is UserRoleEnum
+        assert isinstance(response.messages[0].role, UserRoleEnum)
+        assert response.messages[0].role == UserRoleEnum.ASSISTANT
+        assert response.messages[0].role.value == "assistant"
 
     def test_create_client_with_base_url(self, mock_openai_client):
         """Test creating client with custom base URL."""

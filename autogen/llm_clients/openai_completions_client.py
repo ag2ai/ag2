@@ -35,6 +35,8 @@ from .models import (
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
+    UserRoleEnum,
+    normalize_role,
 )
 
 
@@ -222,10 +224,10 @@ class OpenAICompletionsClient(ModelClient):
                     # Create GenericContent for unknown field
                     content_blocks.append(GenericContent(type=field_name, **{field_name: field_value}))
 
-            # Create unified message
+            # Create unified message with normalized role (convert to UserRoleEnum for known roles)
             messages.append(
                 UnifiedMessage(
-                    role=message_obj.role or "assistant",
+                    role=normalize_role(message_obj.role),
                     content=content_blocks,
                     name=getattr(message_obj, "name", None),
                 )
@@ -283,6 +285,10 @@ class OpenAICompletionsClient(ModelClient):
         unified_response = self.create(params)
 
         # Convert to legacy format (simplified - would need full ChatCompletionExtended in practice)
+        # Extract role and convert UserRoleEnum to string
+        role = unified_response.messages[0].role if unified_response.messages else UserRoleEnum.ASSISTANT
+        role_str = role.value if isinstance(role, UserRoleEnum) else role
+
         return {
             "id": unified_response.id,
             "model": unified_response.model,
@@ -292,7 +298,7 @@ class OpenAICompletionsClient(ModelClient):
                 {
                     "index": 0,
                     "message": {
-                        "role": unified_response.messages[0].role if unified_response.messages else "assistant",
+                        "role": role_str,
                         "content": unified_response.text,
                     },
                     "finish_reason": unified_response.finish_reason,

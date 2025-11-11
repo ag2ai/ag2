@@ -27,7 +27,7 @@ from .content_blocks import (
     ToolResultContent,
     VideoContent,
 )
-from .unified_message import UnifiedMessage
+from .unified_message import UnifiedMessage, UserRoleEnum, UserRoleType, normalize_role
 from .unified_response import UnifiedResponse
 
 __all__ = [  # noqa: RUF022
@@ -48,4 +48,8 @@ __all__ = [  # noqa: RUF022
     # Unified formats
     "UnifiedMessage",
     "UnifiedResponse",
+    # Role types
+    "UserRoleEnum",
+    "UserRoleType",
+    "normalize_role",
 ]

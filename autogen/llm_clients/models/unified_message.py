@@ -6,6 +6,7 @@
 Unified message format supporting all provider features.
 """
 
+from enum import Enum
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
@@ -21,6 +22,55 @@ from .content_blocks import (
 )
 
 
+class UserRoleEnum(str, Enum):
+    """Standard message roles with strict typing."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+    TOOL = "tool"
+
+
+# Union type: strict typing for known roles, flexible string for unknown
+UserRoleType = UserRoleEnum | str
+
+
+def normalize_role(role: str | None) -> UserRoleType:
+    """
+    Normalize role string to UserRoleEnum for known roles, or return as-is for unknown roles.
+
+    This function converts standard role strings to type-safe UserRoleEnum values while
+    preserving unknown/custom roles as plain strings for forward compatibility.
+
+    Args:
+        role: Role string from API response (e.g., "user", "assistant", "system", "tool")
+
+    Returns:
+        UserRoleEnum for known roles, or original string for unknown/custom roles
+
+    Examples:
+        >>> normalize_role("user")
+        UserRoleEnum.USER
+        >>> normalize_role("assistant")
+        UserRoleEnum.ASSISTANT
+        >>> normalize_role("custom_role")
+        "custom_role"
+    """
+    if not role:
+        return UserRoleEnum.ASSISTANT  # Default fallback
+
+    # Map string roles to enum values
+    role_mapping = {
+        "user": UserRoleEnum.USER,
+        "assistant": UserRoleEnum.ASSISTANT,
+        "system": UserRoleEnum.SYSTEM,
+        "tool": UserRoleEnum.TOOL,
+    }
+
+    # Return enum for known roles, original string for unknown roles
+    return role_mapping.get(role.lower(), role)
+
+
 class UnifiedMessage(BaseModel):
     """Unified message format supporting all provider features.
 
@@ -33,15 +83,16 @@ class UnifiedMessage(BaseModel):
     - Any future content types via GenericContent
     - Any future role types via extensible role field
 
-    The role field is extensible to support future provider-specific roles.
-    Standard roles are: "user", "assistant", "system", "tool"
-    But any string value is accepted for forward compatibility.
+    The role field uses UserRoleType which provides:
+    - Type-safe enum values for standard roles (UserRoleEnum.USER, etc.)
+    - String literal typing for known roles ("user", "assistant", "system", "tool")
+    - Flexible string fallback for unknown/future provider-specific roles
     """
 
     # Known standard roles (for reference and validation)
     STANDARD_ROLES: ClassVar[list[str]] = ["user", "assistant", "system", "tool"]
 
-    role: str  # Extensible - accepts any string, not just standard roles
+    role: UserRoleType  # Type-safe for known roles, flexible for unknown
     content: list[ContentBlock]  # Rich, typed content blocks
 
     # Metadata
@@ -96,4 +147,7 @@ class UnifiedMessage(BaseModel):
             True if role is one of the standard roles (user, assistant, system, tool),
             False if it's a custom/future role
         """
+        # Handle both UserRoleEnum and string types
+        if isinstance(self.role, UserRoleEnum):
+            return True  # All enum values are standard roles
         return self.role in self.STANDARD_ROLES
