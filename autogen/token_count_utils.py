@@ -155,6 +155,9 @@ def _num_token_from_messages(messages: list[str] | dict[str, Any], model="gpt-3.
     elif "gpt-4" in model:
         logger.info("gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "gpt-5" in model:
+        logger.info("gpt-5 may update over time. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "gemini" in model:
         logger.info("Gemini is not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")

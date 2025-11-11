@@ -198,7 +198,7 @@ class TestLLMConfig:
             pytest.param(
                 {
                     "api_type": "anthropic",
-                    "model": "claude-3-5-sonnet-latest",
+                    "model": "claude-sonnet-4-5",
                     "api_key": "dummy_api_key",
                     "stream": False,
                     "temperature": 1.0,
@@ -206,19 +206,19 @@ class TestLLMConfig:
                 },
                 LLMConfig(
                     AnthropicLLMConfigEntry(
-                        model="claude-3-5-sonnet-latest",
+                        model="claude-sonnet-4-5",
                         api_key="dummy_api_key",
                         stream=False,
                         temperature=1.0,
                         max_tokens=100,
                     )
                 ),
-                id="anthropic claude-3-5-sonnet-latest",
+                id="anthropic claude-sonnet-4-5",
             ),
             pytest.param(
                 {
                     "api_type": "bedrock",
-                    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+                    "model": "anthropic.claude-4-5-sonnet-20250929-v1:0",
                     "aws_region": "us-east-1",
                     "aws_access_key": "test_access_key_id",
                     "aws_secret_key": "test_secret_access_key",
@@ -228,7 +228,7 @@ class TestLLMConfig:
                 },
                 LLMConfig(
                     BedrockLLMConfigEntry(
-                        model="anthropic.claude-3-sonnet-20240229-v1:0",
+                        model="anthropic.claude-4-5-sonnet-20250929-v1:0",
                         aws_region="us-east-1",
                         aws_access_key="test_access_key_id",
                         aws_secret_key="test_secret_access_key",
@@ -236,7 +236,7 @@ class TestLLMConfig:
                         temperature=0.8,
                     )
                 ),
-                id="bedrock claude-3-sonnet",
+                id="bedrock claude-4-5-sonnet",
             ),
             pytest.param(
                 {
