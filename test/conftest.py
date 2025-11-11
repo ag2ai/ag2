@@ -13,7 +13,7 @@ import pytest
 import autogen
 from autogen import LLMConfig, UserProxyAgent
 from test.const import KEY_LOC, MOCK_AZURE_API_KEY, MOCK_OPEN_AI_API_KEY, OAI_CONFIG_LIST
-from test.credentials import Credentials, Secrets
+from test.credentials import Credentials, Secrets, get_credentials_from_env_vars
 
 
 @pytest.fixture
@@ -191,15 +191,39 @@ def get_credentials(
     temperature: float = 0.0,
 ) -> Credentials:
     credentials = None
+
+    # PRIORITY 1: Try environment variables first (GitHub secrets)
     try:
-        credentials = get_credentials_from_file(filter_dict, temperature)
+        credentials = get_credentials_from_env_vars(filter_dict, temperature)
+        # Filter to the specific api_type if needed
         if api_type == "openai":
             credentials.llm_config = credentials.llm_config.where(api_type="openai")
+        elif api_type == "azure":
+            credentials.llm_config = credentials.llm_config.where(api_type="azure")
+        elif api_type == "google":
+            credentials.llm_config = credentials.llm_config.where(api_type="google")
+        elif api_type == "anthropic":
+            credentials.llm_config = credentials.llm_config.where(api_type="anthropic")
         elif api_type == "responses":
             credentials.llm_config = credentials.llm_config.where(api_type="responses")
-    except Exception:
+        return credentials
+    except Exception as e:
+        # If no env vars found, credentials will be None
+        print(f"Could not get credentials from env vars: {e}")
         credentials = None
 
+    # PRIORITY 2: Fall back to OAI_CONFIG_LIST file (for local development)
+    if not credentials:
+        try:
+            credentials = get_credentials_from_file(filter_dict, temperature)
+            if api_type == "openai":
+                credentials.llm_config = credentials.llm_config.where(api_type="openai")
+            elif api_type == "responses":
+                credentials.llm_config = credentials.llm_config.where(api_type="responses")
+        except Exception:
+            credentials = None
+
+    # PRIORITY 3: Fall back to single env var (legacy)
     if not credentials:
         credentials = get_credentials_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
@@ -208,29 +232,46 @@ def get_credentials(
 
 @pytest.fixture
 def credentials_azure() -> Credentials:
-    return get_credentials_from_file(filter_dict={"api_type": ["azure"]})
+    try:
+        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"]})
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo() -> Credentials:
-    return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+    try:
+        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
 
 
 @pytest.fixture
 def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
-    return get_credentials_from_file(
-        filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
-    )
+    try:
+        return get_credentials_from_env_vars(
+            filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
+        )
+    except Exception:
+        return get_credentials_from_file(
+            filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
+        )
 
 
 @pytest.fixture
 def credentials() -> Credentials:
-    return get_credentials_from_file(filter_dict={"tags": ["gpt-4o"]})
+    try:
+        return get_credentials_from_env_vars(filter_dict={"tags": ["gpt-4o"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_all() -> Credentials:
-    return get_credentials_from_file()
+    try:
+        return get_credentials_from_env_vars()
+    except Exception:
+        return get_credentials_from_file()
 
 
 @pytest.fixture

@@ -100,12 +100,15 @@ class TestSwarmE2E:
             weather_func_mock.assert_called_with(location="Seattle")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "credentials_llm_realtime",
-        [
-            pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.openai_realtime, pytest.mark.aux_neg_flag]),
-            pytest.param("credentials_gemini_realtime", marks=[pytest.mark.gemini_realtime, pytest.mark.aux_neg_flag]),
-        ],
+    # @pytest.mark.parametrize(
+    #     "credentials_llm_realtime",
+    #     [
+    #         pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.openai_realtime, pytest.mark.aux_neg_flag]),
+    #         pytest.param("credentials_gemini_realtime", marks=[pytest.mark.gemini_realtime, pytest.mark.aux_neg_flag]),
+    #     ],
+    # )
+    @pytest.mark.skip(
+        reason="Need to update openai to latest where it conflicts with rag and neo4j module in pyproject.toml"
     )
     async def test_e2e(
         self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
@@ -113,7 +116,6 @@ class TestSwarmE2E:
         """End-to-end test for the RealtimeAgent.
 
         Retry the test up to 5 times if it fails. Sometimes the test fails due to voice not being recognized by the realtime API.
-
         """
         i = 0
         count = 5
