@@ -36,7 +36,6 @@ else:
 from ..llm_config.client import ModelClient
 from .models import (
     CitationContent,
-    ContentParser,
     GenericContent,
     ReasoningContent,
     TextContent,
@@ -154,9 +153,10 @@ class OpenAICompletionsClient(ModelClient):
         which include a 'reasoning' field in the message object.
 
         Content handling:
-        - Known types (text, reasoning, tool_calls, citations) → Specific content blocks
-        - Multimodal content (list) → Parsed via ContentParser (supports extensibility)
-        - Unknown response fields → GenericContent (forward compatibility)
+        - Text content → TextContent
+        - Reasoning blocks (o1/o3 models) → ReasoningContent
+        - Tool calls → ToolCallContent
+        - Unknown message fields → GenericContent (forward compatibility)
 
         This ensures that new OpenAI features are preserved even if we don't have
         specific content types defined yet.
@@ -185,16 +185,10 @@ class OpenAICompletionsClient(ModelClient):
                 )
 
             # Extract text content
+            # Note: OpenAI Chat Completions API always returns content as str, never list
+            # (List content is only used in REQUEST messages for multimodal inputs)
             if message_obj.content:
-                if isinstance(message_obj.content, str):
-                    content_blocks.append(TextContent(type="text", text=message_obj.content))
-                elif isinstance(message_obj.content, list):
-                    # Multimodal content - use ContentParser for extensibility
-                    for item in message_obj.content:
-                        if isinstance(item, dict):
-                            # Use ContentParser to handle known and unknown types
-                            parsed_content = ContentParser.parse(item)
-                            content_blocks.append(parsed_content)
+                content_blocks.append(TextContent(type="text", text=message_obj.content))
 
             # Extract tool calls
             if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:
