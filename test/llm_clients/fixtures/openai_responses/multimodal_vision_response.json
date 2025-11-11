@@ -1,0 +1,39 @@
+{
+  "id": "chatcmpl-CaS1VjBSENiRSLHNT2OD4ztvf42rh",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Dog",
+        "refusal": null,
+        "role": "assistant",
+        "annotations": [],
+        "audio": null,
+        "function_call": null,
+        "tool_calls": null
+      }
+    }
+  ],
+  "created": 1762803565,
+  "model": "gpt-4o-mini-2024-07-18",
+  "object": "chat.completion",
+  "service_tier": "default",
+  "system_fingerprint": "fp_51db84afab",
+  "usage": {
+    "completion_tokens": 1,
+    "prompt_tokens": 8519,
+    "total_tokens": 8520,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0
+    }
+  }
+}
