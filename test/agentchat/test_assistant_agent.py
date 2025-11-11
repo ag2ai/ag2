@@ -232,8 +232,9 @@ async def test_standalone_async(credentials_gpt_4o_mini: Credentials):
     )
 
     await response.process()
-    assert any(keyword in str(await response.summary).lower() for keyword in ["ai", "artificial intelligence"])
-    assert any(keyword in str(await response.summary).lower() for keyword in ["elonmusk", "elon", "elon musk"])
+    summary = await response.summary
+    assert any(keyword in str(summary).lower() for keyword in ["ai", "artificial intelligence"])
+    assert any(keyword in str(summary).lower() for keyword in ["elonmusk", "elon", "elon musk"])
 
 
 if __name__ == "__main__":
