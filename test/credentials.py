@@ -200,11 +200,11 @@ def get_credentials_from_env_vars(
     gemini_config = build_config_from_env(
         api_type="google",
         env_var_name="GEMINI_API_KEY",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-pro",
     )
     if gemini_config:
         config_list.append({**gemini_config, "tags": ["gemini-pro"]})
-        config_list.append({**gemini_config, "model": "gemini-1.5-flash", "tags": ["gemini-flash"]})
+        config_list.append({**gemini_config, "model": "gemini-2.5-flash", "tags": ["gemini-2.5-flash"]})
         config_list.append({
             **gemini_config,
             "model": "gemini-2.0-flash-exp",
@@ -216,11 +216,15 @@ def get_credentials_from_env_vars(
     anthropic_config = build_config_from_env(
         api_type="anthropic",
         env_var_name="ANTHROPIC_API_KEY",
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-4-20250514",
     )
     if anthropic_config:
         config_list.append({**anthropic_config, "tags": ["anthropic-claude-sonnet"]})
-        config_list.append({**anthropic_config, "model": "claude-sonnet-4-5", "tags": ["anthropic-claude-sonnet"]})
+        config_list.append({
+            **anthropic_config,
+            "model": "claude-sonnet-4-20250514",
+            "tags": ["anthropic-claude-sonnet"],
+        })
         config_list.append({**anthropic_config, "model": "claude-3-opus-20240229", "tags": ["anthropic-claude-opus"]})
 
     # DeepSeek configuration
