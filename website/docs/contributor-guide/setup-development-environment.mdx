@@ -4,67 +4,80 @@ title: Setting up Development Environment
 
 ## Setting up LLM Keys
 
-If you are contributing to the AG2 project, you will need an LLM key depending on the submodule you are working on.
+If you are contributing to the AG2 project, you will need credentials for one or more LLM providers, depending on the submodule you are working on.
 
-=== "Using OAI_CONFIG_LIST"
+### Preferred: Setting LLM Keys as Environment Variables
 
-    AG2 uses an environment variable called `OAI_CONFIG_LIST` in JSON format to store the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains the following keys:
+**AG2 will first look for provider-specific environment variables for API keys.** You should set the relevant environment variables for the LLMs you need. The most common ones are:
 
-    - `model`(required): The name of the OpenAI/LLM model.
-    - `api_key`(optional): The API key for the OpenAI/LLM model.
-    - `api_type`(optional): The type of the API key. It is used for non-OpenAI LLMs.
-    - `api_version`(optional): The version of the API key. It is used for Azure API.
-    - `base_url`(optional): The base URL for the OpenAI/LLM model.
-    - `tags`(optional): A list of tags for the OpenAI/LLM model which can be used for filtering.
+- `OPENAI_API_KEY` for OpenAI models
+- `AZURE_OPENAI_API_KEY` for Azure OpenAI Service (requires `AZURE_OPENAI_API_BASE` and possibly `AZURE_OPENAI_API_VERSION`)
+- `GEMINI_API_KEY` for Google Gemini
+- `ANTHROPIC_API_KEY` for Anthropic
+- `DEEPSEEK_API_KEY` for DeepSeek
+- `CEREBRAS_API_KEY` for Cerebras
+- Ollama and AWS Bedrock may require special handling; see below
 
-    Following is an example of the `OAI_CONFIG_LIST` in JSON format which consists of two OpenAI models and a gemini model:
-    ```bash
-    [
-        {
-            "model": "gpt-4o",
-            "api_key": "<your_api_key>",
-            "tags": ["gpt-4o", "tool", "vision"]
-        },
-        {
-            "model": "gpt-5-nano",
-            "api_key": "<your_api_key>",
-            "tags": ["gpt-5-nano", "tool", "vision"]
-        },
-        {
-            "api_type": "google",
-            "model": "gemini-pro",
-            "api_key": "<your_gemini_api_key>",
-        }
-    ]
-    ```
+**Examples:**
 
-    Further, this `OAI_CONFIG_LIST` can be set in two ways:
+```bash
+export OPENAI_API_KEY="<your_openai_api_key>"
+export AZURE_OPENAI_API_KEY="<your_azure_openai_api_key>"
+export AZURE_OPENAI_API_BASE="<your_azure_base_url>"
+export GEMINI_API_KEY="<your_gemini_api_key>"
+export ANTHROPIC_API_KEY="<your_anthropic_api_key>"
+```
 
-    === "As environment variable"
+> ℹ️ If you have multiple LLM providers, set all applicable environment variables.
 
-        Simply set the `OAI_CONFIG_LIST` environment variable in your terminal:
-        ```bash
-        export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"api_type": "openai", "model": "gpt-5-nano","api_key": "<your_api_key>","tags": ["gpt-5-nano", "tool", "vision"]},{"api_type": "google", "model": "gemini-pro","api_key": "<your_gemini_api_key>",}]'
-        ```
+### Fallback: Using OAI_CONFIG_LIST
 
-    === "As file"
+If individual environment variables are not set, AG2 will fall back to using an environment variable called `OAI_CONFIG_LIST` in JSON format, which stores the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains:
 
-        Or you can save the `OAI_CONFIG_LIST` in a file and set the path of the file as an environment variable.
-        For example, let's say you have saved the `OAI_CONFIG_LIST` in a file called `OAI_CONFIG_LIST.json` at the root of the project. You can set the `OAI_CONFIG_LIST` environment variable as follows:
-        ```bash
-        export OAI_CONFIG_LIST="/path/to/OAI_### CONFIG_LIST.json"
-        ```
+- `model` (required): The name of the LLM model.
+- `api_key` (optional): The API key for the LLM model.
+- `api_type` (optional): The type of the provider (e.g. "azure", "google", "openai").
+- `api_version` (optional): The Azure API version (if needed).
+- `base_url` (optional): The custom base URL for the model endpoint.
+- `tags` (optional): A list of tags used for filtering credentials.
 
-    !!! tip
+Example `OAI_CONFIG_LIST` in JSON:
 
-        Learn more about `OAI_CONFIG_LIST` [here](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
+```json
+[
+    {
+        "model": "gpt-4o",
+        "api_key": "<your_api_key>",
+        "tags": ["gpt-4o", "tool", "vision"]
+    },
+    {
+        "model": "gpt-5-nano",
+        "api_key": "<your_api_key>",
+        "tags": ["gpt-5-nano", "tool", "vision"]
+    },
+    {
+        "api_type": "google",
+        "model": "gemini-pro",
+        "api_key": "<your_gemini_api_key>"
+    }
+]
+```
 
-=== "Using LLM keys directly"
+You can provide `OAI_CONFIG_LIST` as an environment variable directly:
 
-    Alternatively, you can set up the LLM keys directly as environment variables. Following is an example of setting up the Gemini api key as an environment variable:
-    ```bash
-    export GEMINI_API_KEY="<your_api_key>"
-    ```
+```bash
+export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o"]}, ...]'
+```
+
+Or as a file and set its path:
+
+```bash
+export OAI_CONFIG_LIST="/path/to/OAI_CONFIG_LIST.json"
+```
+
+!!! tip
+    When developing locally or in CI environments, **always prefer setting individual environment variables for LLM keys first.** Use `OAI_CONFIG_LIST` for advanced configurations or as a fallback if the direct keys are unavailable.
+    Learn more about `OAI_CONFIG_LIST` [here](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
 
 ## Setting up the Development Environment
 
@@ -125,3 +138,4 @@ To run the non-llm tests, run the following command:
 ```bash
 bash scripts/test-core-skip-llm.sh
 ```
+ 
