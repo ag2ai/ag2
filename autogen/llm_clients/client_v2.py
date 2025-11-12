@@ -24,6 +24,12 @@ class ModelClientV2(Protocol):
     - Forward compatibility with unknown content types
     - Backward compatibility via create_v1_compatible()
 
+    Design Philosophy:
+    - Returns UnifiedResponse with typed content blocks for direct access
+    - Users should access content via response properties (text, reasoning, etc.)
+    - No message_retrieval() method - use response.text or response.messages directly
+    - For ModelClient compatibility, implementations should inherit ModelClient
+
     Migration Path:
     1. Implement create() to return UnifiedResponse
     2. Implement create_v1_compatible() for backward compatibility
@@ -45,6 +51,15 @@ class ModelClientV2(Protocol):
 
                 # Convert to legacy format
                 return self._to_v1(response)
+
+    Example Usage:
+        client = OpenAIClientV2()
+        response = client.create({"model": "o1-preview", "messages": [...]})
+
+        # Direct access to rich content
+        text = response.text                      # Get all text content
+        reasoning = response.reasoning             # Get reasoning blocks
+        citations = response.get_content_by_type("citation")  # Get specific types
     """
 
     RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
@@ -100,20 +115,5 @@ class ModelClientV2(Protocol):
 
         Returns:
             Dict with keys from RESPONSE_USAGE_KEYS
-        """
-        ...
-
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:
-        """Retrieve text content from response messages.
-
-        This is a convenience method for extracting simple text content
-        from UnifiedResponse. For rich content (reasoning, citations, etc.),
-        access response.messages directly.
-
-        Args:
-            response: UnifiedResponse from create()
-
-        Returns:
-            List of text strings from message content blocks
         """
         ...

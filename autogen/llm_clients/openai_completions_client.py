@@ -234,7 +234,7 @@ class OpenAICompletionsClient(ModelClient):
 
         # Extract usage information
         usage = {}
-        if getattr(message_obj, "usage", None):
+        if getattr(openai_response, "usage", None):
             usage = {
                 "prompt_tokens": openai_response.usage.prompt_tokens,
                 "completion_tokens": openai_response.usage.completion_tokens,

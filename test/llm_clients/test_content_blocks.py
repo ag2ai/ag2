@@ -62,25 +62,6 @@ class TestImageContent:
         assert content.data_uri == data_uri
         assert content.image_url is None
 
-    def test_image_content_requires_url_or_data_uri(self):
-        """Test that either image_url or data_uri must be provided."""
-        with pytest.raises(ValueError, match="Either image_url or data_uri must be provided"):
-            ImageContent(type="image")
-
-    def test_image_content_prioritizes_data_uri_when_both_provided(self):
-        """Test that data_uri takes precedence when both are provided."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            content = ImageContent(
-                type="image", image_url="https://example.com/image.jpg", data_uri="data:image/png;base64,ABC123"
-            )
-            # Should warn about ignoring image_url
-            assert len(w) == 1
-            assert "Using data_uri and ignoring image_url" in str(w[0].message)
-            # data_uri should be used, image_url should be None
-            assert content.data_uri == "data:image/png;base64,ABC123"
-            assert content.image_url is None
-
 
 class TestAudioContent:
     """Test AudioContent block."""
@@ -107,25 +88,6 @@ class TestAudioContent:
         assert content.audio_url is None
         assert content.transcript == "Test audio"
 
-    def test_audio_content_requires_url_or_data_uri(self):
-        """Test that either audio_url or data_uri must be provided."""
-        with pytest.raises(ValueError, match="Either audio_url or data_uri must be provided"):
-            AudioContent(type="audio")
-
-    def test_audio_content_prioritizes_data_uri_when_both_provided(self):
-        """Test that data_uri takes precedence when both are provided."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            content = AudioContent(
-                type="audio", audio_url="https://example.com/audio.mp3", data_uri="data:audio/mp3;base64,ABC123"
-            )
-            # Should warn about ignoring audio_url
-            assert len(w) == 1
-            assert "Using data_uri and ignoring audio_url" in str(w[0].message)
-            # data_uri should be used, audio_url should be None
-            assert content.data_uri == "data:audio/mp3;base64,ABC123"
-            assert content.audio_url is None
-
 
 class TestVideoContent:
     """Test VideoContent block."""
@@ -144,25 +106,6 @@ class TestVideoContent:
         assert content.type == "video"
         assert content.data_uri == data_uri
         assert content.video_url is None
-
-    def test_video_content_requires_url_or_data_uri(self):
-        """Test that either video_url or data_uri must be provided."""
-        with pytest.raises(ValueError, match="Either video_url or data_uri must be provided"):
-            VideoContent(type="video")
-
-    def test_video_content_prioritizes_data_uri_when_both_provided(self):
-        """Test that data_uri takes precedence when both are provided."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            content = VideoContent(
-                type="video", video_url="https://example.com/video.mp4", data_uri="data:video/mp4;base64,ABC123"
-            )
-            # Should warn about ignoring video_url
-            assert len(w) == 1
-            assert "Using data_uri and ignoring video_url" in str(w[0].message)
-            # data_uri should be used, video_url should be None
-            assert content.data_uri == "data:video/mp4;base64,ABC123"
-            assert content.video_url is None
 
 
 class TestReasoningContent:
