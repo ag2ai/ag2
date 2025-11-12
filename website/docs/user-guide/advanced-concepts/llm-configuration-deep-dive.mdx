@@ -6,7 +6,22 @@ In this deep-dive we run through the LLM configuration in depth, including the u
 
 # LLM Configuration
 
-In AG2, agents use LLMs as key components to understand and react. To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4.1`:
+In AG2, agents use LLMs as key components to understand and react. <Tip>
+**AG2 supports configuring LLM access via dedicated environment variables _in priority_, before falling back to `OAI_CONFIG_LIST`.**
+
+**Recognized environment variables (preferred defaults):**
+- `OPENAI_API_KEY` (OpenAI)
+- `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_API_BASE` (Azure OpenAI)
+- `GEMINI_API_KEY` (Google Gemini)
+- `ANTHROPIC_API_KEY` (Anthropic)
+- `DEEPSEEK_API_KEY` (DeepSeek)
+- `CEREBRAS_API_KEY` (Cerebras)
+- (other integrations, e.g., Bedrock or Ollama, may require their own variables)
+</Tip>
+
+AG2 _first tries_ to build a config from any of those environment variable keys present in your environment. Only if none are found, will it use `OAI_CONFIG_LIST`, which can be provided either as a file path or a JSON string in an environment variable.
+
+To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4.1` via the recommended environment variable pattern:
 
 ```python
 import os
@@ -16,7 +31,7 @@ llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api
 ```
 
 <Warning>
-It is important to never commit secrets into your code, therefore we read the OpenAI API key from an environment variable.
+It is important to **never commit secrets into your code**, therefore you should always read API keys from environment variables, such as `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, etc.
 </Warning>
 
 This `llm_config` can then be passed to an agent's constructor to enable it to use the LLM.
@@ -35,7 +50,7 @@ Different tasks may require different models, and the `config_list` allows speci
   <Tab title="OpenAI">
 - `api_type` (str, required): The model provider
 - `model` (str, required): The identifier of the model to be used, such as 'gpt-5', 'gpt-5-nano'.
-- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint. _Preferably reference `os.environ["OPENAI_API_KEY"]`._
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
 - `tags` (List[str], optional): Tags which can be used for filtering.
 
@@ -52,7 +67,7 @@ Different tasks may require different models, and the `config_list` allows speci
   </Tab>
   <Tab title="Azure OpenAI">
 - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
-- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint. _Preferably reference `os.environ["AZURE_OPENAI_API_KEY"]`._
 - `api_type`: `azure`
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
 - `api_version` (str, optional): The version of the Azure API you wish to use.
@@ -65,7 +80,7 @@ Different tasks may require different models, and the `config_list` allows speci
         "model": "my-gpt-4.1-deployment",
         "api_type": "azure",
         "api_key": os.environ['AZURE_OPENAI_API_KEY'],
-        "base_url": "https://ENDPOINT.openai.azure.com/",
+        "base_url": os.environ['AZURE_OPENAI_API_BASE'],
         "api_version": "2025-01-01"
       }
     ]
@@ -73,7 +88,7 @@ Different tasks may require different models, and the `config_list` allows speci
   </Tab>
   <Tab title="Other OpenAI compatible">
 - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
-- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
+- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint. See your provider docs for the correct environment variable.
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
 - `tags` (List[str], optional): Tags which can be used for filtering.
 
@@ -91,10 +106,10 @@ Different tasks may require different models, and the `config_list` allows speci
 </Tabs>
 
 <Tip>
-These will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
+**Tip:** These environment variables are checked _before_ any config files or JSON lists (`OAI_CONFIG_LIST`). Only if the specific env vars are missing, AG2 will search for and use `OAI_CONFIG_LIST`.
 </Tip>
 
-### `OAI_CONFIG_LIST` pattern
+### `OAI_CONFIG_LIST` pattern (Fallback)
 
 A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `from_json` method to load it:
 
@@ -107,7 +122,7 @@ llm_config = autogen.LLMConfig.from_json(
 assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
-This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
+This is the _fallback_ behavior if the AG2-supported env vars above are not set.
 
 This function interprets the `env_or_file` argument as follows:
 
