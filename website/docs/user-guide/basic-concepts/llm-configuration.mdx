@@ -37,21 +37,6 @@ Here are the different ways to create an LLM configuration in AG2:
 
 The simplest approach is to directly specify the model provider, model name, and authentication:
 
-```python hl_lines="4-8"
-import os
-from autogen import LLMConfig
-
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",                      # The provider
-    "model": "gpt-5-nano",                    # The specific model
-    "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
-})
-```
-
-### Method 2: Using the `config_list` Parameter
-
-For more advanced scenarios, especially when you want to set up fallback models, use the `config_list` parameter.
-
 ```python hl_lines="4-17"
 import os
 from autogen import LLMConfig
@@ -68,6 +53,21 @@ llm_config = LLMConfig(
         "api_key": os.environ["OPENAI_API_KEY"]
     }
 )
+```
+
+### Method 2: Using the `config_list` Parameter
+
+For more advanced scenarios, especially when you want to set up fallback models, use the `config_list` parameter.
+
+```python hl_lines="4-8"
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(config_list={
+    "api_type": "openai",                      # The provider
+    "model": "gpt-5-nano",                    # The specific model
+    "api_key": os.environ["OPENAI_API_KEY"],   # Authentication
+})
 ```
 
 AG2's LLM configuration offers additional methods to create an LLM configuration, allowing you to specify multiple LLMs for fallback support and filtering them per agent. See the [LLM Configuration deep-dive](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive) for more details.
