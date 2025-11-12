@@ -239,23 +239,23 @@ def credentials_azure() -> Credentials:
 
 
 @pytest.fixture
-def credentials_azure_gpt_35_turbo() -> Credentials:
+def credentials_azure_gpt_4_1_mini() -> Credentials:
+    """Azure OpenAI GPT-4.1-mini credentials (official replacement for gpt-35-turbo)"""
     try:
-        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+        return get_credentials_from_env_vars(
+            filter_dict={"api_type": ["azure"], "tags": ["gpt-4.1-mini", "gpt-4-1-mini"]}
+        )
     except Exception:
-        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-4.1-mini", "gpt-4-1-mini"]})
 
 
 @pytest.fixture
-def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
+def credentials_azure_gpt_4o_mini() -> Credentials:
+    """Azure OpenAI GPT-4o-mini credentials (alternative, available until Feb 2026)"""
     try:
-        return get_credentials_from_env_vars(
-            filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
-        )
+        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"], "tags": ["gpt-4o-mini"]})
     except Exception:
-        return get_credentials_from_file(
-            filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
-        )
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-4o-mini"]})
 
 
 @pytest.fixture
