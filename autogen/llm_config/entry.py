@@ -70,10 +70,12 @@ class LLMConfigEntry(ApplicationConfig, ABC):
 
     api_key: SecretStr | None = None
     api_version: str | None = None
+
     base_url: HttpUrl | None = None
+    http_client: httpxClient | None = None
+
     voice: str | None = None
     model_client_cls: str | None = None
-    http_client: httpxClient | None = None
     response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
     default_headers: Mapping[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
