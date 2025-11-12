@@ -106,12 +106,16 @@ class TestSwarmE2E:
         "credentials_llm_realtime",
         [
             pytest.param("credentials_gpt_4o_realtime", marks=[pytest.mark.openai_realtime, pytest.mark.aux_neg_flag]),
-            pytest.param("credentials_gemini_realtime", marks=[pytest.mark.gemini_realtime, pytest.mark.aux_neg_flag]),
+            pytest.param(
+                "credentials_gemini_realtime",
+                marks=[
+                    pytest.mark.gemini_realtime,
+                    pytest.mark.aux_neg_flag,
+                    pytest.mark.skip(reason="Gemini realtime API WebSocket connection issue - InvalidURI error"),
+                ],
+            ),
         ],
     )
-    # @pytest.mark.skip(
-    #     reason="Need to update openai to latest where it conflicts with rag and neo4j module in pyproject.toml"
-    # )
     async def test_e2e(
         self, credentials_llm_realtime: str, credentials_gpt_4o_mini: Credentials, request: FixtureRequest
     ) -> None:
