@@ -4,12 +4,12 @@ sidebarTitle: DocAgent
 ---
 
 In the realm of AI and automation, handling documents and extracting information efficiently is of utmost importance.
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly, and with natural language instructions, by leveraging an internal swarm of agents to streamline document processing and information retrieval.
+[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) introduces an agentic solution to this problem. It handles document ingestion and query tasks seamlessly with natural language instructions, leveraging a streamlined internal architecture to provide efficient document processing and information retrieval.
 
 <Tip>
-DocAgent is new and keen to support your RAG needs. In the first iterations it has been kept simple and uses either local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine).
+DocAgent is designed to be production-ready and supports your RAG needs with a simplified, efficient architecture. It uses either a local vector Chroma database (default) or an in-memory option (InMemoryQueryEngine) for flexible deployment scenarios.
 
-DocAgent will continue to be developed to a production-ready standard and your feedback and [contributions](https://docs.ag2.ai/latest/docs/contributor-guide/contributing) are most welcome!
+DocAgent continues to be developed and your feedback and [contributions](https://docs.ag2.ai/latest/docs/contributor-guide/contributing) are most welcome!
 </Tip>
 
 ## Installation
@@ -37,73 +37,130 @@ The document agent can perform the following tasks:
     - JSON
     - CSV
     - IMAGE (BMP, JPG, JPEG, PNG, TIFF, TIF)
-2. Answer questions with RAG capability
+2. Answer questions with RAG capability and optional citation support
 
 <Tip>
-DocAgent answers questions only related to ingested documents, even if it using an LLM it won't answer general knowledge questions.
+DocAgent answers questions only related to ingested documents, even when using an LLM it won't answer general knowledge questions.
 </Tip>
 
-## Internal Swarm
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) leverages a [`Swarm`](/docs/user-guide/advanced-concepts/orchestration/swarm/deprecation) of internal agents to handle the complex document processing tasks fluidly and efficiently.
+## Architecture
 
-Here's a breakdown of how the internal swarm chat is used within the [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent):
+[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) employs a simplified, efficient architecture that streamlines document processing through a coordinated group of specialized agents. This design reduces complexity while maintaining robust functionality.
 
-### Swarm Agents
+### Architecture Overview
 
-[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) orchestrates the following swarm agents:
+<!-- Architecture diagram placeholder -->
+<div style="text-align: center; margin: 2rem 0; padding: 2rem; border: 2px dashed #ccc; border-radius: 8px; background-color: #f9f9f9;">
+  <p><strong>DocAgent Architecture Diagram</strong></p>
+  <img src="DocAgent_Architecture.png" alt="DocAgent Architecture Diagram showing the flow between DocumentTriageAgent, TaskManagerAgent, and SummaryAgent" style="max-width: 600px; width: 100%; margin-bottom: 1rem;" />
+</div>
 
-- **Triage Agent**: Decides what type of task to perform from user requests.
-- **Task Manager Agent**: Manages the tasks and initiates actions.
-- **Data Ingestion Agent**: Ingests the documents.
-- **Query Agent**: Answers user questions based on ingested documents.
-- **Error Agent**: If anything fails, the error agent will report the problem back.
-- **Summary Agent**: Generates a summary of the completed tasks.
+### Internal Agents
+
+[`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) orchestrates three specialized agents in a streamlined workflow:
+
+- **DocumentTriageAgent**: Analyzes user requests and creates structured `DocumentTask` objects using structured output format
+- **TaskManagerAgent**: Processes documents and queries using integrated tools with concurrent execution capabilities
+- **SummaryAgent**: Provides comprehensive summaries of all completed operations with citation support
 
 ### Workflow
 
-1. **Initialization**: The `DocAgent` initializes the swarm agents and orchestration.
-2. **Triage User Requests**: The `Triage Agent` categorizes the tasks into ingestions and queries.
-3. **Task Management**: The `Task Manager Agent` manages the tasks and ensures they are executed in the correct sequence.
-4. **Data Ingestion**: The `Data Ingestion Agent` processes the documents.
-5. **Query Execution**: The `Query Agent` answers the user's questions.
-6. **Summary Generation**: The `Summary Agent` generates a summary of the completed tasks.
+The DocAgent follows a linear, efficient workflow:
 
-## Parsing documents and web pages
+1. **Request Analysis**: The `DocumentTriageAgent` receives user requests and categorizes them into structured `DocumentTask` objects containing ingestions and queries
+2. **Task Execution**: The `TaskManagerAgent` processes documents and queries concurrently using integrated tools:
+   - `ingest_documents`: Handles document ingestion with concurrent processing
+   - `execute_query`: Executes queries with optional citation support
+3. **Summary Generation**: The `SummaryAgent` provides a comprehensive summary of all operations, including citations when enabled
 
-Internally, DocAgent uses [Docling](https://github.com/DS4SD/docling) to convert documents into Markdown files, which are then using for ingestion into a data store (which is then used for querying).
+### Key Features
+
+- **Structured Task Processing**: Uses Pydantic models for reliable task categorization
+- **Concurrent Execution**: Both document ingestion and query processing support concurrent operations
+- **Citation Support**: Optional citation support with configurable chunk sizes
+- **Persistent Context**: Maintains document state across interactions
+- **Error Handling**: Robust error handling with detailed logging
+
+## Configuration Options
+
+### Basic Configuration
+
+```python
+from autogen import LLMConfig
+from autogen.agents.experimental import DocAgent
+
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+
+# Basic DocAgent with default settings
+doc_agent = DocAgent(llm_config=llm_config)
+```
+
+### Advanced Configuration
+
+```python
+# DocAgent with custom configuration
+doc_agent = DocAgent(
+    name="custom_doc_agent",
+    llm_config=llm_config,
+    parsed_docs_path="./custom_parsed_docs",
+    collection_name="my_documents",
+    enable_citations=True,
+    citation_chunk_size=1024,
+    update_inner_agent_system_message={
+        "DocumentTriageAgent": "Custom triage instructions...",
+        "TaskManagerAgent": "Custom task management instructions...",
+        "SummaryAgent": "Custom summary instructions..."
+    }
+)
+```
+
+### Configuration Parameters
+
+- `name`: Custom name for the DocAgent instance
+- `llm_config`: LLM configuration for all internal agents
+- `parsed_docs_path`: Directory for storing parsed documents (default: `"./parsed_docs"`)
+- `collection_name`: Unique name for vector store collection
+- `query_engine`: Custom RAG query engine (optional)
+- `enable_citations`: Enable citation support in queries (default: `False`)
+- `citation_chunk_size`: Size of chunks for citations (default: `512`)
+- `update_inner_agent_system_message`: Custom system messages for internal agents
+
+## Parsing Documents and Web Pages
+
+Internally, DocAgent uses [Docling](https://github.com/DS4SD/docling) to convert documents into Markdown files, which are then ingested into the data store for querying.
 
 For files (whether local files or URLs that point to files), DocAgent will download those files for Docling to convert. If it's a web page, DocAgent will use [Selenium](https://github.com/SeleniumHQ/Selenium) to browse to the page and extract the content.
 
 ## Data Store and Query Engine
 
-DocAgent can currently use two different data stores and query engines.
+DocAgent supports two different data stores and query engines for flexible deployment scenarios.
 
-### Vector Store: Chroma database
+### Vector Store: Chroma Database
 
-[Chroma](https://www.trychroma.com/) is a popular, open-source, vector database. DocAgent will take the Markdown and embed and store the data into the vector database.
+[Chroma](https://www.trychroma.com/) is a popular, open-source, vector database. DocAgent takes the Markdown and embeds and stores the data into the vector database.
 
-This requires the `OPENAI_API_KEY` environment variable as OpenAI's GPT 4o model is used to create the embeddings.
+This requires the `OPENAI_API_KEY` environment variable as OpenAI's GPT-4o model is used to create the embeddings.
 
-DocAgent will use [LlamaIndex](https://github.com/run-llama/llama_index)'s vector store library to embed and query the Chroma database.
+DocAgent uses [LlamaIndex](https://github.com/run-llama/llama_index)'s vector store library to embed and query the Chroma database.
 
 This is the default data store and query engine, so you do not need to create it and pass it to the DocAgent.
 
 See the section on Collections below to understand how to use them effectively.
 
-### In-memory
+### In-Memory Query Engine
 
 DocAgent can also store the Docling Markdown in memory when digesting documents.
 
 When it comes time to query, DocAgent will inject the Markdown into the system message of an internal query agent and use an LLM to respond to the question.
 
-Import notes about using the in-memory query engine:
+Important notes about using the in-memory query engine:
 
-- The full Markdown content, from the ingested documents, is put into the context window, so be cautious of putting too much content in as it may be too much for the LLM.
-- The Markdown is put into the start of the system message to maximize the chance of utilizing the LLM's caching ability and reduce cost. However, adding more documents in subsequent messages will change the system message and the cache will not be effective, so try to ingest all the documents before querying.
-- As it's in-memory, ingestion content will be lost when the agent is destroyed.
-- LLMs can be better at answering some queries than the vector store as they are processing all of the context to answer the query. However, this does come at the cost of more token usage.
+- The full Markdown content from ingested documents is put into the context window, so be cautious of putting too much content as it may exceed the LLM's context limits
+- The Markdown is put into the start of the system message to maximize the chance of utilizing the LLM's caching ability and reduce cost
+- As it's in-memory, ingested content will be lost when the agent is destroyed
+- LLMs can be better at answering some queries than the vector store as they process all of the context to answer the query, but this comes at the cost of more token usage
 
-To use the in-memory query engine, you will need to create it and pass it to the DocAgent, see the following example:
+To use the in-memory query engine, you will need to create it and pass it to the DocAgent:
 
 ```python
 from autogen.agents.experimental import DocAgent, InMemoryQueryEngine
@@ -120,15 +177,12 @@ doc_agent = DocAgent(
     query_engine=inmemory_qe,
     llm_config=llm_config_list,
 )
-
-...
-
 ```
 
-## Example
+## Example Usage
 
 <Tip>
-The internal ingestation of documents requires an LLM and it will use OpenAI's GPT-4o. Please ensure you have an `OPENAI_API_KEY` environment variable set.
+Document ingestion requires an LLM and will use OpenAI's GPT-4o. Please ensure you have an `OPENAI_API_KEY` environment variable set.
 </Tip>
 
 <Warning>
@@ -137,9 +191,7 @@ This agent is currently in our `experimental` namespace, indicating that we have
 If you do find any bugs please [log an issue](https://github.com/ag2ai/ag2/issues) in the AG2 repository.
 </Warning>
 
-In the following simple example we ask the [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) to ingest a document and then provide a financial summary.
-
-Note that the request is handled in natural language and the output will show the internal agents working together to understand, classify, ingest, and query.
+In the following example, we ask the [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) to ingest a document and provide a financial summary. The request is handled in natural language, and the output demonstrates the internal agents working together efficiently.
 
 ```python
 from autogen import LLMConfig
@@ -150,272 +202,67 @@ llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5"})
 # Create our DocAgent
 document_agent = DocAgent(llm_config=llm_config)
 
-# Update this path to suit your environment
+# Process document and query
 response = document_agent.run(
     "Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
     max_turns=1
 )
 
-# Iterate through the chat automatically with console output
+# Process the response
 response.process()
 ```
 
-```console
-user (to Document_Agent):
-
-Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?
-
---------------------------------------------------------------------------------
-_User (to chat_manager):
-
-Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?
-
---------------------------------------------------------------------------------
-
-Next speaker: DocumentTriageAgent
-
-DocumentTriageAgent (to chat_manager):
-
-{"ingestions":[{"path_or_url":"../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf"}],"queries":[{"query_type":"RAG_QUERY","query":"What is the fiscal year 2024 financial summary?"}]}
-
---------------------------------------------------------------------------------
-
-Next speaker: TaskManagerAgent
-
-context_variables {'CompletedTaskCount': 0, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': []}
-context_variables {'CompletedTaskCount': 0, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': []}
-
->>>>>>>> USING AUTO REPLY...
-TaskManagerAgent (to chat_manager):
-
-***** Suggested tool call (call_NG9mq8dtBEthy8YDsREjiRER): initiate_tasks *****
-Arguments:
-{"ingestions": [{"path_or_url": "../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf"}], "queries": [{"query_type": "RAG_QUERY", "query": "What is the fiscal year 2024 financial summary?"}]}
-*******************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION initiate_tasks...
-Call ID: call_NG9mq8dtBEthy8YDsREjiRER
-Input arguments: {'ingestions': [{'path_or_url': '../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf'}], 'queries': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'context_variables': {'CompletedTaskCount': 0, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': []}}
-initiate_tasks context_variables {'CompletedTaskCount': 0, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': []}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_NG9mq8dtBEthy8YDsREjiRER) *****
-Updated context variables with task decisions
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: TaskManagerAgent
-
-context_variables {'CompletedTaskCount': 0, 'DocumentsToIngest': [{'path_or_url': '../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf'}], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
-context_variables {'CompletedTaskCount': 0, 'DocumentsToIngest': [{'path_or_url': '../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf'}], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
-
->>>>>>>> USING AUTO REPLY...
-TaskManagerAgent (to chat_manager):
-
-***** Suggested tool call (call_I30PrRbDngJPmidOOKutGhsa): transfer_TaskManagerAgent_to_DoclingDocIngestAgent *****
-Arguments:
-{}
-*******************************************************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_DoclingDocIngestAgent...
-Call ID: call_I30PrRbDngJPmidOOKutGhsa
-Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_I30PrRbDngJPmidOOKutGhsa) *****
-Swarm agent --> DoclingDocIngestAgent
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: DoclingDocIngestAgent
-
-
->>>>>>>> USING AUTO REPLY...
-DoclingDocIngestAgent (to chat_manager):
-
-***** Suggested tool call (call_zloTpZZrxiNcvyflE0AHSjAw): data_ingest_task *****
-Arguments:
-{}
-*********************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION data_ingest_task...
-Call ID: call_zloTpZZrxiNcvyflE0AHSjAw
-Input arguments: {'context_variables': {'CompletedTaskCount': 0, 'DocumentsToIngest': [{'path_or_url': '../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf'}], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}}
-INFO:autogen.agents.experimental.document_agent.document_utils:Error when checking if ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf is a valid URL: Invalid URL.
-INFO:autogen.agents.experimental.document_agent.document_utils:Detected file. Returning file path...
-INFO:docling.document_converter:Going to convert document batch...
-/home/vscode/.local/lib/python3.10/site-packages/docling/models/easyocr_model.py:58: UserWarning: Deprecated field. Better to set the `accelerator_options.device` in `pipeline_options`. When `use_gpu and accelerator_options.device == AcceleratorDevice.CUDA` the GPU is used to run EasyOCR. Otherwise, EasyOCR runs in CPU.
-  warnings.warn(
-INFO:docling.utils.accelerator_utils:Accelerator device: 'cpu'
-INFO:docling.utils.accelerator_utils:Accelerator device: 'cpu'
-INFO:docling.pipeline.base_pipeline:Processing document Toast_financial_report.pdf
-INFO:docling.document_converter:Finished converting document Toast_financial_report.pdf in 16.33 sec.
-INFO:autogen.agents.experimental.document_agent.parser_utils:Document converted in 16.33 seconds.
-INFO:autogen.agents.experimental.document_agent.docling_query_engine:Collection docling-parsed-docs was created in the database.
-INFO:autogen.agents.experimental.document_agent.docling_query_engine:Loading input doc: /workspaces/ag2/notebook/parsed_docs/Toast_financial_report.md
-INFO:autogen.agents.experimental.document_agent.docling_query_engine:Documents are loaded successfully.
-INFO:autogen.agents.experimental.document_agent.docling_query_engine:VectorDB index was created with input documents
-docling ingest: {'CompletedTaskCount': 1, 'DocumentsToIngest': [], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
- {'CompletedTaskCount': 1, 'DocumentsToIngest': [], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_zloTpZZrxiNcvyflE0AHSjAw) *****
-Data Ingestion Task Completed for ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: TaskManagerAgent
-
-context_variables {'CompletedTaskCount': 1, 'DocumentsToIngest': [], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
-context_variables {'CompletedTaskCount': 1, 'DocumentsToIngest': [], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}
-
->>>>>>>> USING AUTO REPLY...
-TaskManagerAgent (to chat_manager):
-
-***** Suggested tool call (call_jDHDy8MHHqvucS89X62yUpFE): transfer_TaskManagerAgent_to_QueryAgent *****
-Arguments:
-{}
-********************************************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_QueryAgent...
-Call ID: call_jDHDy8MHHqvucS89X62yUpFE
-Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_jDHDy8MHHqvucS89X62yUpFE) *****
-Swarm agent --> QueryAgent
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: QueryAgent
-
-
->>>>>>>> USING AUTO REPLY...
-QueryAgent (to chat_manager):
-
-***** Suggested tool call (call_YFLZPfxUvG0cBqWw0dnH2keA): execute_rag_query *****
-Arguments:
-{}
-**********************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION execute_rag_query...
-Call ID: call_YFLZPfxUvG0cBqWw0dnH2keA
-Input arguments: {'context_variables': {'CompletedTaskCount': 1, 'DocumentsToIngest': [], 'QueriesToRun': [{'query_type': 'RAG_QUERY', 'query': 'What is the fiscal year 2024 financial summary?'}], 'QueryResults': [], 'TaskInitiated': True}}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_YFLZPfxUvG0cBqWw0dnH2keA) *****
-For the fiscal year 2024, Toast, Inc. reported total assets of $2,227 million as of September 30, 2024, compared to $1,958 million as of December 31, 2023. The total liabilities were $807 million, and stockholders' equity was $1,420 million. The company achieved total revenue of $3,622 million for the nine months ended September 30, 2024, with a gross profit of $857 million. Operating expenses totaled $873 million, resulting in a loss from operations of $16 million. The net loss for the period was $13 million, with basic and diluted loss per share of $0.02.
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: QueryAgent
-
-
->>>>>>>> USING AUTO REPLY...
-QueryAgent (to chat_manager):
-
-For the fiscal year 2024, Toast, Inc. reported the following financial summary:
-- Total assets: $2,227 million as of September 30, 2024, compared to $1,958 million as of December 31, 2023.
-- Total liabilities: $807 million.
-- Stockholders' equity: $1,420 million.
-- Total revenue: $3,622 million for the nine months ended September 30, 2024.
-- Gross profit: $857 million.
-- Operating expenses: $873 million, leading to a loss from operations of $16 million.
-- Net loss for the period: $13 million.
-- Basic and diluted loss per share: $0.02.
-
---------------------------------------------------------------------------------
-
-Next speaker: TaskManagerAgent
-
-context_variables {'CompletedTaskCount': 2, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': [{'query': 'What is the fiscal year 2024 financial summary?', 'result': "For the fiscal year 2024, Toast, Inc. reported total assets of $2,227 million as of September 30, 2024, compared to $1,958 million as of December 31, 2023. The total liabilities were $807 million, and stockholders' equity was $1,420 million. The company achieved total revenue of $3,622 million for the nine months ended September 30, 2024, with a gross profit of $857 million. Operating expenses totaled $873 million, resulting in a loss from operations of $16 million. The net loss for the period was $13 million, with basic and diluted loss per share of $0.02."}], 'TaskInitiated': True}
-context_variables {'CompletedTaskCount': 2, 'DocumentsToIngest': [], 'QueriesToRun': [], 'QueryResults': [{'query': 'What is the fiscal year 2024 financial summary?', 'result': "For the fiscal year 2024, Toast, Inc. reported total assets of $2,227 million as of September 30, 2024, compared to $1,958 million as of December 31, 2023. The total liabilities were $807 million, and stockholders' equity was $1,420 million. The company achieved total revenue of $3,622 million for the nine months ended September 30, 2024, with a gross profit of $857 million. Operating expenses totaled $873 million, resulting in a loss from operations of $16 million. The net loss for the period was $13 million, with basic and diluted loss per share of $0.02."}], 'TaskInitiated': True}
-
->>>>>>>> USING AUTO REPLY...
-TaskManagerAgent (to chat_manager):
-
-***** Suggested tool call (call_3XuWepUFg5FPt6C6JtzrxbFJ): transfer_TaskManagerAgent_to_SummaryAgent *****
-Arguments:
-{}
-**********************************************************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: _Swarm_Tool_Executor
-
-
->>>>>>>> EXECUTING FUNCTION transfer_TaskManagerAgent_to_SummaryAgent...
-Call ID: call_3XuWepUFg5FPt6C6JtzrxbFJ
-Input arguments: {}
-_Swarm_Tool_Executor (to chat_manager):
-
-***** Response from calling tool (call_3XuWepUFg5FPt6C6JtzrxbFJ) *****
-Swarm agent --> SummaryAgent
-**********************************************************************
-
---------------------------------------------------------------------------------
-
-Next speaker: SummaryAgent
-
-
->>>>>>>> USING AUTO REPLY...
-SummaryAgent (to chat_manager):
-
-The fiscal year 2024 financial summary for Toast, Inc. is as follows:
-
-- Total assets increased to $2,227 million by September 30, 2024, from $1,958 million at the end of 2023.
-- The company's total liabilities stood at $807 million.
-- Stockholders' equity was reported at $1,420 million.
-- Toast, Inc. generated total revenue of $3,622 million for the nine months ending September 30, 2024.
-- The company recorded a gross profit of $857 million.
-- Operating expenses amounted to $873 million, resulting in an operating loss of $16 million.
-- There was a net loss of $13 million for the period, with a basic and diluted loss per share of $0.02.
-
---------------------------------------------------------------------------------
-Document_Agent (to user):
-
-The fiscal year 2024 financial summary for Toast, Inc. is as follows:
-
-- Total assets increased to $2,227 million by September 30, 2024, from $1,958 million at the end of 2023.
-- The company's total liabilities stood at $807 million.
-- Stockholders' equity was reported at $1,420 million.
-- Toast, Inc. generated total revenue of $3,622 million for the nine months ending September 30, 2024.
-- The company recorded a gross profit of $857 million.
-- Operating expenses amounted to $873 million, resulting in an operating loss of $16 million.
-- There was a net loss of $13 million for the period, with a basic and diluted loss per share of $0.02.
-
---------------------------------------------------------------------------------
+### Example with Citations
+
+```python
+# DocAgent with citation support
+document_agent = DocAgent(
+    llm_config=llm_config,
+    enable_citations=True,
+    citation_chunk_size=512
+)
+
+response = document_agent.run(
+    "Ingest the document and explain the key financial metrics with citations",
+    max_turns=1
+)
+
+response.process()
 ```
+
+## Collections
+
+By default, [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent) will ingest documents into the same collection. Every time you run the agent, it will utilize this collection, enabling you to keep documents ingested across different runs.
+
+However, if you want to run multiple [`DocAgent`](/docs/api-reference/autogen/agents/experimental/DocAgent)s or want to ingest into a clean or specific vector store collection, you can use the `collection_name` parameter when creating the agent to set a unique collection name.
+
+```python
+from autogen import LLMConfig
+from autogen.agents.experimental import DocAgent
+
+llm_config = LLMConfig({"api_type": "openai", "model": "gpt-5-nano"})
+
+# Create our DocAgents with their own collections
+# so that their ingested data and queries will be unique to them
+document_agent_apple = DocAgent(
+    collection_name="apple_financials",
+    llm_config=llm_config,
+)
+
+document_agent_nvidia = DocAgent(
+    collection_name="nvidia_financials",
+    llm_config=llm_config,
+)
+```
+
+## Performance Characteristics
+
+The new DocAgent architecture provides several performance improvements:
+
+- **Reduced Latency**: Streamlined 3-agent architecture reduces communication overhead
+- **Concurrent Processing**: Both document ingestion and query execution support concurrent operations
+- **Efficient Memory Usage**: Optimized context management and document persistence
+- **Structured Processing**: Pydantic-based task categorization ensures reliable processing
 
 ## DocAgent Performance
 
@@ -432,10 +279,10 @@ Summary:
 | 3 | URL to PDF annual report, query specific figures | ✅ | ✅ | ✅ |
 | 4 | URL to PDF document, query to explain | ✅ | ✅ | ✅ |
 | 5 | Local file, PDF, query to explain | ✅ | ✅ | ✅ |
-| 6 | URL to JPG of scanned invoice, query a figure | ❌ | 🔶 | 🔶 |
+| 6 | URL to JPG of scanned invoice, query a figure | ❌ | 🔶 | �� |
 | 7 | Local file, PNG of scanned invoice, query a figure | ❌ | ❌ | ❌ |
-| 8 | URL to XLSX using a redirect URL, query table | ✅ | 🔶 | 🔶 |
-| 9 | URL to XLSX, query data | ❌ | 🔶 | ✅ |
+| 8 | URL to XLSX using a redirect URL, query table | ✅ | 🔶 | �� |
+| 9 | URL to XLSX, query data | ❌ | �� | ✅ |
 | 10 | URL to CSV, query a figure | ❌ | N/A | N/A |
 | 11 | URL to CSV, query to summarize | ✅ | ✅ | ✅ |
 | 12 | URL with CSV, query unrelated | ✅ | ✅ | ✅ |

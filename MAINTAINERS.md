@@ -25,7 +25,7 @@
 | George Sideris    | [giorgossideris](https://github.com/giorgossideris)        | -                        | reasoning, RAG                          |
 | Beibin Li         | [BeibinLi](https://github.com/BeibinLi)                    | GenAI, Meta              | multimodal, reasoning, optiguide        |
 | Nikita Pastukhov  | [Lancetnik](https://github.com/lancetnik)                  | -                        | A2A                                     |
-
+| Priyanshu Deshmukh| [Priyansh4320](https://github.com/priyansh4320)            | -                        | DocAgent, RAG                           |
 
 **Pending Maintainers list (Marked with \*, Waiting for explicit approval from the maintainers)**
 | Name            | GitHub Handle                                              | Organization           | Features                                |
