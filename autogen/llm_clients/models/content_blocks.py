@@ -51,6 +51,7 @@ class BaseContent(BaseModel):
     - Common type field for discriminated unions (ContentType enum or str for unknown types)
     - Extra field for storing unknown provider-specific data
     - Pydantic configuration for flexible field handling
+    - text property for extracting text representation
     """
 
     type: ContentType | str  # Enum for known types, str for forward compatibility
@@ -61,6 +62,14 @@ class BaseContent(BaseModel):
     class Config:
         # Allow extra fields to be stored in model
         extra = "allow"
+
+    def get_text(self) -> str:
+        """Extract text representation of content block.
+
+        Override in subclasses to provide specific text extraction logic.
+        Default returns empty string for content blocks without text.
+        """
+        return ""
 
 
 # ============================================================================
@@ -73,6 +82,10 @@ class TextContent(BaseContent):
 
     type: Literal[ContentType.TEXT] = ContentType.TEXT
     text: str
+
+    def get_text(self) -> str:
+        """Get text content."""
+        return self.text
 
 
 class ImageContent(BaseContent):
@@ -90,6 +103,8 @@ class ImageContent(BaseContent):
     data_uri: str | None = None
     detail: Literal["auto", "low", "high"] | None = None
 
+    # Inherits get_text() -> "" from BaseContent
+
 
 class AudioContent(BaseContent):
     """Audio content with optional transcript.
@@ -106,6 +121,12 @@ class AudioContent(BaseContent):
     data_uri: str | None = None
     transcript: str | None = None
 
+    def get_text(self) -> str:
+        """Get audio transcript as text."""
+        if self.transcript:
+            return f"audio transcript:{self.transcript}"
+        return ""
+
 
 class VideoContent(BaseContent):
     """Video content block.
@@ -121,6 +142,8 @@ class VideoContent(BaseContent):
     video_url: str | None = None
     data_uri: str | None = None
 
+    # Inherits get_text() -> "" from BaseContent
+
 
 class ReasoningContent(BaseContent):
     """Reasoning/chain-of-thought content (e.g., OpenAI o1/o3 models)."""
@@ -128,6 +151,10 @@ class ReasoningContent(BaseContent):
     type: Literal[ContentType.REASONING] = ContentType.REASONING
     reasoning: str
     summary: str | None = None
+
+    def get_text(self) -> str:
+        """Get reasoning text."""
+        return self.reasoning
 
 
 class CitationContent(BaseContent):
@@ -139,6 +166,12 @@ class CitationContent(BaseContent):
     snippet: str
     relevance_score: float | None = None
 
+    def get_text(self) -> str:
+        """Get citation title as text."""
+        if self.title:
+            return f"citation: {self.title}"
+        return ""
+
 
 class ToolCallContent(BaseContent):
     """Tool/function call request."""
@@ -148,6 +181,10 @@ class ToolCallContent(BaseContent):
     name: str
     arguments: str
 
+    def get_text(self) -> str:
+        """Get tool call as text."""
+        return f"tool call name: {self.name} tool call arguments: {self.arguments}"
+
 
 class ToolResultContent(BaseContent):
     """Tool/function execution result."""
@@ -155,6 +192,10 @@ class ToolResultContent(BaseContent):
     type: Literal[ContentType.TOOL_RESULT] = ContentType.TOOL_RESULT
     tool_call_id: str
     output: str
+
+    def get_text(self) -> str:
+        """Get tool result as text."""
+        return f"tool result: {self.output}"
 
 
 # ============================================================================

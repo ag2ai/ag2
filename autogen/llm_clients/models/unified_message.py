@@ -12,14 +12,11 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .content_blocks import (
-    AudioContent,
     BaseContent,
     CitationContent,
     ContentBlock,
     ReasoningContent,
-    TextContent,
     ToolCallContent,
-    ToolResultContent,
 )
 
 
@@ -97,22 +94,15 @@ class UnifiedMessage(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)  # Provider-specific extras
 
     def get_text(self) -> str:
-        """Extract all text content as string."""
+        """Extract all text content as string.
+
+        Uses the get_text() method of each content block for unified text extraction.
+        """
         text_parts = []
         for block in self.content:
-            if isinstance(block, TextContent):
-                text_parts.append(block.text)
-            elif isinstance(block, ReasoningContent):
-                text_parts.append(block.reasoning)
-            elif isinstance(block, AudioContent) and block.transcript:
-                text_parts.append("audio transcript:" + block.transcript)
-            elif isinstance(block, CitationContent) and block.title:
-                text_parts.append("citation: " + block.title)
-            elif isinstance(block, ToolResultContent):
-                text_parts.append("tool result: " + block.output)
-            elif isinstance(block, ToolCallContent):
-                text_parts.append("tool call name: " + block.name)
-                text_parts.append("tool call arguments: " + block.arguments)
+            block_text = block.get_text()
+            if block_text:  # Only include non-empty text
+                text_parts.append(block_text)
 
         return " ".join(text_parts)
 

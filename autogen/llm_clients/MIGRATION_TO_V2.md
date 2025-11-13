@@ -27,7 +27,7 @@ ModelClientV2 introduces a new protocol for LLM clients that returns rich, provi
 
 ### Benefits of ModelClientV2
 
-1. **Rich Content Support**: Access reasoning blocks, citations, thinking tokens, and other provider-specific features
+1. **Rich Content Support**: Access reasoning blocks, citations, multimodality, and other provider-specific features
 2. **Provider Agnostic**: Unified format across OpenAI, Anthropic, Gemini, and other providers
 3. **Type Safety**: Typed content blocks with enum-based content types
 4. **Forward Compatibility**: Handles new content types without code changes
@@ -227,13 +227,7 @@ class ConversableAgent:
 ```
 
 ### Phase 5: Deprecation (Long-term)
-**Status**: 📋 Planned (18+ months)
-
-**Timeline:**
-- **Month 0-6**: Phase 1-3 (Dual interface for all providers)
-- **Month 6-12**: Phase 4 (Agent layer updates, community feedback)
-- **Month 12-18**: Deprecation warnings for V1-only code
-- **Month 18+**: Remove V1 compatibility layer (major version bump)
+**Status**: 📋 Planned
 
 ## Step-by-Step Migration
 
@@ -783,6 +777,6 @@ GenericContent(
 
 ---
 
-**Last Updated**: 2025-01-13
+**Last Updated**: 2025-11-13
 **Version**: 1.0
 **Status**: Phase 1 Complete (OpenAI), Phase 2 In Progress
