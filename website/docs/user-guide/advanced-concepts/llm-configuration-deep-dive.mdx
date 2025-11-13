@@ -2,17 +2,17 @@
 title: LLM Config Deep-dive
 ---
 
-In this deep-dive we run through the LLM configuration in depth, including the useful `OAI_CONFIG_LIST` file.
+In this deep-dive we run through the LLM configuration in depth, including advanced sourcing from environment variables and the (now secondary) `OAI_CONFIG_LIST` file.
 
 # LLM Configuration
 
-In AG2, agents use LLMs as key components to understand and react. To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4.1`:
+In AG2, agents use LLMs as key components to understand and react. To configure an agent's access to LLMs, you can specify an `llm_config` argument in its constructor. For example, the following snippet shows a configuration that uses `gpt-4o`:
 
 ```python
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-4o", "api_key": os.environ["OPENAI_API_KEY"]})
 ```
 
 <Warning>
@@ -27,14 +27,35 @@ import autogen
 assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
-## Introduction to `config_list`
+## Recommended Credential Sourcing: Environment Variables and Provider Discovery
 
-Different tasks may require different models, and the `config_list` allows specifying the different endpoints and configurations that are to be used. It is a list of dictionaries, each of which contains the following keys depending on the kind of endpoint being used:
+AG2 now supports a modern approach to credential configuration: you should set credentials for popular providers (OpenAI, Azure, Gemini/Google, Anthropic, etc.) as _environment variables_ such as `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `GEMINI_API_KEY`, etc. This is the **recommended and primary** approach. The system will discover and aggregate all available credentials, supporting multiple providers and tags automatically (see also the [setup guide](/docs/contributor-guide/setup-development-environment)).
+
+Example:
+```bash
+export OPENAI_API_KEY="<your_openai_api_key>"
+export AZURE_OPENAI_API_KEY="<your_azure_api_key>"
+export AZURE_OPENAI_API_BASE="<your_azure_base_url>"
+export GEMINI_API_KEY="<your_gemini_api_key>"
+export ANTHROPIC_API_KEY="<your_anthropic_api_key>"
+```
+
+AG2 test and utility code will automatically find and combine these credentials, including tags and current model names supported by each provider. **This is now the preferred method.**
+
+<Tip>
+If both individual environment variables and OAI_CONFIG_LIST are provided, AG2 will prioritize environment variables and provider aggregation for credentials.
+</Tip>
+
+## OAI_CONFIG_LIST Pattern (Secondary/Legacy)
+
+AG2 also supports the legacy pattern of specifying a `config_list` via the environment variable `OAI_CONFIG_LIST` in JSON format or using a JSON file.
+
+A `config_list` is a list of dictionaries, each of which contains the following keys depending on the kind of endpoint being used:
 
 <Tabs>
   <Tab title="OpenAI">
 - `api_type` (str, required): The model provider
-- `model` (str, required): The identifier of the model to be used, such as 'gpt-5', 'gpt-5-nano'.
+- `model` (str, required): The identifier of the model to be used, such as 'gpt-4o', 'gpt-4.1-mini'.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
 - `tags` (List[str], optional): Tags which can be used for filtering.
@@ -44,25 +65,25 @@ Different tasks may require different models, and the `config_list` allows speci
     [
       {
         "api_type": "openai",
-        "model": "gpt-5",
+        "model": "gpt-4o",
         "api_key": os.environ['OPENAI_API_KEY']
       }
     ]
     ```
   </Tab>
   <Tab title="Azure OpenAI">
-- `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
+- `model` (str, required): The deployment to be used. For current Azure usage, deployments like 'gpt-4.1-mini' (official replacement for retired gpt-3.5-turbo) or 'gpt-4o', according to your Azure setup.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `api_type`: `azure`
-- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
+- `base_url` (str, optional): The base URL of the API endpoint.
 - `api_version` (str, optional): The version of the Azure API you wish to use.
-- `tags` (List[str], optional): Tags which can be used for filtering.
+- `tags` (List[str], optional): Tags for filtering.
 
     Example:
     ```json
     [
       {
-        "model": "my-gpt-4.1-deployment",
+        "model": "my-gpt-4.1-mini-deployment",
         "api_type": "azure",
         "api_key": os.environ['AZURE_OPENAI_API_KEY'],
         "base_url": "https://ENDPOINT.openai.azure.com/",
@@ -73,9 +94,9 @@ Different tasks may require different models, and the `config_list` allows speci
   </Tab>
   <Tab title="Other OpenAI compatible">
 - `model` (str, required): The identifier of the model to be used, such as 'llama-7B'.
-- `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
-- `base_url` (str, optional): The base URL of the API endpoint. This is the root address where API calls are directed.
-- `tags` (List[str], optional): Tags which can be used for filtering.
+- `api_key` (str, optional): API key as needed.
+- `base_url` (str, optional): API endpoint.
+- `tags` (List[str], optional): Filtering tags.
 
     Example:
     ```json
@@ -91,12 +112,12 @@ Different tasks may require different models, and the `config_list` allows speci
 </Tabs>
 
 <Tip>
-These will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
+Custom (non-OpenAI) model clients are supported. See [the relevant guide](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
 </Tip>
 
-### `OAI_CONFIG_LIST` pattern
+### Using OAI_CONFIG_LIST
 
-A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `from_json` method to load it:
+The config list can be loaded from an environment variable string or path to JSON file, as shown below:
 
 ```python
 llm_config = autogen.LLMConfig.from_json(
@@ -107,80 +128,66 @@ llm_config = autogen.LLMConfig.from_json(
 assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
-This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
-
-This function interprets the `env_or_file` argument as follows:
-
-- If `env_or_file` is an environment variable then:
-    - It will first try to load the file from the path specified in the environment variable.
-    - If there is no file, it will try to interpret the environment variable as a JSON string.
-- Otherwise, it will try to open the file at the path specified by `env_or_file`.
+This will, in order of priority:
+- First, try to load the file from the path specified in the environment variable.
+- Next, if no file is found, interpret the environment variable as a JSON string.
+- Or, if provided as a path, open the file at that path directly.
 
 ### Why is it a list?
 
-Being a list allows you to define multiple models that can be used by the agent. This is useful for a few reasons:
+A list allows you to define multiple models/providers to be tried in order or to enable filtering by tags, as described below. Modern AG2 will also aggregate providers discovered from individual environment variables, if set.
 
 - If one model times out or fails, the agent can try another model.
-- Having a single global list of models and filtering it based on certain keys (e.g. name, tag) in order to pass select models into a certain agent (e.g. use cheaper GPT 4o-mini for agents solving easier tasks)
-- While the core agents, (e.g. conversable or assistant) do not have special logic around selecting configs, some of the specialized agents *may* have logic to select the best model based on the task at hand.
+- Tags and filtering make switching between deployment types and model providers easier.
 
-### How does an agent decide which model to pick out of the list?
+<Warning>
+Make sure to use only currently-supported models. For instance, `gpt-35-turbo-instruct` is being retired and should be replaced with `gpt-4.1-mini` as per current best practices. See provider release notes for deprecation timelines.
+</Warning>
 
-An agent uses the very first model available in the "config_list" and makes LLM calls against this model. If the model fails (e.g. API throttling) the agent will retry the request against the 2nd model and so on until prompt completion is received (or throws an error if none of the models successfully completes the request). In general there's no implicit/hidden logic inside agents that is used to pick "the best model for the task". However, some specialized agents may attempt to choose "the best model for the task". It is developers responsibility to pick the right models and use them with agents.
+### Model selection and config filtering
 
-### Config list filtering
+The agent chooses the first working model from the config list, trying others if there are failures (e.g., throttling). There is no implicit logic in core agents; some specialized agents may attempt more sophisticated model selection. Developers should ensure order and filtering matches their intentions.
 
-As described above, the list can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you want to select a config with specific model(s), you can pass either a single string or a list of strings:
+The list can be filtered using a filter dictionary, for example:
 
 ```python
-# Single model (string)
-filter_dict = {"model": "gpt-5-nano"}
+# Single model
+filter_dict = {"model": "gpt-4o"}
 
-# Multiple models (list)
-filter_dict = {"model": ["gpt-5-nano", "gpt-4.1"]}
+# Multiple models
+filter_dict = {"model": ["gpt-4o", "gpt-4.1-mini"]}
 ```
 
-This can then be applied to a config when constructing an `LLM_CONFIG` with the `where` method:
-
+Used as follows:
 ```python
 llm_config = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(**filter_dict)
-```
-
-Or, directly when loading the config list using `from_json`:
-
-```python
+# Or
 llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(**filter_dict)
 ```
 
 #### Tags
 
-Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy way to smooth over this inconsistency. Tags are a list of strings in the `config_list`, for example for the following `config_list`:
+Config list entries can include tags (e.g., `gpt-4o`, `gpt-4.1-mini`, `llama`), making filtering easier across provider and deployment name differences.
 
 ```python
 config_list = [
-    {"api_type": "openai", "model": "my-gpt-4.1-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
+    {"api_type": "openai", "model": "my-gpt-4o-deployment", "api_key": "", "tags": ["gpt-4o", "openai"]},
     {"api_type": "openai", "model": "llama-7B", "base_url": "http://127.0.0.1:8080", "tags": ["llama", "local"]},
 ]
 ```
 
-When filtering the `config_list`, you can pass a single tag or multiple tags. A config is selected if it has at least one of the specified tags:
-
+Filter by single or multiple tags:
 ```python
-# Single tag
 filter_dict = {"tags": "llama"}
 llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
-assert len(llm_config.config_list) == 1
 
-# Multiple tags
-filter_dict = {"tags": ["llama", "another_tag"]}
+filter_dict = {"tags": ["llama", "gpt-4o"]}
 llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
 ```
 
 ### Adding http client in llm_config for proxy
 
-In AG2, a deepcopy is used on llm_config to ensure that the llm_config passed by user is not modified internally. You may get an error if the llm_config contains objects of a class that do not support deepcopy. To fix this, you need to implement a `__deepcopy__` method for the class.
-
-The below example shows how to implement a `__deepcopy__` method for http client and add a  proxy.
+Custom http clients/proxying are supported, with the caveat that classes must support deepcopy:
 
 ```python
 #!pip install httpx
@@ -194,91 +201,27 @@ class MyHttpClient(httpx.Client):
 
 llm_config = LLMConfig(config_list={
     "api_type": "openai",
-    "model": "my-gpt-5-deployment",
+    "model": "my-gpt-4o-deployment",
     "api_key": "",
 }, http_client=MyHttpClient(proxy="http://localhost:8030"))
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
 
-Azure Active Directory (AAD) provides secure access to resources and applications. Follow the steps below to configure AAD authentication for AG2.
+Azure Active Directory (AAD) provides secure access to resources and applications. See provider docs and examples for up-to-date setup of AAD credentials including use of environment variables, client ID, and tenant ID.
 
-#### Prerequisites
-- An Azure subscription - [Create one for free](https://azure.microsoft.com/en-us/pricing/purchase-options/azure-account?icid=azurefreeaccount).
-- Access granted to the Azure OpenAI Service in the desired Azure subscription.
-- Appropriate permissions to register an application in AAD.
-- Custom subdomain names are required to enable features like Microsoft Entra ID for authentication.
-- Azure CLI - [Installation Guide](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli).
+#### Prerequisites & Steps
+- See the detailed guide above for registering an AAD application, granting permissions, obtaining client/tenant IDs, and configuring your app.
+- Make sure you configure AG2 to use the appropriate `llm_config` dictionary, setting `azure_ad_token_provider` as needed.
 
-For more detailed and up-to-date instructions, please refer to the official [Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/).
-
-#### Step 1: Register an Application in AAD
-1. Navigate to the [Azure portal](https://azure.microsoft.com/en-us/get-started/azure-portal).
-2. Go to `Azure Active Directory` > `App registrations`.
-3. Click on `New registration`.
-4. Enter a name for your application.
-5. Set the `Redirect URI` (optional).
-6. Click `Register`.
-
-For detailed instructions, refer to the official [Azure AD Quickstart documentation](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate).
-
-#### Step 2: Configure API Permissions
-1. After registration, go to `API permissions`.
-2. Click `Add a permission`.
-3. Select `Microsoft Graph` and then `Delegated permissions`.
-4. Add the necessary permissions (e.g., `User.Read`).
-
-For more details, see [API permissions in Microsoft Graph](https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview)
-
-#### Step 3: Obtain Client ID and Tenant ID
-1. Go to `Overview` of your registered application.
-2. Note down the `Application (client) ID` and `Directory (tenant) ID`.
-
-For more details, visit [Register an application with the Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=certificate)
-
-#### Step 4: Configure Your Application
-Use the obtained `Client ID` and `Tenant ID` in your application configuration. Here’s an example of how to do this in your configuration file:
-```
-aad_config = {
-    "client_id": "YOUR_CLIENT_ID",
-    "tenant_id": "YOUR_TENANT_ID",
-    "authority": "https://login.microsoftonline.com/YOUR_TENANT_ID",
-    "scope": ["https://graph.microsoft.com/.default"],
-}
-```
-#### Step 5: Authenticate and Acquire Tokens
-Use the following code to authenticate and acquire tokens:
-
-```
-from msal import ConfidentialClientApplication
-
-app = ConfidentialClientApplication(
-    client_id=aad_config["client_id"],
-    client_credential="YOUR_CLIENT_SECRET",
-    authority=aad_config["authority"]
-)
-
-result = app.acquire_token_for_client(scopes=aad_config["scope"])
-
-if "access_token" in result:
-    print("Token acquired")
-else:
-    print("Error acquiring token:", result.get("error"))
-```
-
-For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
-
-
-#### Step 6: Configure Azure OpenAI with AAD Auth in AG2
-To use AAD authentication with Azure OpenAI in AG2, configure the `llm_config` with the necessary parameters.
-
-Here is an example configuration:
+<details>
+<summary>Example</summary>
 
 ```
 from autogen import LLMConfig
 
 llm_config = LLMConfig(config_list={
-    "model": "gpt-4",
+    "model": "gpt-4o",
     "base_url": "YOUR_BASE_URL",
     "api_type": "azure",
     "api_version": "2025-01-01",
@@ -286,45 +229,30 @@ llm_config = LLMConfig(config_list={
     "azure_ad_token_provider": "DEFAULT"
 })
 ```
-
-For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
-
-In this configuration:
-- `model`: The Azure OpenAI deployment name.
-- `base_url`: The base URL of the Azure OpenAI endpoint.
-- `api_type`: Should be set to "azure".
-- `api_version`: The API version to use.
-- `azure_ad_token_provider`: Set to "DEFAULT" to use the default token provider.
+</details>
 
 #### Example of Initializing an Assistant Agent with AAD Auth
 ```
 import autogen
-
-# Initialize the assistant agent with the AAD authenticated config
 assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
 #### Troubleshooting
-If you encounter issues, check the following:
-- Ensure your `Client ID` and `Tenant ID` are correct.
-- Verify the permissions granted to your application.
-- Check network connectivity and Azure service status.
-
-This documentation provides a complete guide to configure and use AAD authentication with Azure OpenAI in AG2.
+- Double-check all environment variables, especially for provider credentials (OPENAI_API_KEY, AZURE_OPENAI_API_KEY, etc.),
+- Ensure "model" points to a currently-supported model/deployment,
+- If using OAI_CONFIG_LIST, verify structure and file/location.
 
 ## Other configuration parameters
 
-Besides the `config_list`, there are other parameters that can be used to configure the LLM. These are split between parameters specifically used by Autogen and those passed into the model client.
+Besides the `config_list`, you may configure:
 
-### AG2 specific parameters
+### AG2-specific parameters
 
-- `cache_seed` - This is a legacy parameter and not recommended to be used unless the reason for using it is to disable the default caching behavior. To disable default caching, set this to `None`. Otherwise, by default or if an int is passed the DiskCache will be used. For the new way of using caching, pass a Cache object into `initiate_chat`.
+- `cache_seed` - Used for controlling LLM request caching. Typically should be left as default unless altering caching is intentional.
 
 ### Extra model client parameters
 
-It is also possible to passthrough parameters through to the OpenAI client. Parameters that correspond to the [`OpenAI` client](https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/_client.py#L67) or the [`OpenAI` completions create API](https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/resources/completions.py#L35) can be supplied.
-
-This is commonly used for things like `temperature`, or `timeout`.
+Any parameters supported by the client can be passed through, including `temperature`, `timeout`, etc. See [`OpenAI` client documentation](https://github.com/openai/openai-python/blob/d231d1fa783967c1d3a1db3ba1b52647fff148ac/src/openai/_client.py#L67) for options.
 
 ## Example
 
@@ -333,7 +261,7 @@ from autogen import LLMConfig
 
 llm_config = LLMConfig(
     {
-        "model": "my-gpt-5-deployment",
+        "model": "my-gpt-4o-deployment",
         "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
         "api_type": "azure",
         "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
@@ -352,9 +280,14 @@ llm_config = LLMConfig(
 
 ## Other helpers for loading a config list
 
-- [`get_config_list`](/docs/api-reference/autogen/get_config_list): Generates configurations for API calls, primarily from provided API keys.
-- [`config_list_openai_aoai`](/docs/api-reference/autogen/config_list_openai_aoai): Constructs a list of configurations using both Azure OpenAI and OpenAI endpoints, sourcing API keys from environment variables or local files.
-- [`config_list_from_models`](/docs/api-reference/autogen/config_list_from_models): Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
-- [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
+- [`get_config_list`](/docs/api-reference/autogen/get_config_list): Generates configurations for API calls, primarily from provided API keys or modern environment variables.
+- [`config_list_openai_aoai`](/docs/api-reference/autogen/config_list_openai_aoai): Supports loading from OpenAI and Azure endpoints using modern environment variable-based patterns.
+- [`config_list_from_models`](/docs/api-reference/autogen/config_list_from_models): Useful for targeting groups of models according to supported deployment names.
+- [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Loads from a `.env` file for credential management in local/dev environments.
 
-See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.
+See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples on using these functions with both environment variables and OAI_CONFIG_LIST.
+
+<Tip>
+For the most reliable experience, use environment variables to set credentials for all LLM providers you wish to use. Only use OAI_CONFIG_LIST for legacy compatibility or special projects.
+</Tip>
+ 
