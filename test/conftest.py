@@ -25,6 +25,8 @@ def mock() -> MagicMock:
 def async_mock() -> AsyncMock:
     return AsyncMock()
 
+__all__ = ["Credentials"]
+
 
 def patch_pytest_terminal_writer() -> None:
     import _pytest._io
