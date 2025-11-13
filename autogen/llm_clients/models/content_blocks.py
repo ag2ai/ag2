@@ -12,9 +12,32 @@ This module provides an extensible content block architecture that supports:
 """
 
 import warnings
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+# ============================================================================
+# Content Type Enum
+# ============================================================================
+
+
+class ContentType(str, Enum):
+    """Known content types supported by the system.
+
+    This enum provides type safety for known content types while still allowing
+    unknown types via str union in BaseContent.
+    """
+
+    TEXT = "text"
+    IMAGE = "image"
+    AUDIO = "audio"
+    VIDEO = "video"
+    REASONING = "reasoning"
+    CITATION = "citation"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+
 
 # ============================================================================
 # Base Content Block
@@ -25,12 +48,12 @@ class BaseContent(BaseModel):
     """Base class for all content blocks with extension points.
 
     This serves as the foundation for all content types, providing:
-    - Common type field for discriminated unions
+    - Common type field for discriminated unions (ContentType enum or str for unknown types)
     - Extra field for storing unknown provider-specific data
     - Pydantic configuration for flexible field handling
     """
 
-    type: str  # Not Literal - allows any string for unknown types!
+    type: ContentType | str  # Enum for known types, str for forward compatibility
 
     # Extension point for unknown fields
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -48,7 +71,7 @@ class BaseContent(BaseModel):
 class TextContent(BaseContent):
     """Plain text content block."""
 
-    type: Literal["text"] = "text"
+    type: Literal[ContentType.TEXT] = ContentType.TEXT
     text: str
 
 
@@ -62,7 +85,7 @@ class ImageContent(BaseContent):
     Note: Provide either image_url OR data_uri, not both.
     """
 
-    type: Literal["image"] = "image"
+    type: Literal[ContentType.IMAGE] = ContentType.IMAGE
     image_url: str | None = None
     data_uri: str | None = None
     detail: Literal["auto", "low", "high"] | None = None
@@ -78,7 +101,7 @@ class AudioContent(BaseContent):
     Note: Provide either audio_url OR data_uri, not both.
     """
 
-    type: Literal["audio"] = "audio"
+    type: Literal[ContentType.AUDIO] = ContentType.AUDIO
     audio_url: str | None = None
     data_uri: str | None = None
     transcript: str | None = None
@@ -94,7 +117,7 @@ class VideoContent(BaseContent):
     Note: Provide either video_url OR data_uri, not both.
     """
 
-    type: Literal["video"] = "video"
+    type: Literal[ContentType.VIDEO] = ContentType.VIDEO
     video_url: str | None = None
     data_uri: str | None = None
 
@@ -102,7 +125,7 @@ class VideoContent(BaseContent):
 class ReasoningContent(BaseContent):
     """Reasoning/chain-of-thought content (e.g., OpenAI o1/o3 models)."""
 
-    type: Literal["reasoning"] = "reasoning"
+    type: Literal[ContentType.REASONING] = ContentType.REASONING
     reasoning: str
     summary: str | None = None
 
@@ -110,7 +133,7 @@ class ReasoningContent(BaseContent):
 class CitationContent(BaseContent):
     """Web search citation or reference."""
 
-    type: Literal["citation"] = "citation"
+    type: Literal[ContentType.CITATION] = ContentType.CITATION
     url: str
     title: str
     snippet: str
@@ -120,7 +143,7 @@ class CitationContent(BaseContent):
 class ToolCallContent(BaseContent):
     """Tool/function call request."""
 
-    type: Literal["tool_call"] = "tool_call"
+    type: Literal[ContentType.TOOL_CALL] = ContentType.TOOL_CALL
     id: str
     name: str
     arguments: str
@@ -129,7 +152,7 @@ class ToolCallContent(BaseContent):
 class ToolResultContent(BaseContent):
     """Tool/function execution result."""
 
-    type: Literal["tool_result"] = "tool_result"
+    type: Literal[ContentType.TOOL_RESULT] = ContentType.TOOL_RESULT
     tool_call_id: str
     output: str
 
@@ -168,7 +191,7 @@ class GenericContent(BaseContent):
         print(reflection.get_extra_fields()) # Only unknown fields
     """
 
-    type: str  # Any string allowed - not restricted to Literal
+    type: ContentType | str  # Inherits from BaseContent, can be enum or any string
 
     def get(self, key: str, default: Any = None) -> Any:
         """Dict-style get for any field (defined or extra).
@@ -236,15 +259,23 @@ class ContentParser:
     3. Later add new types to registry without breaking existing code
     """
 
-    # Registry of known types
-    _registry: dict[str, type[BaseContent]] = {
+    # Registry of known types (maps both enum values and string values)
+    _registry: dict[ContentType | str, type[BaseContent]] = {
+        ContentType.TEXT: TextContent,
         "text": TextContent,
+        ContentType.IMAGE: ImageContent,
         "image": ImageContent,
+        ContentType.AUDIO: AudioContent,
         "audio": AudioContent,
+        ContentType.VIDEO: VideoContent,
         "video": VideoContent,
+        ContentType.REASONING: ReasoningContent,
         "reasoning": ReasoningContent,
+        ContentType.CITATION: CitationContent,
         "citation": CitationContent,
+        ContentType.TOOL_CALL: ToolCallContent,
         "tool_call": ToolCallContent,
+        ContentType.TOOL_RESULT: ToolResultContent,
         "tool_result": ToolResultContent,
         # Registry grows as we add types - no code changes elsewhere!
     }
