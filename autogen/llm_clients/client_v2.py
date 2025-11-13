@@ -77,6 +77,7 @@ class ModelClientV2(Protocol):
 
     def create_v1_compatible(self, params: dict[str, Any]) -> Any:
         """Backward compatible - returns ChatCompletionExtended.
+        TODO Remove this method after migrating clients to V2.
 
         This method provides backward compatibility during migration by:
         1. Calling create() to get UnifiedResponse
@@ -97,6 +98,7 @@ class ModelClientV2(Protocol):
 
     def cost(self, response: UnifiedResponse) -> float:
         """Calculate cost from response.
+        TODO Move this method to private after migrating clients to V2.
 
         Args:
             response: UnifiedResponse from create()
@@ -109,6 +111,7 @@ class ModelClientV2(Protocol):
     @staticmethod
     def get_usage(response: UnifiedResponse) -> dict[str, Any]:
         """Extract usage statistics from response.
+        TODO Move this method to private after migrating clients to V2.
 
         Args:
             response: UnifiedResponse from create()
