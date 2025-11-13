@@ -1,44 +1,25 @@
 ```python
 import json
-
 from pydantic import BaseModel
 
-from autogen import ConversableAgent
+from autogen import ConversableAgent, LLMConfig
 
-# 1. Define our lesson plan JSON schema (matches expected LLM-structured output)
-lesson_plan_json_schema = {
-    "type": "object",
-    "properties": {
-        "title": {"type": "string"},
-        "learning_objectives": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "description": {"type": "string"}
-                },
-                "required": ["title", "description"],
-            }
-        },
-        "script": {"type": "string"}
-    },
-    "required": ["title", "learning_objectives", "script"],
-    "additionalProperties": False,
-}
+# 1. Define our lesson plan structure, a lesson with a number of objectives
+class LearningObjective(BaseModel):
+    title: str
+    description: str
 
-# 2. Use OpenAI V2 client and set response format as JSON schema
-llm_config = {
-    "config_list": [{
-        "api_type": "openai_v2",
-        "model": "gpt-5-nano",
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": lesson_plan_json_schema,
-        },
-    }],
-    "temperature": 0,
-}
+class LessonPlan(BaseModel):
+    title: str
+    learning_objectives: list[LearningObjective]
+    script: str
+
+# 2. Add our lesson plan structure to the LLM configuration
+llm_config = LLMConfig(config_list={
+    "api_type": "openai_v2",  # USE the V2 client for unified and structured output
+    "model": "gpt-5-nano",
+    # response_format is not needed—the V2 client always preserves structure
+})
 
 # 3. The agent's system message doesn't need any formatting instructions
 system_message = """You are a classroom lesson agent.
@@ -61,7 +42,7 @@ response = my_agent.run(
 # 5. Iterate through the chat automatically with console output
 response.process()
 
-# 6. Get and print our lesson plan (from structured JSON output)
-lesson_plan_json = json.loads(response.text)
-print(json.dumps(lesson_plan_json, indent=2))
+# 6. Get and parse our lesson plan using the Pydantic model (from the assistant's message text)
+lesson_plan = LessonPlan.parse_raw(response.text)
+print(lesson_plan.json(indent=2))
 ```
