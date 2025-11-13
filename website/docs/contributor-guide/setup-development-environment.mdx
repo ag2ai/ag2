@@ -29,7 +29,6 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
 === "Using OAI_CONFIG_LIST (legacy/secondary method)"
 
     As an alternative, AG2 also supports an environment variable called `OAI_CONFIG_LIST` in JSON format to store the LLM keys. `OAI_CONFIG_LIST` is a list of dictionaries where each dictionary contains the following keys:
-
     - `model`(required): The name of the OpenAI/LLM model.
     - `api_key`(optional): The API key for the OpenAI/LLM model.
     - `api_type`(optional): The type of the API key. It is used for non-OpenAI LLMs.
@@ -62,7 +61,7 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
 
     === "As environment variable"
 
-        Set the `OAI_CONFIG_LIST` environment variable in your terminal:
+        Simply set the `OAI_CONFIG_LIST` environment variable in your terminal:
         ```bash
         export OAI_CONFIG_LIST='[{"api_type": "openai", "model": "gpt-4o","api_key": "<your_api_key>","tags": ["gpt-4o", "tool", "vision"]},{"api_type": "openai", "model": "gpt-5-nano","api_key": "<your_api_key>","tags": ["gpt-5-nano", "tool", "vision"]},{"api_type": "google", "model": "gemini-pro","api_key": "<your_gemini_api_key>",}]'
         ```
@@ -70,6 +69,7 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
     === "As file"
 
         Save the `OAI_CONFIG_LIST` in a file and set the path as an environment variable. For example, if saved as `OAI_CONFIG_LIST.json`:
+
         ```bash
         export OAI_CONFIG_LIST="/path/to/OAI_CONFIG_LIST.json"
         ```
@@ -78,6 +78,12 @@ If you are contributing to the AG2 project, you will need an LLM key depending o
 
         Learn more about `OAI_CONFIG_LIST` [here](/docs/user-guide/advanced-concepts/llm-configuration-deep-dive).
 
+=== "Using LLM keys directly"
+
+    Alternatively, you can set up the LLM keys directly as environment variables. Following is an example of setting up the Gemini api key as an environment variable:
+    ```bash
+    export GEMINI_API_KEY="<your_api_key>"
+    ```
 
 ## Setting up the Development Environment
 
