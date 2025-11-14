@@ -17,7 +17,6 @@ from autogen.llm_clients.models import (
     ImageContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
     ToolResultContent,
     VideoContent,
@@ -47,12 +46,21 @@ class TestImageContent:
         content = ImageContent(type="image", image_url="https://example.com/image.jpg")
         assert content.type == "image"
         assert content.image_url == "https://example.com/image.jpg"
+        assert content.data_uri is None
         assert content.detail is None
 
     def test_image_content_with_detail(self):
         """Test creating an image with detail level."""
         content = ImageContent(type="image", image_url="https://example.com/image.jpg", detail="high")
         assert content.detail == "high"
+
+    def test_image_content_with_data_uri(self):
+        """Test creating an image with base64 data URI."""
+        data_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        content = ImageContent(type="image", data_uri=data_uri)
+        assert content.type == "image"
+        assert content.data_uri == data_uri
+        assert content.image_url is None
 
 
 class TestAudioContent:
@@ -63,12 +71,22 @@ class TestAudioContent:
         content = AudioContent(type="audio", audio_url="https://example.com/audio.mp3")
         assert content.type == "audio"
         assert content.audio_url == "https://example.com/audio.mp3"
+        assert content.data_uri is None
         assert content.transcript is None
 
     def test_audio_content_with_transcript(self):
         """Test creating audio with transcript."""
         content = AudioContent(type="audio", audio_url="https://example.com/audio.mp3", transcript="Hello world")
         assert content.transcript == "Hello world"
+
+    def test_audio_content_with_data_uri(self):
+        """Test creating an audio with base64 data URI."""
+        data_uri = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA"
+        content = AudioContent(type="audio", data_uri=data_uri, transcript="Test audio")
+        assert content.type == "audio"
+        assert content.data_uri == data_uri
+        assert content.audio_url is None
+        assert content.transcript == "Test audio"
 
 
 class TestVideoContent:
@@ -79,6 +97,15 @@ class TestVideoContent:
         content = VideoContent(type="video", video_url="https://example.com/video.mp4")
         assert content.type == "video"
         assert content.video_url == "https://example.com/video.mp4"
+        assert content.data_uri is None
+
+    def test_video_content_with_data_uri(self):
+        """Test creating a video with base64 data URI."""
+        data_uri = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAA"
+        content = VideoContent(type="video", data_uri=data_uri)
+        assert content.type == "video"
+        assert content.data_uri == data_uri
+        assert content.video_url is None
 
 
 class TestReasoningContent:
@@ -97,16 +124,6 @@ class TestReasoningContent:
             type="reasoning", reasoning="Step 1: ... Step 2: ...", summary="Analyzed systematically"
         )
         assert content.summary == "Analyzed systematically"
-
-
-class TestThinkingContent:
-    """Test ThinkingContent block."""
-
-    def test_create_thinking_content(self):
-        """Test creating a thinking content block."""
-        content = ThinkingContent(type="thinking", thinking="Hmm, interesting question...")
-        assert content.type == "thinking"
-        assert content.thinking == "Hmm, interesting question..."
 
 
 class TestCitationContent:
@@ -168,6 +185,10 @@ class TestGenericContent:
         """Test creating generic content with unknown type."""
         content = GenericContent(type="reflection", reflection="Upon reviewing...", confidence=0.87)
         assert content.type == "reflection"
+        # New: use get_extra_fields() or model_extra
+        assert content.get_extra_fields()["reflection"] == "Upon reviewing..."
+        assert content.model_extra["confidence"] == 0.87
+        # Backward compatibility: .data property still works
         assert content.data["reflection"] == "Upon reviewing..."
         assert content.data["confidence"] == 0.87
 
@@ -189,7 +210,7 @@ class TestGenericContent:
     def test_generic_content_missing_attribute(self):
         """Test accessing non-existent attribute raises AttributeError."""
         content = GenericContent(type="custom", field1="value1")
-        with pytest.raises(AttributeError, match="custom.*has no attribute.*missing"):
+        with pytest.raises(AttributeError):
             _ = content.missing
 
     def test_generic_content_preserves_all_fields(self):
@@ -207,6 +228,38 @@ class TestGenericContent:
         assert content.field2 == 42
         assert content.field3 == [1, 2, 3]
         assert content.field4 == {"nested": "dict"}
+
+    def test_generic_content_get_all_fields(self):
+        """Test get_all_fields() helper method."""
+        content = GenericContent(type="test", field1="value1", field2=42, field3=[1, 2, 3])
+        all_fields = content.get_all_fields()
+        assert all_fields == {"type": "test", "field1": "value1", "field2": 42, "field3": [1, 2, 3], "extra": {}}
+
+    def test_generic_content_get_extra_fields(self):
+        """Test get_extra_fields() helper method."""
+        content = GenericContent(type="test", field1="value1", field2=42)
+        extra_fields = content.get_extra_fields()
+        assert extra_fields == {"field1": "value1", "field2": 42}
+        # Should not include 'type' or 'extra' (defined fields)
+        assert "type" not in extra_fields
+        assert "extra" not in extra_fields
+
+    def test_generic_content_has_field(self):
+        """Test has_field() helper method."""
+        content = GenericContent(type="test", field1="value1")
+        # Known field
+        assert content.has_field("type") is True
+        # Extra field
+        assert content.has_field("field1") is True
+        # Missing field
+        assert content.has_field("missing") is False
+
+    def test_generic_content_backward_compat_data_property(self):
+        """Test backward compatibility .data property."""
+        content = GenericContent(type="test", field1="value1", field2=42)
+        # .data property should return same as get_extra_fields()
+        assert content.data == content.get_extra_fields()
+        assert content.data == {"field1": "value1", "field2": 42}
 
 
 class TestContentParser:
@@ -226,13 +279,6 @@ class TestContentParser:
         assert isinstance(content, ReasoningContent)
         assert content.reasoning == "Let me think..."
         assert content.summary == "Analyzed"
-
-    def test_parse_known_thinking_type(self):
-        """Test parsing known thinking type."""
-        data = {"type": "thinking", "thinking": "Hmm..."}
-        content = ContentParser.parse(data)
-        assert isinstance(content, ThinkingContent)
-        assert content.thinking == "Hmm..."
 
     def test_parse_known_citation_type(self):
         """Test parsing known citation type."""
@@ -296,7 +342,6 @@ class TestContentParser:
             ({"type": "audio", "audio_url": "url"}, AudioContent),
             ({"type": "video", "video_url": "url"}, VideoContent),
             ({"type": "reasoning", "reasoning": "test"}, ReasoningContent),
-            ({"type": "thinking", "thinking": "test"}, ThinkingContent),
             (
                 {"type": "citation", "url": "url", "title": "title", "snippet": "snippet"},
                 CitationContent,
@@ -321,7 +366,6 @@ class TestContentBlockInteroperability:
             AudioContent(type="audio", audio_url="url"),
             VideoContent(type="video", video_url="url"),
             ReasoningContent(type="reasoning", reasoning="test"),
-            ThinkingContent(type="thinking", thinking="test"),
             CitationContent(type="citation", url="url", title="title", snippet="snippet"),
             ToolCallContent(type="tool_call", id="id", name="name", arguments="{}"),
             ToolResultContent(type="tool_result", tool_call_id="id", output="output"),

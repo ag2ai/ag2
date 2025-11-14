@@ -28,9 +28,10 @@ with optional_import_block() as result:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_aoai_chat_completion_stream(credentials_gpt_4o_mini: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_gpt_4o_mini.config_list)
-    response = client.create(messages=[{"role": "user", "content": "2+2="}], stream=True)
+def test_completion_stream(credentials_azure_gpt_4_1_mini: Credentials) -> None:
+    """Updated to use gpt-4.1-mini (gpt-35-turbo-instruct retired Nov 11, 2025)"""
+    client = OpenAIWrapper(config_list=credentials_azure_gpt_4_1_mini.config_list)
+    response = client.create(messages=[{"role": "user", "content": "1+1="}], stream=True)
     print(response)
     print(client.extract_text_or_completion_object(response))
 
@@ -259,15 +260,6 @@ def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:
     tool_calls = message.tool_calls
     assert isinstance(tool_calls, list)
     assert len(tool_calls) > 0
-
-
-@run_for_optional_imports("openai", "openai")
-@run_for_optional_imports(["openai"], "openai")
-def test_completion_stream(credentials_azure_gpt_35_turbo_instruct: Credentials) -> None:
-    client = OpenAIWrapper(config_list=credentials_azure_gpt_35_turbo_instruct.config_list)
-    response = client.create(prompt="1+1=", stream=True)
-    print(response)
-    print(client.extract_text_or_completion_object(response))
 
 
 if __name__ == "__main__":

@@ -60,7 +60,7 @@ from ..events.agent_events import (
 )
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..fast_depends.utils import is_coroutine_callable
-from ..io.base import IOStream
+from ..io.base import AsyncIOStreamProtocol, AsyncInputStream, IOStream, IOStreamProtocol, InputStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
@@ -2531,6 +2531,7 @@ class ConversableAgent(LLMAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: Agent | None = None,
         config: Any | None = None,
+        iostream: IOStreamProtocol | None = None,
     ) -> tuple[bool, str | None]:
         """Check if the conversation should be terminated, and if human reply is provided.
 
@@ -2541,15 +2542,16 @@ class ConversableAgent(LLMAgent):
         for the conversation and prints relevant messages based on the human input received.
 
         Args:
-            messages: A list of message dictionaries, representing the conversation history.
-            sender: The agent object representing the sender of the message.
-            config: Configuration object, defaults to the current instance if not provided.
+            messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
+            sender (Optional[Agent]): The agent object representing the sender of the message.
+            config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
+            iostream (Optional[IOStreamProtocol]): The IOStream object to use for sending messages.
 
         Returns:
             A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
 
         if config is None:
             config = self
@@ -2568,7 +2570,8 @@ class ConversableAgent(LLMAgent):
         sender_name = "the sender" if sender is None else sender.name
         if self.human_input_mode == "ALWAYS":
             reply = self.get_human_input(
-                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: "
+                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: ",
+                iostream=iostream,
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -2589,7 +2592,8 @@ class ConversableAgent(LLMAgent):
                     reply = self.get_human_input(
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                         if terminate
-                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: "
+                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -2608,7 +2612,8 @@ class ConversableAgent(LLMAgent):
                 else:
                     # self.human_input_mode == "TERMINATE":
                     reply = self.get_human_input(
-                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
+                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
 
@@ -2675,6 +2680,7 @@ class ConversableAgent(LLMAgent):
         messages: list[dict[str, Any]] | None = None,
         sender: Agent | None = None,
         config: Any | None = None,
+        iostream: AsyncIOStreamProtocol | None = None,
     ) -> tuple[bool, str | None]:
         """(async) Check if the conversation should be terminated, and if human reply is provided.
 
@@ -2688,12 +2694,12 @@ class ConversableAgent(LLMAgent):
             messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
             sender (Optional[Agent]): The agent object representing the sender of the message.
             config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
-
+            iostream (Optional[AsyncIOStreamProtocol]): The AsyncIOStreamProtocol object to use for sending messages.
         Returns:
             Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
 
         if config is None:
             config = self
@@ -2708,7 +2714,8 @@ class ConversableAgent(LLMAgent):
         sender_name = "the sender" if sender is None else sender.name
         if self.human_input_mode == "ALWAYS":
             reply = await self.a_get_human_input(
-                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: "
+                f"Replying as {self.name}. Provide feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: ",
+                iostream=iostream,
             )
             no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
             # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -2729,7 +2736,8 @@ class ConversableAgent(LLMAgent):
                     reply = await self.a_get_human_input(
                         f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
                         if terminate
-                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: "
+                        else f"Please give feedback to {sender_name}. Press enter to skip and use auto-reply, or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
                     # if the human input is empty, and the message is a termination message, then we will terminate the conversation
@@ -2748,7 +2756,8 @@ class ConversableAgent(LLMAgent):
                 else:
                     # self.human_input_mode == "TERMINATE":
                     reply = await self.a_get_human_input(
-                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: "
+                        f"Please give feedback to {sender_name}. Press enter or type 'exit' to stop the conversation: ",
+                        iostream=iostream,
                     )
                     no_human_input_msg = "NO HUMAN INPUT RECEIVED." if not reply else ""
 
@@ -2988,18 +2997,18 @@ class ConversableAgent(LLMAgent):
         else:
             raise ValueError(f"Unsupported trigger type: {type(trigger)}")
 
-    def get_human_input(self, prompt: str) -> str:
+    def get_human_input(self, prompt: str, *, iostream: InputStream | None = None) -> str:
         """Get human input.
 
         Override this method to customize the way to get human input.
 
         Args:
             prompt (str): prompt for the human input.
-
+            iostream (Optional[InputStream]): The InputStream object to use for sending messages.
         Returns:
             str: human input.
         """
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
 
         reply = iostream.input(prompt)
 
@@ -3011,19 +3020,19 @@ class ConversableAgent(LLMAgent):
         self._human_input.append(processed_reply)
         return processed_reply
 
-    async def a_get_human_input(self, prompt: str) -> str:
+    async def a_get_human_input(self, prompt: str, *, iostream: AsyncInputStream | None = None) -> str:
         """(Async) Get human input.
 
         Override this method to customize the way to get human input.
 
         Args:
             prompt (str): prompt for the human input.
-
+            iostream (Optional[AsyncInputStream]): The AsyncInputStream object to use for sending messages.
         Returns:
             str: human input.
         """
 
-        iostream = IOStream.get_default()
+        iostream = iostream or IOStream.get_default()
         input_func = iostream.input
 
         if is_coroutine_callable(input_func):

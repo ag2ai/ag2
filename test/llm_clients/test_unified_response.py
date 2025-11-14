@@ -9,7 +9,6 @@ from autogen.llm_clients.models import (
     GenericContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     UnifiedMessage,
     UnifiedResponse,
 )
@@ -148,13 +147,13 @@ class TestUnifiedResponseTextProperty:
         assert response.text == "Let me think... The answer is 42"
 
     def test_text_property_multiple_messages(self):
-        """Test text property with multiple messages (returns first message text)."""
+        """Test text property with multiple messages (returns text from all messages)."""
         message1 = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="First message")])
         message2 = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="Second message")])
         response = UnifiedResponse(id="resp-123", model="gpt-4", provider="openai", messages=[message1, message2])
 
-        # Should return text from first message only
-        assert response.text == "First message"
+        # Should return text from all messages joined with space
+        assert response.text == "First message Second message"
 
     def test_text_property_empty_messages(self):
         """Test text property with no messages."""
@@ -212,40 +211,6 @@ class TestUnifiedResponseReasoningProperty:
         response = UnifiedResponse(id="resp-123", model="gpt-4", provider="openai", messages=[message])
 
         assert len(response.reasoning) == 0
-
-
-class TestUnifiedResponseThinkingProperty:
-    """Test the thinking property."""
-
-    def test_thinking_property_single_block(self):
-        """Test thinking property with single thinking block."""
-        thinking = ThinkingContent(type="thinking", thinking="Hmm, interesting...")
-        message = UnifiedMessage(role="assistant", content=[thinking])
-        response = UnifiedResponse(id="resp-123", model="claude", provider="anthropic", messages=[message])
-
-        thinking_blocks = response.thinking
-        assert len(thinking_blocks) == 1
-        assert thinking_blocks[0].thinking == "Hmm, interesting..."
-
-    def test_thinking_property_multiple_messages(self):
-        """Test thinking property across multiple messages."""
-        message1 = UnifiedMessage(
-            role="assistant", content=[ThinkingContent(type="thinking", thinking="First thought")]
-        )
-        message2 = UnifiedMessage(
-            role="assistant", content=[ThinkingContent(type="thinking", thinking="Second thought")]
-        )
-        response = UnifiedResponse(id="resp-123", model="claude", provider="anthropic", messages=[message1, message2])
-
-        thinking_blocks = response.thinking
-        assert len(thinking_blocks) == 2
-
-    def test_thinking_property_no_thinking(self):
-        """Test thinking property when no thinking blocks present."""
-        message = UnifiedMessage(role="assistant", content=[TextContent(type="text", text="No thinking")])
-        response = UnifiedResponse(id="resp-123", model="claude", provider="anthropic", messages=[message])
-
-        assert len(response.thinking) == 0
 
 
 class TestUnifiedResponseContentByType:
@@ -373,10 +338,10 @@ class TestUnifiedResponseComplexScenarios:
         )
         assert response.reasoning[0].summary == "Systematic analysis"
 
-    def test_anthropic_claude_with_thinking(self):
-        """Test representing an Anthropic Claude response with thinking blocks."""
+    def test_anthropic_claude_with_reasoning(self):
+        """Test representing an Anthropic Claude response with reasoning blocks."""
         contents = [
-            ThinkingContent(type="thinking", thinking="<thinking>Let me consider this carefully...</thinking>"),
+            ReasoningContent(type="reasoning", reasoning="Let me consider this carefully..."),
             TextContent(type="text", text="Here's my response."),
         ]
         message = UnifiedMessage(role="assistant", content=contents)
@@ -390,8 +355,8 @@ class TestUnifiedResponseComplexScenarios:
             status="completed",
         )
 
-        assert len(response.thinking) == 1
-        assert response.thinking[0].thinking == "<thinking>Let me consider this carefully...</thinking>"
+        assert len(response.reasoning) == 1
+        assert response.reasoning[0].reasoning == "Let me consider this carefully..."
 
     def test_web_search_with_citations(self):
         """Test representing a response with web search citations."""
@@ -459,7 +424,7 @@ class TestUnifiedResponseComplexScenarios:
             UnifiedMessage(
                 role="assistant",
                 content=[
-                    ThinkingContent(type="thinking", thinking="Yes, I'm certain"),
+                    ReasoningContent(type="reasoning", reasoning="Yes, I'm certain"),
                     TextContent(type="text", text="Yes, I'm confident that 2+2=4"),
                 ],
             ),
@@ -467,5 +432,4 @@ class TestUnifiedResponseComplexScenarios:
         response = UnifiedResponse(id="resp-multi-123", model="gpt-4", provider="openai", messages=messages)
 
         assert len(response.messages) == 4
-        assert len(response.reasoning) == 1
-        assert len(response.thinking) == 1
+        assert len(response.reasoning) == 2  # Two reasoning blocks now (both were converted from thinking)

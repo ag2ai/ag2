@@ -9,7 +9,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 from autogen.llm_clients import OpenAICompletionsClient
-from autogen.llm_clients.models import ReasoningContent, TextContent, ToolCallContent, UnifiedResponse
+from autogen.llm_clients.models import (
+    GenericContent,
+    ReasoningContent,
+    TextContent,
+    ToolCallContent,
+    UnifiedResponse,
+    UserRoleEnum,
+)
 
 
 class MockOpenAIResponse:
@@ -91,6 +98,23 @@ class TestOpenAICompletionsClientCreation:
         client = OpenAICompletionsClient(api_key="test-key")
         assert client is not None
         assert client.client is not None
+
+    def test_role_normalization_to_enum(self, mock_openai_client):
+        """Test that known roles are normalized to UserRoleEnum."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Create response with known role
+        mock_message = MockMessage(role="assistant", content="Test")
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Verify role is UserRoleEnum
+        assert isinstance(response.messages[0].role, UserRoleEnum)
+        assert response.messages[0].role == UserRoleEnum.ASSISTANT
+        assert response.messages[0].role.value == "assistant"
 
     def test_create_client_with_base_url(self, mock_openai_client):
         """Test creating client with custom base URL."""
@@ -411,3 +435,64 @@ class TestOpenAICompletionsClientIntegration:
         assert callable(client.cost)
         assert callable(client.get_usage)
         assert callable(client.message_retrieval)
+
+
+class TestOpenAICompletionsClientGenericContent:
+    """Test GenericContent handling for unknown OpenAI response types."""
+
+    # Note: test_multimodal_content_with_unknown_type removed
+    # OpenAI Chat Completions API always returns content as str, never list
+    # List content only exists in REQUEST messages for multimodal inputs,
+    # not in RESPONSE messages from the API
+
+    def test_unknown_message_field_as_generic_content(self, mock_openai_client):
+        """Test that unknown fields in message object are captured as GenericContent."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Create a mock message with unknown field
+        mock_message = MockMessage(role="assistant", content="Test response")
+        # Add unknown field via model_dump simulation
+        mock_message.model_dump = Mock(
+            return_value={
+                "role": "assistant",
+                "content": "Test response",
+                "thinking": "Let me analyze this step by step...",  # Unknown field
+                "confidence_score": 0.92,  # Another unknown field
+            }
+        )
+
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4", "messages": []})
+
+        # Should have text + 2 generic content blocks for unknown fields
+        content_blocks = response.messages[0].content
+        generic_blocks = [b for b in content_blocks if isinstance(b, GenericContent)]
+
+        assert len(generic_blocks) == 2
+
+        # Find thinking block
+        thinking_blocks = [b for b in generic_blocks if b.type == "thinking"]
+        assert len(thinking_blocks) == 1
+        assert thinking_blocks[0].thinking == "Let me analyze this step by step..."
+
+        # Find confidence_score block
+        confidence_blocks = [b for b in generic_blocks if b.type == "confidence_score"]
+        assert len(confidence_blocks) == 1
+        assert confidence_blocks[0].confidence_score == 0.92
+
+    # Note: The following tests were removed because they tested impossible behavior:
+    # - test_generic_content_serialization
+    # - test_generic_content_attribute_access
+    # - test_generic_content_helper_methods
+    # - test_mixed_known_and_unknown_content
+    #
+    # These tests used list content in response messages, but OpenAI Chat Completions API
+    # always returns content as str, never list. List content only exists in REQUEST messages
+    # for multimodal inputs, not in RESPONSE messages from the API.
+    #
+    # GenericContent is still tested via test_unknown_message_field_as_generic_content which
+    # tests the correct use case: unknown MESSAGE FIELDS (not content blocks)

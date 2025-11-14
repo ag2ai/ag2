@@ -53,10 +53,6 @@ class MockClientV2:
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:
-        """Retrieve text content from response."""
-        return [msg.get_text() for msg in response.messages]
-
 
 class TestModelClientV2Protocol:
     """Test ModelClientV2 protocol compliance."""
@@ -71,7 +67,6 @@ class TestModelClientV2Protocol:
         assert hasattr(client, "create_v1_compatible")
         assert hasattr(client, "cost")
         assert hasattr(client, "get_usage")
-        assert hasattr(client, "message_retrieval")
 
         # Check RESPONSE_USAGE_KEYS
         assert isinstance(client.RESPONSE_USAGE_KEYS, list)
@@ -136,17 +131,21 @@ class TestModelClientV2Protocol:
         assert usage["total_tokens"] == 30
         assert usage["model"] == "test-model"
 
-    def test_message_retrieval_method(self):
-        """Test message_retrieval() method."""
+    def test_direct_content_access(self):
+        """Test direct access to rich content via UnifiedResponse properties."""
         client = MockClientV2()
         params = {"model": "test-model"}
 
         response = client.create(params)
-        messages = client.message_retrieval(response)
 
-        assert isinstance(messages, list)
-        assert len(messages) == 1
-        assert messages[0] == "Mock response"
+        # Direct access to text content via response property
+        assert response.text == "Mock response"
+        assert isinstance(response.messages, list)
+        assert len(response.messages) == 1
+
+        # Access message content directly
+        message = response.messages[0]
+        assert message.get_text() == "Mock response"
 
 
 class TestModelClientV2DualInterface:
@@ -272,14 +271,12 @@ class TestModelClientV2ErrorHandling:
                     messages=[],  # Empty messages
                 )
 
-            def message_retrieval(self, response: UnifiedResponse) -> list[str]:
-                return [msg.get_text() for msg in response.messages]
-
         client = ClientEmptyMessages()
         response = client.create({})
-        messages = client.message_retrieval(response)
 
-        assert messages == []
+        # Access content directly via response property
+        assert response.text == ""
+        assert len(response.messages) == 0
 
 
 class TestModelClientV2Integration:
@@ -309,10 +306,10 @@ class TestModelClientV2Integration:
         cost = client.cost(response)
         assert cost == 0.001
 
-        # 5. Retrieve messages
-        messages = client.message_retrieval(response)
-        assert len(messages) == 1
-        assert messages[0] == "Mock response"
+        # 5. Access content directly via UnifiedResponse properties
+        assert response.text == "Mock response"
+        assert len(response.messages) == 1
+        assert response.messages[0].get_text() == "Mock response"
 
     def test_backward_compatibility_workflow(self):
         """Test backward compatibility workflow."""

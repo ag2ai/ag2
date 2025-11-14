@@ -11,7 +11,6 @@ from autogen.llm_clients.models import (
     GenericContent,
     ReasoningContent,
     TextContent,
-    ThinkingContent,
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
@@ -37,14 +36,6 @@ class TestContentBlockSerialization:
         assert content_dict["type"] == "reasoning"
         assert content_dict["reasoning"] == "Step 1: analyze"
         assert content_dict["summary"] == "Analysis"
-
-    def test_thinking_content_serialization(self):
-        """Test ThinkingContent serialization."""
-        content = ThinkingContent(type="thinking", thinking="Hmm...")
-        content_dict = content.model_dump()
-
-        assert content_dict["type"] == "thinking"
-        assert content_dict["thinking"] == "Hmm..."
 
     def test_citation_content_serialization(self):
         """Test CitationContent serialization."""
@@ -78,9 +69,10 @@ class TestContentBlockSerialization:
         content_dict = content.model_dump()
 
         assert content_dict["type"] == "reflection"
-        assert "data" in content_dict
-        assert content_dict["data"]["reflection"] == "Upon reviewing..."
-        assert content_dict["data"]["confidence"] == 0.87
+        # Extra fields are serialized at top level with native extra='allow'
+        assert content_dict["reflection"] == "Upon reviewing..."
+        assert content_dict["confidence"] == 0.87
+        assert content_dict["corrections"] == ["fix1", "fix2"]
 
 
 class TestUnifiedMessageSerialization:
@@ -323,7 +315,9 @@ class TestSerializationEdgeCases:
         )
         content_dict = content.model_dump()
 
-        assert content_dict["data"]["nested"]["level1"]["level2"]["level3"] == "deep value"
+        # Extra fields are serialized at top level with native extra='allow'
+        assert content_dict["nested"]["level1"]["level2"]["level3"] == "deep value"
+        assert content_dict["nested"]["array"] == [1, 2, 3]
 
     def test_unicode_in_content(self):
         """Test serializing content with unicode characters."""

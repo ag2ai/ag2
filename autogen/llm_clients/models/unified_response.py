@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from .content_blocks import BaseContent, ReasoningContent, ThinkingContent
+from .content_blocks import BaseContent, ReasoningContent
 from .unified_message import UnifiedMessage
 
 
@@ -18,11 +18,11 @@ class UnifiedResponse(BaseModel):
     """Provider-agnostic response format.
 
     This response format can represent responses from any LLM provider while
-    preserving all provider-specific features (reasoning, thinking, citations, etc.).
+    preserving all provider-specific features (reasoning, citations, etc.).
 
     Features:
     - Provider agnostic (OpenAI, Anthropic, Gemini, etc.)
-    - Rich content blocks (text, images, reasoning, thinking, citations)
+    - Rich content blocks (text, images, reasoning, citations)
     - Usage tracking and cost calculation
     - Provider-specific metadata preservation
     - Serializable (no attached functions)
@@ -50,20 +50,15 @@ class UnifiedResponse(BaseModel):
 
     @property
     def text(self) -> str:
-        """Quick access to text content from first message."""
+        """Quick access to text content from all messages."""
         if self.messages:
-            return self.messages[0].get_text()
+            return " ".join([msg.get_text() for msg in self.messages])
         return ""
 
     @property
     def reasoning(self) -> list[ReasoningContent]:
         """Quick access to reasoning blocks from all messages."""
         return [block for msg in self.messages for block in msg.get_reasoning()]
-
-    @property
-    def thinking(self) -> list[ThinkingContent]:
-        """Quick access to thinking blocks from all messages."""
-        return [block for msg in self.messages for block in msg.get_thinking()]
 
     def get_content_by_type(self, content_type: str) -> list[BaseContent]:
         """Get all content blocks of a specific type across all messages.

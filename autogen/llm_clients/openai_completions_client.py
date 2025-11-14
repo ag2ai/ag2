@@ -20,19 +20,30 @@ Note: This uses the Chat Completions API, NOT the newer Responses API (client.re
 
 from typing import Any
 
-try:
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as openai_result:
     from openai import OpenAI
-except ImportError:
-    OpenAI = None  # Will raise error in __init__ if not installed
+
+if openai_result.is_successful:
+    openai_import_exception: ImportError | None = None
+else:
+    OpenAI = None  # type: ignore[assignment]
+    openai_import_exception = ImportError(
+        "Please install openai to use OpenAICompletionsClient. Install with: pip install openai"
+    )
 
 from ..llm_config.client import ModelClient
 from .models import (
     CitationContent,
+    GenericContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
+    UserRoleEnum,
+    normalize_role,
 )
 
 
@@ -84,18 +95,28 @@ class OpenAICompletionsClient(ModelClient):
             timeout: Request timeout in seconds
             **kwargs: Additional arguments passed to OpenAI client
         """
-        if OpenAI is None:
-            raise ImportError("OpenAI package not installed. Install with: pip install openai")
+        if openai_import_exception is not None:
+            raise openai_import_exception
 
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)  # type: ignore[misc]
         self._cost_per_token = {
-            # o1 series pricing (example - update with actual pricing)
+            # GPT-5 series - Latest flagship models (per million tokens)
+            "gpt-5": {"prompt": 1.25 / 1_000_000, "completion": 10.00 / 1_000_000},
+            "gpt-5-mini": {"prompt": 0.25 / 1_000_000, "completion": 2.00 / 1_000_000},
+            "gpt-5-nano": {"prompt": 0.05 / 1_000_000, "completion": 0.40 / 1_000_000},
+            # GPT-4o series - Multimodal flagship (per million tokens)
+            "gpt-4o": {"prompt": 2.50 / 1_000_000, "completion": 10.00 / 1_000_000},
+            "gpt-4o-mini": {"prompt": 0.15 / 1_000_000, "completion": 0.60 / 1_000_000},
+            # GPT-4 Turbo (per million tokens)
+            "gpt-4-turbo": {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000},
+            # GPT-4 legacy (per million tokens)
+            "gpt-4": {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000},
+            # GPT-3.5 Turbo (per million tokens)
+            "gpt-3.5-turbo": {"prompt": 0.50 / 1_000_000, "completion": 1.50 / 1_000_000},
+            # o1 series - Reasoning models (keep existing if still valid)
             "o1-preview": {"prompt": 0.015 / 1000, "completion": 0.060 / 1000},
             "o1-mini": {"prompt": 0.003 / 1000, "completion": 0.012 / 1000},
             "o3-mini": {"prompt": 0.003 / 1000, "completion": 0.012 / 1000},
-            # GPT-4 series
-            "gpt-4": {"prompt": 0.03 / 1000, "completion": 0.06 / 1000},
-            "gpt-4-turbo": {"prompt": 0.01 / 1000, "completion": 0.03 / 1000},
         }
 
     def create(self, params: dict[str, Any]) -> UnifiedResponse:  # type: ignore[override]
@@ -131,6 +152,15 @@ class OpenAICompletionsClient(ModelClient):
         This handles the standard ChatCompletion format including o1/o3 models
         which include a 'reasoning' field in the message object.
 
+        Content handling:
+        - Text content → TextContent
+        - Reasoning blocks (o1/o3 models) → ReasoningContent
+        - Tool calls → ToolCallContent
+        - Unknown message fields → GenericContent (forward compatibility)
+
+        This ensures that new OpenAI features are preserved even if we don't have
+        specific content types defined yet.
+
         Args:
             openai_response: Raw OpenAI API response
             model: Model name
@@ -146,32 +176,25 @@ class OpenAICompletionsClient(ModelClient):
             message_obj = choice.message
 
             # Extract reasoning if present (o1/o3 models)
-            if hasattr(message_obj, "reasoning") and message_obj.reasoning:
+            if getattr(message_obj, "reasoning", None):
                 content_blocks.append(
                     ReasoningContent(
-                        type="reasoning",
                         reasoning=message_obj.reasoning,
                         summary=None,
                     )
                 )
 
             # Extract text content
+            # Note: OpenAI Chat Completions API always returns content as str, never list
+            # (List content is only used in REQUEST messages for multimodal inputs)
             if message_obj.content:
-                if isinstance(message_obj.content, str):
-                    content_blocks.append(TextContent(type="text", text=message_obj.content))
-                elif isinstance(message_obj.content, list):
-                    # Multimodal content
-                    for item in message_obj.content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            content_blocks.append(TextContent(type="text", text=item.get("text", "")))
-                    # Add other multimodal types as needed
+                content_blocks.append(TextContent(type="text", text=message_obj.content))
 
             # Extract tool calls
-            if hasattr(message_obj, "tool_calls") and message_obj.tool_calls:
+            if getattr(message_obj, "tool_calls", None):
                 for tool_call in message_obj.tool_calls:
                     content_blocks.append(
                         ToolCallContent(
-                            type="tool_call",
                             id=tool_call.id,
                             name=tool_call.function.name,
                             arguments=tool_call.function.arguments,
@@ -180,11 +203,10 @@ class OpenAICompletionsClient(ModelClient):
 
             # Extract citations if present (future-proofing)
             # Note: Not currently available in Chat Completions API
-            if hasattr(message_obj, "citations") and message_obj.citations:
+            if getattr(message_obj, "citations", None):
                 for citation in message_obj.citations:
                     content_blocks.append(
                         CitationContent(
-                            type="citation",
                             url=citation.get("url", ""),
                             title=citation.get("title", ""),
                             snippet=citation.get("snippet", ""),
@@ -192,10 +214,19 @@ class OpenAICompletionsClient(ModelClient):
                         )
                     )
 
-            # Create unified message
+            # Handle any other unknown fields from OpenAI response as GenericContent
+            # This ensures forward compatibility with new OpenAI features
+            known_fields = {"role", "content", "reasoning", "tool_calls", "citations", "name", "function_call"}
+            message_dict = message_obj.model_dump() if hasattr(message_obj, "model_dump") else {}
+            for field_name, field_value in message_dict.items():
+                if field_name not in known_fields and field_value is not None:
+                    # Create GenericContent for unknown field
+                    content_blocks.append(GenericContent(type=field_name, **{field_name: field_value}))
+
+            # Create unified message with normalized role (convert to UserRoleEnum for known roles)
             messages.append(
                 UnifiedMessage(
-                    role=message_obj.role or "assistant",
+                    role=normalize_role(message_obj.role),
                     content=content_blocks,
                     name=getattr(message_obj, "name", None),
                 )
@@ -203,7 +234,7 @@ class OpenAICompletionsClient(ModelClient):
 
         # Extract usage information
         usage = {}
-        if hasattr(openai_response, "usage") and openai_response.usage:
+        if getattr(openai_response, "usage", None):
             usage = {
                 "prompt_tokens": openai_response.usage.prompt_tokens,
                 "completion_tokens": openai_response.usage.completion_tokens,
@@ -253,6 +284,10 @@ class OpenAICompletionsClient(ModelClient):
         unified_response = self.create(params)
 
         # Convert to legacy format (simplified - would need full ChatCompletionExtended in practice)
+        # Extract role and convert UserRoleEnum to string
+        role = unified_response.messages[0].role if unified_response.messages else UserRoleEnum.ASSISTANT
+        role_str = role.value if isinstance(role, UserRoleEnum) else role
+
         return {
             "id": unified_response.id,
             "model": unified_response.model,
@@ -262,7 +297,7 @@ class OpenAICompletionsClient(ModelClient):
                 {
                     "index": 0,
                     "message": {
-                        "role": unified_response.messages[0].role if unified_response.messages else "assistant",
+                        "role": role_str,
                         "content": unified_response.text,
                     },
                     "finish_reason": unified_response.finish_reason,
@@ -299,8 +334,8 @@ class OpenAICompletionsClient(ModelClient):
                 break
 
         if not pricing:
-            # Unknown model - use default pricing (gpt-4 level)
-            pricing = {"prompt": 0.03 / 1000, "completion": 0.06 / 1000}
+            # Unknown model - use default pricing (GPT-4 Turbo level, per million tokens)
+            pricing = {"prompt": 10.00 / 1_000_000, "completion": 30.00 / 1_000_000}
 
         return (prompt_tokens * pricing["prompt"]) + (completion_tokens * pricing["completion"])
 

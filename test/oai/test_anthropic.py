@@ -52,7 +52,7 @@ def anthropic_client():
 
 def test_anthropic_llm_config_entry():
     anthropic_llm_config = AnthropicLLMConfigEntry(
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         api_key="dummy_api_key",
         stream=False,
         temperature=1.0,
@@ -60,7 +60,7 @@ def test_anthropic_llm_config_entry():
     )
     expected = {
         "api_type": "anthropic",
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "api_key": "dummy_api_key",
         "stream": False,
         "temperature": 1.0,
@@ -158,14 +158,14 @@ def test_cost_calculation(mock_completion):
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
         "max_tokens": 100,
     }
     expected_params = {
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "stream": False,
         "temperature": 1,
         "timeout": None,
@@ -210,7 +210,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -238,7 +238,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -266,7 +266,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -282,7 +282,7 @@ def test_extract_json_response(anthropic_client):
     no_json_response = Message(
         id="msg_123",
         content=[TextBlock(text="This response contains no JSON at all.", type="text")],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
