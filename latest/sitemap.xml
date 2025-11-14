@@ -1069,6 +1069,78 @@
          <lastmod>2025-11-14</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/client_v2/ModelClientV2/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/AudioContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/BaseContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/CitationContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ContentParser/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ContentType/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/GenericContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ImageContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ReasoningContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/TextContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ToolCallContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/ToolResultContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/content_blocks/VideoContent/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/unified_message/UnifiedMessage/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/unified_message/UserRoleEnum/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/unified_message/normalize_role/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/models/unified_response/UnifiedResponse/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/llm_clients/openai_completions_client/OpenAICompletionsClient/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/logger/FileLogger/</loc>
          <lastmod>2025-11-14</lastmod>
     </url>
@@ -1230,6 +1302,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/oai/client/OpenAIResponsesLLMConfigEntry/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/oai/client/OpenAIV2LLMConfigEntry/</loc>
          <lastmod>2025-11-14</lastmod>
     </url>
     <url>
@@ -2165,6 +2241,10 @@
          <lastmod>2025-11-14</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_openai_v2_client_image/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_openlit/</loc>
          <lastmod>2025-11-14</lastmod>
     </url>
@@ -2270,6 +2350,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_two_users/</loc>
+         <lastmod>2025-11-14</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_v1_v2_client_compatibility/</loc>
          <lastmod>2025-11-14</lastmod>
     </url>
     <url>
