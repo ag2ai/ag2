@@ -59,7 +59,7 @@ def test_build(builder: AgentBuilder, credentials_all: Credentials):
     with tempfile.TemporaryDirectory() as temp_dir:
         _, agent_config = builder.build(
             building_task=building_task,
-            default_llm_config=credentials_all.llm_config | {"temperature": 0},
+            default_llm_config={"temperature": 0, "config_list": credentials_all.config_list},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
@@ -86,7 +86,7 @@ def test_build_from_library(builder: AgentBuilder, credentials_all: Credentials)
         _, agent_config = builder.build_from_library(
             building_task=building_task,
             library_path_or_json=f"{here}/example_agent_builder_library.json",
-            default_llm_config=credentials_all.llm_config | {"temperature": 0},
+            default_llm_config={"temperature": 0, "config_list": credentials_all.config_list},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
@@ -106,7 +106,7 @@ def test_build_from_library(builder: AgentBuilder, credentials_all: Credentials)
         _, agent_config = builder.build_from_library(
             building_task=building_task,
             library_path_or_json=f"{here}/example_agent_builder_library.json",
-            default_llm_config=credentials_all.llm_config | {"temperature": 0},
+            default_llm_config={"temperature": 0, "config_list": credentials_all.config_list},
             embedding_model="all-mpnet-base-v2",
             code_execution_config={
                 "last_n_messages": 2,
@@ -135,7 +135,7 @@ def test_build_with_agent_configs(builder: AgentBuilder, credentials_all: Creden
             }
         ],
         "coding": True,
-        "default_llm_config": credentials_all.llm_config | {"temperature": 0},
+        "default_llm_config": {"temperature": 0, "config_list": credentials_all.config_list},
         "code_execution_config": {"work_dir": ".", "use_docker": False, "timeout": 60, "last_n_messages": 2},
     }
 
@@ -160,7 +160,7 @@ def test_save(builder: AgentBuilder, credentials_all: Credentials):
     with tempfile.TemporaryDirectory() as temp_dir:
         builder.build(
             building_task=building_task,
-            default_llm_config=credentials_all.llm_config | {"temperature": 0},
+            default_llm_config={"temperature": 0, "config_list": credentials_all.config_list},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
