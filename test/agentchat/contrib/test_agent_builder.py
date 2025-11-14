@@ -15,7 +15,7 @@ import pytest
 from autogen.agentchat.contrib.captainagent.agent_builder import AgentBuilder
 from autogen.agentchat.contrib.text_analyzer_agent import TextAnalyzerAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from test.const import KEY_LOC, OAI_CONFIG_LIST
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     import chromadb  # noqa: F401
@@ -39,10 +39,9 @@ def _config_check(config):
 
 
 @pytest.fixture
-def builder() -> AgentBuilder:
+def builder(credentials_all: Credentials) -> AgentBuilder:
     return AgentBuilder(
-        config_file_or_env=OAI_CONFIG_LIST,
-        config_file_location=KEY_LOC,
+        llm_config=credentials_all.llm_config,
         builder_model_tags=["gpt-4o"],
         agent_model_tags=["gpt-4o"],
     )
@@ -50,7 +49,7 @@ def builder() -> AgentBuilder:
 
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["openai"], "openai")
-def test_build(builder: AgentBuilder):
+def test_build(builder: AgentBuilder, credentials_all: Credentials):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
@@ -60,7 +59,7 @@ def test_build(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         _, agent_config = builder.build(
             building_task=building_task,
-            default_llm_config={"temperature": 0},
+            default_llm_config=credentials_all.llm_config | {"temperature": 0},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
@@ -77,7 +76,7 @@ def test_build(builder: AgentBuilder):
 @run_for_optional_imports("openai", "openai")
 @run_for_optional_imports(["chromadb", "huggingface_hub"], "autobuild")
 @run_for_optional_imports(["openai"], "openai")
-def test_build_from_library(builder: AgentBuilder):
+def test_build_from_library(builder: AgentBuilder, credentials_all: Credentials):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
@@ -87,7 +86,7 @@ def test_build_from_library(builder: AgentBuilder):
         _, agent_config = builder.build_from_library(
             building_task=building_task,
             library_path_or_json=f"{here}/example_agent_builder_library.json",
-            default_llm_config={"temperature": 0},
+            default_llm_config=credentials_all.llm_config | {"temperature": 0},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
@@ -107,7 +106,7 @@ def test_build_from_library(builder: AgentBuilder):
         _, agent_config = builder.build_from_library(
             building_task=building_task,
             library_path_or_json=f"{here}/example_agent_builder_library.json",
-            default_llm_config={"temperature": 0},
+            default_llm_config=credentials_all.llm_config | {"temperature": 0},
             embedding_model="all-mpnet-base-v2",
             code_execution_config={
                 "last_n_messages": 2,
@@ -123,7 +122,7 @@ def test_build_from_library(builder: AgentBuilder):
 
 
 @pytest.mark.openai
-def test_build_with_agent_configs(builder: AgentBuilder):
+def test_build_with_agent_configs(builder: AgentBuilder, credentials_all: Credentials):
     conf = {
         "building_task": "Generate one TextAnalyzerAgent to analyze text",
         "agent_configs": [
@@ -136,7 +135,7 @@ def test_build_with_agent_configs(builder: AgentBuilder):
             }
         ],
         "coding": True,
-        "default_llm_config": {"temperature": 0},
+        "default_llm_config": credentials_all.llm_config | {"temperature": 0},
         "code_execution_config": {"work_dir": ".", "use_docker": False, "timeout": 60, "last_n_messages": 2},
     }
 
@@ -152,7 +151,7 @@ def test_build_with_agent_configs(builder: AgentBuilder):
 
 
 @pytest.mark.openai
-def test_save(builder: AgentBuilder):
+def test_save(builder: AgentBuilder, credentials_all: Credentials):
     building_task = (
         "Find a paper on arxiv by programming, and analyze its application in some domain. "
         "For example, find a recent paper about gpt-4 on arxiv "
@@ -161,7 +160,7 @@ def test_save(builder: AgentBuilder):
     with tempfile.TemporaryDirectory() as temp_dir:
         builder.build(
             building_task=building_task,
-            default_llm_config={"temperature": 0},
+            default_llm_config=credentials_all.llm_config | {"temperature": 0},
             code_execution_config={
                 "last_n_messages": 2,
                 "work_dir": f"{temp_dir}/test_agent_scripts",
