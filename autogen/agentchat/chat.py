@@ -14,11 +14,10 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, TypedDict
 
-from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.agent_events import PostCarryoverProcessingEvent
 from ..io.base import IOStream
-from .utils import consolidate_chat_info
+from .utils import consolidate_chat_info, normalize_content
 
 logger = logging.getLogger(__name__)
 Prerequisite = tuple[int, int]
@@ -134,9 +133,7 @@ def _post_process_carryover_item(carryover_item):
         return carryover_item
     elif isinstance(carryover_item, dict) and "content" in carryover_item:
         content_value = carryover_item.get("content")
-        if isinstance(content_value, (str, list)) or content_value is None:
-            return content_str(content_value)
-        return str(content_value)
+        return normalize_content(content_value)
     else:
         return str(carryover_item)
 
