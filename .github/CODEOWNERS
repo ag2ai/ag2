@@ -1,0 +1,9 @@
+# AG2 code owners
+# About code owners https://docs.github.com/ru/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# A2A and Remote
+/autogen/a2a/ @Lancetnik
+/autogen/remote/ @Lancetnik
+/test/a2a/ @Lancetnik
+/test/remote/ @Lancetnik
+/website/docs/user-guide/a2a/ @Lancetnik

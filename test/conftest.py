@@ -6,13 +6,24 @@
 # SPDX-License-Identifier: MIT
 import os
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import autogen
 from autogen import LLMConfig, UserProxyAgent
 from test.const import KEY_LOC, MOCK_AZURE_API_KEY, MOCK_OPEN_AI_API_KEY, OAI_CONFIG_LIST
-from test.credentials import Credentials, Secrets
+from test.credentials import Credentials, Secrets, get_credentials_from_env_vars
+
+
+@pytest.fixture
+def mock() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def async_mock() -> AsyncMock:
+    return AsyncMock()
 
 
 def patch_pytest_terminal_writer() -> None:
@@ -38,15 +49,109 @@ def patch_pytest_terminal_writer() -> None:
 patch_pytest_terminal_writer()
 
 
+# Mapping pytest markers to their corresponding API types/SDKs
+MARKER_TO_API_TYPES = {
+    "openai": ["openai", "azure", "responses"],  # OpenAI SDK handles all these types
+    "openai_realtime": ["openai", "azure"],  # OpenAI SDK realtime
+    "anthropic": ["anthropic"],  # Anthropic SDK
+    "gemini": ["google"],  # Google GenAI SDK
+    "gemini_realtime": ["google"],  # Google GenAI SDK realtime
+    "deepseek": ["openai"],  # DeepSeek uses OpenAI-compatible API
+    "ollama": ["openai"],  # Ollama uses OpenAI-compatible API
+    "bedrock": ["bedrock"],  # AWS Bedrock SDK
+    "cerebras": ["openai"],  # Cerebras uses OpenAI-compatible API
+    "together": ["openai"],  # Together uses OpenAI-compatible API
+    "groq": ["openai"],  # Groq uses OpenAI-compatible API
+}
+
+
+def get_safe_api_types_from_test_context() -> set[str]:
+    """Extract safe API types from current test's pytest markers to prevent cross-SDK imports."""
+    import inspect
+
+    # Walk up the call stack to find pytest request context
+    frame = inspect.currentframe()
+    try:
+        while frame:
+            frame_locals = frame.f_locals
+            if "request" in frame_locals:
+                pytest_request = frame_locals["request"]
+                if hasattr(pytest_request, "node") and hasattr(pytest_request.node, "iter_markers"):
+                    # Get all markers from the current test
+                    test_markers = {mark.name for mark in pytest_request.node.iter_markers()}
+
+                    # Map markers to allowed API types
+                    safe_api_types = set()
+                    for marker in test_markers:
+                        if marker in MARKER_TO_API_TYPES:
+                            safe_api_types.update(MARKER_TO_API_TYPES[marker])
+
+                    if safe_api_types:
+                        return safe_api_types
+                    # If we found pytest context but no relevant markers, continue searching
+                    break
+            frame = frame.f_back
+    finally:
+        # Clean up frame references to prevent memory leaks
+        del frame
+
+    # Fallback: if no test context or no relevant markers, allow all
+    # This handles non-test usage and ensures backward compatibility
+    return {
+        "openai",
+        "azure",
+        "responses",
+        "anthropic",
+        "google",
+        "bedrock",
+        "deepseek",
+        "ollama",
+        "cerebras",
+        "together",
+        "groq",
+    }
+
+
 def get_credentials_from_file(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
     **kwargs: Any,
 ) -> Credentials:
-    """Fixture to load the LLM config."""
+    """Load LLM config with test-context filtering to prevent cross-SDK imports."""
+
+    # Get safe API types for current test context
+    safe_api_types = get_safe_api_types_from_test_context()
+
+    # Apply safety filter to prevent cross-SDK imports in CI
+    if filter_dict is None:
+        filter_dict = {}
+
+    # Create a copy to avoid modifying the original
+    filtered_dict = filter_dict.copy()
+
+    # Add/update API type filter to only include safe providers
+    existing_api_types = filtered_dict.get("api_type")
+    if existing_api_types is not None:
+        # Handle both string and list formats
+        if isinstance(existing_api_types, str):
+            existing_api_types = [existing_api_types]
+
+        # Intersect requested types with safe types
+        safe_requested_types = [t for t in existing_api_types if t in safe_api_types]
+        if not safe_requested_types:
+            # No safe intersection - this will trigger env fallback
+            raise Exception(
+                f"No safe API types for current test context. Requested: {existing_api_types}, Safe: {list(safe_api_types)}"
+            )
+
+        filtered_dict["api_type"] = safe_requested_types
+    else:
+        # No specific request - filter to only safe types
+        filtered_dict["api_type"] = list(safe_api_types)
+
     llm_config = autogen.LLMConfig.from_json(
         path=str(OAI_CONFIG_LIST),
-        filter_dict=filter_dict,
+        filter_dict=filtered_dict,
         file_location=KEY_LOC,
         temperature=temperature,
     )
@@ -61,6 +166,10 @@ def get_credentials_from_env(
     filter_dict: dict[str, Any] | None = None,
     temperature: float = 0.0,
 ) -> Credentials:
+    # Check if environment variable exists, otherwise skip test
+    if env_var_name not in os.environ:
+        pytest.skip(f"Skipping test: {env_var_name} environment variable not set and OAI_CONFIG_LIST file not found")
+
     return Credentials(
         LLMConfig(
             {
@@ -82,13 +191,39 @@ def get_credentials(
     temperature: float = 0.0,
 ) -> Credentials:
     credentials = None
+
+    # PRIORITY 1: Try environment variables first (GitHub secrets)
     try:
-        credentials = get_credentials_from_file(filter_dict, temperature)
+        credentials = get_credentials_from_env_vars(filter_dict, temperature)
+        # Filter to the specific api_type if needed
         if api_type == "openai":
             credentials.llm_config = credentials.llm_config.where(api_type="openai")
-    except Exception:
+        elif api_type == "azure":
+            credentials.llm_config = credentials.llm_config.where(api_type="azure")
+        elif api_type == "google":
+            credentials.llm_config = credentials.llm_config.where(api_type="google")
+        elif api_type == "anthropic":
+            credentials.llm_config = credentials.llm_config.where(api_type="anthropic")
+        elif api_type == "responses":
+            credentials.llm_config = credentials.llm_config.where(api_type="responses")
+        return credentials
+    except Exception as e:
+        # If no env vars found, credentials will be None
+        print(f"Could not get credentials from env vars: {e}")
         credentials = None
 
+    # PRIORITY 2: Fall back to OAI_CONFIG_LIST file (for local development)
+    if not credentials:
+        try:
+            credentials = get_credentials_from_file(filter_dict, temperature)
+            if api_type == "openai":
+                credentials.llm_config = credentials.llm_config.where(api_type="openai")
+            elif api_type == "responses":
+                credentials.llm_config = credentials.llm_config.where(api_type="responses")
+        except Exception:
+            credentials = None
+
+    # PRIORITY 3: Fall back to single env var (legacy)
     if not credentials:
         credentials = get_credentials_from_env(env_var_name, model, api_type, filter_dict, temperature)
 
@@ -97,29 +232,46 @@ def get_credentials(
 
 @pytest.fixture
 def credentials_azure() -> Credentials:
-    return get_credentials_from_file(filter_dict={"api_type": ["azure"]})
+    try:
+        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"]})
 
 
 @pytest.fixture
-def credentials_azure_gpt_35_turbo() -> Credentials:
-    return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-3.5-turbo"]})
+def credentials_azure_gpt_4_1_mini() -> Credentials:
+    """Azure OpenAI GPT-4.1-mini credentials (official replacement for gpt-35-turbo)"""
+    try:
+        return get_credentials_from_env_vars(
+            filter_dict={"api_type": ["azure"], "tags": ["gpt-4.1-mini", "gpt-4-1-mini"]}
+        )
+    except Exception:
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-4.1-mini", "gpt-4-1-mini"]})
 
 
 @pytest.fixture
-def credentials_azure_gpt_35_turbo_instruct() -> Credentials:
-    return get_credentials_from_file(
-        filter_dict={"tags": ["gpt-35-turbo-instruct", "gpt-3.5-turbo-instruct"], "api_type": ["azure"]}
-    )
+def credentials_azure_gpt_4o_mini() -> Credentials:
+    """Azure OpenAI GPT-4o-mini credentials (alternative, available until Feb 2026)"""
+    try:
+        return get_credentials_from_env_vars(filter_dict={"api_type": ["azure"], "tags": ["gpt-4o-mini"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"api_type": ["azure"], "tags": ["gpt-4o-mini"]})
 
 
 @pytest.fixture
 def credentials() -> Credentials:
-    return get_credentials_from_file(filter_dict={"tags": ["gpt-4o"]})
+    try:
+        return get_credentials_from_env_vars(filter_dict={"tags": ["gpt-4o"]})
+    except Exception:
+        return get_credentials_from_file(filter_dict={"tags": ["gpt-4o"]})
 
 
 @pytest.fixture
 def credentials_all() -> Credentials:
-    return get_credentials_from_file()
+    try:
+        return get_credentials_from_env_vars()
+    except Exception:
+        return get_credentials_from_file()
 
 
 @pytest.fixture
@@ -156,6 +308,15 @@ def credentials_gpt_4o_realtime() -> Credentials:
 
 
 @pytest.fixture
+def credentials_responses_gpt_4o_mini() -> Credentials:
+    return get_credentials(
+        "OPENAI_API_KEY",
+        model="gpt-4.1-mini",
+        api_type="responses",
+    )
+
+
+@pytest.fixture
 def credentials_gemini_realtime() -> Credentials:
     return get_credentials(
         "GEMINI_API_KEY", model="gemini-2.0-flash-exp", api_type="google", filter_dict={"tags": ["gemini-realtime"]}
@@ -180,7 +341,7 @@ def credentials_gemini_flash_exp() -> Credentials:
 def credentials_anthropic_claude_sonnet() -> Credentials:
     return get_credentials(
         "ANTHROPIC_API_KEY",
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         api_type="anthropic",
         filter_dict={"tags": ["anthropic-claude-sonnet"]},
     )

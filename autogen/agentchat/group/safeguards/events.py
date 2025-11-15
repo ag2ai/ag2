@@ -5,12 +5,33 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from termcolor import colored
 
 from ....events.base_event import BaseEvent, wrap_event
+
+# Type for termcolor colors
+TermColor = Literal[
+    "black",
+    "grey",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "light_grey",
+    "dark_grey",
+    "light_red",
+    "light_green",
+    "light_yellow",
+    "light_blue",
+    "light_magenta",
+    "light_cyan",
+    "white",
+]
 
 
 @wrap_event
@@ -52,7 +73,7 @@ class SafeguardEvent(BaseEvent):
         f = f or print
 
         # Choose color based on event type
-        color = "green"
+        color: TermColor = "green"
         if self.event_type == "load":
             color = "green"
         elif self.event_type == "check":

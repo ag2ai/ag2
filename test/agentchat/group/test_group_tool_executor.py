@@ -70,7 +70,6 @@ class TestGroupToolExecutor:
         # Create mock function and signature
         mock_func = MagicMock()
         mock_param = MagicMock()
-        mock_param.replace.return_value = "new_param"
 
         # Mock signature with context_variables parameter
         mock_signature.return_value.parameters = {"context_variables": mock_param, "other_param": "other_value"}
@@ -87,12 +86,9 @@ class TestGroupToolExecutor:
         mock_param.replace.assert_called_once()
         mock_signature.return_value.replace.assert_called_once()
 
-        # The original function should be returned
-        assert result == mock_func
-
         # The function's signature should be updated
-        assert hasattr(mock_func, "__signature__")
-        assert mock_func.__signature__ == mock_new_sig
+        assert hasattr(result, "__signature__")
+        assert result.__signature__ == mock_new_sig
 
     @patch("autogen.agentchat.group.group_tool_executor.inject_params")
     def test_change_tool_context_variables_to_depends(
