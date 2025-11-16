@@ -8,7 +8,10 @@ from functools import partial
 from types import MethodType
 from typing import TYPE_CHECKING, Any, Optional
 
-from autogen.agentchat.group.events.handoff_events import AfterWorksTransitionEvent, OnContextConditionTransitionEvent
+from autogen.agentchat.group.events.transition_events import (
+    AfterWorksTransitionEvent,
+    OnContextConditionTransitionEvent,
+)
 from autogen.io.base import IOStream
 
 from ..agent import Agent

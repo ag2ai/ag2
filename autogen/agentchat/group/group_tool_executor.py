@@ -7,8 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
-from autogen.agentchat.group.events.handoff_events import OnConditionLLMTransitionEvent
-from autogen.agentchat.group.events.reply_result_events import ReplyResultTransitionEvent
+from autogen.agentchat.group.events.transition_events import OnConditionLLMTransitionEvent, ReplyResultTransitionEvent
 from autogen.code_utils import content_str
 from autogen.io.base import IOStream
 

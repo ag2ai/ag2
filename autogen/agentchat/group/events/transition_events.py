@@ -84,3 +84,28 @@ class OnConditionLLMTransitionEvent(BaseEvent):
             ),
             flush=True,
         )
+
+
+@wrap_event
+class ReplyResultTransitionEvent(BaseEvent):
+    """Event for reply result transitions"""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    source_agent: Agent
+    transition_target: TransitionTarget
+
+    def __init__(self, source_agent: Agent, transition_target: TransitionTarget):
+        super().__init__(source_agent=source_agent, transition_target=transition_target)
+
+    def print(self, f: Callable[..., Any] | None = None) -> None:
+        f = f or print
+        super().print(f)
+
+        f(
+            colored(
+                f"***** ReplyResult transition ({self.source_agent.name if hasattr(self.source_agent, 'name') else self.source_agent}): {self.transition_target.display_name()} *****",
+                "blue",
+            ),
+            flush=True,
+        )
