@@ -152,7 +152,7 @@ document_agent = DocAgent(llm_config=llm_config)
 
 # Update this path to suit your environment
 response = document_agent.run(
-    "Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
+    message="Can you ingest ../test/agentchat/contrib/graph_rag/Toast_financial_report.pdf and tell me the fiscal year 2024 financial summary?",
     max_turns=1
 )
 
