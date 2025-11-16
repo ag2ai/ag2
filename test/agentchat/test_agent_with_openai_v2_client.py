@@ -428,7 +428,7 @@ def test_v2_client_backwards_compatibility(credentials_gpt_4o_mini: Credentials)
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
 def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Credentials) -> None:
-    """Test V2 client with multiple images in one request."""
+    """Test V2 client with multiple images in one request using Base64 encoding."""
     llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
 
     vision_assistant = AssistantAgent(name="vision_bot", llm_config=llm_config)
@@ -437,16 +437,18 @@ def test_v2_client_multimodal_with_multiple_images(credentials_gpt_4o_mini: Cred
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Two dog images
-    image_url_1 = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
-    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Golden_Retriever_Dukedestiny01.jpg"
+    # Two simple Base64 encoded images (1x1 pixel red and blue PNGs)
+    # Red 1x1 pixel PNG
+    base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+    # Blue 1x1 pixel PNG
+    base64_image_2 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
 
     multimodal_message = {
         "role": "user",
         "content": [
-            {"type": "text", "text": "Compare these two dogs briefly."},
-            {"type": "image_url", "image_url": {"url": image_url_1}},
-            {"type": "image_url", "image_url": {"url": image_url_2}},
+            {"type": "text", "text": "Compare these two images briefly. What colors do you see?"},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_1}"}},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_2}"}},
         ],
     }
 
@@ -770,18 +772,20 @@ def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: 
 
     pattern = DefaultPattern(initial_agent=agent1, agents=[agent1, agent2], user_agent=user_proxy)
 
-    # Multiple images in one message
+    # Multiple images in one message using Base64 encoding
     # Do NOT include "name" field - it causes role to become "assistant" which is invalid for images
-    image_url_1 = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
-    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Golden_Retriever_Dukedestiny01.jpg"
+    # Red 1x1 pixel PNG
+    base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+    # Blue 1x1 pixel PNG
+    base64_image_2 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
 
     multimodal_message = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Compare these two images."},
-                {"type": "image_url", "image_url": {"url": image_url_1}},
-                {"type": "image_url", "image_url": {"url": image_url_2}},
+                {"type": "text", "text": "Compare these two images. What colors do you see?"},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_1}"}},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_2}"}},
             ],
         }
     ]
@@ -820,7 +824,9 @@ def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: 
             if block.get("type") == "image_url":
                 assert "image_url" in block, "Image block should have image_url field"
                 assert "url" in block["image_url"], "Image URL should have url field"
-                assert block["image_url"]["url"].startswith("http"), "URL should be preserved"
+                # Check for either http URLs or Base64 data URIs
+                url = block["image_url"]["url"]
+                assert url.startswith("http") or url.startswith("data:image"), "URL should be preserved"
 
     elif isinstance(first_msg["content"], str):
         logger.warning("⚠ CONVERTED to string: %s...", first_msg["content"][:100])

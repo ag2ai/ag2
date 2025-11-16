@@ -188,7 +188,7 @@ class OpenAICompletionsClient(ModelClient):
             # Note: OpenAI Chat Completions API always returns content as str, never list
             # (List content is only used in REQUEST messages for multimodal inputs)
             if message_obj.content:
-                content_blocks.append(TextContent(type="text", text=message_obj.content))
+                content_blocks.append(TextContent(text=message_obj.content))
 
             # Extract tool calls
             if getattr(message_obj, "tool_calls", None):
