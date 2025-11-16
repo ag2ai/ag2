@@ -43,7 +43,11 @@ response = my_agent.run(
 # 5. Iterate through the chat automatically with console output
 response.process()
 
-# 6. Get and print our lesson plan
-lesson_plan_json = json.loads(response.messages[-1]["content"])
-print(json.dumps(lesson_plan_json, indent=2))
+# 6. Get and print our lesson plan (structured output)
+# The response with a Pydantic response_format contains a parsed object in a 'parsed' content block
+parsed_block = next(
+    (b for b in response.messages[-1]["content"] if getattr(b, "type", None) == "parsed"), None
+)
+lesson_plan_obj = parsed_block.parsed if parsed_block is not None else None
+print(json.dumps(lesson_plan_obj, indent=2))
 ```
