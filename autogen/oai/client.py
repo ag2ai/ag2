@@ -1000,6 +1000,7 @@ class OpenAIWrapper:
                     api_key=openai_config.get("api_key"),
                     base_url=openai_config.get("base_url"),
                     timeout=openai_config.get("timeout", 60.0),
+                    response_format=response_format,
                 )
                 self._clients.append(v2_client)  # type: ignore[arg-type]
                 client = v2_client
