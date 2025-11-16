@@ -824,7 +824,9 @@ def test_v2_client_run_group_chat_content_preservation(credentials_gpt_4o_mini: 
             if block.get("type") == "image_url":
                 assert "image_url" in block, "Image block should have image_url field"
                 assert "url" in block["image_url"], "Image URL should have url field"
-                assert block["image_url"]["url"].startswith("http"), "URL should be preserved"
+                # Check for either http URLs or Base64 data URIs
+                url = block["image_url"]["url"]
+                assert url.startswith("http") or url.startswith("data:image"), "URL should be preserved"
 
     elif isinstance(first_msg["content"], str):
         logger.warning("⚠ CONVERTED to string: %s...", first_msg["content"][:100])
