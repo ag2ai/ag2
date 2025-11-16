@@ -269,16 +269,18 @@ def test_capture_system_message_response(credentials_gpt_4o_mini: Credentials) -
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
 def test_capture_multiple_images_response(credentials_gpt_4o_mini: Credentials) -> None:
-    """Capture a response with multiple images for unit testing."""
+    """Capture a response with multiple images using Base64 encoding for unit testing."""
     if OpenAI is None:
         pytest.skip("OpenAI not installed")
 
     api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
     client = OpenAI(api_key=api_key)
 
-    # Multiple images
-    image_url_1 = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
-    image_url_2 = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Golden_Retriever_Dukedestiny01.jpg"
+    # Two simple Base64 encoded images (1x1 pixel red and blue PNGs)
+    # Red 1x1 pixel PNG
+    base64_image_1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+    # Blue 1x1 pixel PNG
+    base64_image_2 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=="
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -286,9 +288,9 @@ def test_capture_multiple_images_response(credentials_gpt_4o_mini: Credentials) 
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Compare these two dogs in one sentence."},
-                    {"type": "image_url", "image_url": {"url": image_url_1}},
-                    {"type": "image_url", "image_url": {"url": image_url_2}},
+                    {"type": "text", "text": "Compare these two images. What colors do you see?"},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_1}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image_2}"}},
                 ],
             }
         ],
