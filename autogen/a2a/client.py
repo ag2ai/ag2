@@ -328,7 +328,7 @@ class A2aRemoteAgent(ConversableAgent):
                     )
 
         except Exception as e:
-            raise A2aAgentNotFoundError(self.name) from e
+            raise A2aAgentNotFoundError(f"{self.name}: {self._card_resolver.base_url}") from e
 
         return card
 
