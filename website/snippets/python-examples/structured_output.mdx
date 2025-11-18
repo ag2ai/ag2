@@ -23,9 +23,9 @@ llm_config = LLMConfig(config_list={
 })
 
 # 3. The agent's system message doesn't need any formatting instructions
-system_message = """You are a classroom lesson agent.
+system_message = '''You are a classroom lesson agent.
 Given a topic, write a lesson plan for a fourth grade class.
-"""
+'''
 
 my_agent = ConversableAgent(
     name="lesson_agent",
@@ -43,11 +43,14 @@ response = my_agent.run(
 # 5. Iterate through the chat automatically with console output
 response.process()
 
-# 6. Get and print our lesson plan (structured output)
-# The response with a Pydantic response_format contains a parsed object in a 'parsed' content block
-parsed_block = next(
-    (b for b in response.messages[-1]["content"] if getattr(b, "type", None) == "parsed"), None
-)
-lesson_plan_obj = parsed_block.parsed if parsed_block is not None else None
-print(json.dumps(lesson_plan_obj, indent=2))
+# 6. Get and print our lesson plan as a dict, accessed from the parsed content block
+# Find the 'parsed' type GenericContent in the last message's content blocks
+last_message_content = response.messages[-1]["content"]
+parsed_block = next((block for block in last_message_content if getattr(block, "type", None) == "parsed"), None)
+
+if parsed_block is not None:
+    lesson_plan_dict = parsed_block.parsed
+    print(json.dumps(lesson_plan_dict, indent=2))
+else:
+    print("No structured lesson plan found in the response.")
 ```
