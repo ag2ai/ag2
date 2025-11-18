@@ -408,9 +408,6 @@ class OpenAIResponsesClient:
                 })
                 continue
 
-            # ------------------------------------------------------------------
-            # 3) Apply patch calls - must come BEFORE generic _call handler
-            # ------------------------------------------------------------------
             if item_type == "apply_patch_call":
                 tool_call_args = {
                     "id": item.get("id"),
