@@ -1620,7 +1620,7 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
-    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "apply_patch_async"]] | None = (
+    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "apply_patch_async", "shell"]] | None = (
         None  # added type safety for built-in tools and IDE autocomplete
     )
     workspace_dir: str | None = None
