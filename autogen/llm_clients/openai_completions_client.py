@@ -35,14 +35,17 @@ else:
 
 from ..llm_config.client import ModelClient
 from .models import (
+    AudioContent,
     CitationContent,
     GenericContent,
+    ImageContent,
     ReasoningContent,
     TextContent,
     ToolCallContent,
     UnifiedMessage,
     UnifiedResponse,
     UserRoleEnum,
+    VideoContent,
     normalize_role,
 )
 
@@ -429,16 +432,105 @@ class OpenAICompletionsClient(ModelClient):
             "model": response.model,
         }
 
-    def message_retrieval(self, response: UnifiedResponse) -> list[str]:  # type: ignore[override]
+    def message_retrieval(self, response: UnifiedResponse) -> list[str] | list[dict[str, Any]]:  # type: ignore[override]
         """
-        Retrieve text content from response messages.
+        Retrieve messages from response in OpenAI-compatible format.
 
-        Implements ModelClient.message_retrieval() but accepts UnifiedResponse via duck typing.
+        Returns list of strings for text-only messages, or list of dicts when
+        tool calls, function calls, or complex content is present.
+
+        This matches the behavior of the legacy OpenAIClient which returns:
+        - Strings for simple text responses
+        - ChatCompletionMessage objects (as dicts) when tool_calls/function_call present
+
+        The returned dicts follow OpenAI's ChatCompletion message format:
+        {
+            "role": "assistant",
+            "content": "text content or None",
+            "tool_calls": [{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}],
+            "name": "agent_name" (optional)
+        }
 
         Args:
             response: UnifiedResponse from create()
 
         Returns:
-            List of text strings from message content blocks
+            List of strings (for text-only) OR list of message dicts (for tool calls/complex content)
         """
-        return [msg.get_text() for msg in response.messages]
+        result: list[str] | list[dict[str, Any]] = []
+
+        for msg in response.messages:
+            # Check for tool calls
+            tool_calls = msg.get_tool_calls()
+
+            # Check for complex/multimodal content that needs dict format
+            has_complex_content = any(
+                isinstance(block, (ImageContent, AudioContent, VideoContent)) for block in msg.content
+            )
+
+            if tool_calls or has_complex_content:
+                # Return OpenAI-compatible dict format
+                message_dict: dict[str, Any] = {
+                    "role": msg.role.value if hasattr(msg.role, "value") else msg.role,
+                    "content": msg.get_text() or None,
+                }
+
+                # Add optional fields
+                if msg.name:
+                    message_dict["name"] = msg.name
+
+                # Add tool calls in OpenAI format
+                if tool_calls:
+                    message_dict["tool_calls"] = [
+                        {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                        for tc in tool_calls
+                    ]
+
+                # Handle multimodal content - convert to OpenAI content array format
+                if has_complex_content:
+                    message_dict["content"] = self._convert_to_openai_content_array(msg)
+
+                result.append(message_dict)
+            else:
+                # Simple text content - return string
+                result.append(msg.get_text())
+
+        return result
+
+    def _convert_to_openai_content_array(self, msg: UnifiedMessage) -> list[dict[str, Any]]:
+        """
+        Convert UnifiedMessage content blocks to OpenAI content array format.
+
+        This handles multimodal content (text, images, audio, video) and converts
+        it to the format expected by OpenAI's API for input messages.
+
+        Args:
+            msg: UnifiedMessage with content blocks
+
+        Returns:
+            List of content dicts in OpenAI format
+        """
+        content_array = []
+
+        for block in msg.content:
+            if isinstance(block, TextContent):
+                content_array.append({"type": "text", "text": block.text})
+            elif isinstance(block, ImageContent):
+                # OpenAI image format
+                image_url = block.url or f"data:{block.mime_type or 'image/jpeg'};base64,{block.data}"
+                content_array.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_url, "detail": block.detail or "auto"},
+                })
+            elif isinstance(block, AudioContent):
+                # OpenAI doesn't have standard audio input format yet
+                # Fall back to text representation
+                content_array.append({"type": "text", "text": block.get_text()})
+            elif isinstance(block, VideoContent):
+                # OpenAI doesn't have standard video input format yet
+                # Fall back to text representation
+                content_array.append({"type": "text", "text": block.get_text()})
+            # Skip ToolCallContent, ReasoningContent - handled separately in message_dict
+
+        # If no content blocks were converted, return text fallback
+        return content_array if content_array else [{"type": "text", "text": msg.get_text()}]
