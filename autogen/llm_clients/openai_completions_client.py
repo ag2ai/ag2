@@ -84,6 +84,7 @@ class OpenAICompletionsClient(ModelClient):
         api_key: str | None = None,
         base_url: str | None = None,
         timeout: float = 60.0,
+        response_format: Any = None,
         **kwargs: Any,
     ):
         """
@@ -93,12 +94,14 @@ class OpenAICompletionsClient(ModelClient):
             api_key: OpenAI API key (or set OPENAI_API_KEY env var)
             base_url: Custom base URL for OpenAI API
             timeout: Request timeout in seconds
+            response_format: Optional response format (Pydantic model or JSON schema)
             **kwargs: Additional arguments passed to OpenAI client
         """
         if openai_import_exception is not None:
             raise openai_import_exception
 
         self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, **kwargs)  # type: ignore[misc]
+        self._default_response_format = response_format
         self._cost_per_token = {
             # GPT-5 series - Latest flagship models (per million tokens)
             "gpt-5": {"prompt": 1.25 / 1_000_000, "completion": 10.00 / 1_000_000},
@@ -134,18 +137,53 @@ class OpenAICompletionsClient(ModelClient):
                 - temperature: Optional temperature (not supported by o1 models)
                 - max_tokens: Optional max completion tokens
                 - tools: Optional tool definitions
+                - response_format: Optional Pydantic BaseModel or JSON schema dict
                 - **other OpenAI parameters
 
         Returns:
             UnifiedResponse with reasoning blocks, citations, and all content preserved
         """
-        # Call OpenAI API
-        response = self.client.chat.completions.create(**params)
+        # Merge default response_format if not already in params
+        if self._default_response_format is not None and "response_format" not in params:
+            params = params.copy()
+            params["response_format"] = self._default_response_format
+
+        # Check if response_format is a Pydantic BaseModel
+        response_format = params.get("response_format")
+        use_parse = self._is_pydantic_model(response_format)
+
+        # Call OpenAI API - use parse() for Pydantic models, create() otherwise
+        if use_parse:
+            # parse() doesn't support stream parameter - remove it if present
+            parse_params = params.copy()
+            parse_params.pop("stream", None)
+            response = self.client.chat.completions.parse(**parse_params)
+        else:
+            response = self.client.chat.completions.create(**params)
 
         # Transform to UnifiedResponse
-        return self._transform_response(response, params.get("model", "unknown"))
+        return self._transform_response(response, params.get("model", "unknown"), use_parse=use_parse)
 
-    def _transform_response(self, openai_response: Any, model: str) -> UnifiedResponse:
+    def _is_pydantic_model(self, obj: Any) -> bool:
+        """
+        Check if object is a Pydantic BaseModel class.
+
+        Args:
+            obj: Object to check
+
+        Returns:
+            True if obj is a Pydantic BaseModel class (not instance)
+        """
+        try:
+            import inspect
+
+            from pydantic import BaseModel
+
+            return inspect.isclass(obj) and issubclass(obj, BaseModel)
+        except (ImportError, TypeError):
+            return False
+
+    def _transform_response(self, openai_response: Any, model: str, use_parse: bool = False) -> UnifiedResponse:
         """
         Transform OpenAI ChatCompletion response to UnifiedResponse.
 
@@ -156,14 +194,17 @@ class OpenAICompletionsClient(ModelClient):
         - Text content → TextContent
         - Reasoning blocks (o1/o3 models) → ReasoningContent
         - Tool calls → ToolCallContent
+        - Parsed Pydantic objects (when use_parse=True) → GenericContent with 'parsed' type
+        - Refusals (when use_parse=True) → GenericContent with 'refusal' type
         - Unknown message fields → GenericContent (forward compatibility)
 
         This ensures that new OpenAI features are preserved even if we don't have
         specific content types defined yet.
 
         Args:
-            openai_response: Raw OpenAI API response
+            openai_response: Raw OpenAI API response (from create() or parse())
             model: Model name
+            use_parse: Whether response came from parse() method (has .parsed field)
 
         Returns:
             UnifiedResponse with all content blocks properly typed
@@ -184,11 +225,29 @@ class OpenAICompletionsClient(ModelClient):
                     )
                 )
 
+            # Extract parsed Pydantic object if present (from parse() method)
+            if use_parse and getattr(message_obj, "parsed", None):
+                # Store parsed object as GenericContent to preserve it
+                parsed_obj = message_obj.parsed
+                # Convert to dict for storage
+                if hasattr(parsed_obj, "model_dump"):
+                    parsed_dict = parsed_obj.model_dump()
+                elif hasattr(parsed_obj, "dict"):
+                    parsed_dict = parsed_obj.dict()
+                else:
+                    parsed_dict = {"value": str(parsed_obj)}
+
+                content_blocks.append(GenericContent(type="parsed", parsed=parsed_dict))
+
+            # Extract refusal if present (from parse() method)
+            if use_parse and getattr(message_obj, "refusal", None):
+                content_blocks.append(GenericContent(type="refusal", refusal=message_obj.refusal))
+
             # Extract text content
             # Note: OpenAI Chat Completions API always returns content as str, never list
             # (List content is only used in REQUEST messages for multimodal inputs)
             if message_obj.content:
-                content_blocks.append(TextContent(type="text", text=message_obj.content))
+                content_blocks.append(TextContent(text=message_obj.content))
 
             # Extract tool calls
             if getattr(message_obj, "tool_calls", None):
@@ -216,7 +275,17 @@ class OpenAICompletionsClient(ModelClient):
 
             # Handle any other unknown fields from OpenAI response as GenericContent
             # This ensures forward compatibility with new OpenAI features
-            known_fields = {"role", "content", "reasoning", "tool_calls", "citations", "name", "function_call"}
+            known_fields = {
+                "role",
+                "content",
+                "reasoning",
+                "tool_calls",
+                "citations",
+                "name",
+                "function_call",
+                "parsed",
+                "refusal",
+            }
             message_dict = message_obj.model_dump() if hasattr(message_obj, "model_dump") else {}
             for field_name, field_value in message_dict.items():
                 if field_name not in known_fields and field_value is not None:
