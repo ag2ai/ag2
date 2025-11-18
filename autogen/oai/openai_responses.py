@@ -205,6 +205,34 @@ class OpenAIResponsesClient:
             params["reasoning"] = {"effort": reasoning_effort}
         return params
 
+    def _apply_patch_operation(self, operation: dict[str, Any]) -> tuple[str, str]:
+        """Apply a patch operation and return status and output message.
+
+        Args:
+            operation: Dictionary containing the patch operation with keys:
+                - type: "create_file", "update_file", or "delete_file"
+                - path: File path
+                - diff: Diff string (for create_file and update_file)
+
+        Returns:
+            Tuple of (status, output) where:
+                - status: "completed" or "failed"
+                - output: Success or error message string
+        """
+        # TODO: Implement actual patch application logic
+        # For now, return a placeholder output
+        op_type = operation.get("type", "unknown")
+        path = operation.get("path", "unknown")
+
+        if op_type == "create_file":
+            return "completed", f"Created {path}"
+        elif op_type == "update_file":
+            return "completed", f"Updated {path}"
+        elif op_type == "delete_file":
+            return "completed", f"Deleted {path}"
+        else:
+            return "failed", f"Unknown operation type: {op_type}"
+
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
@@ -224,39 +252,115 @@ class OpenAIResponsesClient:
         if "messages" in params and "input" not in params:
             msgs = self._get_delta_messages(params.pop("messages"))
             input_items = []
+
+            # Track apply_patch_call_ids and their full data to identify tool outputs correctly
+            apply_patch_call_ids = {}  # Changed from set() to dict to store full apply_patch_call data
+            for msg in msgs:
+                if msg.get("role") == "assistant":
+                    content = msg.get("content", [])
+                    if isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict) and item.get("type") == "apply_patch_call":
+                                call_id = item.get("call_id")
+                                if call_id:
+                                    apply_patch_call_ids[call_id] = item  # Store the full item, not just the ID
+                    # Also check tool_calls
+                    tool_calls = msg.get("tool_calls", [])
+                    for tool_call in tool_calls:
+                        if isinstance(tool_call, dict) and tool_call.get("type") == "apply_patch_call":
+                            call_id = tool_call.get("call_id")
+                            if call_id:
+                                apply_patch_call_ids[call_id] = tool_call
+
+            seen_apply_patch_outputs = set()
             for m in msgs[::-1]:  # reverse the list to get the last item first
                 role = m.get("role", "user")
                 # First, we need to convert the content to the Responses API format
                 content = m.get("content")
                 blocks = []
                 if role != "tool":
+                    # Determine content type based on role: assistant uses output_text, user uses input_text
+                    content_type = "output_text" if role == "assistant" else "input_text"
                     if isinstance(content, list):
                         for c in content:
-                            if c.get("type") in ["input_text", "text"]:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
+                            if c.get("type") in ["input_text", "text", "output_text"]:
+                                # Use the appropriate type based on role, or preserve output_text if already set
+                                if c.get("type") == "output_text" or role == "assistant":
+                                    blocks.append({"type": "output_text", "text": c.get("text")})
+                                else:
+                                    blocks.append({"type": "input_text", "text": c.get("text")})
                             elif c.get("type") == "input_image":
                                 blocks.append({"type": "input_image", "image_url": c.get("image_url")})
                             elif c.get("type") == "image_params":
                                 for k, v in c.get("image_params", {}).items():
                                     if k in self.image_output_params:
                                         image_generation_tool_params[k] = v
+                            elif c.get("type") == "apply_patch_call":
+                                # Skip apply_patch_call items in assistant messages - we'll add outputs separately
+                                # Don't include them in the content blocks
+                                continue
                             else:
                                 raise ValueError(f"Invalid content type: {c.get('type')}")
                     else:
-                        blocks.append({"type": "input_text", "text": content})
+                        blocks.append({"type": content_type, "text": content})
                     input_items.append({"role": role, "content": blocks})
 
                 else:
-                    if input_items:
-                        break
-                    # tool call response is the last item in the list
+                    # tool call response
+                    tool_call_id = m.get("tool_call_id", None)
                     content = content_str(m.get("content"))
-                    input_items.append({
-                        "type": "function_call_output",
-                        "call_id": m.get("tool_call_id", None),
-                        "output": content,
-                    })
-                    break
+
+                    # Check if this tool output corresponds to an apply_patch_call
+                    if tool_call_id and tool_call_id in apply_patch_call_ids:
+                        # Get the apply_patch_call to extract operation details
+                        apply_patch_call = apply_patch_call_ids[tool_call_id]
+                        operation = apply_patch_call.get("operation", {})
+
+                        # Apply the patch operation and get status/output
+                        status, output = self._apply_patch_operation(operation)
+                        seen_apply_patch_outputs.add(tool_call_id)
+                        input_items.append({
+                            "type": "apply_patch_call_output",
+                            "call_id": tool_call_id,
+                            "status": status,
+                            "output": output,
+                        })
+                    else:
+                        # Regular function call output
+                        input_items.append({
+                            "type": "function_call_output",
+                            "call_id": tool_call_id,
+                            "output": content,
+                        })
+                    # Don't break here - continue processing to find all tool outputs
+                    # Only break if we've processed all apply_patch_call outputs
+                    if not apply_patch_call_ids or seen_apply_patch_outputs >= set(apply_patch_call_ids.keys()):
+                        # Check if there are other tool messages we need to process
+                        # For now, continue processing all tool messages
+                        pass
+
+            # Check if there are any apply_patch_call items that don't have outputs yet
+            # If so, we need to execute them and create outputs
+            missing_outputs = set(apply_patch_call_ids.keys()) - seen_apply_patch_outputs
+            if missing_outputs:
+                # Execute missing apply_patch_call operations and create outputs
+                for call_id in missing_outputs:
+                    apply_patch_call = apply_patch_call_ids[call_id]
+                    operation = apply_patch_call.get("operation", {})
+
+                    # Apply the patch operation and get status/output
+                    status, output = self._apply_patch_operation(operation)
+
+                    # Add the output to input_items (these should come before user/assistant messages)
+                    input_items.insert(
+                        0,
+                        {
+                            "type": "apply_patch_call_output",
+                            "call_id": call_id,
+                            "status": status,
+                            "output": output,
+                        },
+                    )
 
             # Ensure we have at least one valid input item
             if input_items:
