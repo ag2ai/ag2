@@ -1057,7 +1057,7 @@ class OpenAIResponsesClient:
                 continue
 
             # ------------------------------------------------------------------
-            # 4) Built-in tool calls
+            # 3)  Built-in tool calls
             # ------------------------------------------------------------------
             if item_type == "shell_call":
                 tool_call_args = {
@@ -1092,19 +1092,6 @@ class OpenAIResponsesClient:
                     pass
                 else:
                     raise ValueError(f"Invalid tool name: {tool_name}")
-                content.append(tool_call_args)
-                continue
-
-            # handling apply_patch_call response from apply_patch tool call
-            if item_type == "apply_patch_call":
-                tool_call_args = {
-                    "id": item.get("id"),
-                    "role": "tool_calls",
-                    "type": "apply_patch_call",
-                    "call_id": item.get("call_id"),
-                    "status": item.get("status", "in_progress"),
-                    "operation": item.get("operation", {}),
-                }
                 content.append(tool_call_args)
                 continue
 
