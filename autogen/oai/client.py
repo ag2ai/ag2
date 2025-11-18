@@ -1618,7 +1618,9 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
-    built_in_tools: list[str] | None = None
+    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch"]] | None = (
+        None  # added type safety for built-in tools and IDE autocomplete
+    )
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
