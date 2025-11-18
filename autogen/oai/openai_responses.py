@@ -212,6 +212,7 @@ class OpenAIResponsesClient:
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
+        apply_patch_tool_params = {"type": "apply_patch"}
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
@@ -271,6 +272,8 @@ class OpenAIResponsesClient:
                 tools_list.append(image_generation_tool_params)
             if "web_search" in built_in_tools:
                 tools_list.append(web_search_tool_params)
+            if "apply_patch" in built_in_tools:
+                tools_list.append(apply_patch_tool_params)
 
         if "tools" in params:
             for tool in params["tools"]:
@@ -426,6 +429,19 @@ class OpenAIResponsesClient:
                     pass
                 else:
                     raise ValueError(f"Invalid tool name: {tool_name}")
+                content.append(tool_call_args)
+                continue
+
+            # handling apply_patch_call response from apply_patch tool call
+            if item_type == "apply_patch_call":
+                tool_call_args = {
+                    "id": item.get("id"),
+                    "role": "tool_calls",
+                    "type": "apply_patch_call",
+                    "call_id": item.get("call_id"),
+                    "status": item.get("status", "in_progress"),
+                    "operation": item.get("operation", {}),
+                }
                 content.append(tool_call_args)
                 continue
 
