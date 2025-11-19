@@ -121,6 +121,7 @@ class AnthropicEntryDict(LLMConfigEntryDict, total=False):
     gcp_project_id: str | None
     gcp_region: str | None
     gcp_auth_token: str | None
+    output_format: dict | None
 
 
 class AnthropicLLMConfigEntry(LLMConfigEntry):
@@ -206,6 +207,7 @@ class AnthropicClient:
 
         # Store the response format, if provided (for structured outputs)
         self._response_format: type[BaseModel] | None = None
+        self._output_format: dict | None = None
 
     def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""
@@ -238,11 +240,57 @@ class AnthropicClient:
         # type = auto, any, tool, none | name = the name of the tool if type=tool
         anthropic_params["tool_choice"] = validate_parameter(params, "tool_choice", dict, True, None, None, None)
 
+        # Add support for output_format (structured outputs)
+        if "output_format" in params:
+            anthropic_params["output_format"] = params["output_format"]
+
         return anthropic_params
 
     def cost(self, response) -> float:
         """Calculate the cost of the completion using the Anthropic pricing."""
         return response.cost
+
+    def _convert_response_format_to_output_format(self, response_format: BaseModel | dict[str, Any]) -> dict:
+        """Convert response_format (Pydantic model or dict) to Anthropic output_format schema.
+
+        Args:
+            response_format: Either a Pydantic BaseModel class or a dict schema
+
+        Returns:
+            dict: Anthropic output_format with json_schema type
+        """
+        if isinstance(response_format, dict):
+            schema = response_format
+        else:
+            # Pydantic model - get JSON schema
+            schema = response_format.model_json_schema()
+
+        # Use transform_schema if available (from anthropic SDK >= 0.39.0)
+        # This handles unsupported features automatically
+        try:
+            from anthropic import transform_schema
+
+            schema = transform_schema(schema)
+        except ImportError:
+            # Fallback: manually ensure additionalProperties: false on objects
+            def ensure_additional_properties(obj):
+                if isinstance(obj, dict):
+                    if obj.get("type") == "object" and "additionalProperties" not in obj:
+                        obj["additionalProperties"] = False
+                    for value in obj.values():
+                        if isinstance(value, (dict, list)):
+                            ensure_additional_properties(value)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        if isinstance(item, (dict, list)):
+                            ensure_additional_properties(item)
+
+            ensure_additional_properties(schema)
+
+        return {
+            "type": "json_schema",
+            "schema": schema,
+        }
 
     @property
     def api_key(self):
@@ -286,12 +334,22 @@ class AnthropicClient:
         anthropic_messages = oai_messages_to_anthropic_messages(params)
         anthropic_params = self.load_config(params)
 
-        # If response_format exists, we want structured outputs
-        # Anthropic doesn't support response_format, so using Anthropic's "JSON Mode":
-        # https://github.com/anthropics/anthropic-cookbook/blob/main/misc/how_to_enable_json_mode.ipynb
-        if params.get("response_format"):
+        # Determine if we should use structured outputs (output_format)
+        output_format = anthropic_params.get("output_format")
+        use_structured_outputs = False
+
+        # Handle response_format -> output_format conversion (backward compatibility)
+        if params.get("response_format") and not output_format:
             self._response_format = params["response_format"]
-            self._add_response_format_to_system(params)
+            output_format = self._convert_response_format_to_output_format(params["response_format"])
+            anthropic_params["output_format"] = output_format
+            use_structured_outputs = True
+        elif output_format:
+            use_structured_outputs = True
+            self._output_format = output_format
+            # If output_format is provided, also store response_format if it exists for validation
+            if params.get("response_format"):
+                self._response_format = params["response_format"]
 
         # TODO: support stream
         params = params.copy()
@@ -317,12 +375,61 @@ class AnthropicClient:
         if anthropic_params["tool_choice"] is None:
             del anthropic_params["tool_choice"]
 
-        response = self._client.messages.create(**anthropic_params)
+        # Use beta API if structured outputs are enabled
+        if use_structured_outputs:
+            # Check if beta.messages is available
+            if not hasattr(self._client, "beta") or not hasattr(self._client.beta, "messages"):
+                warnings.warn(
+                    "Structured outputs require anthropic SDK >= 0.39.0. Falling back to legacy JSON mode.",
+                    UserWarning,
+                )
+                # Fall back to legacy JSON mode workaround
+                if params.get("response_format"):
+                    self._response_format = params["response_format"]
+                    self._add_response_format_to_system(params)
+                response = self._client.messages.create(**anthropic_params)
+                use_structured_outputs = False
+            else:
+                # Use beta.messages.create() - it automatically handles the beta header
+                # when betas=["structured-outputs-2025-11-13"] is passed
+                beta_params = anthropic_params.copy()
+                if "betas" not in beta_params:
+                    beta_params["betas"] = ["structured-outputs-2025-11-13"]
+                elif "structured-outputs-2025-11-13" not in beta_params["betas"]:
+                    beta_params["betas"].append("structured-outputs-2025-11-13")
+
+                response = self._client.beta.messages.create(**beta_params)
+        else:
+            # Normal API call without structured outputs
+            response = self._client.messages.create(**anthropic_params)
 
         tool_calls = []
         message_text = ""
 
-        if self._response_format:
+        # Handle structured outputs response
+        if use_structured_outputs and output_format:
+            # Structured outputs return validated JSON directly in response.content[0].text
+            # See: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
+            if response.content and len(response.content) > 0:
+                # Access text directly from content[0] as per Anthropic docs
+                content_item = response.content[0]
+                if hasattr(content_item, "text") or isinstance(content_item, TextBlock):
+                    message_text = content_item.text
+                else:
+                    # Fallback: try to get text attribute if it exists
+                    message_text = getattr(content_item, "text", "")
+
+                # Parse and validate if we have a Pydantic model
+                if message_text and self._response_format:
+                    try:
+                        parsed_response = self._parse_structured_output_response(message_text)
+                        message_text = _format_json_response(parsed_response)
+                    except ValueError as e:
+                        message_text = str(e)
+
+            anthropic_finish = "stop"
+        elif self._response_format and not use_structured_outputs:
+            # Legacy JSON mode handling (fallback)
             try:
                 parsed_response = self._extract_json_response(response)
                 message_text = _format_json_response(parsed_response)
@@ -331,6 +438,7 @@ class AnthropicClient:
 
             anthropic_finish = "stop"
         else:
+            # Normal response handling
             if response is not None:
                 # If we have tool use as the response, populate completed tool calls for our return OAI response
                 if response.stop_reason == "tool_use":
@@ -512,6 +620,28 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
 
         except Exception as e:
             raise ValueError(f"Failed to parse response as valid JSON matching the schema for Structured Output: {e!s}")
+
+    def _parse_structured_output_response(self, json_text: str) -> Any:
+        """Parse structured output response from Anthropic.
+
+        Args:
+            json_text: JSON string from response.content[0].text
+
+        Returns:
+            Parsed and validated response
+        """
+        if not self._response_format:
+            return json_text
+
+        try:
+            json_data = json.loads(json_text)
+            if isinstance(self._response_format, dict):
+                return json_text
+            else:
+                # Validate against Pydantic model
+                return self._response_format.model_validate(json_data)
+        except Exception as e:
+            raise ValueError(f"Failed to parse structured output response: {e!s}") from e
 
 
 def _format_json_response(response: Any) -> str:
