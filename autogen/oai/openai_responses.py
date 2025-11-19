@@ -303,6 +303,7 @@ class OpenAIResponsesClient:
 
         # Check previous response for apply_patch_call items that need outputs
         # This handles the case where the previous response contained apply_patch_call items
+        previous_apply_patch_calls = {}
         if self.previous_response_id is not None:
             try:
                 # Retrieve the previous response to check for apply_patch_call items
@@ -310,7 +311,6 @@ class OpenAIResponsesClient:
                 previous_output = getattr(previous_response, "output", [])
 
                 # Extract apply_patch_call items from previous response
-                previous_apply_patch_calls = {}
                 for item in previous_output:
                     if hasattr(item, "model_dump"):
                         item = item.model_dump()
