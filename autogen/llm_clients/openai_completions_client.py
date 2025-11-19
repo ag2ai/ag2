@@ -146,10 +146,16 @@ class OpenAICompletionsClient(ModelClient):
         Returns:
             UnifiedResponse with reasoning blocks, citations, and all content preserved
         """
+        # Make a copy of params to avoid mutating the original
+        params = params.copy()
+
         # Merge default response_format if not already in params
         if self._default_response_format is not None and "response_format" not in params:
-            params = params.copy()
             params["response_format"] = self._default_response_format
+
+        # Process reasoning model parameters (o1/o3 models)
+        if self._is_reasoning_model(params.get("model")):
+            self._process_reasoning_model_params(params)
 
         # Check if response_format is a Pydantic BaseModel
         response_format = params.get("response_format")
@@ -185,6 +191,96 @@ class OpenAICompletionsClient(ModelClient):
             return inspect.isclass(obj) and issubclass(obj, BaseModel)
         except (ImportError, TypeError):
             return False
+
+    def _is_reasoning_model(self, model: str | None) -> bool:
+        """
+        Check if model is an o1/o3 reasoning model.
+
+        Args:
+            model: Model name to check
+
+        Returns:
+            True if model is an o1 or o3 reasoning model
+        """
+        if not model:
+            return False
+        return model.startswith(("o1", "o3"))
+
+    def _process_reasoning_model_params(self, params: dict[str, Any]) -> None:
+        """
+        Process parameters for o1/o3 reasoning models.
+
+        Reasoning models have special requirements and limitations:
+        https://platform.openai.com/docs/guides/reasoning#limitations
+
+        This method:
+        1. Removes unsupported parameters (temperature, top_p, etc.)
+        2. Converts max_tokens to max_completion_tokens
+        3. Converts system messages to user messages for older o1 models
+        4. Blocks tools for o1 models (they don't support function calling)
+        5. Blocks streaming (not supported by o1 models)
+
+        Args:
+            params: Request parameters dict (modified in place)
+        """
+        import warnings
+
+        model_name = params.get("model", "unknown")
+
+        # 1. Remove unsupported parameters
+        unsupported_params = [
+            "temperature",
+            "top_p",
+            "frequency_penalty",
+            "presence_penalty",
+            "logprobs",
+            "top_logprobs",
+            "logit_bias",
+        ]
+        for param in unsupported_params:
+            if param in params:
+                warnings.warn(
+                    f"`{param}` is not supported with {model_name} model and will be ignored.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                params.pop(param)
+
+        # 2. Replace max_tokens with max_completion_tokens
+        # Reasoning tokens are now factored in, max_tokens isn't valid
+        if "max_tokens" in params:
+            params["max_completion_tokens"] = params.pop("max_tokens")
+
+        # 3. Convert system messages to user messages (for older o1 models)
+        # Newer o1 models (like o1-2024-12-17) support system messages
+        system_not_allowed = model_name in ("o1-mini", "o1-preview", "o1-mini-2024-09-12", "o1-preview-2024-09-12")
+
+        if "messages" in params and system_not_allowed:
+            # o1-mini/o1-preview don't support role='system' messages
+            # Replace with user messages prepended with "System message: "
+            for msg in params["messages"]:
+                if isinstance(msg, dict) and msg.get("role") == "system":
+                    msg["role"] = "user"
+                    msg["content"] = f"System message: {msg['content']}"
+
+        # 4. Block tools for o1 models (they don't support function calling)
+        if "tools" in params:
+            if params["tools"]:
+                warnings.warn(
+                    f"Tools/function calling is not supported with {model_name} model and will be removed.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            params.pop("tools")
+
+        # 5. Block streaming for o1 models
+        if params.get("stream", False):
+            warnings.warn(
+                f"The {model_name} model does not support streaming. Setting stream=False.",
+                UserWarning,
+                stacklevel=3,
+            )
+            params["stream"] = False
 
     def _transform_response(self, openai_response: Any, model: str, use_parse: bool = False) -> UnifiedResponse:
         """
