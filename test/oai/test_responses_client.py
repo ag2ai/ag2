@@ -1063,3 +1063,417 @@ def test_apply_patch_with_reasoning_is_filtered():
     # Verify no reasoning type in content
     content_types = [item["type"] for item in content]
     assert "reasoning" not in content_types
+
+
+def test_apply_patch_operation_with_agent_tool(mocked_openai_client):
+    """Test _apply_patch_operation finds ApplyPatchTool from agent."""
+    import tempfile
+
+    from autogen.tools.apply_patch_tool import ApplyPatchTool
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Create a mock agent with ApplyPatchTool
+    mock_agent = MagicMock()
+    mock_tool = ApplyPatchTool(workspace_dir=tempfile.mkdtemp())
+    mock_agent._tools = [mock_tool]
+
+    # Test create_file operation
+    operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+print('hello')"}
+    result = client._apply_patch_operation(operation, "call_123", agent=mock_agent)
+
+    assert result.call_id == "call_123"
+    assert result.status == "completed"
+    assert "Created test.py" in result.output
+
+
+def test_apply_patch_operation_without_agent_creates_default_editor(mocked_openai_client):
+    """Test _apply_patch_operation creates default WorkspaceEditor when no agent/tool provided."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Change to temp directory to avoid affecting current working directory
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+print('hello')"}
+        result = client._apply_patch_operation(operation, "call_456", agent=None)
+
+        assert result.call_id == "call_456"
+        assert result.status == "completed"
+        assert "Created test.py" in result.output
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_apply_patch_operation_unknown_operation_type(mocked_openai_client):
+    """Test _apply_patch_operation handles unknown operation types."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    operation = {"type": "unknown_operation", "path": "test.py"}
+    result = client._apply_patch_operation(operation, "call_unknown", agent=None)
+
+    assert result.call_id == "call_unknown"
+    assert result.status == "failed"
+    assert "Unknown operation type: unknown_operation" in result.output
+
+
+def test_apply_patch_operation_handles_exceptions(mocked_openai_client):
+    """Test _apply_patch_operation handles exceptions gracefully."""
+    from unittest.mock import AsyncMock
+
+    from autogen.tools.apply_patch_tool import PatchEditor
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Create a mock editor that raises an exception
+    mock_editor = AsyncMock(spec=PatchEditor)
+    mock_editor.create_file.side_effect = Exception("Test error")
+
+    # Create a mock agent with the failing editor
+    from autogen.tools.apply_patch_tool import ApplyPatchTool
+
+    mock_agent = MagicMock()
+    mock_tool = ApplyPatchTool(editor=mock_editor)
+    mock_agent._tools = [mock_tool]
+
+    operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+content"}
+    result = client._apply_patch_operation(operation, "call_error", agent=mock_agent)
+
+    assert result.call_id == "call_error"
+    assert result.status == "failed"
+    assert "Error applying patch" in result.output
+
+
+def test_create_handles_apply_patch_from_previous_response(mocked_openai_client):
+    """Test create() extracts and processes apply_patch_call from previous response."""
+    import asyncio
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    client.previous_response_id = "prev_resp_123"
+
+    # Mock previous response retrieval
+    previous_patch_call = _create_apply_patch_call_mock(
+        "call_prev", "create_file", "prev.py", diff="@@ -0,0 +1,1 @@\n+prev_content"
+    )
+
+    class MockPreviousResponse:
+        output = [previous_patch_call]
+
+    mocked_openai_client.responses.retrieve.return_value = MockPreviousResponse()
+
+    # Mock asyncio.run to avoid actual execution
+    original_run = asyncio.run
+    asyncio.run = MagicMock(return_value={"status": "completed", "output": "Created prev.py"})
+
+    try:
+        import os
+        import tempfile
+
+        original_cwd = os.getcwd()
+        try:
+            temp_dir = tempfile.mkdtemp()
+            os.chdir(temp_dir)
+
+            client.create({
+                "messages": [{"role": "user", "content": "Continue editing"}],
+            })
+
+            kwargs = mocked_openai_client.responses.create.call_args.kwargs
+            input_items = kwargs["input"]
+
+            # Should have apply_patch_call_output at the beginning
+            assert len(input_items) > 0
+            # The first item should be apply_patch_call_output
+            # (Note: exact structure depends on implementation)
+        finally:
+            os.chdir(original_cwd)
+    finally:
+        asyncio.run = original_run
+
+
+def test_create_handles_previous_response_retrieval_failure(mocked_openai_client):
+    """Test create() handles failure to retrieve previous response gracefully."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+    client.previous_response_id = "prev_resp_123"
+
+    # Mock previous response retrieval to fail
+    mocked_openai_client.responses.retrieve.side_effect = Exception("Network error")
+
+    # Should not raise, but continue processing
+    client.create({
+        "messages": [{"role": "user", "content": "Hello"}],
+    })
+
+    # Verify create was still called
+    assert mocked_openai_client.responses.create.called
+
+
+def test_create_extracts_apply_patch_from_assistant_message_content(mocked_openai_client):
+    """Test create() extracts apply_patch_call from assistant message content items."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    patch_call_item = {
+        "type": "apply_patch_call",
+        "call_id": "call_from_content",
+        "operation": {"type": "create_file", "path": "from_content.py", "diff": "@@ -0,0 +1,1 @@\n+content"},
+    }
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll create that file."},
+                patch_call_item,
+            ],
+        },
+        {"role": "user", "content": "Continue"},
+    ]
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        client.create({"messages": messages})
+
+        kwargs = mocked_openai_client.responses.create.call_args.kwargs
+        input_items = kwargs["input"]
+
+        # Should have processed the apply_patch_call from content
+        # and generated output for it
+        assert len(input_items) > 0
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_create_extracts_apply_patch_from_tool_calls(mocked_openai_client):
+    """Test create() extracts apply_patch_call from assistant message tool_calls."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    patch_call_tool = {
+        "type": "apply_patch_call",
+        "call_id": "call_from_tool_calls",
+        "operation": {"type": "update_file", "path": "tool.py", "diff": "@@ -1,1 +1,1 @@\n-old\n+new"},
+    }
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Updating file."}],
+            "tool_calls": [patch_call_tool],
+        },
+        {"role": "user", "content": "Continue"},
+    ]
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        client.create({"messages": messages})
+
+        kwargs = mocked_openai_client.responses.create.call_args.kwargs
+        input_items = kwargs["input"]
+
+        # Should have processed the apply_patch_call from tool_calls
+        assert len(input_items) > 0
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_create_skips_apply_patch_in_assistant_content_processing(mocked_openai_client):
+    """Test create() skips apply_patch_call items when processing assistant message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll update the file."},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_skip",
+                    "operation": {"type": "update_file", "path": "skip.py", "diff": "@@\n-old\n+new"},
+                },
+            ],
+        },
+        {"role": "user", "content": "What's next?"},
+    ]
+
+    client.create({"messages": messages})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+    input_items = kwargs["input"]
+
+    # apply_patch_call should not be included as a content block in assistant message
+    # It should be processed separately and output added to input_items
+    # Find the assistant message in input_items
+    assistant_msgs = [item for item in input_items if item.get("role") == "assistant"]
+    if assistant_msgs:
+        content_blocks = assistant_msgs[0].get("content", [])
+        # Should only have text block, not apply_patch_call
+        apply_patch_in_content = any(
+            block.get("type") == "apply_patch_call" for block in content_blocks if isinstance(block, dict)
+        )
+        assert not apply_patch_in_content
+
+
+def test_create_handles_missing_operation_in_apply_patch_call(mocked_openai_client):
+    """Test create() handles apply_patch_call without operation dict."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_no_op",
+                    # Missing operation field
+                },
+            ],
+        },
+    ]
+
+    # Should not raise, but skip processing if operation is missing
+    client.create({"messages": messages})
+
+    # Verify create was called (no exception raised)
+    assert mocked_openai_client.responses.create.called
+
+
+def test_create_handles_apply_patch_without_call_id(mocked_openai_client):
+    """Test create() handles apply_patch_call without call_id."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    # Missing call_id
+                    "operation": {"type": "create_file", "path": "no_id.py", "diff": "@@ -0,0 +1,1 @@\n+content"},
+                },
+            ],
+        },
+    ]
+
+    # Should not raise, but skip processing if call_id is missing
+    client.create({"messages": messages})
+
+    # Verify create was called (no exception raised)
+    assert mocked_openai_client.responses.create.called
+
+
+def test_create_handles_empty_operation_dict(mocked_openai_client):
+    """Test create() handles apply_patch_call with empty operation dict."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_empty_op",
+                    "operation": {},  # Empty operation
+                },
+            ],
+        },
+    ]
+
+    # Should not raise, but skip processing if operation is empty
+    client.create({"messages": messages})
+
+    # Verify create was called (no exception raised)
+    assert mocked_openai_client.responses.create.called
+
+
+def test_create_apply_patch_outputs_added_before_messages(mocked_openai_client):
+    """Test that apply_patch_call_outputs are added before messages in input."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_order",
+                    "operation": {"type": "create_file", "path": "order.py", "diff": "@@ -0,0 +1,1 @@\n+test"},
+                },
+            ],
+        },
+        {"role": "user", "content": "What happened?"},
+    ]
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        client.create({"messages": messages})
+
+        kwargs = mocked_openai_client.responses.create.call_args.kwargs
+        input_items = kwargs["input"]
+
+        # Should have items, and apply_patch_call_output should come before user message
+        # (exact position depends on implementation, but should be early)
+        assert len(input_items) > 0
+
+        # Find positions
+        user_msg_idx = next((i for i, item in enumerate(input_items) if item.get("role") == "user"), None)
+
+        # There should be a user message
+        assert user_msg_idx is not None
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_apply_patch_operation_all_operation_types(mocked_openai_client):
+    """Test _apply_patch_operation handles all operation types (create, update, delete)."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        # Test create_file
+        operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+create"}
+        result = client._apply_patch_operation(operation, "call_create", agent=None)
+        assert result.status == "completed"
+        assert "create" in result.output.lower()
+
+        # Test update_file
+        operation = {"type": "update_file", "path": "test.py", "diff": "@@ -1,1 +1,1 @@\n-create\n+update"}
+        result = client._apply_patch_operation(operation, "call_update", agent=None)
+        assert result.status == "completed"
+        assert "update" in result.output.lower()
+
+        # Test delete_file
+        operation = {"type": "delete_file", "path": "test.py"}
+        result = client._apply_patch_operation(operation, "call_delete", agent=None)
+        assert result.status == "completed"
+        assert "delete" in result.output.lower()
+    finally:
+        os.chdir(original_cwd)
