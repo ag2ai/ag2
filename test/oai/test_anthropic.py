@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
+from unittest.mock import patch
+
 import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -441,3 +443,261 @@ def test_oai_messages_to_anthropic_messages():
     ]
     assert user_message is not None
     assert user_message["content"] == expected_content
+
+
+# Add these tests to test/oai/test_anthropic.py
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_convert_response_format_to_output_format_with_pydantic(anthropic_client):
+    """Test converting Pydantic model to output_format schema."""
+
+    class ContactInfo(BaseModel):
+        name: str
+        email: str
+        age: int
+        interests: list[str]
+
+    result = anthropic_client._convert_response_format_to_output_format(ContactInfo)
+
+    assert result["type"] == "json_schema"
+    assert "schema" in result
+    schema = result["schema"]
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    assert schema["properties"]["name"]["type"] == "string"
+    assert schema["properties"]["email"]["type"] == "string"
+    assert schema["properties"]["age"]["type"] == "integer"
+    assert schema["properties"]["interests"]["type"] == "array"
+    assert "name" in schema.get("required", [])
+    assert schema.get("additionalProperties") is False
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_convert_response_format_to_output_format_with_dict(anthropic_client):
+    """Test converting dict schema to output_format schema."""
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "email": {"type": "string"}},
+        "required": ["name", "email"],
+    }
+
+    result = anthropic_client._convert_response_format_to_output_format(dict_schema)
+
+    assert result["type"] == "json_schema"
+    assert result["schema"] == {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "email": {"type": "string"}},
+        "required": ["name", "email"],
+        "additionalProperties": False,
+    }
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_parse_structured_output_response_with_pydantic(anthropic_client):
+    """Test parsing structured output response with Pydantic model."""
+
+    class ContactInfo(BaseModel):
+        name: str
+        email: str
+        age: int
+
+    anthropic_client._response_format = ContactInfo
+
+    json_text = '{"name": "John Doe", "email": "john@example.com", "age": 30}'
+    result = anthropic_client._parse_structured_output_response(json_text)
+
+    assert isinstance(result, ContactInfo)
+    assert result.name == "John Doe"
+    assert result.email == "john@example.com"
+    assert result.age == 30
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_parse_structured_output_response_with_dict(anthropic_client):
+    """Test parsing structured output response with dict schema."""
+    anthropic_client._response_format = {"type": "object"}
+
+    json_text = '{"name": "John Doe", "email": "john@example.com"}'
+    result = anthropic_client._parse_structured_output_response(json_text)
+
+    assert result == json_text  # Should return string for dict schema
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_parse_structured_output_response_without_format(anthropic_client):
+    """Test parsing structured output response without response_format."""
+    anthropic_client._response_format = None
+
+    json_text = '{"name": "John Doe", "email": "john@example.com"}'
+    result = anthropic_client._parse_structured_output_response(json_text)
+
+    assert result == json_text  # Should return string when no format
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_parse_structured_output_response_invalid_json(anthropic_client):
+    """Test parsing structured output response with invalid JSON."""
+
+    class ContactInfo(BaseModel):
+        name: str
+        email: str
+
+    anthropic_client._response_format = ContactInfo
+
+    invalid_json = '{"name": "John Doe", "email": invalid}'
+
+    with pytest.raises(ValueError, match="Failed to parse structured output response"):
+        anthropic_client._parse_structured_output_response(invalid_json)
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_load_config_with_output_format(anthropic_client):
+    """Test load_config with output_format parameter."""
+    output_format = {
+        "type": "json_schema",
+        "schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+    }
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "output_format": output_format,
+        "temperature": 0.7,
+        "max_tokens": 100,
+    }
+
+    result = anthropic_client.load_config(params)
+
+    assert result["model"] == "claude-sonnet-4-5"
+    assert result["output_format"] == output_format
+    assert result["temperature"] == 0.7
+    assert result["max_tokens"] == 100
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_output_format_mocked(anthropic_client):
+    """Test create method with output_format using mocked beta API."""
+    from autogen.oai.oai_models import ChatCompletion
+
+    # Mock the beta API response
+    mock_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text='{"name": "John Doe", "email": "john@example.com", "age": 30, "interests": ["Python"]}',
+                type="text",
+            )
+        ],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    output_format = {
+        "type": "json_schema",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+                "age": {"type": "integer"},
+                "interests": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["name", "email", "age", "interests"],
+            "additionalProperties": False,
+        },
+    }
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Extract contact info"}],
+        "output_format": output_format,
+        "max_tokens": 100,
+    }
+
+    # Mock beta.messages.create
+    with patch.object(anthropic_client._client.beta.messages, "create", return_value=mock_response) as mock_beta_create:
+        result = anthropic_client.create(params)
+
+        # Verify beta API was called
+        mock_beta_create.assert_called_once()
+        call_kwargs = mock_beta_create.call_args[1]  # keyword arguments
+
+        # Verify betas header was added
+        assert "betas" in call_kwargs
+        assert "structured-outputs-2025-11-13" in call_kwargs["betas"]
+
+        # Verify output_format was passed
+        assert call_kwargs["output_format"] == output_format
+
+    # Verify response structure
+    assert isinstance(result, ChatCompletion)
+    assert (
+        result.choices[0].message.content
+        == '{"name": "John Doe", "email": "john@example.com", "age": 30, "interests": ["Python"]}'
+    )
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_response_format_conversion_mocked(anthropic_client):
+    """Test create method converts response_format to output_format."""
+    from autogen.oai.oai_models import ChatCompletion
+
+    class ContactInfo(BaseModel):
+        name: str
+        email: str
+        age: int
+
+    # Mock the beta API response
+    mock_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text='{"name": "John Doe", "email": "john@example.com", "age": 30}',
+                type="text",
+            )
+        ],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Extract contact info"}],
+        "response_format": ContactInfo,  # Pydantic model
+        "max_tokens": 100,
+    }
+
+    # Mock beta.messages.create
+    with patch.object(anthropic_client._client.beta.messages, "create", return_value=mock_response) as mock_beta_create:
+        result = anthropic_client.create(params)
+
+        # Verify beta API was called
+        mock_beta_create.assert_called_once()
+        call_kwargs = mock_beta_create.call_args[1]
+
+        # Verify output_format was created from response_format
+        assert "output_format" in call_kwargs
+        assert call_kwargs["output_format"]["type"] == "json_schema"
+        assert "schema" in call_kwargs["output_format"]
+
+        # Verify betas header was added
+        assert "betas" in call_kwargs
+        assert "structured-outputs-2025-11-13" in call_kwargs["betas"]
+
+    # Verify response_format was stored for validation
+    assert anthropic_client._response_format == ContactInfo
+
+    # Verify response structure
+    assert isinstance(result, ChatCompletion)
+    assert "John Doe" in result.choices[0].message.content

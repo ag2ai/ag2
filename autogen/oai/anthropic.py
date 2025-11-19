@@ -240,7 +240,6 @@ class AnthropicClient:
         # type = auto, any, tool, none | name = the name of the tool if type=tool
         anthropic_params["tool_choice"] = validate_parameter(params, "tool_choice", dict, True, None, None, None)
 
-        # Add support for output_format (structured outputs)
         if "output_format" in params:
             anthropic_params["output_format"] = params["output_format"]
 
@@ -259,20 +258,13 @@ class AnthropicClient:
         Returns:
             dict: Anthropic output_format with json_schema type
         """
-        if isinstance(response_format, dict):
-            schema = response_format
-        else:
-            # Pydantic model - get JSON schema
-            schema = response_format.model_json_schema()
-
-        # Use transform_schema if available (from anthropic SDK >= 0.39.0)
-        # This handles unsupported features automatically
+        schema = response_format if isinstance(response_format, dict) else response_format.model_json_schema()
         try:
             from anthropic import transform_schema
 
             schema = transform_schema(schema)
         except ImportError:
-            # Fallback: manually ensure additionalProperties: false on objects
+
             def ensure_additional_properties(obj):
                 if isinstance(obj, dict):
                     if obj.get("type") == "object" and "additionalProperties" not in obj:
