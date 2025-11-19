@@ -445,9 +445,6 @@ def test_oai_messages_to_anthropic_messages():
     assert user_message["content"] == expected_content
 
 
-# Add these tests to test/oai/test_anthropic.py
-
-
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_convert_response_format_to_output_format_with_pydantic(anthropic_client):
     """Test converting Pydantic model to output_format schema."""
@@ -521,7 +518,7 @@ def test_parse_structured_output_response_with_dict(anthropic_client):
     json_text = '{"name": "John Doe", "email": "john@example.com"}'
     result = anthropic_client._parse_structured_output_response(json_text)
 
-    assert result == json_text  # Should return string for dict schema
+    assert result == json_text
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
@@ -532,7 +529,7 @@ def test_parse_structured_output_response_without_format(anthropic_client):
     json_text = '{"name": "John Doe", "email": "john@example.com"}'
     result = anthropic_client._parse_structured_output_response(json_text)
 
-    assert result == json_text  # Should return string when no format
+    assert result == json_text
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
@@ -628,9 +625,7 @@ def test_create_with_output_format_mocked(anthropic_client):
 
         # Verify beta API was called
         mock_beta_create.assert_called_once()
-        call_kwargs = mock_beta_create.call_args[1]  # keyword arguments
-
-        # Verify betas header was added
+        call_kwargs = mock_beta_create.call_args[1]
         assert "betas" in call_kwargs
         assert "structured-outputs-2025-11-13" in call_kwargs["betas"]
 
