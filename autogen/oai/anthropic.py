@@ -72,6 +72,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import os
 import re
 import time
@@ -83,11 +84,13 @@ from typing_extensions import Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+
+logger = logging.getLogger(__name__)
 from .client_utils import FormatterProtocol, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
-    from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
+    from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex, BadRequestError
     from anthropic import __version__ as anthropic_version
     from anthropic.types import Message, TextBlock, ToolUseBlock
 
@@ -108,6 +111,138 @@ ANTHROPIC_PRICING_1k = {
     "claude-2.0": (0.008, 0.024),
     "claude-instant-1.2": (0.008, 0.024),
 }
+
+# Models that support native structured outputs via beta API
+# https://docs.anthropic.com/en/docs/build-with-claude/structured-outputs
+STRUCTURED_OUTPUT_MODELS = {
+    "claude-sonnet-4-5",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-7-sonnet-20250219",
+    "claude-opus-4-1",  # Future model
+}
+
+
+def supports_native_structured_outputs(model: str) -> bool:
+    """Check if a Claude model supports native structured outputs (beta feature).
+
+    Native structured outputs use constrained decoding to guarantee schema compliance.
+    This is more reliable than JSON Mode which relies on prompting.
+
+    Args:
+        model: The Claude model name (e.g., "claude-sonnet-4-5")
+
+    Returns:
+        True if the model supports native structured outputs, False otherwise.
+
+    Supported models:
+        - Claude Sonnet 4.5+ (claude-sonnet-4-5, claude-3-5-sonnet-20241022+)
+        - Claude Opus 4.1+ (claude-opus-4-1+)
+
+    Example:
+        >>> supports_native_structured_outputs("claude-sonnet-4-5")
+        True
+        >>> supports_native_structured_outputs("claude-3-haiku-20240307")
+        False
+    """
+    # Exact match for known models
+    if model in STRUCTURED_OUTPUT_MODELS:
+        return True
+
+    # Pattern matching for versioned models
+    # Support future Sonnet 3.5+ and 3.7+ versions
+    if model.startswith(("claude-3-5-sonnet-", "claude-3-7-sonnet-")):
+        return True
+
+    # Support future Sonnet 4.x versions
+    if model.startswith("claude-sonnet-4"):
+        return True
+
+    # Support future Opus 4.x versions
+    if model.startswith("claude-opus-4"):
+        return True
+
+    return False
+
+
+def has_beta_messages_api() -> bool:
+    """Check if the current Anthropic SDK version supports beta.messages API.
+
+    The beta.messages API is required for native structured outputs.
+    This function performs runtime detection of SDK capabilities.
+
+    Returns:
+        True if beta.messages.parse() is available, False otherwise.
+
+    Example:
+        >>> has_beta_messages_api()
+        True  # If anthropic>=0.39.0 is installed
+    """
+    try:
+        from anthropic.resources.beta.messages import Messages
+
+        return hasattr(Messages, "parse")
+    except ImportError:
+        return False
+
+
+def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:
+    """Transform JSON schema to be compatible with Anthropic's structured outputs.
+
+    Anthropic's structured outputs don't support certain JSON Schema features:
+    - Numerical constraints (minimum, maximum, multipleOf)
+    - String length constraints (minLength, maxLength, pattern with backreferences)
+    - Recursive schemas ($ref loops)
+    - Complex regex patterns
+
+    This function removes unsupported constraints while preserving the core structure.
+
+    Args:
+        schema: A JSON schema dict (typically from Pydantic model_json_schema())
+
+    Returns:
+        Transformed schema compatible with Anthropic's requirements
+
+    Example:
+        >>> schema = {"type": "object", "properties": {"age": {"type": "integer", "minimum": 0, "maximum": 150}}}
+        >>> transformed = transform_schema_for_anthropic(schema)
+        >>> "minimum" in transformed["properties"]["age"]
+        False
+    """
+    import copy
+
+    transformed = copy.deepcopy(schema)
+
+    def remove_unsupported_constraints(obj: Any) -> None:
+        """Recursively remove unsupported constraints from schema."""
+        if isinstance(obj, dict):
+            # Remove numerical constraints
+            obj.pop("minimum", None)
+            obj.pop("maximum", None)
+            obj.pop("multipleOf", None)
+
+            # Remove string length constraints
+            obj.pop("minLength", None)
+            obj.pop("maxLength", None)
+
+            # Remove array length constraints
+            obj.pop("minItems", None)
+            obj.pop("maxItems", None)
+
+            # Add additionalProperties: false for ALL objects (Anthropic requirement)
+            if obj.get("type") == "object" and "additionalProperties" not in obj:
+                obj["additionalProperties"] = False
+
+            # Recurse into nested objects
+            for value in obj.values():
+                remove_unsupported_constraints(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                remove_unsupported_constraints(item)
+
+    # Remove constraints from entire schema
+    remove_unsupported_constraints(transformed)
+
+    return transformed
 
 
 class AnthropicEntryDict(LLMConfigEntryDict, total=False):
@@ -277,7 +412,48 @@ class AnthropicClient:
         return self._gcp_auth_token
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
-        """Creates a completion using the Anthropic API."""
+        """Creates a completion using the Anthropic API.
+
+        Automatically selects the best structured output method:
+        - Native structured outputs for Claude Sonnet 4.5+ (guaranteed schema compliance)
+        - JSON Mode for older models (prompt-based with <json_response> tags)
+        - Standard completion for requests without response_format
+
+        Args:
+            params: Request parameters including model, messages, and optional response_format
+
+        Returns:
+            ChatCompletion object compatible with OpenAI format
+        """
+        model = params.get("model")
+        response_format = params.get("response_format") or self._response_format
+
+        # Route to appropriate implementation based on model and response_format
+        if response_format:
+            self._response_format = response_format
+
+            # Try native structured outputs if model supports it
+            if supports_native_structured_outputs(model) and has_beta_messages_api():
+                try:
+                    return self._create_with_native_structured_output(params)
+                except (BadRequestError, AttributeError, ValueError) as e:
+                    # Fallback to JSON Mode if native API not supported or schema invalid
+                    # BadRequestError: Model doesn't support output_format
+                    # AttributeError: SDK doesn't have beta API
+                    # ValueError: Invalid schema format
+                    logger.warning(
+                        f"Native structured output not available for {model}: {e}. Falling back to JSON Mode."
+                    )
+                    return self._create_with_json_mode(params)
+            else:
+                # Use JSON Mode for older models or when beta API unavailable
+                return self._create_with_json_mode(params)
+        else:
+            # Standard completion without structured outputs
+            return self._create_standard(params)
+
+    def _create_standard(self, params: dict[str, Any]) -> ChatCompletion:
+        """Create a standard completion without structured outputs."""
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
@@ -285,13 +461,6 @@ class AnthropicClient:
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
         anthropic_params = self.load_config(params)
-
-        # If response_format exists, we want structured outputs
-        # Anthropic doesn't support response_format, so using Anthropic's "JSON Mode":
-        # https://github.com/anthropics/anthropic-cookbook/blob/main/misc/how_to_enable_json_mode.ipynb
-        if params.get("response_format"):
-            self._response_format = params["response_format"]
-            self._add_response_format_to_system(params)
 
         # TODO: support stream
         params = params.copy()
@@ -322,52 +491,222 @@ class AnthropicClient:
         tool_calls = []
         message_text = ""
 
-        if self._response_format:
-            try:
-                parsed_response = self._extract_json_response(response)
-                message_text = _format_json_response(parsed_response)
-            except ValueError as e:
-                message_text = str(e)
-
-            anthropic_finish = "stop"
-        else:
-            if response is not None:
-                # If we have tool use as the response, populate completed tool calls for our return OAI response
-                if response.stop_reason == "tool_use":
-                    anthropic_finish = "tool_calls"
-                    for content in response.content:
-                        if type(content) == ToolUseBlock:
-                            tool_calls.append(
-                                ChatCompletionMessageToolCall(
-                                    id=content.id,
-                                    function={"name": content.name, "arguments": json.dumps(content.input)},
-                                    type="function",
-                                )
-                            )
-                else:
-                    anthropic_finish = "stop"
-                    tool_calls = None
-
-                # Retrieve any text content from the response
+        # Process response content
+        if response is not None:
+            # If we have tool use as the response, populate completed tool calls for our return OAI response
+            if response.stop_reason == "tool_use":
+                anthropic_finish = "tool_calls"
                 for content in response.content:
-                    if type(content) == TextBlock:
-                        message_text = content.text
-                        break
+                    if type(content) == ToolUseBlock:
+                        tool_calls.append(
+                            ChatCompletionMessageToolCall(
+                                id=content.id,
+                                function={"name": content.name, "arguments": json.dumps(content.input)},
+                                type="function",
+                            )
+                        )
+            else:
+                anthropic_finish = "stop"
+                tool_calls = None
 
-        # Calculate and save the cost onto the response
+            # Retrieve any text content from the response
+            for content in response.content:
+                if type(content) == TextBlock:
+                    message_text = content.text
+                    break
+
+        # Build and return ChatCompletion
+        return self._build_chat_completion(response, message_text, tool_calls, anthropic_finish, anthropic_params)
+
+    def _create_with_native_structured_output(self, params: dict[str, Any]) -> ChatCompletion:
+        """Create completion using native structured outputs (beta API).
+
+        This method uses Anthropic's beta structured outputs feature for guaranteed
+        schema compliance via constrained decoding.
+
+        Args:
+            params: Request parameters
+
+        Returns:
+            ChatCompletion with structured JSON output
+
+        Raises:
+            AttributeError: If SDK doesn't support beta API
+            Exception: If native structured output fails
+        """
+        # Get schema from response_format
+        if isinstance(self._response_format, dict):
+            schema = self._response_format
+        elif isinstance(self._response_format, type) and issubclass(self._response_format, BaseModel):
+            schema = self._response_format.model_json_schema()
+        else:
+            raise ValueError(f"Invalid response format: {self._response_format}")
+
+        # Transform schema to Anthropic-compatible format
+        transformed_schema = transform_schema_for_anthropic(schema)
+
+        # Convert AG2 messages to Anthropic messages
+        anthropic_messages = oai_messages_to_anthropic_messages(params)
+        anthropic_params = self.load_config(params)
+
+        # TODO: support stream
+        params = params.copy()
+        if "functions" in params:
+            tools_configs = params.pop("functions")
+            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
+            params["tools"] = tools_configs
+
+        # Setup parameters
+        anthropic_params["messages"] = anthropic_messages
+        if "system" in params:
+            anthropic_params["system"] = params["system"]
+        if "tools" in params:
+            anthropic_params["tools"] = params["tools"]
+
+        # Remove None values
+        if anthropic_params["top_k"] is None:
+            del anthropic_params["top_k"]
+        if anthropic_params["top_p"] is None:
+            del anthropic_params["top_p"]
+        if anthropic_params["stop_sequences"] is None:
+            del anthropic_params["stop_sequences"]
+        if anthropic_params["tool_choice"] is None:
+            del anthropic_params["tool_choice"]
+
+        # Add native structured output parameters
+        anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
+
+        # Use beta API
+        if not hasattr(self._client, "beta"):
+            raise AttributeError(
+                "Anthropic SDK does not support beta.messages API. Please upgrade to anthropic>=0.39.0"
+            )
+
+        # Use parse() for Pydantic models (recommended), create() for dict schemas
+        if isinstance(self._response_format, dict):
+            # Dict schema - use create() with output_format
+            anthropic_params["output_format"] = {
+                "type": "json_schema",
+                "schema": transformed_schema,
+            }
+            response = self._client.beta.messages.create(**anthropic_params)
+
+            # Extract JSON from response
+            message_text = response.content[0].text if response.content else ""
+
+        else:
+            # Pydantic model - use parse() for automatic validation
+            # parse() uses output_format parameter instead of output_format dict
+            anthropic_params["output_format"] = self._response_format
+
+            response = self._client.beta.messages.parse(**anthropic_params)
+
+            # parse() returns validated Pydantic model in parsed_output
+            parsed_response = response.parsed_output if hasattr(response, "parsed_output") else response
+            message_text = _format_json_response(parsed_response)
+
+        # Build and return ChatCompletion
+        return self._build_chat_completion(
+            response, message_text, tool_calls=None, finish_reason="stop", anthropic_params=anthropic_params
+        )
+
+    def _create_with_json_mode(self, params: dict[str, Any]) -> ChatCompletion:
+        """Create completion using legacy JSON Mode with <json_response> tags.
+
+        This method uses prompt-based structured outputs for older Claude models
+        that don't support native structured outputs.
+
+        Args:
+            params: Request parameters
+
+        Returns:
+            ChatCompletion with JSON output extracted from tags
+        """
+        if "tools" in params:
+            converted_functions = self.convert_tools_to_functions(params["tools"])
+            params["functions"] = params.get("functions", []) + converted_functions
+
+        # Convert AG2 messages to Anthropic messages
+        anthropic_messages = oai_messages_to_anthropic_messages(params)
+
+        # Add response format instructions to system message (after conversion extracts system messages)
+        self._add_response_format_to_system(params)
+        anthropic_params = self.load_config(params)
+
+        # TODO: support stream
+        params = params.copy()
+        if "functions" in params:
+            tools_configs = params.pop("functions")
+            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
+            params["tools"] = tools_configs
+
+        # Setup parameters
+        anthropic_params["messages"] = anthropic_messages
+        if "system" in params:
+            anthropic_params["system"] = params["system"]
+        if "tools" in params:
+            anthropic_params["tools"] = params["tools"]
+
+        # Remove None values
+        if anthropic_params["top_k"] is None:
+            del anthropic_params["top_k"]
+        if anthropic_params["top_p"] is None:
+            del anthropic_params["top_p"]
+        if anthropic_params["stop_sequences"] is None:
+            del anthropic_params["stop_sequences"]
+        if anthropic_params["tool_choice"] is None:
+            del anthropic_params["tool_choice"]
+
+        response = self._client.messages.create(**anthropic_params)
+
+        # Extract JSON from <json_response> tags
+        try:
+            parsed_response = self._extract_json_response(response)
+            message_text = _format_json_response(parsed_response)
+        except ValueError as e:
+            message_text = str(e)
+
+        # Build and return ChatCompletion
+        return self._build_chat_completion(
+            response, message_text, tool_calls=None, finish_reason="stop", anthropic_params=anthropic_params
+        )
+
+    def _build_chat_completion(
+        self,
+        response: Message,
+        message_text: str,
+        tool_calls: list[ChatCompletionMessageToolCall] | None,
+        finish_reason: str,
+        anthropic_params: dict[str, Any],
+    ) -> ChatCompletion:
+        """Build OpenAI-compatible ChatCompletion from Anthropic response.
+
+        Args:
+            response: Anthropic Message response
+            message_text: Processed message content
+            tool_calls: List of tool calls if any
+            finish_reason: Completion finish reason
+            anthropic_params: Original request parameters
+
+        Returns:
+            ChatCompletion object
+        """
+        # Calculate token usage
         prompt_tokens = response.usage.input_tokens
         completion_tokens = response.usage.output_tokens
 
-        # Convert output back to AG2 response format
+        # Build message
         message = ChatCompletionMessage(
             role="assistant",
             content=message_text,
             function_call=None,
             tool_calls=tool_calls,
         )
-        choices = [Choice(finish_reason=anthropic_finish, index=0, message=message)]
 
-        response_oai = ChatCompletion(
+        choices = [Choice(finish_reason=finish_reason, index=0, message=message)]
+
+        # Build and return ChatCompletion
+        return ChatCompletion(
             id=response.id,
             model=anthropic_params["model"],
             created=int(time.time()),
@@ -380,8 +719,6 @@ class AnthropicClient:
             ),
             cost=_calculate_cost(prompt_tokens, completion_tokens, anthropic_params["model"]),
         )
-
-        return response_oai
 
     def message_retrieval(self, response) -> list:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
@@ -455,9 +792,6 @@ class AnthropicClient:
         Args:
             params (dict): The client parameters
         """
-        if not params.get("system"):
-            return
-
         # Get the schema of the Pydantic model
         if isinstance(self._response_format, dict):
             schema = self._response_format
@@ -472,8 +806,11 @@ Format your response as valid JSON within <json_response> tags.
 Do not include any text before or after the tags.
 Ensure the JSON is properly formatted and matches the schema exactly."""
 
-        # Add formatting to last user message
-        params["system"] += "\n\n" + format_content
+        # Add formatting to system message (create one if it doesn't exist)
+        if "system" in params:
+            params["system"] += "\n\n" + format_content
+        else:
+            params["system"] = format_content
 
     def _extract_json_response(self, response: Message) -> Any:
         """Extract and validate JSON response from the output for structured outputs.
