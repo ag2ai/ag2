@@ -340,7 +340,7 @@ class AnthropicClient:
         self._last_tooluse_status = {}
 
         # Store the response format, if provided (for structured outputs)
-        self._response_format: type[BaseModel] | None = None
+        self._response_format: type[BaseModel] | dict | None = kwargs.get("response_format")
 
     def load_config(self, params: dict[str, Any]):
         """Load the configuration for the Anthropic API client."""
@@ -428,9 +428,14 @@ class AnthropicClient:
         model = params.get("model")
         response_format = params.get("response_format") or self._response_format
 
+        logger.warning(
+            f"create() called: model={model}, params.response_format={params.get('response_format')}, self._response_format={self._response_format}, final response_format={response_format}"
+        )
+
         # Route to appropriate implementation based on model and response_format
         if response_format:
             self._response_format = response_format
+            params["response_format"] = response_format  # Ensure response_format is in params for methods
 
             # Try native structured outputs if model supports it
             if supports_native_structured_outputs(model) and has_beta_messages_api():
@@ -596,7 +601,7 @@ class AnthropicClient:
 
         else:
             # Pydantic model - use parse() for automatic validation
-            # parse() uses output_format parameter instead of output_format dict
+            # parse() uses output_format parameter and manages beta header automatically
             anthropic_params["output_format"] = self._response_format
 
             response = self._client.beta.messages.parse(**anthropic_params)
@@ -629,8 +634,6 @@ class AnthropicClient:
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
 
-        # Add response format instructions to system message (after conversion extracts system messages)
-        self._add_response_format_to_system(params)
         anthropic_params = self.load_config(params)
 
         # TODO: support stream
@@ -640,10 +643,28 @@ class AnthropicClient:
             tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
             params["tools"] = tools_configs
 
+        # Add response format instructions to system message (after conversion extracts system messages and after copy)
+        logger.warning(
+            f"Before _add_response_format_to_system: params id={id(params)}, system length={len(params.get('system', ''))}"
+        )
+        self._add_response_format_to_system(params)
+        logger.warning(
+            f"After _add_response_format_to_system: params id={id(params)}, system length={len(params.get('system', ''))}"
+        )
+
         # Setup parameters
         anthropic_params["messages"] = anthropic_messages
         if "system" in params:
+            logger.warning(f"About to copy: params id={id(params)}, system length={len(params['system'])}")
+            logger.warning(
+                f"anthropic_params before setting system: {'system' in anthropic_params}, value={anthropic_params.get('system', 'NOT SET')[:50] if 'system' in anthropic_params else 'NOT SET'}"
+            )
             anthropic_params["system"] = params["system"]
+            logger.warning(f"[CHECKPOINT 1] anthropic_params after setting: LENGTH={len(anthropic_params['system'])}")
+            logger.warning(f"[CHECKPOINT 2] FIRST_50={repr(anthropic_params['system'][:50])}")
+            logger.warning(f"[CHECKPOINT 3] LAST_50={repr(anthropic_params['system'][-50:])}")
+        else:
+            logger.warning("JSON Mode: No system message in params!")
         if "tools" in params:
             anthropic_params["tools"] = params["tools"]
 
@@ -657,6 +678,8 @@ class AnthropicClient:
         if anthropic_params["tool_choice"] is None:
             del anthropic_params["tool_choice"]
 
+        logger.warning(f"[FINAL CHECK] About to call API: system LENGTH={len(anthropic_params.get('system', ''))}")
+        logger.warning(f"[FINAL CHECK] System FIRST_50={repr(anthropic_params.get('system', '')[:50])}")
         response = self._client.messages.create(**anthropic_params)
 
         # Extract JSON from <json_response> tags
@@ -808,8 +831,18 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
 
         # Add formatting to system message (create one if it doesn't exist)
         if "system" in params:
-            params["system"] += "\n\n" + format_content
+            logger.warning(f"Appending JSON instructions to existing system message: {params['system'][:100]}")
+            logger.warning(f"format_content length: {len(format_content)}")
+            logger.warning(f"format_content preview: {format_content[:200]}")
+            original_length = len(params["system"])
+            original_content = params["system"]
+            params["system"] = params["system"] + "\n\n" + format_content
+            logger.warning(f"Original length: {original_length}, New length: {len(params['system'])}")
+            logger.warning(f"Did it change? {params['system'] != original_content}")
+            logger.warning(f"Final system message length check: {len(params['system'])}")
+            logger.warning(f"Final system message: {params['system'][-200:]}")
         else:
+            logger.warning("Creating new system message with JSON instructions")
             params["system"] = format_content
 
     def _extract_json_response(self, response: Message) -> Any:
