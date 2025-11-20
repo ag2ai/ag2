@@ -11,8 +11,15 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, create_model
 
 from ..doc_utils import export_module
+from ..logging_utils import event_print
 
-__all__ = ["BaseEvent", "get_annotated_type_for_event_classes", "get_event_classes", "wrap_event"]
+__all__ = [
+    "BaseEvent",
+    "get_annotated_type_for_event_classes",
+    "get_event_classes",
+    "resolve_print_callable",
+    "wrap_event",
+]
 
 
 @export_module("autogen.events")
@@ -30,6 +37,10 @@ class BaseEvent(BaseModel, ABC):
             f (Optional[Callable[..., Any]], optional): Print function. If none, python's default print will be used.
         """
         ...
+
+
+def resolve_print_callable(f: Callable[..., Any] | None = None) -> Callable[..., Any]:
+    return f or event_print
 
 
 def camel2snake(name: str) -> str:
