@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, create_model
 
 from ..doc_utils import export_module
-from ..logging_utils import event_print
+from ..logger.logger_utils import event_print
 
 __all__ = [
     "BaseEvent",
