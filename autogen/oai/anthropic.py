@@ -82,6 +82,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
+from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 
@@ -428,10 +429,6 @@ class AnthropicClient:
         model = params.get("model")
         response_format = params.get("response_format") or self._response_format
 
-        logger.warning(
-            f"create() called: model={model}, params.response_format={params.get('response_format')}, self._response_format={self._response_format}, final response_format={response_format}"
-        )
-
         # Route to appropriate implementation based on model and response_format
         if response_format:
             self._response_format = response_format
@@ -491,7 +488,16 @@ class AnthropicClient:
         if anthropic_params["tool_choice"] is None:
             del anthropic_params["tool_choice"]
 
-        response = self._client.messages.create(**anthropic_params)
+        # Check if any tools use strict mode (requires beta API)
+        has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
+
+        if has_strict_tools:
+            # Use beta API for strict tools
+            anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
+            response = self._client.beta.messages.create(**anthropic_params)
+        else:
+            # Standard API for legacy tools
+            response = self._client.messages.create(**anthropic_params)
 
         tool_calls = []
         message_text = ""
@@ -608,7 +614,12 @@ class AnthropicClient:
 
             # parse() returns validated Pydantic model in parsed_output
             parsed_response = response.parsed_output if hasattr(response, "parsed_output") else response
-            message_text = _format_json_response(parsed_response)
+            # Keep as JSON - FormatterProtocol formatting will be applied in message_retrieval()
+            message_text = (
+                parsed_response.model_dump_json()
+                if hasattr(parsed_response, "model_dump_json")
+                else str(parsed_response)
+            )
 
         # Build and return ChatCompletion
         return self._build_chat_completion(
@@ -644,27 +655,12 @@ class AnthropicClient:
             params["tools"] = tools_configs
 
         # Add response format instructions to system message (after conversion extracts system messages and after copy)
-        logger.warning(
-            f"Before _add_response_format_to_system: params id={id(params)}, system length={len(params.get('system', ''))}"
-        )
         self._add_response_format_to_system(params)
-        logger.warning(
-            f"After _add_response_format_to_system: params id={id(params)}, system length={len(params.get('system', ''))}"
-        )
 
         # Setup parameters
         anthropic_params["messages"] = anthropic_messages
         if "system" in params:
-            logger.warning(f"About to copy: params id={id(params)}, system length={len(params['system'])}")
-            logger.warning(
-                f"anthropic_params before setting system: {'system' in anthropic_params}, value={anthropic_params.get('system', 'NOT SET')[:50] if 'system' in anthropic_params else 'NOT SET'}"
-            )
             anthropic_params["system"] = params["system"]
-            logger.warning(f"[CHECKPOINT 1] anthropic_params after setting: LENGTH={len(anthropic_params['system'])}")
-            logger.warning(f"[CHECKPOINT 2] FIRST_50={repr(anthropic_params['system'][:50])}")
-            logger.warning(f"[CHECKPOINT 3] LAST_50={repr(anthropic_params['system'][-50:])}")
-        else:
-            logger.warning("JSON Mode: No system message in params!")
         if "tools" in params:
             anthropic_params["tools"] = params["tools"]
 
@@ -678,14 +674,17 @@ class AnthropicClient:
         if anthropic_params["tool_choice"] is None:
             del anthropic_params["tool_choice"]
 
-        logger.warning(f"[FINAL CHECK] About to call API: system LENGTH={len(anthropic_params.get('system', ''))}")
-        logger.warning(f"[FINAL CHECK] System FIRST_50={repr(anthropic_params.get('system', '')[:50])}")
         response = self._client.messages.create(**anthropic_params)
 
         # Extract JSON from <json_response> tags
         try:
             parsed_response = self._extract_json_response(response)
-            message_text = _format_json_response(parsed_response)
+            # Keep as JSON - FormatterProtocol formatting will be applied in message_retrieval()
+            message_text = (
+                parsed_response.model_dump_json()
+                if hasattr(parsed_response, "model_dump_json")
+                else str(parsed_response)
+            )
         except ValueError as e:
             message_text = str(e)
 
@@ -743,18 +742,51 @@ class AnthropicClient:
             cost=_calculate_cost(prompt_tokens, completion_tokens, anthropic_params["model"]),
         )
 
-    def message_retrieval(self, response) -> list:
+    def message_retrieval(self, response) -> list[str] | list[ChatCompletionMessage]:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
+
+        This method handles structured outputs with FormatterProtocol:
+        - If tool/function calls present: returns full message objects
+        - If structured output with format(): applies custom formatting
+        - Otherwise: returns content as-is
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
         since that is expected for function or tool calling in the rest of the codebase at the moment, unless a custom agent is being used.
         """
-        return [choice.message for choice in response.choices]
+        choices = response.choices
+
+        def _format_content(content: str | list[dict[str, Any]] | None) -> str:
+            """Format content using FormatterProtocol if available."""
+            normalized_content = content_str(content)  # type: ignore [arg-type]
+            # If response_format implements FormatterProtocol (has format() method), use it
+            if isinstance(self._response_format, FormatterProtocol):
+                try:
+                    return self._response_format.model_validate_json(normalized_content).format()  # type: ignore [union-attr]
+                except Exception:
+                    # If parsing fails (e.g., content is error message), return as-is
+                    return normalized_content
+            else:
+                return normalized_content
+
+        # Handle tool/function calls - return full message object
+        if TOOL_ENABLED:
+            return [  # type: ignore [return-value]
+                (choice.message if choice.message.tool_calls is not None else _format_content(choice.message.content))
+                for choice in choices
+            ]
+        else:
+            return [_format_content(choice.message.content) for choice in choices]  # type: ignore [return-value]
 
     @staticmethod
     def openai_func_to_anthropic(openai_func: dict) -> dict:
         res = openai_func.copy()
         res["input_schema"] = res.pop("parameters")
+
+        # Preserve strict field if present (for Anthropic structured outputs)
+        # strict=True enables guaranteed schema validation for tool inputs
+        if "strict" in openai_func:
+            res["strict"] = openai_func["strict"]
+
         return res
 
     @staticmethod
@@ -807,6 +839,30 @@ class AnthropicClient:
                 functions.append(function)
         return functions
 
+    def _resolve_schema_refs(self, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+        """Recursively resolve $ref references in a JSON schema.
+
+        Args:
+            schema: The schema to resolve
+            defs: The definitions dict from $defs
+
+        Returns:
+            Schema with all $ref references resolved inline
+        """
+        if isinstance(schema, dict):
+            if "$ref" in schema:
+                # Extract the reference name (e.g., "#/$defs/Step" -> "Step")
+                ref_name = schema["$ref"].split("/")[-1]
+                # Replace with the actual definition
+                return self._resolve_schema_refs(defs[ref_name].copy(), defs)
+            else:
+                # Recursively resolve all nested schemas
+                return {k: self._resolve_schema_refs(v, defs) for k, v in schema.items()}
+        elif isinstance(schema, list):
+            return [self._resolve_schema_refs(item, defs) for item in schema]
+        else:
+            return schema
+
     def _add_response_format_to_system(self, params: dict[str, Any]):
         """Add prompt that will generate properly formatted JSON for structured outputs to system parameter.
 
@@ -819,30 +875,37 @@ class AnthropicClient:
         if isinstance(self._response_format, dict):
             schema = self._response_format
         else:
-            schema = self._response_format.model_json_schema()
+            # Use mode='serialization' and ref_template='{model}' to get a flatter, more LLM-friendly schema
+            schema = self._response_format.model_json_schema(mode="serialization", ref_template="{model}")
+
+            # Resolve $ref references for simpler schema
+            if "$defs" in schema:
+                defs = schema.pop("$defs")
+                schema = self._resolve_schema_refs(schema, defs)
 
         # Add instructions for JSON formatting
-        format_content = f"""Please provide your response as a JSON object that matches the following schema:
+        example_json = '{"steps": [{"explanation": "First we...", "output": "result"}], "final_answer": "42"}'
+        format_content = f"""You must respond with a valid JSON object that matches this structure (do NOT return the schema itself):
 {json.dumps(schema, indent=2)}
 
-Format your response as valid JSON within <json_response> tags.
-Do not include any text before or after the tags.
-Ensure the JSON is properly formatted and matches the schema exactly."""
+IMPORTANT: Put your actual response data (not the schema) inside <json_response> tags.
+
+Correct example:
+<json_response>
+{example_json}
+</json_response>
+
+WRONG: Do not return the schema definition itself.
+
+Your JSON must:
+1. Match the schema structure above
+2. Contain actual data values, not schema descriptions
+3. Be valid, parseable JSON"""
 
         # Add formatting to system message (create one if it doesn't exist)
         if "system" in params:
-            logger.warning(f"Appending JSON instructions to existing system message: {params['system'][:100]}")
-            logger.warning(f"format_content length: {len(format_content)}")
-            logger.warning(f"format_content preview: {format_content[:200]}")
-            original_length = len(params["system"])
-            original_content = params["system"]
             params["system"] = params["system"] + "\n\n" + format_content
-            logger.warning(f"Original length: {original_length}, New length: {len(params['system'])}")
-            logger.warning(f"Did it change? {params['system'] != original_content}")
-            logger.warning(f"Final system message length check: {len(params['system'])}")
-            logger.warning(f"Final system message: {params['system'][-200:]}")
         else:
-            logger.warning("Creating new system message with JSON instructions")
             params["system"] = format_content
 
     def _extract_json_response(self, response: Message) -> Any:

@@ -649,23 +649,37 @@ def test_native_structured_output_with_beta_api(anthropic_client, monkeypatch):
     if not has_beta_messages_api():
         pytest.skip("SDK does not support beta.messages API")
 
-    beta_create_called = False
+    beta_parse_called = False
     captured_params = {}
 
-    def mock_beta_create(**kwargs):
-        nonlocal beta_create_called, captured_params
-        beta_create_called = True
+    # Define TestModel first so we can use it in the mock
+    class TestModel(BaseModel):
+        answer: str
+
+    class MockParsedResponse:
+        """Mock response object with parsed_output attribute."""
+
+        def __init__(self, base_response):
+            # Copy attributes from base response
+            for attr in ["id", "content", "model", "role", "stop_reason", "type", "usage"]:
+                if hasattr(base_response, attr):
+                    setattr(self, attr, getattr(base_response, attr))
+            # Add parsed_output as a Pydantic model instance (not dict)
+            self.parsed_output = TestModel(answer="test answer")
+
+    def mock_beta_parse(**kwargs):
+        nonlocal beta_parse_called, captured_params
+        beta_parse_called = True
         captured_params = kwargs
-        return create_mock_anthropic_response()
+        # Create a mock response with parsed_output attribute
+        base_response = create_mock_anthropic_response()
+        return MockParsedResponse(base_response)
 
-    # Mock beta.messages.create
+    # Mock beta.messages.parse (used for Pydantic models)
     if hasattr(anthropic_client._client, "beta"):
-        monkeypatch.setattr(anthropic_client._client.beta.messages, "create", mock_beta_create)
+        monkeypatch.setattr(anthropic_client._client.beta.messages, "parse", mock_beta_parse)
 
-        # Set response format
-        class TestModel(BaseModel):
-            answer: str
-
+        # Set response format (Pydantic model)
         anthropic_client._response_format = TestModel
 
         # Call create with Sonnet 4.5
@@ -678,12 +692,11 @@ def test_native_structured_output_with_beta_api(anthropic_client, monkeypatch):
         anthropic_client._create_with_native_structured_output(params)
 
         # Verify beta API was called
-        assert beta_create_called, "Should call beta.messages.create"
+        assert beta_parse_called, "Should call beta.messages.parse for Pydantic models"
 
-        # Verify output_format parameter
+        # Verify output_format parameter (should be the Pydantic model itself)
         assert "output_format" in captured_params
-        assert captured_params["output_format"]["type"] == "json_schema"
-        assert "schema" in captured_params["output_format"]
+        assert captured_params["output_format"] == TestModel
 
         # Verify beta header
         assert "betas" in captured_params

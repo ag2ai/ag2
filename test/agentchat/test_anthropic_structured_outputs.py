@@ -135,26 +135,14 @@ def test_two_agent_chat_native_structured_output(config_list_sonnet_4_5_structur
         summary_method="last_msg",
     )
 
-    # Verify response is valid structured output
+    # Verify response is formatted output (FormatterProtocol applied in message_retrieval)
     last_message_content = chat_result.chat_history[-1]["content"]
 
-    try:
-        result = MathReasoning.model_validate_json(last_message_content)
-
-        # Validate structure
-        assert len(result.steps) > 0, "Should have at least one step"
-        assert result.final_answer, "Should have a final answer"
-
-        # Validate each step has required fields
-        for step in result.steps:
-            assert step.explanation, "Each step should have an explanation"
-            assert step.output, "Each step should have output"
-
-        # Verify the answer makes sense (x should be 5)
-        assert "5" in result.final_answer or "x = 5" in result.final_answer.lower()
-
-    except ValidationError as e:
-        raise AssertionError(f"Response did not match MathReasoning schema: {e}")
+    # Content should be formatted text, not JSON (FormatterProtocol.format() was applied)
+    assert isinstance(last_message_content, str), "Content should be a string"
+    assert "Step" in last_message_content, "Should contain formatted steps"
+    assert "Final Answer:" in last_message_content, "Should contain 'Final Answer:'"
+    assert "x = 5" in last_message_content or "5" in last_message_content, "Should contain the answer"
 
 
 @pytest.mark.anthropic
@@ -189,19 +177,14 @@ def test_two_agent_chat_json_mode_fallback(config_list_haiku_structured):
         summary_method="last_msg",
     )
 
-    # Verify JSON Mode still produces valid structured output
+    # Verify JSON Mode produces formatted output (FormatterProtocol applied in message_retrieval)
     last_message_content = chat_result.chat_history[-1]["content"]
 
-    try:
-        result = MathReasoning.model_validate_json(last_message_content)
-        assert len(result.steps) > 0, "Should have steps even with JSON Mode"
-        assert result.final_answer, "Should have final answer"
-
-        # Verify answer (x should be 10)
-        assert "10" in result.final_answer or "x = 10" in result.final_answer.lower()
-
-    except ValidationError as e:
-        raise AssertionError(f"JSON Mode fallback failed to produce valid output: {e}")
+    # Content should be formatted text, not JSON (FormatterProtocol.format() was applied)
+    assert isinstance(last_message_content, str), "Content should be a string"
+    assert "Step" in last_message_content, "Should contain formatted steps"
+    assert "Final Answer:" in last_message_content, "Should contain 'Final Answer:'"
+    assert "10" in last_message_content or "x = 10" in last_message_content.lower(), "Should contain the answer (x=10)"
 
 
 # ==============================================================================
@@ -275,7 +258,7 @@ def test_groupchat_structured_output(config_list_sonnet_4_5_structured):
         if message["role"] == "assistant":
             content = message["content"]
 
-            # Try to validate as AnalysisResult
+            # Try to validate as AnalysisResult (remains JSON - no format() method)
             try:
                 result = AnalysisResult.model_validate_json(content)
                 assert result.summary, "AnalysisResult should have summary"
@@ -286,15 +269,10 @@ def test_groupchat_structured_output(config_list_sonnet_4_5_structured):
             except (ValidationError, ValueError):
                 pass
 
-            # Try to validate as MathReasoning
-            try:
-                result = MathReasoning.model_validate_json(content)
-                assert len(result.steps) > 0, "MathReasoning should have steps"
-                assert result.final_answer, "Should have final answer"
+            # Check for formatted MathReasoning (has format() method - will be formatted text)
+            if isinstance(content, str) and "Step" in content and "Final Answer:" in content:
                 found_valid_structure = True
                 break
-            except (ValidationError, ValueError):
-                pass
 
     assert found_valid_structure, "At least one agent should produce valid structured output"
 
@@ -366,21 +344,18 @@ def test_groupchat_defaultpattern_structured_output(config_list_sonnet_4_5_struc
         if message.get("role") == "assistant":
             content = message.get("content", "")
 
-            # Check for AnalysisResult structure
+            # Check for AnalysisResult (remains JSON - no format() method)
             try:
-                result = AnalysisResult.model_validate_json(content)
+                AnalysisResult.model_validate_json(content)
                 found_analysis = True
             except (ValidationError, ValueError):
                 pass
 
-            # Check for MathReasoning structure
-            try:
-                result = MathReasoning.model_validate_json(content)
+            # Check for formatted MathReasoning (has format() method - will be formatted text)
+            if isinstance(content, str) and "Step" in content and "Final Answer:" in content:
                 found_math = True
                 # Verify the answer (15% of 200 = 30)
-                assert "30" in result.final_answer
-            except (ValidationError, ValueError):
-                pass
+                assert "30" in content
 
     # At least one type of structured output should be found
     assert found_analysis or found_math, "DefaultPattern should produce structured outputs"
@@ -422,16 +397,13 @@ def test_structured_output_with_format_method(config_list_sonnet_4_5_structured)
 
     last_message = chat_result.chat_history[-1]["content"]
 
-    # Parse the structured output
-    result = MathReasoning.model_validate_json(last_message)
-
-    # Call the format method
-    formatted = result.format()
-
-    # Verify format method produces expected output
-    assert "Step" in formatted, "Formatted output should contain steps"
-    assert "Final Answer:" in formatted, "Formatted output should contain final answer"
-    assert result.final_answer in formatted, "Formatted output should include the answer"
+    # Verify that FormatterProtocol.format() was already applied in message_retrieval()
+    # Content should be formatted text, not JSON
+    assert isinstance(last_message, str), "Content should be a string"
+    assert "Step" in last_message, "Formatted output should contain steps"
+    assert "Final Answer:" in last_message, "Formatted output should contain final answer"
+    # Verify the calculation result (5 + 3 * 2 = 11)
+    assert "11" in last_message, "Formatted output should include the answer"
 
 
 # ==============================================================================
@@ -484,19 +456,17 @@ def test_groupchat_mixed_models(config_list_sonnet_4_5_structured, config_list_h
         max_turns=2,
     )
 
-    # Both agents should produce valid structured outputs (via different methods)
+    # Both agents should produce valid formatted outputs (via different methods)
     valid_outputs = 0
 
     for message in chat_result.chat_history:
         if message["role"] == "assistant":
-            try:
-                result = MathReasoning.model_validate_json(message["content"])
-                assert result.steps and result.final_answer
+            content = message["content"]
+            # Check for formatted MathReasoning (contains Step and Final Answer)
+            if isinstance(content, str) and "Step" in content and "Final Answer:" in content:
                 valid_outputs += 1
-            except (ValidationError, ValueError):
-                pass
 
-    assert valid_outputs >= 1, "At least one agent should produce valid structured output"
+    assert valid_outputs >= 1, "At least one agent should produce valid formatted output"
 
 
 # ==============================================================================
@@ -555,3 +525,215 @@ def test_structured_output_error_handling(config_list_sonnet_4_5_structured):
     except Exception as e:
         # Should have graceful error handling, not crash
         pytest.fail(f"Should handle complex schemas gracefully: {e}")
+
+
+# ==============================================================================
+# E2E Test 6: Strict Tool Use
+# ==============================================================================
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_strict_tool_use(credentials_anthropic_claude_sonnet):
+    """Test that strict: true is preserved and enables schema validation.
+
+    This test verifies that when tools are marked with strict=True,
+    Anthropic's constrained decoding ensures tool inputs strictly follow
+    the defined schema with guaranteed type safety.
+    """
+
+    # Define a tool with strict mode enabled
+    def get_weather(location: str, unit: str = "celsius") -> str:
+        """Get the weather for a location.
+
+        Args:
+            location: The city and state, e.g. San Francisco, CA
+            unit: Temperature unit (celsius or fahrenheit)
+        """
+        return f"Weather in {location}: 22 {unit}"
+
+    llm_config = {
+        "config_list": credentials_anthropic_claude_sonnet.config_list,
+        "functions": [
+            {
+                "name": "get_weather",
+                "description": "Get the weather for a location",
+                "strict": True,  # Enable strict mode for guaranteed schema compliance
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
+                        "unit": {
+                            "type": "string",
+                            "enum": ["celsius", "fahrenheit"],
+                            "description": "Temperature unit",
+                        },
+                    },
+                    "required": ["location"],
+                },
+            }
+        ],
+    }
+
+    assistant = autogen.AssistantAgent(
+        name="WeatherAssistant",
+        system_message="You help users get weather information. Use the get_weather function.",
+        llm_config=llm_config,
+    )
+
+    assistant.register_function({"get_weather": get_weather})
+
+    user_proxy = autogen.UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=1,
+        code_execution_config=False,
+    )
+
+    # Initiate chat that should trigger tool use
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="What's the weather in Boston, MA?",
+        max_turns=2,
+    )
+
+    # Verify tool was called
+    found_tool_call = False
+    for message in chat_result.chat_history:
+        if message.get("tool_calls"):
+            found_tool_call = True
+            # Verify tool call has correct structure
+            tool_call = message["tool_calls"][0]
+            assert tool_call["function"]["name"] == "get_weather"
+            # With strict mode, inputs should be properly typed
+            import json
+
+            args = json.loads(tool_call["function"]["arguments"])
+            assert isinstance(args["location"], str)
+            if "unit" in args:
+                assert args["unit"] in ["celsius", "fahrenheit"]
+            break
+
+    assert found_tool_call, "Strict tool use should trigger tool call"
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_combined_json_output_and_strict_tools(credentials_anthropic_claude_sonnet):
+    """Test using both JSON outputs and strict tools together.
+
+    Anthropic's structured outputs support using both modes simultaneously:
+    - response_format for structured JSON responses
+    - strict: true for validated tool inputs
+    """
+
+    # Define a calculator tool with strict mode
+    def calculate(operation: str, a: float, b: float) -> float:
+        """Perform a calculation.
+
+        Args:
+            operation: The operation to perform (add, subtract, multiply, divide)
+            a: First number
+            b: Second number
+        """
+        if operation == "add":
+            return a + b
+        elif operation == "subtract":
+            return a - b
+        elif operation == "multiply":
+            return a * b
+        elif operation == "divide":
+            return a / b if b != 0 else 0
+        return 0
+
+    # Result model for structured output
+    class CalculationResult(BaseModel):
+        """Structured output for calculation results."""
+
+        problem: str
+        steps: list[str]
+        result: float
+        verification: str
+
+    llm_config = {
+        "config_list": [
+            {
+                **credentials_anthropic_claude_sonnet.config_list[0],
+                "response_format": CalculationResult,  # Structured JSON output
+            }
+        ],
+        "functions": [
+            {
+                "name": "calculate",
+                "description": "Perform arithmetic calculation",
+                "strict": True,  # Strict tool validation
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide"]},
+                        "a": {"type": "number"},
+                        "b": {"type": "number"},
+                    },
+                    "required": ["operation", "a", "b"],
+                },
+            }
+        ],
+    }
+
+    assistant = autogen.AssistantAgent(
+        name="MathAssistant",
+        system_message="You solve math problems using tools and provide structured results.",
+        llm_config=llm_config,
+    )
+
+    assistant.register_function({"calculate": calculate})
+
+    user_proxy = autogen.UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=2,
+        code_execution_config=False,
+    )
+
+    # Initiate chat requiring both tool use and structured output
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="Calculate (15 + 7) * 3 and explain your steps",
+        max_turns=3,
+    )
+
+    # Verify both features work together
+    found_tool_call = False
+    found_structured_output = False
+
+    for message in chat_result.chat_history:
+        # Check for tool calls
+        if message.get("tool_calls"):
+            found_tool_call = True
+            tool_call = message["tool_calls"][0]
+            assert tool_call["function"]["name"] == "calculate"
+            # Verify strict typing
+            import json
+
+            args = json.loads(tool_call["function"]["arguments"])
+            assert isinstance(args["a"], (int, float))
+            assert isinstance(args["b"], (int, float))
+            assert args["operation"] in ["add", "subtract", "multiply", "divide"]
+
+        # Check for structured output
+        if message.get("role") == "assistant" and message.get("content"):
+            try:
+                result = CalculationResult.model_validate_json(message["content"])
+                found_structured_output = True
+                assert result.problem
+                assert len(result.steps) > 0
+                assert isinstance(result.result, (int, float))
+                assert result.verification
+            except (ValidationError, ValueError):
+                pass
+
+    # Both features should work together
+    assert found_tool_call, "Should use strict tools for calculations"
+    assert found_structured_output, "Should produce structured JSON output"
