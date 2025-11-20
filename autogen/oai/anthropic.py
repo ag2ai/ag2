@@ -452,8 +452,42 @@ class AnthropicClient:
                     # BadRequestError: Model doesn't support output_format
                     # AttributeError: SDK doesn't have beta API
                     # ValueError: Invalid schema format
+
+                    # Log detailed error information for debugging
+                    error_details = {
+                        "model": model,
+                        "response_format": str(
+                            type(response_format).__name__
+                            if isinstance(response_format, type)
+                            else type(response_format)
+                        ),
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    }
+
+                    # Add BadRequestError-specific details
+                    if isinstance(e, BadRequestError):
+                        if hasattr(e, "status_code"):
+                            error_details["status_code"] = e.status_code
+                        if hasattr(e, "response"):
+                            error_details["response_body"] = str(
+                                e.response.text if hasattr(e.response, "text") else e.response
+                            )
+                        if hasattr(e, "body"):
+                            error_details["error_body"] = str(e.body)
+
+                    # Log sanitized params (remove sensitive data)
+                    sanitized_params = {
+                        "model": params.get("model"),
+                        "max_tokens": params.get("max_tokens"),
+                        "temperature": params.get("temperature"),
+                        "has_tools": "tools" in params,
+                        "num_messages": len(params.get("messages", [])),
+                    }
+                    error_details["params"] = sanitized_params
+
                     logger.warning(
-                        f"Native structured output not available for {model}: {e}. Falling back to JSON Mode."
+                        f"Native structured output failed for {model}. Error: {error_details}. Falling back to JSON Mode."
                     )
                     return self._create_with_json_mode(params)
             else:
