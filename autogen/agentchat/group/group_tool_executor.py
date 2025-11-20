@@ -7,7 +7,10 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Annotated, Any
 
-from ...code_utils import content_str
+from autogen.agentchat.group.events.transition_events import OnConditionLLMTransitionEvent, ReplyResultTransitionEvent
+from autogen.code_utils import content_str
+from autogen.io.base import IOStream
+
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
 from ...tools.dependency_injection import inject_params, on
@@ -36,6 +39,8 @@ class GroupToolExecutor(ConversableAgent):
 
         # Track the original agent that initiated the tool call (for safeguards)
         self._tool_call_originator: str | None = None
+        # Group manager will be set by link_agents_to_group_manager
+        self._group_manager: Any = None
 
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
@@ -148,6 +153,90 @@ class GroupToolExecutor(ConversableAgent):
             for tool in agent.tools:
                 self.register_for_execution(serialize=False, silent_override=True)(tool)
 
+    def function_is_agent_llm_handoff(self, agent_name: str, function_name: str) -> bool:
+        """Determines if a function name is an LLM handoff.
+
+        Args:
+            agent_name (str): The name of the agent the conditions against
+            function_name (str): The function name to check.
+
+        Returns:
+            bool: True if the function is an LLM handoff, False otherwise.
+        """
+        agent = self._group_manager.groupchat.agent_by_name(agent_name)
+        if agent is None:
+            return False
+        # Check if agent is a ConversableAgent with handoffs
+        if not isinstance(agent, ConversableAgent) or not hasattr(agent, "handoffs"):
+            return False
+        return any(on_condition.llm_function_name == function_name for on_condition in agent.handoffs.llm_conditions)
+
+    def get_sender_agent_for_message(self, message: dict[str, Any]) -> Agent | None:
+        """Gets the sender agent from the message.
+
+        Args:
+            message: The message containing the tool call and source agent
+
+        Returns:
+            The sender agent, or None if not found
+        """
+        if "name" in message and self._group_manager:
+            agent = self._group_manager.groupchat.agent_by_name(message.get("name"))
+            return agent  # type: ignore[no-any-return]
+        return None
+
+    def is_handoff_function(self, message: dict[str, Any]) -> bool:
+        """Checks if the tool call is a handoff function.
+
+        Args:
+            message: The message containing the tool call and source agent
+        """
+        if "name" in message:
+            agent_name = message.get("name")
+
+            if agent_name and "tool_calls" in message and self._group_manager:
+                for tool_call in message["tool_calls"]:
+                    if "function" in tool_call and "name" in tool_call["function"]:
+                        function_name = tool_call["function"]["name"]
+                        if self.function_is_agent_llm_handoff(agent_name, function_name):
+                            return True
+        return False
+
+    def _send_llm_handoff_event(self, message: dict[str, Any], transition_target: TransitionTarget) -> None:
+        """Send an LLM OnCondition handoff event.
+
+        Args:
+            message: The message containing the tool call and source agent
+            transition_target: The target to transition to
+        """
+        if self.is_handoff_function(message):
+            source_agent = self.get_sender_agent_for_message(message)
+            if source_agent:
+                iostream = IOStream.get_default()
+                iostream.send(
+                    OnConditionLLMTransitionEvent(
+                        source_agent=source_agent,
+                        transition_target=transition_target,
+                    )
+                )
+
+    def _send_reply_result_handoff_event(self, message: dict[str, Any], transition_target: TransitionTarget) -> None:
+        """Send a ReplyResult handoff event.
+
+        Args:
+            message: The message containing the tool call and source agent
+            transition_target: The target to transition to
+        """
+        source_agent = self.get_sender_agent_for_message(message)
+        if source_agent:
+            iostream = IOStream.get_default()
+            iostream.send(
+                ReplyResultTransitionEvent(
+                    source_agent=source_agent,
+                    transition_target=transition_target,
+                )
+            )
+
     def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
@@ -201,13 +290,15 @@ class GroupToolExecutor(ConversableAgent):
                 for tool_response in tool_message["tool_responses"]:
                     content = tool_response.get("content")
 
-                    # Tool Call returns that are a target are either a ReplyResult or a TransitionTarget are the next agent
+                    # Tool Call returns that are a target are either a ReplyResult or a TransitionTarget
                     if isinstance(content, ReplyResult):
                         if content.context_variables and content.context_variables.to_dict() != {}:
                             agent.context_variables.update(content.context_variables.to_dict())
                         if content.target is not None:
+                            self._send_reply_result_handoff_event(message_copy, content.target)
                             next_target = content.target
                     elif isinstance(content, TransitionTarget):
+                        self._send_llm_handoff_event(message_copy, content)
                         next_target = content
 
                     # Serialize the content to a string

@@ -281,6 +281,124 @@ class TestOpenAICompletionsClientStructuredOutput:
         assert isinstance(result, dict)
         assert len(result) > 0
 
+    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
+    def test_structured_output_with_pydantic_model(self, openai_completions_client):
+        """Test structured output with Pydantic BaseModel using chat.completions.parse()."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        # Define Pydantic model for response
+        class QueryAnswer(BaseModel):
+            """Structured answer to a query."""
+
+            question: str
+            answer: str
+            confidence: float
+
+        # Create client with response_format as Pydantic model
+        from autogen.llm_clients import OpenAICompletionsClient
+
+        client = OpenAICompletionsClient(api_key=openai_completions_client.client.api_key, response_format=QueryAnswer)
+
+        response = client.create({
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "What is the capital of France? Rate your confidence from 0-1."}],
+            "temperature": 0,
+        })
+
+        # Should have parsed content
+        parsed_blocks = [b for b in response.messages[0].content if b.type == "parsed"]
+        assert len(parsed_blocks) == 1
+
+        # Verify parsed content structure
+        parsed_data = parsed_blocks[0].parsed
+        assert "question" in parsed_data
+        assert "answer" in parsed_data
+        assert "confidence" in parsed_data
+
+        # Verify content correctness
+        assert "paris" in parsed_data["answer"].lower()
+        assert 0 <= parsed_data["confidence"] <= 1
+
+    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
+    def test_structured_output_pydantic_in_params(self, openai_completions_client):
+        """Test structured output with Pydantic model passed in params instead of client init."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        # Define Pydantic model
+        class MathSolution(BaseModel):
+            """Solution to a math problem."""
+
+            problem: str
+            solution: int
+            steps: str
+
+        response = openai_completions_client.create({
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "What is 15 + 27? Show your work."}],
+            "response_format": MathSolution,  # Pass Pydantic model directly in params
+            "temperature": 0,
+        })
+
+        # Should have parsed content
+        parsed_blocks = [b for b in response.messages[0].content if b.type == "parsed"]
+        assert len(parsed_blocks) == 1
+
+        # Verify structure
+        parsed_data = parsed_blocks[0].parsed
+        assert "problem" in parsed_data
+        assert "solution" in parsed_data
+        assert "steps" in parsed_data
+
+        # Verify correctness
+        assert parsed_data["solution"] == 42
+
+    @pytest.mark.openai
+    @run_for_optional_imports("openai", "openai")
+    def test_structured_output_pydantic_override_default(self, openai_completions_client):
+        """Test that params response_format overrides client default."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        # Define two different models
+        class DefaultModel(BaseModel):
+            default_field: str
+
+        class OverrideModel(BaseModel):
+            override_field: str
+            value: int
+
+        # Create client with default response_format
+        from autogen.llm_clients import OpenAICompletionsClient
+
+        client = OpenAICompletionsClient(api_key=openai_completions_client.client.api_key, response_format=DefaultModel)
+
+        # Override with different model in params
+        response = client.create({
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Return an override_field='test' and value=123"}],
+            "response_format": OverrideModel,  # Override default
+            "temperature": 0,
+        })
+
+        # Should use OverrideModel, not DefaultModel
+        parsed_blocks = [b for b in response.messages[0].content if b.type == "parsed"]
+        assert len(parsed_blocks) == 1
+
+        parsed_data = parsed_blocks[0].parsed
+        assert "override_field" in parsed_data  # From OverrideModel
+        assert "value" in parsed_data  # From OverrideModel
+        assert "default_field" not in parsed_data  # Not from DefaultModel
+
 
 class TestOpenAICompletionsClientImageInput:
     """Test image input/vision capabilities (from agentchat_oai_responses_image.ipynb)."""

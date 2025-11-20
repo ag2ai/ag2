@@ -484,15 +484,232 @@ class TestOpenAICompletionsClientGenericContent:
         assert len(confidence_blocks) == 1
         assert confidence_blocks[0].confidence_score == 0.92
 
-    # Note: The following tests were removed because they tested impossible behavior:
-    # - test_generic_content_serialization
-    # - test_generic_content_attribute_access
-    # - test_generic_content_helper_methods
-    # - test_mixed_known_and_unknown_content
-    #
-    # These tests used list content in response messages, but OpenAI Chat Completions API
-    # always returns content as str, never list. List content only exists in REQUEST messages
-    # for multimodal inputs, not in RESPONSE messages from the API.
-    #
-    # GenericContent is still tested via test_unknown_message_field_as_generic_content which
-    # tests the correct use case: unknown MESSAGE FIELDS (not content blocks)
+
+class TestOpenAICompletionsClientStructuredOutputs:
+    """Test structured outputs with Pydantic models and chat.completions.parse()."""
+
+    def test_pydantic_model_detection(self, mock_openai_client):
+        """Test that Pydantic BaseModel classes are correctly detected."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        class TestModel(BaseModel):
+            name: str
+            age: int
+
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        # Should detect Pydantic model
+        assert client._is_pydantic_model(TestModel) is True
+
+        # Should not detect regular classes
+        assert client._is_pydantic_model(str) is False
+        assert client._is_pydantic_model(dict) is False
+        assert client._is_pydantic_model({"type": "json_schema"}) is False
+        assert client._is_pydantic_model(None) is False
+
+    def test_structured_output_with_pydantic_model(self, mock_openai_client):
+        """Test that response_format with Pydantic model uses parse() method."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        class QueryAnswer(BaseModel):
+            answer: str
+            confidence: float
+
+        client = OpenAICompletionsClient(api_key="test-key", response_format=QueryAnswer)
+
+        # Create mock parsed response
+        parsed_obj = QueryAnswer(answer="42", confidence=0.95)
+        mock_message = MockMessage(role="assistant", content="The answer is 42")
+        mock_message.parsed = parsed_obj
+        mock_message.refusal = None
+
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        # Mock parse() method
+        client.client.chat.completions.parse = Mock(return_value=mock_response)
+        client.client.chat.completions.create = Mock()
+
+        # Test
+        response = client.create({"model": "gpt-4o", "messages": [{"role": "user", "content": "What is the answer?"}]})
+
+        # Should call parse() not create()
+        assert client.client.chat.completions.parse.called
+        assert not client.client.chat.completions.create.called
+
+        # Should have parsed content
+        content_blocks = response.messages[0].content
+        parsed_blocks = [b for b in content_blocks if b.type == "parsed"]
+        assert len(parsed_blocks) == 1
+        assert parsed_blocks[0].parsed["answer"] == "42"
+        assert parsed_blocks[0].parsed["confidence"] == 0.95
+
+    def test_structured_output_with_json_schema(self, mock_openai_client):
+        """Test that JSON schema dict still uses create() method."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        json_schema = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "answer_schema",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {"answer": {"type": "string"}},
+                    "required": ["answer"],
+                },
+            },
+        }
+
+        mock_message = MockMessage(role="assistant", content='{"answer": "42"}')
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        # Mock create() method
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+        client.client.chat.completions.parse = Mock()
+
+        # Test
+        response = client.create({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "What?"}],
+            "response_format": json_schema,
+        })
+
+        # Should call create() not parse()
+        assert client.client.chat.completions.create.called
+        assert not client.client.chat.completions.parse.called
+
+        # Should have text content
+        assert response.messages[0].content[0].text == '{"answer": "42"}'
+
+    def test_structured_output_with_refusal(self, mock_openai_client):
+        """Test handling of refusals in structured outputs."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        class SensitiveQuery(BaseModel):
+            contains_pii: bool
+            explanation: str
+
+        client = OpenAICompletionsClient(api_key="test-key", response_format=SensitiveQuery)
+
+        # Create mock response with refusal
+        mock_message = MockMessage(role="assistant", content=None)
+        mock_message.parsed = None
+        mock_message.refusal = "I cannot process this request as it may contain personally identifiable information."
+
+        mock_choice = MockChoice(message=mock_message, finish_reason="stop")
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        client.client.chat.completions.parse = Mock(return_value=mock_response)
+
+        # Test
+        response = client.create({"model": "gpt-4o", "messages": [{"role": "user", "content": "Process this PII"}]})
+
+        # Should have refusal content
+        content_blocks = response.messages[0].content
+        refusal_blocks = [b for b in content_blocks if b.type == "refusal"]
+        assert len(refusal_blocks) == 1
+        assert "personally identifiable information" in refusal_blocks[0].refusal
+
+    def test_default_response_format_merged_into_params(self, mock_openai_client):
+        """Test that default response_format is merged into params."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        class DefaultModel(BaseModel):
+            result: str
+
+        client = OpenAICompletionsClient(api_key="test-key", response_format=DefaultModel)
+
+        parsed_obj = DefaultModel(result="success")
+        mock_message = MockMessage(role="assistant", content="Success")
+        mock_message.parsed = parsed_obj
+        mock_message.refusal = None
+
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        client.client.chat.completions.parse = Mock(return_value=mock_response)
+
+        # Test without response_format in params
+        client.create({"model": "gpt-4o", "messages": [{"role": "user", "content": "Test"}]})
+
+        # Should still call parse() because of default response_format
+        assert client.client.chat.completions.parse.called
+
+        # Verify response_format was passed
+        call_args = client.client.chat.completions.parse.call_args
+        assert call_args[1]["response_format"] == DefaultModel
+
+    def test_explicit_response_format_overrides_default(self, mock_openai_client):
+        """Test that explicit response_format in params overrides default."""
+        try:
+            from pydantic import BaseModel
+        except ImportError:
+            pytest.skip("Pydantic not installed")
+
+        class DefaultModel(BaseModel):
+            default_field: str
+
+        class OverrideModel(BaseModel):
+            override_field: str
+
+        client = OpenAICompletionsClient(api_key="test-key", response_format=DefaultModel)
+
+        parsed_obj = OverrideModel(override_field="overridden")
+        mock_message = MockMessage(role="assistant", content="Overridden")
+        mock_message.parsed = parsed_obj
+        mock_message.refusal = None
+
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        client.client.chat.completions.parse = Mock(return_value=mock_response)
+
+        # Test with explicit response_format
+        response = client.create({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Test"}],
+            "response_format": OverrideModel,
+        })
+
+        # Should use OverrideModel, not DefaultModel
+        call_args = client.client.chat.completions.parse.call_args
+        assert call_args[1]["response_format"] == OverrideModel
+
+        # Check parsed content uses override model
+        parsed_blocks = [b for b in response.messages[0].content if b.type == "parsed"]
+        assert "override_field" in parsed_blocks[0].parsed
+
+    def test_no_response_format_uses_create(self, mock_openai_client):
+        """Test that requests without response_format use create() method."""
+        client = OpenAICompletionsClient(api_key="test-key")
+
+        mock_message = MockMessage(role="assistant", content="Regular response")
+        mock_choice = MockChoice(message=mock_message)
+        mock_response = MockOpenAIResponse(choices=[mock_choice], usage=MockUsage())
+
+        client.client.chat.completions.create = Mock(return_value=mock_response)
+        client.client.chat.completions.parse = Mock()
+
+        # Test without response_format
+        response = client.create({"model": "gpt-4o", "messages": [{"role": "user", "content": "Test"}]})
+
+        # Should call create() not parse()
+        assert client.client.chat.completions.create.called
+        assert not client.client.chat.completions.parse.called
+
+        # Should have text content
+        assert response.messages[0].content[0].text == "Regular response"

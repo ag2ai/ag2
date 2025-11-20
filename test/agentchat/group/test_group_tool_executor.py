@@ -360,3 +360,147 @@ class TestGroupToolExecutor:
                 executor._generate_group_tool_reply(agent=executor, messages=messages)
 
             assert "Tool call did not return a message" in str(excinfo.value)
+
+    def test_function_is_agent_llm_handoff(self, executor: GroupToolExecutor) -> None:
+        """Test function_is_agent_llm_handoff method."""
+        # Setup mock group manager and groupchat
+        mock_group_manager = MagicMock()
+        mock_groupchat = MagicMock()
+        mock_group_manager.groupchat = mock_groupchat
+        executor._group_manager = mock_group_manager
+
+        # Test case 1: Agent not found
+        mock_groupchat.agent_by_name.return_value = None
+        result = executor.function_is_agent_llm_handoff("NonExistentAgent", "some_function")
+        assert result is False
+        mock_groupchat.agent_by_name.assert_called_with("NonExistentAgent")
+
+        # Test case 2: Agent found but not a ConversableAgent
+        mock_agent = MagicMock()
+        mock_agent.__class__.__name__ = "NotConversableAgent"
+        mock_groupchat.agent_by_name.return_value = mock_agent
+        result = executor.function_is_agent_llm_handoff("SomeAgent", "some_function")
+        assert result is False
+
+        # Test case 3: ConversableAgent but no handoffs attribute
+        mock_conversable = MagicMock(spec=ConversableAgent)
+        del mock_conversable.handoffs  # Remove handoffs attribute
+        mock_groupchat.agent_by_name.return_value = mock_conversable
+        result = executor.function_is_agent_llm_handoff("SomeAgent", "some_function")
+        assert result is False
+
+        # Test case 4: Agent with handoffs but function not found
+        mock_conversable = MagicMock(spec=ConversableAgent)
+        mock_handoffs = MagicMock()
+        mock_condition1 = MagicMock()
+        mock_condition1.llm_function_name = "other_function"
+        mock_condition2 = MagicMock()
+        mock_condition2.llm_function_name = "another_function"
+        mock_handoffs.llm_conditions = [mock_condition1, mock_condition2]
+        mock_conversable.handoffs = mock_handoffs
+        mock_groupchat.agent_by_name.return_value = mock_conversable
+        result = executor.function_is_agent_llm_handoff("SomeAgent", "target_function")
+        assert result is False
+
+        # Test case 5: Function found in handoffs
+        mock_condition3 = MagicMock()
+        mock_condition3.llm_function_name = "target_function"
+        mock_handoffs.llm_conditions.append(mock_condition3)
+        result = executor.function_is_agent_llm_handoff("SomeAgent", "target_function")
+        assert result is True
+
+    def test_get_sender_agent_for_message(self, executor: GroupToolExecutor) -> None:
+        """Test get_sender_agent_for_message method."""
+        # Setup mock group manager and groupchat
+        mock_group_manager = MagicMock()
+        mock_groupchat = MagicMock()
+        mock_group_manager.groupchat = mock_groupchat
+        executor._group_manager = mock_group_manager
+
+        # Test case 1: No 'name' in message
+        message = {"content": "some content"}
+        result = executor.get_sender_agent_for_message(message)
+        assert result is None
+        mock_groupchat.agent_by_name.assert_not_called()
+
+        # Test case 2: No group manager
+        executor._group_manager = None
+        message = {"name": "SomeAgent", "content": "some content"}
+        result = executor.get_sender_agent_for_message(message)
+        assert result is None
+
+        # Test case 3: Agent found successfully
+        executor._group_manager = mock_group_manager
+        mock_agent = MagicMock()
+        mock_agent.name = "SomeAgent"
+        mock_groupchat.agent_by_name.return_value = mock_agent
+        message = {"name": "SomeAgent", "content": "some content"}
+        result = executor.get_sender_agent_for_message(message)
+        assert result == mock_agent
+        mock_groupchat.agent_by_name.assert_called_with("SomeAgent")
+
+        # Test case 4: Agent not found in groupchat
+        mock_groupchat.agent_by_name.return_value = None
+        message = {"name": "NonExistentAgent", "content": "some content"}
+        result = executor.get_sender_agent_for_message(message)
+        assert result is None
+
+    def test_is_handoff_function(self, executor: GroupToolExecutor) -> None:
+        """Test is_handoff_function method."""
+        # Setup mock group manager and groupchat
+        mock_group_manager = MagicMock()
+        mock_groupchat = MagicMock()
+        mock_group_manager.groupchat = mock_groupchat
+        executor._group_manager = mock_group_manager
+
+        # Test case 1: No 'name' in message
+        message = {"content": "some content"}
+        result = executor.is_handoff_function(message)
+        assert result is False
+
+        # Test case 2: No tool_calls in message
+        message = {"name": "SomeAgent", "content": "some content"}
+        result = executor.is_handoff_function(message)
+        assert result is False
+
+        # Test case 3: No group manager
+        executor._group_manager = None
+        message3: dict[str, Any] = {"name": "SomeAgent", "tool_calls": [{"function": {"name": "some_function"}}]}
+        result = executor.is_handoff_function(message3)
+        assert result is False
+
+        # Test case 4: Tool call without function key
+        executor._group_manager = mock_group_manager
+        message4: dict[str, Any] = {"name": "SomeAgent", "tool_calls": [{"id": "call1"}]}
+        result = executor.is_handoff_function(message4)
+        assert result is False
+
+        # Test case 5: Tool call without function name
+        message5: dict[str, Any] = {"name": "SomeAgent", "tool_calls": [{"function": {"arguments": "{}"}}]}
+        result = executor.is_handoff_function(message5)
+        assert result is False
+
+        # Test case 6: Valid tool call but not a handoff function
+        with patch.object(executor, "function_is_agent_llm_handoff", return_value=False) as mock_check:
+            message6: dict[str, Any] = {"name": "SomeAgent", "tool_calls": [{"function": {"name": "regular_function"}}]}
+            result = executor.is_handoff_function(message6)
+            assert result is False
+            mock_check.assert_called_with("SomeAgent", "regular_function")
+
+        # Test case 7: Valid handoff function
+        with patch.object(executor, "function_is_agent_llm_handoff", return_value=True) as mock_check:
+            message7: dict[str, Any] = {"name": "SomeAgent", "tool_calls": [{"function": {"name": "handoff_function"}}]}
+            result = executor.is_handoff_function(message7)
+            assert result is True
+            mock_check.assert_called_with("SomeAgent", "handoff_function")
+
+        # Test case 8: Multiple tool calls, one is a handoff
+        with patch.object(executor, "function_is_agent_llm_handoff") as mock_check:
+            mock_check.side_effect = [False, True]  # First returns False, second returns True
+            message8: dict[str, Any] = {
+                "name": "SomeAgent",
+                "tool_calls": [{"function": {"name": "regular_function"}}, {"function": {"name": "handoff_function"}}],
+            }
+            result = executor.is_handoff_function(message8)
+            assert result is True
+            assert mock_check.call_count == 2
