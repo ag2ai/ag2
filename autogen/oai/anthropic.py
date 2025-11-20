@@ -117,6 +117,7 @@ ANTHROPIC_PRICING_1k = {
 # https://docs.anthropic.com/en/docs/build-with-claude/structured-outputs
 STRUCTURED_OUTPUT_MODELS = {
     "claude-sonnet-4-5",
+    "claude-sonnet-4-5-20250929",  # Versioned Claude Sonnet 4.5
     "claude-3-5-sonnet-20241022",
     "claude-3-7-sonnet-20250219",
     "claude-opus-4-1",  # Future model
@@ -136,12 +137,20 @@ def supports_native_structured_outputs(model: str) -> bool:
         True if the model supports native structured outputs, False otherwise.
 
     Supported models:
-        - Claude Sonnet 4.5+ (claude-sonnet-4-5, claude-3-5-sonnet-20241022+)
+        - Claude Sonnet 4.5+ (claude-sonnet-4-5, claude-sonnet-4-5-20250929, claude-3-5-sonnet-20241022+)
+        - Claude Sonnet 3.7+ (claude-3-7-sonnet-20250219+)
         - Claude Opus 4.1+ (claude-opus-4-1+)
+
+    NOT supported (will use JSON Mode fallback):
+        - Claude Sonnet 4.0 (claude-sonnet-4-20250514) - older version
+        - Claude 3 Haiku models
+        - Claude 2.x models
 
     Example:
         >>> supports_native_structured_outputs("claude-sonnet-4-5")
         True
+        >>> supports_native_structured_outputs("claude-sonnet-4-20250514")
+        False  # Claude Sonnet 4.0 doesn't support it
         >>> supports_native_structured_outputs("claude-3-haiku-20240307")
         False
     """
@@ -154,8 +163,8 @@ def supports_native_structured_outputs(model: str) -> bool:
     if model.startswith(("claude-3-5-sonnet-", "claude-3-7-sonnet-")):
         return True
 
-    # Support future Sonnet 4.x versions
-    if model.startswith("claude-sonnet-4"):
+    # Support future Sonnet 4.5+ versions (NOT Sonnet 4.0)
+    if model.startswith("claude-sonnet-4-5"):
         return True
 
     # Support future Opus 4.x versions

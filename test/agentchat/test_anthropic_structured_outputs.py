@@ -255,7 +255,9 @@ def test_groupchat_structured_output(config_list_sonnet_4_5_structured):
     found_valid_structure = False
 
     for message in chat_result.chat_history:
-        if message["role"] == "assistant":
+        # In GroupChat, agent responses have role="user" when sent to manager
+        # Skip the initial message from user_proxy (role="assistant", name="User")
+        if message.get("name") in ["DataAnalyst", "MathExpert"]:
             content = message["content"]
 
             # Try to validate as AnalysisResult (remains JSON - no format() method)
@@ -341,7 +343,8 @@ def test_groupchat_defaultpattern_structured_output(config_list_sonnet_4_5_struc
     found_math = False
 
     for message in chat_result.chat_history:
-        if message.get("role") == "assistant":
+        # Check messages from Analyst and Solver agents
+        if message.get("name") in ["Analyst", "Solver"]:
             content = message.get("content", "")
 
             # Check for AnalysisResult (remains JSON - no format() method)
@@ -460,7 +463,8 @@ def test_groupchat_mixed_models(config_list_sonnet_4_5_structured, config_list_h
     valid_outputs = 0
 
     for message in chat_result.chat_history:
-        if message["role"] == "assistant":
+        # Check messages from SonnetExpert and HaikuHelper agents
+        if message.get("name") in ["SonnetExpert", "HaikuHelper"]:
             content = message["content"]
             # Check for formatted MathReasoning (contains Step and Final Answer)
             if isinstance(content, str) and "Step" in content and "Final Answer:" in content:
