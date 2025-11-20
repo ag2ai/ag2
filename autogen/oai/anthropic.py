@@ -195,6 +195,48 @@ def has_beta_messages_api() -> bool:
         return False
 
 
+def validate_structured_outputs_version() -> None:
+    """Validate that the Anthropic SDK version supports structured outputs beta.
+
+    The structured-outputs-2025-11-13 beta header requires anthropic>=0.74.1.
+
+    Raises:
+        ImportError: If the Anthropic SDK version is too old
+
+    Example:
+        >>> validate_structured_outputs_version()  # Raises if version < 0.74.1
+    """
+    try:
+        from anthropic import __version__ as anthropic_version
+        from packaging import version
+
+        min_version = "0.74.1"
+        current_version = anthropic_version
+
+        if version.parse(current_version) < version.parse(min_version):
+            raise ImportError(
+                f"Anthropic structured outputs require anthropic>={min_version}, "
+                f"but found version {current_version}. "
+                f"Please upgrade: pip install --upgrade 'anthropic>={min_version}'"
+            )
+    except ImportError as e:
+        if "anthropic" in str(e) or "version" in str(e).lower():
+            raise
+        # If packaging is not available, try manual version comparison
+        from anthropic import __version__ as anthropic_version
+
+        # Simple version comparison (works for major.minor.patch format)
+        current_parts = [int(x) for x in anthropic_version.split(".")[:3]]
+        min_parts = [0, 74, 1]
+
+        if current_parts < min_parts:
+            raise ImportError(
+                f"Anthropic structured outputs require anthropic>=0.74.1, "
+                f"but found version {anthropic_version}. "
+                f"Please upgrade: pip install --upgrade 'anthropic>=0.74.1'"
+            )
+
+
 def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:
     """Transform JSON schema to be compatible with Anthropic's structured outputs.
 
@@ -535,6 +577,8 @@ class AnthropicClient:
         has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
 
         if has_strict_tools:
+            # Validate SDK version supports structured outputs beta
+            validate_structured_outputs_version()
             # Use beta API for strict tools
             anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
             response = self._client.beta.messages.create(**anthropic_params)
@@ -626,6 +670,9 @@ class AnthropicClient:
             del anthropic_params["stop_sequences"]
         if anthropic_params["tool_choice"] is None:
             del anthropic_params["tool_choice"]
+
+        # Validate SDK version supports structured outputs beta
+        validate_structured_outputs_version()
 
         # Add native structured output parameters
         anthropic_params["betas"] = ["structured-outputs-2025-11-13"]
