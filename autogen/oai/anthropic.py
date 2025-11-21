@@ -95,6 +95,24 @@ with optional_import_block():
     from anthropic import __version__ as anthropic_version
     from anthropic.types import Message, TextBlock, ToolUseBlock
 
+    # Import transform_schema for structured outputs (SDK >= 0.74.1)
+    try:
+        from anthropic import transform_schema
+    except ImportError:
+        transform_schema = None  # type: ignore[misc, assignment]
+
+    # Beta content block types for structured outputs (SDK >= 0.74.1)
+    try:
+        from anthropic.types.beta.structured_outputs.beta_text_block import BetaTextBlock
+        from anthropic.types.beta.structured_outputs.beta_tool_use_block import BetaToolUseBlock
+
+        BETA_BLOCKS_AVAILABLE = True
+    except ImportError:
+        # Beta blocks not available in older SDK versions
+        BetaTextBlock = None  # type: ignore[misc, assignment]
+        BetaToolUseBlock = None  # type: ignore[misc, assignment]
+        BETA_BLOCKS_AVAILABLE = False
+
     TOOL_ENABLED = anthropic_version >= "0.23.1"
     if TOOL_ENABLED:
         pass
@@ -207,11 +225,10 @@ def validate_structured_outputs_version() -> None:
         >>> validate_structured_outputs_version()  # Raises if version < 0.74.1
     """
     try:
-        from anthropic import __version__ as anthropic_version
         from packaging import version
 
         min_version = "0.74.1"
-        current_version = anthropic_version
+        current_version = anthropic_version  # Use module-level import
 
         if version.parse(current_version) < version.parse(min_version):
             raise ImportError(
@@ -223,7 +240,7 @@ def validate_structured_outputs_version() -> None:
         if "anthropic" in str(e) or "version" in str(e).lower():
             raise
         # If packaging is not available, try manual version comparison
-        from anthropic import __version__ as anthropic_version
+        current_version = anthropic_version  # Use module-level import
 
         # Simple version comparison (works for major.minor.patch format)
         current_parts = [int(x) for x in anthropic_version.split(".")[:3]]
@@ -235,6 +252,46 @@ def validate_structured_outputs_version() -> None:
                 f"but found version {anthropic_version}. "
                 f"Please upgrade: pip install --upgrade 'anthropic>=0.74.1'"
             )
+
+
+def _is_text_block(content: Any) -> bool:
+    """Check if a content block is a text block (legacy or beta version).
+
+    Args:
+        content: Content block to check
+
+    Returns:
+        True if content is a TextBlock or BetaTextBlock
+    """
+    if type(content) == TextBlock:
+        return True
+    if BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock:
+        return True
+    return False
+
+
+def _is_tool_use_block(content: Any) -> bool:
+    """Check if a content block is a tool use block (legacy or beta version).
+
+    Args:
+        content: Content block to check
+
+    Returns:
+        True if content is a ToolUseBlock or BetaToolUseBlock
+    """
+    content_type = type(content)
+    content_type_name = content_type.__name__
+
+    if content_type == ToolUseBlock:
+        return True
+    if BETA_BLOCKS_AVAILABLE and content_type == BetaToolUseBlock:
+        return True
+
+    # Fallback: check by name if type comparison fails
+    if content_type_name in ("ToolUseBlock", "BetaToolUseBlock"):
+        return True
+
+    return False
 
 
 def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:
@@ -595,7 +652,8 @@ class AnthropicClient:
             if response.stop_reason == "tool_use":
                 anthropic_finish = "tool_calls"
                 for content in response.content:
-                    if type(content) == ToolUseBlock:
+                    # Check for both legacy ToolUseBlock and beta BetaToolUseBlock (for strict tools)
+                    if _is_tool_use_block(content):
                         tool_calls.append(
                             ChatCompletionMessageToolCall(
                                 id=content.id,
@@ -609,7 +667,8 @@ class AnthropicClient:
 
             # Retrieve any text content from the response
             for content in response.content:
-                if type(content) == TextBlock:
+                # Check for both legacy TextBlock and beta BetaTextBlock (for structured outputs)
+                if _is_text_block(content):
                     message_text = content.text
                     break
 
@@ -632,16 +691,21 @@ class AnthropicClient:
             AttributeError: If SDK doesn't support beta API
             Exception: If native structured output fails
         """
-        # Get schema from response_format
-        if isinstance(self._response_format, dict):
+        # Check if Anthropic's transform_schema is available
+        if transform_schema is None:
+            raise ImportError("Anthropic transform_schema not available. Please upgrade to anthropic>=0.74.1")
+
+        # Get schema from response_format and transform it using Anthropic's function
+        if isinstance(self._response_format, type) and issubclass(self._response_format, BaseModel):
+            # For Pydantic models, use Anthropic's transform_schema directly
+            transformed_schema = transform_schema(self._response_format)
+        elif isinstance(self._response_format, dict):
+            # For dict schemas, use as-is (already in correct format)
             schema = self._response_format
-        elif isinstance(self._response_format, type) and issubclass(self._response_format, BaseModel):
-            schema = self._response_format.model_json_schema()
+            # Still apply our transformation for additionalProperties
+            transformed_schema = transform_schema_for_anthropic(schema)
         else:
             raise ValueError(f"Invalid response format: {self._response_format}")
-
-        # Transform schema to Anthropic-compatible format
-        transformed_schema = transform_schema_for_anthropic(schema)
 
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
@@ -692,9 +756,6 @@ class AnthropicClient:
             }
             response = self._client.beta.messages.create(**anthropic_params)
 
-            # Extract JSON from response
-            message_text = response.content[0].text if response.content else ""
-
         else:
             # Pydantic model - use parse() for automatic validation
             # parse() uses output_format parameter and manages beta header automatically
@@ -702,18 +763,65 @@ class AnthropicClient:
 
             response = self._client.beta.messages.parse(**anthropic_params)
 
-            # parse() returns validated Pydantic model in parsed_output
-            parsed_response = response.parsed_output if hasattr(response, "parsed_output") else response
-            # Keep as JSON - FormatterProtocol formatting will be applied in message_retrieval()
-            message_text = (
-                parsed_response.model_dump_json()
-                if hasattr(parsed_response, "model_dump_json")
-                else str(parsed_response)
-            )
+        # Process ALL content blocks - can have both tool calls and structured output
+        tool_calls = []
+        message_text = ""
+        anthropic_finish = "stop"
+
+        if response is not None:
+            # Determine finish reason
+            if response.stop_reason == "tool_use":
+                anthropic_finish = "tool_calls"
+
+            # Loop through ALL content blocks and process each
+            for content in response.content:
+                # Extract tool calls (handles both ToolUseBlock and BetaToolUseBlock)
+                if _is_tool_use_block(content):
+                    tool_calls.append(
+                        ChatCompletionMessageToolCall(
+                            id=content.id,
+                            function={"name": content.name, "arguments": json.dumps(content.input)},
+                            type="function",
+                        )
+                    )
+                # Extract text content (handles both TextBlock and BetaTextBlock)
+                elif _is_text_block(content):
+                    # For dict schemas, extract text directly
+                    if isinstance(self._response_format, dict):
+                        message_text = content.text
+                    # For Pydantic models with parse(), get from parsed_output
+                    elif hasattr(response, "parsed_output"):
+                        parsed_response = response.parsed_output
+                        message_text = (
+                            parsed_response.model_dump_json()
+                            if hasattr(parsed_response, "model_dump_json")
+                            else str(parsed_response)
+                        )
+                    else:
+                        message_text = content.text
+
+            # Fallback: If using parse() and no text was found in content blocks,
+            # extract from parsed_output directly (if it's not None)
+            if (
+                not message_text
+                and hasattr(response, "parsed_output")
+                and response.parsed_output is not None
+                and not isinstance(self._response_format, dict)
+            ):
+                parsed_response = response.parsed_output
+                message_text = (
+                    parsed_response.model_dump_json()
+                    if hasattr(parsed_response, "model_dump_json")
+                    else str(parsed_response)
+                )
 
         # Build and return ChatCompletion
         return self._build_chat_completion(
-            response, message_text, tool_calls=None, finish_reason="stop", anthropic_params=anthropic_params
+            response,
+            message_text,
+            tool_calls=tool_calls if tool_calls else None,
+            finish_reason=anthropic_finish,
+            anthropic_params=anthropic_params,
         )
 
     def _create_with_json_mode(self, params: dict[str, Any]) -> ChatCompletion:
@@ -767,16 +875,11 @@ class AnthropicClient:
         response = self._client.messages.create(**anthropic_params)
 
         # Extract JSON from <json_response> tags
-        try:
-            parsed_response = self._extract_json_response(response)
-            # Keep as JSON - FormatterProtocol formatting will be applied in message_retrieval()
-            message_text = (
-                parsed_response.model_dump_json()
-                if hasattr(parsed_response, "model_dump_json")
-                else str(parsed_response)
-            )
-        except ValueError as e:
-            message_text = str(e)
+        parsed_response = self._extract_json_response(response)
+        # Keep as JSON - FormatterProtocol formatting will be applied in message_retrieval()
+        message_text = (
+            parsed_response.model_dump_json() if hasattr(parsed_response, "model_dump_json") else str(parsed_response)
+        )
 
         # Build and return ChatCompletion
         return self._build_chat_completion(
@@ -876,6 +979,9 @@ class AnthropicClient:
         # strict=True enables guaranteed schema validation for tool inputs
         if "strict" in openai_func:
             res["strict"] = openai_func["strict"]
+            # Transform schema to add required additionalProperties: false for all objects
+            # Anthropic requires this for strict tools
+            res["input_schema"] = transform_schema_for_anthropic(res["input_schema"])
 
         return res
 
@@ -974,13 +1080,45 @@ class AnthropicClient:
                 schema = self._resolve_schema_refs(schema, defs)
 
         # Add instructions for JSON formatting
-        example_json = '{"steps": [{"explanation": "First we...", "output": "result"}], "final_answer": "42"}'
+        # Generate an example based on the actual schema
+        def generate_example(schema_dict: dict[str, Any]) -> dict[str, Any]:
+            """Generate example data from schema."""
+            example = {}
+            properties = schema_dict.get("properties", {})
+            for prop_name, prop_schema in properties.items():
+                prop_type = prop_schema.get("type", "string")
+                if prop_type == "string":
+                    example[prop_name] = f"example {prop_name}"
+                elif prop_type == "integer":
+                    example[prop_name] = 42
+                elif prop_type == "number":
+                    example[prop_name] = 42.0
+                elif prop_type == "boolean":
+                    example[prop_name] = True
+                elif prop_type == "array":
+                    items_schema = prop_schema.get("items", {})
+                    items_type = items_schema.get("type", "string")
+                    if items_type == "string":
+                        example[prop_name] = ["item1", "item2"]
+                    elif items_type == "object":
+                        example[prop_name] = [generate_example(items_schema)]
+                    else:
+                        example[prop_name] = []
+                elif prop_type == "object":
+                    example[prop_name] = generate_example(prop_schema)
+                else:
+                    example[prop_name] = f"example {prop_name}"
+            return example
+
+        example_data = generate_example(schema)
+        example_json = json.dumps(example_data, indent=2)
+
         format_content = f"""You must respond with a valid JSON object that matches this structure (do NOT return the schema itself):
 {json.dumps(schema, indent=2)}
 
 IMPORTANT: Put your actual response data (not the schema) inside <json_response> tags.
 
-Correct example:
+Correct example format:
 <json_response>
 {example_json}
 </json_response>
@@ -1010,8 +1148,13 @@ Your JSON must:
         if not self._response_format:
             return response
 
-        # Extract content from response
-        content = response.content[0].text if response.content else ""
+        # Extract content from response - find first text block (handles both legacy and beta)
+        content = ""
+        if response.content:
+            for block in response.content:
+                if _is_text_block(block):
+                    content = block.text
+                    break
 
         # Try to extract JSON from tags first
         json_match = re.search(r"<json_response>(.*?)</json_response>", content, re.DOTALL)

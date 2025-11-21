@@ -915,3 +915,435 @@ def test_real_native_vs_json_mode_comparison():
     # Both should have at least some key points
     assert len(result_native.key_points) > 0
     assert len(result_json.key_points) > 0
+
+
+# ==============================================================================
+# Unit Tests for Strict Tool Use Feature
+# ==============================================================================
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_validate_structured_outputs_version(monkeypatch):
+    """Test SDK version validation for structured outputs beta header."""
+    from autogen.oai.anthropic import validate_structured_outputs_version
+
+    # Test with sufficient version
+    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.74.1")
+    validate_structured_outputs_version()  # Should not raise
+
+    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.80.0")
+    validate_structured_outputs_version()  # Should not raise
+
+    # Test with insufficient version
+    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.70.0")
+    with pytest.raises(ImportError, match="Anthropic structured outputs require anthropic>=0.74.1"):
+        validate_structured_outputs_version()
+
+    monkeypatch.setattr("autogen.oai.anthropic.anthropic_version", "0.74.0")
+    with pytest.raises(ImportError, match="Anthropic structured outputs require anthropic>=0.74.1"):
+        validate_structured_outputs_version()
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_openai_func_to_anthropic_preserves_strict(anthropic_client):
+    """Test that strict field is preserved during tool conversion."""
+    from autogen.oai.anthropic import AnthropicClient
+
+    # Tool with strict=True
+    strict_tool = {
+        "name": "calculate",
+        "description": "Perform calculation",
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "operation": {"type": "string", "enum": ["add", "subtract"]},
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["operation", "a", "b"],
+        },
+    }
+
+    result = AnthropicClient.openai_func_to_anthropic(strict_tool)
+
+    # Verify strict field is preserved
+    assert "strict" in result
+    assert result["strict"] is True
+
+    # Verify input_schema conversion
+    assert "input_schema" in result
+    assert "parameters" not in result
+
+    # Verify schema transformation was applied for strict tools
+    # Should add additionalProperties: false (required by Anthropic for strict tools)
+    assert result["input_schema"]["additionalProperties"] is False
+
+    # Verify properties are still there
+    assert "properties" in result["input_schema"]
+    assert "operation" in result["input_schema"]["properties"]
+    assert "a" in result["input_schema"]["properties"]
+    assert "b" in result["input_schema"]["properties"]
+
+    # Tool without strict field
+    legacy_tool = {
+        "name": "search",
+        "description": "Search function",
+        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+    }
+
+    result_legacy = AnthropicClient.openai_func_to_anthropic(legacy_tool)
+
+    # Verify strict field is not added if not present
+    assert "strict" not in result_legacy
+
+    # Legacy tools should not have schema transformation applied
+    # (additionalProperties might not be set)
+    assert result_legacy["input_schema"]["properties"]["query"]["type"] == "string"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_strict_tools_use_beta_api(anthropic_client, monkeypatch):
+    """Test that strict tools trigger beta API usage."""
+
+    beta_create_called = False
+    standard_create_called = False
+    captured_params = {}
+
+    def mock_beta_create(**kwargs):
+        nonlocal beta_create_called, captured_params
+        beta_create_called = True
+        captured_params = kwargs
+        return create_mock_anthropic_response()
+
+    def mock_standard_create(**kwargs):
+        nonlocal standard_create_called
+        standard_create_called = True
+        return create_mock_anthropic_response()
+
+    # Mock both beta and standard API calls
+    if hasattr(anthropic_client._client, "beta"):
+        monkeypatch.setattr(anthropic_client._client.beta.messages, "create", mock_beta_create)
+    monkeypatch.setattr(anthropic_client._client.messages, "create", mock_standard_create)
+
+    # Test with strict tools
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Calculate 5 + 3"}],
+        "max_tokens": 100,
+        "functions": [
+            {
+                "name": "calculate",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+                    "required": ["a", "b"],
+                },
+            }
+        ],
+    }
+
+    anthropic_client._create_standard(params)
+
+    # Verify beta API was called
+    assert beta_create_called, "Strict tools should trigger beta API"
+    assert not standard_create_called, "Should not call standard API when strict tools present"
+
+    # Verify beta header
+    assert "betas" in captured_params
+    assert "structured-outputs-2025-11-13" in captured_params["betas"]
+
+    # Verify tools have strict field
+    assert "tools" in captured_params
+    assert any(tool.get("strict") for tool in captured_params["tools"])
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_legacy_tools_use_standard_api(anthropic_client, monkeypatch):
+    """Test that legacy tools (without strict) use standard API."""
+
+    beta_create_called = False
+    standard_create_called = False
+
+    def mock_beta_create(**kwargs):
+        nonlocal beta_create_called
+        beta_create_called = True
+        return create_mock_anthropic_response()
+
+    def mock_standard_create(**kwargs):
+        nonlocal standard_create_called
+        standard_create_called = True
+        return create_mock_anthropic_response()
+
+    # Mock both APIs
+    if hasattr(anthropic_client._client, "beta"):
+        monkeypatch.setattr(anthropic_client._client.beta.messages, "create", mock_beta_create)
+    monkeypatch.setattr(anthropic_client._client.messages, "create", mock_standard_create)
+
+    # Test with legacy tools (no strict field)
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Search for documentation"}],
+        "max_tokens": 100,
+        "functions": [
+            {
+                "name": "search",
+                "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+            }
+        ],
+    }
+
+    anthropic_client._create_standard(params)
+
+    # Verify standard API was called
+    assert standard_create_called, "Legacy tools should use standard API"
+    assert not beta_create_called, "Should not call beta API without strict tools"
+
+
+# ==============================================================================
+# Real API Call Tests for Strict Tool Use
+# ==============================================================================
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_strict_tool_use_api_call():
+    """Real API call test for strict tool use with type enforcement."""
+    import json
+    import os
+
+    # Create client
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # Define strict tool with enum for operation
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Calculate 15 + 7 using the calculator tool"}],
+        "max_tokens": 1024,
+        "functions": [
+            {
+                "name": "calculate",
+                "description": "Perform arithmetic calculation",
+                "strict": True,  # Enable strict type validation
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {
+                            "type": "string",
+                            "enum": ["add", "subtract", "multiply", "divide"],
+                            "description": "The operation to perform",
+                        },
+                        "a": {"type": "number", "description": "First number"},
+                        "b": {"type": "number", "description": "Second number"},
+                    },
+                    "required": ["operation", "a", "b"],
+                },
+            }
+        ],
+    }
+
+    # Make actual API call
+    response = client.create(params)
+
+    # Verify response structure
+    assert response is not None
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+
+    # Verify tool call was made
+    message = response.choices[0].message
+    assert message.tool_calls is not None, "Should have tool calls"
+    assert len(message.tool_calls) > 0, "Should have at least one tool call"
+
+    # Verify tool call structure
+    tool_call = message.tool_calls[0]
+    assert tool_call.function.name == "calculate"
+
+    # Parse and verify arguments
+    args = json.loads(tool_call.function.arguments)
+
+    # With strict=True, these should be guaranteed to be correct types
+    assert isinstance(args["a"], (int, float)), "Argument 'a' should be a number"
+    assert isinstance(args["b"], (int, float)), "Argument 'b' should be a number"
+    assert args["operation"] in ["add", "subtract", "multiply", "divide"], "Operation should be valid enum value"
+
+    # Verify the calculation is correct
+    assert args["operation"] == "add"
+    assert args["a"] == 15
+    assert args["b"] == 7
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_strict_tool_type_enforcement():
+    """Real API call test verifying strict mode enforces correct types."""
+    import json
+    import os
+
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # Tool with multiple type constraints
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Book a flight for 2 passengers to New York, economy cabin"}],
+        "max_tokens": 1024,
+        "functions": [
+            {
+                "name": "book_flight",
+                "description": "Book a flight",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "passengers": {"type": "integer", "description": "Number of passengers"},
+                        "destination": {"type": "string", "description": "Destination city"},
+                        "cabin_class": {
+                            "type": "string",
+                            "enum": ["economy", "business", "first"],
+                            "description": "Cabin class",
+                        },
+                    },
+                    "required": ["passengers", "destination", "cabin_class"],
+                },
+            }
+        ],
+    }
+
+    response = client.create(params)
+
+    # Verify tool call
+    assert response.choices[0].message.tool_calls is not None
+
+    tool_call = response.choices[0].message.tool_calls[0]
+    args = json.loads(tool_call.function.arguments)
+
+    # Strict mode guarantees these types
+    assert isinstance(args["passengers"], int), "passengers should be integer, not string '2'"
+    assert args["passengers"] == 2
+
+    assert isinstance(args["destination"], str)
+    assert args["destination"].lower() == "new york"
+
+    assert args["cabin_class"] in ["economy", "business", "first"], "cabin_class must match enum"
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_combined_strict_tools_and_structured_output():
+    """Real API call test combining strict tools with structured output."""
+    import json
+    import os
+
+    from pydantic import BaseModel
+
+    # Result schema
+    class CalculationResult(BaseModel):
+        problem: str
+        steps: list[str]
+        result: float
+        verification: str
+
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # Use both strict tools and structured output
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Calculate (10 + 5) * 2 and explain your work"}],
+        "max_tokens": 1024,
+        "response_format": CalculationResult,
+        "functions": [
+            {
+                "name": "calculate",
+                "description": "Perform calculation",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {"type": "string", "enum": ["add", "subtract", "multiply", "divide"]},
+                        "a": {"type": "number"},
+                        "b": {"type": "number"},
+                    },
+                    "required": ["operation", "a", "b"],
+                },
+            }
+        ],
+    }
+
+    response = client.create(params)
+
+    # When both strict tools and structured output are configured,
+    # Claude will choose which feature to use for the response:
+    # - Either make a tool call (BetaToolUseBlock)
+    # - OR provide structured output (BetaTextBlock)
+    # Both content types are processed via beta API with the same header
+    message = response.choices[0].message
+
+    # Verify at least one content type is present
+    has_tool_calls = message.tool_calls is not None and len(message.tool_calls) > 0
+    has_structured_output = message.content and message.content.strip()
+
+    assert has_tool_calls or has_structured_output, "Should have either tool calls or structured output"
+
+    # If we got tool calls, verify strict tool validation worked
+    if has_tool_calls:
+        tool_call = message.tool_calls[0]
+        assert tool_call.function.name == "calculate", "Tool call should be for calculate function"
+        args = json.loads(tool_call.function.arguments)
+        assert isinstance(args["a"], (int, float)), "Argument 'a' should be a number"
+        assert isinstance(args["b"], (int, float)), "Argument 'b' should be a number"
+        assert args["operation"] in [
+            "add",
+            "subtract",
+            "multiply",
+            "divide",
+        ], "Operation should be valid enum value"
+
+    # If we got structured output, verify the format
+    if has_structured_output:
+        result = CalculationResult.model_validate_json(message.content)
+        assert result.problem, "Should have problem description"
+        assert len(result.steps) > 0, "Should have calculation steps"
+        assert isinstance(result.result, float), "Result should be a number"
+        assert result.verification, "Should have verification"
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_sdk_version_validation_on_strict_tools():
+    """Test that SDK version is validated when using strict tools."""
+    import os
+
+    # This test verifies that the version check happens
+    # If SDK is too old, it should raise ImportError
+
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test"}],
+        "max_tokens": 100,
+        "functions": [
+            {
+                "name": "test_tool",
+                "strict": True,
+                "parameters": {"type": "object", "properties": {"value": {"type": "string"}}},
+            }
+        ],
+    }
+
+    # This should work if SDK >= 0.74.1, otherwise raise ImportError
+    # We can't easily test the failure case without downgrading the SDK
+    # So we just verify it doesn't raise with a compatible SDK
+    try:
+        response = client.create(params)
+        # If we get here, SDK version is compatible
+        assert response is not None
+    except ImportError as e:
+        # If SDK is too old, should get clear error message
+        assert "anthropic>=0.74.1" in str(e)
+        assert "Please upgrade" in str(e)
