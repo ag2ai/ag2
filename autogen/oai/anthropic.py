@@ -484,6 +484,183 @@ class AnthropicClient:
 
         return anthropic_params
 
+    def _remove_none_params(self, params: dict[str, Any]) -> None:
+        """Remove parameters with None values from the params dict.
+
+        Anthropic API doesn't accept None values, so we remove them before making requests.
+        This method modifies the params dict in-place.
+
+        Args:
+            params: Dictionary of API parameters
+        """
+        keys_to_remove = [key for key, value in params.items() if value is None]
+        for key in keys_to_remove:
+            del params[key]
+
+    def _prepare_anthropic_params(
+        self, params: dict[str, Any], anthropic_messages: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Prepare parameters for Anthropic API call.
+
+        Consolidates common parameter preparation logic used across all create methods:
+        - Loads base configuration
+        - Converts tools format if needed
+        - Assigns messages, system, and tools
+        - Removes None values
+
+        Args:
+            params: Original request parameters
+            anthropic_messages: Converted messages in Anthropic format
+
+        Returns:
+            Dictionary of Anthropic API parameters ready for use
+        """
+        # Load base configuration
+        anthropic_params = self.load_config(params)
+
+        # Convert tools to functions if needed (make a copy to avoid modifying original)
+        params_copy = params.copy()
+        if "functions" in params_copy:
+            tools_configs = params_copy.pop("functions")
+            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
+            params_copy["tools"] = tools_configs
+
+        # Assign messages and optional parameters
+        anthropic_params["messages"] = anthropic_messages
+        if "system" in params_copy:
+            anthropic_params["system"] = params_copy["system"]
+        if "tools" in params_copy:
+            anthropic_params["tools"] = params_copy["tools"]
+
+        # Remove None values
+        self._remove_none_params(anthropic_params)
+
+        return anthropic_params
+
+    def _process_response_content(
+        self, response: Message, is_native_structured_output: bool = False
+    ) -> tuple[str, list[ChatCompletionMessageToolCall] | None, str]:
+        """Process Anthropic response content into OpenAI-compatible format.
+
+        Extracts tool calls, text content, and determines finish reason from the response.
+        Handles both standard and native structured output responses.
+
+        Args:
+            response: Anthropic Message response object
+            is_native_structured_output: Whether this is a native structured output response
+
+        Returns:
+            Tuple of (message_text, tool_calls, finish_reason)
+        """
+        tool_calls: list[ChatCompletionMessageToolCall] = []
+        message_text = ""
+        finish_reason = "stop"
+
+        if response is None:
+            return message_text, None, finish_reason
+
+        # Determine finish reason
+        if response.stop_reason == "tool_use":
+            finish_reason = "tool_calls"
+
+        # Process all content blocks
+        for content in response.content:
+            # Extract tool calls (handles both ToolUseBlock and BetaToolUseBlock)
+            if _is_tool_use_block(content):
+                tool_calls.append(
+                    ChatCompletionMessageToolCall(
+                        id=content.id,
+                        function={"name": content.name, "arguments": json.dumps(content.input)},
+                        type="function",
+                    )
+                )
+            # Extract text content (handles both TextBlock and BetaTextBlock)
+            elif _is_text_block(content):
+                # For native structured output with parsed_output
+                if is_native_structured_output and hasattr(response, "parsed_output"):
+                    parsed_response = response.parsed_output
+                    if parsed_response is not None:
+                        message_text = (
+                            parsed_response.model_dump_json()
+                            if hasattr(parsed_response, "model_dump_json")
+                            else str(parsed_response)
+                        )
+                    else:
+                        message_text = content.text
+                else:
+                    message_text = content.text
+
+        # Fallback: If using native SO parse() and no text was found in content blocks,
+        # extract from parsed_output directly (if it's not None)
+        if (
+            not message_text
+            and is_native_structured_output
+            and hasattr(response, "parsed_output")
+            and response.parsed_output is not None
+        ):
+            parsed_response = response.parsed_output
+            message_text = (
+                parsed_response.model_dump_json()
+                if hasattr(parsed_response, "model_dump_json")
+                else str(parsed_response)
+            )
+
+        return message_text, tool_calls if tool_calls else None, finish_reason
+
+    def _log_structured_output_fallback(
+        self,
+        exception: Exception,
+        model: str | None,
+        response_format: Any,
+        params: dict[str, Any],
+    ) -> None:
+        """Log detailed error information when native structured output fails and we fallback to JSON Mode.
+
+        Consolidates error logging logic used in the create() method when native structured
+        output encounters errors and needs to fall back to JSON Mode.
+
+        Args:
+            exception: The exception that triggered the fallback
+            model: Model name/identifier
+            response_format: Response format specification (Pydantic model or dict)
+            params: Original request parameters
+        """
+        # Build error details dictionary
+        error_details = {
+            "model": model,
+            "response_format": str(
+                type(response_format).__name__ if isinstance(response_format, type) else type(response_format)
+            ),
+            "error_type": type(exception).__name__,
+            "error_message": str(exception),
+        }
+
+        # Add BadRequestError-specific details if available
+        if isinstance(exception, BadRequestError):
+            if hasattr(exception, "status_code"):
+                error_details["status_code"] = exception.status_code
+            if hasattr(exception, "response"):
+                error_details["response_body"] = str(
+                    exception.response.text if hasattr(exception.response, "text") else exception.response
+                )
+            if hasattr(exception, "body"):
+                error_details["error_body"] = str(exception.body)
+
+        # Log sanitized params (remove sensitive data like API keys, message content)
+        sanitized_params = {
+            "model": params.get("model"),
+            "max_tokens": params.get("max_tokens"),
+            "temperature": params.get("temperature"),
+            "has_tools": "tools" in params,
+            "num_messages": len(params.get("messages", [])),
+        }
+        error_details["params"] = sanitized_params
+
+        # Log warning with full error context
+        logger.warning(
+            f"Native structured output failed for {model}. Error: {error_details}. Falling back to JSON Mode."
+        )
+
     def cost(self, response) -> float:
         """Calculate the cost of the completion using the Anthropic pricing."""
         return response.cost
@@ -551,43 +728,7 @@ class AnthropicClient:
                     # BadRequestError: Model doesn't support output_format
                     # AttributeError: SDK doesn't have beta API
                     # ValueError: Invalid schema format
-
-                    # Log detailed error information for debugging
-                    error_details = {
-                        "model": model,
-                        "response_format": str(
-                            type(response_format).__name__
-                            if isinstance(response_format, type)
-                            else type(response_format)
-                        ),
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    }
-
-                    # Add BadRequestError-specific details
-                    if isinstance(e, BadRequestError):
-                        if hasattr(e, "status_code"):
-                            error_details["status_code"] = e.status_code
-                        if hasattr(e, "response"):
-                            error_details["response_body"] = str(
-                                e.response.text if hasattr(e.response, "text") else e.response
-                            )
-                        if hasattr(e, "body"):
-                            error_details["error_body"] = str(e.body)
-
-                    # Log sanitized params (remove sensitive data)
-                    sanitized_params = {
-                        "model": params.get("model"),
-                        "max_tokens": params.get("max_tokens"),
-                        "temperature": params.get("temperature"),
-                        "has_tools": "tools" in params,
-                        "num_messages": len(params.get("messages", [])),
-                    }
-                    error_details["params"] = sanitized_params
-
-                    logger.warning(
-                        f"Native structured output failed for {model}. Error: {error_details}. Falling back to JSON Mode."
-                    )
+                    self._log_structured_output_fallback(e, model, response_format, params)
                     return self._create_with_json_mode(params)
             else:
                 # Use JSON Mode for older models or when beta API unavailable
@@ -598,37 +739,16 @@ class AnthropicClient:
 
     def _create_standard(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a standard completion without structured outputs."""
+        # Convert tools to functions format if needed
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
 
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
-        anthropic_params = self.load_config(params)
 
-        # TODO: support stream
-        params = params.copy()
-        if "functions" in params:
-            tools_configs = params.pop("functions")
-            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
-            params["tools"] = tools_configs
-
-        # Anthropic doesn't accept None values, so we need to use keyword argument unpacking instead of setting parameters.
-        # Copy params we need into anthropic_params
-        # Remove any that don't have values
-        anthropic_params["messages"] = anthropic_messages
-        if "system" in params:
-            anthropic_params["system"] = params["system"]
-        if "tools" in params:
-            anthropic_params["tools"] = params["tools"]
-        if anthropic_params["top_k"] is None:
-            del anthropic_params["top_k"]
-        if anthropic_params["top_p"] is None:
-            del anthropic_params["top_p"]
-        if anthropic_params["stop_sequences"] is None:
-            del anthropic_params["stop_sequences"]
-        if anthropic_params["tool_choice"] is None:
-            del anthropic_params["tool_choice"]
+        # Prepare Anthropic API parameters using helper (handles tool conversion, None removal, etc.)
+        anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
 
         # Check if any tools use strict mode (requires beta API)
         has_strict_tools = any(tool.get("strict") for tool in anthropic_params.get("tools", []))
@@ -643,34 +763,8 @@ class AnthropicClient:
             # Standard API for legacy tools
             response = self._client.messages.create(**anthropic_params)
 
-        tool_calls = []
-        message_text = ""
-
-        # Process response content
-        if response is not None:
-            # If we have tool use as the response, populate completed tool calls for our return OAI response
-            if response.stop_reason == "tool_use":
-                anthropic_finish = "tool_calls"
-                for content in response.content:
-                    # Check for both legacy ToolUseBlock and beta BetaToolUseBlock (for strict tools)
-                    if _is_tool_use_block(content):
-                        tool_calls.append(
-                            ChatCompletionMessageToolCall(
-                                id=content.id,
-                                function={"name": content.name, "arguments": json.dumps(content.input)},
-                                type="function",
-                            )
-                        )
-            else:
-                anthropic_finish = "stop"
-                tool_calls = None
-
-            # Retrieve any text content from the response
-            for content in response.content:
-                # Check for both legacy TextBlock and beta BetaTextBlock (for structured outputs)
-                if _is_text_block(content):
-                    message_text = content.text
-                    break
+        # Process response content using helper (extracts tool calls, text, finish reason)
+        message_text, tool_calls, anthropic_finish = self._process_response_content(response)
 
         # Build and return ChatCompletion
         return self._build_chat_completion(response, message_text, tool_calls, anthropic_finish, anthropic_params)
@@ -709,31 +803,9 @@ class AnthropicClient:
 
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
-        anthropic_params = self.load_config(params)
 
-        # TODO: support stream
-        params = params.copy()
-        if "functions" in params:
-            tools_configs = params.pop("functions")
-            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
-            params["tools"] = tools_configs
-
-        # Setup parameters
-        anthropic_params["messages"] = anthropic_messages
-        if "system" in params:
-            anthropic_params["system"] = params["system"]
-        if "tools" in params:
-            anthropic_params["tools"] = params["tools"]
-
-        # Remove None values
-        if anthropic_params["top_k"] is None:
-            del anthropic_params["top_k"]
-        if anthropic_params["top_p"] is None:
-            del anthropic_params["top_p"]
-        if anthropic_params["stop_sequences"] is None:
-            del anthropic_params["stop_sequences"]
-        if anthropic_params["tool_choice"] is None:
-            del anthropic_params["tool_choice"]
+        # Prepare Anthropic API parameters using helper
+        anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
 
         # Validate SDK version supports structured outputs beta
         validate_structured_outputs_version()
@@ -755,74 +827,20 @@ class AnthropicClient:
                 "schema": transformed_schema,
             }
             response = self._client.beta.messages.create(**anthropic_params)
-
         else:
             # Pydantic model - use parse() for automatic validation
             # parse() uses output_format parameter and manages beta header automatically
             anthropic_params["output_format"] = self._response_format
-
             response = self._client.beta.messages.parse(**anthropic_params)
 
-        # Process ALL content blocks - can have both tool calls and structured output
-        tool_calls = []
-        message_text = ""
-        anthropic_finish = "stop"
-
-        if response is not None:
-            # Determine finish reason
-            if response.stop_reason == "tool_use":
-                anthropic_finish = "tool_calls"
-
-            # Loop through ALL content blocks and process each
-            for content in response.content:
-                # Extract tool calls (handles both ToolUseBlock and BetaToolUseBlock)
-                if _is_tool_use_block(content):
-                    tool_calls.append(
-                        ChatCompletionMessageToolCall(
-                            id=content.id,
-                            function={"name": content.name, "arguments": json.dumps(content.input)},
-                            type="function",
-                        )
-                    )
-                # Extract text content (handles both TextBlock and BetaTextBlock)
-                elif _is_text_block(content):
-                    # For dict schemas, extract text directly
-                    if isinstance(self._response_format, dict):
-                        message_text = content.text
-                    # For Pydantic models with parse(), get from parsed_output
-                    elif hasattr(response, "parsed_output"):
-                        parsed_response = response.parsed_output
-                        message_text = (
-                            parsed_response.model_dump_json()
-                            if hasattr(parsed_response, "model_dump_json")
-                            else str(parsed_response)
-                        )
-                    else:
-                        message_text = content.text
-
-            # Fallback: If using parse() and no text was found in content blocks,
-            # extract from parsed_output directly (if it's not None)
-            if (
-                not message_text
-                and hasattr(response, "parsed_output")
-                and response.parsed_output is not None
-                and not isinstance(self._response_format, dict)
-            ):
-                parsed_response = response.parsed_output
-                message_text = (
-                    parsed_response.model_dump_json()
-                    if hasattr(parsed_response, "model_dump_json")
-                    else str(parsed_response)
-                )
+        # Process response content using helper (extracts tool calls, text, finish reason)
+        # Pass is_native_structured_output=True to handle parsed_output correctly
+        message_text, tool_calls, anthropic_finish = self._process_response_content(
+            response, is_native_structured_output=True
+        )
 
         # Build and return ChatCompletion
-        return self._build_chat_completion(
-            response,
-            message_text,
-            tool_calls=tool_calls if tool_calls else None,
-            finish_reason=anthropic_finish,
-            anthropic_params=anthropic_params,
-        )
+        return self._build_chat_completion(response, message_text, tool_calls, anthropic_finish, anthropic_params)
 
     def _create_with_json_mode(self, params: dict[str, Any]) -> ChatCompletion:
         """Create completion using legacy JSON Mode with <json_response> tags.
@@ -836,42 +854,21 @@ class AnthropicClient:
         Returns:
             ChatCompletion with JSON output extracted from tags
         """
+        # Convert tools to functions format if needed
         if "tools" in params:
             converted_functions = self.convert_tools_to_functions(params["tools"])
             params["functions"] = params.get("functions", []) + converted_functions
 
+        # Add response format instructions to system message before message conversion
+        self._add_response_format_to_system(params)
+
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
 
-        anthropic_params = self.load_config(params)
+        # Prepare Anthropic API parameters using helper
+        anthropic_params = self._prepare_anthropic_params(params, anthropic_messages)
 
-        # TODO: support stream
-        params = params.copy()
-        if "functions" in params:
-            tools_configs = params.pop("functions")
-            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
-            params["tools"] = tools_configs
-
-        # Add response format instructions to system message (after conversion extracts system messages and after copy)
-        self._add_response_format_to_system(params)
-
-        # Setup parameters
-        anthropic_params["messages"] = anthropic_messages
-        if "system" in params:
-            anthropic_params["system"] = params["system"]
-        if "tools" in params:
-            anthropic_params["tools"] = params["tools"]
-
-        # Remove None values
-        if anthropic_params["top_k"] is None:
-            del anthropic_params["top_k"]
-        if anthropic_params["top_p"] is None:
-            del anthropic_params["top_p"]
-        if anthropic_params["stop_sequences"] is None:
-            del anthropic_params["stop_sequences"]
-        if anthropic_params["tool_choice"] is None:
-            del anthropic_params["tool_choice"]
-
+        # Call Anthropic API
         response = self._client.messages.create(**anthropic_params)
 
         # Extract JSON from <json_response> tags
@@ -1244,6 +1241,135 @@ def process_message_content(message: dict[str, Any]) -> str | list[dict[str, Any
     return content
 
 
+def _extract_system_message(message: dict[str, Any], params: dict[str, Any]) -> None:
+    """Extract system message content and add to params['system'].
+
+    System messages are handled specially in Anthropic API - they're passed as a separate
+    'system' parameter rather than in the messages list.
+
+    Args:
+        message: Message dict with role='system'
+        params: Params dict to update with system content (modified in place)
+    """
+    content = process_message_content(message)
+    if isinstance(content, list):
+        # For system messages with images, concatenate only the text portions
+        text_content = " ".join(item.get("text", "") for item in content if item.get("type") == "text")
+        params["system"] = params.get("system", "") + (" " if "system" in params else "") + text_content
+    else:
+        params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + content
+
+
+def _convert_tool_call_message(
+    message: dict[str, Any],
+    has_tools: bool,
+    expected_role: str,
+    user_continue_message: dict[str, str],
+    processed_messages: list[dict[str, Any]],
+) -> tuple[int, int | None]:
+    """Convert OpenAI tool_calls format to Anthropic ToolUseBlock format.
+
+    Args:
+        message: Message dict containing 'tool_calls'
+        has_tools: Whether tools parameter is present in request
+        expected_role: Expected role based on message alternation ("user" or "assistant")
+        user_continue_message: Standard continue message for role alternation
+        processed_messages: List to append converted messages to (modified in place)
+
+    Returns:
+        Tuple of (tool_use_messages_count, last_tool_use_index)
+        - tool_use_messages_count: Number of tool use messages added (0 or count)
+        - last_tool_use_index: Index of last tool use message, or None if not using tools
+    """
+    # Map the tool call options to Anthropic's ToolUseBlock
+    tool_uses = []
+    tool_names = []
+    tool_use_count = 0
+
+    for tool_call in message["tool_calls"]:
+        tool_uses.append(
+            ToolUseBlock(
+                type="tool_use",
+                id=tool_call["id"],
+                name=tool_call["function"]["name"],
+                input=json.loads(tool_call["function"]["arguments"]),
+            )
+        )
+        if has_tools:
+            tool_use_count += 1
+        tool_names.append(tool_call["function"]["name"])
+
+    # Ensure role alternation: if we expect user, insert user continue message
+    if expected_role == "user":
+        processed_messages.append(user_continue_message)
+
+    # Add tool use message (format depends on whether tools are enabled)
+    if has_tools:
+        processed_messages.append({"role": "assistant", "content": tool_uses})
+        last_tool_use_index = len(processed_messages) - 1
+        return tool_use_count, last_tool_use_index
+    else:
+        # Not using tools, so put in a plain text message
+        processed_messages.append({
+            "role": "assistant",
+            "content": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]",
+        })
+        return 0, None
+
+
+def _convert_tool_result_message(
+    message: dict[str, Any],
+    has_tools: bool,
+    expected_role: str,
+    assistant_continue_message: dict[str, str],
+    processed_messages: list[dict[str, Any]],
+    last_tool_result_index: int,
+) -> tuple[int, int]:
+    """Convert OpenAI tool result format to Anthropic tool_result format.
+
+    Args:
+        message: Message dict containing 'tool_call_id'
+        has_tools: Whether tools parameter is present in request
+        expected_role: Expected role based on message alternation ("user" or "assistant")
+        assistant_continue_message: Standard continue message for role alternation
+        processed_messages: List to append converted messages to (modified in place)
+        last_tool_result_index: Index of last tool result message (-1 if none)
+
+    Returns:
+        Tuple of (tool_result_messages_count, updated_last_tool_result_index)
+        - tool_result_messages_count: 1 if tool result added, 0 otherwise
+        - updated_last_tool_result_index: New index of last tool result message
+    """
+    if has_tools:
+        # Map the tool usage call to tool_result for Anthropic
+        tool_result = {
+            "type": "tool_result",
+            "tool_use_id": message["tool_call_id"],
+            "content": message["content"],
+        }
+
+        # If the previous message also had a tool_result, add it to that
+        # Otherwise append a new message
+        if last_tool_result_index == len(processed_messages) - 1:
+            processed_messages[-1]["content"].append(tool_result)
+        else:
+            if expected_role == "assistant":
+                # Insert an extra assistant message as we will append a user message
+                processed_messages.append(assistant_continue_message)
+
+            processed_messages.append({"role": "user", "content": [tool_result]})
+            last_tool_result_index = len(processed_messages) - 1
+
+        return 1, last_tool_result_index
+    else:
+        # Not using tools, so put in a plain text message
+        processed_messages.append({
+            "role": "user",
+            "content": f"Running the function returned: {message['content']}",
+        })
+        return 0, last_tool_result_index
+
+
 @require_optional_import("anthropic", "anthropic")
 def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str, Any]]:
     """Convert messages from OAI format to Anthropic format.
@@ -1267,75 +1393,30 @@ def oai_messages_to_anthropic_messages(params: dict[str, Any]) -> list[dict[str,
     last_tool_result_index = -1
     for message in params["messages"]:
         if message["role"] == "system":
-            content = process_message_content(message)
-            if isinstance(content, list):
-                # For system messages with images, concatenate only the text portions
-                text_content = " ".join(item.get("text", "") for item in content if item.get("type") == "text")
-                params["system"] = params.get("system", "") + (" " if "system" in params else "") + text_content
-            else:
-                params["system"] = params.get("system", "") + ("\n" if "system" in params else "") + content
+            _extract_system_message(message, params)
         else:
             # New messages will be added here, manage role alternations
             expected_role = "user" if len(processed_messages) % 2 == 0 else "assistant"
 
             if "tool_calls" in message:
-                # Map the tool call options to Anthropic's ToolUseBlock
-                tool_uses = []
-                tool_names = []
-                for tool_call in message["tool_calls"]:
-                    tool_uses.append(
-                        ToolUseBlock(
-                            type="tool_use",
-                            id=tool_call["id"],
-                            name=tool_call["function"]["name"],
-                            input=json.loads(tool_call["function"]["arguments"]),
-                        )
-                    )
-                    if has_tools:
-                        tool_use_messages += 1
-                    tool_names.append(tool_call["function"]["name"])
-
-                if expected_role == "user":
-                    # Insert an extra user message as we will append an assistant message
-                    processed_messages.append(user_continue_message)
-
-                if has_tools:
-                    processed_messages.append({"role": "assistant", "content": tool_uses})
-                    last_tool_use_index = len(processed_messages) - 1
-                else:
-                    # Not using tools, so put in a plain text message
-                    processed_messages.append({
-                        "role": "assistant",
-                        "content": f"Some internal function(s) that could be used: [{', '.join(tool_names)}]",
-                    })
+                # Convert OpenAI tool_calls to Anthropic ToolUseBlock format
+                count, index = _convert_tool_call_message(
+                    message, has_tools, expected_role, user_continue_message, processed_messages
+                )
+                tool_use_messages += count
+                if index is not None:
+                    last_tool_use_index = index
             elif "tool_call_id" in message:
-                if has_tools:
-                    # Map the tool usage call to tool_result for Anthropic
-                    tool_result = {
-                        "type": "tool_result",
-                        "tool_use_id": message["tool_call_id"],
-                        "content": message["content"],
-                    }
-
-                    # If the previous message also had a tool_result, add it to that
-                    # Otherwise append a new message
-                    if last_tool_result_index == len(processed_messages) - 1:
-                        processed_messages[-1]["content"].append(tool_result)
-                    else:
-                        if expected_role == "assistant":
-                            # Insert an extra assistant message as we will append a user message
-                            processed_messages.append(assistant_continue_message)
-
-                        processed_messages.append({"role": "user", "content": [tool_result]})
-                        last_tool_result_index = len(processed_messages) - 1
-
-                    tool_result_messages += 1
-                else:
-                    # Not using tools, so put in a plain text message
-                    processed_messages.append({
-                        "role": "user",
-                        "content": f"Running the function returned: {message['content']}",
-                    })
+                # Convert OpenAI tool result to Anthropic tool_result format
+                count, last_tool_result_index = _convert_tool_result_message(
+                    message,
+                    has_tools,
+                    expected_role,
+                    assistant_continue_message,
+                    processed_messages,
+                    last_tool_result_index,
+                )
+                tool_result_messages += count
             elif message["content"] == "":
                 # Ignoring empty messages
                 pass
