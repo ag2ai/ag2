@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+import logging
 import warnings
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -44,6 +46,19 @@ VALID_SIZES = {
     "dall-e-3": ["1024x1024", "1024x1792", "1792x1024"],
     "dall-e-2": ["1024x1024", "512x512", "256x256"],
 }
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ApplyPatchCallOutput:
+    call_id: str
+    status: str
+    output: str
+    type: str = "apply_patch_call_output"
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
 
 
 def calculate_openai_image_cost(
@@ -202,6 +217,72 @@ class OpenAIResponsesClient:
             params["text"] = {"verbosity": verbosity}
         return params
 
+    def _apply_patch_operation(self, operation: dict[str, Any], call_id: str, agent=None) -> ApplyPatchCallOutput:
+        """Apply a patch operation and return apply_patch_call_output dict.
+
+        Args:
+            operation: Dictionary containing the patch operation with keys:
+                - type: "create_file", "update_file", or "delete_file"
+                - path: File path
+                - diff: Diff string (for create_file and update_file)
+            call_id: The call_id for this patch operation
+            agent: Optional agent instance to get ApplyPatchTool from
+
+        Returns:
+            Dict with type, call_id, status, and output keys matching apply_patch_call_output format
+        """
+        # Try to find ApplyPatchTool from the agent
+        editor = None
+        if agent is not None:
+            # Import here to avoid circular imports
+            from autogen.tools.apply_patch_tool import ApplyPatchTool
+
+            # Look for ApplyPatchTool in agent's tools
+            tools = getattr(agent, "_tools", [])
+
+            for tool_idx, tool in enumerate(tools):
+                if isinstance(tool, ApplyPatchTool):
+                    editor = tool.editor
+                    break
+
+        # If no tool found, create a default WorkspaceEditor with current working directory
+        if editor is None:
+            import os
+
+            from autogen.tools.apply_patch_tool import WorkspaceEditor
+
+            editor = WorkspaceEditor(workspace_dir=os.getcwd())
+
+        op_type = operation.get("type")
+        import asyncio
+
+        try:
+            # Execute the patch operation
+            if op_type == "create_file":
+                result = asyncio.run(editor.create_file(operation))
+            elif op_type == "update_file":
+                result = asyncio.run(editor.update_file(operation))
+            elif op_type == "delete_file":
+                result = asyncio.run(editor.delete_file(operation))
+            else:
+                return ApplyPatchCallOutput(
+                    call_id=call_id,
+                    status="failed",
+                    output=f"Unknown operation type: {op_type}",
+                )
+            # Return in the correct format
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status=result.get("status", "failed"),
+                output=result.get("output", ""),
+            )
+        except Exception as e:
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status="failed",
+                output=f"Error applying patch: {str(e)}",
+            )
+
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
@@ -212,55 +293,134 @@ class OpenAIResponsesClient:
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
+        apply_patch_tool_params = {"type": "apply_patch"}
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
-        # Back-compat: transform messages → input if needed ------------------
+        # Check previous response for apply_patch_call items that need outputs
+        # This handles the case where the previous response contained apply_patch_call items
+        previous_apply_patch_calls = {}
+        if self.previous_response_id is not None:
+            try:
+                # Retrieve the previous response to check for apply_patch_call items
+                previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
+                previous_output = getattr(previous_response, "output", [])
+
+                # Extract apply_patch_call items from previous response
+                for item in previous_output:
+                    if hasattr(item, "model_dump"):
+                        item = item.model_dump()
+                    if item.get("type") == "apply_patch_call":
+                        call_id = item.get("call_id")
+                        if call_id:
+                            previous_apply_patch_calls[call_id] = item
+            except Exception as e:
+                logger.debug(f"[apply_patch] Could not retrieve previous response: {e}")
+
         if "messages" in params and "input" not in params:
             msgs = self._get_delta_messages(params.pop("messages"))
             input_items = []
+            apply_patch_call_ids = {}
+            # First, add any apply_patch_call items from previous response
+            if self.previous_response_id is not None and previous_apply_patch_calls:
+                apply_patch_call_ids.update(previous_apply_patch_calls)
+
+            # Then check messages for apply_patch_call items
+            for msg_idx, msg in enumerate(msgs):
+                role = msg.get("role")
+                logger.debug(f"[apply_patch] Message {msg_idx}: role={role}")
+
+                if role == "assistant":
+                    content = msg.get("content", [])
+                    if isinstance(content, list):
+                        for item_idx, item in enumerate(content):
+                            # Check for apply_patch_call in content items
+                            if isinstance(item, dict):
+                                item_type = item.get("type")
+                                if item_type == "apply_patch_call":
+                                    call_id = item.get("call_id")
+                                    if call_id:
+                                        apply_patch_call_ids[call_id] = item
+                    tool_calls = msg.get("tool_calls", [])
+
+                    if isinstance(tool_calls, list):
+                        for tool_call_idx, tool_call in enumerate(tool_calls):
+                            if isinstance(tool_call, dict):
+                                tool_call_type = tool_call.get("type")
+                                if tool_call_type == "apply_patch_call":
+                                    call_id = tool_call.get("call_id")
+                                    if call_id:
+                                        apply_patch_call_ids[call_id] = tool_call
+
+            # FIRST: Generate outputs for ALL apply_patch_call items and add them to the beginning
+            # This ensures they're available before any user/assistant messages that might reference them
+            apply_patch_outputs = []
+            if apply_patch_call_ids:
+                for call_id, apply_patch_call in apply_patch_call_ids.items():
+                    operation = apply_patch_call.get("operation", {})
+                    if operation:  # Only process if we have an operation
+                        # Apply the patch operation and get the full output dict
+                        output = self._apply_patch_operation(operation, call_id=call_id, agent=params.get("agent"))
+                        apply_patch_outputs.append(output.to_dict())
+
+            # Add all apply_patch_call_outputs at the beginning of input_items
+            input_items.extend(apply_patch_outputs)
+
             for m in msgs[::-1]:  # reverse the list to get the last item first
                 role = m.get("role", "user")
                 # First, we need to convert the content to the Responses API format
                 content = m.get("content")
                 blocks = []
                 if role != "tool":
+                    # Determine content type based on role: assistant uses output_text, user uses input_text
+                    content_type = "output_text" if role == "assistant" else "input_text"
                     if isinstance(content, list):
                         for c in content:
-                            if c.get("type") in ["input_text", "text"]:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
+                            if c.get("type") in ["input_text", "text", "output_text"]:
+                                # Use the appropriate type based on role, or preserve output_text if already set
+                                if c.get("type") == "output_text" or role == "assistant":
+                                    blocks.append({"type": "output_text", "text": c.get("text")})
+                                else:
+                                    blocks.append({"type": "input_text", "text": c.get("text")})
                             elif c.get("type") == "input_image":
                                 blocks.append({"type": "input_image", "image_url": c.get("image_url")})
                             elif c.get("type") == "image_params":
                                 for k, v in c.get("image_params", {}).items():
                                     if k in self.image_output_params:
                                         image_generation_tool_params[k] = v
+                            elif c.get("type") == "apply_patch_call":
+                                # Skip apply_patch_call items in assistant messages - we've already processed them above
+                                # Don't include them in the content blocks
+                                continue
                             else:
                                 raise ValueError(f"Invalid content type: {c.get('type')}")
                     else:
-                        blocks.append({"type": "input_text", "text": content})
+                        blocks.append({"type": content_type, "text": content})
                     input_items.append({"role": role, "content": blocks})
 
                 else:
-                    if input_items:
-                        break
-                    # tool call response is the last item in the list
+                    # tool call response - but apply_patch_call items are NOT tool messages
+                    # They're content items, so we skip them here
+                    tool_call_id = m.get("tool_call_id", None)
                     content = content_str(m.get("content"))
-                    input_items.append({
-                        "type": "function_call_output",
-                        "call_id": m.get("tool_call_id", None),
-                        "output": content,
-                    })
-                    break
 
-            # Ensure we have at least one valid input item
-            if input_items:
-                params["input"] = input_items[::-1]
-            else:
-                # If no valid input items were created, create a default one
-                # This prevents the API error about missing required parameters
-                params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
+                    # Check if this tool output corresponds to an apply_patch_call
+                    # (This shouldn't happen for apply_patch, but keep for other tool types)
+                    if tool_call_id and tool_call_id in apply_patch_call_ids:
+                        # This case should already be handled above, but if we get here, skip it
+                        continue
+                    else:
+                        # Regular function call output
+                        input_items.append({
+                            "type": "function_call_output",
+                            "call_id": tool_call_id,
+                            "output": content,
+                        })
+
+            # Reverse input_items so that apply_patch_call_outputs come first, then messages in chronological order
+            # (We added outputs first, then messages in reverse, so reversing gives us: outputs, then messages in order)
+            params["input"] = input_items[::-1]
 
         # Initialize tools list
         tools_list = []
@@ -271,6 +431,8 @@ class OpenAIResponsesClient:
                 tools_list.append(image_generation_tool_params)
             if "web_search" in built_in_tools:
                 tools_list.append(web_search_tool_params)
+            if "apply_patch" in built_in_tools:
+                tools_list.append(apply_patch_tool_params)
 
         if "tools" in params:
             for tool in params["tools"]:
@@ -402,8 +564,20 @@ class OpenAIResponsesClient:
                 })
                 continue
 
+            if item_type == "apply_patch_call":
+                tool_call_args = {
+                    "id": item.get("id"),
+                    "role": "tool_calls",
+                    "type": "apply_patch_call",
+                    "call_id": item.get("call_id"),
+                    "status": item.get("status", "in_progress"),
+                    "operation": item.get("operation", {}),
+                }
+                content.append(tool_call_args)
+                continue
+
             # ------------------------------------------------------------------
-            # 3) Built-in tool calls
+            # 4) Built-in tool calls
             # ------------------------------------------------------------------
             if item_type and item_type.endswith("_call"):
                 tool_name = item_type.replace("_call", "")
@@ -430,7 +604,7 @@ class OpenAIResponsesClient:
                 continue
 
             # ------------------------------------------------------------------
-            # 4) Fallback - store raw dict so information isn't lost
+            # 5) Fallback - store raw dict so information isn't lost
             # ------------------------------------------------------------------
             content.append(item)
 
