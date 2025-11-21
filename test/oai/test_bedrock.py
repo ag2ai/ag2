@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
-from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
+from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, format_tools, oai_messages_to_bedrock_messages
 
 
 # Fixtures for mock data
@@ -341,3 +341,91 @@ def test_oai_messages_to_bedrock_messages(bedrock_client: BedrockClient):
     ]
 
     assert messages == expected_messages, "'Please continue' message was not appended."
+
+
+def test_format_tools_handles_various_property_shapes():
+    """format_tools should faithfully copy every supported JSON Schema shape (scalars, enums, unions, arrays, nested objects)."""
+    cases = [
+        (
+            "simple_type",
+            {"type": "string", "description": "plain type"},
+            {"type": "string", "description": "plain type"},
+        ),
+        (
+            "enum_default",
+            {"type": "integer", "enum": [1, 2], "default": 1},
+            {"type": "integer", "enum": [1, 2], "default": 1, "description": ""},
+        ),
+        (
+            "union_anyof",
+            {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "default": None,
+                "description": "optional text",
+            },
+            {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "default": None,
+                "description": "optional text",
+            },
+        ),
+        (
+            "array_items",
+            {"type": "array", "items": {"type": "number"}, "minItems": 1},
+            {"type": "array", "items": {"type": "number"}, "minItems": 1, "description": ""},
+        ),
+        (
+            "object_additional",
+            {
+                "type": "object",
+                "additionalProperties": {"type": "boolean"},
+                "required": [],
+            },
+            {
+                "type": "object",
+                "additionalProperties": {"type": "boolean"},
+                "description": "",
+            },
+        ),
+    ]
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "schema_tester",
+                "description": "verifies schema copying",
+                "parameters": {
+                    "type": "object",
+                    "properties": {name: prop for name, prop, _ in cases},
+                },
+            },
+        }
+    ]
+
+    converted_props = format_tools(tools)["tools"][0]["toolSpec"]["inputSchema"]["json"]["properties"]
+
+    for name, _, expected in cases:
+        assert converted_props[name] == expected, f"schema mismatch for {name}"
+
+
+def test_format_tools_rejects_non_dict_properties():
+    """format_tools should raise TypeError when a property schema is not a dict, mirroring runtime validation."""
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "bad_prop",
+                "description": "schema with malformed property",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "oops": "not a dict",
+                    },
+                },
+            },
+        }
+    ]
+
+    with pytest.raises(TypeError, match="Property 'oops' schema must be a dict"):
+        format_tools(tools)

@@ -534,10 +534,34 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
             }
 
             for prop_name, prop_details in function["parameters"]["properties"].items():
-                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = {
-                    "type": prop_details["type"],
-                    "description": prop_details.get("description", ""),
-                }
+                if not isinstance(prop_details, dict):
+                    raise TypeError(f"Property '{prop_name}' schema must be a dict, got {type(prop_details)!r}")
+
+                prop_schema: dict[str, Any] = {"description": prop_details.get("description", "")}
+
+                for key in (
+                    "type",
+                    "enum",
+                    "default",
+                    "anyOf",
+                    "oneOf",
+                    "allOf",
+                    "items",
+                    "const",
+                    "format",
+                    "minimum",
+                    "maximum",
+                    "minItems",
+                    "maxItems",
+                    "minLength",
+                    "maxLength",
+                    "pattern",
+                    "additionalProperties",
+                ):
+                    if key in prop_details:
+                        prop_schema[key] = prop_details[key]
+
+                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = prop_schema
                 if "enum" in prop_details:
                     converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name]["enum"] = prop_details[
                         "enum"
