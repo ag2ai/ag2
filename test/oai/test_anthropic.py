@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
+import logging
+
 import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
@@ -19,6 +21,8 @@ with optional_import_block() as result:
 from typing import Literal
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -1376,3 +1380,82 @@ def test_real_sdk_version_validation_on_strict_tools():
         # If SDK is too old, should get clear error message
         assert "anthropic>=0.74.1" in str(e)
         assert "Please upgrade" in str(e)
+
+
+# ==============================================================================
+# Real API Call Tests for Extended Thinking
+# ==============================================================================
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_extended_thinking_api_call():
+    """Real API call test for extended thinking feature with ThinkingBlock."""
+    import os
+
+    # Create client
+    client = AnthropicClient(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    # Test with a complex reasoning problem that benefits from extended thinking
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [
+            {
+                "role": "user",
+                "content": """A farmer has 17 sheep. All but 9 die. How many sheep are left alive?
+Think through this step by step, being careful about the wording.""",
+            }
+        ],
+        "max_tokens": 8000,  # Must be greater than thinking.budget_tokens
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 3000,  # Budget for internal reasoning
+        },
+    }
+
+    # Make API call with extended thinking enabled
+    response = client.create(params)
+
+    # Verify response structure
+    assert response is not None
+    assert response.choices is not None
+    assert len(response.choices) > 0
+
+    # Get message content
+    message = response.choices[0].message
+    assert message.content is not None
+
+    content = message.content
+    logger.info("\n=== Extended Thinking Response ===")
+    logger.info(content)
+    logger.info("=== End Response ===\n")
+
+    # Verify both thinking and text content are present
+    # The response should contain "[Thinking]" prefix when ThinkingBlock is present
+    assert isinstance(content, str)
+    assert len(content) > 0
+
+    # Check if thinking was included (indicated by [Thinking] prefix)
+    has_thinking = "[Thinking]" in content
+
+    # Verify the answer is correct (9 sheep are left alive)
+    assert "9" in content
+
+    # If thinking was included, verify it's properly formatted
+    if has_thinking:
+        # Should have [Thinking] prefix followed by thinking content, then regular response
+        assert content.startswith("[Thinking]")
+        # Should have multiple parts (thinking + text)
+        parts = content.split("\n\n", 1)
+        assert len(parts) >= 1
+
+    # Verify cost tracking includes thinking tokens if present
+    assert response.cost is not None
+    assert response.cost >= 0
+
+    # Verify token usage
+    assert response.usage is not None
+    assert response.usage.total_tokens > 0
+    assert response.usage.prompt_tokens > 0
+    assert response.usage.completion_tokens > 0

@@ -93,7 +93,7 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex, BadRequestError
     from anthropic import __version__ as anthropic_version
-    from anthropic.types import Message, TextBlock, ToolUseBlock
+    from anthropic.types import Message, TextBlock, ThinkingBlock, ToolUseBlock
 
     # Import transform_schema for structured outputs (SDK >= 0.74.1)
     try:
@@ -289,6 +289,28 @@ def _is_tool_use_block(content: Any) -> bool:
 
     # Fallback: check by name if type comparison fails
     if content_type_name in ("ToolUseBlock", "BetaToolUseBlock"):
+        return True
+
+    return False
+
+
+def _is_thinking_block(content: Any) -> bool:
+    """Check if a content block is a thinking block (extended thinking).
+
+    Args:
+        content: Content block to check
+
+    Returns:
+        True if content is a ThinkingBlock
+    """
+    content_type = type(content)
+    content_type_name = content_type.__name__
+
+    if content_type == ThinkingBlock:
+        return True
+
+    # Fallback: check by name if type comparison fails
+    if content_type_name == "ThinkingBlock":
         return True
 
     return False
@@ -564,6 +586,9 @@ class AnthropicClient:
             finish_reason = "tool_calls"
 
         # Process all content blocks
+        thinking_content = ""
+        text_content = ""
+
         for content in response.content:
             # Extract tool calls (handles both ToolUseBlock and BetaToolUseBlock)
             if _is_tool_use_block(content):
@@ -574,6 +599,11 @@ class AnthropicClient:
                         type="function",
                     )
                 )
+            # Extract thinking content (extended thinking feature)
+            elif _is_thinking_block(content):
+                if thinking_content:
+                    thinking_content += "\n\n"
+                thinking_content += content.thinking
             # Extract text content (handles both TextBlock and BetaTextBlock)
             elif _is_text_block(content):
                 # For native structured output, prefer parsed_output from parse() if available
@@ -584,7 +614,7 @@ class AnthropicClient:
                     and response.parsed_output is not None
                 ):
                     parsed_response = response.parsed_output
-                    message_text = (
+                    text_content = (
                         parsed_response.model_dump_json()
                         if hasattr(parsed_response, "model_dump_json")
                         else str(parsed_response)
@@ -592,7 +622,17 @@ class AnthropicClient:
                 else:
                     # Use text content from BetaTextBlock (when using create() with dict schema)
                     # or regular TextBlock (non-SO responses)
-                    message_text = content.text
+                    if text_content:
+                        text_content += "\n\n"
+                    text_content += content.text
+
+        # Combine thinking and text content
+        if thinking_content and text_content:
+            message_text = f"[Thinking]\n{thinking_content}\n\n{text_content}"
+        elif thinking_content:
+            message_text = f"[Thinking]\n{thinking_content}"
+        elif text_content:
+            message_text = text_content
 
         # Fallback: If using native SO parse() and no text was found in content blocks,
         # extract from parsed_output directly (if it's not None)
@@ -1154,11 +1194,14 @@ Your JSON must:
         if not self._response_format:
             return response
 
-        # Extract content from response - find first text block (handles both legacy and beta)
+        # Extract content from response - check both thinking and text blocks
         content = ""
         if response.content:
             for block in response.content:
-                if _is_text_block(block):
+                if _is_thinking_block(block):
+                    content = block.thinking
+                    break
+                elif _is_text_block(block):
                     content = block.text
                     break
 
