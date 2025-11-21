@@ -13,7 +13,7 @@ from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicClient, AnthropicLLMConfigEntry, _calculate_cost
 
 with optional_import_block() as result:
-    from anthropic.types import Message, TextBlock
+    from anthropic.types import Message, TextBlock, ThinkingBlock
 
 
 from typing import Literal
@@ -291,6 +291,35 @@ def test_extract_json_response(anthropic_client):
 
     with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
         anthropic_client._extract_json_response(no_json_response)
+
+    # Test case 5: Plain JSON without tags, using ThinkingBlock - SHOULD STILL PASS
+    plain_response = Message(
+        id="msg_123",
+        content=[
+            ThinkingBlock(
+                signature="json_response",
+                thinking="""Here's the solution:
+            {
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }""",
+                type="thinking",
+            )
+        ],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(plain_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
