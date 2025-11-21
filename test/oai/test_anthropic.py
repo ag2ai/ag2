@@ -1275,20 +1275,20 @@ def test_real_combined_strict_tools_and_structured_output():
 
     response = client.create(params)
 
-    # When both strict tools and structured output are configured,
-    # Claude will choose which feature to use for the response:
-    # - Either make a tool call (BetaToolUseBlock)
-    # - OR provide structured output (BetaTextBlock)
-    # Both content types are processed via beta API with the same header
+    # When both strict tools and structured output are configured with beta.messages.create,
+    # Claude chooses which feature to use based on the prompt:
+    # - Either makes tool calls (BetaToolUseBlock), OR
+    # - Provides structured output (BetaTextBlock)
+    # Both are processed via beta API with the structured-outputs-2025-11-13 header
     message = response.choices[0].message
 
     # Verify at least one content type is present
     has_tool_calls = message.tool_calls is not None and len(message.tool_calls) > 0
     has_structured_output = message.content and message.content.strip()
 
-    assert has_tool_calls or has_structured_output, "Should have either tool calls or structured output"
+    assert has_tool_calls or has_structured_output, "Should have either tool calls OR structured output"
 
-    # If we got tool calls, verify strict tool validation worked
+    # If tool calls are present, verify strict typing
     if has_tool_calls:
         tool_call = message.tool_calls[0]
         assert tool_call.function.name == "calculate", "Tool call should be for calculate function"
@@ -1302,12 +1302,12 @@ def test_real_combined_strict_tools_and_structured_output():
             "divide",
         ], "Operation should be valid enum value"
 
-    # If we got structured output, verify the format
+    # If structured output is present, verify schema compliance
     if has_structured_output:
         result = CalculationResult.model_validate_json(message.content)
         assert result.problem, "Should have problem description"
         assert len(result.steps) > 0, "Should have calculation steps"
-        assert isinstance(result.result, float), "Result should be a number"
+        assert isinstance(result.result, (int, float)), "Result should be a number"
         assert result.verification, "Should have verification"
 
 

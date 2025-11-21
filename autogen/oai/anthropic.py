@@ -576,18 +576,22 @@ class AnthropicClient:
                 )
             # Extract text content (handles both TextBlock and BetaTextBlock)
             elif _is_text_block(content):
-                # For native structured output with parsed_output
-                if is_native_structured_output and hasattr(response, "parsed_output"):
+                # For native structured output, prefer parsed_output from parse() if available
+                # Otherwise use the text content from the BetaTextBlock (from create() with dict schema)
+                if (
+                    is_native_structured_output
+                    and hasattr(response, "parsed_output")
+                    and response.parsed_output is not None
+                ):
                     parsed_response = response.parsed_output
-                    if parsed_response is not None:
-                        message_text = (
-                            parsed_response.model_dump_json()
-                            if hasattr(parsed_response, "model_dump_json")
-                            else str(parsed_response)
-                        )
-                    else:
-                        message_text = content.text
+                    message_text = (
+                        parsed_response.model_dump_json()
+                        if hasattr(parsed_response, "model_dump_json")
+                        else str(parsed_response)
+                    )
                 else:
+                    # Use text content from BetaTextBlock (when using create() with dict schema)
+                    # or regular TextBlock (non-SO responses)
                     message_text = content.text
 
         # Fallback: If using native SO parse() and no text was found in content blocks,
@@ -819,17 +823,22 @@ class AnthropicClient:
                 "Anthropic SDK does not support beta.messages API. Please upgrade to anthropic>=0.39.0"
             )
 
-        # Use parse() for Pydantic models (recommended), create() for dict schemas
-        if isinstance(self._response_format, dict):
-            # Dict schema - use create() with output_format
+        # When both tools and structured output are configured, must use create() (not parse())
+        # parse() doesn't support tools, so we convert Pydantic models to dict schemas
+        has_tools = "tools" in anthropic_params and anthropic_params["tools"]
+
+        if has_tools or isinstance(self._response_format, dict):
+            # Use create() with output_format for:
+            # 1. Dict schemas (always)
+            # 2. Pydantic models when tools are present (parse() doesn't support tools)
             anthropic_params["output_format"] = {
                 "type": "json_schema",
                 "schema": transformed_schema,
             }
             response = self._client.beta.messages.create(**anthropic_params)
         else:
-            # Pydantic model - use parse() for automatic validation
-            # parse() uses output_format parameter and manages beta header automatically
+            # Pydantic model without tools - use parse() for automatic validation
+            # parse() provides parsed_output attribute for direct model access
             anthropic_params["output_format"] = self._response_format
             response = self._client.beta.messages.parse(**anthropic_params)
 
