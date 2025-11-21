@@ -9,6 +9,8 @@
 
 from typing import Any, Literal
 
+from pydantic import Field
+
 from ._models import BaseModel
 from .chat_completion_audio import ChatCompletionAudio
 from .chat_completion_message_tool_call import (
@@ -55,7 +57,9 @@ class FunctionCall(BaseModel):
 
 
 class ChatCompletionMessage(BaseModel):
-    content: str | dict[str, Any] | list[dict[str, Any]] | None = None
+    content: str | dict[str, Any] | list[dict[str, Any]] | None = Field(
+        default=None, json_schema_extra={"anyOf": [{"type": "string"}, {"type": "null"}]}
+    )
     """The contents of the message.
 
     Can be a string for text-only messages, a dict for structured content,

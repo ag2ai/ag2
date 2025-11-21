@@ -168,7 +168,7 @@ class OpenAIRealtimeWebRTCClient(RealtimeClientBase):
                 "Content-Type": "application/json",
             }
             data = {
-                # "model": "gpt-4o-realtime-preview-2024-12-17",
+                # "model": "gpt-4o-realtime-preview-2025-06-03",
                 "model": self._model,
                 "voice": self._voice,
             }
