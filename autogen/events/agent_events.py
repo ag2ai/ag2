@@ -17,7 +17,7 @@ from ..agentchat.agent import LLMMessageType
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..oai.client import OpenAIWrapper
-from .base_event import BaseEvent, wrap_event
+from .base_event import BaseEvent, resolve_print_callable, wrap_event
 
 with optional_import_block() as result:
     from PIL.Image import Image
@@ -62,7 +62,7 @@ class BasePrintReceivedEvent(BaseEvent, ABC):
     recipient: str
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         f(f"{colored(self.sender, 'yellow')} (to {self.recipient}):\n", flush=True)
 
 
@@ -73,7 +73,7 @@ class FunctionResponseEvent(BasePrintReceivedEvent):
     content: str | int | float | bool
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         super().print(f)
 
         id = self.name or "No id found"
@@ -91,7 +91,7 @@ class ToolResponse(BaseModel):
     content: str | int | float | bool
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         id = self.tool_call_id or "No id found"
         tool_print = f"***** Response from calling {self.role} ({id}) *****"
         f(colored(tool_print, "green"), flush=True)
@@ -106,7 +106,7 @@ class ToolResponseEvent(BasePrintReceivedEvent):
     content: str | int | float | bool
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         super().print(f)
 
         for tool_response in self.tool_responses:
@@ -119,7 +119,7 @@ class FunctionCall(BaseModel):
     arguments: str | None = None
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         name = self.name or "(No function name found)"
         arguments = self.arguments or "(No arguments found)"
@@ -141,7 +141,7 @@ class FunctionCallEvent(BasePrintReceivedEvent):
     function_call: FunctionCall
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         super().print(f)
 
         if self.content is not None:
@@ -158,7 +158,7 @@ class ToolCall(BaseModel):
     type: str
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         id = self.id or "No tool call id found"
 
@@ -186,7 +186,7 @@ class ToolCallEvent(BasePrintReceivedEvent):
     tool_calls: list[ToolCall]
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         super().print(f)
 
         if self.content is not None:
@@ -226,7 +226,7 @@ class TextEvent(BasePrintReceivedEvent):
         return content
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         super().print(f)
 
         if self.content is not None:
@@ -363,7 +363,7 @@ class PostCarryoverProcessingEvent(BaseEvent):
         return ("\n").join(print_carryover)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         print_carryover = self._process_carryover()
 
@@ -400,7 +400,7 @@ class ClearAgentsHistoryEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         if self.agent:
             if self.nr_events_to_preserve:
@@ -450,7 +450,7 @@ class SpeakerAttemptSuccessfulEvent(BaseEvent):
         }
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         selected_agent_name = next(iter(self.mentions))
         f(
@@ -497,7 +497,7 @@ class SpeakerAttemptFailedMultipleAgentsEvent(BaseEvent):
         }
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -543,7 +543,7 @@ class SpeakerAttemptFailedNoAgentsEvent(BaseEvent):
         }
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -580,7 +580,7 @@ class GroupChatResumeEvent(BaseEvent):
         }
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             f"Prepared group chat with {len(self.events)} events, the last speaker is",
@@ -602,7 +602,7 @@ class GroupChatRunChatEvent(BaseEvent):
         return {"uuid": self.uuid, "speaker": self.speaker, "silent": not self.verbose}
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(colored(f"\nNext speaker: {self.speaker}\n", "green"), flush=True)
 
@@ -632,7 +632,7 @@ class TerminationAndHumanReplyNoInputEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(colored(f"\n>>>>>>>> {self.no_human_input_msg}", "red"), flush=True)
 
@@ -660,7 +660,7 @@ class UsingAutoReplyEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(colored("\n>>>>>>>> USING AUTO REPLY...", "red"), flush=True)
 
@@ -689,7 +689,7 @@ class TerminationEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(colored(f"\n>>>>>>>> TERMINATING RUN ({str(self.uuid)}): {self.termination_reason}", "red"), flush=True)
 
@@ -719,7 +719,7 @@ class ExecuteCodeBlockEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -755,7 +755,7 @@ class ExecuteFunctionEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -797,7 +797,7 @@ class ExecutedFunctionEvent(BaseEvent):
         self.is_exec_success = is_exec_success
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -817,7 +817,7 @@ class SelectSpeakerEvent(BaseEvent):
         super().__init__(uuid=uuid, agents=agents)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f("Please select the next speaker from the following list:")
         agents = self.agents or []
@@ -835,7 +835,7 @@ class SelectSpeakerTryCountExceededEvent(BaseEvent):
         super().__init__(uuid=uuid, try_count=try_count, agents=agents)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(f"You have tried {self.try_count} times. The next speaker will be selected automatically.")
 
@@ -849,7 +849,7 @@ class SelectSpeakerInvalidInputEvent(BaseEvent):
         super().__init__(uuid=uuid, agents=agents)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(f"Invalid input. Please enter a number between 1 and {len(self.agents or [])}.")
 
@@ -877,7 +877,7 @@ class ClearConversableAgentHistoryEvent(BaseEvent):
         }
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         for _ in range(self.no_events_preserved):
             f(f"Preserving one more event for {self.agent} to not divide history between tool call and tool response.")
@@ -894,7 +894,7 @@ class ClearConversableAgentHistoryWarningEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(
             colored(
@@ -932,7 +932,7 @@ class GenerateCodeExecutionReplyEvent(BaseEvent):
         )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         num_code_blocks = len(self.code_blocks)
         if num_code_blocks == 1:
@@ -961,7 +961,7 @@ class ConversableAgentUsageSummaryNoCostIncurredEvent(BaseEvent):
         super().__init__(uuid=uuid, recipient=recipient.name if hasattr(recipient, "name") else recipient)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(f"No cost incurred from agent '{self.recipient}'.")
 
@@ -974,7 +974,7 @@ class ConversableAgentUsageSummaryEvent(BaseEvent):
         super().__init__(uuid=uuid, recipient=recipient.name if hasattr(recipient, "name") else recipient)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         f(f"Agent '{self.recipient}':")
 
