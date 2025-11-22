@@ -51,7 +51,9 @@ def _create_test_multimodal_content() -> list[dict[str, Any]]:
         {"type": "text", "text": "Analyze this data visualization:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -63,7 +65,7 @@ def _create_test_multimodal_content_responses_api() -> list[dict[str, Any]]:
         {"type": "text", "text": "Analyze this data visualization:"},
         {
             "type": "input_image",
-            "image_url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg",
+            "image_url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png",
         },
     ]
 
@@ -162,7 +164,9 @@ def test_two_agent_multimodal_conversation(credentials_gpt_4o_mini: Credentials)
         },
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -229,7 +233,9 @@ def test_group_chat_multimodal_content(credentials_gpt_4o_mini: Credentials) -> 
         {"type": "text", "text": "Team, please review this product interface design:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
         {"type": "text", "text": " Please provide your expert feedback."},
     ]
@@ -288,7 +294,9 @@ def test_sequential_chat_multimodal_carryover(credentials_gpt_4o_mini: Credentia
         {"type": "text", "text": "Analyze this system architecture diagram:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -354,7 +362,9 @@ def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials
         [
             {
                 "type": "image_url",
-                "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+                "image_url": {
+                    "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+                },
             }
         ],
         # Mixed content - using real image URLs
@@ -362,7 +372,9 @@ def test_multimodal_content_str_integration(credentials_gpt_4o_mini: Credentials
             {"type": "text", "text": "Start: "},
             {
                 "type": "image_url",
-                "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+                "image_url": {
+                    "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+                },
             },
             {"type": "text", "text": " End."},
         ],
@@ -523,7 +535,9 @@ def test_error_handling_multimodal_integration(credentials_gpt_4o_mini: Credenti
         {"type": "text", "text": "This is valid multimodal content"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -724,7 +738,9 @@ def test_run_group_chat_multimodal(credentials_gpt_4o_mini: Credentials) -> None
         {"type": "text", "text": "Review this system diagram:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -771,7 +787,9 @@ def test_pattern_based_multimodal_orchestration(credentials_gpt_4o_mini: Credent
         {"type": "text", "text": "Evaluate this design:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 
@@ -858,7 +876,9 @@ def test_group_chat_context_variables_multimodal(credentials_gpt_4o_mini: Creden
         {"type": "text", "text": "Process this content for session analysis:"},
         {
             "type": "image_url",
-            "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"},
+            "image_url": {
+                "url": "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
+            },
         },
     ]
 

@@ -144,14 +144,14 @@ def test_capture_multimodal_vision_response(credentials_gpt_4o_mini: Credentials
     client = OpenAI(api_key=api_key)
 
     # Make vision API call with image
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "What animal is in this image? Answer in one word."},
+                    {"type": "text", "text": "What color is this image? Answer in one word."},
                     {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }
