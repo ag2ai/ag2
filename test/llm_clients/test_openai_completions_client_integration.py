@@ -411,7 +411,7 @@ class TestOpenAICompletionsClientImageInput:
     def test_image_url_input(self, openai_completions_client):
         """Test image input with URL."""
         # Use a public domain image URL
-        image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+        image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
 
         response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support vision
@@ -419,7 +419,7 @@ class TestOpenAICompletionsClientImageInput:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What animal is in this image? Answer in one word."},
+                        {"type": "text", "text": "What color is this image? Answer in one word."},
                         {"type": "image_url", "image_url": {"url": image_url}},
                     ],
                 }
@@ -429,7 +429,7 @@ class TestOpenAICompletionsClientImageInput:
 
         # Verify response
         assert len(response.text) > 0
-        assert "dog" in response.text.lower() or "schnauzer" in response.text.lower()
+        assert "blue" in response.text.lower()
 
     @pytest.mark.openai
     @run_for_optional_imports("openai", "openai")
@@ -438,7 +438,7 @@ class TestOpenAICompletionsClientImageInput:
     )
     def test_image_description(self, openai_completions_client):
         """Test detailed image description."""
-        image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+        image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
 
         response = openai_completions_client.create({
             "model": "gpt-4o-mini",  # gpt-4o models support vision
