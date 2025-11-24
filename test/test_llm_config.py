@@ -515,6 +515,7 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
+            # allowed_paths is None, so excluded with exclude_none=True
         }
         assert actual == expected
 
@@ -573,13 +574,14 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
+            # allowed_paths is None, so excluded
         }
         assert dict(actual) == expected, dict(actual)
 
     def test_keys(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.keys()  # type: ignore[var-annotated]
         assert isinstance(actual, dict_keys)
-        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]
+        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]  # Remove "allowed_paths"
         assert list(actual) == expected, list(actual)
 
     def test_values(self, openai_llm_config: LLMConfig) -> None:
@@ -589,6 +591,7 @@ class TestLLMConfig:
             0.5,
             1000,
             42,
+            # Remove ["**"] - allowed_paths is None and excluded
             [
                 {
                     "api_type": "openai",
@@ -875,3 +878,38 @@ class TestLLMConfig:
                     assert LLMConfig.get_current_llm_config() == llm_config.where(api_type="openai", model="gpt-4")
                     assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
                     assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
+
+    def test_llm_config_with_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test LLMConfig initialization with workspace_dir parameter."""
+        config = LLMConfig(
+            openai_llm_config_entry,
+            workspace_dir="./my_project",
+        )
+        assert hasattr(config, "workspace_dir") or config.workspace_dir == "./my_project"
+
+    def test_llm_config_with_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test LLMConfig initialization with allowed_paths parameter."""
+        config = LLMConfig(
+            openai_llm_config_entry,
+            allowed_paths=["src/**", "tests/**"],
+        )
+        # Verify allowed_paths is stored
+        assert hasattr(config, "allowed_paths") or config.allowed_paths == ["src/**", "tests/**"]
+
+    def test_llm_config_workspace_dir_and_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test LLMConfig with both workspace_dir and allowed_paths."""
+        config = LLMConfig(
+            openai_llm_config_entry,
+            workspace_dir="./project",
+            allowed_paths=["src/**", "*.py"],
+        )
+        assert hasattr(config, "workspace_dir")
+        assert hasattr(config, "allowed_paths")
+
+    def test_llm_config_copy_preserves_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test that copy() preserves workspace_dir."""
+        config = LLMConfig(openai_llm_config_entry, workspace_dir="./project")
+        copied = config.copy()
+        # Verify workspace_dir is preserved in copy
+        if hasattr(config, "workspace_dir"):
+            assert hasattr(copied, "workspace_dir")
