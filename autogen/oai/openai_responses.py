@@ -4,6 +4,7 @@
 
 import copy
 import logging
+import os
 import warnings
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
@@ -220,7 +221,9 @@ class OpenAIResponsesClient:
             params["reasoning"] = {"effort": reasoning_effort}
         return params
 
-    def _apply_patch_operation(self, operation: dict[str, Any], call_id: str, agent=None) -> ApplyPatchCallOutput:
+    def _apply_patch_operation(
+        self, operation: dict[str, Any], call_id: str, agent=None, workspace_dir=os.getcwd()
+    ) -> ApplyPatchCallOutput:
         """Apply a patch operation and return apply_patch_call_output dict.
 
         Args:
@@ -230,6 +233,7 @@ class OpenAIResponsesClient:
                 - diff: Diff string (for create_file and update_file)
             call_id: The call_id for this patch operation
             agent: Optional agent instance to get ApplyPatchTool from
+            workspace_dir: a dedicated path for workspace directory
 
         Returns:
             Dict with type, call_id, status, and output keys matching apply_patch_call_output format
@@ -250,11 +254,9 @@ class OpenAIResponsesClient:
 
         # If no tool found, create a default WorkspaceEditor with current working directory
         if editor is None:
-            import os
-
             from autogen.tools.apply_patch_tool import WorkspaceEditor
 
-            editor = WorkspaceEditor(workspace_dir=os.getcwd())
+            editor = WorkspaceEditor(workspace_dir=workspace_dir)
 
         op_type = operation.get("type")
         import asyncio
@@ -292,12 +294,18 @@ class OpenAIResponsesClient:
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
         """
+        from pprint import pprint
+
+        print("params: ")
+        pprint(params)
         params = params.copy()
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
         apply_patch_tool_params = {"type": "apply_patch"}
+        workspace_dir = params.pop("workspace_dir", None)
 
+        print("workspace_dir2", workspace_dir)
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
@@ -364,7 +372,10 @@ class OpenAIResponsesClient:
                     operation = apply_patch_call.get("operation", {})
                     if operation:  # Only process if we have an operation
                         # Apply the patch operation and get the full output dict
-                        output = self._apply_patch_operation(operation, call_id=call_id, agent=params.get("agent"))
+                        print("workspace_dir1", workspace_dir)
+                        output = self._apply_patch_operation(
+                            operation, call_id=call_id, agent=params.get("agent"), workspace_dir=workspace_dir
+                        )
                         apply_patch_outputs.append(output.to_dict())
 
             # Add all apply_patch_call_outputs at the beginning of input_items

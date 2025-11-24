@@ -72,6 +72,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         tools: Iterable[Any] = (),
         functions: Iterable[Any] = (),
         routing_method: Literal["fixed_order", "round_robin"] | None = None,
+        workspace_dir: str | None = None,
         config_list: Annotated[
             Iterable[ConfigItem] | dict[str, Any],
             deprecated(
@@ -107,7 +108,8 @@ class LLMConfig(metaclass=MetaLLMConfig):
             max_tokens: The maximum number of tokens to generate.
             top_p: The nucleus sampling probability.
             routing_method: The method used to route requests (e.g., fixed_order, round_robin).
-            **kwargs: Additional keyword arguments for\ future extensions.
+            workspace_dir: Set a workspace dir for 'apply_patch' tool.
+            **kwargs: Additional keyword arguments for future extensions.
 
         Examples:
             ```python
@@ -190,6 +192,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         application_level_options = app_config.model_dump(exclude_none=True)
 
         final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
+        # Use kwargs_for_config instead of kwargs to exclude workspace_dir from config processing
         for c in filter(bool, (*configs, *config_list, kwargs)):
             if isinstance(c, LLMConfigEntry):
                 final_config_list.append(c.apply_application_config(app_config))
@@ -201,7 +204,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
                     **application_level_options,
                     **c,
                 })
-
         self._model = _LLMConfig(
             **application_level_options,
             config_list=final_config_list,
@@ -215,6 +217,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
             functions=functions or [],
             parallel_tool_calls=parallel_tool_calls,
             routing_method=routing_method,
+            workspace_dir=workspace_dir,
         )
 
     @classmethod
@@ -332,6 +335,10 @@ class LLMConfig(metaclass=MetaLLMConfig):
         kwargs = self.model_dump()
         del kwargs["config_list"]
 
+        # Preserve workspace_dir if it exists
+        if hasattr(self, "workspace_dir") and self.workspace_dir is not None:
+            kwargs["workspace_dir"] = self.workspace_dir
+
         return LLMConfig(*filtered_config_list, **kwargs)
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
@@ -444,7 +451,7 @@ class _LLMConfig(ApplicationConfig):
     timeout: int | None
     cache_seed: int | None
     parallel_tool_calls: bool | None
-
+    workspace_dir: str | None = None
     tools: list[Any]
     functions: list[Any]
 

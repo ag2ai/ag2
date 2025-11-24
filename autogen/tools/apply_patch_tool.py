@@ -157,6 +157,7 @@ class WorkspaceEditor:
             workspace_dir: Root directory for file operations
             allowed_paths: List of allowed path patterns (for security)
         """
+        print("workspace_dir", workspace_dir)
         self.workspace_dir = Path(workspace_dir).resolve()
         # Use "**" to match all files and directories recursively (including root)
         self.allowed_paths = allowed_paths or ["**"]
@@ -174,7 +175,8 @@ class WorkspaceEditor:
             ValueError: If path is invalid or outside workspace, or not in allowed_paths
         """
         full_path = (self.workspace_dir / path).resolve()
-
+        print("workspace_dir", self.workspace_dir)
+        print("full_path", full_path)
         # Security: Ensure path is within workspace
         if not str(full_path).startswith(str(self.workspace_dir)):
             raise ValueError(f"Path {path} is outside workspace directory")
