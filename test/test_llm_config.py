@@ -515,6 +515,7 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
+            # allowed_paths is None, so excluded with exclude_none=True
         }
         assert actual == expected
 
@@ -573,13 +574,14 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
+            # allowed_paths is None, so excluded
         }
         assert dict(actual) == expected, dict(actual)
 
     def test_keys(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.keys()  # type: ignore[var-annotated]
         assert isinstance(actual, dict_keys)
-        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]
+        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]  # Remove "allowed_paths"
         assert list(actual) == expected, list(actual)
 
     def test_values(self, openai_llm_config: LLMConfig) -> None:
