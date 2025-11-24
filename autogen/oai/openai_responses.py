@@ -279,10 +279,6 @@ class OpenAIResponsesClient:
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
         """
-        from pprint import pprint
-
-        print("params: ")
-        pprint(params)
         params = params.copy()
 
         image_generation_tool_params = {"type": "image_generation"}
@@ -358,7 +354,6 @@ class OpenAIResponsesClient:
                     operation = apply_patch_call.get("operation", {})
                     if operation:  # Only process if we have an operation
                         # Apply the patch operation and get the full output dict
-                        print("workspace_dir1", workspace_dir)
                         output = self._apply_patch_operation(
                             operation, call_id=call_id, workspace_dir=workspace_dir, allowed_paths=allowed_paths
                         )
