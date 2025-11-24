@@ -73,6 +73,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         functions: Iterable[Any] = (),
         routing_method: Literal["fixed_order", "round_robin"] | None = None,
         workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = ["**"],
         config_list: Annotated[
             Iterable[ConfigItem] | dict[str, Any],
             deprecated(
@@ -217,6 +218,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
             parallel_tool_calls=parallel_tool_calls,
             routing_method=routing_method,
             workspace_dir=workspace_dir,
+            allowed_paths=allowed_paths,
         )
 
     @classmethod
