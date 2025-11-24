@@ -547,10 +547,6 @@ class OpenAIResponsesClient:
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
         """
-        from pprint import pprint
-
-        print("params: ")
-        pprint(params)
         params = params.copy()
 
         image_generation_tool_params = {"type": "image_generation"}
