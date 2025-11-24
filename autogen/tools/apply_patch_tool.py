@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import fnmatch
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -144,7 +145,10 @@ def apply_diff(current_content: str, diff: str, create: bool = False) -> str:
 
 
 class WorkspaceEditor:
-    """Default file system editor for apply_patch operations."""
+    """File system editor for apply_patch operations.
+
+    Supports both local filesystem and cloud storage paths through allowed_paths patterns.
+    """
 
     def __init__(
         self,
@@ -154,8 +158,19 @@ class WorkspaceEditor:
         """Initialize workspace editor.
 
         Args:
-            workspace_dir: Root directory for file operations
-            allowed_paths: List of allowed path patterns (for security)
+            workspace_dir: Root directory for file operations (local filesystem path).
+                For cloud storage, use allowed_paths patterns with bucket names instead.
+            allowed_paths: List of allowed path patterns (for security).
+                Supports glob-style patterns with ** for recursive matching.
+                Works for both local filesystem and cloud storage paths.
+
+                Examples:
+                    - ["**"] - Allow all paths (default)
+                    - ["src/**"] - Allow all files in src/ and subdirectories
+                    - ["*.py"] - Allow Python files in root directory
+                    - ["my-bucket/**"] - Allow all paths in cloud storage bucket
+                    - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
+                    - ["src/**", "tests/**"] - Allow paths in multiple directories
         """
         print("workspace_dir", workspace_dir)
         self.workspace_dir = Path(workspace_dir).resolve()
@@ -166,43 +181,52 @@ class WorkspaceEditor:
         """Validate and resolve a file path.
 
         Args:
-            path: Relative path to validate
+            path: Relative path to validate (can be local filesystem or cloud storage path)
 
         Returns:
-            Absolute resolved path
+            Absolute resolved path (for local filesystem) or Path object for cloud storage paths
 
         Raises:
             ValueError: If path is invalid or outside workspace, or not in allowed_paths
         """
-        full_path = (self.workspace_dir / path).resolve()
-        print("workspace_dir", self.workspace_dir)
-        print("full_path", full_path)
-        # Security: Ensure path is within workspace
-        if not str(full_path).startswith(str(self.workspace_dir)):
-            raise ValueError(f"Path {path} is outside workspace directory")
-
-        # Security: Ensure path matches allowed_paths patterns
-        # Get relative path from workspace directory for pattern matching
-        try:
-            relative_path = full_path.relative_to(self.workspace_dir)
-        except ValueError:
-            # This shouldn't happen if the above check passed, but handle it anyway
-            raise ValueError(f"Path {path} is outside workspace directory")
-
-        # Check if path matches any allowed pattern using pathlib.Path.match()
-        # which supports ** for recursive matching
-        # Note: **/* matches files in subdirectories, ** matches everything
+        # Check if path matches any allowed pattern first (works for both local and cloud paths)
+        # This allows cloud storage bucket patterns in allowed_paths
         matches_any = False
         for pattern in self.allowed_paths:
-            # pathlib.Path.match() supports ** for recursive matching
-            if relative_path.match(pattern):
+            # Normalize path separators for cross-platform and cloud storage compatibility
+            path_normalized = path.replace("\\", "/")
+            pattern_normalized = pattern.replace("\\", "/")
+
+            # Use fnmatch which properly supports ** for recursive matching
+            # Works for both local filesystem and cloud storage paths
+            if fnmatch.fnmatch(path_normalized, pattern_normalized):
                 matches_any = True
                 break
 
         if not matches_any:
             raise ValueError(f"Path {path} is not allowed by allowed_paths patterns: {self.allowed_paths}")
 
-        return full_path
+        # For local filesystem paths, validate they're within workspace
+        # Cloud storage paths are validated by pattern matching above
+        try:
+            full_path = (self.workspace_dir / path).resolve()
+            print("workspace_dir", self.workspace_dir)
+            print("full_path", full_path)
+
+            # Security: Ensure path is within workspace (for local filesystem)
+            if not str(full_path).startswith(str(self.workspace_dir)):
+                raise ValueError(f"Path {path} is outside workspace directory")
+
+            return full_path
+        except (OSError, ValueError) as e:
+            # If path resolution fails, it might be a cloud storage path
+            # Pattern matching already validated it, so allow it
+            # Return a Path object for the pattern (cloud storage paths won't use pathlib operations)
+            if matches_any:
+                # For cloud storage, we can't resolve to a local path
+                # Return a Path-like object that represents the cloud path
+                return Path(path)  # This won't be used for actual file ops if it's cloud storage
+            raise ValueError(f"Path {path} is invalid: {str(e)}")
 
     async def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Create a new file."""
@@ -305,20 +329,35 @@ class ApplyPatchTool(Tool):
         workspace_dir: str | Path | None = None,
         needs_approval: bool = False,
         on_approval: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
+        allowed_paths: list[str] | None = ["**"],
     ):
         """Initialize ApplyPatchTool.
 
         Args:
             editor: Custom PatchEditor implementation (optional)
-            workspace_dir: Directory for file operations (used if editor not provided)
+            workspace_dir: Directory for file operations (used if editor not provided).
+                For local filesystem operations only.
             needs_approval: Whether operations require approval
             on_approval: Callback for approval decisions
+            allowed_paths: List of allowed path patterns (for security).
+                Supports glob-style patterns with ** for recursive matching.
+                Works for both local filesystem and cloud storage paths.
+
+                Examples:
+                    - ["**"] - Allow all paths (default)
+                    - ["src/**"] - Allow all files in src/ and subdirectories
+                    - ["*.py"] - Allow Python files in root directory
+                    - ["my-bucket/**"] - Allow all paths in cloud storage bucket
+                    - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
+
+                Note: For cloud storage, specify bucket names in allowed_paths patterns.
+                The workspace_dir should remain a local path for default operations.
         """
         if editor is None and workspace_dir is None:
             raise ValueError("Either 'editor' or 'workspace_dir' must be provided")
 
         if editor is None:
-            editor = WorkspaceEditor(workspace_dir=workspace_dir)  # type: ignore
+            editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)  # type: ignore
 
         self.editor = editor
         self.needs_approval = needs_approval

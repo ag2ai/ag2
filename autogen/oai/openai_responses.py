@@ -219,7 +219,11 @@ class OpenAIResponsesClient:
         return params
 
     def _apply_patch_operation(
-        self, operation: dict[str, Any], call_id: str, agent=None, workspace_dir=os.getcwd()
+        self,
+        operation: dict[str, Any],
+        call_id: str,
+        workspace_dir: str = os.getcwd(),
+        allowed_paths: list[str] = ["**"],
     ) -> ApplyPatchCallOutput:
         """Apply a patch operation and return apply_patch_call_output dict.
 
@@ -229,31 +233,15 @@ class OpenAIResponsesClient:
                 - path: File path
                 - diff: Diff string (for create_file and update_file)
             call_id: The call_id for this patch operation
-            agent: Optional agent instance to get ApplyPatchTool from
             workspace_dir: a dedicated path for workspace directory
+            allowed_paths: list of allowed paths for the workspace directory
 
         Returns:
             Dict with type, call_id, status, and output keys matching apply_patch_call_output format
         """
-        # Try to find ApplyPatchTool from the agent
-        editor = None
-        if agent is not None:
-            # Import here to avoid circular imports
-            from autogen.tools.apply_patch_tool import ApplyPatchTool
+        from autogen.tools.apply_patch_tool import WorkspaceEditor
 
-            # Look for ApplyPatchTool in agent's tools
-            tools = getattr(agent, "_tools", [])
-
-            for tool_idx, tool in enumerate(tools):
-                if isinstance(tool, ApplyPatchTool):
-                    editor = tool.editor
-                    break
-
-        # If no tool found, create a default WorkspaceEditor with current working directory
-        if editor is None:
-            from autogen.tools.apply_patch_tool import WorkspaceEditor
-
-            editor = WorkspaceEditor(workspace_dir=workspace_dir)
+        editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
 
         op_type = operation.get("type")
         import asyncio
@@ -301,6 +289,7 @@ class OpenAIResponsesClient:
         web_search_tool_params = {"type": "web_search_preview"}
         apply_patch_tool_params = {"type": "apply_patch"}
         workspace_dir = params.pop("workspace_dir", None)
+        allowed_paths = params.pop("allowed_paths", ["**"])
 
         print("workspace_dir2", workspace_dir)
         if self.previous_response_id is not None and "previous_response_id" not in params:
@@ -371,7 +360,7 @@ class OpenAIResponsesClient:
                         # Apply the patch operation and get the full output dict
                         print("workspace_dir1", workspace_dir)
                         output = self._apply_patch_operation(
-                            operation, call_id=call_id, agent=params.get("agent"), workspace_dir=workspace_dir
+                            operation, call_id=call_id, workspace_dir=workspace_dir, allowed_paths=allowed_paths
                         )
                         apply_patch_outputs.append(output.to_dict())
 
