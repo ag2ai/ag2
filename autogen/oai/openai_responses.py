@@ -547,6 +547,10 @@ class OpenAIResponsesClient:
         If the caller provided a classic *messages* array we convert it to the
         *input* format expected by the Responses API.
         """
+        from pprint import pprint
+
+        print("params: ")
+        pprint(params)
         params = params.copy()
 
         image_generation_tool_params = {"type": "image_generation"}
@@ -556,6 +560,7 @@ class OpenAIResponsesClient:
         allowed_paths = params.pop("allowed_paths", ["**"])
         built_in_tools = params.pop("built_in_tools", [])
 
+        print("workspace_dir2", workspace_dir)
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
