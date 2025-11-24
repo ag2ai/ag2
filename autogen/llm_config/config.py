@@ -73,6 +73,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
         functions: Iterable[Any] = (),
         routing_method: Literal["fixed_order", "round_robin"] | None = None,
         workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = ["**"],
         config_list: Annotated[
             Iterable[ConfigItem] | dict[str, Any],
             deprecated(
@@ -108,7 +109,19 @@ class LLMConfig(metaclass=MetaLLMConfig):
             max_tokens: The maximum number of tokens to generate.
             top_p: The nucleus sampling probability.
             routing_method: The method used to route requests (e.g., fixed_order, round_robin).
-            workspace_dir: Set a workspace dir for 'apply_patch' tool.
+            workspace_dir: Set a workspace dir for 'apply_patch' tool (local filesystem path).
+            allowed_paths: List of allowed path patterns (for security).
+                Supports glob-style patterns with ** for recursive matching.
+                Works for both local filesystem and cloud storage paths.
+
+                Examples:
+                    - ["**"] - Allow all paths (default)
+                    - ["src/**"] - Allow all files in src/ and subdirectories
+                    - ["my-bucket/**"] - Allow all paths in cloud storage bucket
+                    - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
+
+                Note: For cloud storage, specify bucket names in allowed_paths patterns.
+                The workspace_dir should remain a local path for default operations.
             **kwargs: Additional keyword arguments for future extensions.
 
         Examples:
@@ -218,6 +231,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
             parallel_tool_calls=parallel_tool_calls,
             routing_method=routing_method,
             workspace_dir=workspace_dir,
+            allowed_paths=allowed_paths,
         )
 
     @classmethod
@@ -334,11 +348,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
         kwargs = self.model_dump()
         del kwargs["config_list"]
-
-        # Preserve workspace_dir if it exists
-        if hasattr(self, "workspace_dir") and self.workspace_dir is not None:
-            kwargs["workspace_dir"] = self.workspace_dir
-
         return LLMConfig(*filtered_config_list, **kwargs)
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
@@ -452,6 +461,7 @@ class _LLMConfig(ApplicationConfig):
     cache_seed: int | None
     parallel_tool_calls: bool | None
     workspace_dir: str | None = None
+    allowed_paths: list[str] | None = ["**"]
     tools: list[Any]
     functions: list[Any]
 
