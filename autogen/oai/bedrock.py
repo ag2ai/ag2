@@ -227,9 +227,9 @@ class BedrockClient:
             Parsed JSON dict from __structured_output tool call, or None if not found.
         """
         for tool_call in tool_calls:
-            if tool_call.function["name"] == "__structured_output":
+            if tool_call.function.name == "__structured_output":
                 try:
-                    return json.loads(tool_call.function["arguments"])
+                    return json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError as e:
                     raise ValueError(f"Failed to parse structured output from tool call: {e!s}") from e
         return None
@@ -362,6 +362,7 @@ class BedrockClient:
 
             # Force the structured output tool
             tool_config["toolChoice"] = {"tool": {"name": "__structured_output"}}
+            has_tools = len(tool_config["tools"]) > 0
         else:
             has_tools = "tools" in params
             tool_config = format_tools(params["tools"] if has_tools else [])
