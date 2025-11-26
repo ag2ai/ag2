@@ -66,6 +66,13 @@ def get_max_token_limit(model: str = "gpt-3.5-turbo-0613") -> int:
         "gpt-5": 128000,
         "gpt-5-mini": 128000,
         "gpt-5-nano": 128000,
+        "gpt-5-pro": 128000,
+        "gpt-5-search-api": 128000,
+        "gpt-5.1": 128000,
+        "gpt-5.1-chat-latest": 128000,
+        "gpt-5.1-codex": 128000,
+        "gpt-5.1-codex-mini": 128000,
+        "codex-mini-latest": 128000,
     }
     return max_token_limit[model]
 
@@ -154,6 +161,9 @@ def _num_token_from_messages(messages: list[str] | dict[str, Any], model="gpt-3.
         return _num_token_from_messages(messages, model="gpt-3.5-turbo-0613")
     elif "gpt-4" in model:
         logger.info("gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
+        return _num_token_from_messages(messages, model="gpt-4-0613")
+    elif "gpt-5" in model:
+        logger.info("gpt-5 may update over time. Returning num tokens assuming gpt-4-0613.")
         return _num_token_from_messages(messages, model="gpt-4-0613")
     elif "gemini" in model:
         logger.info("Gemini is not supported in tiktoken. Returning num tokens assuming gpt-4-0613.")
