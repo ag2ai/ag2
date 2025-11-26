@@ -1,6 +1,9 @@
-from autogen import LLMConfig, ConversableAgent
 import os
+
 from dotenv import load_dotenv
+
+from autogen import ConversableAgent, LLMConfig
+
 load_dotenv()
 
 llm_config = LLMConfig(
