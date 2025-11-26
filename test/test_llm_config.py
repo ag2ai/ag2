@@ -515,7 +515,6 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
-            # allowed_paths is None, so excluded with exclude_none=True
         }
         assert actual == expected
 
@@ -574,14 +573,13 @@ class TestLLMConfig:
             "temperature": 0.5,
             "check_every_ms": 1000,
             "cache_seed": 42,
-            # allowed_paths is None, so excluded
         }
         assert dict(actual) == expected, dict(actual)
 
     def test_keys(self, openai_llm_config: LLMConfig) -> None:
         actual = openai_llm_config.keys()  # type: ignore[var-annotated]
         assert isinstance(actual, dict_keys)
-        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]  # Remove "allowed_paths"
+        expected = ["temperature", "check_every_ms", "cache_seed", "config_list"]
         assert list(actual) == expected, list(actual)
 
     def test_values(self, openai_llm_config: LLMConfig) -> None:
@@ -879,37 +877,102 @@ class TestLLMConfig:
                     assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
                     assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
 
-    def test_llm_config_with_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test LLMConfig initialization with workspace_dir parameter."""
-        config = LLMConfig(
-            openai_llm_config_entry,
+    def test_openai_llm_config_entry_with_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test OpenAILLMConfigEntry with workspace_dir parameter."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             workspace_dir="./my_project",
         )
-        assert hasattr(config, "workspace_dir") or config.workspace_dir == "./my_project"
+        assert entry.workspace_dir == "./my_project"
+        assert entry.model_dump()["workspace_dir"] == "./my_project"
 
-    def test_llm_config_with_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test LLMConfig initialization with allowed_paths parameter."""
-        config = LLMConfig(
-            openai_llm_config_entry,
+    def test_openai_llm_config_entry_with_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
+        """Test OpenAILLMConfigEntry with allowed_paths parameter."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             allowed_paths=["src/**", "tests/**"],
         )
-        # Verify allowed_paths is stored
-        assert hasattr(config, "allowed_paths") or config.allowed_paths == ["src/**", "tests/**"]
+        assert entry.allowed_paths == ["src/**", "tests/**"]
+        assert entry.model_dump()["allowed_paths"] == ["src/**", "tests/**"]
 
-    def test_llm_config_workspace_dir_and_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test LLMConfig with both workspace_dir and allowed_paths."""
-        config = LLMConfig(
-            openai_llm_config_entry,
+    def test_openai_llm_config_entry_workspace_dir_and_allowed_paths(self) -> None:
+        """Test OpenAILLMConfigEntry with both workspace_dir and allowed_paths."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             workspace_dir="./project",
             allowed_paths=["src/**", "*.py"],
         )
-        assert hasattr(config, "workspace_dir")
-        assert hasattr(config, "allowed_paths")
+        assert entry.workspace_dir == "./project"
+        assert entry.allowed_paths == ["src/**", "*.py"]
 
-    def test_llm_config_copy_preserves_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test that copy() preserves workspace_dir."""
-        config = LLMConfig(openai_llm_config_entry, workspace_dir="./project")
+        # Test that they're included in model_dump
+        dumped = entry.model_dump()
+        assert dumped["workspace_dir"] == "./project"
+        assert dumped["allowed_paths"] == ["src/**", "*.py"]
+
+    def test_openai_llm_config_entry_defaults_workspace_dir_and_allowed_paths(self) -> None:
+        """Test that workspace_dir and allowed_paths default to None."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+        )
+        assert entry.workspace_dir is None
+        assert entry.allowed_paths is None
+
+        # Test that None values are excluded from model_dump with exclude_none=True
+        dumped = entry.model_dump(exclude_none=True)
+        assert "workspace_dir" not in dumped
+        assert "allowed_paths" not in dumped
+
+    def test_llm_config_with_entry_workspace_dir_and_allowed_paths(self) -> None:
+        """Test LLMConfig with OpenAILLMConfigEntry containing workspace_dir and allowed_paths."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./project",
+            allowed_paths=["src/**"],
+        )
+        config = LLMConfig(entry)
+
+        # Verify they're in the config entry, not at LLMConfig level
+        assert config.config_list[0].workspace_dir == "./project"
+        assert config.config_list[0].allowed_paths == ["src/**"]
+
+        # Verify LLMConfig doesn't have these attributes
+        assert not hasattr(config, "workspace_dir")
+        assert not hasattr(config, "allowed_paths")
+
+    def test_llm_config_copy_preserves_entry_workspace_dir(self) -> None:
+        """Test that copy() preserves workspace_dir in config entry."""
+        entry = OpenAILLMConfigEntry(
+            model="gpt-4o-mini",
+            api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            workspace_dir="./project",
+        )
+        config = LLMConfig(entry)
         copied = config.copy()
-        # Verify workspace_dir is preserved in copy
-        if hasattr(config, "workspace_dir"):
-            assert hasattr(copied, "workspace_dir")
+
+        # Verify workspace_dir is preserved in the copied config entry
+        assert copied.config_list[0].workspace_dir == "./project"
+        assert copied.config_list[0].workspace_dir == config.config_list[0].workspace_dir
+
+    def test_llm_config_dict_with_workspace_dir_and_allowed_paths(self) -> None:
+        """Test LLMConfig with dict config containing workspace_dir and allowed_paths."""
+        config = LLMConfig({
+            "api_type": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
+            "workspace_dir": "./project",
+            "allowed_paths": ["src/**", "*.py"],
+        })
+
+        # Verify they're in the config entry
+        assert config.config_list[0].workspace_dir == "./project"
+        assert config.config_list[0].allowed_paths == ["src/**", "*.py"]
+
+        # Verify LLMConfig doesn't have these attributes
+        assert not hasattr(config, "workspace_dir")
+        assert not hasattr(config, "allowed_paths")

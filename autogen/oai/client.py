@@ -259,6 +259,8 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     max_completion_tokens: int | None
     workspace_dir: str | None
     allowed_paths: list[str] | None
+
+
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
 
