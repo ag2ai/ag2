@@ -1,0 +1,130 @@
+name: Claude Code Review
+
+on:
+  # For PRs from the same repository (fast path)
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+  # For PRs from forked repositories (secure path with secrets)
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+
+jobs:
+  # Job for same-repo PRs (can use OIDC if needed)
+  claude-review-same-repo:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout PR branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Checking out PR #${{ github.event.pull_request.number }}"
+          gh pr checkout ${{ github.event.pull_request.number }}
+          echo "✅ PR branch checked out successfully"
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            # Steps to run a Review:
+              1) Check if previous review is already done by Claude. If so, perform a re-reivew with the latest changes referring previous review.
+              2) If no previous review is found, perform a new review with the latest changes.
+
+            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+
+  # Job for forked PRs (no OIDC, token-based only)
+  claude-review-forked:
+    if: |
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      github.event.pull_request.draft == false
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      # Explicitly disable id-token to avoid OIDC flow
+
+    steps:
+      - name: Checkout repository (no credentials persisted)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout PR branch (forked PR)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⚠️  Forked PR detected - running in secure mode"
+          echo "PR from: ${{ github.event.pull_request.head.repo.full_name }}"
+          echo "Base repo: ${{ github.repository }}"
+          echo "Checking out PR #${{ github.event.pull_request.number }}"
+          gh pr checkout ${{ github.event.pull_request.number }}
+          echo "✅ PR branch checked out successfully"
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            # Steps to run a Review:
+              1) Check if previous review is already done by Claude. If so, perform a re-reivew with the latest changes referring previous review.
+              2) If no previous review is found, perform a new review with the latest changes.
+
+            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'

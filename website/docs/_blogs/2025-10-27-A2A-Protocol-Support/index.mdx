@@ -1,0 +1,531 @@
+---
+title: "A2A Protocol Support in AG2 v0.10"
+authors: [ag2]
+tags: [A2A, Distributed Agents, Interoperability]
+---
+
+![AG2 × A2A](img/ag2-a2a-banner.png)
+
+AG2 v0.10 introduces native support for the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org/latest/), enabling agents to communicate across different processes, frameworks, and languages through a standardized interface.
+
+This article walks through implementing A2A in AG2, with a focus on practical patterns for building distributed agent systems.
+
+<!-- more -->
+
+## What is A2A?
+
+A2A is a JSON-RPC 2.0 protocol over HTTP(S) for agent-to-agent communication. It provides a framework-agnostic interface that allows agents built with different tools (AG2, LangGraph, CrewAI, Semantic Kernel, Pydantic AI, etc.) to communicate without custom integration code.
+
+The protocol handles:
+- Task delegation and execution
+- Bidirectional communication between agents
+- Authentication and security
+- Observability and monitoring
+
+**When to use A2A:**
+
+Use A2A when you need to connect agents across:
+- Different processes or machines
+- Different teams or organizations
+- Different programming languages or frameworks
+- Services that require formal contracts between components
+
+Don't use A2A for simple in-process agent communication—standard AG2 patterns are more efficient for that.
+
+Note: AG2's A2A implementation uses the official [A2A Python SDK](https://github.com/a2aproject/a2a-python). Check their documentation for protocol-level details.
+
+## Implementation Example: Distributed Code Review
+
+Let's build a practical example: a distributed code review system where a specialized type-checking agent runs as a standalone service that multiple client workflows can access.
+
+This pattern is useful when:
+- You have specialized, computationally expensive tools (like mypy, linters, or analyzers)
+- Multiple workflows need the same capability
+- You want to scale the service independently
+- The agent should remain stateless and reusable
+
+### Server Implementation
+
+The server exposes an AG2 `ConversableAgent` as an A2A endpoint. Here's the complete implementation:
+
+```python
+import os
+import tempfile
+from mypy import api
+from autogen import ConversableAgent
+from autogen.a2a.server import A2aAgentServer
+
+def mypy_check(code: str) -> str:
+    """
+    Run mypy type checker on Python code and return results.
+
+    Implementation notes:
+    - Uses delete=False to avoid file locking issues on Windows
+    - Mypy reports errors on stderr, not stdout
+    - Returns stderr when exit_status != 0
+    """
+    fp = tempfile.NamedTemporaryFile('w', suffix='.py', delete=False)
+    try:
+        fp.write(code)
+        fp.close()  # Close so mypy can open it
+        stdout, stderr, exit_status = api.run([fp.name])
+    finally:
+        os.remove(fp.name)
+
+    if exit_status != 0:
+        return stderr
+    return stdout or "No issues found."
+
+# Create the base agent
+reviewer = ConversableAgent(
+    name="PythonReviewer",
+    system_message="""You are a Python code reviewer specializing in type safety.
+
+    When given code:
+    1. Use the mypy_check tool to analyze it
+    2. Interpret the mypy output
+    3. Provide specific recommendations for fixing type issues
+    4. Explain why the changes improve type safety
+
+    Be concise but thorough.""",
+    llm_config={
+        "model": "gpt-4.1",
+        "temperature": 0.1,  # Low temperature for consistent reviews
+    },
+)
+
+# Register the tool
+reviewer.register_for_llm(
+    name="mypy_check",
+    description="Check Python code for type errors using mypy"
+)(mypy_check)
+
+reviewer.register_for_execution(name="mypy_check")(mypy_check)
+
+# Wrap in A2A server
+server_wrapper = A2aAgentServer(agent=reviewer)
+server = server_wrapper.build()
+```
+
+Start the server with any ASGI server, like [uvicorn](https://www.uvicorn.org/):
+
+```bash
+uvicorn server:server --host 0.0.0.0 --port 8000
+```
+
+That's it. The agent is now accessible via A2A at `http://localhost:8000`.
+
+### Client Implementation
+
+The `A2aRemoteAgent` class provides a `ConversableAgent` interface to remote A2A services. From the client's perspective, it works like any other agent—the network communication is abstracted away.
+
+**Example 1: CLI-based code generation with review**
+
+```python
+import asyncio
+from autogen import ConversableAgent
+from autogen.a2a.client import A2aRemoteAgent
+
+async def generate_and_review():
+    # Local code generation agent
+    coder = ConversableAgent(
+        name="Coder",
+        system_message="""Generate Python code with type hints.
+        After generation, ask the reviewer to check it.""",
+        llm_config={"model": "gpt-4.1"},
+    )
+
+    # Remote reviewer via A2A
+    reviewer = A2aRemoteAgent(
+        name="RemoteReviewer",
+        url="http://localhost:8000",
+        description="Remote Python code reviewer",
+    )
+
+    # Two-agent conversation
+    response = await coder.a_run(
+        recipient=reviewer,
+        message="Generate a function to compute fibonacci numbers with full type hints",
+        max_turns=3,
+        summary_method="reflection_with_llm",
+    )
+
+    await response.process()
+    print(response.summary)
+
+asyncio.run(generate_and_review())
+```
+
+**Example 2: FastAPI integration**
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from autogen import ConversableAgent
+from autogen.a2a.client import A2aRemoteAgent
+
+app = FastAPI()
+
+class CodeReviewRequest(BaseModel):
+    code: str
+    context: str = ""
+
+@app.post("/review")
+async def review_code(request: CodeReviewRequest):
+    """Submit code for type checking via A2A."""
+    try:
+        reviewer = A2aRemoteAgent(
+            name="RemoteReviewer",
+            url="http://localhost:8000",
+        )
+
+        submitter = ConversableAgent(
+            name="Submitter",
+            system_message="Submit code for review",
+            llm_config={"model": "gpt-4.1"},
+            max_consecutive_auto_reply=0,  # Don't auto-reply
+        )
+
+        message = f"Review this code:\n\n```python\n{request.code}\n```"
+        if request.context:
+            message += f"\n\nContext: {request.context}"
+
+        response = await submitter.a_run(
+            recipient=reviewer,
+            message=message,
+            summary_method="reflection_with_llm",
+        )
+
+        await response.process()
+        return {"review": response.summary}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+**Example 3: Multi-workflow reuse**
+
+The same A2A server can be used by completely different workflows:
+
+```python
+# Workflow 1: Interactive code generation
+async def interactive_workflow():
+    coder = ConversableAgent(...)
+    reviewer = A2aRemoteAgent(url="http://localhost:8000")
+    # Interactive coding session with review feedback
+
+# Workflow 2: Batch code analysis
+async def batch_workflow(code_files: list[str]):
+    reviewer = A2aRemoteAgent(url="http://localhost:8000")
+    # Process multiple files through the same reviewer
+
+# Workflow 3: CI/CD integration
+async def ci_workflow(pull_request_code: str):
+    reviewer = A2aRemoteAgent(url="http://localhost:8000")
+    # Automated PR review
+```
+
+## Cross-Framework Interoperability
+
+A2A's primary value is enabling communication between agents built with different frameworks. Here's how to connect AG2 agents with agents from other frameworks.
+
+### Connecting to Pydantic AI Agents
+
+[Pydantic AI](https://ai.pydantic.dev/a2a/) has built-in A2A support. Here's how to use a Pydantic AI agent from AG2:
+
+```python
+# server.py (Pydantic AI)
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIModel
+
+agent = Agent(
+    model=OpenAIModel('gpt-4.1'),
+    system_prompt='You are a data analysis expert.',
+)
+
+# Expose via A2A (Pydantic AI's implementation)
+app = agent.create_a2a_server()
+
+# Run with: uvicorn server:app --port 8001
+```
+
+```python
+# client.py (AG2)
+from autogen.a2a.client import A2aRemoteAgent
+
+# Connect to the Pydantic AI agent
+data_analyst = A2aRemoteAgent(
+    name="DataAnalyst",
+    url="http://localhost:8001",
+    description="Data analysis agent built with Pydantic AI",
+)
+
+# Use it like any AG2 agent
+response = await my_ag2_agent.a_run(
+    recipient=data_analyst,
+    message="Analyze quarterly sales trends",
+    summary_method="reflection_with_llm",
+)
+
+await response.process()
+```
+
+The implementation framework is completely abstracted—your AG2 agent doesn't know or care that it's talking to a Pydantic AI agent.
+
+### Multi-Framework Workflows
+
+You can compose workflows that span multiple frameworks:
+
+```python
+# AG2 agent for orchestration
+orchestrator = ConversableAgent(
+    name="Orchestrator",
+    system_message="Coordinate analysis tasks across specialized agents",
+    llm_config={"model": "gpt-4"},
+)
+
+# Remote agents from different frameworks
+code_analyzer = A2aRemoteAgent(
+    url="http://ag2-service:8000",      # AG2 agent
+    name="CodeAnalyzer",
+)
+
+data_processor = A2aRemoteAgent(
+    url="http://pydantic-service:8001",  # Pydantic AI agent
+    name="DataProcessor",
+)
+
+report_generator = A2aRemoteAgent(
+    url="http://langgraph-service:8002", # LangGraph agent
+    name="ReportGenerator",
+)
+
+# Orchestrator can delegate to any of them
+# Each agent communicates via the same A2A protocol
+```
+
+## Implementation Considerations
+
+### Async-Only Interface
+
+**Important**: `A2aRemoteAgent` only supports asynchronous methods. This is a limitation of the underlying A2A client.
+
+```python
+# This works
+response = await agent.a_run(recipient=remote_agent, message="...")
+await response.process()
+
+# This will fail
+result = agent.run(recipient=remote_agent, message="...")  # ❌
+```
+
+If you need synchronous interfaces, wrap async calls:
+
+```python
+import asyncio
+
+async def async_chat(agent, remote_agent, message):
+    response = await agent.a_run(
+        recipient=remote_agent,
+        message=message,
+        summary_method="reflection_with_llm"
+    )
+    await response.process()
+    return response
+
+def sync_wrapper(agent, remote_agent, message):
+    return asyncio.run(async_chat(agent, remote_agent, message))
+```
+
+### Error Handling
+
+Network communication introduces failure modes that don't exist with in-process agents. Handle these explicitly:
+
+```python
+from httpx import HTTPError, TimeoutException
+
+async def robust_a2a_call(agent, remote_agent, message, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = await agent.a_run(
+                recipient=remote_agent,
+                message=message,
+                summary_method="reflection_with_llm",
+                timeout=30,  # Set appropriate timeouts
+            )
+            await response.process()
+            return response
+
+        except TimeoutException:
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
+        except HTTPError as e:
+            if e.response.status_code >= 500:
+                # Server error - retry
+                if attempt == max_retries - 1:
+                    raise
+                await asyncio.sleep(2 ** attempt)
+            else:
+                # Client error - don't retry
+                raise
+```
+
+### Authentication and Security
+
+For production deployments, implement proper authentication. The A2A protocol supports authentication headers:
+
+```python
+from autogen.a2a.client import A2aRemoteAgent
+
+reviewer = A2aRemoteAgent(
+    name="SecureReviewer",
+    url="https://secure-service.example.com",
+    headers={
+        "Authorization": "Bearer your-token-here",
+        "X-API-Key": "your-api-key",
+    },
+)
+```
+
+On the server side, implement authentication middleware:
+
+```python
+from fastapi import Request, HTTPException
+from autogen.a2a.server import A2aAgentServer
+
+async def auth_middleware(request: Request, call_next):
+    token = request.headers.get("Authorization")
+    if not validate_token(token):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return await call_next(request)
+
+# Add to your ASGI app
+app.middleware("http")(auth_middleware)
+```
+
+### Performance Considerations
+
+A2A adds network latency. Optimize for this:
+
+**1. Batch requests when possible:**
+
+```python
+# Instead of multiple round trips
+for code_snippet in snippets:
+    await review(code_snippet)  # N network calls
+
+# Batch into one request
+combined_code = "\n\n".join(snippets)
+await review(combined_code)  # 1 network call
+```
+
+**2. Use connection pooling:**
+
+The underlying `httpx` client pools connections automatically, but configure limits appropriately:
+
+```python
+import httpx
+
+# Configure the client
+client = httpx.AsyncClient(
+    limits=httpx.Limits(
+        max_keepalive_connections=20,
+        max_connections=100,
+    ),
+    timeout=30.0,
+)
+```
+
+**3. Consider caching for deterministic operations:**
+
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=128)
+def cached_review(code_hash: str) -> str:
+    # Cache results for identical code
+    return asyncio.run(review_code(code))
+```
+
+### Monitoring and Observability
+
+Instrument your A2A calls:
+
+```python
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def monitored_a2a_call(agent, remote_agent, message):
+    start = time.time()
+    try:
+        response = await agent.a_run(
+            recipient=remote_agent,
+            message=message,
+            summary_method="reflection_with_llm"
+        )
+        await response.process()
+        duration = time.time() - start
+        logger.info(f"A2A call succeeded in {duration:.2f}s")
+        return response
+    except Exception as e:
+        duration = time.time() - start
+        logger.error(f"A2A call failed after {duration:.2f}s: {e}")
+        raise
+```
+
+## Server Configuration
+
+For production A2A servers, consider these configuration options:
+
+```python
+from autogen.a2a.server import A2aAgentServer, CardSettings
+
+server_wrapper = A2aAgentServer(
+    agent=reviewer,
+    agent_card=CardSettings(
+        name="Production Reviewer",
+        description="Production code review service supporting Python with type checking and style analysis",
+        version="1.0.0",
+    ),
+)
+server = server_wrapper.build()
+```
+
+Configure the ASGI server appropriately:
+
+```bash
+# Production configuration
+uvicorn server:server \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 4 \
+    --timeout-keep-alive 30 \
+    --limit-concurrency 100 \
+    --access-log \
+    --log-level info
+```
+
+## Getting Started
+
+1. **Install AG2 v0.10+**:
+   ```bash
+   pip install ag2
+   ```
+
+2. **Review the documentation**: [AG2 A2A Guide](https://docs.ag2.ai/latest/docs/user-guide/a2a/)
+
+3. **Try the examples**: [A2A Sample Repository](https://github.com/a2aproject/a2a-samples/tree/main/samples/python/agents/ag2)
+
+4. **Read the A2A spec**: [a2a-protocol.org](https://a2a-protocol.org)
+
+## Additional Resources
+
+- [AG2 A2A Server Setup](https://docs.ag2.ai/latest/docs/user-guide/a2a/server)
+- [AG2 A2A Client Usage](https://docs.ag2.ai/latest/docs/user-guide/a2a/client)
+- [A2A Protocol Specification](https://a2a-protocol.org/latest/)
+- [A2A Python SDK](https://github.com/a2aproject/a2a-python)
+- [Complete Sample Code](https://github.com/a2aproject/a2a-samples/pull/392)

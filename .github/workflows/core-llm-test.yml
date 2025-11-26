@@ -60,7 +60,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: astral-sh/setup-uv@v6
         with:
           version: "latest"

@@ -16,6 +16,31 @@ Policy-guided safeguards is a policy-driven system-wide safeguard. A policy (sec
 
 ## Safeguards API (Quick Start)
 
+**New Recommended Approach (using `initiate_group_chat` or `run_group_chat`):**
+```python
+from autogen.agentchat import initiate_group_chat, run_group_chat
+
+result, context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages=user_query,
+    max_rounds=10,
+    safeguard_policy=policy,           # Apply safeguards directly
+    safeguard_llm_config=llm_config,   # LLM config for safeguard checks
+    mask_llm_config=llm_config,        # Optional: separate LLM for masking
+)
+
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern,
+#     messages=user_query,
+#     max_rounds=10,
+#     safeguard_policy=safeguard_policy,
+#     safeguard_llm_config=llm_config,
+#     mask_llm_config=llm_config
+# )
+```
+
+**Legacy Approach (using `apply_safeguard_policy` with `initiate_chat`):**
 - `apply_safeguard_policy(agents|groupchat_manager, policy, safeguard_llm_config=None, mask_llm_config=None)`
     - Apply a policy to agents or a `GroupChatManager`. Provide `safeguard_llm_config` for LLM-based safeguard checks; optionally `mask_llm_config` for LLM masking.
 - `reset_safeguard_policy(agents|groupchat_manager)`
@@ -191,7 +216,42 @@ These rules protect interactions with tools, LLMs, and users.
 
 ## Applying Safeguards
 
-Use `apply_safeguard_policy()` to enforce a policy on a set of agents or an groupchat. Provide an LLM config when using LLM-based checks, and optionally a separate LLM config for masking.
+**New Recommended Approach:** Use `initiate_group_chat()` with safeguard parameters to apply policies directly during group chat initialization.
+
+```python
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
+
+# Create pattern
+pattern = AutoPattern(
+    initial_agent=planner,
+    agents=[data_analyst, outreach_admin, planner],
+    user_agent=user_proxy,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Apply safeguards directly in initiate_group_chat
+result, context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages=user_query,
+    max_rounds=10,
+    safeguard_policy=policy,           # Apply safeguards directly
+    safeguard_llm_config=llm_config,   # LLM config for safeguard checks
+    mask_llm_config=llm_config,        # Optional: separate LLM for masking
+)
+
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern,
+#     messages=user_query,
+#     max_rounds=10,
+#     safeguard_policy=safeguard_policy,
+#     safeguard_llm_config=llm_config,
+#     mask_llm_config=llm_config
+# )
+```
+
+**Legacy Approach:** Use `apply_safeguard_policy()` to enforce a policy on a set of agents or an groupchat. Provide an LLM config when using LLM-based checks, and optionally a separate LLM config for masking.
 
 ```python
 from autogen import ConversableAgent
@@ -335,21 +395,38 @@ policy = {
     },
 }
 
-# Apply policy to the group
-from autogen.agentchat.group.safeguards import apply_safeguard_policy, reset_safeguard_policy
+# Apply safeguards using the new recommended approach
+from autogen.agentchat import initiate_group_chat
+from autogen.agentchat.group.patterns import AutoPattern
 
-apply_safeguard_policy(
-    groupchat_manager=manager,
-    policy=policy,
+# Create pattern
+pattern = AutoPattern(
+    initial_agent=planner,
+    agents=[data_analyst, outreach_admin, planner],
+    user_agent=user_proxy,
+    group_manager_args={"llm_config": llm_config},
+)
+
+# Run with safeguards applied directly
+user_query = "contact patient with diabetes for appointment reminder"
+result, context, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages=user_query,
+    max_rounds=10,
+    safeguard_policy=policy,
     safeguard_llm_config={"model": "gpt-4o-mini"},
 )
 
-# Run
-user_query = "contact patient with diabetes for appointment reminder"
-user_proxy.initiate_chat(manager, message=user_query)
+# OR use the run_group_chat
+# response = run_group_chat(
+#     pattern=pattern,
+#     messages=user_query,
+#     max_rounds=10,
+#     safeguard_policy=safeguard_policy,
+#     safeguard_llm_config=llm_config,
+#     mask_llm_config=llm_config
+# )
 
-# Later, reset if needed
-reset_safeguard_policy(groupchat_manager=manager)
 ```
 
 

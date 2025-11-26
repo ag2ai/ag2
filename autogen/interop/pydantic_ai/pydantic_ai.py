@@ -63,7 +63,7 @@ class PydanticAIInteroperability:
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            current_retry = 0 if ctx_typed is None else ctx_typed.retries.get(tool_typed.name, 0)
+            current_retry = 0 if ctx_typed is None else ctx_typed.retries.get(tool_typed.name, 0)  # type: ignore[attr-defined]
 
             if current_retry >= max_retries:
                 raise ValueError(f"{tool_typed.name} failed after {max_retries} retries")
@@ -73,12 +73,12 @@ class PydanticAIInteroperability:
                     kwargs.pop("ctx", None)
                     ctx_typed.retry = current_retry
                     result = f(**kwargs, ctx=ctx_typed)  # type: ignore[call-arg]
-                    ctx_typed.retries[tool_typed.name] = 0
+                    ctx_typed.retries[tool_typed.name] = 0  # type: ignore[attr-defined]
                 else:
                     result = f(**kwargs)  # type: ignore[call-arg]
             except Exception as e:
                 if ctx_typed is not None:
-                    ctx_typed.retries[tool_typed.name] += 1
+                    ctx_typed.retries[tool_typed.name] = ctx_typed.retries.get(tool_typed.name, 0) + 1  # type: ignore[attr-defined]
                 raise e
 
             return result
@@ -145,6 +145,10 @@ class PydanticAIInteroperability:
             else None
         )
 
+        # Initialize retries dict for tracking retry counts per tool
+        if ctx is not None:
+            ctx.retries = {}  # type: ignore[attr-defined]
+
         func = PydanticAIInteroperability.inject_params(
             ctx=ctx,
             tool=pydantic_ai_tool,
@@ -154,7 +158,7 @@ class PydanticAIInteroperability:
             name=pydantic_ai_tool.name,
             description=pydantic_ai_tool.description,
             func_or_tool=func,
-            parameters_json_schema=pydantic_ai_tool.function_schema.json_schema,
+            parameters_json_schema=pydantic_ai_tool.function_schema.json_schema,  # type: ignore[attr-defined]
         )
 
     @classmethod

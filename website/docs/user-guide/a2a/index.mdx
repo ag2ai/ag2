@@ -1,0 +1,119 @@
+---
+title: "A2A (Agent2Agent) Communication"
+description: "Learn how to enable agents to communicate across different processes and machines using the A2A protocol."
+---
+
+# A2A (Agent2Agent) Communication
+
+The [A2A (Agent2Agent Protocol)](https://a2a-protocol.org/latest/){.external-link target="_blank"} communication system in AG2 enables agents to communicate across different processes, machines, applications, or even different frameworks and languages. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
+
+Consider using A2A when:
+
+* The agent you need to talk to is a **separate, standalone service** (e.g., a specialized financial modeling agent)
+* The agent is maintained by a **different team or organization**
+* You need to connect agents written in **different programming languages or agent frameworks**
+* You want to enforce a **strong, formal contract** (the A2A protocol) between your system's components
+* You need **Human in the Loop (HITL)** support for interactive workflows across distributed agents
+
+!!! note
+    We are using official [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to implement A2A in AG2.
+
+    You can check their documentation for more details on how to use A2A in your own projects.
+
+## Creating an A2A Server
+
+We've built a convenience wrapper that exposes regular AG2 `ConversableAgent` agents as A2A servers - let's have a quick look at how to use it:
+
+```python title="server.py" linenums="1" hl_lines="16"
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aAgentServer
+
+# Create your regular agent
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
+
+agent = ConversableAgent(
+    name="python_coder",
+    system_message="You are an expert Python developer...",
+    llm_config=llm_config,
+)
+
+# Create A2A server
+server = A2aAgentServer(agent).build()
+```
+
+Now you can start it using any ASGI server, for example:
+
+```bash
+uvicorn server:server
+```
+
+To read more about how to configure an A2A server, please refer to [A2A Server Setup](./server){.internal-link} documentation.
+
+## Creating an A2A Client
+
+```python title="client.py" linenums="1" hl_lines="4"
+from autogen.a2a import A2aRemoteAgent
+
+remote_coding_agent = A2aRemoteAgent(
+    url="http://localhost:8000",  # your server URL
+    name="python_coder",
+)
+```
+
+Now you can use it just like any other `ConversableAgent`:
+
+```python linenums="1"
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
+
+review_agent = ConversableAgent(
+    name="reviewer",
+    system_message="You are a code reviewer...",
+    llm_config=llm_config,
+)
+
+remote_coding_agent = A2aRemoteAgent(
+    url="http://localhost:9999",
+    name="python_coder",
+)
+
+await review_agent.a_initiate_chat(
+    recipient=remote_coding_agent,
+    message={"role": "user", "content": prompt},
+)
+```
+
+!!! warning
+    `A2aRemoteAgent` supports only asynchronous methods - this is the limitation of the A2A client we use.
+
+To read more about how to use `A2aRemoteAgent`, please refer to [A2A Client Usage](./client){.internal-link} documentation.
+
+## Interoperability with other frameworks
+
+A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
+
+As an example, you can easily connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
+
+```python title="server.py" linenums="1"
+from pydantic_ai import Agent
+
+agent = Agent(
+    "openai:gpt-4.1",
+    instructions="You are an expert Python developer...",
+)
+app = agent.to_a2a()
+```
+
+Now, without any changes, your `A2aRemoteAgent` clients can interact with them:
+
+```python title="client.py" linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# works correctly with other frameworks A2A servers
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+)
+```

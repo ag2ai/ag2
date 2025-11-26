@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Optional, TypeVar
 import anyio
 from anyio import create_task_group, from_thread
 
+from autogen.agentchat.group.guardrails import Guardrail, GuardrailResult
+
 from ....agentchat.contrib.swarm_agent import AfterWorkOption, initiate_swarm_chat
 from ....cache import AbstractCache
 from ....code_utils import content_str
@@ -136,6 +138,8 @@ class SwarmableAgent(Agent):
         self.previous_cache = None
 
         self.reply_at_receive: dict[Agent, bool] = defaultdict(bool)
+        self.input_guardrails: list[Guardrail] = []
+        self.output_guardrails: list[Guardrail] = []
 
     @property
     def system_message(self) -> str:
@@ -156,6 +160,32 @@ class SwarmableAgent(Agent):
     @property
     def description(self) -> str:
         return self._description
+
+    def register_input_guardrail(self, guardrail: Guardrail) -> None:
+        self.input_guardrails.append(guardrail)
+
+    def register_input_guardrails(self, guardrails: list[Guardrail]) -> None:
+        self.input_guardrails.extend(guardrails)
+
+    def register_output_guardrail(self, guardrail: Guardrail) -> None:
+        self.output_guardrails.append(guardrail)
+
+    def register_output_guardrails(self, guardrails: list[Guardrail]) -> None:
+        self.output_guardrails.extend(guardrails)
+
+    def run_input_guardrails(self, messages: list[dict[str, Any]] | None = None) -> GuardrailResult | None:
+        for guardrail in self.input_guardrails:
+            result = guardrail.check(context=messages)
+            if result.activated:
+                return result
+        return None
+
+    def run_output_guardrails(self, reply: str | dict[str, Any]) -> GuardrailResult | None:
+        for guardrail in self.output_guardrails:
+            result = guardrail.check(context=reply)
+            if result.activated:
+                return result
+        return None
 
     def send(
         self,
@@ -185,7 +215,6 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
         if messages is None:
             if sender is None:
@@ -242,9 +271,8 @@ class SwarmableAgent(Agent):
         self,
         messages: list[dict[str, Any]] | None = None,
         sender: Optional["Agent"] = None,
-        **kwargs: Any,
     ) -> str | dict[str, Any] | None:
-        return self.generate_reply(messages=messages, sender=sender, **kwargs)
+        return self.generate_reply(messages=messages, sender=sender)
 
     async def a_receive(
         self,
@@ -453,6 +481,15 @@ class SwarmableRealtimeAgent(SwarmableAgent):
         realtime_agent.register_realtime_function(
             name="answer_task_question", description="Answer question from the task"
         )(self.set_answer)
+
+        registered_tool_names = set()
+        all_agents = [self._initial_agent] + self._agents
+
+        for agent in all_agents:
+            for tool in agent.tools:
+                if tool.name not in registered_tool_names:
+                    realtime_agent.register_realtime_function(name=tool.name, description=tool.description)(tool.func)
+                    registered_tool_names.add(tool.name)
 
         async def on_observers_ready() -> None:
             self._realtime_agent._tg.start_soon(

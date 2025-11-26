@@ -1,0 +1,205 @@
+---
+title: "A2A Client Usage"
+description: "Learn how to connect to and interact with remote A2A agents from your local applications."
+---
+
+# A2A Client Usage
+
+The A2A client allows you to connect to remote A2A agent servers and interact with them as if they were local agents. This guide covers everything you need to know about using A2A clients.
+
+!!! warning
+    `A2aRemoteAgent` supports only asynchronous methods - this is the limitation of the A2A client we use.
+
+## Basic Client Setup
+
+Generally, you can use `A2aRemoteAgent` like any other `ConversableAgent`. In the example below, we specify a remote agent and start a chat between a local agent and that remote agent, asking them to generate code.
+
+```python linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Use it like any other agent
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={
+        "role": "user",
+        "content": "Create a calculator function",
+    }
+)
+```
+
+Here's another example of a `A2aRemoteAgent` client agent working with a local agent, with the conversation printed out afterwards.
+
+```python linenums="1"
+import asyncio
+from autogen import ConversableAgent, LLMConfig
+from autogen.a2a import A2aRemoteAgent
+
+# Configure local agent
+llm_config = LLMConfig({ "model": "gpt-4o-mini" })
+
+reviewer = ConversableAgent(
+    name="code_reviewer",
+    system_message="You are a code reviewer...",
+    llm_config=llm_config,
+)
+
+# Connect to remote agent
+coder = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder"
+)
+
+# Start conversation
+async def review_code():
+    await reviewer.a_initiate_chat(
+        recipient=coder,
+        message={"role": "user", "content": "Create a Python calculator"}
+    )
+
+    # Process the response
+    messages = reviewer.chat_messages[coder.name]
+    for message in messages:
+        print(f"{message['name']}: {message['content']}")
+
+# Run the conversation
+asyncio.run(review_code())
+```
+
+### Creating from AgentCard
+
+If you already have an `AgentCard` (e.g., fetched from a discovery service or another source), you can create an `A2aRemoteAgent` instance directly from it using the `from_card` classmethod. This avoids redundant fetching of the agent card and allows you to use pre-validated card information.
+
+```python linenums="1"
+from a2a.types import AgentCard, AgentCapabilities
+
+# Create or fetch an AgentCard
+card = AgentCard(
+    name="python_coder",
+    url="http://localhost:8000",
+    description="A Python coding assistant",
+    version="0.1.0",
+    default_input_modes=["text"],
+    default_output_modes=["text"],
+    capabilities=AgentCapabilities(streaming=True),
+    skills=[],
+    supports_authenticated_extended_card=False,
+)
+
+# Create the remote agent from the card
+remote_agent = A2aRemoteAgent.from_card(card)
+```
+
+## Human in the Loop (HITL) Support
+
+`A2aRemoteAgent` automatically handles Human in the Loop interactions when the remote agent requests human input. This happens transparently - you don't need to write any special code to handle HITL requests. The client will loop until the agent completes its task or the conversation terminates.
+
+```python linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent that may request human input
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="approval_agent"
+)
+
+# The client will automatically handle any human input requests
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={
+        "role": "user",
+        "content": "Should I approve this budget proposal?",
+    }
+)
+# If the remote agent requests input, the user will be prompted automatically
+```
+
+The input prompt from the remote agent will be displayed to the user, and their response will be sent back to continue the conversation seamlessly.
+
+## Advanced Usage
+
+### Custom HTTP Client
+
+Commonly, you will need to set some custom options on the remote agent's HTTP client, such as headers, timeout, etc. To do this, pass your own `HttpxClientFactory` instance to the `A2aRemoteAgent` constructor.
+
+```python linenums="1"
+import httpx
+from autogen.a2a import A2aRemoteAgent, HttpxClientFactory
+
+# Create custom HTTP client factory
+http_client = HttpxClientFactory(
+    timeout=30.0,
+    headers={
+        "User-Agent": "MyApp/1.0",
+        "Authorization": f"Bearer {your_token}"
+    }
+)
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client=http_client
+)
+```
+
+### Client Configuration
+
+The A2A client has a few configuration options that you can pass to the `A2aRemoteAgent` constructor, use the `client_config` parameter and a `ClientConfig` to do that.
+
+```python linenums="1"
+from a2a.client import ClientConfig
+from autogen.a2a import A2aRemoteAgent
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client_config=ClientConfig(streaming=True),
+)
+```
+
+### A2aRemoteAgent testing
+
+To help with testing remote clients, you can mock remote agent replies by passing a `MockClient` instance to the `A2aRemoteAgent` constructor.
+
+```python linenums="1"
+from autogen.a2a import A2aRemoteAgent, MockClient
+
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+    client=MockClient(response_message="Hello, user!"),
+)
+```
+
+## Interoperability with other frameworks
+
+A2A is also supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
+
+As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents. Here we create a Pydantic AI agent:
+
+```python title="server.py" linenums="1"
+from pydantic_ai import Agent
+
+agent = Agent(
+    "openai:gpt-4.1",
+    instructions="You are an expert Python developer...",
+)
+app = agent.to_a2a()
+```
+
+And now, without any changes, your `A2aRemoteAgent` clients can interact with them:
+
+```python title="client.py" linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# works correctly with other frameworks A2A servers
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="python_coder",
+)
+```

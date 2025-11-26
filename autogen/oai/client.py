@@ -12,6 +12,7 @@ import re
 import sys
 import uuid
 import warnings
+from collections import deque
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any, Literal
@@ -19,7 +20,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, HttpUrl
 from pydantic.type_adapter import TypeAdapter
 
+from autogen.oai.oai_models.chat_completion import ChatCompletionExtended
+
 from ..cache import Cache
+from ..code_utils import content_str
 from ..doc_utils import export_module
 from ..events.client_events import StreamEvent, UsageSummaryEvent
 from ..exception_utils import ModelToolNotSupportedError
@@ -30,7 +34,7 @@ from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
 from ..token_count_utils import count_token
-from .client_utils import FormatterProtocol, logging_formatter
+from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
 TOOL_ENABLED = False
@@ -56,10 +60,10 @@ if openai_result.is_successful:
 
     if openai.__version__ >= "1.1.0":
         TOOL_ENABLED = True
-    ERROR = None
+    ERROR: ImportError | None = None
     from openai.lib._pydantic import _ensure_strict_json_schema
 else:
-    ERROR: ImportError | None = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")
+    ERROR = ImportError("Please install openai>=1 and diskcache to use autogen.OpenAIWrapper.")  # type: ignore[assignment]
 
     # OpenAI = object
     # AzureOpenAI = object
@@ -76,7 +80,7 @@ with optional_import_block() as cerebras_result:
 if cerebras_result.is_successful:
     cerebras_import_exception: ImportError | None = None
 else:
-    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception  # noqa: N816
+    cerebras_AuthenticationError = cerebras_InternalServerError = cerebras_RateLimitError = Exception  # type: ignore[assignment,misc]  # noqa: N816
     cerebras_import_exception = ImportError("cerebras_cloud_sdk not found")
 
 with optional_import_block() as gemini_result:
@@ -90,7 +94,7 @@ with optional_import_block() as gemini_result:
 if gemini_result.is_successful:
     gemini_import_exception: ImportError | None = None
 else:
-    gemini_InternalServerError = gemini_ResourceExhausted = Exception  # noqa: N816
+    gemini_InternalServerError = gemini_ResourceExhausted = Exception  # type: ignore[assignment,misc]  # noqa: N816
     gemini_import_exception = ImportError("google-genai not found")
 
 with optional_import_block() as anthropic_result:
@@ -104,7 +108,7 @@ with optional_import_block() as anthropic_result:
 if anthropic_result.is_successful:
     anthropic_import_exception: ImportError | None = None
 else:
-    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception  # noqa: N816
+    anthorpic_InternalServerError = anthorpic_RateLimitError = Exception  # type: ignore[assignment,misc]  # noqa: N816
     anthropic_import_exception = ImportError("anthropic not found")
 
 with optional_import_block() as mistral_result:
@@ -173,7 +177,7 @@ with optional_import_block() as ollama_result:
 if ollama_result.is_successful:
     ollama_import_exception: ImportError | None = None
 else:
-    ollama_RequestError = ollama_ResponseError = Exception  # noqa: N816
+    ollama_RequestError = ollama_ResponseError = Exception  # type: ignore[assignment,misc]  # noqa: N816
     ollama_import_exception = ImportError("ollama not found")
 
 with optional_import_block() as bedrock_result:
@@ -339,6 +343,8 @@ class PlaceHolderClient:
 class OpenAIClient:
     """Follows the Client protocol and wraps the OpenAI client."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, client: OpenAI | AzureOpenAI, response_format: BaseModel | dict[str, Any] | None = None):
         self._oai_client = client
         self.response_format = response_format
@@ -365,11 +371,12 @@ class OpenAIClient:
         if isinstance(response, Completion):
             return [choice.text for choice in choices]  # type: ignore [union-attr]
 
-        def _format_content(content: str) -> str:
+        def _format_content(content: str | list[dict[str, Any]] | None) -> str:
+            normalized_content = content_str(content)
             return (
-                self.response_format.model_validate_json(content).format()
+                self.response_format.model_validate_json(normalized_content).format()
                 if isinstance(self.response_format, FormatterProtocol)
-                else content
+                else normalized_content
             )
 
         if TOOL_ENABLED:
@@ -637,8 +644,11 @@ class OpenAIClient:
                     warnings.warn(
                         f"The {params.get('model')} model does not support streaming. The stream will be set to False."
                     )
-                if params.get("tools", False):
-                    raise ModelToolNotSupportedError(params.get("model"))
+                if "tools" in params:
+                    if params["tools"]:  # If tools exist, raise as unsupported
+                        raise ModelToolNotSupportedError(params.get("model"))
+                    else:
+                        params.pop("tools")  # Remove empty tools list
                 self._process_reasoning_model_params(params)
             params["stream"] = False
             response = create_or_parse(**params)
@@ -707,7 +717,7 @@ class OpenAIClient:
         return tmp_price1K * (n_input_tokens + n_output_tokens) / 1000  # type: ignore [operator]
 
     @staticmethod
-    def get_usage(response: ChatCompletion | Completion) -> dict:
+    def get_usage(response: ChatCompletion | Completion) -> dict[str, Any]:
         return {
             "prompt_tokens": response.usage.prompt_tokens if response.usage is not None else 0,
             "completion_tokens": response.usage.completion_tokens if response.usage is not None else 0,
@@ -796,6 +806,14 @@ class OpenAIWrapper:
         self.routing_method = base_config.get("routing_method") or "fixed_order"
         self._round_robin_index = 0
 
+        # Response metadata storage (for serializable responses)
+        # Store metadata separately instead of mutating response objects
+        self._response_metadata: dict[str, dict[str, Any]] = {}  # response_id → metadata
+        self._response_buffer: deque[str] = deque(maxlen=100)  # Circular buffer of response IDs
+        self._response_buffer_size = base_config.get("response_buffer_size", 100)
+        if self._response_buffer_size != 100:
+            self._response_buffer = deque(maxlen=self._response_buffer_size)
+
         # Remove routing_method from extra_kwargs after it has been used to set self.routing_method
         # This ensures it's not part of the individual client configurations that are based on extra_kwargs.
         extra_kwargs.pop("routing_method", None)
@@ -828,6 +846,30 @@ class OpenAIWrapper:
         create_config = {k: v for k, v in config.items() if k not in self.extra_kwargs}
         extra_kwargs = {k: v for k, v in config.items() if k in self.extra_kwargs}
         return create_config, extra_kwargs
+
+    def _store_response_metadata(
+        self, response_id: str, client: ModelClient, config_id: int, pass_filter: bool
+    ) -> None:
+        """Store response metadata with circular buffer to prevent memory overflow.
+
+        Args:
+            response_id: Unique ID of the response (response.id)
+            client: ModelClient that generated the response
+            config_id: Index of the client in config_list
+            pass_filter: Whether the response passed the filter function
+        """
+        # If buffer is full, remove oldest entry
+        if len(self._response_buffer) >= self._response_buffer_size:
+            oldest_id = self._response_buffer[0]  # Will be auto-removed by deque
+            self._response_metadata.pop(oldest_id, None)
+
+        # Add new metadata
+        self._response_metadata[response_id] = {
+            "client": client,
+            "config_id": config_id,
+            "pass_filter": pass_filter,
+        }
+        self._response_buffer.append(response_id)
 
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         openai_config["azure_deployment"] = openai_config.get("azure_deployment", config.get("model"))
@@ -895,7 +937,7 @@ class OpenAIWrapper:
                 def create_azure_openai_client() -> AzureOpenAI:
                     self._configure_azure_openai(config, openai_config)
                     client = AzureOpenAI(**openai_config)
-                    self._clients.append(OpenAIClient(client, response_format=response_format))
+                    self._clients.append(OpenAIClient(client, response_format=response_format))  # type: ignore[arg-type]
                     return client
 
                 client = create_azure_openai_client()
@@ -903,13 +945,13 @@ class OpenAIWrapper:
                 if cerebras_import_exception:
                     raise ImportError("Please install `cerebras_cloud_sdk` to use Cerebras OpenAI API.")
                 client = CerebrasClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("google"):
                 if gemini_import_exception:
                     raise ImportError("Please install `google-genai` and 'vertexai' to use Google's API.")
                 self._configure_openai_config_for_gemini(config, openai_config)
                 client = GeminiClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("anthropic"):
                 if "api_key" not in config and "aws_region" in config:
                     self._configure_openai_config_for_bedrock(config, openai_config)
@@ -918,44 +960,56 @@ class OpenAIWrapper:
                 if anthropic_import_exception:
                     raise ImportError("Please install `anthropic` to use Anthropic API.")
                 client = AnthropicClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("mistral"):
                 if mistral_import_exception:
                     raise ImportError("Please install `mistralai` to use the Mistral.AI API.")
                 client = MistralAIClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("together"):
                 if together_import_exception:
                     raise ImportError("Please install `together` to use the Together.AI API.")
                 client = TogetherClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("groq"):
                 if groq_import_exception:
                     raise ImportError("Please install `groq` to use the Groq API.")
                 client = GroqClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("cohere"):
                 if cohere_import_exception:
                     raise ImportError("Please install `cohere` to use the Cohere API.")
                 client = CohereClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("ollama"):
                 if ollama_import_exception:
                     raise ImportError("Please install `ollama` and `fix-busted-json` to use the Ollama API.")
                 client = OllamaClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
             elif api_type is not None and api_type.startswith("bedrock"):
                 self._configure_openai_config_for_bedrock(config, openai_config)
                 if bedrock_import_exception:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
-                self._clients.append(client)
+                self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("openai_v2"):
+                # OpenAI V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                from autogen.llm_clients import OpenAICompletionsClient as V2Client
+
+                v2_client = V2Client(
+                    api_key=openai_config.get("api_key"),
+                    base_url=openai_config.get("base_url"),
+                    timeout=openai_config.get("timeout", 60.0),
+                    response_format=response_format,
+                )
+                self._clients.append(v2_client)  # type: ignore[arg-type]
+                client = v2_client
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
                 @require_optional_import("openai>=1.66.2", "openai")
                 def create_responses_client() -> OpenAI:
                     client = OpenAI(**openai_config)
-                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))
+                    self._clients.append(OpenAIResponsesClient(client, response_format=response_format))  # type: ignore[arg-type]
                     return client
 
                 client = create_responses_client()
@@ -964,7 +1018,7 @@ class OpenAIWrapper:
                 @require_optional_import("openai>=1.66.2", "openai")
                 def create_openai_client() -> OpenAI:
                     client = OpenAI(**openai_config)
-                    self._clients.append(OpenAIClient(client, response_format))
+                    self._clients.append(OpenAIClient(client, response_format))  # type: ignore[arg-type]
                     return client
 
                 client = create_openai_client()
@@ -1079,9 +1133,10 @@ class OpenAIWrapper:
             self._round_robin_index = (self._round_robin_index + 1) % len(self._clients)
 
         for i in ordered_clients_indices:
-            client = self._clients[i]
             # merge the input config with the i-th config in the config list
-            full_config = {**config, **self._config_list[i]}
+            client_config = self._config_list[i]
+            full_config = merge_config_with_tools(config, client_config)
+
             # separate the config into create_config and extra_kwargs
             create_config, extra_kwargs = self._separate_create_config(full_config)
             # construct the create params
@@ -1112,6 +1167,7 @@ class OpenAIWrapper:
                 # Legacy cache behavior, if cache_seed is given, use DiskCache.
                 cache_client = Cache.disk(cache_seed, LEGACY_CACHE_DIR)
 
+            client = self._clients[i]
             log_cache_seed_value(cache if cache is not None else cache_seed, client=client)
 
             if cache_client is not None:
@@ -1127,12 +1183,15 @@ class OpenAIWrapper:
                     )
                     request_ts = get_current_ts()
 
-                    response: ModelClient.ModelClientResponseProtocol = cache.get(key, None)
+                    response: ChatCompletionExtended | None = cache.get(key, None)
 
                     if response is not None:
-                        response.message_retrieval_function = client.message_retrieval
+                        # Backward compatibility: set message_retrieval_function for ChatCompletionExtended
+                        if hasattr(response, "message_retrieval_function"):
+                            response.message_retrieval_function = client.message_retrieval
+
                         try:
-                            response.cost  # type: ignore [attr-defined]
+                            response.cost
                         except AttributeError:
                             # update attribute if cost is not calculated
                             response.cost = client.cost(response)
@@ -1150,16 +1209,22 @@ class OpenAIWrapper:
                                 request=params,
                                 response=response,
                                 is_cached=1,
-                                cost=response.cost,
+                                cost=response.cost if response.cost is not None else 0.0,
                                 start_time=request_ts,
                             )
 
                         # check the filter
                         pass_filter = filter_func is None or filter_func(context=context, response=response)
                         if pass_filter or i == last:
-                            # Return the response if it passes the filter or it is the last client
-                            response.config_id = i
-                            response.pass_filter = pass_filter
+                            # Store metadata for serializable responses
+                            if hasattr(response, "id"):
+                                self._store_response_metadata(response.id, client, i, pass_filter)
+
+                            # Backward compatibility: set attributes on ChatCompletionExtended
+                            if hasattr(response, "config_id"):
+                                response.config_id = i
+                            if hasattr(response, "pass_filter"):
+                                response.pass_filter = pass_filter
                             self._update_usage(actual_usage=actual_usage, total_usage=total_usage)
                             return response
                         continue  # filter is not passed; try the next config
@@ -1253,24 +1318,34 @@ class OpenAIWrapper:
                         start_time=request_ts,
                     )
 
-                response.message_retrieval_function = client.message_retrieval
+                # Store metadata instead of mutating response
+                # Keep backward compatibility by setting message_retrieval_function for now
+                if hasattr(response, "message_retrieval_function"):
+                    response.message_retrieval_function = client.message_retrieval
+
                 # check the filter
                 pass_filter = filter_func is None or filter_func(context=context, response=response)
                 if pass_filter or i == last:
+                    # Store metadata for serializable responses
+                    if hasattr(response, "id"):
+                        self._store_response_metadata(response.id, client, i, pass_filter)
+
+                    # Backward compatibility: set attributes on ChatCompletionExtended
+                    if hasattr(response, "config_id"):
+                        response.config_id = i
+                    if hasattr(response, "pass_filter"):
+                        response.pass_filter = pass_filter
+
                     # Return the response if it passes the filter or it is the last client
-                    response.config_id = i
-                    response.pass_filter = pass_filter
                     return response
                 continue  # filter is not passed; try the next config
         raise RuntimeError("Should not reach here.")
 
     @staticmethod
-    def _cost_with_customized_price(
-        response: ModelClient.ModelClientResponseProtocol, price_1k: tuple[float, float]
-    ) -> None:
+    def _cost_with_customized_price(response: ChatCompletion | Completion, price_1k: tuple[float, float]) -> float:
         """If a customized cost is passed, overwrite the cost in the response."""
-        n_input_tokens = response.usage.prompt_tokens if response.usage is not None else 0  # type: ignore [union-attr]
-        n_output_tokens = response.usage.completion_tokens if response.usage is not None else 0  # type: ignore [union-attr]
+        n_input_tokens = response.usage.prompt_tokens if response.usage is not None else 0
+        n_output_tokens = response.usage.completion_tokens if response.usage is not None else 0
         if n_output_tokens is None:
             n_output_tokens = 0
         return (n_input_tokens * price_1k[0] + n_output_tokens * price_1k[1]) / 1000
@@ -1442,19 +1517,45 @@ class OpenAIWrapper:
         self.total_usage_summary = None
         self.actual_usage_summary = None
 
-    @classmethod
-    def extract_text_or_completion_object(
-        cls, response: ModelClient.ModelClientResponseProtocol
-    ) -> list[str] | list[ModelClient.ModelClientResponseProtocol.Choice.Message]:
+    def extract_text_or_completion_object(self, response: Any) -> list[str] | list[dict[str, Any]]:
         """Extract the text or ChatCompletion objects from a completion or chat response.
 
+        Supports both legacy responses (with message_retrieval_function) and new serializable responses.
+
         Args:
-            response (ChatCompletion | Completion): The response from openai.
+            response: The response from any client (ChatCompletion, UnifiedResponse, etc.)
 
         Returns:
-            A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
+            A list of text, or a list of message dicts if function_call/tool_calls are present.
         """
-        return response.message_retrieval_function(response)
+        # Option 1: Legacy path - response has message_retrieval_function attached
+        if hasattr(response, "message_retrieval_function") and callable(response.message_retrieval_function):
+            return response.message_retrieval_function(response)  # type: ignore [misc]
+
+        # Option 2: Use stored metadata to find client
+        if hasattr(response, "id") and response.id in self._response_metadata:
+            metadata = self._response_metadata[response.id]
+            client = metadata["client"]
+            return client.message_retrieval(response)
+
+        # Option 3: Fallback - try to extract from response structure directly
+        # This handles cases where response is not in buffer
+        if hasattr(response, "choices"):
+            # OpenAI-style response
+            return [
+                choice.message
+                if hasattr(choice.message, "tool_calls") and choice.message.tool_calls
+                else getattr(choice.message, "content", "")
+                for choice in response.choices
+            ]
+
+        # Last resort: return empty list
+        warnings.warn(
+            f"Could not extract messages from response type {type(response).__name__}. "
+            "Response may not be in metadata buffer or may not support extraction.",
+            UserWarning,
+        )
+        return []
 
 
 # -----------------------------------------------------------------------------
@@ -1490,6 +1591,40 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
     built_in_tools: list[str] | None = None
+
+    def create_client(self) -> ModelClient:  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
+
+
+class OpenAIV2EntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["openai_v2"]
+
+
+class OpenAIV2LLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for OpenAI V2 Client with ModelClientV2 architecture.
+
+    This uses the new OpenAIResponsesClient from autogen.llm_clients which returns
+    rich UnifiedResponse objects with typed content blocks (ReasoningContent,
+    CitationContent, ToolCallContent, etc.).
+
+    Example:
+    ```python
+    {
+        "api_type": "openai_v2",  # <-- uses ModelClientV2 architecture
+        "model": "gpt-4o-mini",  # vision-capable model
+        "api_key": "...",
+    }
+    ```
+
+    Benefits over standard OpenAI client:
+    - Returns UnifiedResponse with typed content blocks
+    - Access to reasoning blocks from o1/o3 models via response.reasoning
+    - Forward-compatible with unknown content types via GenericContent
+    - Rich metadata and citations support
+    - Type-safe with Pydantic validation
+    """
+
+    api_type: Literal["openai_v2"] = "openai_v2"
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")

@@ -79,6 +79,8 @@ class MistralLLMConfigEntry(LLMConfigEntry):
 class MistralAIClient:
     """Client for Mistral.AI's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[MistralEntryDict]):
         """Requires api_key or environment variable to be set
 

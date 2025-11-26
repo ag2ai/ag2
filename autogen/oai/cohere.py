@@ -99,6 +99,8 @@ class CohereLLMConfigEntry(LLMConfigEntry):
 class CohereClient:
     """Client for Cohere's API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[CohereEntryDict]):
         """Requires api_key or environment variable to be set
 
@@ -216,16 +218,6 @@ class CohereClient:
 
         if "top_p" in params:
             cohere_params["p"] = validate_parameter(params, "top_p", (int, float), False, 0.75, (0.01, 0.99), None)
-
-        if "p" in params:
-            warnings.warn(
-                (
-                    "parameter 'p' is deprecated, use 'top_p' instead for consistency with OpenAI API spec. "
-                    "Scheduled for removal in 0.10.0 version."
-                ),
-                DeprecationWarning,
-            )
-            cohere_params["p"] = validate_parameter(params, "p", (int, float), False, 0.75, (0.01, 0.99), None)
 
         if "seed" in params:
             cohere_params["seed"] = validate_parameter(params, "seed", int, True, None, None, None)
