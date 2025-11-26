@@ -70,10 +70,12 @@ class LLMConfigEntry(ApplicationConfig, ABC):
 
     api_key: SecretStr | None = None
     api_version: str | None = None
+
     base_url: HttpUrl | None = None
+    http_client: httpxClient | None = None
+
     voice: str | None = None
     model_client_cls: str | None = None
-    http_client: httpxClient | None = None
     response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
     default_headers: Mapping[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
@@ -97,7 +99,8 @@ class LLMConfigEntry(ApplicationConfig, ABC):
     def check_base_url(cls, v: HttpUrl | str | None, info: ValidationInfo) -> str | None:
         if v is None:  # Handle None case explicitly
             return None
-        if not str(v).startswith("https://") and not str(v).startswith("http://"):
+        # Allow WebSocket URLs as well as HTTP(S)
+        if not str(v).startswith(("https://", "http://", "wss://", "ws://")):
             return f"http://{str(v)}"
         return str(v)
 

@@ -95,6 +95,32 @@ card = AgentCard(
 remote_agent = A2aRemoteAgent.from_card(card)
 ```
 
+## Human in the Loop (HITL) Support
+
+`A2aRemoteAgent` automatically handles Human in the Loop interactions when the remote agent requests human input. This happens transparently - you don't need to write any special code to handle HITL requests. The client will loop until the agent completes its task or the conversation terminates.
+
+```python linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent that may request human input
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="approval_agent"
+)
+
+# The client will automatically handle any human input requests
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={
+        "role": "user",
+        "content": "Should I approve this budget proposal?",
+    }
+)
+# If the remote agent requests input, the user will be prompted automatically
+```
+
+The input prompt from the remote agent will be displayed to the user, and their response will be sent back to continue the conversation seamlessly.
+
 ## Advanced Usage
 
 ### Custom HTTP Client

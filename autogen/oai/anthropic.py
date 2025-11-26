@@ -89,7 +89,7 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     from anthropic import Anthropic, AnthropicBedrock, AnthropicVertex
     from anthropic import __version__ as anthropic_version
-    from anthropic.types import Message, TextBlock, ToolUseBlock
+    from anthropic.types import Message, TextBlock, ThinkingBlock, ToolUseBlock
 
     TOOL_ENABLED = anthropic_version >= "0.23.1"
     if TOOL_ENABLED:
@@ -150,6 +150,8 @@ class AnthropicLLMConfigEntry(LLMConfigEntry):
 
 @require_optional_import("anthropic", "anthropic")
 class AnthropicClient:
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(self, **kwargs: Unpack[AnthropicEntryDict]):
         """Initialize the Anthropic API client.
 
@@ -486,7 +488,17 @@ Ensure the JSON is properly formatted and matches the schema exactly."""
             return response
 
         # Extract content from response
-        content = response.content[0].text if response.content else ""
+        if response.content:
+            if isinstance(response.content[0]) == TextBlock:
+                content = response.content[0].text
+
+            elif isinstance(response.content[0]) == ThinkingBlock:
+                content = response.content[0].thinking
+
+            else:
+                content = ""
+        else:
+            content = ""
 
         # Try to extract JSON from tags first
         json_match = re.search(r"<json_response>(.*?)</json_response>", content, re.DOTALL)

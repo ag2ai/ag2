@@ -110,6 +110,8 @@ class OpenAIResponsesClient:
     OpenAI SDK so we don't replicate logic here.
     """
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     def __init__(
         self,
         client: "OpenAI",

@@ -40,7 +40,7 @@ def bedrock_client():
 
 def test_bedrock_llm_config_entry():
     bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
         aws_region="us-east-1",
         aws_access_key="test_access_key_id",
         aws_secret_key="test_secret_access_key",
@@ -49,7 +49,7 @@ def test_bedrock_llm_config_entry():
     )
     expected = {
         "api_type": "bedrock",
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
         "aws_region": "us-east-1",
         "aws_access_key": "test_access_key_id",
         "aws_secret_key": "test_secret_access_key",
@@ -67,7 +67,7 @@ def test_bedrock_llm_config_entry():
 
     with pytest.raises(ValidationError, match="List should have at least 2 items after validation, not 1"):
         bedrock_llm_config = BedrockLLMConfigEntry(
-            model="anthropic.claude-3-sonnet-20240229-v1:0",
+            model="anthropic.claude-sonnet-4-5-20250929-v1:0",
             aws_region="us-east-1",
             price=["0.1"],
         )
@@ -75,7 +75,7 @@ def test_bedrock_llm_config_entry():
 
 def test_bedrock_llm_config_entry_repr():
     bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
         aws_region="us-east-1",
         aws_access_key="test_access_key_id",
         aws_secret_key="test_secret_access_key",
@@ -84,14 +84,14 @@ def test_bedrock_llm_config_entry_repr():
     )
 
     actual = repr(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
 
     assert actual == expected, actual
 
 
 def test_bedrock_llm_config_entry_str():
     bedrock_llm_config = BedrockLLMConfigEntry(
-        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
         aws_region="us-east-1",
         aws_access_key="test_access_key_id",
         aws_secret_key="test_secret_access_key",
@@ -100,7 +100,7 @@ def test_bedrock_llm_config_entry_str():
     )
 
     actual = str(bedrock_llm_config)
-    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-3-sonnet-20240229-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
+    expected = "BedrockLLMConfigEntry(api_type='bedrock', model='anthropic.claude-sonnet-4-5-20250929-v1:0', tags=[], aws_region='us-east-1', aws_access_key='**********', aws_secret_key='**********', aws_session_token='**********', aws_profile_name='test_profile_name', supports_system_prompts=True)"
 
     assert actual == expected, actual
 
@@ -117,7 +117,7 @@ def test_initialization():
 def test_parsing_params(bedrock_client: BedrockClient):
     # All parameters (with default values)
     assert bedrock_client.parse_params({
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
         "temperature": 0.8,
         "top_p": 0.6,
         "max_tokens": 250,
@@ -137,7 +137,7 @@ def test_parsing_params(bedrock_client: BedrockClient):
     # Incorrect types, defaults should be set, will show warnings but not trigger assertions
     with pytest.warns(UserWarning, match=r"Config error - .*"):
         assert bedrock_client.parse_params({
-            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "temperature": "0.5",
             "top_p": "0.6",
             "max_tokens": "250",
@@ -155,12 +155,12 @@ def test_parsing_params(bedrock_client: BedrockClient):
 
     with pytest.warns(UserWarning, match="Streaming is not currently supported, streaming will be disabled"):
         bedrock_client.parse_params({
-            "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+            "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "stream": True,
         })
 
     assert bedrock_client.parse_params({
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     }) == ({}, {})
 
     with pytest.raises(AssertionError, match="Please provide the 'model` in the config_list to use Amazon Bedrock"):
@@ -177,7 +177,7 @@ def test_create_response(mock_chat, bedrock_client: BedrockClient):
         MagicMock(finish_reason="stop", message=MagicMock(content="Example Bedrock response", tool_calls=None))
     ]
     mock_bedrock_response.id = "mock_bedrock_response_id"
-    mock_bedrock_response.model = "anthropic.claude-3-sonnet-20240229-v1:0"
+    mock_bedrock_response.model = "anthropic.claude-sonnet-4-5-20250929-v1:0"
     mock_bedrock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)  # Example token usage
 
     mock_chat.return_value = mock_bedrock_response
@@ -185,7 +185,7 @@ def test_create_response(mock_chat, bedrock_client: BedrockClient):
     # Test parameters
     params = {
         "messages": [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "World"}],
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     }
 
     # Call the create method
@@ -196,7 +196,7 @@ def test_create_response(mock_chat, bedrock_client: BedrockClient):
         "Response content should match expected output"
     )
     assert response.id == "mock_bedrock_response_id", "Response ID should match the mocked response ID"
-    assert response.model == "anthropic.claude-3-sonnet-20240229-v1:0", (
+    assert response.model == "anthropic.claude-sonnet-4-5-20250929-v1:0", (
         "Response model should match the mocked response model"
     )
     assert response.usage.prompt_tokens == 10, "Response prompt tokens should match the mocked response usage"
@@ -230,7 +230,7 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client: BedrockClient
             )
         ],
         id="mock_bedrock_response_id",
-        model="anthropic.claude-3-sonnet-20240229-v1:0",
+        model="anthropic.claude-sonnet-4-5-20250929-v1:0",
         usage=MagicMock(prompt_tokens=10, completion_tokens=20),
     )
 
@@ -260,7 +260,7 @@ def test_create_response_with_tool_call(mock_chat, bedrock_client: BedrockClient
     response = bedrock_client.create({
         "messages": bedrock_messages,
         "tools": converted_functions,
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "model": "anthropic.claude-sonnet-4-5-20250929-v1:0",
     })
 
     # Assertions to check if the functions and content are included in the response

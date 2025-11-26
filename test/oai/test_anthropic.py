@@ -13,7 +13,7 @@ from autogen.llm_config import LLMConfig
 from autogen.oai.anthropic import AnthropicClient, AnthropicLLMConfigEntry, _calculate_cost
 
 with optional_import_block() as result:
-    from anthropic.types import Message, TextBlock
+    from anthropic.types import Message, TextBlock, ThinkingBlock
 
 
 from typing import Literal
@@ -52,7 +52,7 @@ def anthropic_client():
 
 def test_anthropic_llm_config_entry():
     anthropic_llm_config = AnthropicLLMConfigEntry(
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         api_key="dummy_api_key",
         stream=False,
         temperature=1.0,
@@ -60,7 +60,7 @@ def test_anthropic_llm_config_entry():
     )
     expected = {
         "api_type": "anthropic",
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "api_key": "dummy_api_key",
         "stream": False,
         "temperature": 1.0,
@@ -158,14 +158,14 @@ def test_cost_calculation(mock_completion):
 @run_for_optional_imports(["anthropic"], "anthropic")
 def test_load_config(anthropic_client):
     params = {
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "stream": False,
         "temperature": 1,
         "top_p": 0.8,
         "max_tokens": 100,
     }
     expected_params = {
-        "model": "claude-3-5-sonnet-latest",
+        "model": "claude-sonnet-4-5",
         "stream": False,
         "temperature": 1,
         "timeout": None,
@@ -210,7 +210,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -238,7 +238,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -266,7 +266,7 @@ def test_extract_json_response(anthropic_client):
                 type="text",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -282,7 +282,7 @@ def test_extract_json_response(anthropic_client):
     no_json_response = Message(
         id="msg_123",
         content=[TextBlock(text="This response contains no JSON at all.", type="text")],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -291,6 +291,35 @@ def test_extract_json_response(anthropic_client):
 
     with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
         anthropic_client._extract_json_response(no_json_response)
+
+    # Test case 5: Plain JSON without tags, using ThinkingBlock - SHOULD STILL PASS
+    plain_response = Message(
+        id="msg_123",
+        content=[
+            ThinkingBlock(
+                signature="json_response",
+                thinking="""Here's the solution:
+            {
+                "steps": [
+                    {"explanation": "Step 1", "output": "8x = -30"},
+                    {"explanation": "Step 2", "output": "x = -3.75"}
+                ],
+                "final_answer": "x = -3.75"
+            }""",
+                type="thinking",
+            )
+        ],
+        model="claude-3-5-sonnet-latest",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(plain_response)
+    assert isinstance(result, MathReasoning)
+    assert len(result.steps) == 2
+    assert result.final_answer == "x = -3.75"
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
