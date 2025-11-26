@@ -938,8 +938,8 @@ class TestLLMConfig:
         config = LLMConfig(entry)
 
         # Verify they're in the config entry, not at LLMConfig level
-        assert config.config_list[0].workspace_dir == "./project"
-        assert config.config_list[0].allowed_paths == ["src/**"]
+        assert config.config_list[0].workspace_dir == "./project" # type: ignore[union-attr]
+        assert config.config_list[0].allowed_paths == ["src/**"] # type: ignore[union-attr]
 
         # Verify LLMConfig doesn't have these attributes
         assert not hasattr(config, "workspace_dir")
@@ -956,8 +956,8 @@ class TestLLMConfig:
         copied = config.copy()
 
         # Verify workspace_dir is preserved in the copied config entry
-        assert copied.config_list[0].workspace_dir == "./project"
-        assert copied.config_list[0].workspace_dir == config.config_list[0].workspace_dir
+        assert copied.config_list[0].workspace_dir == "./project" # type: ignore[union-attr]
+        assert copied.config_list[0].workspace_dir == config.config_list[0].workspace_dir # type: ignore[union-attr]
 
     def test_llm_config_dict_with_workspace_dir_and_allowed_paths(self) -> None:
         """Test LLMConfig with dict config containing workspace_dir and allowed_paths."""
@@ -970,8 +970,8 @@ class TestLLMConfig:
         })
 
         # Verify they're in the config entry
-        assert config.config_list[0].workspace_dir == "./project"
-        assert config.config_list[0].allowed_paths == ["src/**", "*.py"]
+        assert config.config_list[0].workspace_dir == "./project" # type: ignore[union-attr]
+        assert config.config_list[0].allowed_paths == ["src/**", "*.py"] # type: ignore[union-attr]
 
         # Verify LLMConfig doesn't have these attributes
         assert not hasattr(config, "workspace_dir")
