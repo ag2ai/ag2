@@ -15,6 +15,12 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
+from autogen.tools.shell_tool import (
+    ShellCallOutcome,
+    ShellCallOutput,
+    ShellCommandOutput,
+    ShellExecutor,
+)
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -193,6 +199,7 @@ class OpenAIResponsesClient:
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
+        self.shell_executor = ShellExecutor()
         self.previous_response_id = None
 
         # Image costs are calculated manually (rather than off returned information)
@@ -907,7 +914,24 @@ class OpenAIResponsesClient:
                 denied_commands=denied_commands,
                 enable_command_filtering=enable_command_filtering,
                 dangerous_patterns=dangerous_patterns,
+                
             )
+
+        shell_call_outputs_payloads: list[dict[str, Any]] = []
+        if shell_call_ids:
+            for call_id, shell_call in shell_call_ids.items():
+                action = shell_call.get("action")
+                if not action:
+                    continue
+                shell_call_output = self._shell_call_operation(shell_call, call_id)
+                shell_call_outputs_payloads.append(shell_call_output.model_dump())
+
+        if shell_call_outputs_payloads:
+            existing_input = params.get("input", [])
+            if existing_input:
+                params["input"] = shell_call_outputs_payloads + existing_input
+            else:
+                params["input"] = shell_call_outputs_payloads
 
         # Initialize tools list
         tools_list = []
