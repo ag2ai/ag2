@@ -96,6 +96,7 @@ def content_str(content: str | list[UserMessageTextContentPart | UserMessageImag
             call_id =  item.get("call_id","<unknown>")
             action = item.get("action",{})
             commands = action.get("commands",[])
+
             rst.append(f"[shell_call id={call_id} commands={commands}]")
         else:
             raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
