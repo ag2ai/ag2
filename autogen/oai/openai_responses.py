@@ -6,6 +6,7 @@ import asyncio
 import copy
 import logging
 import os
+import warnings
 from pathlib import Path
 import warnings
 from dataclasses import asdict, dataclass
@@ -917,28 +918,41 @@ class OpenAIResponsesClient:
                 dangerous_patterns=dangerous_patterns,
                 
             )
+            
 
+        # Extract and remove sandboxing parameters from params (they're only used internally)
+        # These must be removed before passing params to the OpenAI API
+        workspace_dir = params.pop("workspace_dir", None)
+        if workspace_dir is None:
+            workspace_dir = os.getcwd()
+        allowed_paths = params.pop("allowed_paths", None)
+        if allowed_paths is None:
+            allowed_paths = []
+        allowed_commands = params.pop("allowed_commands", None)
+        denied_commands = params.pop("denied_commands", None)
+        if denied_commands is None:
+            denied_commands = []
+        enable_command_filtering = params.pop("enable_command_filtering", True)  # Default to True
+        dangerous_patterns = params.pop("dangerous_patterns", None)
+        if dangerous_patterns is None:
+            dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
+
+        
         shell_call_outputs_payloads: list[dict[str, Any]] = []
         if shell_call_ids:
             for call_id, shell_call in shell_call_ids.items():
                 action = shell_call.get("action")
                 if not action:
                     continue
-                workspace_dir = params.get("workspace_dir", os.getcwd())
-                allowed_paths = params.get("allowed_paths", [])
-                allowed_commands = params.get("allowed_commands", [])
-                denied_commands = params.get("denied_commands", [])
-                enable_command_filtering = params.get("enable_command_filtering", True)  # Default to True
-                dangerous_patterns = params.get("dangerous_patterns", ShellExecutor.DEFAULT_DANGEROUS_PATTERNS)
                 shell_call_output = self._execute_shell_operation(
                     action,  # Pass action, not shell_call
-                    call_id, 
-                    workspace_dir, 
-                    allowed_paths, 
-                    allowed_commands, 
-                    denied_commands, 
+                    call_id,
+                    workspace_dir,
+                    allowed_paths,
+                    allowed_commands,
+                    denied_commands,
                     enable_command_filtering,
-                    dangerous_patterns
+                    dangerous_patterns,
                 )
                 shell_call_outputs_payloads.append(shell_call_output.model_dump())
 
