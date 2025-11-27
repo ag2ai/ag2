@@ -7,7 +7,6 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -99,7 +98,7 @@ class ShellExecutor:
                               DEFAULT_DANGEROUS_PATTERNS.
         """
         self.default_timeout = default_timeout
-        
+
         # Working directory setup
         if workspace_dir is None:
             self.workspace_dir = Path.cwd()
@@ -107,57 +106,57 @@ class ShellExecutor:
             self.workspace_dir = Path(workspace_dir).resolve()
             if not self.workspace_dir.exists():
                 self.workspace_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Path restrictions
         if allowed_paths is None:
             allowed_paths = ["**"]  # Allow all paths within workspace_dir by default
         self.allowed_paths = allowed_paths
-        
+
         # Command restrictions
         self.allowed_commands = allowed_commands
         self.denied_commands = denied_commands or []
-        
+
         # Pattern filtering
         self.enable_command_filtering = enable_command_filtering
         self.dangerous_patterns = dangerous_patterns or self.DEFAULT_DANGEROUS_PATTERNS
 
     def _validate_path(self, path: str | Path) -> bool:
         """Check if a path is allowed based on allowed_paths patterns.
-        
+
         Args:
             path: Path to validate
-            
+
         Returns:
             True if path is allowed, False otherwise
         """
         if "**" in self.allowed_paths:
             return True  # Allow all paths
-        
+
         path_obj = Path(path)
-        
+
         # Resolve relative to workspace_dir
         if not path_obj.is_absolute():
             path_obj = (self.workspace_dir / path_obj).resolve()
-        
+
         # Check if path is within workspace_dir
         try:
             path_obj.relative_to(self.workspace_dir)
         except ValueError:
             return False  # Path is outside workspace_dir
-        
+
         # Check against allowed patterns
         for pattern in self.allowed_paths:
             if path_obj.match(pattern) or self.workspace_dir.joinpath(pattern).match(str(path_obj)):
                 return True
-        
+
         return False
 
     def _validate_command(self, cmd: str) -> None:
         """Validate a command against security restrictions.
-        
+
         Args:
             cmd: Command string to validate
-            
+
         Raises:
             ValueError: If command violates security restrictions
         """
@@ -165,36 +164,35 @@ class ShellExecutor:
         cmd_parts = cmd.strip().split()
         if not cmd_parts:
             raise ValueError("Empty command is not allowed")
-        
+
         cmd_name = cmd_parts[0].split("/")[-1]  # Get basename in case of /usr/bin/command
-        
+
         # Check whitelist
-        if self.allowed_commands is not None:
-            if cmd_name not in self.allowed_commands:
-                raise ValueError(f"Command '{cmd_name}' is not in the allowed commands list: {self.allowed_commands}")
-        
+        if self.allowed_commands is not None and cmd_name not in self.allowed_commands:
+            raise ValueError(f"Command '{cmd_name}' is not in the allowed commands list: {self.allowed_commands}")
+
         # Check blacklist
         if cmd_name in self.denied_commands:
             raise ValueError(f"Command '{cmd_name}' is in the denied commands list")
-        
+
         # Check dangerous patterns
         if self.enable_command_filtering:
             for pattern, message in self.dangerous_patterns:
                 if re.search(pattern, cmd, re.IGNORECASE):
                     raise ValueError(f"Potentially dangerous command detected: {message}")
-        
+
         # Check for path access violations
         if self.allowed_paths and "**" not in self.allowed_paths:
             # Extract paths from command (simple heuristic - look for absolute paths or paths with /)
-            path_pattern = r'(?:^|\s)([/~]|\.\./)[^\s]*'
+            path_pattern = r"(?:^|\s)([/~]|\.\./)[^\s]*"
             matches = re.findall(path_pattern, cmd)
             for match in matches:
                 # Normalize path
                 if match.startswith("~"):
-                    test_path = os.path.expanduser(match)
+                    test_path = test_path = os.path.expanduser(match) if match.startswith("~") else match
                 else:
                     test_path = match
-                
+
                 if not self._validate_path(test_path):
                     raise ValueError(f"Access to path '{match}' is not allowed. Allowed paths: {self.allowed_paths}")
 
@@ -207,15 +205,15 @@ class ShellExecutor:
 
         Returns:
             CmdResult with stdout, stderr, exit_code, and timed_out flag.
-            
+
         Raises:
             ValueError: If command violates security restrictions
         """
         # Validate command before execution
         self._validate_command(cmd)
-        
+
         t = timeout or self.default_timeout
-        
+
         # Execute in the restricted working directory
         p = subprocess.Popen(
             cmd,
@@ -233,9 +231,7 @@ class ShellExecutor:
             out, err = p.communicate()
             return CmdResult(stdout=out or "", stderr=err or "", exit_code=p.returncode, timed_out=True)
 
-    def run_commands(
-        self, commands: list[str], timeout_ms: int | None = None
-    ) -> list[ShellCommandOutput]:
+    def run_commands(self, commands: list[str], timeout_ms: int | None = None) -> list[ShellCommandOutput]:
         """Execute multiple shell commands concurrently and return results.
 
         Args:
@@ -245,6 +241,7 @@ class ShellExecutor:
         Returns:
             List of ShellCommandOutput objects.
         """
+        print("executing commands:-------- ", commands)
         timeout = (timeout_ms / 1000.0) if timeout_ms is not None else None
         results = []
 
@@ -255,7 +252,7 @@ class ShellExecutor:
                     outcome = ShellCallOutcome(type="timeout")
                 else:
                     outcome = ShellCallOutcome(type="exit", exit_code=result.exit_code)
-                
+
                 results.append(
                     ShellCommandOutput(
                         stdout=result.stdout,
@@ -272,5 +269,5 @@ class ShellExecutor:
                         outcome=ShellCallOutcome(type="exit", exit_code=1),
                     )
                 )
-
+        print("results:-------- ", results)
         return results

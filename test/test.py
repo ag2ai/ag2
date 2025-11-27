@@ -4,52 +4,41 @@
 
 import os
 
-from autogen import AssistantAgent, ConversableAgent, LLMConfig, UserProxyAgent
 from dotenv import load_dotenv
+
+from autogen import ConversableAgent, LLMConfig
 
 load_dotenv()
 
-def main():
-    """Example using shell tool with Responses API to refactor calculator code."""
-    
-    # Create LLM config with Responses API and shell tool
-    llm_config = LLMConfig(
-        config_list={
-            "api_type": "responses",
-            "model": "gpt-5.1",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "built_in_tools": ["shell"],
-        },
-    )
 
-    # Create the coding agent
-    coding_agent = ConversableAgent(
-        name="CodingAgent",
-        system_message="""You are a helpful coding assistant. 
-        You can use shell commands to inspect files, run tests, and refactor code.
-        When you need to execute shell commands, use the shell tool.
-        The local shell environment is on Mac/Linux.
-        Keep your responses concise and include command output when helpful.
-        """,
-        llm_config=llm_config,
-        human_input_mode="NEVER",
-    )
+llm_config = LLMConfig(
+    config_list={
+        "api_type": "responses",
+        "model": "gpt-5.1",
+        "api_key": os.getenv("OPENAI_API_KEY"),
+        "built_in_tools": ["shell"],
+    },
+)
 
-    # Initiate the chat to refactor calculator code
-    result = coding_agent.initiate_chat(
-        recipient=coding_agent,
-        message="""
-        i want to see current directory
-        """,
-        max_turns=2,
-    )
-    
-    print("\n" + "="*80)
-    print("Chat Summary:")
-    print("="*80)
-    print(result.summary)
-    print("\n" + "="*80)
+# Create the assistant agent
+assistant = ConversableAgent(
+    name="Assistant",
+    system_message="""You are a helpful assistant with access to shell commands.
+    You can use the shell tool to execute commands and interact with the filesystem.
+    The local shell environment is on Mac/Linux.
+    Keep your responses concise and include command output when helpful.
+    """,
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
 
 
-if __name__ == "__main__":
-    main()
+# Example 1: Find the largest PDF and show processes
+result = assistant.initiate_chat(
+    recipient=assistant,
+    message="""
+    Please help me with the following tasks:
+    1. use ls command to list the files in the current directory
+    """,
+    max_turns=2,
+)
