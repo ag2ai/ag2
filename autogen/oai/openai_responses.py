@@ -287,7 +287,6 @@ class OpenAIResponsesClient:
         workspace_dir = params.pop("workspace_dir", None)
         allowed_paths = params.pop("allowed_paths", ["**"])
 
-        print("workspace_dir2", workspace_dir)
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 

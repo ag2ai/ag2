@@ -198,7 +198,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
         application_level_options = app_config.model_dump(exclude_none=True)
 
         final_config_list: list[LLMConfigEntry | dict[str, Any]] = []
-        # Use kwargs_for_config instead of kwargs to exclude workspace_dir from config processing
         for c in filter(bool, (*configs, *config_list, kwargs)):
             if isinstance(c, LLMConfigEntry):
                 final_config_list.append(c.apply_application_config(app_config))
