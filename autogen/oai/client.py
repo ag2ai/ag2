@@ -1591,7 +1591,12 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
     built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "shell"]] | None = None
-
+    workspace_dir: str | None = None
+    allowed_paths: list[str] | None = None
+    allowed_commands: list[str] | None = None
+    denied_commands: list[str] | None = None
+    enable_command_filtering:bool = True
+    dangerous_patterns: list[tuple[str, str]] | None = None
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
 
