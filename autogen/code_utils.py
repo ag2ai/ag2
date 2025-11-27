@@ -91,6 +91,13 @@ def content_str(content: str | list[UserMessageTextContentPart | UserMessageImag
             status = item.get("status", "unknown_status")
             diff = operation.get("diff", "unknown_diff")
             rst.append(f"<apply_patch_call: {operation_type} on {path} (status: {status}) diff: {diff}>")
+        
+        elif item['type'] == "shell_call":
+            call_id =  item.get("call_id","<unknown>")
+            status = item.get("status","in_progress")
+            action = item.get("action",{})
+            commands = action.get("commmands",[])
+            rst.append(f"[shell_call id={call_id} status={status} commands={commands}]")
         else:
             raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
     return "\n".join(rst)

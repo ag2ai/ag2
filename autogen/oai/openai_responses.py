@@ -14,6 +14,12 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
+from autogen.tools.shell_tool import (
+    ShellCallOutcome,
+    ShellCallOutput,
+    ShellCommandOutput,
+    ShellExecutor,
+)
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -26,6 +32,9 @@ else:
 with optional_import_block() as openai_result:
     from openai.types.responses.response import Response
     from openai.types.responses.response_output_item import ImageGenerationCall
+
+
+logger = logging.getLogger(__name__)
 
 # Image Costs
 # Pricing per image (in USD)
@@ -145,6 +154,7 @@ class OpenAIResponsesClient:
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
+        self.shell_executor = ShellExecutor()
         self.previous_response_id = None
 
         # Image costs are calculated manually (rather than off returned information)
@@ -541,6 +551,45 @@ class OpenAIResponsesClient:
         # (We added outputs first, then messages in reverse, so reversing gives us: messages first, then outputs)
         return input_items[::-1]
 
+    def _shell_call_operation(self, shell_call: dict[str, Any], call_id: str) -> ShellCallOutput:
+        """Execute the commands from a shell_call payload."""
+        action = shell_call.get("action", {})
+        commands = action.get("commands") or []
+        timeout_ms = action.get("timeout_ms")
+        max_output_length = action.get("max_output_length")
+
+        if not commands:
+            logger.debug("[shell] No commands provided for call_id=%s", call_id)
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[
+                    ShellCommandOutput(
+                        stdout="",
+                        stderr="No commands provided for shell_call.",
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                ],
+            )
+
+        try:
+            command_outputs = self.shell_executor.run_commands(commands, timeout_ms=timeout_ms)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("[shell] Error running commands for call_id=%s", call_id)
+            command_outputs = [
+                ShellCommandOutput(
+                    stdout="",
+                    stderr=str(exc),
+                    outcome=ShellCallOutcome(type="exit", exit_code=1),
+                )
+            ]
+
+        return ShellCallOutput(
+            call_id=call_id,
+            max_output_length=max_output_length,
+            output=command_outputs,
+        )
+
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
@@ -555,6 +604,7 @@ class OpenAIResponsesClient:
         workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
         built_in_tools = params.pop("built_in_tools", [])
+        shell_tool_params = {"type": "shell"}
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
@@ -575,6 +625,22 @@ class OpenAIResponsesClient:
             except Exception as e:
                 logger.debug(f"[apply_patch] Could not retrieve previous response: {e}")
 
+        shell_call_ids: dict[str, Any] = {}
+        if self.previous_response_id is not None:
+            try:
+                previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
+                previous_output = getattr(previous_response, "output", [])
+                for item in previous_output:
+                    if hasattr(item, "model_dump"):
+                        item = item.model_dump()
+                    if item.get("type") == "shell_call":
+                        call_id = item.get("call_id")
+                        if call_id:
+                            shell_call_ids[call_id] = item
+            except Exception as exc:  # pragma: no cover - retrieval best-effort
+                logger.debug("[shell] Could not inspect previous response: %s", exc)
+
+        # Back-compat: transform messages → input if needed ------------------
         if "messages" in params and "input" not in params:
             msgs = self._get_delta_messages(params.pop("messages"))
             params["input"] = self._normalize_messages_for_responses_api(
@@ -586,6 +652,22 @@ class OpenAIResponsesClient:
                 image_generation_tool_params=image_generation_tool_params,
             )
 
+        shell_call_outputs_payloads: list[dict[str, Any]] = []
+        if shell_call_ids:
+            for call_id, shell_call in shell_call_ids.items():
+                action = shell_call.get("action")
+                if not action:
+                    continue
+                shell_call_output = self._shell_call_operation(shell_call, call_id)
+                shell_call_outputs_payloads.append(shell_call_output.model_dump())
+
+        if shell_call_outputs_payloads:
+            existing_input = params.get("input", [])
+            if existing_input:
+                params["input"] = shell_call_outputs_payloads + existing_input
+            else:
+                params["input"] = shell_call_outputs_payloads
+
         # Initialize tools list
         tools_list = []
         # Back-compat: add default tools
@@ -596,6 +678,8 @@ class OpenAIResponsesClient:
                 tools_list.append(web_search_tool_params)
             if "apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools:
                 tools_list.append(apply_patch_tool_params)
+            if "shell" in built_in_tools:
+                tools_list.append(shell_tool_params)
 
         if "tools" in params:
             for tool in params["tools"]:
@@ -742,6 +826,18 @@ class OpenAIResponsesClient:
             # ------------------------------------------------------------------
             # 4) Built-in tool calls
             # ------------------------------------------------------------------
+            if item_type == "shell_call":
+                tool_call_args = {
+                    "id": item.get("id"),
+                    "role": "tool_calls",
+                    "type": "shell_call",
+                    "call_id": item.get("call_id"),
+                    "status": item.get("status", "in_progress"),
+                    "action": item.get("action", {}),
+                }
+                content.append(tool_call_args)
+                continue
+
             if item_type and item_type.endswith("_call"):
                 tool_name = item_type.replace("_call", "")
                 tool_call_args = {
