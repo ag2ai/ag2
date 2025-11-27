@@ -6,6 +6,7 @@ import asyncio
 import copy
 import logging
 import os
+from pathlib import Path
 import warnings
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
@@ -552,40 +553,91 @@ class OpenAIResponsesClient:
         """Execute the commands from a shell_call payload."""
         action = shell_call.get("action", {})
         commands = action.get("commands") or []
+    def _execute_shell_operation(
+        self,
+        action: dict[str, Any],
+        call_id: str,
+        workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = None,
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> "ShellCallOutput":
+        """Execute shell commands and return shell_call_output.
+
+        Args:
+            action: Dictionary containing shell action with keys:
+                - commands: List of shell commands to execute
+                - timeout_ms: Optional timeout in milliseconds
+                - max_output_length: Optional maximum output length
+            call_id: The call_id for this shell operation
+            workspace_dir: Working directory for command execution
+            allowed_paths: List of allowed path patterns for sandboxing
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
+
+        Returns:
+            ShellCallOutput with execution results
+        """
+        # Initialize shell executor if not already initialized
+        if not hasattr(self, '_shell_executor'):
+            self._shell_executor = ShellExecutor(
+                workspace_dir=workspace_dir if workspace_dir else os.getcwd(),
+                allowed_paths=allowed_paths if allowed_paths else [],
+                allowed_commands=allowed_commands if allowed_commands else [],
+                denied_commands=denied_commands if denied_commands else [],
+                enable_command_filtering=enable_command_filtering if enable_command_filtering else True,
+                dangerous_patterns=dangerous_patterns if dangerous_patterns else ShellExecutor.DEFAULT_DANGEROUS_PATTERNS,
+            )
+        else:
+            # Update executor settings if provided
+            self._shell_executor.workspace_dir = Path(workspace_dir).resolve() if workspace_dir else self._shell_executor.workspace_dir
+            self._shell_executor.allowed_paths = allowed_paths if allowed_paths is not None else self._shell_executor.allowed_paths
+            self._shell_executor.allowed_commands = allowed_commands if allowed_commands is not None else self._shell_executor.allowed_commands
+            self._shell_executor.denied_commands = denied_commands if denied_commands is not None else self._shell_executor.denied_commands
+            self._shell_executor.dangerous_patterns = dangerous_patterns if dangerous_patterns is not None else self._shell_executor.dangerous_patterns
+            self._shell_executor.enable_command_filtering = enable_command_filtering if enable_command_filtering is not None else self._shell_executor.enable_command_filtering
+
+        commands = action.get("commands", [])
         timeout_ms = action.get("timeout_ms")
         max_output_length = action.get("max_output_length")
 
         if not commands:
-            logger.debug("[shell] No commands provided for call_id=%s", call_id)
+            # Return empty output if no commands
             return ShellCallOutput(
                 call_id=call_id,
                 max_output_length=max_output_length,
-                output=[
-                    ShellCommandOutput(
-                        stdout="",
-                        stderr="No commands provided for shell_call.",
-                        outcome=ShellCallOutcome(type="exit", exit_code=1),
-                    )
-                ],
+                output=[ShellCommandOutput(
+                    stdout="",
+                    stderr="No commands provided",
+                    outcome=ShellCallOutcome(type="exit", exit_code=1),
+                )],
             )
 
         try:
-            command_outputs = self.shell_executor.run_commands(commands, timeout_ms=timeout_ms)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.exception("[shell] Error running commands for call_id=%s", call_id)
-            command_outputs = [
-                ShellCommandOutput(
-                    stdout="",
-                    stderr=str(exc),
-                    outcome=ShellCallOutcome(type="exit", exit_code=1),
-                )
-            ]
+            # Execute commands
+            command_outputs = self._shell_executor.run_commands(commands, timeout_ms=timeout_ms)
 
-        return ShellCallOutput(
-            call_id=call_id,
-            max_output_length=max_output_length,
-            output=command_outputs,
-        )
+            # Return in the correct format
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=command_outputs,
+            )
+        except Exception as e:
+            # Return error in the correct format
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[ShellCommandOutput(
+                    stdout="",
+                    stderr=f"Error executing shell commands: {str(e)}",
+                    outcome=ShellCallOutcome(type="exit", exit_code=1),
+                )],
+            )
 
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
@@ -655,7 +707,22 @@ class OpenAIResponsesClient:
                 action = shell_call.get("action")
                 if not action:
                     continue
-                shell_call_output = self._shell_call_operation(shell_call, call_id)
+                workspace_dir = params.get("workspace_dir", os.getcwd())
+                allowed_paths = params.get("allowed_paths", [])
+                allowed_commands = params.get("allowed_commands", [])
+                denied_commands = params.get("denied_commands", [])
+                enable_command_filtering = params.get("enable_command_filtering", True)  # Default to True
+                dangerous_patterns = params.get("dangerous_patterns", ShellExecutor.DEFAULT_DANGEROUS_PATTERNS)
+                shell_call_output = self._execute_shell_operation(
+                    action,  # Pass action, not shell_call
+                    call_id, 
+                    workspace_dir, 
+                    allowed_paths, 
+                    allowed_commands, 
+                    denied_commands, 
+                    enable_command_filtering,
+                    dangerous_patterns
+                )
                 shell_call_outputs_payloads.append(shell_call_output.model_dump())
 
         if shell_call_outputs_payloads:
