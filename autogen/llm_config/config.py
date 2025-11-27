@@ -107,7 +107,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
             max_tokens: The maximum number of tokens to generate.
             top_p: The nucleus sampling probability.
             routing_method: The method used to route requests (e.g., fixed_order, round_robin).
-                Note: For cloud storage, specify bucket names in allowed_paths patterns.
             **kwargs: Additional keyword arguments for future extensions.
 
         Examples:
