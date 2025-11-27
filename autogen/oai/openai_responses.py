@@ -6,6 +6,7 @@ import asyncio
 import copy
 import logging
 import os
+from pathlib import Path
 import warnings
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -923,7 +924,22 @@ class OpenAIResponsesClient:
                 action = shell_call.get("action")
                 if not action:
                     continue
-                shell_call_output = self._shell_call_operation(shell_call, call_id)
+                workspace_dir = params.get("workspace_dir", os.getcwd())
+                allowed_paths = params.get("allowed_paths", [])
+                allowed_commands = params.get("allowed_commands", [])
+                denied_commands = params.get("denied_commands", [])
+                enable_command_filtering = params.get("enable_command_filtering", True)  # Default to True
+                dangerous_patterns = params.get("dangerous_patterns", ShellExecutor.DEFAULT_DANGEROUS_PATTERNS)
+                shell_call_output = self._execute_shell_operation(
+                    action,  # Pass action, not shell_call
+                    call_id, 
+                    workspace_dir, 
+                    allowed_paths, 
+                    allowed_commands, 
+                    denied_commands, 
+                    enable_command_filtering,
+                    dangerous_patterns
+                )
                 shell_call_outputs_payloads.append(shell_call_output.model_dump())
 
         if shell_call_outputs_payloads:
