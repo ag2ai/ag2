@@ -39,7 +39,7 @@ def main():
     result = coding_agent.initiate_chat(
         recipient=coding_agent,
         message="""
-        use shell tool to create a new folder calculator and create a file calculator.py in it with the following content:
+        i want to see current directory
         """,
         max_turns=2,
     )
