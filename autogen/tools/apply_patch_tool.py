@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import fnmatch
+import os
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -172,6 +173,7 @@ class WorkspaceEditor:
                     - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
                     - ["src/**", "tests/**"] - Allow paths in multiple directories
         """
+        workspace_dir = workspace_dir if workspace_dir is not None else os.getcwd()
         print("workspace_dir", workspace_dir)
         self.workspace_dir = Path(workspace_dir).resolve()
         # Use "**" to match all files and directories recursively (including root)
