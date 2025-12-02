@@ -211,7 +211,7 @@ class WorkspaceEditor:
         # For local filesystem paths, validate they're within workspace
         # Cloud storage paths are validated by pattern matching above
         try:
-            full_path = (self.workspace_dir / path).resolve()
+            full_path = Path(self.workspace_dir +"/" + path).resolve()
             print("workspace_dir", self.workspace_dir)
             print("full_path", full_path)
 
