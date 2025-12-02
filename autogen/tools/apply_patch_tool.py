@@ -16,8 +16,19 @@ from .tool import Tool
 class PatchEditor(Protocol):
     """Protocol for implementing file operations for apply_patch."""
 
-    async def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
-        """Create a new file.
+    def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Create a new file sync.
+
+        Args:
+            operation: Dict with 'path' and 'diff' keys
+
+        Returns:
+            Dict with 'status' ("completed" or "failed") and optional 'output' message
+        """
+        ...
+
+    async def a_create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Create a new file async.
 
         Args:
             operation: Dict with 'path' and 'diff' keys
@@ -28,7 +39,7 @@ class PatchEditor(Protocol):
         ...
 
     async def update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
-        """Update an existing file.
+        """Update an existing file sync.
 
         Args:
             operation: Dict with 'path' and 'diff' keys
@@ -38,8 +49,31 @@ class PatchEditor(Protocol):
         """
         ...
 
-    async def delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
-        """Delete a file.
+    async def a_update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing file async.
+
+        Args:
+            operation: Dict with 'path' and 'diff' keys
+
+        Returns:
+            Dict with 'status' ("completed" or "failed") and optional 'output' message
+        """
+        ...
+
+
+    def delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Delete a file sync.
+
+        Args:
+            operation: Dict with 'path' key
+
+        Returns:
+            Dict with 'status' ("completed" or "failed") and optional 'output' message
+        """
+        ...
+
+    async def a_delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Delete a file async.
 
         Args:
             operation: Dict with 'path' key
@@ -230,7 +264,28 @@ class WorkspaceEditor:
                 return Path(path)  # This won't be used for actual file ops if it's cloud storage
             raise ValueError(f"Path {path} is invalid: {str(e)}")
 
-    async def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+    def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Create a new file."""
+        try:
+            path = operation.get("path")
+            diff = operation.get("diff", "")
+
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
+
+            # Ensure parent directory exists
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Apply diff to get file content
+            content = apply_diff("", diff, create=True)
+
+            # Write file
+            full_path.write_text(content, encoding="utf-8")
+
+            return {"status": "completed", "output": f"Created {path}"}
+        except Exception as e:
+            return {"status": "failed", "output": f"Error creating {path}: {str(e)}"}
+    
+    async def a_create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Create a new file."""
         try:
             path = operation.get("path")
@@ -251,7 +306,32 @@ class WorkspaceEditor:
         except Exception as e:
             return {"status": "failed", "output": f"Error creating {path}: {str(e)}"}
 
-    async def update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+    
+    def update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing file."""
+        try:
+            path = operation.get("path")
+            diff = operation.get("diff", "")
+
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
+
+            if not full_path.exists():
+                return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
+
+            # Read current content
+            current_content = full_path.read_text(encoding="utf-8")
+
+            # Apply diff
+            new_content = apply_diff(current_content, diff)
+
+            # Write updated content
+            full_path.write_text(new_content, encoding="utf-8")
+
+            return {"status": "completed", "output": f"Updated {path}"}
+        except Exception as e:
+            return {"status": "failed", "output": f"Error updating {path}: {str(e)}"}
+    
+    async def a_update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Update an existing file."""
         try:
             path = operation.get("path")
@@ -275,7 +355,22 @@ class WorkspaceEditor:
         except Exception as e:
             return {"status": "failed", "output": f"Error updating {path}: {str(e)}"}
 
-    async def delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+    def delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+        """Delete a file."""
+        try:
+            path = operation.get("path")
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
+
+            if not full_path.exists():
+                return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
+
+            full_path.unlink()
+
+            return {"status": "completed", "output": f"Deleted {path}"}
+        except Exception as e:
+            return {"status": "failed", "output": f"Error deleting {path}: {str(e)}"}
+
+    async def a_delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Delete a file."""
         try:
             path = operation.get("path")
@@ -332,6 +427,7 @@ class ApplyPatchTool(Tool):
         needs_approval: bool = False,
         on_approval: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
         allowed_paths: list[str] | None = ["**"],
+        async_patches: bool = False
     ):
         """Initialize ApplyPatchTool.
 
@@ -344,7 +440,7 @@ class ApplyPatchTool(Tool):
             allowed_paths: List of allowed path patterns (for security).
                 Supports glob-style patterns with ** for recursive matching.
                 Works for both local filesystem and cloud storage paths.
-
+            async_patches: apply patches aynchronously/ synchronously
                 Examples:
                     - ["**"] - Allow all paths (default)
                     - ["src/**"] - Allow all files in src/ and subdirectories
@@ -364,7 +460,7 @@ class ApplyPatchTool(Tool):
         self.editor = editor
         self.needs_approval = needs_approval
         self.on_approval = on_approval or (lambda ctx, item: {"approve": True})
-
+        self.async_patches = async_patches
         # Create the tool function
         async def _apply_patch_handler(call_id: str, operation: dict[str, Any]) -> dict[str, Any]:
             """Handle apply_patch operations from GPT-5.1.
@@ -390,15 +486,24 @@ class ApplyPatchTool(Tool):
                     }
 
             # Route to appropriate handler
-            if operation_type == "create_file":
-                result = await self.editor.create_file(operation)
-            elif operation_type == "update_file":
-                result = await self.editor.update_file(operation)
-            elif operation_type == "delete_file":
-                result = await self.editor.delete_file(operation)
+            if self.async_patches:
+                if operation_type == "create_file":
+                    result = await self.editor.a_create_file(operation)
+                elif operation_type == "update_file":
+                    result = await self.editor.a_update_file(operation)
+                elif operation_type == "delete_file":
+                    result = await self.editor.a_delete_file(operation)
+                else:
+                    result = {"status": "failed", "output": f"Unknown operation type: {operation_type}"}
             else:
-                result = {"status": "failed", "output": f"Unknown operation type: {operation_type}"}
-
+                if operation_type == "create_file":
+                    result = self.editor.create_file(operation)
+                elif operation_type == "update_file":
+                    result = self.editor.update_file(operation)
+                elif operation_type == "delete_file":
+                    result = self.editor.delete_file(operation)
+                else:
+                    result = {"status": "failed", "output": f"Unknown operation type: {operation_type}"}
             # Format response for Responses API
             return {"type": "apply_patch_call_output", "call_id": call_id, **result}
 
