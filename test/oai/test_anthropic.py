@@ -309,7 +309,7 @@ def test_extract_json_response(anthropic_client):
                 type="thinking",
             )
         ],
-        model="claude-3-5-sonnet-latest",
+        model="claude-sonnet-4-5",
         role="assistant",
         stop_reason="end_turn",
         type="message",
@@ -320,6 +320,116 @@ def test_extract_json_response(anthropic_client):
     assert isinstance(result, MathReasoning)
     assert len(result.steps) == 2
     assert result.final_answer == "x = -3.75"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_extract_json_response_isinstance_textblock(anthropic_client):
+    """Test that _extract_json_response correctly uses isinstance for TextBlock."""
+
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    anthropic_client._response_format = MathReasoning
+
+    # Test with TextBlock - verifies isinstance check at line 492
+    text_block_response = Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text="""{
+                    "steps": [
+                        {"explanation": "Add numbers", "output": "5"}
+                    ],
+                    "final_answer": "5"
+                }""",
+                type="text",
+            )
+        ],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(text_block_response)
+    assert isinstance(result, MathReasoning)
+    assert result.final_answer == "5"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_extract_json_response_isinstance_thinkingblock(anthropic_client):
+    """Test that _extract_json_response correctly uses isinstance for ThinkingBlock."""
+
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    anthropic_client._response_format = MathReasoning
+
+    # Test with ThinkingBlock - verifies isinstance check at line 495
+    thinking_block_response = Message(
+        id="msg_123",
+        content=[
+            ThinkingBlock(
+                signature="test_sig",
+                thinking="""{
+                    "steps": [
+                        {"explanation": "Multiply numbers", "output": "10"}
+                    ],
+                    "final_answer": "10"
+                }""",
+                type="thinking",
+            )
+        ],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    result = anthropic_client._extract_json_response(thinking_block_response)
+    assert isinstance(result, MathReasoning)
+    assert result.final_answer == "10"
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_extract_json_response_unrecognized_block_type(anthropic_client):
+    """Test that _extract_json_response handles unrecognized block types gracefully."""
+
+    class SimpleResponse(BaseModel):
+        value: str
+
+    anthropic_client._response_format = SimpleResponse
+
+    # Create a mock block type that is neither TextBlock nor ThinkingBlock
+    class UnknownBlock:
+        def __init__(self):
+            self.type = "unknown"
+
+    # Test with empty content list - should result in empty string and fail JSON extraction
+    empty_content_response = Message(
+        id="msg_123",
+        content=[],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+    with pytest.raises(ValueError, match="No valid JSON found in response for Structured Output."):
+        anthropic_client._extract_json_response(empty_content_response)
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
