@@ -614,8 +614,8 @@ class OpenAIClient:
                 else:
                     if chunk_cc.usage:
                         # Usage will be in the last chunk as we have set include_usage=True on stream_options
-                        chunks_usage_prompt_tokens = chunk_cc.usage.prompt_tokens
-                        chunks_usage_completion_tokens = chunk_cc.usage.completion_tokens
+                        chunks_usage_prompt_tokens = getattr(chunk_cc.usage, "prompt_tokens", 0)
+                        chunks_usage_completion_tokens = getattr(chunk_cc.usage, "completion_tokens", 0)
 
                 if not chunks_id:
                     chunks_id = chunk_cc.id
