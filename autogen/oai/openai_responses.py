@@ -240,7 +240,7 @@ class OpenAIResponsesClient:
             call_id: The call_id for this patch operation
             workspace_dir: a dedicated path for workspace directory
             allowed_paths: list of allowed paths for the workspace directory
-
+            async_patches: apply patches asynchronously/ synchronously
         Returns:
             Dict with type, call_id, status, and output keys matching apply_patch_call_output format
         """

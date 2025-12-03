@@ -1229,21 +1229,31 @@ def test_apply_patch_operation_with_async_patches(mocked_openai_client):
 
         # Test create_file with async_patches
         operation = {"type": "create_file", "path": "test_async.py", "diff": "@@ -0,0 +1,1 @@\n+async_content"}
-        result = client._apply_patch_operation(operation, "call_async_create", workspace_dir=temp_dir, async_patches=True)
+        result = client._apply_patch_operation(
+            operation, "call_async_create", workspace_dir=temp_dir, async_patches=True
+        )
         assert result.call_id == "call_async_create"
         assert result.status == "completed"
         assert "Created test_async.py" in result.output
 
         # Test update_file with async_patches
-        operation = {"type": "update_file", "path": "test_async.py", "diff": "@@ -1,1 +1,1 @@\n-async_content\n+updated_async"}
-        result = client._apply_patch_operation(operation, "call_async_update", workspace_dir=temp_dir, async_patches=True)
+        operation = {
+            "type": "update_file",
+            "path": "test_async.py",
+            "diff": "@@ -1,1 +1,1 @@\n-async_content\n+updated_async",
+        }
+        result = client._apply_patch_operation(
+            operation, "call_async_update", workspace_dir=temp_dir, async_patches=True
+        )
         assert result.call_id == "call_async_update"
         assert result.status == "completed"
         assert "Updated test_async.py" in result.output
 
         # Test delete_file with async_patches
         operation = {"type": "delete_file", "path": "test_async.py"}
-        result = client._apply_patch_operation(operation, "call_async_delete", workspace_dir=temp_dir, async_patches=True)
+        result = client._apply_patch_operation(
+            operation, "call_async_delete", workspace_dir=temp_dir, async_patches=True
+        )
         assert result.call_id == "call_async_delete"
         assert result.status == "completed"
         assert "Deleted test_async.py" in result.output
