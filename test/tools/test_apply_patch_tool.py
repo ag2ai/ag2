@@ -175,7 +175,7 @@ class TestWorkspaceEditor:
 +hello
 +world"""
         operation = {"path": "test.txt", "diff": diff}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
         assert "Created test.txt" in result["output"]
 
@@ -189,7 +189,7 @@ class TestWorkspaceEditor:
         diff = """@@ -0,0 +1,1 @@
 +content"""
         operation = {"path": "nested/dir/test.txt", "diff": diff}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
 
         file_path = editor.workspace_dir / "nested" / "dir" / "test.txt"
@@ -207,7 +207,7 @@ class TestWorkspaceEditor:
 -old content
 +new content"""
         operation = {"path": "test.txt", "diff": diff}
-        result = await editor.update_file(operation)
+        result = editor.update_file(operation)
         assert result["status"] == "completed"
         assert "Updated test.txt" in result["output"]
         assert file_path.read_text() == "new content"
@@ -219,7 +219,7 @@ class TestWorkspaceEditor:
 -old
 +new"""
         operation = {"path": "nonexistent.txt", "diff": diff}
-        result = await editor.update_file(operation)
+        result = editor.update_file(operation)
         assert result["status"] == "failed"
         assert "File not found" in result["output"]
 
@@ -230,7 +230,7 @@ class TestWorkspaceEditor:
         file_path.write_text("content")
 
         operation = {"path": "test.txt"}
-        result = await editor.delete_file(operation)
+        result = editor.delete_file(operation)
         assert result["status"] == "completed"
         assert "Deleted test.txt" in result["output"]
         assert not file_path.exists()
@@ -239,7 +239,7 @@ class TestWorkspaceEditor:
     async def test_delete_file_not_found(self, editor: WorkspaceEditor) -> None:
         """Test deleting a non-existent file."""
         operation = {"path": "nonexistent.txt"}
-        result = await editor.delete_file(operation)
+        result = editor.delete_file(operation)
         assert result["status"] == "failed"
         assert "File not found" in result["output"]
 
@@ -253,7 +253,7 @@ class TestWorkspaceEditor:
 
         # Use a relative path that escapes the workspace
         operation = {"path": "../../outside_file.txt", "diff": "@@ -0,0 +1,1 @@\n+test"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         # Should fail because path doesn't match allowed_paths pattern
         assert result["status"] == "failed"
         assert "not allowed" in result["output"].lower()
@@ -266,17 +266,17 @@ class TestWorkspaceEditor:
 
         # Should allow .py files
         operation = {"path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+code"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
 
         # Should allow files in src/
         operation = {"path": "src/main.py", "diff": "@@ -0,0 +1,1 @@\n+code"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
 
         # Should reject .txt files
         operation = {"path": "test.txt", "diff": "@@ -0,0 +1,1 @@\n+content"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "failed"
         assert "not allowed" in result["output"].lower()
 
@@ -285,7 +285,7 @@ class TestWorkspaceEditor:
         """Test error handling in create_file."""
         # Invalid diff that causes an error
         operation = {"path": "test.txt", "diff": "@@ invalid diff"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         # Should handle gracefully
         assert result["status"] in ["completed", "failed"]
 
@@ -297,7 +297,7 @@ class TestWorkspaceEditor:
 
         # Should allow cloud storage paths
         operation = {"path": "my-bucket/src/file.py", "diff": "@@ -0,0 +1,1 @@\n+code"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
 
     @pytest.mark.asyncio
@@ -308,12 +308,12 @@ class TestWorkspaceEditor:
 
         # Should allow nested paths
         operation = {"path": "src/utils/helpers/file.py", "diff": "@@ -0,0 +1,1 @@\n+code"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "completed"
 
         # Should reject paths outside src/
         operation = {"path": "other/file.py", "diff": "@@ -0,0 +1,1 @@\n+code"}
-        result = await editor.create_file(operation)
+        result = editor.create_file(operation)
         assert result["status"] == "failed"
         assert "not allowed" in result["output"].lower()
 
