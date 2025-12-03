@@ -1,7 +1,9 @@
 import os
 
-from autogen import ConversableAgent, LLMConfig
 from dotenv import load_dotenv
+
+from autogen import ConversableAgent, LLMConfig
+
 load_dotenv()
 
 llm_config = LLMConfig(
@@ -26,7 +28,7 @@ result = coding_agent.initiate_chat(
     recipient=coding_agent,
     message="""
     Create a new Python project folder called 'calculator' with the following structure:
-    1. Create a main.py file with a Calculator class that has methods for add, subtract, multiply, and divide  
+    1. Create a main.py file with a Calculator class that has methods for add, subtract, multiply, and divide
     """,
     max_turns=2,
     clear_history=True,
