@@ -38,7 +38,7 @@ class PatchEditor(Protocol):
         """
         ...
 
-    async def update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
+    def update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Update an existing file sync.
 
         Args:
