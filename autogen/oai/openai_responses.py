@@ -591,7 +591,7 @@ class OpenAIResponsesClient:
             self._shell_executor = ShellExecutor(
                 workspace_dir=workspace_dir if workspace_dir else os.getcwd(),
                 allowed_paths=allowed_paths if allowed_paths else [],
-                allowed_commands=allowed_commands if allowed_commands else [],
+                allowed_commands=allowed_commands,
                 denied_commands=denied_commands if denied_commands else [],
                 enable_command_filtering=enable_command_filtering if enable_command_filtering else True,
                 dangerous_patterns=dangerous_patterns
