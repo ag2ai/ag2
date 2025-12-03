@@ -477,6 +477,16 @@ class OpenAIClient:
             if msg.get("role", "") == "system":
                 msg["role"] = "user"
 
+    @staticmethod
+    def _add_streaming_usage_to_params(params: dict[str, Any]) -> dict[str, Any]:
+        if params.get("stream", False):
+            # Add include_usage to the params if streaming
+            if "stream_options" not in params or "include_usage" not in params["stream_options"]:
+                if "stream_options" not in params:
+                    params["stream_options"] = {}
+                params["stream_options"]["include_usage"] = True
+        return params
+
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
@@ -488,7 +498,9 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None or "response_format" in params:
+        is_structured_output = self.response_format is not None or "response_format" in params
+
+        if is_structured_output:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
@@ -530,13 +542,11 @@ class OpenAIClient:
         if is_mistral:
             OpenAIClient._convert_system_role_to_user(params["messages"])
 
-        # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params and not is_o1:
-            # Add include_usage to the params if streaming
-            if "stream_options" not in params or "include_usage" not in params["stream_options"]:
-                if "stream_options" not in params:
-                    params["stream_options"] = {}
-                params["stream_options"]["include_usage"] = True
+        # If streaming is enabled and has messages, then iterate over the chunks of the response and is not using structured outputs.
+        if params.get("stream", False) and "messages" in params and not is_o1 and not is_structured_output:
+
+            # Usage will be returned as the last chunk
+            params = OpenAIClient._add_streaming_usage_to_params(params)
 
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
@@ -553,98 +563,72 @@ class OpenAIClient:
             chunks_usage_prompt_tokens: int = 0
             chunks_usage_completion_tokens: int = 0
             for chunk in create_or_parse(**params):
-                if isinstance(chunk, tuple):
-                    # Structured Outputs with streaming results in tuples, and will not support function calls
-                    if "id" in chunk:
-                        chunks_id = chunk[1]  # E.g. ('id', 'chatcmpl-CiTWMHQDsAENBXWHWQs7liMAfBsUU')
-                    elif "model" in chunk:
-                        chunks_model = chunk[1]  # E.g. ('model', 'gpt-5.1-2025-11-13')
-                    elif "created" in chunk:
-                        chunks_created = chunk[1]  # E.g. ('created', 1700000000)
-                    elif "usage" in chunk:
-                        chunks_usage: CompletionUsage = chunk[1]  # E.g. ('usage', CompletionUsage{...})
-                        chunks_usage_prompt_tokens += chunks_usage.prompt_tokens
-                        chunks_usage_completion_tokens += chunks_usage.completion_tokens
-                    elif "choices" in chunk:
-                        chunk_choices: list[Choice] = chunk[
-                            1
-                        ]  # E.g. ('choices', [Choice(finish_reason='stop', index=0, logprob...
-                        for choice in chunk_choices:
-                            logger.info(f"Processing choices chunk: {choice}")
-                            content = choice.message.content
-                            finish_reasons[choice.index] = choice.finish_reason
+                if not isinstance(chunk, ChatCompletionChunk):
+                    continue
+                
+                chunk_cc: ChatCompletionChunk = chunk
+                if chunk_cc.choices:
+                    for choice in chunk_cc.choices:
+                        content = choice.delta.content
+                        tool_calls_chunks = choice.delta.tool_calls
+                        finish_reasons[choice.index] = choice.finish_reason
 
-                            if content is not None:
-                                iostream.send(StreamEvent(content=content))
-                                response_contents[choice.index] += content
-                                completion_tokens += 1
-                    else:
-                        logger.info(f"Received tuple chunk that wasn't processed : {chunk}")
-                elif isinstance(chunk, ChatCompletionChunk):
-                    # Non-Structured Output stream
-                    chunk_cc: ChatCompletionChunk = chunk
-                    if chunk_cc.choices:
-                        for choice in chunk_cc.choices:
-                            content = choice.delta.content
-                            tool_calls_chunks = choice.delta.tool_calls
-                            finish_reasons[choice.index] = choice.finish_reason
-
-                            # todo: remove this after function calls are removed from the API
-                            # the code should work regardless of whether function calls are removed or not, but test_chat_functions_stream should fail
-                            # begin block
-                            function_call_chunk = (
-                                choice.delta.function_call if hasattr(choice.delta, "function_call") else None
-                            )
+                        # todo: remove this after function calls are removed from the API
+                        # the code should work regardless of whether function calls are removed or not, but test_chat_functions_stream should fail
+                        # begin block
+                        function_call_chunk = (
+                            choice.delta.function_call if hasattr(choice.delta, "function_call") else None
+                        )
+                        # Handle function call
+                        if function_call_chunk:
                             # Handle function call
                             if function_call_chunk:
-                                # Handle function call
-                                if function_call_chunk:
-                                    full_function_call, completion_tokens = (
-                                        OpenAIWrapper._update_function_call_from_chunk(
-                                            function_call_chunk, full_function_call, completion_tokens
-                                        )
+                                full_function_call, completion_tokens = (
+                                    OpenAIWrapper._update_function_call_from_chunk(
+                                        function_call_chunk, full_function_call, completion_tokens
                                     )
+                                )
+                            if not content:
+                                continue
+                        # end block
+
+                        # Handle tool calls
+                        if tool_calls_chunks:
+                            for tool_calls_chunk in tool_calls_chunks:
+                                # the current tool call to be reconstructed
+                                ix = tool_calls_chunk.index
+                                if full_tool_calls is None:
+                                    full_tool_calls = []
+                                if ix >= len(full_tool_calls):
+                                    # in case ix is not sequential
+                                    full_tool_calls = full_tool_calls + [None] * (ix - len(full_tool_calls) + 1)
+
+                                full_tool_calls[ix], completion_tokens = (
+                                    OpenAIWrapper._update_tool_calls_from_chunk(
+                                        tool_calls_chunk, full_tool_calls[ix], completion_tokens
+                                    )
+                                )
                                 if not content:
                                     continue
-                            # end block
 
-                            # Handle tool calls
-                            if tool_calls_chunks:
-                                for tool_calls_chunk in tool_calls_chunks:
-                                    # the current tool call to be reconstructed
-                                    ix = tool_calls_chunk.index
-                                    if full_tool_calls is None:
-                                        full_tool_calls = []
-                                    if ix >= len(full_tool_calls):
-                                        # in case ix is not sequential
-                                        full_tool_calls = full_tool_calls + [None] * (ix - len(full_tool_calls) + 1)
+                        # End handle tool calls
 
-                                    full_tool_calls[ix], completion_tokens = (
-                                        OpenAIWrapper._update_tool_calls_from_chunk(
-                                            tool_calls_chunk, full_tool_calls[ix], completion_tokens
-                                        )
-                                    )
-                                    if not content:
-                                        continue
+                        # If content is present, print it to the terminal and update response variables
+                        if content is not None:
+                            iostream.send(StreamEvent(content=content))
+                            response_contents[choice.index] += content
+                            completion_tokens += 1
+                        else:
+                            pass
+                else:
+                    if chunk_cc.usage:
+                        # Usage will be in the last chunk as we have set include_usage=True on stream_options
+                        chunks_usage_prompt_tokens += chunk_cc.usage.prompt_tokens
+                        chunks_usage_completion_tokens += chunk_cc.usage.completion_tokens
 
-                            # End handle tool calls
-
-                            # If content is present, print it to the terminal and update response variables
-                            if content is not None:
-                                iostream.send(StreamEvent(content=content))
-                                response_contents[choice.index] += content
-                                completion_tokens += 1
-                            else:
-                                pass
-                    else:
-                        if chunk_cc.usage:
-                            # Usage will be in the last chunk as we have set include_usage=True on stream_options
-                            chunks_usage_prompt_tokens += chunk_cc.usage.prompt_tokens
-                            chunks_usage_completion_tokens += chunk_cc.usage.completion_tokens
-
-                    chunks_id = chunk_cc.id
-                    chunks_model = chunk_cc.model
-                    chunks_created = chunk_cc.created
+                chunks_id = chunk_cc.id
+                chunks_model = chunk_cc.model
+                chunks_created = chunk_cc.created
 
             # Prepare the final ChatCompletion object based on the accumulated data
             response = ChatCompletion(
