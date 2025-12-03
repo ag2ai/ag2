@@ -284,7 +284,7 @@ class OpenAIResponsesClient:
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
         apply_patch_tool_params = {"type": "apply_patch"}
-        workspace_dir = params.pop("workspace_dir", None)
+        workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
         built_in_tools = params.pop("built_in_tools", [])
 
