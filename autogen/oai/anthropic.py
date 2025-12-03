@@ -172,24 +172,10 @@ def supports_native_structured_outputs(model: str) -> bool:
         >>> supports_native_structured_outputs("claude-3-haiku-20240307")
         False
     """
-    # Exact match for known models
-    if model in STRUCTURED_OUTPUT_MODELS:
-        return True
-
-    # Pattern matching for versioned models
-    # Support future Sonnet 3.5+ and 3.7+ versions
-    if model.startswith(("claude-3-5-sonnet-", "claude-3-7-sonnet-")):
-        return True
-
-    # Support future Sonnet 4.5+ versions (NOT Sonnet 4.0)
-    if model.startswith("claude-sonnet-4-5"):
-        return True
-
-    # Support future Opus 4.x versions
-    if model.startswith("claude-opus-4"):
-        return True
-
-    return False
+    return (
+        model.startswith(("claude-3-5-sonnet-", "claude-3-7-sonnet-", "claude-sonnet-4-5", "claude-opus-4"))
+        or model in STRUCTURED_OUTPUT_MODELS
+    )
 
 
 def has_beta_messages_api() -> bool:
@@ -265,9 +251,7 @@ def _is_text_block(content: Any) -> bool:
     """
     if type(content) == TextBlock:
         return True
-    if BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock:
-        return True
-    return False
+    return BETA_BLOCKS_AVAILABLE and type(content) == BetaTextBlock
 
 
 def _is_tool_use_block(content: Any) -> bool:
@@ -288,10 +272,7 @@ def _is_tool_use_block(content: Any) -> bool:
         return True
 
     # Fallback: check by name if type comparison fails
-    if content_type_name in ("ToolUseBlock", "BetaToolUseBlock"):
-        return True
-
-    return False
+    return content_type_name in ("ToolUseBlock", "BetaToolUseBlock")
 
 
 def _is_thinking_block(content: Any) -> bool:
@@ -309,11 +290,7 @@ def _is_thinking_block(content: Any) -> bool:
     if content_type == ThinkingBlock:
         return True
 
-    # Fallback: check by name if type comparison fails
-    if content_type_name == "ThinkingBlock":
-        return True
-
-    return False
+    return content_type_name == "ThinkingBlock"
 
 
 def transform_schema_for_anthropic(schema: dict[str, Any]) -> dict[str, Any]:
