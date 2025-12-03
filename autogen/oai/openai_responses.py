@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import copy
 import logging
 import os
@@ -224,6 +225,7 @@ class OpenAIResponsesClient:
         call_id: str,
         workspace_dir: str = os.getcwd(),
         allowed_paths: list[str] = ["**"],
+        async_patches: bool = False,
     ) -> ApplyPatchCallOutput:
         """Apply a patch operation and return apply_patch_call_output dict.
 
@@ -244,22 +246,35 @@ class OpenAIResponsesClient:
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
 
         op_type = operation.get("type")
-        import asyncio
 
         try:
             # Execute the patch operation
-            if op_type == "create_file":
-                result = asyncio.run(editor.create_file(operation))
-            elif op_type == "update_file":
-                result = asyncio.run(editor.update_file(operation))
-            elif op_type == "delete_file":
-                result = asyncio.run(editor.delete_file(operation))
-            else:
-                return ApplyPatchCallOutput(
-                    call_id=call_id,
-                    status="failed",
-                    output=f"Unknown operation type: {op_type}",
-                )
+            if async_patches:
+                if op_type == "create_file":
+                    result = asyncio.run(editor.a_create_file(operation))
+                elif op_type == "update_file":
+                    result = asyncio.run(editor.a_update_file(operation))
+                elif op_type == "delete_file":
+                    result = asyncio.run(editor.a_delete_file(operation))
+                else:
+                    return ApplyPatchCallOutput(
+                        call_id=call_id,
+                        status="failed",
+                        output=f"Unknown operation type: {op_type}",
+                    )
+            elif not async_patches:
+                if op_type == "create_file":
+                    result = editor.create_file(operation)
+                elif op_type == "update_file":
+                    result = editor.update_file(operation)
+                elif op_type == "delete_file":
+                    result = editor.delete_file(operation)
+                else:
+                    return ApplyPatchCallOutput(
+                        call_id=call_id,
+                        status="failed",
+                        output=f"Unknown operation type: {op_type}",
+                    )
             # Return in the correct format
             return ApplyPatchCallOutput(
                 call_id=call_id,

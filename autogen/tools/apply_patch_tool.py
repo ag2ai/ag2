@@ -207,7 +207,6 @@ class WorkspaceEditor:
                     - ["src/**", "tests/**"] - Allow paths in multiple directories
         """
         workspace_dir = workspace_dir if workspace_dir is not None else os.getcwd()
-        print("workspace_dir", workspace_dir)
         self.workspace_dir = Path(workspace_dir).resolve()
         # Use "**" to match all files and directories recursively (including root)
         self.allowed_paths = allowed_paths or ["**"]
@@ -245,8 +244,6 @@ class WorkspaceEditor:
         # Cloud storage paths are validated by pattern matching above
         try:
             full_path = (Path(self.workspace_dir) / path).resolve()
-            print("workspace_dir", self.workspace_dir)
-            print("full_path", full_path)
 
             # Security: Ensure path is within workspace (for local filesystem)
             if not str(full_path).startswith(str(self.workspace_dir)):
