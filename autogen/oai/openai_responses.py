@@ -554,7 +554,7 @@ class OpenAIResponsesClient:
         apply_patch_tool_params = {"type": "apply_patch"}
         workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
-        built_in_tools = params.pop("built_in_tools", [])
+        built_in_tools = params.pop('built_in_tools', [])
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
