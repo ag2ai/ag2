@@ -286,6 +286,7 @@ class OpenAIResponsesClient:
         apply_patch_tool_params = {"type": "apply_patch"}
         workspace_dir = params.pop("workspace_dir", None)
         allowed_paths = params.pop("allowed_paths", ["**"])
+        built_in_tools = params.pop("built_in_tools", [])
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
@@ -351,12 +352,27 @@ class OpenAIResponsesClient:
             if apply_patch_call_ids:
                 for call_id, apply_patch_call in apply_patch_call_ids.items():
                     operation = apply_patch_call.get("operation", {})
-                    if operation:  # Only process if we have an operation
-                        # Apply the patch operation and get the full output dict
+                    if operation and "apply_patch_async" in built_in_tools:  # Only process if we have an operation
+                        # Apply the patch operation and get the full output dict asynchronously
                         output = self._apply_patch_operation(
-                            operation, call_id=call_id, workspace_dir=workspace_dir, allowed_paths=allowed_paths
+                            operation,
+                            call_id=call_id,
+                            workspace_dir=workspace_dir,
+                            allowed_paths=allowed_paths,
+                            async_patches=True,
                         )
                         apply_patch_outputs.append(output.to_dict())
+                    elif operation and "apply_patch" not in built_in_tools:
+                        # Apply the patch operation and get the full output dict synchronously
+                        apply_patch_outputs.append(
+                            self._apply_patch_operation(
+                                operation,
+                                call_id=call_id,
+                                workspace_dir=workspace_dir,
+                                allowed_paths=allowed_paths,
+                                async_patches=False,
+                            ).to_dict()
+                        )
 
             # Add all apply_patch_call_outputs at the beginning of input_items
             input_items.extend(apply_patch_outputs)
@@ -419,7 +435,6 @@ class OpenAIResponsesClient:
         # Initialize tools list
         tools_list = []
         # Back-compat: add default tools
-        built_in_tools = params.pop("built_in_tools", [])
         if built_in_tools:
             if "image_generation" in built_in_tools:
                 tools_list.append(image_generation_tool_params)
