@@ -558,6 +558,7 @@ class OpenAIClient:
             chunks_usage_completion_tokens: int = 0
             for chunk in create_or_parse(**params):
                 if not isinstance(chunk, ChatCompletionChunk):
+                    logger.debug(f"Skipping unexpected chunk type: {type(chunk)}")
                     continue
 
                 chunk_cc: ChatCompletionChunk = chunk
@@ -613,12 +614,13 @@ class OpenAIClient:
                 else:
                     if chunk_cc.usage:
                         # Usage will be in the last chunk as we have set include_usage=True on stream_options
-                        chunks_usage_prompt_tokens += chunk_cc.usage.prompt_tokens
-                        chunks_usage_completion_tokens += chunk_cc.usage.completion_tokens
+                        chunks_usage_prompt_tokens = chunk_cc.usage.prompt_tokens
+                        chunks_usage_completion_tokens = chunk_cc.usage.completion_tokens
 
-                chunks_id = chunk_cc.id
-                chunks_model = chunk_cc.model
-                chunks_created = chunk_cc.created
+                if not chunks_id:
+                    chunks_id = chunk_cc.id
+                    chunks_model = chunk_cc.model
+                    chunks_created = chunk_cc.created
 
             # Prepare the final ChatCompletion object based on the accumulated data
             response = ChatCompletion(
