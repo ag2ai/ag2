@@ -478,14 +478,9 @@ class OpenAIClient:
                 msg["role"] = "user"
 
     @staticmethod
-    def _add_streaming_usage_to_params(params: dict[str, Any]) -> dict[str, Any]:
+    def _add_streaming_usage_to_params(params: dict[str, Any]) -> None:
         if params.get("stream", False):
-            # Add include_usage to the params if streaming
-            if "stream_options" not in params or "include_usage" not in params["stream_options"]:
-                if "stream_options" not in params:
-                    params["stream_options"] = {}
-                params["stream_options"]["include_usage"] = True
-        return params
+            params.setdefault("stream_options", {}).setdefault("include_usage", True)
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
@@ -544,9 +539,8 @@ class OpenAIClient:
 
         # If streaming is enabled and has messages, then iterate over the chunks of the response and is not using structured outputs.
         if params.get("stream", False) and "messages" in params and not is_o1 and not is_structured_output:
-
             # Usage will be returned as the last chunk
-            params = OpenAIClient._add_streaming_usage_to_params(params)
+            OpenAIClient._add_streaming_usage_to_params(params)
 
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
@@ -565,7 +559,7 @@ class OpenAIClient:
             for chunk in create_or_parse(**params):
                 if not isinstance(chunk, ChatCompletionChunk):
                     continue
-                
+
                 chunk_cc: ChatCompletionChunk = chunk
                 if chunk_cc.choices:
                     for choice in chunk_cc.choices:
@@ -583,10 +577,8 @@ class OpenAIClient:
                         if function_call_chunk:
                             # Handle function call
                             if function_call_chunk:
-                                full_function_call, completion_tokens = (
-                                    OpenAIWrapper._update_function_call_from_chunk(
-                                        function_call_chunk, full_function_call, completion_tokens
-                                    )
+                                full_function_call, completion_tokens = OpenAIWrapper._update_function_call_from_chunk(
+                                    function_call_chunk, full_function_call, completion_tokens
                                 )
                             if not content:
                                 continue
@@ -603,10 +595,8 @@ class OpenAIClient:
                                     # in case ix is not sequential
                                     full_tool_calls = full_tool_calls + [None] * (ix - len(full_tool_calls) + 1)
 
-                                full_tool_calls[ix], completion_tokens = (
-                                    OpenAIWrapper._update_tool_calls_from_chunk(
-                                        tool_calls_chunk, full_tool_calls[ix], completion_tokens
-                                    )
+                                full_tool_calls[ix], completion_tokens = OpenAIWrapper._update_tool_calls_from_chunk(
+                                    tool_calls_chunk, full_tool_calls[ix], completion_tokens
                                 )
                                 if not content:
                                     continue
