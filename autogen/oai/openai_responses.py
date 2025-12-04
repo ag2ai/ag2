@@ -201,7 +201,7 @@ class OpenAIResponsesClient:
             contents = m.get("content")
             is_last_completed_response = False
             has_apply_patch_call = False
-            
+
             if isinstance(contents, list):
                 for c in contents:
                     # Check if message contains apply_patch_call items
@@ -253,7 +253,6 @@ class OpenAIResponsesClient:
         from autogen.tools.apply_patch_tool import WorkspaceEditor
 
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
-
         op_type = operation.get("type")
 
         def _run_async_in_thread(coro):
@@ -340,10 +339,10 @@ class OpenAIResponsesClient:
         image_generation_tool_params: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Normalize messages for Responses API format.
-        
+
         This method processes apply_patch_call items from messages before sending to recipient,
         implementing the diff generation (sender) -> executor (recipient) pattern.
-        
+
         Args:
             messages: List of messages to normalize
             built_in_tools: List of built-in tools enabled
@@ -351,12 +350,12 @@ class OpenAIResponsesClient:
             allowed_paths: Allowed paths for apply_patch operations
             previous_apply_patch_calls: Apply patch calls from previous response
             image_generation_tool_params: Image generation tool parameters dict (modified in place)
-            
+
         Returns:
             List of input items in Responses API format
         """
         input_items = []
-        
+
         # Collect apply_patch_call items from messages
         message_apply_patch_calls = {}
         for msg in messages:
@@ -402,7 +401,7 @@ class OpenAIResponsesClient:
                             async_patches=False,
                         )
                         message_apply_patch_outputs.append(output.to_dict())
-        
+
         # Process apply_patch_call items from previous_response_id (same agent continuation)
         previous_apply_patch_outputs = []
         if previous_apply_patch_calls and ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
@@ -427,10 +426,10 @@ class OpenAIResponsesClient:
                             async_patches=False,
                         )
                         previous_apply_patch_outputs.append(output.to_dict())
-        
+
         # Combine all outputs: message outputs first (from sender), then previous response outputs
         all_apply_patch_outputs = message_apply_patch_outputs + previous_apply_patch_outputs
-        
+
         # Add all outputs at the beginning
         if all_apply_patch_outputs:
             input_items.extend(all_apply_patch_outputs)
@@ -438,12 +437,12 @@ class OpenAIResponsesClient:
         # Convert messages to Responses API format, filtering out apply_patch_call items
         # (they've been processed above and outputs are already included)
         processed_apply_patch_call_ids = set(message_apply_patch_calls.keys()) | set(previous_apply_patch_calls.keys())
-        
+
         for m in messages[::-1]:  # reverse the list to get the last item first
             role = m.get("role", "user")
             content = m.get("content")
             blocks = []
-            
+
             if role != "tool":
                 content_type = "output_text" if role == "assistant" else "input_text"
                 if isinstance(content, list):
@@ -467,7 +466,7 @@ class OpenAIResponsesClient:
                             raise ValueError(f"Invalid content type: {c.get('type')}")
                 else:
                     blocks.append({"type": content_type, "text": content})
-                
+
                 # Only append if we have valid content blocks
                 if blocks:
                     input_items.append({"role": role, "content": blocks})
@@ -475,7 +474,7 @@ class OpenAIResponsesClient:
                 # Tool call response
                 tool_call_id = m.get("tool_call_id", None)
                 content = content_str(m.get("content"))
-                
+
                 # Skip if this corresponds to an already-processed apply_patch_call
                 if tool_call_id and tool_call_id in processed_apply_patch_call_ids:
                     continue
