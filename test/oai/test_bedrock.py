@@ -4,14 +4,19 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
+import asyncio
+import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
+from autogen.agentchat import ConversableAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, format_tools, oai_messages_to_bedrock_messages
+from test.credentials import Credentials, get_credentials_from_env_vars
 
 
 # Fixtures for mock data
@@ -429,3 +434,84 @@ def test_format_tools_rejects_non_dict_properties():
 
     with pytest.raises(TypeError, match="Property 'oops' schema must be a dict"):
         format_tools(tools)
+
+
+# Integration tests with real Bedrock credentials
+@pytest.fixture
+def bedrock_credentials() -> Credentials:
+    """Fixture to get Bedrock credentials from environment variables."""
+    try:
+        return get_credentials_from_env_vars(filter_dict={"api_type": "bedrock"})
+    except Exception:
+        pytest.skip("Bedrock credentials not available (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required)")
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@pytest.mark.integration
+def test_execute_function_resolves_async_tool_with_bedrock(bedrock_credentials: Credentials):
+    """Integration test: execute_function should await async tools instead of returning coroutine reprs with real Bedrock client."""
+    agent = ConversableAgent(name="agent", llm_config=bedrock_credentials.llm_config)
+    observed_inputs: list[str] = []
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Uppercase text asynchronously")
+    async def uppercase_tool(text: str) -> str:
+        observed_inputs.append(text)
+        await asyncio.sleep(0)
+        return text.upper()
+
+    success, payload = agent.execute_function(
+        {"name": "uppercase_tool", "arguments": json.dumps({"text": "nyc"})},
+        call_id="tool-call-1",
+    )
+
+    assert success is True
+    assert payload["content"] == "NYC"
+    assert observed_inputs == ["nyc"]
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not (os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")),
+    reason="Bedrock credentials not available (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required)",
+)
+async def test_async_tool_execution_with_bedrock_integration(bedrock_credentials: Credentials):
+    """Integration test: async tool execution with real Bedrock client, checking summary and chat history."""
+    agent = ConversableAgent(
+        name="agent",
+        llm_config=bedrock_credentials.llm_config,
+        system_message="You are a helpful assistant. Use tools when needed.",
+    )
+
+    observed_inputs: list[str] = []
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Uppercase text asynchronously. Useful for converting text to uppercase.")
+    async def uppercase_tool(text: str) -> str:
+        """Uppercase the given text."""
+        observed_inputs.append(text)
+        await asyncio.sleep(0.1)  # Simulate async operation
+        return text.upper()
+
+    # Run the agent with a message that should trigger tool usage
+    result = await agent.a_run(
+        message="say 'hello bedrock'",
+        max_turns=3,
+        user_input=False,
+        summary_method="reflection_with_llm",
+    )
+
+    # Wait for the result to process
+    await result.process()
+
+    # Assert summary is generated and contains relevant information
+    summary = await result.summary
+    assert "hello" in summary.lower()
+    all_content = " ".join([
+        msg.get("content", "") for msg in result.chat_history if isinstance(msg.get("content"), str)
+    ])
+    assert "HELLO BEDROCK" in all_content or "hello bedrock".upper() in all_content, (
+        f"Chat history should contain the uppercase result. Content: {all_content[:200]}"
+    )
