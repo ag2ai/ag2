@@ -216,13 +216,13 @@ def get_credentials_from_env_vars(
     anthropic_config = build_config_from_env(
         api_type="anthropic",
         env_var_name="ANTHROPIC_API_KEY",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
     )
     if anthropic_config:
         config_list.append({**anthropic_config, "tags": ["anthropic-claude-sonnet"]})
         config_list.append({
             **anthropic_config,
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-5-20250929",
             "tags": ["anthropic-claude-sonnet"],
         })
         config_list.append({**anthropic_config, "model": "claude-3-opus-20240229", "tags": ["anthropic-claude-opus"]})
