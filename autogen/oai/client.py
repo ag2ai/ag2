@@ -12,6 +12,7 @@ import re
 import sys
 import uuid
 import warnings
+from collections import deque
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any, Literal
@@ -805,6 +806,14 @@ class OpenAIWrapper:
         self.routing_method = base_config.get("routing_method") or "fixed_order"
         self._round_robin_index = 0
 
+        # Response metadata storage (for serializable responses)
+        # Store metadata separately instead of mutating response objects
+        self._response_metadata: dict[str, dict[str, Any]] = {}  # response_id → metadata
+        self._response_buffer: deque[str] = deque(maxlen=100)  # Circular buffer of response IDs
+        self._response_buffer_size = base_config.get("response_buffer_size", 100)
+        if self._response_buffer_size != 100:
+            self._response_buffer = deque(maxlen=self._response_buffer_size)
+
         # Remove routing_method from extra_kwargs after it has been used to set self.routing_method
         # This ensures it's not part of the individual client configurations that are based on extra_kwargs.
         extra_kwargs.pop("routing_method", None)
@@ -837,6 +846,30 @@ class OpenAIWrapper:
         create_config = {k: v for k, v in config.items() if k not in self.extra_kwargs}
         extra_kwargs = {k: v for k, v in config.items() if k in self.extra_kwargs}
         return create_config, extra_kwargs
+
+    def _store_response_metadata(
+        self, response_id: str, client: ModelClient, config_id: int, pass_filter: bool
+    ) -> None:
+        """Store response metadata with circular buffer to prevent memory overflow.
+
+        Args:
+            response_id: Unique ID of the response (response.id)
+            client: ModelClient that generated the response
+            config_id: Index of the client in config_list
+            pass_filter: Whether the response passed the filter function
+        """
+        # If buffer is full, remove oldest entry
+        if len(self._response_buffer) >= self._response_buffer_size:
+            oldest_id = self._response_buffer[0]  # Will be auto-removed by deque
+            self._response_metadata.pop(oldest_id, None)
+
+        # Add new metadata
+        self._response_metadata[response_id] = {
+            "client": client,
+            "config_id": config_id,
+            "pass_filter": pass_filter,
+        }
+        self._response_buffer.append(response_id)
 
     def _configure_azure_openai(self, config: dict[str, Any], openai_config: dict[str, Any]) -> None:
         openai_config["azure_deployment"] = openai_config.get("azure_deployment", config.get("model"))
@@ -959,6 +992,18 @@ class OpenAIWrapper:
                     raise ImportError("Please install `boto3` to use the Amazon Bedrock API.")
                 client = BedrockClient(response_format=response_format, **openai_config)
                 self._clients.append(client)  # type: ignore[arg-type]
+            elif api_type is not None and api_type.startswith("openai_v2"):
+                # OpenAI V2 Client with ModelClientV2 architecture (rich UnifiedResponse)
+                from autogen.llm_clients import OpenAICompletionsClient as V2Client
+
+                v2_client = V2Client(
+                    api_key=openai_config.get("api_key"),
+                    base_url=openai_config.get("base_url"),
+                    timeout=openai_config.get("timeout", 60.0),
+                    response_format=response_format,
+                )
+                self._clients.append(v2_client)  # type: ignore[arg-type]
+                client = v2_client
             elif api_type is not None and api_type.startswith("responses"):
                 # OpenAI Responses API (stateful). Reuse the same OpenAI SDK but call the `/responses` endpoint via the new client.
                 @require_optional_import("openai>=1.66.2", "openai")
@@ -1141,7 +1186,10 @@ class OpenAIWrapper:
                     response: ChatCompletionExtended | None = cache.get(key, None)
 
                     if response is not None:
-                        response.message_retrieval_function = client.message_retrieval
+                        # Backward compatibility: set message_retrieval_function for ChatCompletionExtended
+                        if hasattr(response, "message_retrieval_function"):
+                            response.message_retrieval_function = client.message_retrieval
+
                         try:
                             response.cost
                         except AttributeError:
@@ -1168,9 +1216,15 @@ class OpenAIWrapper:
                         # check the filter
                         pass_filter = filter_func is None or filter_func(context=context, response=response)
                         if pass_filter or i == last:
-                            # Return the response if it passes the filter or it is the last client
-                            response.config_id = i
-                            response.pass_filter = pass_filter
+                            # Store metadata for serializable responses
+                            if hasattr(response, "id"):
+                                self._store_response_metadata(response.id, client, i, pass_filter)
+
+                            # Backward compatibility: set attributes on ChatCompletionExtended
+                            if hasattr(response, "config_id"):
+                                response.config_id = i
+                            if hasattr(response, "pass_filter"):
+                                response.pass_filter = pass_filter
                             self._update_usage(actual_usage=actual_usage, total_usage=total_usage)
                             return response
                         continue  # filter is not passed; try the next config
@@ -1264,13 +1318,25 @@ class OpenAIWrapper:
                         start_time=request_ts,
                     )
 
-                response.message_retrieval_function = client.message_retrieval
+                # Store metadata instead of mutating response
+                # Keep backward compatibility by setting message_retrieval_function for now
+                if hasattr(response, "message_retrieval_function"):
+                    response.message_retrieval_function = client.message_retrieval
+
                 # check the filter
                 pass_filter = filter_func is None or filter_func(context=context, response=response)
                 if pass_filter or i == last:
+                    # Store metadata for serializable responses
+                    if hasattr(response, "id"):
+                        self._store_response_metadata(response.id, client, i, pass_filter)
+
+                    # Backward compatibility: set attributes on ChatCompletionExtended
+                    if hasattr(response, "config_id"):
+                        response.config_id = i
+                    if hasattr(response, "pass_filter"):
+                        response.pass_filter = pass_filter
+
                     # Return the response if it passes the filter or it is the last client
-                    response.config_id = i
-                    response.pass_filter = pass_filter
                     return response
                 continue  # filter is not passed; try the next config
         raise RuntimeError("Should not reach here.")
@@ -1451,19 +1517,45 @@ class OpenAIWrapper:
         self.total_usage_summary = None
         self.actual_usage_summary = None
 
-    @classmethod
-    def extract_text_or_completion_object(
-        cls, response: ChatCompletionExtended
-    ) -> list[str] | list[ChatCompletionMessage]:
+    def extract_text_or_completion_object(self, response: Any) -> list[str] | list[dict[str, Any]]:
         """Extract the text or ChatCompletion objects from a completion or chat response.
 
+        Supports both legacy responses (with message_retrieval_function) and new serializable responses.
+
         Args:
-            response: The response from openai with message_retrieval_function attached.
+            response: The response from any client (ChatCompletion, UnifiedResponse, etc.)
 
         Returns:
-            A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
+            A list of text, or a list of message dicts if function_call/tool_calls are present.
         """
-        return response.message_retrieval_function(response)  # type: ignore [misc]
+        # Option 1: Legacy path - response has message_retrieval_function attached
+        if hasattr(response, "message_retrieval_function") and callable(response.message_retrieval_function):
+            return response.message_retrieval_function(response)  # type: ignore [misc]
+
+        # Option 2: Use stored metadata to find client
+        if hasattr(response, "id") and response.id in self._response_metadata:
+            metadata = self._response_metadata[response.id]
+            client = metadata["client"]
+            return client.message_retrieval(response)
+
+        # Option 3: Fallback - try to extract from response structure directly
+        # This handles cases where response is not in buffer
+        if hasattr(response, "choices"):
+            # OpenAI-style response
+            return [
+                choice.message
+                if hasattr(choice.message, "tool_calls") and choice.message.tool_calls
+                else getattr(choice.message, "content", "")
+                for choice in response.choices
+            ]
+
+        # Last resort: return empty list
+        warnings.warn(
+            f"Could not extract messages from response type {type(response).__name__}. "
+            "Response may not be in metadata buffer or may not support extraction.",
+            UserWarning,
+        )
+        return []
 
 
 # -----------------------------------------------------------------------------
@@ -1499,6 +1591,40 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
     built_in_tools: list[str] | None = None
+
+    def create_client(self) -> ModelClient:  # pragma: no cover
+        raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
+
+
+class OpenAIV2EntryDict(LLMConfigEntryDict, total=False):
+    api_type: Literal["openai_v2"]
+
+
+class OpenAIV2LLMConfigEntry(OpenAILLMConfigEntry):
+    """LLMConfig entry for OpenAI V2 Client with ModelClientV2 architecture.
+
+    This uses the new OpenAIResponsesClient from autogen.llm_clients which returns
+    rich UnifiedResponse objects with typed content blocks (ReasoningContent,
+    CitationContent, ToolCallContent, etc.).
+
+    Example:
+    ```python
+    {
+        "api_type": "openai_v2",  # <-- uses ModelClientV2 architecture
+        "model": "gpt-4o-mini",  # vision-capable model
+        "api_key": "...",
+    }
+    ```
+
+    Benefits over standard OpenAI client:
+    - Returns UnifiedResponse with typed content blocks
+    - Access to reasoning blocks from o1/o3 models via response.reasoning
+    - Forward-compatible with unknown content types via GenericContent
+    - Rich metadata and citations support
+    - Type-safe with Pydantic validation
+    """
+
+    api_type: Literal["openai_v2"] = "openai_v2"
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
