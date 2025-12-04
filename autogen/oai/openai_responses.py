@@ -241,28 +241,63 @@ class OpenAIResponsesClient:
         Returns:
             Dict with type, call_id, status, and output keys matching apply_patch_call_output format
         """
+        import threading
+
         from autogen.tools.apply_patch_tool import WorkspaceEditor
 
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
 
         op_type = operation.get("type")
 
+        def _run_async_in_thread(coro):
+            """Run an async coroutine in a separate thread with its own event loop."""
+            result = {}
+
+            def runner():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result["value"] = loop.run_until_complete(coro)
+                loop.close()
+
+            t = threading.Thread(target=runner)
+            t.start()
+            t.join()
+            return result["value"]
+
         try:
             # Execute the patch operation
             if async_patches:
-                if op_type == "create_file":
-                    result = asyncio.run(editor.a_create_file(operation))
-                elif op_type == "update_file":
-                    result = asyncio.run(editor.a_update_file(operation))
-                elif op_type == "delete_file":
-                    result = asyncio.run(editor.a_delete_file(operation))
-                else:
-                    return ApplyPatchCallOutput(
-                        call_id=call_id,
-                        status="failed",
-                        output=f"Unknown operation type: {op_type}",
-                    )
-            elif not async_patches:
+                # Check if there's already a running event loop (e.g., in Jupyter)
+                try:
+                    asyncio.get_running_loop()
+                    # If we get here, there's a running loop, so use thread-based approach
+                    if op_type == "create_file":
+                        result = _run_async_in_thread(editor.a_create_file(operation))
+                    elif op_type == "update_file":
+                        result = _run_async_in_thread(editor.a_update_file(operation))
+                    elif op_type == "delete_file":
+                        result = _run_async_in_thread(editor.a_delete_file(operation))
+                    else:
+                        return ApplyPatchCallOutput(
+                            call_id=call_id,
+                            status="failed",
+                            output=f"Unknown operation type: {op_type}",
+                        )
+                except RuntimeError:
+                    # No running loop, safe to use asyncio.run()
+                    if op_type == "create_file":
+                        result = asyncio.run(editor.a_create_file(operation))
+                    elif op_type == "update_file":
+                        result = asyncio.run(editor.a_update_file(operation))
+                    elif op_type == "delete_file":
+                        result = asyncio.run(editor.a_delete_file(operation))
+                    else:
+                        return ApplyPatchCallOutput(
+                            call_id=call_id,
+                            status="failed",
+                            output=f"Unknown operation type: {op_type}",
+                        )
+            else:
                 if op_type == "create_file":
                     result = editor.create_file(operation)
                 elif op_type == "update_file":
@@ -377,7 +412,7 @@ class OpenAIResponsesClient:
                             async_patches=True,
                         )
                         apply_patch_outputs.append(output.to_dict())
-                    elif operation and "apply_patch" not in built_in_tools:
+                    elif operation and "apply_patch" in built_in_tools:  # Changed: removed 'not'
                         # Apply the patch operation and get the full output dict synchronously
                         apply_patch_outputs.append(
                             self._apply_patch_operation(
@@ -455,7 +490,7 @@ class OpenAIResponsesClient:
                 tools_list.append(image_generation_tool_params)
             if "web_search" in built_in_tools:
                 tools_list.append(web_search_tool_params)
-            if "apply_patch" in built_in_tools:
+            if "apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools:
                 tools_list.append(apply_patch_tool_params)
 
         if "tools" in params:
