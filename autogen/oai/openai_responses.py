@@ -200,15 +200,22 @@ class OpenAIResponsesClient:
         for m in messages[::-1]:
             contents = m.get("content")
             is_last_completed_response = False
+            has_apply_patch_call = False
+            
             if isinstance(contents, list):
                 for c in contents:
+                    # Check if message contains apply_patch_call items
+                    if isinstance(c, dict) and c.get("type") == "apply_patch_call":
+                        has_apply_patch_call = True
+                        continue  # Skip status check for apply_patch_call items
                     if "status" in c and c.get("status") == "completed":
                         is_last_completed_response = True
                         break
             elif isinstance(contents, str):
                 is_last_completed_response = "status" in m and m.get("status") == "completed"
 
-            if is_last_completed_response:
+            # Don't break if message contains apply_patch_call items - they need to be processed
+            if is_last_completed_response and not has_apply_patch_call:
                 break
             delta_messages.append(m)
         return delta_messages[::-1]
@@ -366,10 +373,13 @@ class OpenAIResponsesClient:
             input_items = []
             apply_patch_call_ids = {}
             # First, add any apply_patch_call items from previous response
+            # (Only process these if they're from the same agent's previous response)
             if self.previous_response_id is not None and previous_apply_patch_calls:
                 apply_patch_call_ids.update(previous_apply_patch_calls)
 
-            # Then check messages for apply_patch_call items
+            # Collect apply_patch_call items from messages
+            # Process them BEFORE sending to recipient (diff generation -> executor pattern)
+            message_apply_patch_calls = {}
             for msg_idx, msg in enumerate(msgs):
                 role = msg.get("role")
                 logger.debug(f"[apply_patch] Message {msg_idx}: role={role}")
@@ -384,9 +394,8 @@ class OpenAIResponsesClient:
                                 if item_type == "apply_patch_call":
                                     call_id = item.get("call_id")
                                     if call_id:
-                                        apply_patch_call_ids[call_id] = item
+                                        message_apply_patch_calls[call_id] = item
                     tool_calls = msg.get("tool_calls", [])
-
                     if isinstance(tool_calls, list):
                         for tool_call_idx, tool_call in enumerate(tool_calls):
                             if isinstance(tool_call, dict):
@@ -394,38 +403,65 @@ class OpenAIResponsesClient:
                                 if tool_call_type == "apply_patch_call":
                                     call_id = tool_call.get("call_id")
                                     if call_id:
-                                        apply_patch_call_ids[call_id] = tool_call
+                                        message_apply_patch_calls[call_id] = tool_call
 
-            # FIRST: Generate outputs for ALL apply_patch_call items and add them to the beginning
-            # This ensures they're available before any user/assistant messages that might reference them
-            apply_patch_outputs = []
-            if apply_patch_call_ids:
-                for call_id, apply_patch_call in apply_patch_call_ids.items():
+            # Process apply_patch_call items from messages if built_in_tools includes apply_patch
+            # This implements the diff generation (sender) -> executor (recipient) pattern
+            message_apply_patch_outputs = []
+            if message_apply_patch_calls and ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
+                for call_id, apply_patch_call in message_apply_patch_calls.items():
                     operation = apply_patch_call.get("operation", {})
-                    if operation and "apply_patch_async" in built_in_tools:  # Only process if we have an operation
-                        # Apply the patch operation and get the full output dict asynchronously
-                        output = self._apply_patch_operation(
-                            operation,
-                            call_id=call_id,
-                            workspace_dir=workspace_dir,
-                            allowed_paths=allowed_paths,
-                            async_patches=True,
-                        )
-                        apply_patch_outputs.append(output.to_dict())
-                    elif operation and "apply_patch" in built_in_tools:  # Changed: removed 'not'
-                        # Apply the patch operation and get the full output dict synchronously
-                        apply_patch_outputs.append(
-                            self._apply_patch_operation(
+                    if operation:
+                        if "apply_patch_async" in built_in_tools:
+                            output = self._apply_patch_operation(
+                                operation,
+                                call_id=call_id,
+                                workspace_dir=workspace_dir,
+                                allowed_paths=allowed_paths,
+                                async_patches=True,
+                            )
+                            message_apply_patch_outputs.append(output.to_dict())
+                        elif "apply_patch" in built_in_tools:
+                            output = self._apply_patch_operation(
                                 operation,
                                 call_id=call_id,
                                 workspace_dir=workspace_dir,
                                 allowed_paths=allowed_paths,
                                 async_patches=False,
-                            ).to_dict()
-                        )
-
-            # Add all apply_patch_call_outputs at the beginning of input_items
-            input_items.extend(apply_patch_outputs)
+                            )
+                            message_apply_patch_outputs.append(output.to_dict())
+            
+            # Combine outputs from previous_response_id and messages
+            all_apply_patch_outputs = []
+            if previous_apply_patch_calls and ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
+                for call_id, apply_patch_call in previous_apply_patch_calls.items():
+                    operation = apply_patch_call.get("operation", {})
+                    if operation:
+                        if "apply_patch_async" in built_in_tools:
+                            output = self._apply_patch_operation(
+                                operation,
+                                call_id=call_id,
+                                workspace_dir=workspace_dir,
+                                allowed_paths=allowed_paths,
+                                async_patches=True,
+                            )
+                            all_apply_patch_outputs.append(output.to_dict())
+                        elif "apply_patch" in built_in_tools:
+                            output = self._apply_patch_operation(
+                                operation,
+                                call_id=call_id,
+                                workspace_dir=workspace_dir,
+                                allowed_paths=allowed_paths,
+                                async_patches=False,
+                            )
+                            all_apply_patch_outputs.append(output.to_dict())
+            
+            # Add message outputs (these come from sender, so process first)
+            all_apply_patch_outputs.extend(message_apply_patch_outputs)
+            
+            # Add all outputs at the beginning of input_items
+            if all_apply_patch_outputs:
+                input_items.extend(all_apply_patch_outputs)
 
             for m in msgs[::-1]:  # reverse the list to get the last item first
                 role = m.get("role", "user")
@@ -450,14 +486,17 @@ class OpenAIResponsesClient:
                                     if k in self.image_output_params:
                                         image_generation_tool_params[k] = v
                             elif c.get("type") == "apply_patch_call":
-                                # Skip apply_patch_call items in assistant messages - we've already processed them above
-                                # Don't include them in the content blocks
+                                # Skip apply_patch_call items - they've already been processed above
+                                # The outputs are already in input_items, recipient doesn't need the raw call
                                 continue
                             else:
                                 raise ValueError(f"Invalid content type: {c.get('type')}")
                     else:
                         blocks.append({"type": content_type, "text": content})
-                    input_items.append({"role": role, "content": blocks})
+                    
+                    # Only append if we have valid content blocks
+                    if blocks:
+                        input_items.append({"role": role, "content": blocks})
 
                 else:
                     # tool call response - but apply_patch_call items are NOT tool messages
@@ -566,6 +605,7 @@ class OpenAIResponsesClient:
             return response
         # No structured output
         params = self._parse_params(params)
+        print("params", params)
         response = self._oai_client.responses.create(**params)
         self.previous_response_id = response.id
         # Accumulate image costs
