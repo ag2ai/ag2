@@ -33,7 +33,6 @@ from ..llm_config import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
-from ..token_count_utils import count_token
 from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
@@ -46,7 +45,7 @@ if openai_result.is_successful:
     from openai import APIError, APITimeoutError, AzureOpenAI, OpenAI
     from openai import __version__ as openai_version
     from openai.lib._parsing._completions import type_to_response_format_param
-    from openai.types.chat import ChatCompletion
+    from openai.types.chat import ChatCompletion, ChatCompletionChunk
     from openai.types.chat.chat_completion import ChatCompletionMessage, Choice  # type: ignore [attr-defined]
     from openai.types.chat.chat_completion_chunk import (
         ChoiceDeltaFunctionCall,
@@ -478,6 +477,11 @@ class OpenAIClient:
             if msg.get("role", "") == "system":
                 msg["role"] = "user"
 
+    @staticmethod
+    def _add_streaming_usage_to_params(params: dict[str, Any]) -> None:
+        if params.get("stream", False):
+            params.setdefault("stream_options", {}).setdefault("include_usage", True)
+
     def create(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a completion for a given config using openai's client.
 
@@ -489,11 +493,14 @@ class OpenAIClient:
         """
         iostream = IOStream.get_default()
 
-        if self.response_format is not None or "response_format" in params:
+        is_structured_output = self.response_format is not None or "response_format" in params
+
+        if is_structured_output:
 
             def _create_or_parse(*args, **kwargs):
                 if "stream" in kwargs:
                     kwargs.pop("stream")
+                    kwargs.pop("stream_options", None)
 
                 if (
                     isinstance(kwargs["response_format"], dict)
@@ -530,8 +537,11 @@ class OpenAIClient:
         if is_mistral:
             OpenAIClient._convert_system_role_to_user(params["messages"])
 
-        # If streaming is enabled and has messages, then iterate over the chunks of the response.
-        if params.get("stream", False) and "messages" in params and not is_o1:
+        # If streaming is enabled and has messages, then iterate over the chunks of the response and is not using structured outputs.
+        if params.get("stream", False) and "messages" in params and not is_o1 and not is_structured_output:
+            # Usage will be returned as the last chunk
+            OpenAIClient._add_streaming_usage_to_params(params)
+
             response_contents = [""] * params.get("n", 1)
             finish_reasons = [""] * params.get("n", 1)
             completion_tokens = 0
@@ -541,9 +551,19 @@ class OpenAIClient:
             full_tool_calls: list[dict[str, Any] | None] | None = None
 
             # Send the chat completion request to OpenAI's API and process the response in chunks
+            chunks_id: str = ""
+            chunks_model: str = ""
+            chunks_created: int = 0
+            chunks_usage_prompt_tokens: int = 0
+            chunks_usage_completion_tokens: int = 0
             for chunk in create_or_parse(**params):
-                if chunk.choices:
-                    for choice in chunk.choices:
+                if not isinstance(chunk, ChatCompletionChunk):
+                    logger.debug(f"Skipping unexpected chunk type: {type(chunk)}")
+                    continue
+
+                chunk_cc: ChatCompletionChunk = chunk
+                if chunk_cc.choices:
+                    for choice in chunk_cc.choices:
                         content = choice.delta.content
                         tool_calls_chunks = choice.delta.tool_calls
                         finish_reasons[choice.index] = choice.finish_reason
@@ -591,20 +611,28 @@ class OpenAIClient:
                             completion_tokens += 1
                         else:
                             pass
+                else:
+                    if chunk_cc.usage:
+                        # Usage will be in the last chunk as we have set include_usage=True on stream_options
+                        chunks_usage_prompt_tokens = getattr(chunk_cc.usage, "prompt_tokens", 0)
+                        chunks_usage_completion_tokens = getattr(chunk_cc.usage, "completion_tokens", 0)
+
+                if not chunks_id:
+                    chunks_id = chunk_cc.id
+                    chunks_model = chunk_cc.model
+                    chunks_created = chunk_cc.created
 
             # Prepare the final ChatCompletion object based on the accumulated data
-            model = chunk.model.replace("gpt-35", "gpt-3.5")  # hack for Azure API
-            prompt_tokens = count_token(params["messages"], model)
             response = ChatCompletion(
-                id=chunk.id,
-                model=chunk.model,
-                created=chunk.created,
+                id=chunks_id,
+                model=chunks_model,
+                created=chunks_created,
                 object="chat.completion",
                 choices=[],
                 usage=CompletionUsage(
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=prompt_tokens + completion_tokens,
+                    prompt_tokens=chunks_usage_prompt_tokens,
+                    completion_tokens=chunks_usage_completion_tokens,
+                    total_tokens=chunks_usage_prompt_tokens + chunks_usage_completion_tokens,
                 ),
             )
             for i in range(len(response_contents)):
