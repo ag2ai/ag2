@@ -233,7 +233,7 @@ lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
     "google-api-core",
-    "google-genai>=1.20.0",
+    "google-genai>=1.20.0,<1.50",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
