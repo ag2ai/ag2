@@ -1,0 +1,405 @@
+## Introduction to MCP
+
+MCP aims to standardize how applications provide contextual information to LLMs and how LLMs can access external tools. MCP servers expose specific tools that are accessible via different communication protocols, such as [`stdio` (Standard Input/Output)](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#stdio), [`SSE` (Server-Sent Events)](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#http-with-sse), and [`streamable-http`](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http).
+
+MCP clients are responsible for interacting with these servers, sending requests, and processing responses. By integrating MCP into your application, you can build systems where LLMs can utilize external computational tools in real-time.
+
+In this guide, we will:
+
+- Set up an MCP server that exposes basic MCP tools (`add` and `multiply`) and resources (`get_server_file`)
+- Connect the AG2 framework to this MCP server.
+- Communicate using three different transport protocols: [stdio](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#stdio), [SSE](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/#http-with-sse), and [`streamable-http`](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http).
+
+## Installation
+
+To integrate MCP tools into the AG2 framework, install the required dependencies:
+
+```bash
+pip install -U ag2[openai,mcp]
+```
+
+> **Note:** If you have been using `autogen` or `ag2`, all you need to do is upgrade it using:
+> ```bash
+> pip install -U autogen[openai,mcp]
+> ```
+> or
+> ```bash
+> pip install -U ag2[openai,mcp]
+> ```
+> as `autogen` and `ag2` are aliases for the same PyPI package.
+
+## Imports
+
+Before diving into the code, let's go over the main imports used in this guide:
+
+- `ClientSession`: Manages the client session for connecting to the MCP server, allowing you to send requests and handle responses.
+- `StdioServerParameters`: Provides parameters to set up communication with an MCP server over `stdio`.
+- `stdio_client`: A utility that helps you connect to an MCP server using the standard input/output protocol.
+- `sse_client`: A utility to connect to an MCP server using the `SSE` (Server-Sent Events) protocol.
+- `streamablehttp_client`: A utility to connect to an MCP server using the `streamable-http` protocol.
+- [`create_toolkit`](/docs/api-reference/autogen/mcp/create_toolkit): A helper function that creates a toolkit, wrapping the tools exposed by the MCP server for easier access.
+
+
+```python
+from pathlib import Path
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
+from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamablehttp_client
+from datetime import timedelta
+
+
+from autogen import LLMConfig
+from autogen.agentchat import AssistantAgent
+from autogen.mcp import create_toolkit
+
+# Only needed for Jupyter notebooks
+import nest_asyncio
+
+nest_asyncio.apply()
+```
+
+## Setting Up an MCP Server
+
+We will create a simple MCP server that exposes:
+
+- two tools: `add` and `multiply`
+The server listens for requests using either the **stdio** or **SSE** transport protocols, depending on the argument passed when starting the server.
+- one resource endpoint: `get_server_file`
+
+The server listens for requests using either the **stdio** or **SSE** transport protocols, depending on the argument passed when starting the server.
+
+For more details on creating MCP servers, visit the [MCP Python SDK documentation](https://github.com/modelcontextprotocol/python-sdk).
+
+Let's create a Python script (`mcp_server.py`) with the following content:
+
+```python
+mcp_server_file_content = """# mcp_server.py
+import argparse
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("McpServer")
+
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    \"\"\"Add two numbers\"\"\"
+    return a + b
+
+
+@mcp.tool()
+def multiply(a: int, b: int) -> int:
+    \"\"\"Multiply two numbers\"\"\"
+    return a * b
+
+
+files = {
+    "ag2": "AG has released 0.8.5 version on 2025-04-03",
+}
+
+@mcp.resource("server-file://{name}")
+def get_server_file(name: str) -> str:
+    \"\"\"Get a file content\"\"\"
+    return files.get(name, f"File not found: {name}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="MCP Server")
+    parser.add_argument("transport", choices=["stdio", "sse", "streamable-http"], help="Transport mode (stdio, sse or streamable-http)")
+    args = parser.parse_args()
+
+    mcp.run(transport=args.transport)
+"""
+
+# Write content to a file
+mcp_server_path = Path("mcp_server.py")
+mcp_server_path.write_text(mcp_server_file_content)
+```
+
+## Creating a Toolkit from MCP Tools
+
+To allow AG2 to interact with the MCP server, we need to establish a connection, create a toolkit from the tools exposed by the server, and then register this toolkit with an AG2 agent. The toolkit will provide the necessary functionality for AG2 to call the MCP tools, such as performing mathematical operations and getting resource content.
+
+**Steps to Create a Toolkit from MCP Tools**
+
+- **Wrap MCP tools and resources into a toolkit**: The tools exposed by the MCP server (like `add` and `multiply`) and resource endpoints (like `get_server_file`) are wrapped into a toolkit for easy use by AG2.
+- **Register the toolkit with an AG2 agent**: This step allows AG2 to use the toolkit's tools when processing requests.
+- **Start a conversation**: AG2 can now send a message to the MCP server requesting a task to be performed (e.g., adding two numbers) and receive the result.
+
+```python
+async def create_toolkit_and_run(session: ClientSession) -> None:
+    # Create a toolkit with available MCP tools
+    toolkit = await create_toolkit(session=session)
+    agent = AssistantAgent(
+        name="assistant",
+        llm_config=LLMConfig(config_list={"model": "gpt-5-nano", "api_type": "openai"})
+    )
+    # Register MCP tools with the agent
+    toolkit.register_for_llm(agent)
+
+    # Make a request using the MCP tool
+    result = await agent.a_run(
+        message="""1. Add 123223 and 456789
+2.Get file content for 'ag2'.""",
+        tools=toolkit.tools,
+        max_turns=2,
+        user_input=False,
+    )
+    await result.process()
+```
+
+## Setting Up the Client Session and Communicating with the MCP Server
+
+Once the toolkit is created, the next step is to connect AG2 to the MCP server and manage the communication between them. This involves setting up connection parameters and starting a client session, which will facilitate the entire interaction. After establishing the connection, AG2 can send requests and receive responses from the server.
+
+### Steps to Set Up the Client Session and Communicate with the MCP Server
+
+- **Set up connection parameters**: Define how AG2 will communicate with the MCP server. This includes specifying the transport protocol (`stdio` or `SSE`) and other connection details.
+- **Start a client session**: This session facilitates communication between AG2 and the MCP server. The session is responsible for sending requests, receiving responses, and maintaining the connection state.
+
+#### Using `stdio_client` for Communication
+
+Establish the connection in the client code by using the `stdio_client` requires:
+
+- **Server Parameters**: The connection is defined using the `StdioServerParameters`, where the command (`python`) runs the server (`mcp_server.py`) with `stdio` mode.
+- **Connecting to the Server**: The `stdio_client` establishes the connection to the server, and the `ClientSession` is used to facilitate communication.
+- **Running the Task**: Once the connection is established, `create_toolkit_and_run(session)` is called to wrap the MCP tools and perform the task asynchronously.
+
+```python
+# Create server parameters for stdio connection
+server_params = StdioServerParameters(
+    command="python",  # The command to run the server
+    args=[
+        str(mcp_server_path),
+        "stdio",
+    ],  # Path to server script and transport mode
+)
+
+async with stdio_client(server_params) as (read, write), ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session:
+    # Initialize the connection
+    await session.initialize()
+    await create_toolkit_and_run(session)
+```
+
+#### Expected Output
+
+```console
+user (to assistant):
+
+1. Add 123223 and 456789
+2.Get file content for 'ag2'.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_GwCwkWY9lYmTPQUd0fQNcFZN): add *****
+Arguments:
+{"a": 123223, "b": 456789}
+********************************************************************
+***** Suggested tool call (call_R7WGyZOgwltczXn6VENHLbWr): get_server_file *****
+Arguments:
+{"uri": "server-file://ag2"}
+********************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+Call ID: call_GwCwkWY9lYmTPQUd0fQNcFZN
+Input arguments: {'a': 123223, 'b': 456789}
+
+>>>>>>>> EXECUTING FUNCTION get_server_file...
+Call ID: call_R7WGyZOgwltczXn6VENHLbWr
+Input arguments: {'uri': 'server-file://ag2'}
+user (to assistant):
+
+***** Response from calling tool (call_GwCwkWY9lYmTPQUd0fQNcFZN) *****
+('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_R7WGyZOgwltczXn6VENHLbWr) *****
+{"meta":null,"contents":[{"uri":"server-file://ag2","mimeType":"text/plain","text":"AG has released 0.8.5 version on 2025-04-03"}]}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+The result of adding 123223 and 456789 is **580012**.
+
+The content of the file 'ag2' is:
+AG has released 0.8.5 version on 2025-04-03
+
+
+TERMINATE
+```
+
+#### Using `sse_client` for Communication
+
+To interact with the MCP server via `SSE`, follow these steps:
+
+- Open new terminal and start the server using the sse transport mode:
+
+    > ```bash
+    > python mcp_server.py sse
+    > ```
+- Once the server is running, rstablish the connection in the client code by using the `sse_client`:
+
+  - **Server URL**: The `sse_client` connects to the `SSE` server running locally at `http://127.0.0.1:8000/sse`.
+  - **Connecting to the Server**: The `sse_client` establishes an `SSE` connection, and the `ClientSession` is used to manage the communication with the server.
+  - **Running the Task**: Once the session is initialized, `create_toolkit_and_run(session)` is called to create the toolkit from MCP tools and perform the task.
+
+```python
+async with sse_client(url="http://127.0.0.1:8000/sse") as streams, ClientSession(*streams) as session:
+    # Initialize the connection
+    await session.initialize()
+    await create_toolkit_and_run(session)
+```
+
+#### Expected Output
+
+```console
+user (to assistant):
+
+1. Add 123223 and 456789
+2.Get file content for 'ag2'.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_GwCwkWY9lYmTPQUd0fQNcFZN): add *****
+Arguments:
+{"a": 123223, "b": 456789}
+********************************************************************
+***** Suggested tool call (call_R7WGyZOgwltczXn6VENHLbWr): get_server_file *****
+Arguments:
+{"uri": "server-file://ag2"}
+********************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+Call ID: call_GwCwkWY9lYmTPQUd0fQNcFZN
+Input arguments: {'a': 123223, 'b': 456789}
+
+>>>>>>>> EXECUTING FUNCTION get_server_file...
+Call ID: call_R7WGyZOgwltczXn6VENHLbWr
+Input arguments: {'uri': 'server-file://ag2'}
+user (to assistant):
+
+***** Response from calling tool (call_GwCwkWY9lYmTPQUd0fQNcFZN) *****
+('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_R7WGyZOgwltczXn6VENHLbWr) *****
+{"meta":null,"contents":[{"uri":"server-file://ag2","mimeType":"text/plain","text":"AG has released 0.8.5 version on 2025-04-03"}]}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+The result of adding 123223 and 456789 is **580012**.
+
+The content of the file 'ag2' is:
+AG has released 0.8.5 version on 2025-04-03
+
+
+TERMINATE
+```
+
+#### Using `streamable-http` for Communication
+
+To interact with the MCP server via `streamable-http`, follow these steps:
+
+- Open new terminal and start the server using the sse transport mode:
+
+    > ```bash
+    > python mcp_server.py streamable-http
+    > ```
+- Once the server is running, establish the connection in the client code by using the `streamablehttp_client`:
+
+  - **Server URL**: The `streamablehttp_client` connects to the `http` server running locally at `http://127.0.0.1:8000/mcp`.
+  - **Connecting to the Server**: The `streamablehttp_client` establishes an `HTTP` connection, and the `ClientSession` is used to manage the communication with the server.
+  - **Running the Task**: Once the session is initialized, `create_toolkit_and_run(session)` is called to create the toolkit from MCP tools and perform the task.
+
+```python
+async with (
+    streamablehttp_client("http://127.0.0.1:8000/mcp") as (
+        read_stream,
+        write_stream,
+        _,
+    ),
+    ClientSession(read_stream, write_stream) as session,
+):
+    await session.initialize()
+    await create_toolkit_and_run(session)
+```
+
+#### Expected Output
+
+```console
+user (to assistant):
+
+1. Add 123223 and 456789
+2.Get file content for 'ag2'.
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+***** Suggested tool call (call_GwCwkWY9lYmTPQUd0fQNcFZN): add *****
+Arguments:
+{"a": 123223, "b": 456789}
+********************************************************************
+***** Suggested tool call (call_R7WGyZOgwltczXn6VENHLbWr): get_server_file *****
+Arguments:
+{"uri": "server-file://ag2"}
+********************************************************************************
+
+--------------------------------------------------------------------------------
+
+>>>>>>>> EXECUTING FUNCTION add...
+Call ID: call_GwCwkWY9lYmTPQUd0fQNcFZN
+Input arguments: {'a': 123223, 'b': 456789}
+
+>>>>>>>> EXECUTING FUNCTION get_server_file...
+Call ID: call_R7WGyZOgwltczXn6VENHLbWr
+Input arguments: {'uri': 'server-file://ag2'}
+user (to assistant):
+
+***** Response from calling tool (call_GwCwkWY9lYmTPQUd0fQNcFZN) *****
+('580012', None)
+**********************************************************************
+
+--------------------------------------------------------------------------------
+***** Response from calling tool (call_R7WGyZOgwltczXn6VENHLbWr) *****
+{"meta":null,"contents":[{"uri":"server-file://ag2","mimeType":"text/plain","text":"AG has released 0.8.5 version on 2025-04-03"}]}
+**********************************************************************
+
+--------------------------------------------------------------------------------
+assistant (to user):
+
+The result of adding 123223 and 456789 is **580012**.
+
+The content of the file 'ag2' is:
+AG has released 0.8.5 version on 2025-04-03
+
+
+TERMINATE
+```
+
+For a complete example on how to use MCPProxy and streamable-http checkout: [MCPProxy example notebook](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy.ipynb)
+
+## Related Notebooks: MCP Servers
+
+Explore more MCP server and proxy examples in this collection of notebooks:
+
+- [General MCP Proxy Example](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_general.ipynb)
+- [MCP Proxy (Base Example)](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy.ipynb)
+- [MCP Proxy for PokeAPI](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_PokeAPI.ipynb)
+- [MCP Proxy for Giphy](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_giphy.ipynb)
+- [MCP Proxy for GitHub](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_github.ipynb)
+- [MCP Proxy for Asana](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_asana.ipynb)
+- [MCP Proxy for WhatsApp](https://github.com/ag2ai/ag2/blob/main/notebook/mcp/mcp_proxy_whatsapp.ipynb)
+
+You can find these and more in the [notebook/mcp/ directory](https://github.com/ag2ai/ag2/tree/main/notebook/mcp/).
