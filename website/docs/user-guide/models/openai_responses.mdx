@@ -5,7 +5,7 @@ sidebarTitle: OpenAI Responses
 
 [OpenAI](https://openai.com/)'s Responses API is a significant evolution from the Chat Completions and Assistants APIs, offering support for both stateless interactions and structured, stateful conversations.
 
-Additionally, it includes built-in tools for web search, file search, and computer use. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
+Additionally, it includes built-in tools for web search, file search, computer use, and **file editing/patching via the `apply_patch` and `apply_patch_async` built-in tools**. The robust multimodal capabilities of the API also set it apart and will be utilized in our initial support for this API. [See their website for further details](https://platform.openai.com/docs/api-reference/responses).
 
 <Warning>
 This OpenAI Responses model provider is currently only supported in a two-agent chat using the agent's `initiate_chat`.
@@ -47,9 +47,11 @@ By specifying the `api_type` as `responses`, the client will use the OpenAI Resp
         "model": "gpt-5",
         "api_key": "your OpenAI Key goes here",
 
-        # Optional: use image_generation and web_search built-in tools
+        # Optional: use image_generation, web_search, and apply_patch built-in tools
         # See https://platform.openai.com/docs/guides/images-vision?api-mode=responses
-        "built_in_tools": ["image_generation", "web_search"],
+        # and apply_patch documentation
+        "built_in_tools": ["image_generation", "web_search", "apply_patch"],
+        # You may also use "apply_patch_async" for async file operations
     }
 ]
 ```
