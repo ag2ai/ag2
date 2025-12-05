@@ -4,19 +4,15 @@
 #
 # Portions derived from https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import asyncio
-import json
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from autogen.agentchat import ConversableAgent
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
-from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, format_tools, oai_messages_to_bedrock_messages
-from test.credentials import Credentials, get_credentials_from_env_vars
+from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
+from autogen.oai.oai_models import ChatCompletionMessageToolCall
 
 
 # Fixtures for mock data
@@ -348,170 +344,442 @@ def test_oai_messages_to_bedrock_messages(bedrock_client: BedrockClient):
     assert messages == expected_messages, "'Please continue' message was not appended."
 
 
-def test_format_tools_handles_various_property_shapes():
-    """format_tools should faithfully copy every supported JSON Schema shape (scalars, enums, unions, arrays, nested objects)."""
-    cases = [
-        (
-            "simple_type",
-            {"type": "string", "description": "plain type"},
-            {"type": "string", "description": "plain type"},
-        ),
-        (
-            "enum_default",
-            {"type": "integer", "enum": [1, 2], "default": 1},
-            {"type": "integer", "enum": [1, 2], "default": 1, "description": ""},
-        ),
-        (
-            "union_anyof",
-            {
-                "anyOf": [{"type": "string"}, {"type": "null"}],
-                "default": None,
-                "description": "optional text",
-            },
-            {
-                "anyOf": [{"type": "string"}, {"type": "null"}],
-                "default": None,
-                "description": "optional text",
-            },
-        ),
-        (
-            "array_items",
-            {"type": "array", "items": {"type": "number"}, "minItems": 1},
-            {"type": "array", "items": {"type": "number"}, "minItems": 1, "description": ""},
-        ),
-        (
-            "object_additional",
-            {
-                "type": "object",
-                "additionalProperties": {"type": "boolean"},
-                "required": [],
-            },
-            {
-                "type": "object",
-                "additionalProperties": {"type": "boolean"},
-                "description": "",
-            },
-        ),
-    ]
+class Step(BaseModel):
+    explanation: str
+    output: str
 
-    tools = [
+
+class MathReasoning(BaseModel):
+    steps: list[Step]
+    final_answer: str
+
+
+# Test 1: Test with Pydantic models
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_with_pydantic_model(bedrock_client: BedrockClient):
+    """Test structured output with Pydantic model."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock Bedrock response with tool call
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [
+                                    {"explanation": "Step 1", "output": "8x = -30"},
+                                    {"explanation": "Step 2", "output": "x = -3.75"},
+                                ],
+                                "final_answer": "x = -3.75",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 30, "totalTokens": 80},
+        "ResponseMetadata": {"RequestId": "test-request-id"},
+    }
+
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": MathReasoning,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify the response
+    assert response.choices[0].finish_reason == "tool_calls"
+    assert response.choices[0].message.tool_calls is not None
+    assert len(response.choices[0].message.tool_calls) == 1
+    assert response.choices[0].message.tool_calls[0].function.name == "__structured_output"
+
+    # Verify the structured output was extracted and formatted
+    import json
+
+    parsed_content = json.loads(response.choices[0].message.content)
+    assert parsed_content["final_answer"] == "x = -3.75"
+    assert len(parsed_content["steps"]) == 2
+
+    # Verify toolConfig was set correctly
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    assert "toolChoice" in tool_config
+    assert tool_config["toolChoice"] == {"tool": {"name": "__structured_output"}}
+
+
+# Test 2: Test with dict schemas
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_with_dict_schema(bedrock_client: BedrockClient):
+    """Test structured output with dict schema."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}, "email": {"type": "string"}},
+        "required": ["name", "age"],
+    }
+
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_456",
+                            "name": "__structured_output",
+                            "input": {"name": "John Doe", "age": 30, "email": "john@example.com"},
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 40, "outputTokens": 20, "totalTokens": 60},
+        "ResponseMetadata": {"RequestId": "test-request-id-2"},
+    }
+
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Create a user profile"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": dict_schema,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify the response
+    assert response.choices[0].finish_reason == "tool_calls"
+    import json
+
+    parsed_content = json.loads(response.choices[0].message.content)
+    assert parsed_content["name"] == "John Doe"
+    assert parsed_content["age"] == 30
+    assert parsed_content["email"] == "john@example.com"
+
+
+# Test 3: Test with both response_format and user tools together
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_with_user_tools(bedrock_client: BedrockClient):
+    """Test structured output when both response_format and user tools are provided."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    user_tools = [
         {
             "type": "function",
             "function": {
-                "name": "schema_tester",
-                "description": "verifies schema copying",
+                "name": "get_weather",
+                "description": "Get weather information",
                 "parameters": {
                     "type": "object",
-                    "properties": {name: prop for name, prop, _ in cases},
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
                 },
             },
         }
     ]
 
-    converted_props = format_tools(tools)["tools"][0]["toolSpec"]["inputSchema"]["json"]["properties"]
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_789",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Used weather tool", "output": "Sunny, 75°F"}],
+                                "final_answer": "The weather is sunny and 75°F",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 60, "outputTokens": 40, "totalTokens": 100},
+        "ResponseMetadata": {"RequestId": "test-request-id-3"},
+    }
 
-    for name, _, expected in cases:
-        assert converted_props[name] == expected, f"schema mismatch for {name}"
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Get weather and format the response"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": MathReasoning,
+        "tools": user_tools,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify both tools are in toolConfig
+    call_args = mock_bedrock_runtime.converse.call_args
+    tool_config = call_args.kwargs["toolConfig"]
+    assert len(tool_config["tools"]) == 2  # user tool + structured output tool
+
+    # Verify toolChoice forces structured output tool
+    assert tool_config["toolChoice"] == {"tool": {"name": "__structured_output"}}
+
+    # Verify response contains structured output
+    assert response.choices[0].finish_reason == "tool_calls"
+    import json
+
+    parsed_content = json.loads(response.choices[0].message.content)
+    assert "final_answer" in parsed_content
 
 
-def test_format_tools_rejects_non_dict_properties():
-    """format_tools should raise TypeError when a property schema is not a dict, mirroring runtime validation."""
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "bad_prop",
-                "description": "schema with malformed property",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "oops": "not a dict",
-                    },
-                },
-            },
-        }
+# Test 4: Test error handling when model doesn't call the tool
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_no_tool_call_error_handling(bedrock_client: BedrockClient):
+    """Test error handling when model doesn't call the structured output tool."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock response that doesn't call the tool (returns text instead)
+    mock_response = {
+        "stopReason": "finished",
+        "output": {"message": {"content": [{"text": "Here's the answer: x = -3.75"}]}},
+        "usage": {"inputTokens": 50, "outputTokens": 20, "totalTokens": 70},
+        "ResponseMetadata": {"RequestId": "test-request-id-4"},
+    }
+
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": MathReasoning,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Should fallback to text content when tool isn't called
+    assert response.choices[0].finish_reason == "stop"
+    assert response.choices[0].message.content == "Here's the answer: x = -3.75"
+    assert response.choices[0].message.tool_calls is None
+
+
+# Test 5: Test with models that support Tool Use
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_with_tool_supporting_model(bedrock_client: BedrockClient):
+    """Test structured output with a model that supports Tool Use (e.g., Claude models)."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Claude models support tool use
+    claude_model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_claude_123",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [
+                                    {"explanation": "First step", "output": "Result 1"},
+                                    {"explanation": "Second step", "output": "Result 2"},
+                                ],
+                                "final_answer": "Final result",
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 100, "outputTokens": 50, "totalTokens": 150},
+        "ResponseMetadata": {"RequestId": "test-claude-request"},
+    }
+
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Perform a calculation"}],
+        "model": claude_model,
+        "response_format": MathReasoning,
+    }
+
+    response = bedrock_client.create(params)
+
+    # Verify successful structured output extraction
+    assert response.choices[0].finish_reason == "tool_calls"
+    assert response.choices[0].message.tool_calls is not None
+
+    # Verify toolConfig was properly set
+    call_args = mock_bedrock_runtime.converse.call_args
+    assert "toolConfig" in call_args.kwargs
+    tool_config = call_args.kwargs["toolConfig"]
+    assert "toolChoice" in tool_config
+    assert tool_config["toolChoice"]["tool"]["name"] == "__structured_output"
+
+
+# Test 6: Test validation error when structured output doesn't match schema
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_response_format_validation_error(bedrock_client: BedrockClient):
+    """Test error handling when structured output doesn't match Pydantic schema."""
+    # Mock bedrock_runtime on the instance
+    mock_bedrock_runtime = MagicMock()
+    bedrock_client.bedrock_runtime = mock_bedrock_runtime
+
+    # Mock response with invalid data (missing required field)
+    mock_response = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tool_invalid",
+                            "name": "__structured_output",
+                            "input": {
+                                "steps": [{"explanation": "Step 1", "output": "Result 1"}]
+                                # Missing required "final_answer" field
+                            },
+                        }
+                    }
+                ]
+            }
+        },
+        "usage": {"inputTokens": 50, "outputTokens": 25, "totalTokens": 75},
+        "ResponseMetadata": {"RequestId": "test-invalid-request"},
+    }
+
+    mock_bedrock_runtime.converse.return_value = mock_response
+
+    params = {
+        "messages": [{"role": "user", "content": "Solve this"}],
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "response_format": MathReasoning,
+    }
+
+    # Should raise ValidationError when validating against Pydantic model
+    with pytest.raises(ValueError, match="Failed to validate structured output against schema"):
+        bedrock_client.create(params)
+
+
+# Test 7: Test helper method _get_response_format_schema
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_response_format_schema_pydantic(bedrock_client: BedrockClient):
+    """Test _get_response_format_schema with Pydantic model."""
+    schema = bedrock_client._get_response_format_schema(MathReasoning)
+
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "required" in schema
+
+
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_get_response_format_schema_dict(bedrock_client: BedrockClient):
+    """Test _get_response_format_schema with dict schema."""
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name"],
+    }
+
+    schema = bedrock_client._get_response_format_schema(dict_schema)
+
+    assert schema["type"] == "object"
+    assert "properties" in schema
+    assert "name" in schema["properties"]
+    assert "age" in schema["properties"]
+    assert "required" in schema
+    assert "name" in schema["required"]
+
+
+# Test 8: Test helper method _create_structured_output_tool
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_create_structured_output_tool(bedrock_client: BedrockClient):
+    """Test _create_structured_output_tool creates correct tool definition."""
+    tool = bedrock_client._create_structured_output_tool(MathReasoning)
+
+    assert tool["type"] == "function"
+    assert tool["function"]["name"] == "__structured_output"
+    assert tool["function"]["description"] == "Generate structured output matching the specified schema"
+    assert "parameters" in tool["function"]
+    assert tool["function"]["parameters"]["type"] == "object"
+
+
+# Test 9: Test helper method _extract_structured_output_from_tool_call
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_extract_structured_output_from_tool_call(bedrock_client: BedrockClient):
+    """Test _extract_structured_output_from_tool_call extracts data correctly."""
+    from autogen.oai.oai_models.chat_completion_message_tool_call import Function
+
+    tool_calls = [
+        ChatCompletionMessageToolCall(
+            id="tool_1", function=Function(name="get_weather", arguments='{"location": "NYC"}'), type="function"
+        ),
+        ChatCompletionMessageToolCall(
+            id="tool_2",
+            function=Function(
+                name="__structured_output",
+                arguments='{"steps": [{"explanation": "Step 1", "output": "Result"}], "final_answer": "Answer"}',
+            ),
+            type="function",
+        ),
     ]
 
-    with pytest.raises(TypeError, match="Property 'oops' schema must be a dict"):
-        format_tools(tools)
+    result = bedrock_client._extract_structured_output_from_tool_call(tool_calls)
+
+    assert result is not None
+    assert result["final_answer"] == "Answer"
+    assert len(result["steps"]) == 1
 
 
-# Integration tests with real Bedrock credentials
-@pytest.fixture
-def bedrock_credentials() -> Credentials:
-    """Fixture to get Bedrock credentials from environment variables."""
-    try:
-        return get_credentials_from_env_vars(filter_dict={"api_type": "bedrock"})
-    except Exception:
-        pytest.skip("Bedrock credentials not available (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required)")
-
-
+# Test 10: Test helper method _extract_structured_output_from_tool_call not found
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-@pytest.mark.integration
-def test_execute_function_resolves_async_tool_with_bedrock(bedrock_credentials: Credentials):
-    """Integration test: execute_function should await async tools instead of returning coroutine reprs with real Bedrock client."""
-    agent = ConversableAgent(name="agent", llm_config=bedrock_credentials.llm_config)
-    observed_inputs: list[str] = []
+def test_extract_structured_output_from_tool_call_not_found(bedrock_client: BedrockClient):
+    """Test _extract_structured_output_from_tool_call returns None when tool not found."""
+    from autogen.oai.oai_models.chat_completion_message_tool_call import Function
 
-    @agent.register_for_execution()
-    @agent.register_for_llm(description="Uppercase text asynchronously")
-    async def uppercase_tool(text: str) -> str:
-        observed_inputs.append(text)
-        await asyncio.sleep(0)
-        return text.upper()
+    tool_calls = [
+        ChatCompletionMessageToolCall(
+            id="tool_1", function=Function(name="get_weather", arguments='{"location": "NYC"}'), type="function"
+        )
+    ]
 
-    success, payload = agent.execute_function(
-        {"name": "uppercase_tool", "arguments": json.dumps({"text": "nyc"})},
-        call_id="tool-call-1",
-    )
+    result = bedrock_client._extract_structured_output_from_tool_call(tool_calls)
 
-    assert success is True
-    assert payload["content"] == "NYC"
-    assert observed_inputs == ["nyc"]
+    assert result is None
 
 
+# Test 11: Test helper method _validate_and_format_structured_output
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
-@pytest.mark.asyncio
-@pytest.mark.integration
-@pytest.mark.skipif(
-    not (os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")),
-    reason="Bedrock credentials not available (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY required)",
-)
-async def test_async_tool_execution_with_bedrock_integration(bedrock_credentials: Credentials):
-    """Integration test: async tool execution with real Bedrock client, checking summary and chat history."""
-    agent = ConversableAgent(
-        name="agent",
-        llm_config=bedrock_credentials.llm_config,
-        system_message="You are a helpful assistant. Use tools when needed.",
-    )
+def test_validate_and_format_structured_output(bedrock_client: BedrockClient):
+    """Test _validate_and_format_structured_output validates and formats correctly."""
+    bedrock_client._response_format = MathReasoning
 
-    observed_inputs: list[str] = []
+    structured_data = {"steps": [{"explanation": "Step 1", "output": "Result 1"}], "final_answer": "Final answer"}
 
-    @agent.register_for_execution()
-    @agent.register_for_llm(description="Uppercase text asynchronously. Useful for converting text to uppercase.")
-    async def uppercase_tool(text: str) -> str:
-        """Uppercase the given text."""
-        observed_inputs.append(text)
-        await asyncio.sleep(0.1)  # Simulate async operation
-        return text.upper()
+    result = bedrock_client._validate_and_format_structured_output(structured_data)
 
-    # Run the agent with a message that should trigger tool usage
-    result = await agent.a_run(
-        message="say 'hello bedrock'",
-        max_turns=3,
-        user_input=False,
-        summary_method="reflection_with_llm",
-    )
+    # Should return JSON string
+    import json
 
-    # Wait for the result to process
-    await result.process()
-
-    # Assert summary is generated and contains relevant information
-    summary = await result.summary
-    assert "hello" in summary.lower()
-    all_content = " ".join([
-        msg.get("content", "") for msg in result.chat_history if isinstance(msg.get("content"), str)
-    ])
-    assert "HELLO BEDROCK" in all_content or "hello bedrock".upper() in all_content, (
-        f"Chat history should contain the uppercase result. Content: {all_content[:200]}"
-    )
+    parsed = json.loads(result)
+    assert parsed["final_answer"] == "Final answer"
+    assert len(parsed["steps"]) == 1
