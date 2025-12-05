@@ -410,7 +410,7 @@ class TestOpenAICompletionsClientImageInput:
     )
     def test_image_url_input(self, openai_completions_client):
         """Test image input with URL."""
-        # Use a public domain image URL
+        # Use a stable test image URL (blue square)
         image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
 
         response = openai_completions_client.create({

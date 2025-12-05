@@ -143,7 +143,7 @@ def test_capture_multimodal_vision_response(credentials_gpt_4o_mini: Credentials
     api_key = _get_api_key_from_credentials(credentials_gpt_4o_mini)
     client = OpenAI(api_key=api_key)
 
-    # Make vision API call with image
+    # Make vision API call with image (blue square test image)
     image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
