@@ -1235,6 +1235,11 @@ def test_v2_client_tool_calling_two_agent(credentials_gpt_4o_mini: Credentials) 
         code_execution_config=False,
     )
 
+    # Register functions for execution on user_proxy
+    # (functions= parameter only registers for LLM, not for execution)
+    user_proxy.register_for_execution(name="add_numbers")(add_numbers)
+    user_proxy.register_for_execution(name="multiply_numbers")(multiply_numbers)
+
     # Initiate chat with tool calling
     chat_result = user_proxy.initiate_chat(
         assistant,
@@ -1263,9 +1268,14 @@ def test_v2_client_tool_calling_two_agent(credentials_gpt_4o_mini: Credentials) 
 @pytest.mark.openai
 @run_for_optional_imports("openai", "openai")
 def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials) -> None:
-    """Test tool calling in group chat with V2 client."""
+    """Test tool calling in group chat with V2 client using AutoPattern."""
+    from typing import Annotated
 
-    def get_weather(location: str) -> str:
+    from autogen.agentchat.group.patterns import AutoPattern
+
+    def get_weather(
+        location: Annotated[str, "City name to get weather for"],
+    ) -> str:
         """Get weather for a location.
 
         Args:
@@ -1276,7 +1286,9 @@ def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials)
         """
         return f"The weather in {location} is sunny and 72°F"
 
-    def get_time(timezone: str) -> str:
+    def get_time(
+        timezone: Annotated[str, "Timezone name (e.g., 'America/New_York', 'America/Los_Angeles')"],
+    ) -> str:
         """Get current time in a timezone.
 
         Args:
@@ -1291,47 +1303,41 @@ def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials)
     llm_config = _create_test_v2_config(credentials_gpt_4o_mini)
     llm_config["temperature"] = 0
 
-    # Create agents
-    weather_agent = AssistantAgent(
+    # Create agents with tools using functions= parameter
+    weather_agent = ConversableAgent(
         name="weather_agent",
         llm_config=llm_config,
         system_message="You provide weather information using the get_weather function.",
+        functions=[get_weather],  # Register tool here
     )
 
-    time_agent = AssistantAgent(
+    time_agent = ConversableAgent(
         name="time_agent",
         llm_config=llm_config,
         system_message="You provide time information using the get_time function.",
+        functions=[get_time],  # Register tool here
     )
 
-    user_proxy = UserProxyAgent(
+    # Create user agent
+    user_agent = ConversableAgent(
         name="user",
         human_input_mode="NEVER",
-        max_consecutive_auto_reply=0,
-        code_execution_config=False,
+        llm_config=False,
     )
 
-    # Register weather tool
-    weather_agent.register_for_llm(name="get_weather", description="Get weather")(get_weather)
-    user_proxy.register_for_execution(name="get_weather")(get_weather)
-
-    # Register time tool
-    time_agent.register_for_llm(name="get_time", description="Get time")(get_time)
-    user_proxy.register_for_execution(name="get_time")(get_time)
-
-    # Create group chat
-    group_chat = GroupChat(
-        agents=[user_proxy, weather_agent, time_agent],
-        messages=[],
-        max_round=10,
-        speaker_selection_method="auto",
+    # Create AutoPattern for intelligent agent selection
+    pattern = AutoPattern(
+        initial_agent=weather_agent,
+        agents=[weather_agent, time_agent],
+        user_agent=user_agent,
+        group_manager_args={"llm_config": llm_config},
     )
 
-    manager = GroupChatManager(groupchat=group_chat, llm_config=llm_config)
-
-    # Initiate group chat
-    chat_result = user_proxy.initiate_chat(
-        manager, message="What's the weather in San Francisco and what time is it in America/Los_Angeles?", max_turns=8
+    # Initiate group chat with AutoPattern
+    chat_result, context_variables, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages="What's the weather in San Francisco and what time is it in America/Los_Angeles?",
+        max_rounds=10,
     )
 
     _assert_v2_response_structure(chat_result)
@@ -1344,7 +1350,7 @@ def test_v2_client_tool_calling_group_chat(credentials_gpt_4o_mini: Credentials)
 
     # Verify tool call messages exist
     tool_call_messages = [msg for msg in chat_result.chat_history if msg.get("tool_calls")]
-    assert len(tool_call_messages) > 0, "Should have tool call messages in group chat"
+    assert len(tool_call_messages) > 0, "Should have tool call messages with AutoPattern"
 
 
 @pytest.mark.openai
