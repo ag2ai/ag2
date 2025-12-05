@@ -172,7 +172,7 @@ class TestStreamingCapturesUsage:
 
     def _create_content_chunk(
         self, chunk_id: str, model: str, created: int, content: str, index: int = 0
-    ) -> ChatCompletionChunk:
+    ) -> "ChatCompletionChunk":
         """Create a ChatCompletionChunk with content."""
         return ChatCompletionChunk(
             id=chunk_id,
@@ -190,7 +190,7 @@ class TestStreamingCapturesUsage:
 
     def _create_final_chunk_with_finish_reason(
         self, chunk_id: str, model: str, created: int, index: int = 0
-    ) -> ChatCompletionChunk:
+    ) -> "ChatCompletionChunk":
         """Create a final ChatCompletionChunk with finish_reason."""
         return ChatCompletionChunk(
             id=chunk_id,
@@ -208,7 +208,7 @@ class TestStreamingCapturesUsage:
 
     def _create_usage_chunk(
         self, chunk_id: str, model: str, created: int, prompt_tokens: int, completion_tokens: int
-    ) -> ChatCompletionChunk:
+    ) -> "ChatCompletionChunk":
         """Create a ChatCompletionChunk with usage information (no choices)."""
         return ChatCompletionChunk(
             id=chunk_id,
@@ -301,7 +301,7 @@ class TestStreamingHandlesInvalidChunks:
         mock_client.chat.completions = mock_completions
         return mock_client
 
-    def _create_content_chunk(self, chunk_id: str, model: str, created: int, content: str) -> ChatCompletionChunk:
+    def _create_content_chunk(self, chunk_id: str, model: str, created: int, content: str) -> "ChatCompletionChunk":
         """Create a ChatCompletionChunk with content."""
         return ChatCompletionChunk(
             id=chunk_id,
@@ -317,7 +317,7 @@ class TestStreamingHandlesInvalidChunks:
             object="chat.completion.chunk",
         )
 
-    def _create_final_chunk_with_finish_reason(self, chunk_id: str, model: str, created: int) -> ChatCompletionChunk:
+    def _create_final_chunk_with_finish_reason(self, chunk_id: str, model: str, created: int) -> "ChatCompletionChunk":
         """Create a final chunk with finish_reason."""
         return ChatCompletionChunk(
             id=chunk_id,
@@ -333,7 +333,7 @@ class TestStreamingHandlesInvalidChunks:
             object="chat.completion.chunk",
         )
 
-    def _create_usage_chunk(self, chunk_id: str, model: str, created: int) -> ChatCompletionChunk:
+    def _create_usage_chunk(self, chunk_id: str, model: str, created: int) -> "ChatCompletionChunk":
         """Create a chunk with usage information (no choices)."""
         return ChatCompletionChunk(
             id=chunk_id,
