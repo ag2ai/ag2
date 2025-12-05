@@ -8,6 +8,7 @@
 
 import asyncio
 import copy
+import json
 import os
 import threading
 import time
@@ -1966,6 +1967,55 @@ def test_tool_integration(mock_credentials: Credentials):
     tool_schemas = [tool["function"]["name"] for tool in agent.llm_config.get("tools", [])]
     assert "tool1" not in tool_schemas
     assert "tool2" in tool_schemas
+
+
+def test_execute_function_resolves_async_tool(mock_credentials: Credentials):
+    """execute_function should await async tools instead of returning coroutine reprs."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+    observed_inputs: list[str] = []
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Uppercase text asynchronously")
+    async def uppercase_tool(text: str) -> str:
+        observed_inputs.append(text)
+        await asyncio.sleep(0)
+        return text.upper()
+
+    success, payload = agent.execute_function(
+        {"name": "uppercase_tool", "arguments": json.dumps({"text": "nyc"})},
+        call_id="tool-call-1",
+    )
+
+    assert success is True
+    assert payload["content"] == "NYC"
+    assert observed_inputs == ["nyc"]
+
+
+def test_generate_tool_calls_reply_handles_async_tool(mock_credentials: Credentials):
+    """generate_tool_calls_reply should await async tools registered for execution."""
+    agent = ConversableAgent(name="agent", llm_config=mock_credentials.llm_config)
+
+    @agent.register_for_execution()
+    @agent.register_for_llm(description="Title case text asynchronously")
+    async def title_tool(text: str) -> str:
+        await asyncio.sleep(0)
+        return text.title()
+
+    message = {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call-xyz",
+                "function": {"name": "title_tool", "arguments": json.dumps({"text": "new york"})},
+            }
+        ],
+    }
+
+    handled, response = agent.generate_tool_calls_reply(messages=[message])
+    assert handled is True
+    tool_response = response["tool_responses"][0]
+    assert tool_response["tool_call_id"] == "call-xyz"
+    assert tool_response["content"] == "New York"
 
 
 def test_create_or_get_executor(mock_credentials: Credentials):
