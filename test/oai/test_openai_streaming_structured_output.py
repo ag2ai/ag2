@@ -8,13 +8,17 @@
 
 """Tests for OpenAI client streaming with structured output fixes."""
 
+import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import BaseModel
 
+from autogen import OpenAIWrapper
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 from autogen.oai.client import OpenAIClient
+from test.credentials import Credentials
 
 with optional_import_block() as result:
     from openai import OpenAI
@@ -404,3 +408,117 @@ class TestStreamingHandlesInvalidChunks:
             mock_logger.debug.assert_called()
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
             assert any("Skipping unexpected chunk type" in call for call in debug_calls)
+
+
+# Pydantic model for integration tests
+class SimpleResponse(BaseModel):
+    """Simple response model for testing structured output."""
+
+    answer: str
+    confidence: float
+
+
+@run_for_optional_imports(["openai"], "openai")
+class TestStreamingStructuredOutputIntegration:
+    """Integration tests for streaming with structured output using real OpenAI API calls.
+
+    These tests verify the fix that automatically disables streaming when structured
+    output is requested, and verifies usage metrics are captured for regular streaming.
+    """
+
+    @pytest.mark.openai
+    def test_streaming_with_structured_output_pydantic(self, credentials_gpt_4o_mini: Credentials) -> None:
+        """Test that streaming with Pydantic structured output works correctly.
+
+        When stream=True and response_format is a Pydantic model, streaming should
+        be automatically disabled internally and a valid structured response returned.
+        """
+        config_list = credentials_gpt_4o_mini.config_list
+
+        # Add stream=True and response_format to config
+        for config in config_list:
+            config["stream"] = True
+            config["response_format"] = SimpleResponse
+
+        client = OpenAIWrapper(config_list=config_list, cache_seed=None)
+
+        response = client.create(
+            messages=[{"role": "user", "content": "What is 2+2? Reply with answer and confidence (0-1)."}],
+        )
+
+        # Verify response is valid
+        assert response is not None
+        assert len(response.choices) > 0
+        assert response.choices[0].message.content is not None
+
+        # Verify the response can be parsed as the structured output model
+        content = response.choices[0].message.content
+        parsed = SimpleResponse.model_validate_json(content)
+        assert parsed.answer is not None
+        assert 0 <= parsed.confidence <= 1
+
+    @pytest.mark.openai
+    def test_streaming_with_structured_output_json_schema(self, credentials_gpt_4o_mini: Credentials) -> None:
+        """Test that streaming with JSON schema structured output works correctly.
+
+        When stream=True and response_format is a JSON schema dict, streaming should
+        be automatically disabled internally and a valid JSON response returned.
+        """
+        config_list = credentials_gpt_4o_mini.config_list
+
+        # Use Pydantic's model_json_schema() for the JSON schema format
+        # This matches the pattern used in test_structured_output.py
+        json_schema = SimpleResponse.model_json_schema()
+
+        # Add stream=True and response_format to config
+        for config in config_list:
+            config["stream"] = True
+            config["response_format"] = json_schema
+
+        client = OpenAIWrapper(config_list=config_list, cache_seed=None)
+
+        response = client.create(
+            messages=[{"role": "user", "content": "What is 2+2? Reply with answer and confidence (0-1)."}],
+        )
+
+        # Verify response is valid
+        assert response is not None
+        assert len(response.choices) > 0
+        assert response.choices[0].message.content is not None
+
+        # Verify the response is valid JSON matching schema
+        content = response.choices[0].message.content
+        parsed = json.loads(content)
+        assert "answer" in parsed
+        assert "confidence" in parsed
+        assert isinstance(parsed["confidence"], (int, float))
+
+    @pytest.mark.openai
+    def test_streaming_without_structured_output_captures_usage(self, credentials_gpt_4o_mini: Credentials) -> None:
+        """Test that streaming without structured output correctly captures usage metrics.
+
+        When stream=True without response_format, streaming should work normally
+        and usage metrics should be captured from the final chunk.
+        """
+        config_list = credentials_gpt_4o_mini.config_list
+
+        # Add stream=True without response_format
+        for config in config_list:
+            config["stream"] = True
+
+        client = OpenAIWrapper(config_list=config_list, cache_seed=None)
+
+        response = client.create(
+            messages=[{"role": "user", "content": "Say hello in exactly 5 words."}],
+        )
+
+        # Verify response is valid
+        assert response is not None
+        assert len(response.choices) > 0
+        assert response.choices[0].message.content is not None
+
+        # Verify usage metrics were captured
+        assert response.usage is not None
+        assert response.usage.prompt_tokens > 0
+        assert response.usage.completion_tokens > 0
+        assert response.usage.total_tokens == response.usage.prompt_tokens + response.usage.completion_tokens
