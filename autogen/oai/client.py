@@ -256,6 +256,8 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     extra_body: dict[str, Any] | None
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None
     max_completion_tokens: int | None
+    workspace_dir: str | None
+    allowed_paths: list[str] | None
 
 
 class OpenAILLMConfigEntry(LLMConfigEntry):
@@ -277,6 +279,8 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["low", "minimal", "medium", "high"] | None = None
     max_completion_tokens: int | None = None
+    workspace_dir: str | None = None
+    allowed_paths: list[str] | None = None
 
     def create_client(self) -> ModelClient:
         raise NotImplementedError("create_client method must be implemented in the derived class.")
@@ -1618,7 +1622,11 @@ class OpenAIResponsesLLMConfigEntry(OpenAILLMConfigEntry):
 
     api_type: Literal["responses"] = "responses"
     tool_choice: Literal["none", "auto", "required"] | None = "auto"
-    built_in_tools: list[str] | None = None
+    built_in_tools: list[Literal["web_search", "image_generation", "apply_patch", "apply_patch_async"]] | None = (
+        None  # added type safety for built-in tools and IDE autocomplete
+    )
+    workspace_dir: str | None = None
+    allowed_paths: list[str] | None = None
 
     def create_client(self) -> ModelClient:  # pragma: no cover
         raise NotImplementedError("Handled via OpenAIWrapper._register_default_client")
