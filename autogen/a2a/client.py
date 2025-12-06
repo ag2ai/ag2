@@ -4,12 +4,13 @@
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from pprint import pformat
 from typing import Any, cast
 from uuid import uuid4
 
 import httpx
-from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientConfig, ClientEvent
+from a2a.client import A2ACardResolver, A2AClientHTTPError, Client, ClientCallInterceptor, ClientConfig, ClientEvent
 from a2a.client import ClientFactory as A2AClientFactory
 from a2a.types import AgentCard, Message, Task, TaskIdParams, TaskQueryParams, TaskState
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH, EXTENDED_AGENT_CARD_PATH, PREV_AGENT_CARD_WELL_KNOWN_PATH
@@ -49,6 +50,7 @@ class A2aRemoteAgent(ConversableAgent):
         client_config: A2A Client configuration options.
         max_reconnects: Maximum number of reconnection attempts before giving up.
         polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
+        interceptors: A list of interceptors to use for the client.
     """
 
     def __init__(
@@ -59,6 +61,7 @@ class A2aRemoteAgent(ConversableAgent):
         silent: bool | None = None,
         client: ClientFactory | None = None,
         client_config: ClientConfig | None = None,
+        interceptors: Sequence[ClientCallInterceptor] = (),
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
     ) -> None:
@@ -78,6 +81,7 @@ class A2aRemoteAgent(ConversableAgent):
         self.__llm_config: dict[str, Any] = {}
 
         self._client_config = client_config or ClientConfig()
+        self._interceptors = list(interceptors)
         self._agent_card: AgentCard | None = None
 
         self.replace_reply_func(
@@ -99,6 +103,7 @@ class A2aRemoteAgent(ConversableAgent):
         client_config: ClientConfig | None = None,
         max_reconnects: int = 3,
         polling_interval: float = 0.5,
+        interceptors: Sequence[ClientCallInterceptor] = (),
     ) -> Self:
         """Creates an A2aRemoteAgent instance from an existing AgentCard.
 
@@ -115,6 +120,7 @@ class A2aRemoteAgent(ConversableAgent):
             client_config: A2A Client configuration options.
             max_reconnects: Maximum number of reconnection attempts before giving up.
             polling_interval: Time in seconds between polling operations. Works for A2A Servers doesn't support streaming.
+            interceptors: A list of interceptors to use for the client.
 
         Returns:
             Self: An instance of the A2aRemoteAgent configured with the provided card.
@@ -127,6 +133,7 @@ class A2aRemoteAgent(ConversableAgent):
             client_config=client_config,
             max_reconnects=max_reconnects,
             polling_interval=polling_interval,
+            interceptors=interceptors,
         )
         instance._agent_card = card
         return instance
@@ -155,7 +162,10 @@ class A2aRemoteAgent(ConversableAgent):
 
         self._client_config.httpx_client = self._httpx_client_factory()
         async with self._client_config.httpx_client:
-            agent_client = A2AClientFactory(self._client_config).create(self._agent_card)
+            agent_client = A2AClientFactory(self._client_config).create(
+                self._agent_card,
+                interceptors=self._interceptors,
+            )
 
             while True:
                 initial_message = request_message_to_a2a(

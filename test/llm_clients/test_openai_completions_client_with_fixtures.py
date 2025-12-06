@@ -168,7 +168,7 @@ class TestOpenAICompletionsClientWithFixtures:
 
         # Verify text content was extracted
         assert len(response.text) > 0
-        assert response.text.lower() in ["dog", "schnauzer", "the image shows a dog."]
+        assert response.text.lower() == "blue"
 
     def test_tool_call_response(self, mock_openai_client):
         """Test handling tool call response from real API fixture."""

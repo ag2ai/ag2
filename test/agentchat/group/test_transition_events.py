@@ -156,7 +156,7 @@ class TestOnConditionLLMTransitionEvent(TestTransitionEvents):
             mock_iostream_instance.send.assert_not_called()
 
         # Test case 3: Valid handoff function with sender agent
-        mock_agent = MagicMock()
+        mock_agent = MagicMock(spec=Agent)
         mock_agent.name = "TestAgent"
         with (
             patch.object(executor, "is_handoff_function", return_value=True),

@@ -103,12 +103,12 @@ def test_v2_client_with_vision_multimodal(credentials_gpt_4o_mini: Credentials) 
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Use formal multimodal content format
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    # Use formal multimodal content format (blue square test image)
+    image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
     multimodal_message = {
         "role": "user",
         "content": [
-            {"type": "text", "text": "What animal is in this image? Answer in one word."},
+            {"type": "text", "text": "What color is this image? Answer in one word."},
             {"type": "image_url", "image_url": {"url": image_url}},
         ],
     }
@@ -117,7 +117,7 @@ def test_v2_client_with_vision_multimodal(credentials_gpt_4o_mini: Credentials) 
 
     _assert_v2_response_structure(chat_result)
     summary_lower = chat_result.summary.lower()
-    assert "dog" in summary_lower or "schnauzer" in summary_lower
+    assert "blue" in summary_lower
     # Verify cost tracking for vision
     assert "usage_including_cached_inference" in chat_result.cost
     assert len(chat_result.cost["usage_including_cached_inference"]) > 0
@@ -536,13 +536,13 @@ def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> 
         agents=[image_describer, detail_analyst],
     )
 
-    # Multimodal message with image
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    # Multimodal message with image (blue square test image)
+    image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
     multimodal_message = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Team, analyze this image and identify the animal breed."},
+                {"type": "text", "text": "Team, analyze this image and identify the color."},
                 {"type": "image_url", "image_url": {"url": image_url}},
             ],
         }
@@ -558,7 +558,7 @@ def test_v2_client_pattern_with_vision(credentials_gpt_4o_mini: Credentials) -> 
     # Verify pattern works with multimodal V2 responses
     _assert_v2_response_structure(chat_result)
     summary_lower = chat_result.summary.lower()
-    assert "dog" in summary_lower or "schnauzer" in summary_lower or "terrier" in summary_lower
+    assert "blue" in summary_lower
 
     # Verify cost tracking
     assert "usage_including_cached_inference" in chat_result.cost
@@ -687,14 +687,14 @@ def test_v2_client_run_group_chat_multimodal(credentials_gpt_4o_mini: Credential
         user_agent=user_proxy,
     )
 
-    # Multimodal message with image
+    # Multimodal message with image (blue square test image)
     # Do NOT include "name" field - it causes role to become "assistant" which is invalid for images
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/3/3b/BlkStdSchnauzer2.jpg"
+    image_url = "https://media.githubusercontent.com/media/ag2ai/ag2/refs/heads/main/test/test_files/test_image.png"
     multimodal_message = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Team, what animal is in this image?"},
+                {"type": "text", "text": "Team, what color is this image?"},
                 {"type": "image_url", "image_url": {"url": image_url}},
             ],
         }
