@@ -3,13 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+import logging
+import os
 import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
+from autogen.tools.shell_tool import (
+    ShellCallOutcome,
+    ShellCallOutput,
+    ShellCommandOutput,
+    ShellExecutor,
+)
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -22,6 +31,9 @@ else:
 with optional_import_block() as openai_result:
     from openai.types.responses.response import Response
     from openai.types.responses.response_output_item import ImageGenerationCall
+
+
+logger = logging.getLogger(__name__)
 
 # Image Costs
 # Pricing per image (in USD)
@@ -128,6 +140,7 @@ class OpenAIResponsesClient:
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
+        self.shell_executor = ShellExecutor()
         self.previous_response_id = None
 
         # Image costs are calculated manually (rather than off returned information)
@@ -202,6 +215,112 @@ class OpenAIResponsesClient:
             params["text"] = {"verbosity": verbosity}
         return params
 
+    def _execute_shell_operation(
+        self,
+        action: dict[str, Any],
+        call_id: str,
+        workspace_dir: str | None = None,
+        allowed_paths: list[str] | None = None,
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> "ShellCallOutput":
+        """Execute shell commands and return shell_call_output.
+
+        Args:
+            action: Dictionary containing shell action with keys:
+                - commands: List of shell commands to execute
+                - timeout_ms: Optional timeout in milliseconds
+                - max_output_length: Optional maximum output length
+            call_id: The call_id for this shell operation
+            workspace_dir: Working directory for command execution
+            allowed_paths: List of allowed path patterns for sandboxing
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
+
+        Returns:
+            ShellCallOutput with execution results
+        """
+        # Initialize shell executor if not already initialized
+        if not hasattr(self, "_shell_executor"):
+            self._shell_executor = ShellExecutor(
+                workspace_dir=workspace_dir if workspace_dir else os.getcwd(),
+                allowed_paths=allowed_paths if allowed_paths else [],
+                allowed_commands=allowed_commands if allowed_commands else [],
+                denied_commands=denied_commands if denied_commands else [],
+                enable_command_filtering=enable_command_filtering if enable_command_filtering else True,
+                dangerous_patterns=dangerous_patterns
+                if dangerous_patterns
+                else ShellExecutor.DEFAULT_DANGEROUS_PATTERNS,
+            )
+        else:
+            # Update executor settings if provided
+            self._shell_executor.workspace_dir = (
+                Path(workspace_dir).resolve() if workspace_dir else self._shell_executor.workspace_dir
+            )
+            self._shell_executor.allowed_paths = (
+                allowed_paths if allowed_paths is not None else self._shell_executor.allowed_paths
+            )
+            self._shell_executor.allowed_commands = (
+                allowed_commands if allowed_commands is not None else self._shell_executor.allowed_commands
+            )
+            self._shell_executor.denied_commands = (
+                denied_commands if denied_commands is not None else self._shell_executor.denied_commands
+            )
+            self._shell_executor.dangerous_patterns = (
+                dangerous_patterns if dangerous_patterns is not None else self._shell_executor.dangerous_patterns
+            )
+            self._shell_executor.enable_command_filtering = (
+                enable_command_filtering
+                if enable_command_filtering is not None
+                else self._shell_executor.enable_command_filtering
+            )
+
+        commands = action.get("commands", [])
+        timeout_ms = action.get("timeout_ms")
+        max_output_length = action.get("max_output_length")
+
+        if not commands:
+            # Return empty output if no commands
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[
+                    ShellCommandOutput(
+                        stdout="",
+                        stderr="No commands provided",
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                ],
+            )
+
+        try:
+            # Execute commands
+            command_outputs = self._shell_executor.run_commands(commands, timeout_ms=timeout_ms)
+
+            # Return in the correct format
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=command_outputs,
+            )
+        except Exception as e:
+            # Return error in the correct format
+            return ShellCallOutput(
+                call_id=call_id,
+                max_output_length=max_output_length,
+                output=[
+                    ShellCommandOutput(
+                        stdout="",
+                        stderr=f"Error executing shell commands: {str(e)}",
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                ],
+            )
+
     def create(self, params: dict[str, Any]) -> "Response":
         """Invoke `client.responses.create() or .parse()`.
 
@@ -212,9 +331,25 @@ class OpenAIResponsesClient:
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
+        shell_tool_params = {"type": "shell"}
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
+
+        shell_call_ids: dict[str, Any] = {}
+        if self.previous_response_id is not None:
+            try:
+                previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
+                previous_output = getattr(previous_response, "output", [])
+                for item in previous_output:
+                    if hasattr(item, "model_dump"):
+                        item = item.model_dump()
+                    if item.get("type") == "shell_call":
+                        call_id = item.get("call_id")
+                        if call_id:
+                            shell_call_ids[call_id] = item
+            except Exception as exc:  # pragma: no cover - retrieval best-effort
+                logger.debug("[shell] Could not inspect previous response: %s", exc)
 
         # Back-compat: transform messages → input if needed ------------------
         if "messages" in params and "input" not in params:
@@ -226,30 +361,50 @@ class OpenAIResponsesClient:
                 content = m.get("content")
                 blocks = []
                 if role != "tool":
+                    content_type = "output_text" if role == "assistant" else "input_text"
                     if isinstance(content, list):
                         for c in content:
-                            if c.get("type") in ["input_text", "text"]:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
+                            if c.get("type") in ["input_text", "output_text", "text"]:
+                                blocks.append({"type": content_type, "text": c.get("text")})
                             elif c.get("type") == "input_image":
                                 blocks.append({"type": "input_image", "image_url": c.get("image_url")})
                             elif c.get("type") == "image_params":
                                 for k, v in c.get("image_params", {}).items():
                                     if k in self.image_output_params:
                                         image_generation_tool_params[k] = v
+                            elif c.get("type") == "shell_call":
+                                call_id = c.get("call_id")
+                                if call_id:
+                                    shell_call_ids[call_id] = c
+                                continue
                             else:
                                 raise ValueError(f"Invalid content type: {c.get('type')}")
                     else:
-                        blocks.append({"type": "input_text", "text": content})
+                        blocks.append({"type": content_type, "text": content})
                     input_items.append({"role": role, "content": blocks})
 
+                    if role == "assistant":
+                        tool_calls = m.get("tool_calls", [])
+                        if isinstance(tool_calls, list):
+                            for tool_call in tool_calls:
+                                if not isinstance(tool_call, dict):
+                                    continue
+                                if tool_call.get("type") == "shell_call":
+                                    call_id = tool_call.get("call_id")
+                                    if call_id:
+                                        shell_call_ids[call_id] = tool_call
+
                 else:
+                    tool_call_id = m.get("tool_call_id", None)
+                    if tool_call_id and tool_call_id in shell_call_ids:
+                        continue
                     if input_items:
                         break
                     # tool call response is the last item in the list
                     content = content_str(m.get("content"))
                     input_items.append({
                         "type": "function_call_output",
-                        "call_id": m.get("tool_call_id", None),
+                        "call_id": tool_call_id,
                         "output": content,
                     })
                     break
@@ -262,6 +417,48 @@ class OpenAIResponsesClient:
                 # This prevents the API error about missing required parameters
                 params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
 
+        # Extract and remove sandboxing parameters from params (they're only used internally)
+        # These must be removed before passing params to the OpenAI API
+        workspace_dir = params.pop("workspace_dir", None)
+        if workspace_dir is None:
+            workspace_dir = os.getcwd()
+        allowed_paths = params.pop("allowed_paths", None)
+        if allowed_paths is None:
+            allowed_paths = []
+        allowed_commands = params.pop("allowed_commands", None)
+        denied_commands = params.pop("denied_commands", None)
+        if denied_commands is None:
+            denied_commands = []
+        enable_command_filtering = params.pop("enable_command_filtering", True)  # Default to True
+        dangerous_patterns = params.pop("dangerous_patterns", None)
+        if dangerous_patterns is None:
+            dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
+
+        shell_call_outputs_payloads: list[dict[str, Any]] = []
+        if shell_call_ids:
+            for call_id, shell_call in shell_call_ids.items():
+                action = shell_call.get("action")
+                if not action:
+                    continue
+                shell_call_output = self._execute_shell_operation(
+                    action,  # Pass action, not shell_call
+                    call_id,
+                    workspace_dir,
+                    allowed_paths,
+                    allowed_commands,
+                    denied_commands,
+                    enable_command_filtering,
+                    dangerous_patterns,
+                )
+                shell_call_outputs_payloads.append(shell_call_output.model_dump())
+
+        if shell_call_outputs_payloads:
+            existing_input = params.get("input", [])
+            if existing_input:
+                params["input"] = shell_call_outputs_payloads + existing_input
+            else:
+                params["input"] = shell_call_outputs_payloads
+
         # Initialize tools list
         tools_list = []
         # Back-compat: add default tools
@@ -271,6 +468,8 @@ class OpenAIResponsesClient:
                 tools_list.append(image_generation_tool_params)
             if "web_search" in built_in_tools:
                 tools_list.append(web_search_tool_params)
+            if "shell" in built_in_tools:
+                tools_list.append(shell_tool_params)
 
         if "tools" in params:
             for tool in params["tools"]:
@@ -405,6 +604,18 @@ class OpenAIResponsesClient:
             # ------------------------------------------------------------------
             # 3) Built-in tool calls
             # ------------------------------------------------------------------
+            if item_type == "shell_call":
+                tool_call_args = {
+                    "id": item.get("id"),
+                    "role": "tool_calls",
+                    "type": "shell_call",
+                    "call_id": item.get("call_id"),
+                    "status": item.get("status", "in_progress"),
+                    "action": item.get("action", {}),
+                }
+                content.append(tool_call_args)
+                continue
+
             if item_type and item_type.endswith("_call"):
                 tool_name = item_type.replace("_call", "")
                 tool_call_args = {
