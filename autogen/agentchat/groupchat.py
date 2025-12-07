@@ -32,6 +32,7 @@ from ..exception_utils import AgentNameConflictError, NoEligibleSpeakerError, Un
 from ..graph_utils import check_graph_validity, invert_disallowed_to_allowed
 from ..io.base import IOStream
 from ..llm_config import LLMConfig, ModelClient
+from ..oai.client_utils import validate_parameter
 from ..runtime_logging import log_new_agent, logging_enabled
 from .agent import Agent
 from .contrib.capabilities import transform_messages
@@ -254,32 +255,34 @@ class GroupChat:
             agents=self.agents,
         )
 
-        # Check select speaker messages, prompts, roles, and retries have values
-        if self.select_speaker_message_template is None or len(self.select_speaker_message_template) == 0:
-            raise ValueError("select_speaker_message_template cannot be empty or None.")
+        # Validate string parameters using standardized validation
+        def _validate_non_empty_string(param_name: str, value: str) -> str:
+            """Helper to validate non-empty string parameters."""
+            if value is None or (isinstance(value, str) and len(value) == 0):
+                raise ValueError(f"{param_name} cannot be empty or None.")
+            return value
 
+        # Validate all required string parameters
+        _validate_non_empty_string("select_speaker_message_template", self.select_speaker_message_template)
+        _validate_non_empty_string("role_for_select_speaker_messages", self.role_for_select_speaker_messages)
+        _validate_non_empty_string("select_speaker_auto_multiple_template", self.select_speaker_auto_multiple_template)
+        _validate_non_empty_string("select_speaker_auto_none_template", self.select_speaker_auto_none_template)
+
+        # Handle optional prompt template (can be None or empty)
         if self.select_speaker_prompt_template is not None and len(self.select_speaker_prompt_template) == 0:
             self.select_speaker_prompt_template = None
 
-        if self.role_for_select_speaker_messages is None or len(self.role_for_select_speaker_messages) == 0:
-            raise ValueError("role_for_select_speaker_messages cannot be empty or None.")
-
-        if self.select_speaker_auto_multiple_template is None or len(self.select_speaker_auto_multiple_template) == 0:
-            raise ValueError("select_speaker_auto_multiple_template cannot be empty or None.")
-
-        if self.select_speaker_auto_none_template is None or len(self.select_speaker_auto_none_template) == 0:
-            raise ValueError("select_speaker_auto_none_template cannot be empty or None.")
-
-        if self.max_retries_for_selecting_speaker is None or len(self.role_for_select_speaker_messages) == 0:
-            raise ValueError("role_for_select_speaker_messages cannot be empty or None.")
-
-        # Validate max select speakers retries
-        if self.max_retries_for_selecting_speaker is None or not isinstance(
-            self.max_retries_for_selecting_speaker, int
-        ):
-            raise ValueError("max_retries_for_selecting_speaker cannot be None or non-int")
-        elif self.max_retries_for_selecting_speaker < 0:
-            raise ValueError("max_retries_for_selecting_speaker must be greater than or equal to zero")
+        # Validate max_retries_for_selecting_speaker using standardized validation
+        params_dict = {"max_retries_for_selecting_speaker": self.max_retries_for_selecting_speaker}
+        self.max_retries_for_selecting_speaker = validate_parameter(
+            params_dict,
+            "max_retries_for_selecting_speaker",
+            (int,),
+            allow_None=False,
+            default_value=2,
+            numerical_bound=(0, None),  # Must be >= 0
+            allowed_values=None,
+        )
 
         # Load message transforms here (load once for the Group Chat so we don't have to re-initiate it and it maintains the cache across subsequent select speaker calls)
         if self.select_speaker_transform_messages is not None:
@@ -560,6 +563,12 @@ class GroupChat:
         else:  # auto
             selected_agent = None
             select_speaker_messages = self.messages.copy()
+
+            # Normalize message content for speaker selection agent to handle Responses API format
+            for i, msg in enumerate(select_speaker_messages):
+                if "content" in msg:
+                    select_speaker_messages[i] = dict(msg, content=content_str(msg["content"]))
+
             # If last message is a tool call or function call, blank the call so the api doesn't throw
             if select_speaker_messages[-1].get("function_call", False):
                 select_speaker_messages[-1] = dict(select_speaker_messages[-1], function_call=None)
@@ -862,7 +871,7 @@ class GroupChat:
         """
         # Validate the speaker name selected
         if messages and (name := messages[-1].get("content")):
-            mentions = self._mentioned_agents(name.strip(), agents)
+            mentions = self._mentioned_agents(content_str(name).strip(), agents)
         else:
             mentions = []
         no_of_mentions = len(mentions)
@@ -998,9 +1007,11 @@ class GroupChat:
         if agents is None:
             agents = self.agents
 
-        # Cast message content to str
+        # Cast message content to str - handle both Chat Completions and Responses API formats
         if isinstance(message_content, dict):
             message_content = message_content["content"]
+
+        # Use content_str to handle Responses API list format
         message_content = content_str(message_content)
 
         mentions = {}

@@ -2298,6 +2298,51 @@ def test_groupchat_with_deepseek_reasoner(
         assert isinstance(result.summary, str)
 
 
+@run_for_optional_imports(["openai"], "openai")
+def test_groupchat_content_normalization():
+    """Test that GroupChat properly handles both string and list content formats (Responses API)."""
+    agent1 = AssistantAgent("alice", max_consecutive_auto_reply=0, llm_config=False)
+    agent2 = AssistantAgent("bob", max_consecutive_auto_reply=0, llm_config=False)
+    groupchat = GroupChat(agents=[agent1, agent2], messages=[], max_round=10)
+
+    # Test _mentioned_agents with string content (Chat Completions format)
+    string_content = "alice should speak next"
+    mentions = groupchat._mentioned_agents(string_content, [agent1, agent2])
+    assert "alice" in mentions
+    assert mentions["alice"] == 1
+
+    # Test _mentioned_agents with list content (Responses API format)
+    list_content = [{"type": "text", "text": "alice should speak next"}]
+    mentions = groupchat._mentioned_agents(list_content, [agent1, agent2])
+    assert "alice" in mentions
+    assert mentions["alice"] == 1
+
+    # Test _mentioned_agents with dict content (message dict format)
+    dict_content = {"content": [{"type": "text", "text": "bob should speak next"}]}
+    mentions = groupchat._mentioned_agents(dict_content, [agent1, agent2])
+    assert "bob" in mentions
+    assert mentions["bob"] == 1
+
+    # Test _mentioned_agents with complex list content
+    complex_list_content = [
+        {"type": "text", "text": "alice and bob should both speak"},
+        {"type": "image_url", "image_url": {"url": "http://example.com/image.jpg"}},
+    ]
+    mentions = groupchat._mentioned_agents(complex_list_content, [agent1, agent2])
+    assert "alice" in mentions
+    assert "bob" in mentions
+    assert mentions["alice"] == 1
+    assert mentions["bob"] == 1
+
+    # Test with None content
+    mentions = groupchat._mentioned_agents(None, [agent1, agent2])
+    assert len(mentions) == 0
+
+    # Test with empty list content
+    mentions = groupchat._mentioned_agents([], [agent1, agent2])
+    assert len(mentions) == 0
+
+
 def test_groupchatmanager_no_llm_config():
     """Tests that the GroupChatManager has an LLM config"""
     # Setup
