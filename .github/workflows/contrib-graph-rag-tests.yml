@@ -56,10 +56,10 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -129,10 +129,10 @@ jobs:
           exit 1
       # checkout to pr branch
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -180,8 +180,8 @@ jobs:
   #       env:
   #         NEO4J_AUTH: neo4j/password
   #   steps:
-  #     - uses: actions/checkout@v5
-  #     - uses: astral-sh/setup-uv@v6
+  #     - uses: actions/checkout@v6
+  #     - uses: astral-sh/setup-uv@v7
   #       with:
   #         version: "latest"
   #     - name: Set up Python ${{ matrix.python-version }}

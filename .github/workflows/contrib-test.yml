@@ -36,8 +36,8 @@ jobs:
         python-version: ["3.10", "3.11"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -109,8 +109,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -189,8 +189,8 @@ jobs:
         python-version: ["3.10"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -222,8 +222,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -261,8 +261,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -300,8 +300,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -339,10 +339,10 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.13"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           lfs: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -385,8 +385,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -424,8 +424,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -463,8 +463,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -498,8 +498,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -540,8 +540,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -580,8 +580,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -620,8 +620,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -660,8 +660,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -698,8 +698,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -738,8 +738,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -778,8 +778,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -818,8 +818,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}

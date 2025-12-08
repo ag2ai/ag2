@@ -20,7 +20,7 @@ jobs:
     outputs:
       hasChanges: ${{ steps.filter.outputs.autogen == 'true' || steps.filter.outputs.test == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.setup == 'true' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -59,8 +59,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
