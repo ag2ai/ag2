@@ -59,6 +59,7 @@ class ManualPattern(Pattern):
         self,
         max_rounds: int,
         messages: list[dict[str, Any]] | str,
+        isolate_agent_views: bool = False,
     ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
@@ -83,6 +84,10 @@ class ManualPattern(Pattern):
         Args:
             max_rounds: Maximum number of conversation rounds.
             messages: Initial message(s) to start the conversation.
+            isolate_agent_views: If True, agents will only maintain their own message history
+                and will not receive messages from other agents. When False (default), all agents
+                receive all messages. When True, messages are still stored in groupchat.messages
+                for the GroupChatManager's view, but are not broadcast to other agents.
 
         Returns:
             Tuple containing all necessary components for the group chat.
@@ -91,6 +96,7 @@ class ManualPattern(Pattern):
         components = super().prepare_group_chat(
             max_rounds=max_rounds,
             messages=messages,
+            isolate_agent_views=isolate_agent_views,
         )
 
         # Extract the group_after_work and the rest of the components

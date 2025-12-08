@@ -25,6 +25,7 @@ class TestPatternImpl(Pattern):
         self,
         max_rounds: int,
         messages: list[dict[str, Any]] | str,
+        isolate_agent_views: bool = False,
     ) -> tuple[
         list["ConversableAgent"],
         list["ConversableAgent"],
@@ -41,7 +42,7 @@ class TestPatternImpl(Pattern):
         list[Any],
     ]:
         """Concrete implementation that just calls the parent method."""
-        return super().prepare_group_chat(max_rounds, messages)
+        return super().prepare_group_chat(max_rounds, messages, isolate_agent_views)
 
 
 class TestPattern:
@@ -200,7 +201,7 @@ class TestPattern:
         )
 
         # Call the method
-        result = pattern.prepare_group_chat(max_rounds=10, messages="Hello")
+        result = pattern.prepare_group_chat(max_rounds=10, messages="Hello", isolate_agent_views=False)
 
         # Check method calls
         mock_prepare_agents.assert_called_once_with(agents, context_variables, True)
