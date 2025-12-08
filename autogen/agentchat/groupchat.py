@@ -128,6 +128,10 @@ class GroupChat:
     - select_speaker_auto_model_client_cls: Custom model client class for the internal speaker select agent used during 'auto' speaker selection (optional)
     - select_speaker_auto_llm_config: LLM config for the internal speaker select agent used during 'auto' speaker selection (optional)
     - role_for_select_speaker_messages: sets the role name for speaker selection when in 'auto' mode, typically 'user' or 'system'. (default: 'system')
+    - isolate_agent_views: if True, agents will only maintain their own message history and will not receive messages from other agents.
+        When False (default), all agents receive all messages (current behavior). When True, messages are still stored in
+        groupchat.messages for the GroupChatManager's view, but are not broadcast to other agents. Each agent will only
+        see their own messages when generating replies. (default: False)
     """
 
     agents: list[Agent]
@@ -165,6 +169,7 @@ class GroupChat:
     select_speaker_auto_model_client_cls: ModelClient | list[ModelClient] | None = None
     select_speaker_auto_llm_config: LLMConfig | dict[str, Any] | Literal[False] | None = None
     role_for_select_speaker_messages: str | None = "system"
+    isolate_agent_views: bool = False
 
     _VALID_SPEAKER_SELECTION_METHODS = ["auto", "manual", "random", "round_robin"]
     _VALID_SPEAKER_TRANSITIONS_TYPE = ["allowed", "disallowed", None]
@@ -1212,8 +1217,9 @@ class GroupChatManager(ConversableAgent):
         if send_introductions:
             # Broadcast the intro
             intro = groupchat.introductions_msg()
-            for agent in groupchat.agents:
-                self.send(intro, agent, request_reply=False, silent=True)
+            if not groupchat.isolate_agent_views:
+                for agent in groupchat.agents:
+                    self.send(intro, agent, request_reply=False, silent=True)
             # NOTE: We do not also append to groupchat.messages,
             # since groupchat handles its own introductions
 
@@ -1224,23 +1230,24 @@ class GroupChatManager(ConversableAgent):
         for i in range(groupchat.max_round):
             self._last_speaker = speaker
             groupchat.append(message, speaker)
-            # broadcast the message to all agents except the speaker
-            for agent in groupchat.agents:
-                if agent != speaker:
-                    inter_reply = groupchat._run_inter_agent_guardrails(
-                        src_agent_name=speaker.name,
-                        dst_agent_name=agent.name,
-                        message_content=message,
-                    )
-                    if inter_reply is not None:
-                        replacement = (
-                            {"content": inter_reply, "name": speaker.name}
-                            if not isinstance(inter_reply, dict)
-                            else inter_reply
+            # broadcast the message to all agents except the speaker (unless isolate_agent_views is True)
+            if not groupchat.isolate_agent_views:
+                for agent in groupchat.agents:
+                    if agent != speaker:
+                        inter_reply = groupchat._run_inter_agent_guardrails(
+                            src_agent_name=speaker.name,
+                            dst_agent_name=agent.name,
+                            message_content=message,
                         )
-                        self.send(replacement, agent, request_reply=False, silent=True)
-                    else:
-                        self.send(message, agent, request_reply=False, silent=True)
+                        if inter_reply is not None:
+                            replacement = (
+                                {"content": inter_reply, "name": speaker.name}
+                                if not isinstance(inter_reply, dict)
+                                else inter_reply
+                            )
+                            self.send(replacement, agent, request_reply=False, silent=True)
+                        else:
+                            self.send(message, agent, request_reply=False, silent=True)
 
             if self._is_termination_msg(message):
                 # The conversation is over
@@ -1345,8 +1352,9 @@ class GroupChatManager(ConversableAgent):
         if send_introductions:
             # Broadcast the intro
             intro = groupchat.introductions_msg()
-            for agent in groupchat.agents:
-                await self.a_send(intro, agent, request_reply=False, silent=True)
+            if not groupchat.isolate_agent_views:
+                for agent in groupchat.agents:
+                    await self.a_send(intro, agent, request_reply=False, silent=True)
             # NOTE: We do not also append to groupchat.messages,
             # since groupchat handles its own introductions
 
@@ -1363,10 +1371,24 @@ class GroupChatManager(ConversableAgent):
                 termination_reason = f"Termination message condition on the GroupChatManager '{self.name}' met"
                 break
 
-            # broadcast the message to all agents except the speaker
-            for agent in groupchat.agents:
-                if agent != speaker:
-                    await self.a_send(message, agent, request_reply=False, silent=True)
+            # broadcast the message to all agents except the speaker (unless isolate_agent_views is True)
+            if not groupchat.isolate_agent_views:
+                for agent in groupchat.agents:
+                    if agent != speaker:
+                        inter_reply = groupchat._run_inter_agent_guardrails(
+                            src_agent_name=speaker.name,
+                            dst_agent_name=agent.name,
+                            message_content=message,
+                        )
+                        if inter_reply is not None:
+                            replacement = (
+                                {"content": inter_reply, "name": speaker.name}
+                                if not isinstance(inter_reply, dict)
+                                else inter_reply
+                            )
+                            await self.a_send(replacement, agent, request_reply=False, silent=True)
+                        else:
+                            await self.a_send(message, agent, request_reply=False, silent=True)
             if i == groupchat.max_round - 1:
                 # the last round
                 termination_reason = f"Maximum rounds ({groupchat.max_round}) reached"
