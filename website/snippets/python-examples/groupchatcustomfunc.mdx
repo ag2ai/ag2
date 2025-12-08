@@ -104,12 +104,17 @@ def custom_speaker_selection_func(last_speaker: Agent, groupchat: GroupChat):
     else:
         return "random"
 
+# The new parameter 'isolate_agent_views' may be set to True to make agents see only their own messages.
+# When isolate_agent_views=True, each agent maintains only its own message history and does not receive messages from other agents.
+# For standard (shared context) group chat, leave isolate_agent_views as False (default).
+
+# Example with isolate_agent_views (optional):
 groupchat = GroupChat(
     agents=[user_proxy, engineer, scientist, planner, executor],
     messages=[],
     max_round=20,
-    # Here we specify our custom speaker selection function
-    speaker_selection_method=custom_speaker_selection_func
+    speaker_selection_method=custom_speaker_selection_func,
+    isolate_agent_views=False  # Set to True for isolated agent views
 )
 
 manager = GroupChatManager(
