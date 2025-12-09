@@ -1369,365 +1369,365 @@ def test_apply_patch_operation_with_allowed_paths(mocked_openai_client):
         os.chdir(original_cwd)
 
 
-def test_normalize_messages_basic_text_messages(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api with basic text messages."""
+# Add these new tests after line 1260, before test_normalize_messages_basic_text_messages
+
+# -----------------------------------------------------------------------------
+# Helper Method Tests for _normalize_messages_for_responses_api
+# -----------------------------------------------------------------------------
+
+
+def test_extract_apply_patch_calls_from_content(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+    assert result["call_123"]["type"] == "apply_patch_call"
+    assert result["call_123"]["call_id"] == "call_123"
+
+
+def test_extract_apply_patch_calls_from_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "I'll create a file",
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_456",
+                    "operation": {"type": "create_file", "path": "new.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_456" in result
+    assert result["call_456"]["type"] == "apply_patch_call"
+
+
+def test_extract_apply_patch_calls_from_both_content_and_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts from both content and tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_content",
+                    "operation": {"type": "create_file", "path": "content.py"},
+                }
+            ],
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_tool",
+                    "operation": {"type": "update_file", "path": "tool.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 2
+    assert "call_content" in result
+    assert "call_tool" in result
+
+
+def test_extract_apply_patch_calls_ignores_non_assistant_messages(mocked_openai_client):
+    """Test _extract_apply_patch_calls only processes assistant messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "create_file", "path": "test.py"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_xyz", "content": "output"},
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+
+
+def test_extract_apply_patch_calls_skips_items_without_call_id(mocked_openai_client):
+    """Test _extract_apply_patch_calls skips apply_patch_call items without call_id."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "apply_patch_call", "operation": {"type": "create_file"}},  # No call_id
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_valid",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_valid" in result
+
+
+def test_execute_apply_patch_calls_with_apply_patch_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls executes calls when apply_patch is in built_in_tools."""
     import tempfile
 
     client = OpenAIResponsesClient(mocked_openai_client)
     temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_123"
+    assert result[0]["type"] == "apply_patch_call_output"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls uses async mode when apply_patch_async is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_456": {
+            "type": "apply_patch_call",
+            "call_id": "call_456",
+            "operation": {
+                "type": "create_file",
+                "path": "async.py",
+                "diff": "@@ -0,0 +1,1 @@\n+async_content",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch_async"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_456"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_returns_empty_when_not_in_built_in_tools(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list when tool not enabled."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {"type": "create_file", "path": "test.py"},
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, [], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list for empty calls_dict."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
+    """Test _execute_apply_patch_calls handles multiple apply_patch calls."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_1": {
+            "type": "apply_patch_call",
+            "call_id": "call_1",
+            "operation": {
+                "type": "create_file",
+                "path": "file1.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file1",
+            },
+        },
+        "call_2": {
+            "type": "apply_patch_call",
+            "call_id": "call_2",
+            "operation": {
+                "type": "create_file",
+                "path": "file2.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file2",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 2
+    call_ids = {r["call_id"] for r in result}
+    assert call_ids == {"call_1", "call_2"}
+
+
+def test_execute_apply_patch_calls_skips_calls_without_operation(mocked_openai_client):
+    """Test _execute_apply_patch_calls skips calls without operation."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_no_op": {
+            "type": "apply_patch_call",
+            "call_id": "call_no_op",
+            # No operation field
+        },
+        "call_valid": {
+            "type": "apply_patch_call",
+            "call_id": "call_valid",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+valid",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_valid"
+
+
+def test_convert_messages_to_input_basic_text(mocked_openai_client):
+    """Test _convert_messages_to_input converts basic text messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
 
     messages = [
         {"role": "user", "content": "Hello"},
         {"role": "assistant", "content": "Hi there"},
     ]
 
+    input_items = []
     image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
 
-    # Should return messages in chronological order
-    assert len(result) == 2
-    assert result[0]["role"] == "user"
-    assert result[0]["content"][0]["type"] == "input_text"
-    assert result[0]["content"][0]["text"] == "Hello"
-    assert result[1]["role"] == "assistant"
-    assert result[1]["content"][0]["type"] == "output_text"
-    assert result[1]["content"][0]["text"] == "Hi there"
+    # Messages are added in reverse, so we expect: [assistant, user] in input_items
+    assert len(input_items) == 2
+    # Last message first (assistant)
+    assert input_items[0]["role"] == "assistant"
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    # First message second (user)
+    assert input_items[1]["role"] == "user"
+    assert input_items[1]["content"][0]["type"] == "input_text"
 
 
-def test_normalize_messages_with_list_content(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api with list content."""
-    import tempfile
-
+def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_client):
+    """Test _convert_messages_to_input filters out processed apply_patch_call items."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": "Describe this image."},
-                {"type": "input_image", "image_url": "https://example.com/cat.png"},
-            ],
-        }
-    ]
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    assert len(result) == 1
-    assert result[0]["role"] == "user"
-    assert len(result[0]["content"]) == 2
-    assert result[0]["content"][0]["type"] == "input_text"
-    assert result[0]["content"][1]["type"] == "input_image"
-    assert result[0]["content"][1]["image_url"] == "https://example.com/cat.png"
-
-
-def test_normalize_messages_processes_apply_patch_from_content(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api processes apply_patch_call from message content."""
-    import os
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    # Create a test file first
-    test_file = os.path.join(temp_dir, "test.py")
-    with open(test_file, "w") as f:
-        f.write("original")
 
     messages = [
         {
             "role": "assistant",
             "content": [
-                {"type": "text", "text": "I'll update the file."},
+                {"type": "text", "text": "I'll fix this"},
                 {
                     "type": "apply_patch_call",
                     "call_id": "call_123",
-                    "operation": {
-                        "type": "update_file",
-                        "path": "test.py",
-                        "diff": "@@ -1,1 +1,1 @@\n-original\n+updated",
-                    },
+                    "operation": {"type": "update_file"},
                 },
             ],
         }
     ]
 
+    input_items = []
     image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
 
-    # After final reverse: messages first (chronological), then outputs
-    assert len(result) >= 2
-    # First item should be the text message (apply_patch_call filtered out)
-    assert result[0]["role"] == "assistant"
-    assert len(result[0]["content"]) == 1  # Only text, no apply_patch_call
-    assert result[0]["content"][0]["type"] == "output_text"
-    assert result[0]["content"][0]["text"] == "I'll update the file."
-    # Second item should be apply_patch_call_output
-    assert result[1]["type"] == "apply_patch_call_output"
-    assert result[1]["call_id"] == "call_123"
-    assert result[1]["status"] == "completed"
-
-
-def test_normalize_messages_processes_apply_patch_from_tool_calls(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api processes apply_patch_call from tool_calls."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "assistant",
-            "content": "I'll create a file.",
-            "tool_calls": [
-                {
-                    "type": "apply_patch_call",
-                    "call_id": "call_456",
-                    "operation": {
-                        "type": "create_file",
-                        "path": "new.py",
-                        "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
-                    },
-                }
-            ],
-        }
-    ]
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    # Messages come first, then outputs
-    assert len(result) >= 2
-    # First should be the assistant message
-    assert result[0]["role"] == "assistant"
-    assert result[0]["content"][0]["text"] == "I'll create a file."
-    # Second should be apply_patch_call_output
-    assert result[1]["type"] == "apply_patch_call_output"
-    assert result[1]["call_id"] == "call_456"
-    assert result[1]["status"] == "completed"
-
-
-def test_normalize_messages_processes_previous_apply_patch_calls(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api processes previous_apply_patch_calls."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [{"role": "user", "content": "Continue"}]
-
-    previous_apply_patch_calls = {
-        "call_789": {
-            "type": "apply_patch_call",
-            "call_id": "call_789",
-            "operation": {
-                "type": "create_file",
-                "path": "previous.py",
-                "diff": "@@ -0,0 +1,1 @@\n+previous",
-            },
-        }
-    }
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls=previous_apply_patch_calls,
-        image_generation_tool_params=image_params,
-    )
-
-    # Messages come first, then outputs
-    assert len(result) >= 2
-    # First should be user message
-    assert result[0]["role"] == "user"
-    assert result[0]["content"][0]["text"] == "Continue"
-    # Second should be previous apply_patch_call_output
-    assert result[1]["type"] == "apply_patch_call_output"
-    assert result[1]["call_id"] == "call_789"
-    assert result[1]["status"] == "completed"
-
-
-def test_normalize_messages_combines_message_and_previous_apply_patch(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api combines message and previous apply_patch calls."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "apply_patch_call",
-                    "call_id": "call_msg",
-                    "operation": {
-                        "type": "create_file",
-                        "path": "msg.py",
-                        "diff": "@@ -0,0 +1,1 @@\n+msg",
-                    },
-                }
-            ],
-        }
-    ]
-
-    previous_apply_patch_calls = {
-        "call_prev": {
-            "type": "apply_patch_call",
-            "call_id": "call_prev",
-            "operation": {
-                "type": "create_file",
-                "path": "prev.py",
-                "diff": "@@ -0,0 +1,1 @@\n+prev",
-            },
-        }
-    }
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls=previous_apply_patch_calls,
-        image_generation_tool_params=image_params,
-    )
-
-    # Since message has no content after filtering apply_patch_call:
-    # Before reverse: [msg_output, prev_output] (no messages added)
-    # After reverse: [prev_output, msg_output]
-    # So previous output comes first, then message output
-    assert len(result) >= 2
-    assert result[0]["type"] == "apply_patch_call_output"
-    assert result[0]["call_id"] == "call_prev"  # Previous call comes first after reverse
-    assert result[1]["type"] == "apply_patch_call_output"
-    assert result[1]["call_id"] == "call_msg"  # Message call comes second
-
-
-def test_normalize_messages_handles_apply_patch_async(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles apply_patch_async."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "apply_patch_call",
-                    "call_id": "call_async",
-                    "operation": {
-                        "type": "create_file",
-                        "path": "async.py",
-                        "diff": "@@ -0,0 +1,1 @@\n+async",
-                    },
-                }
-            ],
-        }
-    ]
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch_async"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    assert len(result) >= 1
-    assert result[0]["type"] == "apply_patch_call_output"
-    assert result[0]["call_id"] == "call_async"
-    assert result[0]["status"] == "completed"
-
-
-def test_normalize_messages_skips_apply_patch_when_not_in_built_in_tools(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api skips apply_patch when not in built_in_tools."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "Hello"},
-                {
-                    "type": "apply_patch_call",
-                    "call_id": "call_skip",
-                    "operation": {"type": "create_file", "path": "skip.py", "diff": "@@\n+skip"},
-                },
-            ],
-        }
-    ]
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],  # No apply_patch
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    # Should filter out apply_patch_call but not process it
-    assert len(result) == 1
-    assert result[0]["role"] == "assistant"
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "assistant"
     # apply_patch_call should be filtered out
-    assert len(result[0]["content"]) == 1
-    assert result[0]["content"][0]["type"] == "output_text"
-    assert result[0]["content"][0]["text"] == "Hello"
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    assert input_items[0]["content"][0]["text"] == "I'll fix this"
 
 
-def test_normalize_messages_handles_image_params(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles image_params."""
-    import tempfile
-
+def test_convert_messages_to_input_handles_image_params(mocked_openai_client):
+    """Test _convert_messages_to_input extracts image_params."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
 
-    image_params = {}
     messages = [
         {
             "role": "user",
             "content": [
-                {"type": "input_text", "text": "Generate an image"},
+                {"type": "input_text", "text": "Generate image"},
                 {
                     "type": "image_params",
                     "image_params": {
@@ -1740,102 +1740,23 @@ def test_normalize_messages_handles_image_params(mocked_openai_client):
         }
     ]
 
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
 
     # image_params should be extracted
     assert image_params["quality"] == "high"
     assert image_params["size"] == "1024x1024"
     assert image_params["output_format"] == "png"
-    # image_params block should not appear in output
-    assert len(result) == 1
-    assert len(result[0]["content"]) == 1  # Only text, no image_params block
-    assert result[0]["content"][0]["type"] == "input_text"
+    # image_params block should not appear in content
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "input_text"
 
 
-def test_normalize_messages_handles_tool_role_messages(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles tool role messages."""
-    import tempfile
-
+def test_convert_messages_to_input_handles_multimodal_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles mixed text and image content."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "tool",
-            "tool_call_id": "call_tool_123",
-            "content": "Tool output",
-        }
-    ]
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    assert len(result) == 1
-    assert result[0]["type"] == "function_call_output"
-    assert result[0]["call_id"] == "call_tool_123"
-    assert result[0]["output"] == "Tool output"
-
-
-def test_normalize_messages_filters_tool_responses_for_processed_apply_patch(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api filters tool responses for processed apply_patch calls."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    messages = [
-        {
-            "role": "tool",
-            "tool_call_id": "call_123",  # This matches an apply_patch_call
-            "content": "Patch output",
-        }
-    ]
-
-    previous_apply_patch_calls = {
-        "call_123": {
-            "type": "apply_patch_call",
-            "call_id": "call_123",
-            "operation": {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+test"},
-        }
-    }
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls=previous_apply_patch_calls,
-        image_generation_tool_params=image_params,
-    )
-
-    # Tool response should be filtered out since call_123 is processed
-    # Only the apply_patch_call_output should remain
-    assert len(result) == 1
-    assert result[0]["type"] == "apply_patch_call_output"
-    assert result[0]["call_id"] == "call_123"
-
-
-def test_normalize_messages_handles_mixed_content_types(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles mixed content types."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
 
     messages = [
         {
@@ -1848,29 +1769,63 @@ def test_normalize_messages_handles_mixed_content_types(mocked_openai_client):
         }
     ]
 
+    input_items = []
     image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
 
-    assert len(result) == 1
-    assert len(result[0]["content"]) == 3
-    assert result[0]["content"][0]["type"] == "input_text"
-    assert result[0]["content"][1]["type"] == "input_image"
-    assert result[0]["content"][2]["type"] == "input_text"
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 3
+    assert input_items[0]["content"][0]["type"] == "input_text"
+    assert input_items[0]["content"][1]["type"] == "input_image"
+    assert input_items[0]["content"][2]["type"] == "input_text"
 
 
-def test_normalize_messages_raises_error_for_invalid_content_type(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api raises error for invalid content type."""
-    import tempfile
-
+def test_convert_messages_to_input_handles_tool_role_messages(mocked_openai_client):
+    """Test _convert_messages_to_input handles tool role messages."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_tool_123",
+            "content": "Tool output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["type"] == "function_call_output"
+    assert input_items[0]["call_id"] == "call_tool_123"
+    assert input_items[0]["output"] == "Tool output"
+
+
+def test_convert_messages_to_input_filters_tool_responses_for_processed_apply_patch(mocked_openai_client):
+    """Test _convert_messages_to_input filters tool responses for processed apply_patch calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_123",  # This is a processed apply_patch_call
+            "content": "Patch output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Tool response should be filtered out
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_raises_error_for_invalid_content_type(mocked_openai_client):
+    """Test _convert_messages_to_input raises error for invalid content type."""
+    client = OpenAIResponsesClient(mocked_openai_client)
 
     messages = [
         {
@@ -1879,44 +1834,15 @@ def test_normalize_messages_raises_error_for_invalid_content_type(mocked_openai_
         }
     ]
 
+    input_items = []
     image_params = {}
     with pytest.raises(ValueError, match="Invalid content type: invalid_type"):
-        client._normalize_messages_for_responses_api(
-            messages=messages,
-            built_in_tools=[],
-            workspace_dir=temp_dir,
-            allowed_paths=["**"],
-            previous_apply_patch_calls={},
-            image_generation_tool_params=image_params,
-        )
+        client._convert_messages_to_input(messages, set(), image_params, input_items)
 
 
-def test_normalize_messages_handles_empty_messages(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles empty messages list."""
-    import tempfile
-
+def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_client):
+    """Test _convert_messages_to_input handles messages with only filtered content."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
-
-    image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=[],
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
-
-    assert result == []
-
-
-def test_normalize_messages_handles_empty_content_blocks(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api handles messages with only apply_patch_call content."""
-    import tempfile
-
-    client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
 
     messages = [
         {
@@ -1924,39 +1850,25 @@ def test_normalize_messages_handles_empty_content_blocks(mocked_openai_client):
             "content": [
                 {
                     "type": "apply_patch_call",
-                    "call_id": "call_only_patch",
-                    "operation": {
-                        "type": "create_file",
-                        "path": "test.py",
-                        "diff": "@@ -0,0 +1,1 @@\n+test",
-                    },
-                },
+                    "call_id": "call_only",
+                    "operation": {"type": "create_file"},
+                }
             ],
         }
     ]
 
+    input_items = []
     image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=["apply_patch"],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
-    )
+    processed_ids = {"call_only"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
 
-    # Should have apply_patch_call_output but no message (since all content was filtered)
-    assert len(result) == 1
-    assert result[0]["type"] == "apply_patch_call_output"
-    assert result[0]["call_id"] == "call_only_patch"
+    # Message should not be added since all content was filtered
+    assert len(input_items) == 0
 
 
-def test_normalize_messages_preserves_message_order(mocked_openai_client):
-    """Test _normalize_messages_for_responses_api preserves chronological message order."""
-    import tempfile
-
+def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):
+    """Test _convert_messages_to_input adds messages in reverse order."""
     client = OpenAIResponsesClient(mocked_openai_client)
-    temp_dir = tempfile.mkdtemp()
 
     messages = [
         {"role": "user", "content": "First"},
@@ -1964,21 +1876,1044 @@ def test_normalize_messages_preserves_message_order(mocked_openai_client):
         {"role": "user", "content": "Third"},
     ]
 
+    input_items = []
     image_params = {}
-    result = client._normalize_messages_for_responses_api(
-        messages=messages,
-        built_in_tools=[],
-        workspace_dir=temp_dir,
-        allowed_paths=["**"],
-        previous_apply_patch_calls={},
-        image_generation_tool_params=image_params,
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so: Third, Second, First
+    assert len(input_items) == 3
+    assert input_items[0]["content"][0]["text"] == "Third"
+    assert input_items[1]["content"][0]["text"] == "Second"
+    assert input_items[2]["content"][0]["text"] == "First"
+
+
+# -----------------------------------------------------------------------------
+# Helper Method Tests for _normalize_messages_for_responses_api
+# -----------------------------------------------------------------------------
+
+
+def test_extract_apply_patch_calls_from_content(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+    assert result["call_123"]["type"] == "apply_patch_call"
+    assert result["call_123"]["call_id"] == "call_123"
+
+
+def test_extract_apply_patch_calls_from_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "I'll create a file",
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_456",
+                    "operation": {"type": "create_file", "path": "new.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_456" in result
+    assert result["call_456"]["type"] == "apply_patch_call"
+
+
+def test_extract_apply_patch_calls_from_both_content_and_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts from both content and tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_content",
+                    "operation": {"type": "create_file", "path": "content.py"},
+                }
+            ],
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_tool",
+                    "operation": {"type": "update_file", "path": "tool.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 2
+    assert "call_content" in result
+    assert "call_tool" in result
+
+
+def test_extract_apply_patch_calls_ignores_non_assistant_messages(mocked_openai_client):
+    """Test _extract_apply_patch_calls only processes assistant messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "create_file", "path": "test.py"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_xyz", "content": "output"},
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+
+
+def test_extract_apply_patch_calls_skips_items_without_call_id(mocked_openai_client):
+    """Test _extract_apply_patch_calls skips apply_patch_call items without call_id."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "apply_patch_call", "operation": {"type": "create_file"}},  # No call_id
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_valid",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_valid" in result
+
+
+def test_execute_apply_patch_calls_with_apply_patch_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls executes calls when apply_patch is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
     )
 
-    # Messages should be in chronological order
-    assert len(result) == 3
-    assert result[0]["role"] == "user"
-    assert result[0]["content"][0]["text"] == "First"
-    assert result[1]["role"] == "assistant"
-    assert result[1]["content"][0]["text"] == "Second"
-    assert result[2]["role"] == "user"
-    assert result[2]["content"][0]["text"] == "Third"
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_123"
+    assert result[0]["type"] == "apply_patch_call_output"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls uses async mode when apply_patch_async is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_456": {
+            "type": "apply_patch_call",
+            "call_id": "call_456",
+            "operation": {
+                "type": "create_file",
+                "path": "async.py",
+                "diff": "@@ -0,0 +1,1 @@\n+async_content",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch_async"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_456"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_returns_empty_when_not_in_built_in_tools(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list when tool not enabled."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {"type": "create_file", "path": "test.py"},
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, [], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list for empty calls_dict."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
+    """Test _execute_apply_patch_calls handles multiple apply_patch calls."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_1": {
+            "type": "apply_patch_call",
+            "call_id": "call_1",
+            "operation": {
+                "type": "create_file",
+                "path": "file1.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file1",
+            },
+        },
+        "call_2": {
+            "type": "apply_patch_call",
+            "call_id": "call_2",
+            "operation": {
+                "type": "create_file",
+                "path": "file2.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file2",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 2
+    call_ids = {r["call_id"] for r in result}
+    assert call_ids == {"call_1", "call_2"}
+
+
+def test_execute_apply_patch_calls_skips_calls_without_operation(mocked_openai_client):
+    """Test _execute_apply_patch_calls skips calls without operation."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_no_op": {
+            "type": "apply_patch_call",
+            "call_id": "call_no_op",
+            # No operation field
+        },
+        "call_valid": {
+            "type": "apply_patch_call",
+            "call_id": "call_valid",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+valid",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_valid"
+
+
+def test_convert_messages_to_input_basic_text(mocked_openai_client):
+    """Test _convert_messages_to_input converts basic text messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so we expect: [assistant, user] in input_items
+    assert len(input_items) == 2
+    # Last message first (assistant)
+    assert input_items[0]["role"] == "assistant"
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    # First message second (user)
+    assert input_items[1]["role"] == "user"
+    assert input_items[1]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_client):
+    """Test _convert_messages_to_input filters out processed apply_patch_call items."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file"},
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "assistant"
+    # apply_patch_call should be filtered out
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    assert input_items[0]["content"][0]["text"] == "I'll fix this"
+
+
+def test_convert_messages_to_input_handles_image_params(mocked_openai_client):
+    """Test _convert_messages_to_input extracts image_params."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Generate image"},
+                {
+                    "type": "image_params",
+                    "image_params": {
+                        "quality": "high",
+                        "size": "1024x1024",
+                        "output_format": "png",
+                    },
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # image_params should be extracted
+    assert image_params["quality"] == "high"
+    assert image_params["size"] == "1024x1024"
+    assert image_params["output_format"] == "png"
+    # image_params block should not appear in content
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_multimodal_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles mixed text and image content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Look at this"},
+                {"type": "input_image", "image_url": "https://example.com/img.png"},
+                {"type": "input_text", "text": "and describe it"},
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 3
+    assert input_items[0]["content"][0]["type"] == "input_text"
+    assert input_items[0]["content"][1]["type"] == "input_image"
+    assert input_items[0]["content"][2]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_tool_role_messages(mocked_openai_client):
+    """Test _convert_messages_to_input handles tool role messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_tool_123",
+            "content": "Tool output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["type"] == "function_call_output"
+    assert input_items[0]["call_id"] == "call_tool_123"
+    assert input_items[0]["output"] == "Tool output"
+
+
+def test_convert_messages_to_input_filters_tool_responses_for_processed_apply_patch(mocked_openai_client):
+    """Test _convert_messages_to_input filters tool responses for processed apply_patch calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_123",  # This is a processed apply_patch_call
+            "content": "Patch output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Tool response should be filtered out
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_raises_error_for_invalid_content_type(mocked_openai_client):
+    """Test _convert_messages_to_input raises error for invalid content type."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [{"type": "invalid_type", "data": "something"}],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    with pytest.raises(ValueError, match="Invalid content type: invalid_type"):
+        client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+
+def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_client):
+    """Test _convert_messages_to_input handles messages with only filtered content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_only",
+                    "operation": {"type": "create_file"},
+                }
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_only"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Message should not be added since all content was filtered
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):
+    """Test _convert_messages_to_input adds messages in reverse order."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "First"},
+        {"role": "assistant", "content": "Second"},
+        {"role": "user", "content": "Third"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so: Third, Second, First
+    assert len(input_items) == 3
+    assert input_items[0]["content"][0]["text"] == "Third"
+    assert input_items[1]["content"][0]["text"] == "Second"
+    assert input_items[2]["content"][0]["text"] == "First"
+
+
+# -----------------------------------------------------------------------------
+# Helper Method Tests for _normalize_messages_for_responses_api
+# -----------------------------------------------------------------------------
+
+
+def test_extract_apply_patch_calls_from_content(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+    assert result["call_123"]["type"] == "apply_patch_call"
+    assert result["call_123"]["call_id"] == "call_123"
+
+
+def test_extract_apply_patch_calls_from_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "I'll create a file",
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_456",
+                    "operation": {"type": "create_file", "path": "new.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_456" in result
+    assert result["call_456"]["type"] == "apply_patch_call"
+
+
+def test_extract_apply_patch_calls_from_both_content_and_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts from both content and tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_content",
+                    "operation": {"type": "create_file", "path": "content.py"},
+                }
+            ],
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_tool",
+                    "operation": {"type": "update_file", "path": "tool.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 2
+    assert "call_content" in result
+    assert "call_tool" in result
+
+
+def test_extract_apply_patch_calls_ignores_non_assistant_messages(mocked_openai_client):
+    """Test _extract_apply_patch_calls only processes assistant messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "create_file", "path": "test.py"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_xyz", "content": "output"},
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+
+
+def test_extract_apply_patch_calls_skips_items_without_call_id(mocked_openai_client):
+    """Test _extract_apply_patch_calls skips apply_patch_call items without call_id."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "apply_patch_call", "operation": {"type": "create_file"}},  # No call_id
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_valid",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_valid" in result
+
+
+def test_execute_apply_patch_calls_with_apply_patch_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls executes calls when apply_patch is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_123"
+    assert result[0]["type"] == "apply_patch_call_output"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls uses async mode when apply_patch_async is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_456": {
+            "type": "apply_patch_call",
+            "call_id": "call_456",
+            "operation": {
+                "type": "create_file",
+                "path": "async.py",
+                "diff": "@@ -0,0 +1,1 @@\n+async_content",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch_async"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_456"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_returns_empty_when_not_in_built_in_tools(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list when tool not enabled."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {"type": "create_file", "path": "test.py"},
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, [], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list for empty calls_dict."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
+    """Test _execute_apply_patch_calls handles multiple apply_patch calls."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_1": {
+            "type": "apply_patch_call",
+            "call_id": "call_1",
+            "operation": {
+                "type": "create_file",
+                "path": "file1.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file1",
+            },
+        },
+        "call_2": {
+            "type": "apply_patch_call",
+            "call_id": "call_2",
+            "operation": {
+                "type": "create_file",
+                "path": "file2.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file2",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 2
+    call_ids = {r["call_id"] for r in result}
+    assert call_ids == {"call_1", "call_2"}
+
+
+def test_execute_apply_patch_calls_skips_calls_without_operation(mocked_openai_client):
+    """Test _execute_apply_patch_calls skips calls without operation."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_no_op": {
+            "type": "apply_patch_call",
+            "call_id": "call_no_op",
+            # No operation field
+        },
+        "call_valid": {
+            "type": "apply_patch_call",
+            "call_id": "call_valid",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+valid",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_valid"
+
+
+def test_convert_messages_to_input_basic_text(mocked_openai_client):
+    """Test _convert_messages_to_input converts basic text messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so we expect: [assistant, user] in input_items
+    assert len(input_items) == 2
+    # Last message first (assistant)
+    assert input_items[0]["role"] == "assistant"
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    # First message second (user)
+    assert input_items[1]["role"] == "user"
+    assert input_items[1]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_client):
+    """Test _convert_messages_to_input filters out processed apply_patch_call items."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file"},
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "assistant"
+    # apply_patch_call should be filtered out
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    assert input_items[0]["content"][0]["text"] == "I'll fix this"
+
+
+def test_convert_messages_to_input_handles_image_params(mocked_openai_client):
+    """Test _convert_messages_to_input extracts image_params."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Generate image"},
+                {
+                    "type": "image_params",
+                    "image_params": {
+                        "quality": "high",
+                        "size": "1024x1024",
+                        "output_format": "png",
+                    },
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # image_params should be extracted
+    assert image_params["quality"] == "high"
+    assert image_params["size"] == "1024x1024"
+    assert image_params["output_format"] == "png"
+    # image_params block should not appear in content
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_multimodal_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles mixed text and image content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Look at this"},
+                {"type": "input_image", "image_url": "https://example.com/img.png"},
+                {"type": "input_text", "text": "and describe it"},
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 3
+    assert input_items[0]["content"][0]["type"] == "input_text"
+    assert input_items[0]["content"][1]["type"] == "input_image"
+    assert input_items[0]["content"][2]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_tool_role_messages(mocked_openai_client):
+    """Test _convert_messages_to_input handles tool role messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_tool_123",
+            "content": "Tool output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["type"] == "function_call_output"
+    assert input_items[0]["call_id"] == "call_tool_123"
+    assert input_items[0]["output"] == "Tool output"
+
+
+def test_convert_messages_to_input_filters_tool_responses_for_processed_apply_patch(mocked_openai_client):
+    """Test _convert_messages_to_input filters tool responses for processed apply_patch calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_123",  # This is a processed apply_patch_call
+            "content": "Patch output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Tool response should be filtered out
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_raises_error_for_invalid_content_type(mocked_openai_client):
+    """Test _convert_messages_to_input raises error for invalid content type."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [{"type": "invalid_type", "data": "something"}],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    with pytest.raises(ValueError, match="Invalid content type: invalid_type"):
+        client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+
+def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_client):
+    """Test _convert_messages_to_input handles messages with only filtered content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_only",
+                    "operation": {"type": "create_file"},
+                }
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_only"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Message should not be added since all content was filtered
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):
+    """Test _convert_messages_to_input adds messages in reverse order."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "First"},
+        {"role": "assistant", "content": "Second"},
+        {"role": "user", "content": "Third"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so: Third, Second, First
+    assert len(input_items) == 3
+    assert input_items[0]["content"][0]["text"] == "Third"
+    assert input_items[1]["content"][0]["text"] == "Second"
+    assert input_items[2]["content"][0]["text"] == "First"

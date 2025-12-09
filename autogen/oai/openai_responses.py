@@ -526,8 +526,8 @@ class OpenAIResponsesClient:
             input_items,
         )
 
-        # Reverse input_items so that apply_patch_call_outputs come first, then messages in chronological order
-        # (We added outputs first, then messages in reverse, so reversing gives us: outputs, then messages in order)
+        # Reverse input_items so that messages come first (in chronological order), then outputs
+        # (We added outputs first, then messages in reverse, so reversing gives us: messages first, then outputs)
         return input_items[::-1]
 
     def create(self, params: dict[str, Any]) -> "Response":
