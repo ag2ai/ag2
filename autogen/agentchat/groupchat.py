@@ -1264,8 +1264,22 @@ class GroupChatManager(ConversableAgent):
                     iostream = IOStream.get_default()
                     iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
 
+                # If isolate_agent_views is True, build a temporary message list for the speaker
+                # that includes their own messages plus the last message, without persisting it.
+                # This allows the speaker to generate a reply while maintaining isolation.
+                if groupchat.isolate_agent_views:
+                    # Get the speaker's own messages (their history with the manager)
+                    speaker_own_messages = speaker._oai_messages.get(self, [])
+                    # Build temporary message list: speaker's own messages + last message
+                    # This gives context without adding the last message to persistent history
+                    temp_messages = speaker_own_messages + ([message] if message else [])
+                    messages_for_reply = temp_messages
+                else:
+                    # Normal flow: use speaker's persistent message history
+                    messages_for_reply = speaker._oai_messages[self]
+
                 guardrails_activated = False
-                guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
+                guardrails_reply = groupchat._run_input_guardrails(speaker, messages_for_reply)
 
                 if guardrails_reply is not None:
                     # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
@@ -1273,7 +1287,7 @@ class GroupChatManager(ConversableAgent):
                     reply = guardrails_reply
                 else:
                     # let the speaker speak
-                    reply = speaker.generate_reply(sender=self)
+                    reply = speaker.generate_reply(messages=messages_for_reply, sender=self)
             except KeyboardInterrupt:
                 # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
@@ -1399,8 +1413,22 @@ class GroupChatManager(ConversableAgent):
                 if not silent:
                     iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
 
+                # If isolate_agent_views is True, build a temporary message list for the speaker
+                # that includes their own messages plus the last message, without persisting it.
+                # This allows the speaker to generate a reply while maintaining isolation.
+                if groupchat.isolate_agent_views:
+                    # Get the speaker's own messages (their history with the manager)
+                    speaker_own_messages = speaker._oai_messages.get(self, [])
+                    # Build temporary message list: speaker's own messages + last message
+                    # This gives context without adding the last message to persistent history
+                    temp_messages = speaker_own_messages + ([message] if message else [])
+                    messages_for_reply = temp_messages
+                else:
+                    # Normal flow: use speaker's persistent message history
+                    messages_for_reply = speaker._oai_messages[self]
+
                 guardrails_activated = False
-                guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
+                guardrails_reply = groupchat._run_input_guardrails(speaker, messages_for_reply)
 
                 if guardrails_reply is not None:
                     # if a guardrail has been activated, then the next target has been set and the guardrail reply will be sent
@@ -1408,7 +1436,7 @@ class GroupChatManager(ConversableAgent):
                     reply = guardrails_reply
                 else:
                     # let the speaker speak
-                    reply = await speaker.a_generate_reply(sender=self)
+                    reply = await speaker.a_generate_reply(messages=messages_for_reply, sender=self)
             except KeyboardInterrupt:
                 # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
