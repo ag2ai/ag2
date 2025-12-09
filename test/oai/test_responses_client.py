@@ -1584,6 +1584,58 @@ def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_cl
     client = OpenAIResponsesClient(mocked_openai_client)
     temp_dir = tempfile.mkdtemp()
 
+    calls_dict = {
+        "call_no_op": {
+            "type": "apply_patch_call",
+            "call_id": "call_no_op",
+            # No operation field
+        },
+        "call_valid": {
+            "type": "apply_patch_call",
+            "call_id": "call_valid",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+valid",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_valid"
+
+
+def test_convert_messages_to_input_basic_text(mocked_openai_client):
+    """Test _convert_messages_to_input converts basic text messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so we expect: [assistant, user] in input_items
+    assert len(input_items) == 2
+    # Last message first (assistant)
+    assert input_items[0]["role"] == "assistant"
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    # First message second (user)
+    assert input_items[1]["role"] == "user"
+    assert input_items[1]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_client):
+    """Test _convert_messages_to_input filters out processed apply_patch_call items."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
     result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
 
     assert result == []
