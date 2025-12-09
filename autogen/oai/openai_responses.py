@@ -619,7 +619,6 @@ class OpenAIResponsesClient:
             return response
         # No structured output
         params = self._parse_params(params)
-        print("params", params)
         response = self._oai_client.responses.create(**params)
         self.previous_response_id = response.id
         # Accumulate image costs
