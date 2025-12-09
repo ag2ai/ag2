@@ -332,34 +332,15 @@ class OpenAIResponsesClient:
                 output=f"Error applying patch: {str(e)}",
             )
 
-    def _normalize_messages_for_responses_api(
-        self,
-        messages: list[dict[str, Any]],
-        built_in_tools: list[str],
-        workspace_dir: str,
-        allowed_paths: list[str],
-        previous_apply_patch_calls: dict[str, Any],
-        image_generation_tool_params: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        """Normalize messages for Responses API format.
-
-        This method processes apply_patch_call items from messages before sending to recipient,
-        implementing the diff generation (sender) -> executor (recipient) pattern.
+    def _extract_apply_patch_calls(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract apply_patch_call items from messages.
 
         Args:
-            messages: List of messages to normalize
-            built_in_tools: List of built-in tools enabled
-            workspace_dir: Workspace directory for apply_patch operations
-            allowed_paths: Allowed paths for apply_patch operations
-            previous_apply_patch_calls: Apply patch calls from previous response
-            image_generation_tool_params: Image generation tool parameters dict (modified in place)
+            messages: List of messages to scan
 
         Returns:
-            List of input items in Responses API format
+            Dictionary mapping call_id to apply_patch_call item
         """
-        input_items = []
-
-        # Collect apply_patch_call items from messages
         message_apply_patch_calls = {}
         for msg in messages:
             role = msg.get("role")
@@ -378,69 +359,60 @@ class OpenAIResponsesClient:
                             call_id = tool_call.get("call_id")
                             if call_id:
                                 message_apply_patch_calls[call_id] = tool_call
+        return message_apply_patch_calls
 
-        # Process apply_patch_call items from messages if built_in_tools includes apply_patch
-        # This implements the diff generation (sender) -> executor (recipient) pattern
-        message_apply_patch_outputs = []
-        if message_apply_patch_calls and ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
-            for call_id, apply_patch_call in message_apply_patch_calls.items():
-                operation = apply_patch_call.get("operation", {})
-                if operation:
-                    if "apply_patch_async" in built_in_tools:
-                        output = self._apply_patch_operation(
-                            operation,
-                            call_id=call_id,
-                            workspace_dir=workspace_dir,
-                            allowed_paths=allowed_paths,
-                            async_patches=True,
-                        )
-                        message_apply_patch_outputs.append(output.to_dict())
-                    elif "apply_patch" in built_in_tools:
-                        output = self._apply_patch_operation(
-                            operation,
-                            call_id=call_id,
-                            workspace_dir=workspace_dir,
-                            allowed_paths=allowed_paths,
-                            async_patches=False,
-                        )
-                        message_apply_patch_outputs.append(output.to_dict())
+    def _execute_apply_patch_calls(
+        self,
+        calls_dict: dict[str, Any],
+        built_in_tools: list[str],
+        workspace_dir: str,
+        allowed_paths: list[str],
+    ) -> list[dict[str, Any]]:
+        """Execute apply_patch_call items and return outputs.
 
-        # Process apply_patch_call items from previous_response_id (same agent continuation)
-        previous_apply_patch_outputs = []
-        if previous_apply_patch_calls and ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
-            for call_id, apply_patch_call in previous_apply_patch_calls.items():
-                operation = apply_patch_call.get("operation", {})
-                if operation:
-                    if "apply_patch_async" in built_in_tools:
-                        output = self._apply_patch_operation(
-                            operation,
-                            call_id=call_id,
-                            workspace_dir=workspace_dir,
-                            allowed_paths=allowed_paths,
-                            async_patches=True,
-                        )
-                        previous_apply_patch_outputs.append(output.to_dict())
-                    elif "apply_patch" in built_in_tools:
-                        output = self._apply_patch_operation(
-                            operation,
-                            call_id=call_id,
-                            workspace_dir=workspace_dir,
-                            allowed_paths=allowed_paths,
-                            async_patches=False,
-                        )
-                        previous_apply_patch_outputs.append(output.to_dict())
+        Args:
+            calls_dict: Dictionary mapping call_id to apply_patch_call item
+            built_in_tools: List of built-in tools enabled
+            workspace_dir: Workspace directory for apply_patch operations
+            allowed_paths: Allowed paths for apply_patch operations
 
-        # Combine all outputs: message outputs first (from sender), then previous response outputs
-        all_apply_patch_outputs = message_apply_patch_outputs + previous_apply_patch_outputs
+        Returns:
+            List of apply_patch_call_output dictionaries
+        """
+        outputs = []
+        if not calls_dict or not ("apply_patch" in built_in_tools or "apply_patch_async" in built_in_tools):
+            return outputs
 
-        # Add all outputs at the beginning
-        if all_apply_patch_outputs:
-            input_items.extend(all_apply_patch_outputs)
+        async_mode = "apply_patch_async" in built_in_tools
 
-        # Convert messages to Responses API format, filtering out apply_patch_call items
-        # (they've been processed above and outputs are already included)
-        processed_apply_patch_call_ids = set(message_apply_patch_calls.keys()) | set(previous_apply_patch_calls.keys())
+        for call_id, apply_patch_call in calls_dict.items():
+            operation = apply_patch_call.get("operation", {})
+            if operation:
+                output = self._apply_patch_operation(
+                    operation,
+                    call_id=call_id,
+                    workspace_dir=workspace_dir,
+                    allowed_paths=allowed_paths,
+                    async_patches=async_mode,
+                )
+                outputs.append(output.to_dict())
+        return outputs
 
+    def _convert_messages_to_input(
+        self,
+        messages: list[dict[str, Any]],
+        processed_apply_patch_call_ids: set[str],
+        image_generation_tool_params: dict[str, Any],
+        input_items: list[dict[str, Any]],
+    ) -> None:
+        """Convert messages to Responses API format and append to input_items.
+
+        Args:
+            messages: List of messages to convert
+            processed_apply_patch_call_ids: Set of call_ids that have been processed
+            image_generation_tool_params: Image generation tool parameters dict (modified in place)
+            input_items: List to append converted message items to (modified in place)
+        """
         for m in messages[::-1]:  # reverse the list to get the last item first
             role = m.get("role", "user")
             content = m.get("content")
@@ -488,6 +460,71 @@ class OpenAIResponsesClient:
                         "call_id": tool_call_id,
                         "output": content,
                     })
+
+    def _normalize_messages_for_responses_api(
+        self,
+        messages: list[dict[str, Any]],
+        built_in_tools: list[str],
+        workspace_dir: str,
+        allowed_paths: list[str],
+        previous_apply_patch_calls: dict[str, Any],
+        image_generation_tool_params: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Normalize messages for Responses API format.
+
+        This method processes apply_patch_call items from messages before sending to recipient,
+        implementing the diff generation (sender) -> executor (recipient) pattern.
+
+        Args:
+            messages: List of messages to normalize
+            built_in_tools: List of built-in tools enabled
+            workspace_dir: Workspace directory for apply_patch operations
+            allowed_paths: Allowed paths for apply_patch operations
+            previous_apply_patch_calls: Apply patch calls from previous response
+            image_generation_tool_params: Image generation tool parameters dict (modified in place)
+
+        Returns:
+            List of input items in Responses API format
+        """
+        input_items = []
+
+        # Extract apply_patch_call items from messages
+        message_apply_patch_calls = self._extract_apply_patch_calls(messages)
+
+        # Process apply_patch_call items from messages if built_in_tools includes apply_patch
+        # This implements the diff generation (sender) -> executor (recipient) pattern
+        message_apply_patch_outputs = self._execute_apply_patch_calls(
+            message_apply_patch_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+        )
+
+        # Process apply_patch_call items from previous_response_id (same agent continuation)
+        previous_apply_patch_outputs = self._execute_apply_patch_calls(
+            previous_apply_patch_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+        )
+
+        # Combine all outputs: message outputs first (from sender), then previous response outputs
+        all_apply_patch_outputs = message_apply_patch_outputs + previous_apply_patch_outputs
+
+        # Add all outputs at the beginning
+        if all_apply_patch_outputs:
+            input_items.extend(all_apply_patch_outputs)
+
+        # Convert messages to Responses API format, filtering out apply_patch_call items
+        # (they've been processed above and outputs are already included)
+        processed_apply_patch_call_ids = set(message_apply_patch_calls.keys()) | set(previous_apply_patch_calls.keys())
+
+        self._convert_messages_to_input(
+            messages,
+            processed_apply_patch_call_ids,
+            image_generation_tool_params,
+            input_items,
+        )
 
         # Reverse input_items so that apply_patch_call_outputs come first, then messages in chronological order
         # (We added outputs first, then messages in reverse, so reversing gives us: outputs, then messages in order)
