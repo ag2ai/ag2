@@ -1561,6 +1561,74 @@ def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_cli
 def test_execute_apply_patch_calls_returns_empty_when_not_in_built_in_tools(mocked_openai_client):
     """Test _execute_apply_patch_calls returns empty list when tool not enabled."""
     import tempfile
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {"type": "create_file", "path": "test.py"},
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, [], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list for empty calls_dict."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
+    """Test _execute_apply_patch_calls handles multiple apply_patch calls."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_1": {
+            "type": "apply_patch_call",
+            "call_id": "call_1",
+            "operation": {
+                "type": "create_file",
+                "path": "file1.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file1",
+            },
+        },
+        "call_2": {
+            "type": "apply_patch_call",
+            "call_id": "call_2",
+            "operation": {
+                "type": "create_file",
+                "path": "file2.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file2",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(
+        calls_dict, ["apply_patch"], temp_dir, ["**"]
+    )
+
+    assert len(result) == 2
+    call_ids = {r["call_id"] for r in result}
+    assert call_ids == {"call_1", "call_2"}
+
+
+def test_execute_apply_patch_calls_skips_calls_without_operation(mocked_openai_client):
+    """Test _execute_apply_patch_calls skips calls without operation."""
+    import tempfile
 
     client = OpenAIResponsesClient(mocked_openai_client)
     temp_dir = tempfile.mkdtemp()
