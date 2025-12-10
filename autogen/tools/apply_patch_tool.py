@@ -209,7 +209,7 @@ class WorkspaceEditor:
         workspace_dir = workspace_dir if workspace_dir is not None else os.getcwd()
         self.workspace_dir = Path(workspace_dir).resolve()
         # Use "**" to match all files and directories recursively (including root)
-        self.allowed_paths = allowed_paths or ["**"]
+        self.allowed_paths = allowed_paths if allowed_paths is not None else ["**"]
 
     def _validate_path(self, path: str) -> Path:
         """Validate and resolve a file path.

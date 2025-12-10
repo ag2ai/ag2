@@ -1669,9 +1669,7 @@ def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
         },
     }
 
-    result = client._execute_apply_patch_calls(
-        calls_dict, ["apply_patch"], temp_dir, ["**"]
-    )
+    result = client._execute_apply_patch_calls(calls_dict, ["apply_patch"], temp_dir, ["**"])
 
     assert len(result) == 2
     call_ids = {r["call_id"] for r in result}
