@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from autogen.tools.apply_patch_tool import (
+from autogen.tools.experimental.apply_patch.apply_patch_tool import (
     ApplyPatchTool,
     PatchEditor,
     WorkspaceEditor,
