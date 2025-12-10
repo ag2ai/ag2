@@ -331,10 +331,14 @@ class TestOpenAICompletionsClientMessageRetrievalWithFixtures:
         response = client.create({"model": "gpt-4o-mini", "messages": []})
         messages = client.message_retrieval(response)
 
-        # Tool call responses have no text content, only tool calls
+        # Tool call responses return dict format with tool_calls
         assert len(messages) == 1
-        # Message should be empty string or representation of tool calls
-        assert isinstance(messages[0], str)
+        # Message should be a dict with role, content, and tool_calls
+        assert isinstance(messages[0], dict)
+        assert messages[0]["role"] == "assistant"
+        assert "tool_calls" in messages[0]
+        assert len(messages[0]["tool_calls"]) == 1
+        assert messages[0]["tool_calls"][0]["function"]["name"] == "get_weather"
 
 
 class TestOpenAICompletionsClientV1CompatibleWithFixtures:
