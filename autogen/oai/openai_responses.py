@@ -250,7 +250,7 @@ class OpenAIResponsesClient:
         """
         import threading
 
-        from autogen.tools.apply_patch_tool import WorkspaceEditor
+        from autogen.tools.experimental.apply_patch.apply_patch_tool import WorkspaceEditor
 
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
         op_type = operation.get("type")

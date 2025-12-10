@@ -9,8 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
-from ..doc_utils import export_module
-from .tool import Tool
+from ....doc_utils import export_module
+from ...tool import Tool
 
 
 class PatchEditor(Protocol):
@@ -202,8 +202,6 @@ class WorkspaceEditor:
                     - ["**"] - Allow all paths (default)
                     - ["src/**"] - Allow all files in src/ and subdirectories
                     - ["*.py"] - Allow Python files in root directory
-                    - ["my-bucket/**"] - Allow all paths in cloud storage bucket
-                    - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
                     - ["src/**", "tests/**"] - Allow paths in multiple directories
         """
         workspace_dir = workspace_dir if workspace_dir is not None else os.getcwd()
@@ -251,13 +249,6 @@ class WorkspaceEditor:
 
             return full_path
         except (OSError, ValueError) as e:
-            # If path resolution fails, it might be a cloud storage path
-            # Pattern matching already validated it, so allow it
-            # Return a Path object for the pattern (cloud storage paths won't use pathlib operations)
-            if matches_any:
-                # For cloud storage, we can't resolve to a local path
-                # Return a Path-like object that represents the cloud path
-                return Path(path)  # This won't be used for actual file ops if it's cloud storage
             raise ValueError(f"Path {path} is invalid: {str(e)}")
 
     def create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
@@ -440,8 +431,6 @@ class ApplyPatchTool(Tool):
                     - ["**"] - Allow all paths (default)
                     - ["src/**"] - Allow all files in src/ and subdirectories
                     - ["*.py"] - Allow Python files in root directory
-                    - ["my-bucket/**"] - Allow all paths in cloud storage bucket
-                    - ["s3://my-bucket/src/**"] - Allow paths in S3 bucket
 
                 Note: For cloud storage, specify bucket names in allowed_paths patterns.
                 The workspace_dir should remain a local path for default operations.
