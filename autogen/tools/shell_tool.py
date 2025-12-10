@@ -57,15 +57,50 @@ class ShellExecutor:
 
     # Dangerous command patterns to block by default
     DEFAULT_DANGEROUS_PATTERNS = [
-        (r"\brm\s+-rf\s+/", "Use of 'rm -rf /' is not allowed."),
-        (r"\brm\s+-rf\s+~\b", "Use of 'rm -rf ~' is not allowed."),
-        # (r">\s*/dev/sd[a-z][1-9]?", "Overwriting disk blocks directly is not allowed."),
-        # (r":\(\)\{\s*:\|\:&\s*\};:", "Fork bombs are not allowed."),
-        # (r"\bdd\b.*if=.*of=", "Use of 'dd' with disk operations is not allowed."),
-        # (r"\bmkfs\.", "Formatting file systems is not allowed."),
-        # (r"\bformat\s+[A-Z]:", "Formatting drives is not allowed (Windows)."),
-        # (r"\bdel\s+/[sS]\s+C:\\", "System directory deletion is not allowed (Windows)."),
-    ]
+    # Critical: Root filesystem deletion
+    (r"\brm\s+-rf\s+/\s*$", "Deletion of root filesystem (rm -rf /) is not allowed."),
+    (r"\brm\s+-rf\s+/\s+", "Deletion starting from root (rm -rf / ...) is not allowed."),
+    
+    # Critical: Home directory deletion
+    (r"\brm\s+-rf\s+~\s*$", "Deletion of entire home directory (rm -rf ~) is not allowed."),
+    (r"\brm\s+-rf\s+~\s+", "Deletion starting from home (rm -rf ~ ...) is not allowed."),
+    
+    # Critical system directories - block deletion
+    (r"\brm\s+-rf\s+/(?:etc|usr|bin|sbin|lib|lib64|boot|root|sys|proc|dev)\b", 
+     "Deletion of critical system directories is not allowed."),
+    
+    # Critical: Direct disk block device operations
+    (r">\s*/dev/sd[a-z][0-9]*\s*$", "Direct disk block device overwrite is not allowed."),
+    (r">\s*/dev/hd[a-z][0-9]*\s*$", "Direct disk block device overwrite is not allowed."),
+    (r">\s*/dev/nvme\d+n\d+p\d+\s*$", "Direct NVMe disk overwrite is not allowed."),
+    
+    # Critical: dd to disk devices
+    (r"\bdd\b.*\bof=/dev/(?:sd|hd|nvme)", "Writing to disk devices with dd is not allowed."),
+    
+    # Critical: Fork bombs
+    (r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;", "Fork bombs are not allowed."),
+    
+    # Critical: Filesystem formatting
+    (r"\bmkfs\.(?:ext[234]|xfs|btrfs|ntfs|vfat|fat)\s+/dev/", 
+     "Formatting filesystems is not allowed."),
+    
+    # Windows: Format drives
+    (r"\bformat\s+[A-Z]:\s*$", "Formatting Windows drives is not allowed."),
+    (r"\bformat\s+[A-Z]:\s+/", "Formatting Windows drives is not allowed."),
+    
+    # Windows: System directory deletion
+    (r"\bdel\s+/[sS]\s+C:\\Windows", "Deletion of Windows system directory is not allowed."),
+    (r"\bdel\s+/[sS]\s+C:\\Program\s+Files", "Deletion of Windows Program Files is not allowed."),
+    (r"\brmdir\s+/[sS]\s+C:\\Windows", "Deletion of Windows system directory is not allowed."),
+    
+    # Dangerous: Mass deletion with wildcards in system paths
+    (r"\brm\s+-rf\s+/\*\s*$", "Mass deletion of root directory contents is not allowed."),
+    (r"\brm\s+-rf\s+~\*\s*$", "Mass deletion of home directory contents is not allowed."),
+    
+    # Dangerous: Overwriting critical system files
+    (r">\s*/etc/(?:passwd|shadow|hosts|fstab)", "Overwriting critical system files is not allowed."),
+    (r">\s*/boot/", "Overwriting boot files is not allowed."),
+]
 
     def __init__(
         self,
@@ -273,5 +308,6 @@ class ShellExecutor:
                         outcome=ShellCallOutcome(type="exit", exit_code=1),
                     )
                 )
-        print("results:-------- ", results)
+        from pprint import pprint
+        pprint(results)
         return results
