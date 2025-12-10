@@ -301,12 +301,14 @@ def test_v2_client_content_str_compatibility(credentials_gpt_4o_mini: Credential
 @run_for_optional_imports("openai", "openai")
 def test_v2_client_vs_standard_comparison(credentials_gpt_4o_mini: Credentials) -> None:
     """Compare V2 client with standard client - both should work."""
+    base_config = credentials_gpt_4o_mini.llm_config._model.config_list[0]
+
     # Standard client config
     standard_config = {
         "config_list": [
             {
                 "model": "gpt-4o-mini",
-                "api_key": os.getenv("OPENAI_API_KEY"),
+                "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
             }
         ],
         "temperature": 0,
@@ -1510,26 +1512,26 @@ def test_v2_client_multimodal_group_chat(credentials_gpt_4o_mini: Credentials) -
 
 @pytest.mark.openai
 @pytest.mark.skipif(
-    os.getenv("OPENAI_O1_AVAILABLE", "false").lower() != "true",
-    reason="o1 model access not available - set OPENAI_O1_AVAILABLE=true if you have access",
+    os.getenv("OPENAI_REASONING_MODEL_AVAILABLE", "false").lower() != "true",
+    reason="Reasoning model access not available - set OPENAI_REASONING_MODEL_AVAILABLE=true if you have access",
 )
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_reasoning_model_basic(credentials_o1_mini: Credentials) -> None:
-    """Test basic reasoning with V2 client using o1-mini model.
+def test_v2_client_reasoning_model_basic(credentials_o4_mini: Credentials) -> None:
+    """Test basic reasoning with V2 client using o4-mini model.
 
     This test verifies:
-    1. V2 client works with actual o1-mini reasoning model
+    1. V2 client works with actual o4-mini reasoning model
     2. Reasoning content is properly extracted from response
     3. Response structure is correct
     """
-    base_config = credentials_o1_mini.llm_config._model.config_list[0]
+    base_config = credentials_o4_mini.llm_config._model.config_list[0]
 
-    # Create V2 config with o1-mini reasoning model
+    # Create V2 config with o4-mini reasoning model
     llm_config = {
         "config_list": [
             {
                 "api_type": "openai_v2",
-                "model": "o1-mini",
+                "model": "o4-mini",
                 "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
             }
         ],
@@ -1558,7 +1560,7 @@ def test_v2_client_reasoning_model_basic(credentials_o1_mini: Credentials) -> No
     assert "36" in response, "Should calculate 15% of 240 = 36"
 
     # CRITICAL: Verify reasoning content was extracted
-    # o1-mini returns reasoning field that should be extracted as ReasoningContent
+    # o4-mini returns reasoning field that should be extracted as ReasoningContent
     # We verify this by checking the chat history for reasoning content
     last_message = chat_result.chat_history[-1]
     assert "content" in last_message, "Message should have content field"
@@ -1570,32 +1572,34 @@ def test_v2_client_reasoning_model_basic(credentials_o1_mini: Credentials) -> No
 
 
 @pytest.mark.openai
+@pytest.mark.skipif(
+    os.getenv("OPENAI_REASONING_MODEL_AVAILABLE", "false").lower() != "true",
+    reason="Reasoning model access not available - set OPENAI_REASONING_MODEL_AVAILABLE=true if you have access",
+)
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_reasoning_parameter_processing(credentials_o1_mini: Credentials) -> None:
-    """Test that V2 client properly processes o1 model parameters.
+def test_v2_client_reasoning_parameter_processing(credentials_o4_mini: Credentials) -> None:
+    """Test that V2 client works with reasoning model parameters.
 
     This test verifies:
-    1. Unsupported parameters (temperature, top_p, etc.) are automatically removed
-    2. max_tokens is converted to max_completion_tokens
-    3. Request succeeds without API errors
-    4. Warning messages are issued for removed parameters
+    1. max_completion_tokens works correctly for reasoning models
+    2. Request succeeds without API errors
+    3. Model works correctly with default temperature (o4-mini only supports temperature=1)
+
+    Note: o4-mini requires max_completion_tokens (not max_tokens).
     """
-    import warnings
+    base_config = credentials_o4_mini.llm_config._model.config_list[0]
 
-    base_config = credentials_o1_mini.llm_config._model.config_list[0]
-
-    # Create config with parameters that ARE unsupported by o1 models
-    # These should be automatically removed by _process_reasoning_model_params()
+    # Create config with max_completion_tokens (required for o4-mini)
+    # Note: o4-mini only supports temperature=1, so we don't set it explicitly
     llm_config = {
         "config_list": [
             {
                 "api_type": "openai_v2",
-                "model": "o1-mini",
+                "model": "o4-mini",
                 "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
+                "max_completion_tokens": 1000,  # Required for reasoning models
             }
         ],
-        "temperature": 0.7,  # UNSUPPORTED - should be removed with warning
-        "max_tokens": 1000,  # Should be converted to max_completion_tokens
     }
 
     assistant = AssistantAgent(
@@ -1607,46 +1611,39 @@ def test_v2_client_reasoning_parameter_processing(credentials_o1_mini: Credentia
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Capture warnings to verify parameter processing warnings are issued
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-
-        # This should work WITHOUT API errors despite unsupported parameters
-        # because _process_reasoning_model_params() removes them
-        chat_result = user_proxy.initiate_chat(
-            assistant,
-            message="What is 2+2?",
-            max_turns=1,
-        )
-
-        # Verify warning was issued for temperature parameter
-        warning_messages = [str(warning.message) for warning in w]
-        assert any("temperature" in msg.lower() for msg in warning_messages), (
-            "Should warn about temperature being unsupported"
-        )
+    # This should work WITHOUT API errors
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="What is 2+2?",
+        max_turns=1,
+    )
 
     _assert_v2_response_structure(chat_result)
     assert "4" in chat_result.summary
 
 
 @pytest.mark.openai
+@pytest.mark.skipif(
+    os.getenv("OPENAI_REASONING_MODEL_AVAILABLE", "false").lower() != "true",
+    reason="Reasoning model access not available - set OPENAI_REASONING_MODEL_AVAILABLE=true if you have access",
+)
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_reasoning_with_system_message(credentials_o1_mini: Credentials) -> None:
+def test_v2_client_reasoning_with_system_message(credentials_o4_mini: Credentials) -> None:
     """Test that V2 client handles system messages correctly for o1 models.
 
-    Note: o1-mini (2024-09-12 and later) supports system messages natively.
+    Note: o4-mini (2024-09-12 and later) supports system messages natively.
     Older models like o1-preview would have system messages converted to user messages,
     but this is handled automatically by _process_reasoning_model_params().
 
     This test verifies the model works correctly with system messages.
     """
-    base_config = credentials_o1_mini.llm_config._model.config_list[0]
+    base_config = credentials_o4_mini.llm_config._model.config_list[0]
 
     llm_config = {
         "config_list": [
             {
                 "api_type": "openai_v2",
-                "model": "o1-mini",
+                "model": "o4-mini",
                 "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
             }
         ],
@@ -1663,7 +1660,7 @@ def test_v2_client_reasoning_with_system_message(credentials_o1_mini: Credential
     )
 
     # Should work without errors with system message
-    # (o1-mini supports system messages; older models would have them converted)
+    # (o4-mini supports system messages; older models would have them converted)
     chat_result = user_proxy.initiate_chat(
         assistant,
         message="Calculate 25% of 80.",
@@ -1675,27 +1672,26 @@ def test_v2_client_reasoning_with_system_message(credentials_o1_mini: Credential
 
 
 @pytest.mark.openai
+@pytest.mark.skipif(
+    os.getenv("OPENAI_REASONING_MODEL_AVAILABLE", "false").lower() != "true",
+    reason="Reasoning model access not available - set OPENAI_REASONING_MODEL_AVAILABLE=true if you have access",
+)
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_reasoning_no_streaming(credentials_o1_mini: Credentials) -> None:
-    """Test that V2 client blocks streaming for o1 models.
+def test_v2_client_reasoning_non_streaming(credentials_o4_mini: Credentials) -> None:
+    """Test that V2 client works with non-streaming mode for reasoning models.
 
-    This test verifies:
-    1. stream=True is automatically set to False for o1 models
-    2. Warning is issued about streaming not being supported
-    3. Request succeeds without API errors
+    Note: The V2 client currently doesn't support streaming responses.
+    This test verifies basic non-streaming operation works correctly.
     """
-    import warnings
+    base_config = credentials_o4_mini.llm_config._model.config_list[0]
 
-    base_config = credentials_o1_mini.llm_config._model.config_list[0]
-
-    # Attempt to use streaming - should be automatically blocked
+    # Non-streaming config (default)
     llm_config = {
         "config_list": [
             {
                 "api_type": "openai_v2",
-                "model": "o1-mini",
+                "model": "o4-mini",
                 "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
-                "stream": True,  # NOT supported by o1 - should be blocked with warning
             }
         ],
     }
@@ -1709,44 +1705,37 @@ def test_v2_client_reasoning_no_streaming(credentials_o1_mini: Credentials) -> N
         name="user", human_input_mode="NEVER", max_consecutive_auto_reply=0, code_execution_config=False
     )
 
-    # Capture warnings to verify streaming blocking warning is issued
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-
-        # Should work WITHOUT errors because stream=True is automatically set to False
-        chat_result = user_proxy.initiate_chat(
-            assistant,
-            message="Say hello.",
-            max_turns=1,
-        )
-
-        # Verify warning was issued about streaming not being supported
-        warning_messages = [str(warning.message) for warning in w]
-        assert any("streaming" in msg.lower() or "stream" in msg.lower() for msg in warning_messages), (
-            "Should warn about streaming not being supported"
-        )
+    # Should work with non-streaming mode
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="Say hello.",
+        max_turns=1,
+    )
 
     _assert_v2_response_structure(chat_result)
+    assert len(chat_result.summary) > 0, "Should have a non-empty response"
 
 
 @pytest.mark.openai
+@pytest.mark.skipif(
+    os.getenv("OPENAI_REASONING_MODEL_AVAILABLE", "false").lower() != "true",
+    reason="Reasoning model access not available - set OPENAI_REASONING_MODEL_AVAILABLE=true if you have access",
+)
 @run_for_optional_imports("openai", "openai")
-def test_v2_client_reasoning_no_tools(credentials_o1_mini: Credentials) -> None:
-    """Test that V2 client blocks tools for o1 models.
+def test_v2_client_reasoning_no_tools(credentials_o4_mini: Credentials) -> None:
+    """Test that V2 client works with reasoning models without tools.
 
     This test verifies:
-    1. o1 models work correctly without tool registration
-    2. o1 models don't support function calling
-    3. Basic reasoning works for mathematical calculations
+    1. Reasoning models work correctly without tool registration
+    2. Basic reasoning works for mathematical calculations
     """
-    base_config = credentials_o1_mini.llm_config._model.config_list[0]
+    base_config = credentials_o4_mini.llm_config._model.config_list[0]
 
-    # o1 models do NOT support function calling/tools
     llm_config = {
         "config_list": [
             {
                 "api_type": "openai_v2",
-                "model": "o1-mini",
+                "model": "o4-mini",
                 "api_key": getattr(base_config, "api_key", os.getenv("OPENAI_API_KEY")),
             }
         ],

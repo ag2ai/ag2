@@ -292,6 +292,11 @@ def credentials_o1_mini() -> Credentials:
 
 
 @pytest.fixture
+def credentials_o4_mini() -> Credentials:
+    return get_credentials("OPENAI_API_KEY", model="o4-mini", api_type="openai", filter_dict={"tags": ["o4-mini"]})
+
+
+@pytest.fixture
 def credentials_o1() -> Credentials:
     return get_credentials("OPENAI_API_KEY", model="o1", api_type="openai", filter_dict={"tags": ["o1"]})
 
