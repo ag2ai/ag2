@@ -6,14 +6,8 @@ import asyncio
 import os
 import re
 from collections.abc import Callable
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, Protocol
-
-try:
-    import aiofiles
-    import aiofiles.os
-except ImportError:
-    aiofiles = None  # type: ignore[assignment]
 
 from ....doc_utils import export_module
 from ...tool import Tool
@@ -187,7 +181,7 @@ def apply_diff(current_content: str, diff: str, create: bool = False) -> str:
 class WorkspaceEditor:
     """File system editor for apply_patch operations.
 
-    currently supports local filesystem through allowed_paths patterns.
+    Supports both local filesystem and cloud storage paths through allowed_paths patterns.
     """
 
     def __init__(
@@ -199,10 +193,10 @@ class WorkspaceEditor:
 
         Args:
             workspace_dir: Root directory for file operations (local filesystem path).
-
+                For cloud storage, use allowed_paths patterns with bucket names instead.
             allowed_paths: List of allowed path patterns (for security).
                 Supports glob-style patterns with ** for recursive matching.
-                currently works for local filesystem.
+                Works for both local filesystem and cloud storage paths.
 
                 Examples:
                     - ["**"] - Allow all paths (default)
@@ -219,10 +213,10 @@ class WorkspaceEditor:
         """Validate and resolve a file path.
 
         Args:
-            path: Relative path to validate (local filesystem)
+            path: Relative path to validate (can be local filesystem or cloud storage path)
 
         Returns:
-            Absolute resolved path (for local filesystem)
+            Absolute resolved path (for local filesystem) or Path object for cloud storage paths
 
         Raises:
             ValueError: If path is invalid or outside workspace, or not in allowed_paths
@@ -235,15 +229,13 @@ class WorkspaceEditor:
         if not matches_any:
             raise ValueError(f"Path {path} is not allowed by allowed_paths patterns: {self.allowed_paths}")
 
-        # Validate path is within workspace
+        # For local filesystem paths, validate they're within workspace
+        # Cloud storage paths are validated by pattern matching above
         try:
             full_path = (Path(self.workspace_dir) / path).resolve()
 
-            # Use Path.relative_to() for secure path containment check
-            # This prevents path traversal attacks that startswith() would miss
-            try:
-                full_path.relative_to(self.workspace_dir)
-            except ValueError:
+            # Security: Ensure path is within workspace (for local filesystem)
+            if not str(full_path).startswith(str(self.workspace_dir)):
                 raise ValueError(f"Path {path} is outside workspace directory")
 
             return full_path
@@ -259,7 +251,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
 
             # Ensure parent directory exists
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -286,10 +278,10 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            # Ensure parent directory exists (use asyncio.to_thread for blocking mkdir)
-            await asyncio.to_thread(full_path.parent.mkdir, parents=True, exist_ok=True)
+            # Ensure parent directory exists
+            full_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Apply diff to get file content
             content = apply_diff("", diff, create=True)
@@ -311,7 +303,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
 
             if not full_path.exists():
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
@@ -341,11 +333,9 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)
+            full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            # Check if file exists using asyncio.to_thread
-            exists = await asyncio.to_thread(full_path.exists)
-            if not exists:
+            if not full_path.exists():
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
             # Read current content using async I/O
@@ -398,8 +388,7 @@ class WorkspaceEditor:
             if not exists:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
-            # Delete file using async I/O
-            await aiofiles.os.remove(str(full_path))
+            full_path.unlink()
 
             return {"status": "completed", "output": f"Deleted {path}"}
         except Exception as e:
@@ -463,14 +452,14 @@ class ApplyPatchTool(Tool):
             on_approval: Callback for approval decisions
             allowed_paths: List of allowed path patterns (for security).
                 Supports glob-style patterns with ** for recursive matching.
-                currently works for local filesystem.
-            async_patches: apply patches asynchronously / synchronously
+                Works for both local filesystem and cloud storage paths.
+            async_patches: apply patches asynchronously/ synchronously
                 Examples:
                     - ["**"] - Allow all paths (default)
                     - ["src/**"] - Allow all files in src/ and subdirectories
                     - ["*.py"] - Allow Python files in root directory
 
-                Note:
+                Note: For cloud storage, specify bucket names in allowed_paths patterns.
                 The workspace_dir should remain a local path for default operations.
         """
         if editor is None and workspace_dir is None:
