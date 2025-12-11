@@ -1310,10 +1310,7 @@ class GroupChatManager(ConversableAgent):
                             # Not a tool response - always add it
                             should_add_message = True
 
-                    if should_add_message:
-                        temp_messages = speaker_own_messages + [message]
-                    else:
-                        temp_messages = speaker_own_messages
+                    temp_messages = speaker_own_messages + [message] if should_add_message else speaker_own_messages
                     messages_for_reply = temp_messages
                 else:
                     # Normal flow: use speaker's persistent message history
@@ -1500,10 +1497,7 @@ class GroupChatManager(ConversableAgent):
                             # Not a tool response - always add it
                             should_add_message = True
 
-                    if should_add_message:
-                        temp_messages = speaker_own_messages + [message]
-                    else:
-                        temp_messages = speaker_own_messages
+                    temp_messages = speaker_own_messages + [message] if should_add_message else speaker_own_messages
                     messages_for_reply = temp_messages
                 else:
                     # Normal flow: use speaker's persistent message history
