@@ -5,9 +5,16 @@
 import fnmatch
 import os
 import re
+import asyncio
 from collections.abc import Callable
 from pathlib import Path, PurePath
 from typing import Any, Protocol
+
+try:
+    import aiofiles
+    import aiofiles.os
+except ImportError:
+    aiofiles = None  # type: ignore[assignment]
 
 from ....doc_utils import export_module
 from ...tool import Tool
@@ -270,20 +277,27 @@ class WorkspaceEditor:
 
     async def a_create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Create a new file."""
+        if aiofiles is None:
+            raise RuntimeError(
+                "aiofiles is required for async file operations. "
+                "Install it with: pip install aiofiles"
+            )
+        
         try:
             path = operation.get("path")
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            # Ensure parent directory exists
-            full_path.parent.mkdir(parents=True, exist_ok=True)
+            # Ensure parent directory exists (use asyncio.to_thread for blocking mkdir)
+            await asyncio.to_thread(full_path.parent.mkdir, parents=True, exist_ok=True)
 
             # Apply diff to get file content
             content = apply_diff("", diff, create=True)
 
-            # Write file
-            full_path.write_text(content, encoding="utf-8")
+            # Write file using async I/O
+            async with aiofiles.open(str(full_path), 'w', encoding='utf-8') as f:
+                await f.write(content)
 
             return {"status": "completed", "output": f"Created {path}"}
         except Exception as e:
@@ -315,23 +329,33 @@ class WorkspaceEditor:
 
     async def a_update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Update an existing file."""
+        if aiofiles is None:
+            raise RuntimeError(
+                "aiofiles is required for async file operations. "
+                "Install it with: pip install aiofiles"
+            )
+        
         try:
             path = operation.get("path")
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            if not full_path.exists():
+            # Check if file exists using asyncio.to_thread
+            exists = await asyncio.to_thread(full_path.exists)
+            if not exists:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
-            # Read current content
-            current_content = full_path.read_text(encoding="utf-8")
+            # Read current content using async I/O
+            async with aiofiles.open(str(full_path), 'r', encoding='utf-8') as f:
+                current_content = await f.read()
 
             # Apply diff
             new_content = apply_diff(current_content, diff)
 
-            # Write updated content
-            full_path.write_text(new_content, encoding="utf-8")
+            # Write updated content using async I/O
+            async with aiofiles.open(str(full_path), 'w', encoding='utf-8') as f:
+                await f.write(new_content)
 
             return {"status": "completed", "output": f"Updated {path}"}
         except Exception as e:
@@ -354,14 +378,23 @@ class WorkspaceEditor:
 
     async def a_delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Delete a file."""
+        if aiofiles is None:
+            raise RuntimeError(
+                "aiofiles is required for async file operations. "
+                "Install it with: pip install aiofiles"
+            )
+        
         try:
             path = operation.get("path")
             full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            if not full_path.exists():
+            # Check if file exists using asyncio.to_thread
+            exists = await asyncio.to_thread(full_path.exists)
+            if not exists:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
-            full_path.unlink()
+            # Delete file using async I/O
+            await aiofiles.os.remove(str(full_path))
 
             return {"status": "completed", "output": f"Deleted {path}"}
         except Exception as e:
