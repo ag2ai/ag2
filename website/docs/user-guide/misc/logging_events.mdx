@@ -1,0 +1,111 @@
+---
+title: Event Logging Setup
+description: Configure AG2 event logging to customize output format and handlers
+---
+
+import { CodeBlock } from '@site/src/components/CodeBlock';
+
+## Overview
+
+AG2 events now use Python's standard `logging` module, allowing you to configure handlers, formatters, and filters at the application level. All event output goes through the `ag2.event.processor` logger.
+
+## Basic Setup
+
+Configure the logger before creating agents:
+
+<CodeBlock language="python">
+import logging
+import io
+
+# Get the AG2 event logger
+logger = logging.getLogger("ag2.event.processor")
+
+# Create a custom handler (e.g., StringIO for testing)
+log_stream = io.StringIO()
+handler = logging.StreamHandler(log_stream)
+handler.setFormatter(logging.Formatter("%(message)s"))
+
+# Replace default handlers
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+</CodeBlock>
+
+## Custom Formatters
+
+Use structured logging or JSON output:
+
+<CodeBlock language="python">
+import logging
+import json
+
+logger = logging.getLogger("ag2.event.processor")
+
+# JSON formatter example
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "message": record.getMessage(),
+            "level": record.levelname,
+            "timestamp": record.created
+        })
+
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+</CodeBlock>
+
+## Example: Capturing Event Output
+
+<CodeBlock language="python">
+import logging
+import io
+from autogen import AssistantAgent, UserProxyAgent
+
+# Setup logger to capture output
+logger = logging.getLogger("ag2.event.processor")
+log_stream = io.StringIO()
+handler = logging.StreamHandler(log_stream)
+handler.setFormatter(logging.Formatter("%(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+# Create agents and run chat
+assistant = AssistantAgent("assistant", llm_config=your_llm_config)
+user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
+
+user_proxy.initiate_chat(assistant, message="Hello!")
+
+# Retrieve captured output
+output = log_stream.getvalue()
+print(output)  # Contains all event messages
+</CodeBlock>
+
+## Advanced: Custom Handler with Filters
+
+<CodeBlock language="python">
+import logging
+
+class EventFilter(logging.Filter):
+    def filter(self, record):
+        # Only log termination events
+        return "TERMINATING RUN" in record.getMessage()
+
+logger = logging.getLogger("ag2.event.processor")
+handler = logging.StreamHandler()
+handler.addFilter(EventFilter())
+handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+logger.handlers = [handler]
+logger.setLevel(logging.INFO)
+logger.propagate = False
+</CodeBlock>
+
+## Benefits
+
+- **Centralized Configuration**: Configure once at app startup, affects all AG2 packages
+- **Standard Python Logging**: Use any logging handler, formatter, or filter
+- **Backwards Compatible**: Default behavior unchanged if no custom configuration
+- **Testable**: Easy to capture and verify event output in tests
