@@ -95,7 +95,6 @@ All file operations will be relative to this workspace directory.
 
 Control which paths can be accessed for security:
 
-```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -105,10 +104,7 @@ llm_config = LLMConfig(
         "workspace_dir": "./my_project_folder",
         "allowed_paths": ["src/**", "tests/**", "*.py"],  # Only allow these paths
     },
-)
-```
-
-**Path Pattern Examples:**
+)**Path Pattern Examples:**
 - `["**"]` - Allow all paths (default)
 - `["src/**"]` - Allow all files in `src/` and subdirectories
 - `["*.py"]` - Allow Python files in root directory
