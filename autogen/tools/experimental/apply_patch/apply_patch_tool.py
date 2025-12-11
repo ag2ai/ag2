@@ -6,7 +6,7 @@ import fnmatch
 import os
 import re
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any, Protocol
 
 from ....doc_utils import export_module
@@ -223,16 +223,11 @@ class WorkspaceEditor:
         """
         # Check if path matches any allowed pattern first (works for both local and cloud paths)
         # This allows cloud storage bucket patterns in allowed_paths
-        matches_any = False
-        for pattern in self.allowed_paths:
-            # Normalize path separators for cross-platform compatibility
-            path_normalized = path.replace("\\", "/")
-            pattern_normalized = pattern.replace("\\", "/")
-
-            # Use fnmatch which properly supports ** for recursive matching
-            if fnmatch.fnmatch(path_normalized, pattern_normalized):
-                matches_any = True
-                break
+        # Use PurePath.match() which properly supports ** for recursive matching
+        matches_any = any(
+            PurePath(path).match(pattern)
+            for pattern in self.allowed_paths
+        )
 
         if not matches_any:
             raise ValueError(f"Path {path} is not allowed by allowed_paths patterns: {self.allowed_paths}")
