@@ -1273,7 +1273,7 @@ def test_apply_patch_operation_unknown_operation_type(mocked_openai_client):
 
     assert result.call_id == "call_unknown"
     assert result.status == "failed"
-    assert "Unknown operation type: unknown_operation" in result.output
+    assert "Invalid operation type" in result.output
 
 
 def test_apply_patch_operation_handles_exceptions(mocked_openai_client):

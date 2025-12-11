@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import fnmatch
+import asyncio
 import os
 import re
-import asyncio
 from collections.abc import Callable
 from pathlib import Path, PurePath
 from typing import Any, Protocol
@@ -231,10 +230,7 @@ class WorkspaceEditor:
         # Check if path matches any allowed pattern first (works for both local and cloud paths)
         # This allows cloud storage bucket patterns in allowed_paths
         # Use PurePath.match() which properly supports ** for recursive matching
-        matches_any = any(
-            PurePath(path).match(pattern)
-            for pattern in self.allowed_paths
-        )
+        matches_any = any(PurePath(path).match(pattern) for pattern in self.allowed_paths)
 
         if not matches_any:
             raise ValueError(f"Path {path} is not allowed by allowed_paths patterns: {self.allowed_paths}")
@@ -260,7 +256,7 @@ class WorkspaceEditor:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)
@@ -281,16 +277,13 @@ class WorkspaceEditor:
     async def a_create_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Create a new file."""
         if aiofiles is None:
-            raise RuntimeError(
-                "aiofiles is required for async file operations. "
-                "Install it with: pip install aiofiles"
-            )
-        
+            raise RuntimeError("aiofiles is required for async file operations. Install it with: pip install aiofiles")
+
         try:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)
@@ -302,7 +295,7 @@ class WorkspaceEditor:
             content = apply_diff("", diff, create=True)
 
             # Write file using async I/O
-            async with aiofiles.open(str(full_path), 'w', encoding='utf-8') as f:
+            async with aiofiles.open(str(full_path), "w", encoding="utf-8") as f:
                 await f.write(content)
 
             return {"status": "completed", "output": f"Created {path}"}
@@ -315,7 +308,7 @@ class WorkspaceEditor:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)
@@ -339,16 +332,13 @@ class WorkspaceEditor:
     async def a_update_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Update an existing file."""
         if aiofiles is None:
-            raise RuntimeError(
-                "aiofiles is required for async file operations. "
-                "Install it with: pip install aiofiles"
-            )
-        
+            raise RuntimeError("aiofiles is required for async file operations. Install it with: pip install aiofiles")
+
         try:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             diff = operation.get("diff", "")
 
             full_path = self._validate_path(path)
@@ -359,14 +349,14 @@ class WorkspaceEditor:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
             # Read current content using async I/O
-            async with aiofiles.open(str(full_path), 'r', encoding='utf-8') as f:
+            async with aiofiles.open(str(full_path), "r", encoding="utf-8") as f:
                 current_content = await f.read()
 
             # Apply diff
             new_content = apply_diff(current_content, diff)
 
             # Write updated content using async I/O
-            async with aiofiles.open(str(full_path), 'w', encoding='utf-8') as f:
+            async with aiofiles.open(str(full_path), "w", encoding="utf-8") as f:
                 await f.write(new_content)
 
             return {"status": "completed", "output": f"Updated {path}"}
@@ -379,7 +369,7 @@ class WorkspaceEditor:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             full_path = self._validate_path(path)
 
             if not full_path.exists():
@@ -394,16 +384,13 @@ class WorkspaceEditor:
     async def a_delete_file(self, operation: dict[str, Any]) -> dict[str, Any]:
         """Delete a file."""
         if aiofiles is None:
-            raise RuntimeError(
-                "aiofiles is required for async file operations. "
-                "Install it with: pip install aiofiles"
-            )
-        
+            raise RuntimeError("aiofiles is required for async file operations. Install it with: pip install aiofiles")
+
         try:
             path = operation.get("path")
             if not path:
                 return {"status": "failed", "output": "Missing 'path' in operation"}
-            
+
             full_path = self._validate_path(path)
 
             # Check if file exists using asyncio.to_thread
@@ -421,6 +408,7 @@ class WorkspaceEditor:
 
 # Valid operation types for apply_patch tool
 VALID_OPERATIONS = {"create_file", "update_file", "delete_file"}
+
 
 @export_module("autogen.tools")
 class ApplyPatchTool(Tool):
@@ -509,7 +497,7 @@ class ApplyPatchTool(Tool):
                 Result dict with status and output
             """
             operation_type = operation.get("type")
-            
+
             # Validate operation type early
             if operation_type not in VALID_OPERATIONS:
                 return {
