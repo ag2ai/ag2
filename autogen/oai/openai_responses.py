@@ -310,9 +310,6 @@ class OpenAIResponsesClient:
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
         
 
-        # Valid operation types for apply_patch tool
-        valid_operations = {"create_file", "update_file", "delete_file"}
-
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
         op_type = operation.get("type")
 
