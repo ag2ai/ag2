@@ -5,7 +5,6 @@
 import asyncio
 import os
 import re
-import asyncio
 from collections.abc import Callable
 from pathlib import Path, PurePath
 from typing import Any, Protocol
@@ -498,7 +497,7 @@ class ApplyPatchTool(Tool):
                 Result dict with status and output
             """
             operation_type = operation.get("type")
-            
+
             # Validate operation type early
             if operation_type not in VALID_OPERATIONS:
                 return {
