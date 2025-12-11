@@ -258,9 +258,12 @@ class WorkspaceEditor:
         """Create a new file."""
         try:
             path = operation.get("path")
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Ensure parent directory exists
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -285,9 +288,12 @@ class WorkspaceEditor:
         
         try:
             path = operation.get("path")
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Ensure parent directory exists (use asyncio.to_thread for blocking mkdir)
             await asyncio.to_thread(full_path.parent.mkdir, parents=True, exist_ok=True)
@@ -307,9 +313,12 @@ class WorkspaceEditor:
         """Update an existing file."""
         try:
             path = operation.get("path")
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             if not full_path.exists():
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
@@ -337,9 +346,12 @@ class WorkspaceEditor:
         
         try:
             path = operation.get("path")
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Check if file exists using asyncio.to_thread
             exists = await asyncio.to_thread(full_path.exists)
@@ -365,7 +377,10 @@ class WorkspaceEditor:
         """Delete a file."""
         try:
             path = operation.get("path")
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
+            full_path = self._validate_path(path)
 
             if not full_path.exists():
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
@@ -386,7 +401,10 @@ class WorkspaceEditor:
         
         try:
             path = operation.get("path")
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            if not path:
+                return {"status": "failed", "output": "Missing 'path' in operation"}
+            
+            full_path = self._validate_path(path)
 
             # Check if file exists using asyncio.to_thread
             exists = await asyncio.to_thread(full_path.exists)
