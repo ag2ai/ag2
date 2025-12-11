@@ -5,9 +5,16 @@
 import asyncio
 import os
 import re
+import asyncio
 from collections.abc import Callable
 from pathlib import Path, PurePath
 from typing import Any, Protocol
+
+try:
+    import aiofiles
+    import aiofiles.os
+except ImportError:
+    aiofiles = None  # type: ignore[assignment]
 
 from ....doc_utils import export_module
 from ...tool import Tool
@@ -282,8 +289,8 @@ class WorkspaceEditor:
 
             full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            # Ensure parent directory exists
-            full_path.parent.mkdir(parents=True, exist_ok=True)
+            # Ensure parent directory exists (use asyncio.to_thread for blocking mkdir)
+            await asyncio.to_thread(full_path.parent.mkdir, parents=True, exist_ok=True)
 
             # Apply diff to get file content
             content = apply_diff("", diff, create=True)
@@ -337,7 +344,9 @@ class WorkspaceEditor:
 
             full_path = self._validate_path(path)  # type: ignore[arg-type]
 
-            if not full_path.exists():
+            # Check if file exists using asyncio.to_thread
+            exists = await asyncio.to_thread(full_path.exists)
+            if not exists:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
             # Read current content using async I/O
@@ -390,7 +399,8 @@ class WorkspaceEditor:
             if not exists:
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
 
-            full_path.unlink()
+            # Delete file using async I/O
+            await aiofiles.os.remove(str(full_path))
 
             return {"status": "completed", "output": f"Deleted {path}"}
         except Exception as e:
