@@ -260,7 +260,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Ensure parent directory exists
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,7 +287,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Ensure parent directory exists (use asyncio.to_thread for blocking mkdir)
             await asyncio.to_thread(full_path.parent.mkdir, parents=True, exist_ok=True)
@@ -312,7 +312,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             if not full_path.exists():
                 return {"status": "failed", "output": f"Error: File not found at path '{path}'"}
@@ -342,7 +342,7 @@ class WorkspaceEditor:
 
             diff = operation.get("diff", "")
 
-            full_path = self._validate_path(path)  # type: ignore[arg-type]
+            full_path = self._validate_path(path)
 
             # Check if file exists using asyncio.to_thread
             exists = await asyncio.to_thread(full_path.exists)
