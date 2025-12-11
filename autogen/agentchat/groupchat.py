@@ -1272,7 +1272,48 @@ class GroupChatManager(ConversableAgent):
                     speaker_own_messages = speaker._oai_messages.get(self, [])
                     # Build temporary message list: speaker's own messages + last message
                     # This gives context without adding the last message to persistent history
-                    temp_messages = speaker_own_messages + ([message] if message else [])
+                    should_add_message = False
+                    if message:
+                        # Check if the message is a tool response
+                        is_tool_response = message.get("role") == "tool" or message.get("tool_responses")
+                        if is_tool_response:
+                            # Only add tool responses if the speaker has the corresponding tool_call
+                            # in their history (i.e., this tool response belongs to them)
+                            msg_tool_call_ids = set()
+                            for resp in message.get("tool_responses", []):
+                                if resp.get("tool_call_id"):
+                                    msg_tool_call_ids.add(resp["tool_call_id"])
+                            if message.get("tool_call_id"):
+                                msg_tool_call_ids.add(message["tool_call_id"])
+
+                            # Check if speaker has tool_calls with matching IDs
+                            speaker_tool_call_ids = set()
+                            for hist_msg in speaker_own_messages:
+                                for tc in hist_msg.get("tool_calls", []):
+                                    if tc.get("id"):
+                                        speaker_tool_call_ids.add(tc["id"])
+
+                            # Only include if any of the tool response IDs match speaker's tool calls
+                            # and it's not already in their history
+                            if msg_tool_call_ids & speaker_tool_call_ids:
+                                # Check if not already in history
+                                already_in_history = False
+                                if speaker_own_messages:
+                                    last_in_history = speaker_own_messages[-1]
+                                    if last_in_history.get("tool_responses"):
+                                        hist_ids = {
+                                            r.get("tool_call_id") for r in last_in_history.get("tool_responses", [])
+                                        }
+                                        already_in_history = msg_tool_call_ids and msg_tool_call_ids == hist_ids
+                                should_add_message = not already_in_history
+                        else:
+                            # Not a tool response - always add it
+                            should_add_message = True
+
+                    if should_add_message:
+                        temp_messages = speaker_own_messages + [message]
+                    else:
+                        temp_messages = speaker_own_messages
                     messages_for_reply = temp_messages
                 else:
                     # Normal flow: use speaker's persistent message history
@@ -1421,7 +1462,48 @@ class GroupChatManager(ConversableAgent):
                     speaker_own_messages = speaker._oai_messages.get(self, [])
                     # Build temporary message list: speaker's own messages + last message
                     # This gives context without adding the last message to persistent history
-                    temp_messages = speaker_own_messages + ([message] if message else [])
+                    should_add_message = False
+                    if message:
+                        # Check if the message is a tool response
+                        is_tool_response = message.get("role") == "tool" or message.get("tool_responses")
+                        if is_tool_response:
+                            # Only add tool responses if the speaker has the corresponding tool_call
+                            # in their history (i.e., this tool response belongs to them)
+                            msg_tool_call_ids = set()
+                            for resp in message.get("tool_responses", []):
+                                if resp.get("tool_call_id"):
+                                    msg_tool_call_ids.add(resp["tool_call_id"])
+                            if message.get("tool_call_id"):
+                                msg_tool_call_ids.add(message["tool_call_id"])
+
+                            # Check if speaker has tool_calls with matching IDs
+                            speaker_tool_call_ids = set()
+                            for hist_msg in speaker_own_messages:
+                                for tc in hist_msg.get("tool_calls", []):
+                                    if tc.get("id"):
+                                        speaker_tool_call_ids.add(tc["id"])
+
+                            # Only include if any of the tool response IDs match speaker's tool calls
+                            # and it's not already in their history
+                            if msg_tool_call_ids & speaker_tool_call_ids:
+                                # Check if not already in history
+                                already_in_history = False
+                                if speaker_own_messages:
+                                    last_in_history = speaker_own_messages[-1]
+                                    if last_in_history.get("tool_responses"):
+                                        hist_ids = {
+                                            r.get("tool_call_id") for r in last_in_history.get("tool_responses", [])
+                                        }
+                                        already_in_history = msg_tool_call_ids and msg_tool_call_ids == hist_ids
+                                should_add_message = not already_in_history
+                        else:
+                            # Not a tool response - always add it
+                            should_add_message = True
+
+                    if should_add_message:
+                        temp_messages = speaker_own_messages + [message]
+                    else:
+                        temp_messages = speaker_own_messages
                     messages_for_reply = temp_messages
                 else:
                     # Normal flow: use speaker's persistent message history
