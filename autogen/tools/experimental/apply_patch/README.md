@@ -64,8 +64,10 @@ result = coding_agent.initiate_chat(
     recipient=coding_agent,
     message="Create a Python file called hello.py with a hello_world function",
     max_turns=2,
-)## Configuration Options
+)
 ```
+
+## Configuration Options
 
 ### Workspace Directory
 
@@ -85,7 +87,6 @@ llm_config = LLMConfig(
 
 Control which paths can be accessed for security:
 
-```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -95,10 +96,7 @@ llm_config = LLMConfig(
         "workspace_dir": "./my_project_folder",
         "allowed_paths": ["src/**", "tests/**", "*.py"],  # Only allow these paths
     },
-)
-```
-
-**Path Pattern Examples:**
+)**Path Pattern Examples:**
 - `["**"]` - Allow all paths (default)
 - `["src/**"]` - Allow all files in `src/` and subdirectories
 - `["*.py"]` - Allow Python files in root directory
@@ -110,7 +108,6 @@ The `allowed_paths` parameter supports glob-style patterns with `**` for recursi
 
 Apply patches asynchronously for better performance:
 
-```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -119,7 +116,8 @@ llm_config = LLMConfig(
         "built_in_tools": ["apply_patch_async"],  # Use async version
         "workspace_dir": "./my_project_folder",
     },
-)## Usage Examples
+)
+## Usage Examples
 
 ### Example 1: Creating a New Project
 
@@ -144,7 +142,7 @@ result = coding_agent.initiate_chat(
     """,
     max_turns=2,
 )## Understanding Apply Patch Operations
-```
+
 The apply_patch tool uses three types of operations:
 
 1. **create_file** / **a_create_file**: Creates a new file with the specified content
