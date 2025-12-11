@@ -419,6 +419,9 @@ class WorkspaceEditor:
             return {"status": "failed", "output": f"Error deleting {path}: {str(e)}"}
 
 
+# Valid operation types for apply_patch tool
+VALID_OPERATIONS = {"create_file", "update_file", "delete_file"}
+
 @export_module("autogen.tools")
 class ApplyPatchTool(Tool):
     """Tool for applying code patches with GPT-5.1.
@@ -506,6 +509,15 @@ class ApplyPatchTool(Tool):
                 Result dict with status and output
             """
             operation_type = operation.get("type")
+            
+            # Validate operation type early
+            if operation_type not in VALID_OPERATIONS:
+                return {
+                    "type": "apply_patch_call_output",
+                    "call_id": call_id,
+                    "status": "failed",
+                    "output": f"Invalid operation type: {operation_type}. Must be one of {VALID_OPERATIONS}",
+                }
 
             # Check approval if needed
             if self.needs_approval:
@@ -527,6 +539,7 @@ class ApplyPatchTool(Tool):
                 elif operation_type == "delete_file":
                     result = await self.editor.a_delete_file(operation)  # type: ignore[union-attr]
                 else:
+                    # This should never happen due to validation above, but kept for safety
                     result = {"status": "failed", "output": f"Unknown operation type: {operation_type}"}
             else:
                 if operation_type == "create_file":
@@ -536,6 +549,7 @@ class ApplyPatchTool(Tool):
                 elif operation_type == "delete_file":
                     result = self.editor.delete_file(operation)  # type: ignore[union-attr]
                 else:
+                    # This should never happen due to validation above, but kept for safety
                     result = {"status": "failed", "output": f"Unknown operation type: {operation_type}"}
             # Format response for Responses API
             return {"type": "apply_patch_call_output", "call_id": call_id, **result}
