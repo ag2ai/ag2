@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from .base_event import BaseEvent, wrap_event
+from .base_event import BaseEvent, resolve_print_callable, wrap_event
 
 __all__ = ["UsageSummaryEvent"]
 
@@ -104,7 +104,7 @@ class UsageSummaryEvent(BaseEvent):
         usage_type: str = "total",
         f: Callable[..., Any] | None = None,
     ) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
         word_from_type = "including" if usage_type == "total" else "excluding"
         if usage_summary.usages is None or len(usage_summary.usages) == 0:
             f("No actual cost incurred (all completions are using cache).", flush=True)
@@ -120,7 +120,7 @@ class UsageSummaryEvent(BaseEvent):
             )
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         if self.total.usages is None:
             f('No usage summary. Please call "create" first.', flush=True)
@@ -157,7 +157,7 @@ class StreamEvent(BaseEvent):
         super().__init__(uuid=uuid, content=content)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
+        f = resolve_print_callable(f)
 
         # Set the terminal text color to green
         f("\033[32m", end="")
