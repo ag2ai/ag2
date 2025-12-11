@@ -27,7 +27,11 @@ The `ApplyPatchTool` enables agents to create, update, and delete files using st
 
 Install AG2 with OpenAI support:
 
-pip install ag2[openai]For more information, refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
+```bash
+pip install ag2[openai]
+```
+
+For more information, refer to the [installation guide](/docs/user-guide/basic-concepts/installing-ag2).
 
 ## Quick Start
 
@@ -73,6 +77,7 @@ result = coding_agent.initiate_chat(
 
 Specify a dedicated workspace directory for file operations:
 
+```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -81,12 +86,16 @@ llm_config = LLMConfig(
         "built_in_tools": ["apply_patch"],
         "workspace_dir": "./my_project_folder",  # Root directory for operations
     },
-)All file operations will be relative to this workspace directory.
+)
+```
+
+All file operations will be relative to this workspace directory.
 
 ### Allowed Paths
 
 Control which paths can be accessed for security:
 
+```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -96,7 +105,10 @@ llm_config = LLMConfig(
         "workspace_dir": "./my_project_folder",
         "allowed_paths": ["src/**", "tests/**", "*.py"],  # Only allow these paths
     },
-)**Path Pattern Examples:**
+)
+```
+
+**Path Pattern Examples:**
 - `["**"]` - Allow all paths (default)
 - `["src/**"]` - Allow all files in `src/` and subdirectories
 - `["*.py"]` - Allow Python files in root directory
@@ -107,7 +119,7 @@ The `allowed_paths` parameter supports glob-style patterns with `**` for recursi
 ### Async Patches
 
 Apply patches asynchronously for better performance:
-
+```python
 llm_config = LLMConfig(
     config_list={
         "api_type": "responses",
@@ -117,12 +129,14 @@ llm_config = LLMConfig(
         "workspace_dir": "./my_project_folder",
     },
 )
+```
+
 ## Usage Examples
 
 ### Example 1: Creating a New Project
 
 Create a simple Python project with multiple files:
-
+```python
 result = coding_agent.initiate_chat(
     recipient=coding_agent,
     message="""
@@ -131,17 +145,24 @@ result = coding_agent.initiate_chat(
     """,
     max_turns=2,
     clear_history=True,
-)### Example 2: Modifying Existing Files
+)
+```
+
+### Example 2: Modifying Existing Files
 
 Update files using the apply_patch tool:
 
+```python
 result = coding_agent.initiate_chat(
     recipient=coding_agent,
     message="""
     In calculator folder, add power and square root methods to the Calculator class in main.py
     """,
     max_turns=2,
-)## Understanding Apply Patch Operations
+)
+```
+
+## Understanding Apply Patch Operations
 
 The apply_patch tool uses three types of operations:
 
