@@ -6,7 +6,7 @@ import asyncio
 import os
 import re
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any, Protocol
 
 from ....doc_utils import export_module
