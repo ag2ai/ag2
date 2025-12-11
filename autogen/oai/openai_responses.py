@@ -252,8 +252,19 @@ class OpenAIResponsesClient:
 
         from autogen.tools.experimental.apply_patch.apply_patch_tool import WorkspaceEditor
 
+        # Valid operation types for apply_patch tool
+        VALID_OPERATIONS = {"create_file", "update_file", "delete_file"}
+
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
         op_type = operation.get("type")
+
+        # Validate operation type early
+        if op_type not in VALID_OPERATIONS:
+            return ApplyPatchCallOutput(
+                call_id=call_id,
+                status="failed",
+                output=f"Invalid operation type: {op_type}. Must be one of {VALID_OPERATIONS}",
+            )
 
         def _run_async_in_thread(coro):
             """Run an async coroutine in a separate thread with its own event loop."""
