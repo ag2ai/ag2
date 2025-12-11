@@ -498,7 +498,7 @@ class ApplyPatchTool(Tool):
                 Result dict with status and output
             """
             operation_type = operation.get("type")
-
+            
             # Validate operation type early
             if operation_type not in VALID_OPERATIONS:
                 return {
