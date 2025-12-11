@@ -33,6 +33,15 @@ except ImportError:
     class ImageGenerationCall:
         pass
 
+
+# Check if aiofiles is available for async patch operations
+try:
+    import aiofiles
+
+    HAS_AIOFILES = True
+except ImportError:
+    HAS_AIOFILES = False
+
 # -----------------------------------------------------------------------------
 # Helper fakes
 # -----------------------------------------------------------------------------
@@ -1104,6 +1113,7 @@ def test_apply_patch_operation_without_agent_creates_default_editor(mocked_opena
         os.chdir(original_cwd)
 
 
+@pytest.mark.skipif(not HAS_AIOFILES, reason="aiofiles is required for async patch operations")
 def test_apply_patch_operation_with_async_patches(mocked_openai_client):
     """Test _apply_patch_operation with async_patches=True."""
     import os
@@ -1421,6 +1431,7 @@ def test_execute_apply_patch_calls_with_apply_patch_tool(mocked_openai_client):
     assert result[0]["status"] == "completed"
 
 
+@pytest.mark.skipif(not HAS_AIOFILES, reason="aiofiles is required for async patch operations")
 def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_client):
     """Test _execute_apply_patch_calls uses async mode when apply_patch_async is in built_in_tools."""
     import tempfile
