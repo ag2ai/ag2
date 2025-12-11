@@ -233,7 +233,11 @@ class WorkspaceEditor:
         try:
             full_path = (Path(self.workspace_dir) / path).resolve()
 
-            if not str(full_path).startswith(str(self.workspace_dir)):
+            # Use Path.relative_to() for secure path containment check
+            # This prevents path traversal attacks that startswith() would miss
+            try:
+                full_path.relative_to(self.workspace_dir)
+            except ValueError:
                 raise ValueError(f"Path {path} is outside workspace directory")
 
             return full_path
