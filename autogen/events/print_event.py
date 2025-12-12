@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
-from .base_event import BaseEvent, wrap_event
+from .base_event import BaseEvent, resolve_print_callable, wrap_event
 
 
 @wrap_event
@@ -40,6 +40,5 @@ class PrintEvent(BaseEvent):
             # return repr(obj)
 
     def print(self, f: Callable[..., Any] | None = None) -> None:
-        f = f or print
-
+        f = resolve_print_callable(f)
         f(*self.objects, sep=self.sep, end=self.end, flush=True)
