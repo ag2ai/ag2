@@ -7,7 +7,7 @@ from typing import Any
 from autogen.import_utils import optional_import_block, run_for_optional_imports
 
 
-def strip_descriptions(schema: dict[str, Any]) -> dict[str, Any]:
+def strip_descriptions(schema: Any) -> Any:
     """Recursively strip 'description' fields from a JSON schema.
 
     This is needed because the OpenAI SDK may include description fields
