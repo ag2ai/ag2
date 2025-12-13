@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.tools.shell_tool import (
+from autogen.tools.experimental.shell.shell_tool import (
     ShellCallOutcome,
     ShellCallOutput,
     ShellCommandOutput,
