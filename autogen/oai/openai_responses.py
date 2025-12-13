@@ -15,12 +15,6 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.tools.experimental.shell.shell_tool import (
-    ShellCallOutcome,
-    ShellCallOutput,
-    ShellCommandOutput,
-    ShellExecutor,
-)
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -70,6 +64,50 @@ class ApplyPatchCallOutput:
     type: str = "apply_patch_call_output"
 
     def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass
+class ShellCallOutcome:
+    """Outcome of shell command execution."""
+
+    type: str  # Type of outcome: 'exit' or 'timeout'
+    exit_code: int | None = None  # Exit code if type is 'exit'
+
+    def model_dump(self) -> dict[str, Any]:
+        """Convert to dict for compatibility with Pydantic models."""
+        return asdict(self)
+
+
+@dataclass
+class ShellCommandOutput:
+    """Output from a single shell command execution."""
+
+    stdout: str = ""  # Standard output from the command
+    stderr: str = ""  # Standard error from the command
+    outcome: ShellCallOutcome = None  # Outcome of the command execution
+
+    def model_dump(self) -> dict[str, Any]:
+        """Convert to dict for compatibility with Pydantic models."""
+        return asdict(self)
+
+
+@dataclass
+class ShellCallOutput:
+    """Shell call output payload for Responses API."""
+
+    call_id: str  # Call ID matching the shell_call
+    type: str = "shell_call_output"  # Type identifier
+    max_output_length: int | None = None  # Maximum output length to truncate
+    output: list[ShellCommandOutput] = None  # List of command outputs
+
+    def __post_init__(self):
+        """Initialize default values."""
+        if self.output is None:
+            self.output = []
+
+    def model_dump(self) -> dict[str, Any]:
+        """Convert to dict for compatibility with Pydantic models."""
         return asdict(self)
 
 
@@ -155,7 +193,6 @@ class OpenAIResponsesClient:
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
-        self.shell_executor = ShellExecutor()
         self.previous_response_id = None
 
         # Image costs are calculated manually (rather than off returned information)
@@ -676,6 +713,8 @@ class OpenAIResponsesClient:
 
     def _shell_call_operation(self, shell_call: dict[str, Any], call_id: str) -> ShellCallOutput:
         """Execute the commands from a shell_call payload."""
+        # Import here to avoid circular import
+
         action = shell_call.get("action", {})
         commands = action.get("commands") or []
 
@@ -689,7 +728,7 @@ class OpenAIResponsesClient:
         denied_commands: list[str] | None = None,
         enable_command_filtering: bool = True,
         dangerous_patterns: list[tuple[str, str]] | None = None,
-    ) -> "ShellCallOutput":
+    ) -> ShellCallOutput:
         """Execute shell commands and return shell_call_output.
 
         Args:
@@ -708,6 +747,9 @@ class OpenAIResponsesClient:
         Returns:
             ShellCallOutput with execution results
         """
+        # Import here to avoid circular import
+        from autogen.tools.experimental.shell.shell_tool import ShellExecutor
+
         # Initialize shell executor if not already initialized
         if not hasattr(self, "_shell_executor"):
             self._shell_executor = ShellExecutor(
@@ -792,6 +834,9 @@ class OpenAIResponsesClient:
         *input* format expected by the Responses API.
         """
         params = params.copy()
+
+        # Import here to avoid circular import
+        from autogen.tools.experimental.shell import ShellExecutor
 
         image_generation_tool_params = {"type": "image_generation"}
         web_search_tool_params = {"type": "web_search_preview"}
