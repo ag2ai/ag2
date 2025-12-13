@@ -171,20 +171,16 @@ class ShellExecutor:
 
         # Check whitelist
         if self.allowed_commands is not None and cmd_name not in self.allowed_commands:
-            print("allowed_commands error:-------- ", self.allowed_commands)
             raise ValueError(f"Command '{cmd_name}' is not in the allowed commands list: {self.allowed_commands}")
 
         # Check blacklist
         if cmd_name in self.denied_commands:
-            print("denied_commands error:-------- ", self.denied_commands)
             raise ValueError(f"Command '{cmd_name}' is in the denied commands list")
 
         # Check dangerous patterns
         if self.enable_command_filtering:
-            print("dangerous_patterns error:-------- ", self.dangerous_patterns)
             for pattern, message in self.dangerous_patterns:
                 if re.search(pattern, cmd, re.IGNORECASE):
-                    print("dangerous_patterns error:-------- ", pattern, message)
                     raise ValueError(f"Potentially dangerous command detected: {message}")
 
         # Check for path access violations
@@ -247,7 +243,6 @@ class ShellExecutor:
         Returns:
             List of ShellCommandOutput objects.
         """
-        print("executing commands:-------- ", commands)
         timeout = (timeout_ms / 1000.0) if timeout_ms is not None else None
         results = []
 
@@ -275,7 +270,4 @@ class ShellExecutor:
                         outcome=ShellCallOutcome(type="exit", exit_code=1),
                     )
                 )
-        from pprint import pprint
-
-        pprint(results)
         return results
