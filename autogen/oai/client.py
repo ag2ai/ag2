@@ -276,8 +276,6 @@ class OpenAILLMConfigEntry(LLMConfigEntry):
     # reasoning models - see: https://platform.openai.com/docs/api-reference/chat/create#chat-create-reasoning_effort
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None = None
     max_completion_tokens: int | None = None
-    workspace_dir: str | None = None
-    allowed_paths: list[str] | None = None
 
     def create_client(self) -> ModelClient:
         raise NotImplementedError("create_client method must be implemented in the derived class.")
