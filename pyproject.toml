@@ -287,6 +287,7 @@ test = [
     "pytest-asyncio==1.1.0",
     "dirty-equals==0.9.0",
     "freezegun==1.5.5",
+    "aiofiles>=24.1.0,<26.0.0",
 ]
 
 docs = [
