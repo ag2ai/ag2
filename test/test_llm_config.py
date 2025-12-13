@@ -877,9 +877,11 @@ class TestLLMConfig:
                     assert LLMConfig.current == llm_config.where(api_type="openai", model="gpt-4")
                     assert LLMConfig.default == llm_config.where(api_type="openai", model="gpt-4")
 
-    def test_openai_llm_config_entry_with_workspace_dir(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test OpenAILLMConfigEntry with workspace_dir parameter."""
-        entry = OpenAILLMConfigEntry(
+    def test_openai_llm_config_entry_with_workspace_dir(
+        self, openai_llm_config_entry: OpenAIResponsesLLMConfigEntry
+    ) -> None:
+        """Test OpenAIResponsesLLMConfigEntry with workspace_dir parameter."""
+        entry = OpenAIResponsesLLMConfigEntry(
             model="gpt-4o-mini",
             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             workspace_dir="./my_project",
@@ -887,9 +889,11 @@ class TestLLMConfig:
         assert entry.workspace_dir == "./my_project"
         assert entry.model_dump()["workspace_dir"] == "./my_project"
 
-    def test_openai_llm_config_entry_with_allowed_paths(self, openai_llm_config_entry: OpenAILLMConfigEntry) -> None:
-        """Test OpenAILLMConfigEntry with allowed_paths parameter."""
-        entry = OpenAILLMConfigEntry(
+    def test_openai_llm_config_entry_with_allowed_paths(
+        self, openai_llm_config_entry: OpenAIResponsesLLMConfigEntry
+    ) -> None:
+        """Test OpenAIResponsesLLMConfigEntry with allowed_paths parameter."""
+        entry = OpenAIResponsesLLMConfigEntry(
             model="gpt-4o-mini",
             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             allowed_paths=["src/**", "tests/**"],
@@ -898,8 +902,8 @@ class TestLLMConfig:
         assert entry.model_dump()["allowed_paths"] == ["src/**", "tests/**"]
 
     def test_openai_llm_config_entry_workspace_dir_and_allowed_paths(self) -> None:
-        """Test OpenAILLMConfigEntry with both workspace_dir and allowed_paths."""
-        entry = OpenAILLMConfigEntry(
+        """Test OpenAIResponsesLLMConfigEntry with both workspace_dir and allowed_paths."""
+        entry = OpenAIResponsesLLMConfigEntry(
             model="gpt-4o-mini",
             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             workspace_dir="./project",
@@ -915,7 +919,7 @@ class TestLLMConfig:
 
     def test_openai_llm_config_entry_defaults_workspace_dir_and_allowed_paths(self) -> None:
         """Test that workspace_dir and allowed_paths default to None."""
-        entry = OpenAILLMConfigEntry(
+        entry = OpenAIResponsesLLMConfigEntry(
             model="gpt-4o-mini",
             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
         )
@@ -928,8 +932,8 @@ class TestLLMConfig:
         assert "allowed_paths" not in dumped
 
     def test_llm_config_with_entry_workspace_dir_and_allowed_paths(self) -> None:
-        """Test LLMConfig with OpenAILLMConfigEntry containing workspace_dir and allowed_paths."""
-        entry = OpenAILLMConfigEntry(
+        """Test LLMConfig with OpenAIResponsesLLMConfigEntry containing workspace_dir and allowed_paths."""
+        entry = OpenAIResponsesLLMConfigEntry(
             model="gpt-4o-mini",
             api_key="sk-mockopenaiAPIkeysinexpectedformatsfortestingonly",
             workspace_dir="./project",
