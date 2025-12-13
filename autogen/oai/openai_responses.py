@@ -7,8 +7,6 @@ import copy
 import logging
 import os
 import warnings
-from pathlib import Path
-import warnings
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -918,7 +916,6 @@ class OpenAIResponsesClient:
                 dangerous_patterns=dangerous_patterns,
                 
             )
-            
 
         # Extract and remove sandboxing parameters from params (they're only used internally)
         # These must be removed before passing params to the OpenAI API
@@ -937,7 +934,6 @@ class OpenAIResponsesClient:
         if dangerous_patterns is None:
             dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
 
-        
         shell_call_outputs_payloads: list[dict[str, Any]] = []
         if shell_call_ids:
             for call_id, shell_call in shell_call_ids.items():
