@@ -4287,6 +4287,9 @@ def normilize_message_to_oai(
 
     if oai_message.get("function_call", False) or oai_message.get("tool_calls", False):
         oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
+        # Also set the name for tool_calls messages so we can track the originating agent
+        if "name" not in oai_message:
+            oai_message["name"] = name
     elif "name" not in oai_message:
         # If we don't have a name field, append it
         oai_message["name"] = name
