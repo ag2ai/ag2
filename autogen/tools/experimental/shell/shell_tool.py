@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from autogen.oai.openai_responses import ShellCallOutcome, ShellCommandOutput
 
 
 @dataclass
@@ -19,30 +19,6 @@ class CmdResult:
     stderr: str
     exit_code: int | None
     timed_out: bool
-
-
-class ShellCallOutcome(BaseModel):
-    """Outcome of shell command execution."""
-
-    type: str = Field(..., description="Type of outcome: 'exit' or 'timeout'")
-    exit_code: int | None = Field(None, description="Exit code if type is 'exit'")
-
-
-class ShellCommandOutput(BaseModel):
-    """Output from a single shell command execution."""
-
-    stdout: str = Field(default="", description="Standard output from the command")
-    stderr: str = Field(default="", description="Standard error from the command")
-    outcome: ShellCallOutcome = Field(..., description="Outcome of the command execution")
-
-
-class ShellCallOutput(BaseModel):
-    """Shell call output payload for Responses API."""
-
-    type: str = Field(default="shell_call_output", description="Type identifier")
-    call_id: str = Field(..., description="Call ID matching the shell_call")
-    max_output_length: int | None = Field(None, description="Maximum output length to truncate")
-    output: list[ShellCommandOutput] = Field(..., description="List of command outputs")
 
 
 class ShellExecutor:
