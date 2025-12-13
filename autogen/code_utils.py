@@ -91,11 +91,11 @@ def content_str(content: str | list[UserMessageTextContentPart | UserMessageImag
             status = item.get("status", "unknown_status")
             diff = operation.get("diff", "unknown_diff")
             rst.append(f"<apply_patch_call: {operation_type} on {path} (status: {status}) diff: {diff}>")
-        
-        elif item['type'] == "shell_call":
-            call_id =  item.get("call_id","<unknown>")
-            action = item.get("action",{})
-            commands = action.get("commands",[])
+
+        elif item["type"] == "shell_call":
+            call_id = item.get("call_id", "<unknown>")
+            action = item.get("action", {})
+            commands = action.get("commands", [])
 
             rst.append(f"[shell_call id={call_id} commands={commands}]")
         else:

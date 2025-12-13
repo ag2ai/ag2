@@ -7,9 +7,8 @@ import copy
 import logging
 import os
 import warnings
-from pathlib import Path
-import warnings
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -557,6 +556,7 @@ class OpenAIResponsesClient:
         """Execute the commands from a shell_call payload."""
         action = shell_call.get("action", {})
         commands = action.get("commands") or []
+
     def _execute_shell_operation(
         self,
         action: dict[str, Any],
@@ -724,7 +724,6 @@ class OpenAIResponsesClient:
                 previous_apply_patch_calls=previous_apply_patch_calls,
                 image_generation_tool_params=image_generation_tool_params,
             )
-            
 
         # Extract and remove sandboxing parameters from params (they're only used internally)
         # These must be removed before passing params to the OpenAI API
@@ -743,7 +742,6 @@ class OpenAIResponsesClient:
         if dangerous_patterns is None:
             dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
 
-        
         shell_call_outputs_payloads: list[dict[str, Any]] = []
         if shell_call_ids:
             for call_id, shell_call in shell_call_ids.items():
