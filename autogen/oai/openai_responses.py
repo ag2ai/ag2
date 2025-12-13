@@ -15,12 +15,6 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.tools.experimental.shell.shell_tool import (
-    ShellCallOutcome,
-    ShellCallOutput,
-    ShellCommandOutput,
-    ShellExecutor,
-)
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -199,7 +193,6 @@ class OpenAIResponsesClient:
             "output_format": "png",  # "png", "jpg" or "jpeg" or "webp"
             "output_compression": None,  # 0-100 if output_format is "jpg" or "jpeg" or "webp"
         }
-        self.shell_executor = ShellExecutor()
         self.previous_response_id = None
 
         # Image costs are calculated manually (rather than off returned information)
