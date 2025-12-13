@@ -338,7 +338,7 @@ action = {
 
 **Error**: `Access to path 'X' is not allowed`
 
-**Solution**: 
+**Solution**:
 - Add the path pattern to `allowed_paths`
 - Use `["**"]` to allow all paths (less secure)
 - Note: Some paths may bypass validation (see Path Access Control section)
