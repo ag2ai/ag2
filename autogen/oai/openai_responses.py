@@ -711,13 +711,6 @@ class OpenAIResponsesClient:
         # (We added outputs first, then messages in reverse, so reversing gives us: messages first, then outputs)
         return input_items[::-1]
 
-    def _shell_call_operation(self, shell_call: dict[str, Any], call_id: str) -> ShellCallOutput:
-        """Execute the commands from a shell_call payload."""
-        # Import here to avoid circular import
-
-        action = shell_call.get("action", {})
-        commands = action.get("commands") or []
-
     def _execute_shell_operation(
         self,
         action: dict[str, Any],
