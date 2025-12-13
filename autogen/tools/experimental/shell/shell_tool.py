@@ -191,7 +191,7 @@ class ShellExecutor:
             for match in matches:
                 # Normalize path
                 if match.startswith("~"):
-                    test_path = test_path = os.path.expanduser(match) if match.startswith("~") else match
+                    test_path = os.path.expanduser(match) if match.startswith("~") else match
                 else:
                     test_path = match
 
