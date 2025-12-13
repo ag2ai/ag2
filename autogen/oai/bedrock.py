@@ -243,7 +243,7 @@ class BedrockClient:
         Returns:
             Formatted string representation of structured output.
         """
-        if not self._response_format:
+        if self._response_format:
             return json.dumps(structured_data)
 
         try:
@@ -360,8 +360,6 @@ class BedrockClient:
             user_tools = params.get("tools", [])
             tool_config = self._merge_tools_with_structured_output(user_tools, structured_output_tool)
 
-            # Force the structured output tool
-            tool_config["toolChoice"] = {"tool": {"name": "__structured_output"}}
             has_tools = len(tool_config["tools"]) > 0
         else:
             has_tools = "tools" in params
