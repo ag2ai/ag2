@@ -136,5 +136,128 @@ def test_group_chat_with_lmm(monkeypatch: MonkeyPatch):
     assert all(len(arr) <= max_round for arr in user_proxy._oai_messages.values()), "User proxy exceeded max rounds"
 
 
+@run_for_optional_imports(["PIL"], "unknown")
+@pytest.mark.lmm
+class TestMultimodalConversableAgentImageTagProcessing:
+    """Test that <img> tags are processed correctly in messages sent to MultimodalConversableAgent.
+
+    This tests the fix for the regression introduced in v0.10.0 where <img> tags
+    stopped being processed because _append_oai_message was refactored to use
+    normilize_message_to_oai instead of self._message_to_dict.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setUp(self):
+        self.visual_agent = MultimodalConversableAgent(
+            name="visual_agent",
+            llm_config={
+                "timeout": 600,
+                "seed": 42,
+                "config_list": [
+                    {"api_type": "openai", "model": "gpt-4-vision-preview", "api_key": MOCK_OPEN_AI_API_KEY}
+                ],
+            },
+        )
+        self.user_agent = ConversableAgent(
+            name="user_agent",
+            human_input_mode="NEVER",
+            llm_config=False,
+            code_execution_config=False,
+        )
+
+    def test_img_tag_processed_in_received_message(self):
+        """Test that <img> tags in messages are converted to multimodal content.
+
+        This is the key regression test - in v0.9.10 this worked, in v0.10.0 it stopped
+        working because _append_oai_message no longer called self._message_to_dict.
+        """
+        # Send a message with an <img> tag from user to visual agent
+        message_with_img = f"Describe this image: <img {base64_encoded_image}>"
+
+        # Call receive directly to test the _append_oai_message flow
+        self.visual_agent.receive(message_with_img, self.user_agent, request_reply=False)
+
+        # Get the stored message from _oai_messages
+        stored_messages = self.visual_agent._oai_messages[self.user_agent]
+        assert len(stored_messages) == 1, "Should have one stored message"
+
+        stored_message = stored_messages[0]
+        content = stored_message["content"]
+
+        # The content should be a list (multimodal format), not a string
+        assert isinstance(content, list), (
+            f"Content should be a list (multimodal format), not {type(content)}. "
+            "This indicates <img> tags were not processed."
+        )
+
+        # Should have text and image_url parts
+        text_parts = [item for item in content if item.get("type") == "text"]
+        image_parts = [item for item in content if item.get("type") == "image_url"]
+
+        assert len(text_parts) >= 1, "Should have at least one text part"
+        assert len(image_parts) == 1, "Should have exactly one image part"
+
+        # The text should contain "Describe this image:"
+        all_text = " ".join(item.get("text", "") for item in text_parts)
+        assert "Describe this image:" in all_text, "Text content should be preserved"
+
+        # The image_url should contain the PIL image (not the raw string)
+        image_item = image_parts[0]
+        assert "image_url" in image_item, "Image part should have image_url field"
+        assert "url" in image_item["image_url"], "image_url should have url field"
+
+    def test_img_tag_processed_in_sent_message(self):
+        """Test that <img> tags are also processed when visual agent sends a message."""
+        message_with_img = f"Here is the analysis: <img {base64_encoded_image}>"
+
+        # Visual agent sends a message to user
+        # Using send directly to test the flow
+        self.visual_agent.send(message_with_img, self.user_agent, request_reply=False)
+
+        # The message stored in visual_agent's _oai_messages (as sent to user_agent)
+        stored_messages = self.visual_agent._oai_messages[self.user_agent]
+        assert len(stored_messages) == 1, "Should have one stored message"
+
+        stored_message = stored_messages[0]
+        content = stored_message["content"]
+
+        # Should be multimodal format
+        assert isinstance(content, list), "Sent message content should be multimodal format"
+
+    def test_message_without_img_tag_preserved(self):
+        """Test that regular messages without <img> tags still work correctly."""
+        regular_message = "This is a regular text message without any images."
+
+        self.visual_agent.receive(regular_message, self.user_agent, request_reply=False)
+
+        stored_messages = self.visual_agent._oai_messages[self.user_agent]
+        assert len(stored_messages) == 1
+
+        stored_message = stored_messages[0]
+        content = stored_message["content"]
+
+        # Even without images, _message_to_dict wraps in multimodal format
+        assert isinstance(content, list), "Content should still be in list format"
+        assert len(content) == 1, "Should have one text item"
+        assert content[0]["type"] == "text"
+        assert content[0]["text"] == regular_message
+
+    def test_dict_message_with_string_content_processed(self):
+        """Test that dict messages with string content containing <img> tags are processed."""
+        message_dict = {"content": f"Check this: <img {base64_encoded_image}>", "role": "user"}
+
+        self.visual_agent.receive(message_dict, self.user_agent, request_reply=False)
+
+        stored_messages = self.visual_agent._oai_messages[self.user_agent]
+        stored_message = stored_messages[0]
+        content = stored_message["content"]
+
+        # Should be converted to multimodal format
+        assert isinstance(content, list), "Dict message content should be converted to multimodal format"
+
+        image_parts = [item for item in content if item.get("type") == "image_url"]
+        assert len(image_parts) == 1, "Should have processed the <img> tag"
+
+
 if __name__ == "__main__":
     unittest.main()
