@@ -420,10 +420,86 @@ class OpenAIResponsesClient:
                 outputs.append(output.to_dict())
         return outputs
 
+    def _extract_shell_calls(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Extract shell_call items from messages.
+
+        Args:
+            messages: List of messages to scan
+
+        Returns:
+            Dictionary mapping call_id to shell_call item
+        """
+        message_shell_calls = {}
+        for msg in messages:
+            role = msg.get("role")
+            if role == "assistant":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "shell_call":
+                            call_id = item.get("call_id")
+                            if call_id:
+                                message_shell_calls[call_id] = item
+                tool_calls = msg.get("tool_calls", [])
+                if isinstance(tool_calls, list):
+                    for tool_call in tool_calls:
+                        if isinstance(tool_call, dict) and tool_call.get("type") == "shell_call":
+                            call_id = tool_call.get("call_id")
+                            if call_id:
+                                message_shell_calls[call_id] = tool_call
+        return message_shell_calls
+
+    def _execute_shell_calls(
+        self,
+        calls_dict: dict[str, Any],
+        built_in_tools: list[str],
+        workspace_dir: str,
+        allowed_paths: list[str],
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute shell_call items and return outputs.
+
+        Args:
+            calls_dict: Dictionary mapping call_id to shell_call item
+            built_in_tools: List of built-in tools enabled
+            workspace_dir: Workspace directory for shell operations
+            allowed_paths: Allowed paths for shell operations
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
+
+        Returns:
+            List of shell_call_output dictionaries
+        """
+        outputs = []
+        if not calls_dict or "shell" not in built_in_tools:
+            return outputs
+
+        for call_id, shell_call in calls_dict.items():
+            action = shell_call.get("action", {})
+            if action:
+                shell_call_output = self._execute_shell_operation(
+                    action,
+                    call_id=call_id,
+                    workspace_dir=workspace_dir,
+                    allowed_paths=allowed_paths,
+                    allowed_commands=allowed_commands,
+                    denied_commands=denied_commands,
+                    enable_command_filtering=enable_command_filtering,
+                    dangerous_patterns=dangerous_patterns,
+                )
+                outputs.append(shell_call_output.model_dump())
+        return outputs
+
     def _convert_messages_to_input(
         self,
         messages: list[dict[str, Any]],
         processed_apply_patch_call_ids: set[str],
+        processed_shell_call_ids: set[str],
         image_generation_tool_params: dict[str, Any],
         input_items: list[dict[str, Any]],
     ) -> None:
@@ -432,6 +508,7 @@ class OpenAIResponsesClient:
         Args:
             messages: List of messages to convert
             processed_apply_patch_call_ids: Set of call_ids that have been processed
+            processed_shell_call_ids: Set of shell call_ids that have been processed
             image_generation_tool_params: Image generation tool parameters dict (modified in place)
             input_items: List to append converted message items to (modified in place)
         """
@@ -459,6 +536,10 @@ class OpenAIResponsesClient:
                             # Skip apply_patch_call items - they've already been processed above
                             # The outputs are already in input_items, recipient doesn't need the raw call
                             continue
+                        elif c.get("type") == "shell_call":
+                            # Skip shell_call items - they've already been processed above
+                            # The outputs are already in input_items, recipient doesn't need the raw call
+                            continue
                         else:
                             raise ValueError(f"Invalid content type: {c.get('type')}")
                 else:
@@ -472,8 +553,10 @@ class OpenAIResponsesClient:
                 tool_call_id = m.get("tool_call_id", None)
                 content = content_str(m.get("content"))
 
-                # Skip if this corresponds to an already-processed apply_patch_call
-                if tool_call_id and tool_call_id in processed_apply_patch_call_ids:
+                # Skip if this corresponds to an already-processed apply_patch_call or shell_call
+                if tool_call_id and (
+                    tool_call_id in processed_apply_patch_call_ids or tool_call_id in processed_shell_call_ids
+                ):
                     continue
                 else:
                     # Regular function call output
@@ -490,20 +573,30 @@ class OpenAIResponsesClient:
         workspace_dir: str,
         allowed_paths: list[str],
         previous_apply_patch_calls: dict[str, Any],
+        previous_shell_calls: dict[str, Any],
         image_generation_tool_params: dict[str, Any],
+        allowed_commands: list[str] | None = None,
+        denied_commands: list[str] | None = None,
+        enable_command_filtering: bool = True,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
     ) -> list[dict[str, Any]]:
         """Normalize messages for Responses API format.
 
-        This method processes apply_patch_call items from messages before sending to recipient,
+        This method processes apply_patch_call and shell_call items from messages before sending to recipient,
         implementing the diff generation (sender) -> executor (recipient) pattern.
 
         Args:
             messages: List of messages to normalize
             built_in_tools: List of built-in tools enabled
-            workspace_dir: Workspace directory for apply_patch operations
-            allowed_paths: Allowed paths for apply_patch operations
+            workspace_dir: Workspace directory for operations
+            allowed_paths: Allowed paths for operations
             previous_apply_patch_calls: Apply patch calls from previous response
+            previous_shell_calls: Shell calls from previous response
             image_generation_tool_params: Image generation tool parameters dict (modified in place)
+            allowed_commands: List of allowed commands (whitelist)
+            denied_commands: List of denied commands (blacklist)
+            enable_command_filtering: Whether to enable command filtering
+            dangerous_patterns: List of dangerous command patterns to check
 
         Returns:
             List of input items in Responses API format
@@ -530,20 +623,52 @@ class OpenAIResponsesClient:
             allowed_paths,
         )
 
+        # Extract shell_call items from messages
+        message_shell_calls = self._extract_shell_calls(messages)
+
+        # Process shell_call items from messages if built_in_tools includes shell
+        message_shell_outputs = self._execute_shell_calls(
+            message_shell_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+            allowed_commands,
+            denied_commands,
+            enable_command_filtering,
+            dangerous_patterns,
+        )
+
+        # Process shell_call items from previous_response_id (same agent continuation)
+        previous_shell_outputs = self._execute_shell_calls(
+            previous_shell_calls,
+            built_in_tools,
+            workspace_dir,
+            allowed_paths,
+            allowed_commands,
+            denied_commands,
+            enable_command_filtering,
+            dangerous_patterns,
+        )
+
         # Combine all outputs: message outputs first (from sender), then previous response outputs
         all_apply_patch_outputs = message_apply_patch_outputs + previous_apply_patch_outputs
+        all_shell_outputs = message_shell_outputs + previous_shell_outputs
 
         # Add all outputs at the beginning
         if all_apply_patch_outputs:
             input_items.extend(all_apply_patch_outputs)
+        if all_shell_outputs:
+            input_items.extend(all_shell_outputs)
 
-        # Convert messages to Responses API format, filtering out apply_patch_call items
+        # Convert messages to Responses API format, filtering out apply_patch_call and shell_call items
         # (they've been processed above and outputs are already included)
         processed_apply_patch_call_ids = set(message_apply_patch_calls.keys()) | set(previous_apply_patch_calls.keys())
+        processed_shell_call_ids = set(message_shell_calls.keys()) | set(previous_shell_calls.keys())
 
         self._convert_messages_to_input(
             messages,
             processed_apply_patch_call_ids,
+            processed_shell_call_ids,
             image_generation_tool_params,
             input_items,
         )
@@ -679,6 +804,17 @@ class OpenAIResponsesClient:
         built_in_tools = params.pop("built_in_tools", [])
         shell_tool_params = {"type": "shell"}
 
+        # Extract and remove sandboxing parameters from params (they're only used internally)
+        # These must be removed before passing params to the OpenAI API
+        allowed_commands = params.pop("allowed_commands", None)
+        denied_commands = params.pop("denied_commands", None)
+        if denied_commands is None:
+            denied_commands = []
+        enable_command_filtering = params.pop("enable_command_filtering", True)  # Default to True
+        dangerous_patterns = params.pop("dangerous_patterns", None)
+        if dangerous_patterns is None:
+            dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
+
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
@@ -698,7 +834,8 @@ class OpenAIResponsesClient:
             except Exception as e:
                 logger.debug(f"[apply_patch] Could not retrieve previous response: {e}")
 
-        shell_call_ids: dict[str, Any] = {}
+        # Check previous response for shell_call items that need outputs
+        previous_shell_calls = {}
         if self.previous_response_id is not None:
             try:
                 previous_response = self._oai_client.responses.retrieve(self.previous_response_id)
@@ -709,7 +846,7 @@ class OpenAIResponsesClient:
                     if item.get("type") == "shell_call":
                         call_id = item.get("call_id")
                         if call_id:
-                            shell_call_ids[call_id] = item
+                            previous_shell_calls[call_id] = item
             except Exception as exc:  # pragma: no cover - retrieval best-effort
                 logger.debug("[shell] Could not inspect previous response: %s", exc)
 
@@ -722,50 +859,13 @@ class OpenAIResponsesClient:
                 workspace_dir=workspace_dir,
                 allowed_paths=allowed_paths,
                 previous_apply_patch_calls=previous_apply_patch_calls,
+                previous_shell_calls=previous_shell_calls,
                 image_generation_tool_params=image_generation_tool_params,
+                allowed_commands=allowed_commands,
+                denied_commands=denied_commands,
+                enable_command_filtering=enable_command_filtering,
+                dangerous_patterns=dangerous_patterns,
             )
-
-        # Extract and remove sandboxing parameters from params (they're only used internally)
-        # These must be removed before passing params to the OpenAI API
-        workspace_dir = params.pop("workspace_dir", None)
-        if workspace_dir is None:
-            workspace_dir = os.getcwd()
-        allowed_paths = params.pop("allowed_paths", None)
-        if allowed_paths is None:
-            allowed_paths = []
-        allowed_commands = params.pop("allowed_commands", None)
-        denied_commands = params.pop("denied_commands", None)
-        if denied_commands is None:
-            denied_commands = []
-        enable_command_filtering = params.pop("enable_command_filtering", True)  # Default to True
-        dangerous_patterns = params.pop("dangerous_patterns", None)
-        if dangerous_patterns is None:
-            dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
-
-        shell_call_outputs_payloads: list[dict[str, Any]] = []
-        if shell_call_ids:
-            for call_id, shell_call in shell_call_ids.items():
-                action = shell_call.get("action")
-                if not action:
-                    continue
-                shell_call_output = self._execute_shell_operation(
-                    action,  # Pass action, not shell_call
-                    call_id,
-                    workspace_dir,
-                    allowed_paths,
-                    allowed_commands,
-                    denied_commands,
-                    enable_command_filtering,
-                    dangerous_patterns,
-                )
-                shell_call_outputs_payloads.append(shell_call_output.model_dump())
-
-        if shell_call_outputs_payloads:
-            existing_input = params.get("input", [])
-            if existing_input:
-                params["input"] = shell_call_outputs_payloads + existing_input
-            else:
-                params["input"] = shell_call_outputs_payloads
 
         # Initialize tools list
         tools_list = []
@@ -800,10 +900,6 @@ class OpenAIResponsesClient:
         if not any(key in params for key in ["input", "previous_response_id", "prompt"]):
             # If we still don't have any required parameters, create a minimal input
             params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
-
-        # ------------------------------------------------------------------
-        # Structured output handling - mimic OpenAIClient behaviour
-        # ------------------------------------------------------------------
 
         if self.response_format is not None or "response_format" in params:
 
