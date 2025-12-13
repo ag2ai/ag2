@@ -1555,7 +1555,7 @@ def test_convert_messages_to_input_basic_text(mocked_openai_client):
 
     input_items = []
     image_params = {}
-    client._convert_messages_to_input(messages, set(), image_params, input_items)
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
     # Messages are added in reverse, so we expect: [assistant, user] in input_items
     assert len(input_items) == 2
@@ -1588,7 +1588,7 @@ def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_clien
     input_items = []
     image_params = {}
     processed_ids = {"call_123"}
-    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+    client._convert_messages_to_input(messages, processed_ids, set(), image_params, input_items)
 
     assert len(input_items) == 1
     assert input_items[0]["role"] == "assistant"
@@ -1621,7 +1621,7 @@ def test_convert_messages_to_input_handles_image_params(mocked_openai_client):
 
     input_items = []
     image_params = {}
-    client._convert_messages_to_input(messages, set(), image_params, input_items)
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
     # image_params should be extracted
     assert image_params["quality"] == "high"
@@ -1650,7 +1650,7 @@ def test_convert_messages_to_input_handles_multimodal_content(mocked_openai_clie
 
     input_items = []
     image_params = {}
-    client._convert_messages_to_input(messages, set(), image_params, input_items)
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
     assert len(input_items) == 1
     assert len(input_items[0]["content"]) == 3
@@ -1673,7 +1673,7 @@ def test_convert_messages_to_input_handles_tool_role_messages(mocked_openai_clie
 
     input_items = []
     image_params = {}
-    client._convert_messages_to_input(messages, set(), image_params, input_items)
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
     assert len(input_items) == 1
     assert input_items[0]["type"] == "function_call_output"
@@ -1696,7 +1696,7 @@ def test_convert_messages_to_input_filters_tool_responses_for_processed_apply_pa
     input_items = []
     image_params = {}
     processed_ids = {"call_123"}
-    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+    client._convert_messages_to_input(messages, processed_ids, set(), image_params, input_items)
 
     # Tool response should be filtered out
     assert len(input_items) == 0
@@ -1716,7 +1716,7 @@ def test_convert_messages_to_input_raises_error_for_invalid_content_type(mocked_
     input_items = []
     image_params = {}
     with pytest.raises(ValueError, match="Invalid content type: invalid_type"):
-        client._convert_messages_to_input(messages, set(), image_params, input_items)
+        client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
 
 def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_client):
@@ -1739,7 +1739,7 @@ def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_cl
     input_items = []
     image_params = {}
     processed_ids = {"call_only"}
-    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+    client._convert_messages_to_input(messages, processed_ids, set(), image_params, input_items)
 
     # Message should not be added since all content was filtered
     assert len(input_items) == 0
@@ -1757,7 +1757,7 @@ def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_clie
 
     input_items = []
     image_params = {}
-    client._convert_messages_to_input(messages, set(), image_params, input_items)
+    client._convert_messages_to_input(messages, set(), set(), image_params, input_items)
 
     # Messages are added in reverse, so: Third, Second, First
     assert len(input_items) == 3
