@@ -176,6 +176,7 @@ def get_credentials_from_env_vars(
         config_list.append({**openai_config, "model": "gpt-4o-realtime-preview", "tags": ["gpt-4o-realtime"]})
         config_list.append({**openai_config, "model": "o1-mini", "tags": ["o1-mini"]})
         config_list.append({**openai_config, "model": "o1", "tags": ["o1"]})
+        config_list.append({**openai_config, "model": "o4-mini", "tags": ["o4-mini"]})
 
     # Azure OpenAI configuration
     azure_base = os.getenv("AZURE_OPENAI_API_BASE")

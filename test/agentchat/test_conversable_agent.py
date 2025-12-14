@@ -8,7 +8,9 @@
 
 import asyncio
 import copy
+import io
 import json
+import logging
 import os
 import threading
 import time
@@ -391,26 +393,44 @@ def test_max_consecutive_auto_reply():
 def test_max_consecutive_auto_reply_with_max_turns(capsys: pytest.CaptureFixture[str]):
     agent1 = ConversableAgent("agent1", max_consecutive_auto_reply=1, llm_config=False, human_input_mode="NEVER")
     agent2 = ConversableAgent("agent2", max_consecutive_auto_reply=100, llm_config=False, human_input_mode="NEVER")
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_handlers = logger.handlers[:]
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    # max_consecutive_auto_reply parameter on the agent that initiates chat
-    agent1.initiate_chat(agent2, message="hello", max_turns=50)
-    assert len(agent2.chat_messages[agent1]) == 4
-    assert len(agent1.chat_messages[agent2]) == 4
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+    try:
+        # max_consecutive_auto_reply parameter on the agent that initiates chat
+        agent1.initiate_chat(agent2, message="hello", max_turns=50)
+        assert len(agent2.chat_messages[agent1]) == 4
+        assert len(agent1.chat_messages[agent2]) == 4
+        # checking captured output
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
 
-    _ = capsys.readouterr()  # Explicitly clear buffer
+        _ = capsys.readouterr()  # Explicitly clear buffer
+        log_stream.truncate(0)
+        log_stream.seek(0)
 
-    # max_consecutive_auto_reply parameter on the recipient agent
-    agent2.initiate_chat(agent1, message="hello", max_turns=50)
-    assert len(agent1.chat_messages[agent2]) == 3
-    assert len(agent2.chat_messages[agent1]) == 3
-    # checking captured output
-    captured = capsys.readouterr()
-    assert "TERMINATING RUN" in captured.out
-    assert "Maximum number of consecutive auto-replies reached" in captured.out
+        # max_consecutive_auto_reply parameter on the recipient agent
+        agent2.initiate_chat(agent1, message="hello", max_turns=50)
+        assert len(agent1.chat_messages[agent2]) == 3
+        assert len(agent2.chat_messages[agent1]) == 3
+        # checking captured output
+        _ = capsys.readouterr()
+        log_output = log_stream.getvalue()
+        assert "TERMINATING RUN" in log_output
+        assert "Maximum number of consecutive auto-replies reached" in log_output
+    finally:
+        logger.handlers = old_handlers
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
 
 def test_conversable_agent():
