@@ -200,6 +200,9 @@ class OpenAIResponsesClient:
         if "verbosity" in params:
             verbosity = params.pop("verbosity")
             params["text"] = {"verbosity": verbosity}
+        if "reasoning_effort" in params:
+            reasoning_effort = params.pop("reasoning_effort")
+            params["reasoning"] = {"effort": reasoning_effort}
         return params
 
     def create(self, params: dict[str, Any]) -> "Response":

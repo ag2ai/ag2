@@ -7,8 +7,9 @@ from uuid import uuid4
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
-from a2a.types import Task, TaskArtifactUpdateEvent, TaskState, TaskStatus, TaskStatusUpdateEvent
-from a2a.utils.message import new_agent_text_message
+from a2a.server.tasks import TaskUpdater
+from a2a.types import InternalError, Task, TaskState, TaskStatus
+from a2a.utils.errors import ServerError
 
 from autogen import ConversableAgent
 from autogen.doc_utils import export_module
@@ -47,68 +48,39 @@ class AutogenAgentExecutor(AgentExecutor):
             # publish the task status submitted event
             await event_queue.enqueue_event(task)
 
+        updater = TaskUpdater(event_queue, task.id, task.context_id)
+
         try:
             result = await self.agent(request_message_from_a2a(context.message))
 
         except Exception as e:
-            # publish the task status failed event
-            await event_queue.enqueue_event(
-                TaskStatusUpdateEvent(
-                    task_id=task.id,
-                    status=TaskStatus(
-                        state=TaskState.failed,
-                        message=new_agent_text_message(
-                            str(e),
-                            task_id=task.id,
-                            context_id=context.context_id,
-                        ),
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                    ),
-                    context_id=context.context_id,
-                    final=True,
-                )
-            )
-            return
+            raise ServerError(error=InternalError()) from e
 
-        artifact, messages = response_message_to_a2a(result, context.context_id, task.id)
+        artifact, messages, input_required_msg = response_message_to_a2a(result, context.context_id, task.id)
 
         # publish local chat history events
         for message in messages:
-            await event_queue.enqueue_event(
-                TaskStatusUpdateEvent(
-                    task_id=task.id,
-                    status=TaskStatus(
-                        state=TaskState.working,
-                        message=message,
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                    ),
-                    context_id=context.context_id,
-                    final=False,
-                )
+            await updater.update_status(
+                state=TaskState.working,
+                message=message,
             )
 
-        # publish the task result event
-        await event_queue.enqueue_event(
-            TaskArtifactUpdateEvent(
-                task_id=task.id,
-                last_chunk=True,
-                context_id=context.context_id,
-                artifact=artifact,
-            )
-        )
+        # publish input required event
+        if input_required_msg:
+            await updater.requires_input(message=input_required_msg, final=True)
+            return
 
-        # publish the task status completed event
-        await event_queue.enqueue_event(
-            TaskStatusUpdateEvent(
-                task_id=task.id,
-                status=TaskStatus(
-                    state=TaskState.completed,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                ),
-                context_id=context.context_id,
-                final=True,
+        # publish the task final result event
+        if artifact:
+            await updater.add_artifact(
+                artifact_id=artifact.artifact_id,
+                name=artifact.name,
+                parts=artifact.parts,
+                metadata=artifact.metadata,
+                extensions=artifact.extensions,
             )
-        )
+
+            await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         pass

@@ -70,6 +70,30 @@ class MultimodalConversableAgent(ConversableAgent):
         self._oai_system_message[0]["content"] = self._message_to_dict(system_message)["content"]
         self._oai_system_message[0]["role"] = "system"
 
+    def _append_oai_message(
+        self,
+        message: dict[str, Any] | str,
+        conversation_id: Agent,
+        role: str = "assistant",
+        name: str | None = None,
+    ) -> bool:
+        """Append a message to the ChatCompletion conversation.
+
+        This override processes <img> tags in string messages using gpt4v_formatter
+        before appending to the conversation.
+
+        Args:
+            message (dict or str): message to be appended to the ChatCompletion conversation.
+            conversation_id (Agent): id of the conversation, should be the recipient or sender.
+            role (str): role of the message, can be "assistant" or "function".
+            name (str | None): name of the message author.
+
+        Returns:
+            bool: whether the message is appended to the ChatCompletion conversation.
+        """
+        processed_message = self._message_to_dict(message)
+        return super()._append_oai_message(processed_message, conversation_id, role, name)
+
     @staticmethod
     def _message_to_dict(message: dict[str, Any] | list[str] | str) -> dict:
         """Convert a message to a dictionary. This implementation
