@@ -1186,8 +1186,6 @@ class ConversableAgent(LLMAgent):
 
     def _process_received_message(self, message: dict[str, Any] | str, sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
-        if isinstance(message, dict) and iscoroutine(message.get("content")):
-            message["content"] = ""
         valid = self._append_oai_message(message, sender, role="user", name=sender.name)
         if logging_enabled():
             log_event(self, "received_message", message=message, sender=sender.name, valid=valid)
@@ -3009,11 +3007,9 @@ class ConversableAgent(LLMAgent):
             str: human input.
         """
         iostream = iostream or IOStream.get_default()
-
         reply = iostream.input(prompt)
-
         # Process the human input through hooks
-        processed_reply = self._process_human_input(reply)
+        processed_reply = self._process_human_input("" if not isinstance(reply, str) and iscoroutine(reply) else reply)
         if processed_reply is None:
             raise ValueError("safeguard_human_inputs hook returned None")
 
