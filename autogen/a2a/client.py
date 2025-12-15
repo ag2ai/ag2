@@ -223,10 +223,10 @@ class A2aRemoteAgent(ConversableAgent):
                     raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                 raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        connection_attemps, task = 1, cast(Task, started_task)
+        connection_attemps, started_task = 1, cast(Task, started_task)
         while connection_attemps < self._max_reconnects:
             try:
-                async for event in client.resubscribe(TaskIdParams(id=task.id)):
+                async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
                     result, task = self._process_event(event)
                     if not task:
                         return result
@@ -236,7 +236,9 @@ class A2aRemoteAgent(ConversableAgent):
                 if connection_attemps >= self._max_reconnects:
                     if not self._agent_card:
                         raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-                    raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
+                    raise A2aClientError(
+                        f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}"
+                    ) from e
 
         return None
 
@@ -255,10 +257,10 @@ class A2aRemoteAgent(ConversableAgent):
                     raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                 raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        connection_attemps, task = 1, cast(Task, started_task)
+        connection_attemps, started_task = 1, cast(Task, started_task)
         while connection_attemps < self._max_reconnects:
             try:
-                task = await client.get_task(TaskQueryParams(id=task.id))
+                task = await client.get_task(TaskQueryParams(id=started_task.id))
 
             except (httpx.ConnectError, A2AClientHTTPError) as e:
                 connection_attemps += 1
