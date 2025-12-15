@@ -210,21 +210,20 @@ class A2aRemoteAgent(ConversableAgent):
                 return True, reply.messages[-1]
 
     async def _ask_streaming(self, client: Client, message: Message) -> ResponseMessage | None:
-        connection_attemps = 1
+        started_task: Task | None = None
         try:
             async for event in client.send_message(message):
-                result, task = self._process_event(event)
-                if not task:
+                result, started_task = self._process_event(event)
+                if not started_task:
                     return result
-        except httpx.ConnectError as e:
-            if task and connection_attemps < self._max_reconnects:
-                pass
 
-            if not self._agent_card:
-                raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
+        except (httpx.ConnectError, A2AClientHTTPError) as e:
+            if not started_task:
+                if not self._agent_card:
+                    raise A2aClientError("Failed to connect to the agent: agent card not found") from e
+                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        task = cast(Task, task)
+        connection_attemps, task = 1, cast(Task, started_task)
         while connection_attemps < self._max_reconnects:
             try:
                 async for event in client.resubscribe(TaskIdParams(id=task.id)):
@@ -232,51 +231,49 @@ class A2aRemoteAgent(ConversableAgent):
                     if not task:
                         return result
 
-            except httpx.ConnectError as e:
+            except (httpx.ConnectError, A2AClientHTTPError) as e:
                 connection_attemps += 1
-                if connection_attemps < self._max_reconnects:
-                    pass
-
-                if not self._agent_card:
-                    raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
+                if connection_attemps >= self._max_reconnects:
+                    if not self._agent_card:
+                        raise A2aClientError("Failed to connect to the agent: agent card not found") from e
+                    raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
         return None
 
     async def _ask_polling(self, client: Client, message: Message) -> ResponseMessage | None:
+        started_task: Task | None = None
         try:
             async for event in client.send_message(message):
                 result, started_task = self._process_event(event)
                 if not started_task:
                     return result
                 break
-        except httpx.ConnectError as e:
-            if not self._agent_card:
-                raise A2aClientError("Failed to connect to the agent: agent card not found") from e
-            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        started_task, connection_attemps = cast(Task, started_task), 0
+        except (httpx.ConnectError, A2AClientHTTPError) as e:
+            if not started_task:
+                if not self._agent_card:
+                    raise A2aClientError("Failed to connect to the agent: agent card not found") from e
+                raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
+
+        connection_attemps, task = 1, cast(Task, started_task)
         while connection_attemps < self._max_reconnects:
-            while True:
-                try:
-                    task = await client.get_task(TaskQueryParams(id=started_task.id))
+            try:
+                task = await client.get_task(TaskQueryParams(id=task.id))
 
-                except httpx.ConnectError as e:
-                    connection_attemps += 1
-                    if connection_attemps < self._max_reconnects:
-                        pass
-
+            except (httpx.ConnectError, A2AClientHTTPError) as e:
+                connection_attemps += 1
+                if connection_attemps >= self._max_reconnects:
                     if not self._agent_card:
                         raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                     raise A2aClientError(
                         f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}"
                     ) from e
 
-                else:
-                    if _is_task_completed(task):
-                        return response_message_from_a2a_task(task)
+            else:
+                if _is_task_completed(task):
+                    return response_message_from_a2a_task(task)
 
-                    await asyncio.sleep(self._polling_interval)
+                await asyncio.sleep(self._polling_interval)
 
         return None
 
