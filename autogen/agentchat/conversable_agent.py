@@ -17,7 +17,7 @@ from collections import defaultdict
 from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from inspect import signature
+from inspect import iscoroutine, signature
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1186,6 +1186,8 @@ class ConversableAgent(LLMAgent):
 
     def _process_received_message(self, message: dict[str, Any] | str, sender: Agent, silent: bool):
         # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
+        if isinstance(message, dict) and iscoroutine(message.get("content")):
+            message["content"] = ""
         valid = self._append_oai_message(message, sender, role="user", name=sender.name)
         if logging_enabled():
             log_event(self, "received_message", message=message, sender=sender.name, valid=valid)
