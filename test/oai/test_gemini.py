@@ -665,6 +665,171 @@ class TestGeminiClient:
         assert call_kwargs["top_p"] == 0.9, "top_p parameter should be passed to generation config"
         assert call_kwargs["top_k"] == 5, "top_k parameter should be passed to generation config"
 
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_with_thinking_config(
+        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that thinking parameters are properly passed to generation config"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Thoughtful response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 12
+        mock_usage_metadata.candidates_token_count = 6
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "include_thoughts": True,
+            "thinking_budget": 1024,
+            "thinking_level": "High",
+        })
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=True,
+            thinking_budget=1024,
+            thinking_level="High",
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "thinking_config should be passed to GenerateContentConfig"
+        )
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_with_default_thinking_config(
+        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that a default ThinkingConfig is created and passed when no thinking params are provided"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 5
+        mock_usage_metadata.candidates_token_count = 3
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create without thinking params
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+        })
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=None,
+            thinking_budget=None,
+            thinking_level=None,
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "default thinking_config should still be passed to GenerateContentConfig"
+        )
+
+    @pytest.mark.parametrize(
+        "kwargs,expected",
+        [
+            ({"include_thoughts": True}, {"include_thoughts": True, "thinking_budget": None, "thinking_level": None}),
+            ({"thinking_budget": 256}, {"include_thoughts": None, "thinking_budget": 256, "thinking_level": None}),
+            ({"thinking_level": "High"}, {"include_thoughts": None, "thinking_budget": None, "thinking_level": "High"}),
+            (
+                {"include_thoughts": False, "thinking_budget": 512},
+                {"include_thoughts": False, "thinking_budget": 512, "thinking_level": None},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Low"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Low"},
+            ),
+            (
+                {"thinking_budget": 1024, "thinking_level": "High"},
+                {"include_thoughts": None, "thinking_budget": 1024, "thinking_level": "High"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+            ),
+        ],
+    )
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_thinking_param_variants(
+        self,
+        mock_thinking_config,
+        mock_generate_content_config,
+        mock_generative_client,
+        gemini_client,
+        kwargs,
+        expected,
+    ):
+        """Test individual and combined thinking params are passed through to ThinkingConfig and GenerateContentConfig"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 5
+        mock_usage_metadata.candidates_token_count = 3
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        params = {
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            **kwargs,
+        }
+        gemini_client.create(params)
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=expected["include_thoughts"],
+            thinking_budget=expected["thinking_budget"],
+            thinking_level=expected["thinking_level"],
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "thinking_config should be passed to GenerateContentConfig"
+        )
+
     @patch("autogen.oai.gemini.GenerativeModel")
     @patch("autogen.oai.gemini.GenerationConfig")
     def test_vertexai_generation_config_with_seed(
