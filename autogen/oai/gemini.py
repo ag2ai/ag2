@@ -79,6 +79,7 @@ with optional_import_block():
         GenerateContentConfig,
         GenerateContentResponse,
         GoogleSearch,
+        ThinkingConfig,
         Part,
         Schema,
         Tool,
@@ -129,6 +130,9 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_config: ToolConfig | None = None
     proxy: str | None = None
+    include_thoughts: bool | None = Field(default=None, description="Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought")
+    thinking_budget: int | None = Field(default=None, description="Indicates the thinking budget in tokens. min:0 , max:24576")
+    thinking_level: Literal["High","Low"] | None = Field(default=None, description="The level of thoughts tokens that the model should generate.")
     """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
@@ -272,7 +276,14 @@ class GeminiClient:
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
         tool_config = params.get("tool_config")
-
+        include_thoughts = params.get("include_thoughts", None)
+        thinking_budget = params.get("thinking_budget", None)
+        thinking_level = params.get("thinking_level", None)
+        thinking_config = ThinkingConfig(
+            include_thoughts=include_thoughts,
+            thinking_budget=thinking_budget,
+            thinking_level=thinking_level,
+        )
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -336,6 +347,7 @@ class GeminiClient:
                 system_instruction=system_instruction,
                 tools=tools,
                 tool_config=tool_config,
+                thinking_config=thinking_config if thinking_config is not None else None,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
