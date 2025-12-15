@@ -7,7 +7,7 @@
 # !/usr/bin/env python3 -m pytest
 
 import io
-from contextlib import redirect_stdout
+import logging
 
 from autogen import AssistantAgent, UserProxyAgent, gather_usage_summary
 from autogen.import_utils import run_for_optional_imports
@@ -92,18 +92,33 @@ def test_agent_usage(credentials: Credentials):
     )
     print("Result summary:", res.summary)
 
-    # test print
-    captured_output = io.StringIO()
-    with redirect_stdout(captured_output):
-        ai_user_proxy.print_usage_summary()
-    output = captured_output.getvalue()
-    assert "Usage summary excluding cached usage:" in output
+    # test print - capture logger output since print_usage_summary uses IOStream events
+    logger = logging.getLogger("ag2.event.processor")
+    log_stream = io.StringIO()
+    handler = logging.StreamHandler(log_stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    old_handlers = logger.handlers[:]
+    old_level = logger.level
+    old_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    captured_output = io.StringIO()
-    with redirect_stdout(captured_output):
+    try:
+        ai_user_proxy.print_usage_summary()
+        output = log_stream.getvalue()
+        assert "Usage summary excluding cached usage:" in output
+
+        log_stream.truncate(0)
+        log_stream.seek(0)
+
         assistant.print_usage_summary()
-    output = captured_output.getvalue()
-    assert "All completions are non-cached:" in output
+        output = log_stream.getvalue()
+        assert "All completions are non-cached:" in output
+    finally:
+        logger.handlers = old_handlers
+        logger.setLevel(old_level)
+        logger.propagate = old_propagate
 
     # test get
     print("Actual usage summary (excluding completion from cache):", assistant.get_actual_usage())
