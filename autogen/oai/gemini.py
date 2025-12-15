@@ -135,7 +135,8 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
         description="Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought",
     )
     thinking_budget: int | None = Field(
-        default=None, description="Indicates the thinking budget in tokens. min:0 , max:24576"
+        default=None,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
     )
     thinking_level: Literal["High", "Low"] | None = Field(
         default=None, description="The level of thoughts tokens that the model should generate."
