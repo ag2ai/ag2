@@ -1585,6 +1585,14 @@
          <lastmod>2025-12-16</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/tools/experimental/apply_patch/apply_patch_tool/PatchEditor/</loc>
+         <lastmod>2025-12-16</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/tools/experimental/apply_patch/apply_patch_tool/WorkspaceEditor/</loc>
+         <lastmod>2025-12-16</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/api-reference/autogen/tools/experimental/browser_use/BrowserUseResult/</loc>
          <lastmod>2025-12-16</lastmod>
     </url>
@@ -2086,6 +2094,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt-5_verbosity_example/</loc>
+         <lastmod>2025-12-16</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/use-cases/notebooks/notebooks/agentchat_gpt5.1_apply_patch_example/</loc>
          <lastmod>2025-12-16</lastmod>
     </url>
     <url>
