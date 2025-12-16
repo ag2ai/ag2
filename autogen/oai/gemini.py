@@ -787,7 +787,6 @@ class GeminiClient:
 
         # Guard against missing type (can happen with unresolved refs or anyOf/oneOf)
         if "type" not in json_data:
-            logger.warning(f"Schema missing 'type' field, defaulting to STRING: {list(json_data.keys())}")
             param_schema.type = Type.STRING
             if "description" in json_data:
                 param_schema.description = json_data["description"]
