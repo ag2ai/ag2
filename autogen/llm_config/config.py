@@ -107,7 +107,7 @@ class LLMConfig(metaclass=MetaLLMConfig):
             max_tokens: The maximum number of tokens to generate.
             top_p: The nucleus sampling probability.
             routing_method: The method used to route requests (e.g., fixed_order, round_robin).
-            **kwargs: Additional keyword arguments for\ future extensions.
+            **kwargs: Additional keyword arguments for future extensions.
 
         Examples:
             ```python
@@ -201,7 +201,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
                     **application_level_options,
                     **c,
                 })
-
         self._model = _LLMConfig(
             **application_level_options,
             config_list=final_config_list,
@@ -331,7 +330,6 @@ class LLMConfig(metaclass=MetaLLMConfig):
 
         kwargs = self.model_dump()
         del kwargs["config_list"]
-
         return LLMConfig(*filtered_config_list, **kwargs)
 
     def model_dump(self, *args: Any, exclude_none: bool = True, **kwargs: Any) -> dict[str, Any]:
@@ -444,7 +442,6 @@ class _LLMConfig(ApplicationConfig):
     timeout: int | None
     cache_seed: int | None
     parallel_tool_calls: bool | None
-
     tools: list[Any]
     functions: list[Any]
 
