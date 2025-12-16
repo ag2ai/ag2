@@ -49,21 +49,22 @@ logger = logging.getLogger(__name__)
 def content_str(content: str | list[UserMessageTextContentPart | UserMessageImageContentPart] | None) -> str:
     """Converts the `content` field of an OpenAI message into a string format.
 
-    This function processes content that may be a string, a list of mixed text and image URLs, or None,
-    and converts it into a string. Text is directly appended to the result string, while image URLs are
-    represented by a placeholder image token. If the content is None, an empty string is returned.
+    This function processes content that may be a string, a list of mixed text and multimodal URLs, or None,
+    and converts it into a string. Text is directly appended to the result string, while media URLs are
+    represented by placeholder tokens. If the content is None, an empty string is returned.
 
     Args:
-        content: The content to be processed. Can be a string, a list of dictionaries representing text and image URLs, or None.
+        content: The content to be processed. Can be a string, a list of dictionaries representing text and media URLs, or None.
 
     Returns:
-        str: A string representation of the input content. Image URLs are replaced with an image token.
+        str: A string representation of the input content. Media URLs are replaced with placeholder tokens.
 
     Note:
-    - The function expects each dictionary in the list to have a "type" key that is either "text" or "image_url".
-      For "text" type, the "text" key's value is appended to the result. For "image_url", an image token is appended.
-    - This function is useful for handling content that may include both text and image references, especially
-      in contexts where images need to be represented as placeholders.
+    - The function expects each dictionary in the list to have a "type" key.
+      For "text" type, the "text" key's value is appended to the result.
+      For media types (image_url, audio_url, video_url), a placeholder token is appended.
+    - This function is useful for handling content that may include both text and media references, especially
+      in contexts where media need to be represented as placeholders.
     """
     if content is None:
         return ""
@@ -81,6 +82,10 @@ def content_str(content: str | list[UserMessageTextContentPart | UserMessageImag
             rst.append(item["text"])
         elif item["type"] in ["image_url", "input_image"]:
             rst.append("<image>")
+        elif item["type"] in ["audio_url", "input_audio"]:
+            rst.append("<audio>")
+        elif item["type"] in ["video_url", "input_video"]:
+            rst.append("<video>")
         elif item["type"] in ["function", "tool_call", "tool_calls"]:
             rst.append("<function>" if "name" not in item else f"<function: {item['name']}>")
         else:

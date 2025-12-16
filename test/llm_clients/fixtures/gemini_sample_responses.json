@@ -1,0 +1,123 @@
+{
+  "basic_text": {
+    "id": "mPgMaY3rFJaRjMcPxt_myQY",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "thinking_tokens": 0
+    },
+    "cost": 3e-06,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello, World!\n"
+          }
+        ]
+      }
+    ]
+  },
+  "thinking_mode": {
+    "id": "nfgMabv7A_aD-8YPuryUwQE",
+    "model": "gemini-2.5-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 13,
+      "completion_tokens": 574,
+      "total_tokens": 687,
+      "thinking_tokens": 100
+    },
+    "cost": 0.0014389000000000001,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "**Deconstructing Factorial Calculation**\n\nOkay, here's how I'm approaching this 15 factorial calculation. First things first, let's drill down on the *meaning* of the factorial operator. It's the straightforward product of all integers, from one, up to the integer in question.  So 15! means multiplying everything out from 1 to 15. Got it. Now, it's a matter of working through that product.\n"
+          },
+          {
+            "type": "text",
+            "text": "Let's calculate 15 factorial (15!) step by step.\n\n**Understanding Factorial:**\n\"n factorial\" (n!) is the product of all positive integers less than or equal to n.\nSo, 15! = 15 \u00d7 14 \u00d7 13 \u00d7 12 \u00d7 11 \u00d7 10 \u00d7 9 \u00d7 8 \u00d7 7 \u00d7 6 \u00d7 5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1\n\n**Step-by-step Calculation:**\n\n1.  **Start with the first few:**\n    *   15 \u00d7 14 = 210\n    *   210 \u00d7 13 = 2730\n    *   2730 \u00d7 12 = 32760\n    *   32760 \u00d7 11 = 360360\n\n2.  **Multiply by 10 (easy):**\n    *   360360 \u00d7 10 = 3603600\n\n3.  **Continue with the next numbers:**\n    *   3603600 \u00d7 9 = 32432400\n    *   32432400 \u00d7 8 = 259459200\n    *   259459200 \u00d7 7 = 1816214400\n    *   1816214400 \u00d7 6 = 10897286400\n\n4.  **Almost there:**\n    *   10897286400 \u00d7 5 = 54486432000\n    *   54486432000 \u00d7 4 = 217945728000\n    *   217945728000 \u00d7 3 = 653837184000\n    *   653837184000 \u00d7 2 = 1307674368000\n    *   1307674368000 \u00d7 1 = 1307674368000\n\n**Result:**\n\n15! = **1,307,674,368,000** (One trillion, three hundred seven billion, six hundred seventy-four million, three hundred sixty-eight thousand)"
+          }
+        ]
+      }
+    ]
+  },
+  "tool_calling": {
+    "id": "nfgMaef9Et-C-8YPtda28AQ",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 48,
+      "completion_tokens": 7,
+      "total_tokens": 55,
+      "thinking_tokens": 0
+    },
+    "cost": 7.600000000000001e-06,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "8ecf4d25-ce09-46c1-ace7-b05f121d6fd1",
+            "name": "calculate",
+            "arguments": "{\"operation\": \"add\", \"b\": 456, \"a\": 123}"
+          }
+        ]
+      }
+    ]
+  },
+  "multimodal": {
+    "id": "nvgMad_0L7OVjMcPyffniAQ",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 6,
+      "completion_tokens": 42,
+      "total_tokens": 48,
+      "thinking_tokens": 0
+    },
+    "cost": 1.7400000000000003e-05,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "To tell you the color of the image, I need you to provide me with the image. I am a text-based AI and cannot see images. Please upload the image or describe it to me.\n"
+          }
+        ]
+      }
+    ]
+  },
+  "structured_output": {
+    "id": "n_gMaZLNNZGMjMcPzafOiAQ",
+    "model": "gemini-2.0-flash",
+    "provider": "gemini",
+    "usage": {
+      "prompt_tokens": 37,
+      "completion_tokens": 90,
+      "total_tokens": 127,
+      "thinking_tokens": 0
+    },
+    "cost": 3.97e-05,
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"colors\": [\n    {\n      \"name\": \"red\",\n      \"hex\": \"#FF0000\"\n    },\n    {\n      \"name\": \"green\",\n      \"hex\": \"#00FF00\"\n    },\n    {\n      \"name\": \"blue\",\n      \"hex\": \"#0000FF\"\n    }\n  ]\n}"
+          }
+        ]
+      }
+    ]
+  }
+}
