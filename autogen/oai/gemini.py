@@ -777,10 +777,22 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_declaration_schema(json_data) -> Schema:
         """Recursively creates Schema objects for FunctionDeclaration."""
-        # First unwrap any $ref references
-        json_data = GeminiClient._unwrap_references(json_data)
+        # First resolve any $ref references in this node
+        json_data = resolve_json_references(json_data)
+        if "$defs" in json_data:
+            json_data = copy.deepcopy(json_data)
+            json_data.pop("$defs", None)
 
         param_schema = Schema()
+
+        # Guard against missing type (can happen with unresolved refs or anyOf/oneOf)
+        if "type" not in json_data:
+            logger.warning(f"Schema missing 'type' field, defaulting to STRING: {list(json_data.keys())}")
+            param_schema.type = Type.STRING
+            if "description" in json_data:
+                param_schema.description = json_data["description"]
+            return param_schema
+
         param_type = json_data["type"]
 
         if param_type == "integer":

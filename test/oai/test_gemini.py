@@ -679,6 +679,39 @@ class TestGeminiClient:
         assert schema.required == ["status"]
         assert schema.properties["status"].enum == ["active", "inactive", "pending"]
 
+    def test_create_gemini_function_declaration_schema_with_nested_refs(self) -> None:
+        """Test that _create_gemini_function_declaration_schema handles nested $ref references."""
+        # This schema has a $ref inside a property that references a $defs entry
+        json_data = {
+            "type": "object",
+            "$defs": {
+                "SubItem": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "The name"},
+                    },
+                    "required": ["name"],
+                }
+            },
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "description": "List of items",
+                    "items": {"$ref": "#/$defs/SubItem"},
+                },
+            },
+            "required": ["items"],
+        }
+
+        # This should not raise KeyError: 'type'
+        schema = GeminiClient._create_gemini_function_declaration_schema(json_data)
+
+        assert isinstance(schema, Schema)
+        assert schema.required == ["items"]
+        assert schema.properties["items"].description == "List of items"
+        # The nested $ref should be resolved and have proper type
+        assert schema.properties["items"].items is not None
+
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.GenerateContentConfig")
     def test_generation_config_with_seed(self, mock_generate_content_config, mock_generative_client, gemini_client):
