@@ -24,7 +24,7 @@ from autogen.import_utils import run_for_optional_imports
 
 try:
     from autogen.agentchat.group.multi_agent_chat import initiate_group_chat
-    from autogen.agentchat.group.patterns import DefaultPattern
+    from autogen.agentchat.group.patterns import AutoPattern, DefaultPattern
 
     HAS_GROUP_PATTERNS = True
 except ImportError:
@@ -748,3 +748,346 @@ def test_combined_json_output_and_strict_tools(credentials_anthropic_claude_sonn
 
     # Verify at least one feature was used (Claude chooses one approach when both are available)
     assert found_tool_call or found_structured_output, "Should use either strict tools OR structured output"
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_tools_openai_format_with_structured_output(credentials_anthropic_claude_sonnet, caplog):
+    """Test that OpenAI tool format works with structured outputs beta API.
+
+    This test specifically verifies the fix for the issue where tools in OpenAI format
+    (with {"type": "function", "function": {...}} wrapper) were rejected by the
+    structured outputs beta API with a 400 error.
+
+    The fix ensures that when using the 'tools' parameter (not 'functions'),
+    the OpenAI wrapper format is properly converted to Anthropic's expected format
+    before being sent to the beta API.
+    """
+    import logging
+
+    # Capture logs to verify beta API usage (not fallback to JSON mode)
+    caplog.set_level(logging.WARNING)
+
+    # Define a calculator tool
+    def calculator(operation: str, a: float, b: float) -> float:
+        """Perform a calculation.
+
+        Args:
+            operation: The operation to perform (add, subtract, multiply, divide)
+            a: First number
+            b: Second number
+        """
+        if operation == "add":
+            return a + b
+        elif operation == "subtract":
+            return a - b
+        elif operation == "multiply":
+            return a * b
+        elif operation == "divide":
+            return a / b if b != 0 else 0
+        return 0
+
+    # Result model for structured output
+    class CalculationSteps(BaseModel):
+        """Structured output for calculation with steps."""
+
+        reasoning: str
+        answer: float
+
+    # Use 'tools' parameter with OpenAI format (this was causing the 400 error)
+    llm_config = {
+        "config_list": [
+            {
+                **credentials_anthropic_claude_sonnet.config_list[0],
+                "response_format": CalculationSteps,  # Triggers beta API
+            }
+        ],
+        "tools": [  # Using 'tools' instead of 'functions'
+            {
+                "type": "function",  # OpenAI wrapper format
+                "function": {
+                    "name": "calculator",
+                    "description": "Perform arithmetic calculation",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {
+                                "type": "string",
+                                "enum": ["add", "subtract", "multiply", "divide"],
+                                "description": "The operation to perform",
+                            },
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"},
+                        },
+                        "required": ["operation", "a", "b"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ],
+    }
+
+    assistant = autogen.AssistantAgent(
+        name="Calculator",
+        system_message="You help solve math problems using the calculator tool and provide structured explanations.",
+        llm_config=llm_config,
+    )
+
+    user_proxy = autogen.UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=5,
+        code_execution_config=False,
+    )
+
+    # Register function
+    assistant.register_function({"calculator": calculator})
+    user_proxy.register_function({"calculator": calculator})
+
+    # Initiate chat - this should NOT cause a 400 error
+    chat_result = user_proxy.initiate_chat(
+        assistant,
+        message="Use the calculator tool to compute 23 + 19, then explain your reasoning in structured format.",
+        max_turns=6,
+    )
+
+    # Verify the conversation succeeded without 400 error
+    assert chat_result is not None
+    assert len(chat_result.chat_history) > 0
+
+    # Check that tools were used or structured output was generated
+    found_tool_call = False
+    found_structured_output = False
+
+    for message in chat_result.chat_history:
+        # Check for tool calls
+        if message.get("tool_calls"):
+            found_tool_call = True
+            tool_call = message["tool_calls"][0]
+            assert tool_call["function"]["name"] == "calculator"
+
+            # Verify arguments are properly typed
+            import json
+
+            args = json.loads(tool_call["function"]["arguments"])
+            assert args["operation"] == "add"
+            assert isinstance(args["a"], (int, float))
+            assert isinstance(args["b"], (int, float))
+
+        # Check for structured output
+        if message.get("role") == "assistant" and message.get("content"):
+            try:
+                result = CalculationSteps.model_validate_json(message["content"])
+                found_structured_output = True
+                assert result.reasoning, "Should have reasoning"
+                assert isinstance(result.answer, (int, float)), "Should have numeric answer"
+            except (ValidationError, ValueError):
+                # Not all assistant messages will be structured output
+                pass
+
+    # Verify that the conversation worked (either tool calls or structured output)
+    # The key test is that we didn't get a 400 error from the beta API
+    assert found_tool_call or found_structured_output, (
+        "Should successfully use tools or structured output without 400 error"
+    )
+
+    # VERIFY BETA API WAS ACTUALLY USED (not fallback to JSON mode)
+    fallback_warnings = [
+        record
+        for record in caplog.records
+        if "Falling back to JSON Mode" in record.message and record.levelname == "WARNING"
+    ]
+    assert len(fallback_warnings) == 0, (
+        f"Beta API should not fall back to JSON mode. Found warnings: {[r.message for r in fallback_warnings]}"
+    )
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@pytest.mark.skipif(not HAS_GROUP_PATTERNS, reason="Group patterns not available")
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_groupchat_autopattern_tools_with_structured_output(credentials_anthropic_claude_sonnet, caplog):
+    """Test GroupChat with AutoPattern using tools and structured outputs together.
+
+    This test verifies that the fix for tools + structured outputs works in a
+    multi-agent groupchat scenario with AutoPattern (LLM-based speaker selection).
+
+    The key verification is that OpenAI tool format works with structured outputs
+    in the context of groupchat orchestration without causing 400 errors.
+    """
+    import logging
+
+    # Capture logs to verify beta API usage (not fallback to JSON mode)
+    caplog.set_level(logging.WARNING)
+
+    # Define calculator tool
+    def calculator(operation: str, a: float, b: float) -> float:
+        """Perform a calculation.
+
+        Args:
+            operation: The operation to perform (add, subtract, multiply, divide)
+            a: First number
+            b: Second number
+        """
+        if operation == "add":
+            return a + b
+        elif operation == "subtract":
+            return a - b
+        elif operation == "multiply":
+            return a * b
+        elif operation == "divide":
+            return a / b if b != 0 else 0
+        return 0
+
+    # Structured output models
+    class AnalysisOutput(BaseModel):
+        """Analysis agent structured output."""
+
+        problem_summary: str
+        approach: str
+
+    class CalculationOutput(BaseModel):
+        """Calculation agent structured output."""
+
+        steps: list[str]
+        final_result: float
+
+    # Create analysis agent with structured output
+    analyst = autogen.AssistantAgent(
+        name="Analyst",
+        system_message="You analyze math problems and determine the approach needed.",
+        llm_config={
+            "config_list": [
+                {
+                    **credentials_anthropic_claude_sonnet.config_list[0],
+                    "response_format": AnalysisOutput,
+                }
+            ],
+        },
+    )
+
+    # Create calculator agent with tools + structured output
+    calculator_agent = autogen.AssistantAgent(
+        name="CalculatorAgent",
+        system_message="You solve math problems using the calculator tool and provide structured step-by-step solutions.",
+        functions=[calculator],
+        llm_config={
+            "config_list": [
+                {
+                    **credentials_anthropic_claude_sonnet.config_list[0],
+                    "response_format": CalculationOutput,
+                }
+            ],
+            "tools": [  # Using OpenAI format
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "calculator",
+                        "description": "Perform arithmetic calculation",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "operation": {
+                                    "type": "string",
+                                    "enum": ["add", "subtract", "multiply", "divide"],
+                                },
+                                "a": {"type": "number"},
+                                "b": {"type": "number"},
+                            },
+                            "required": ["operation", "a", "b"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            ],
+        },
+    )
+
+    # Create user proxy for tool execution
+    user_proxy = autogen.UserProxyAgent(
+        name="User",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+    # user_proxy.register_function({"calculator": calculator})
+
+    # Create AutoPattern for LLM-based speaker selection
+    # AutoPattern requires llm_config for the group manager
+    pattern = AutoPattern(
+        initial_agent=analyst,
+        agents=[analyst, calculator_agent],
+        group_manager_args={
+            "llm_config": {
+                "config_list": credentials_anthropic_claude_sonnet.config_list,
+            }
+        },
+    )
+
+    # Initiate group chat
+    messages = [
+        {
+            "role": "user",
+            "content": "Calculate (45 + 23) * 2. First analyze the problem, then solve it step by step.",
+        }
+    ]
+
+    chat_result, context_variables, last_agent = initiate_group_chat(
+        pattern=pattern,
+        messages=messages,
+        max_rounds=6,
+    )
+
+    # Verify no 400 error occurred
+    assert chat_result is not None
+    assert len(chat_result.chat_history) > 0
+
+    # Track what was found
+    found_analysis = False
+    found_calculation = False
+    found_tool_call = False
+
+    for message in chat_result.chat_history:
+        # Check for analysis structured output
+        if message.get("name") == "Analyst":
+            content = message.get("content", "")
+            try:
+                result = AnalysisOutput.model_validate_json(content)
+                found_analysis = True
+                assert result.problem_summary
+                assert result.approach
+            except (ValidationError, ValueError):
+                pass
+
+        # Check for calculation structured output
+        if message.get("name") == "CalculatorAgent":
+            content = message.get("content", "")
+            try:
+                result = CalculationOutput.model_validate_json(content)
+                found_calculation = True
+                assert len(result.steps) > 0
+                assert isinstance(result.final_result, (int, float))
+            except (ValidationError, ValueError):
+                pass
+
+        # Check for tool calls
+        if message.get("tool_calls"):
+            found_tool_call = True
+            tool_call = message["tool_calls"][0]
+            assert tool_call["function"]["name"] == "calculator"
+
+    # Verify the groupchat worked with AutoPattern
+    # At least one agent should have produced output
+    assert found_analysis or found_calculation or found_tool_call, (
+        "AutoPattern groupchat should produce structured outputs or tool calls without 400 error"
+    )
+
+    # VERIFY BETA API WAS ACTUALLY USED (not fallback to JSON mode)
+    fallback_warnings = [
+        record
+        for record in caplog.records
+        if "Falling back to JSON Mode" in record.message and record.levelname == "WARNING"
+    ]
+    assert len(fallback_warnings) == 0, (
+        f"Beta API should not fall back to JSON mode. Found warnings: {[r.message for r in fallback_warnings]}"
+    )

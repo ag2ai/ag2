@@ -546,6 +546,13 @@ class AnthropicClient:
             tools_configs = params_copy.pop("functions")
             tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
             params_copy["tools"] = tools_configs
+        elif "tools" in params_copy:
+            # Convert OpenAI tool format to Anthropic format
+            # OpenAI format: {"type": "function", "function": {...}}
+            # Anthropic format: {"name": "...", "description": "...", "input_schema": {...}}
+            tools_configs = self.convert_tools_to_functions(params_copy.pop("tools"))
+            tools_configs = [self.openai_func_to_anthropic(tool) for tool in tools_configs]
+            params_copy["tools"] = tools_configs
 
         # Assign messages and optional parameters
         anthropic_params["messages"] = anthropic_messages
