@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import warnings
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -20,7 +21,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Tool
+    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Schema, Tool
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -617,6 +618,66 @@ class TestGeminiClient:
         }
 
         assert result == expected_result, result
+
+    def test_create_gemini_function_declaration_returns_schema(self) -> None:
+        """Test that _create_gemini_function_declaration returns proper Schema objects without Pydantic warnings."""
+        tool = {
+            "function": {
+                "name": "search_web",
+                "description": "Search the web for information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query"},
+                        "max_results": {"type": "integer", "description": "Maximum number of results"},
+                    },
+                    "required": ["query"],
+                },
+            }
+        }
+
+        func_decl = GeminiClient._create_gemini_function_declaration(tool)
+
+        # Verify the function declaration is correct
+        assert func_decl.name == "search_web"
+        assert func_decl.description == "Search the web for information"
+        assert isinstance(func_decl.parameters, Schema), "parameters should be a Schema object, not a dict"
+
+        # Verify no Pydantic serialization warnings are raised when serializing
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            func_decl.model_dump()
+
+            pydantic_warnings = [
+                warning
+                for warning in w
+                if "PydanticSerializationUnexpectedValue" in str(warning.message)
+                and "parameters" in str(warning.message)
+            ]
+            assert len(pydantic_warnings) == 0, (
+                f"Pydantic serialization warnings were raised for parameters field: {pydantic_warnings}"
+            )
+
+    def test_create_gemini_function_declaration_schema_handles_required_and_enum(self) -> None:
+        """Test that _create_gemini_function_declaration_schema handles required and enum fields."""
+        json_data = {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "The status",
+                    "enum": ["active", "inactive", "pending"],
+                },
+                "count": {"type": "integer", "description": "The count"},
+            },
+            "required": ["status"],
+        }
+
+        schema = GeminiClient._create_gemini_function_declaration_schema(json_data)
+
+        assert isinstance(schema, Schema)
+        assert schema.required == ["status"]
+        assert schema.properties["status"].enum == ["active", "inactive", "pending"]
 
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.GenerateContentConfig")

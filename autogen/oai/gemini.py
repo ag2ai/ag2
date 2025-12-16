@@ -768,7 +768,7 @@ class GeminiClient:
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
         if len(tool["function"]["parameters"]["properties"]) != 0:
-            function_declaration.parameters = GeminiClient._create_gemini_function_parameters(
+            function_declaration.parameters = GeminiClient._create_gemini_function_declaration_schema(
                 copy.deepcopy(tool["function"]["parameters"])
             )
 
@@ -777,18 +777,11 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_declaration_schema(json_data) -> Schema:
         """Recursively creates Schema objects for FunctionDeclaration."""
+        # First unwrap any $ref references
+        json_data = GeminiClient._unwrap_references(json_data)
+
         param_schema = Schema()
         param_type = json_data["type"]
-
-        """
-        TYPE_UNSPECIFIED = 0
-        STRING = 1
-        INTEGER = 2
-        NUMBER = 3
-        OBJECT = 4
-        ARRAY = 5
-        BOOLEAN = 6
-        """
 
         if param_type == "integer":
             param_schema.type = Type.INTEGER
@@ -803,7 +796,7 @@ class GeminiClient:
             if "items" in json_data:
                 param_schema.items = GeminiClient._create_gemini_function_declaration_schema(json_data["items"])
             else:
-                print("Warning: Array schema missing 'items' definition.")
+                logger.warning("Array schema missing 'items' definition.")
         elif param_type == "object":
             param_schema.type = Type.OBJECT
             param_schema.properties = {}
@@ -812,16 +805,21 @@ class GeminiClient:
                     param_schema.properties[prop_name] = GeminiClient._create_gemini_function_declaration_schema(
                         prop_data
                     )
-                else:
-                    print("Warning: Object schema missing 'properties' definition.")
-
+            else:
+                logger.warning("Object schema missing 'properties' definition.")
         elif param_type in ("null", "any"):
             param_schema.type = Type.STRING  # Treating these as strings for simplicity
         else:
-            print(f"Warning: Unsupported parameter type '{param_type}'.")
+            logger.warning(f"Unsupported parameter type '{param_type}'.")
 
         if "description" in json_data:
             param_schema.description = json_data["description"]
+
+        if "required" in json_data:
+            param_schema.required = json_data["required"]
+
+        if "enum" in json_data:
+            param_schema.enum = json_data["enum"]
 
         return param_schema
 
