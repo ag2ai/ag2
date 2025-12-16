@@ -203,7 +203,7 @@ class GeminiClient:
         # Store the response format, if provided (for structured outputs)
         self._response_format: type[BaseModel] | None = None
 
-    def message_retrieval(self, response) -> list:
+    def message_retrieval(self, response: ChatCompletion) -> list[ChatCompletionMessage]:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
@@ -211,11 +211,11 @@ class GeminiClient:
         """
         return [choice.message for choice in response.choices]
 
-    def cost(self, response) -> float:
+    def cost(self, response: ChatCompletion) -> float:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> dict:
+    def get_usage(response: ChatCompletion) -> dict[str, Any]:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -226,7 +226,7 @@ class GeminiClient:
             "model": response.model,
         }
 
-    def create(self, params: dict) -> ChatCompletion:
+    def create(self, params: dict[str, Any]) -> ChatCompletion:
         # When running in async context via run_in_executor from ConversableAgent.a_generate_oai_reply,
         # this method runs in a new thread that doesn't have an event loop by default. The Google Genai
         # client requires an event loop even for synchronous operations, so we need to ensure one exists.
@@ -452,7 +452,7 @@ class GeminiClient:
 
         return response_oai
 
-    def _extract_system_instruction(self, messages: list[dict]) -> str | None:
+    def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction if provided."""
         if messages is None or len(messages) == 0 or messages[0].get("role") != "system":
             return None
@@ -559,7 +559,7 @@ class GeminiClient:
         else:
             raise Exception("Unable to convert content to Gemini format.")
 
-    def _concat_parts(self, parts: list[Part]) -> list:
+    def _concat_parts(self, parts: list[Part]) -> list[Any]:
         """Concatenate parts with the same type.
         If two adjacent parts both have the "text" attribute, then it will be joined into one part.
         """
@@ -588,7 +588,7 @@ class GeminiClient:
 
         return concatenated_parts
 
-    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[Content]:
         """Convert messages from OAI format to Gemini format.
         Make sure the "user" role and "model" role are interleaved.
         Also, make sure the last item is from the "user" role.
@@ -763,7 +763,7 @@ class GeminiClient:
             return [Tool(function_declarations=functions)]
 
     @staticmethod
-    def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
+    def _create_gemini_function_declaration(tool: dict[str, Any]) -> FunctionDeclaration:
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
@@ -775,7 +775,7 @@ class GeminiClient:
         return function_declaration
 
     @staticmethod
-    def _create_gemini_function_declaration_schema(json_data) -> Schema:
+    def _create_gemini_function_declaration_schema(json_data: dict[str, Any]) -> Schema:
         """Recursively creates Schema objects for FunctionDeclaration."""
         # First resolve any $ref references in this node
         json_data = resolve_json_references(json_data)
@@ -835,7 +835,7 @@ class GeminiClient:
         return param_schema
 
     @staticmethod
-    def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
+    def _create_gemini_function_parameters(function_parameter: dict[str, Any]) -> dict[str, Any]:
         """Convert function parameters to Gemini format, recursive"""
         function_parameter = GeminiClient._unwrap_references(function_parameter)
 
@@ -862,7 +862,7 @@ class GeminiClient:
         return function_parameter
 
     @staticmethod
-    def _to_vertexai_safety_settings(safety_settings):
+    def _to_vertexai_safety_settings(safety_settings: list[dict[str, Any]] | None) -> list[Any]:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
@@ -898,7 +898,7 @@ class GeminiClient:
 
 
 @require_optional_import(["PIL"], "gemini")
-def get_image_data(image_file: str, use_b64=True) -> bytes:
+def get_image_data(image_file: str, use_b64: bool = True) -> bytes:
     if image_file.startswith("http://") or image_file.startswith("https://"):
         response = requests.get(image_file)
         content = response.content
@@ -922,11 +922,11 @@ def _format_json_response(response: Any, original_answer: str) -> str:
 
 
 def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: int, model_name: str) -> float:
-    def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float):
+    def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float) -> float:
         # Cost per million
         return cost_per_mil_input * input_tokens / 1e6 + cost_per_mil_output * output_tokens / 1e6
 
-    def total_cost_k(cost_per_k_input: float, cost_per_k_output: float):
+    def total_cost_k(cost_per_k_input: float, cost_per_k_output: float) -> float:
         # Cost per thousand
         return cost_per_k_input * input_tokens / 1e3 + cost_per_k_output * output_tokens / 1e3
 
