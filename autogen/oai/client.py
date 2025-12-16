@@ -256,6 +256,8 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     extra_body: dict[str, Any] | None
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
+    workspace_dir: str | None
+    allowed_paths: list[str] | None
 
 
 class OpenAILLMConfigEntry(LLMConfigEntry):
