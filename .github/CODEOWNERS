@@ -7,3 +7,7 @@
 /test/a2a/ @Lancetnik
 /test/remote/ @Lancetnik
 /website/docs/user-guide/a2a/ @Lancetnik
+
+# GPT 5.1 Apply Patch Tool
+/autogen/tools/experimental/apply_patch/ @priyansh4320
+/test/tools/experimental/apply_patch/ @priyansh4320
