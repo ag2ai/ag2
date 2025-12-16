@@ -306,10 +306,6 @@ class OpenAIResponsesClient:
         # Valid operation types for apply_patch tool
         valid_operations = {"create_file", "update_file", "delete_file"}
 
-
-        editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
-        
-
         editor = WorkspaceEditor(workspace_dir=workspace_dir, allowed_paths=allowed_paths)
         op_type = operation.get("type")
 
@@ -907,50 +903,7 @@ class OpenAIResponsesClient:
                 denied_commands=denied_commands,
                 enable_command_filtering=enable_command_filtering,
                 dangerous_patterns=dangerous_patterns,
-                
             )
-
-        # Extract and remove sandboxing parameters from params (they're only used internally)
-        # These must be removed before passing params to the OpenAI API
-        workspace_dir = params.pop("workspace_dir", None)
-        if workspace_dir is None:
-            workspace_dir = os.getcwd()
-        allowed_paths = params.pop("allowed_paths", None)
-        if allowed_paths is None:
-            allowed_paths = []
-        allowed_commands = params.pop("allowed_commands", None)
-        denied_commands = params.pop("denied_commands", None)
-        if denied_commands is None:
-            denied_commands = []
-        enable_command_filtering = params.pop("enable_command_filtering", True)  # Default to True
-        dangerous_patterns = params.pop("dangerous_patterns", None)
-        if dangerous_patterns is None:
-            dangerous_patterns = ShellExecutor.DEFAULT_DANGEROUS_PATTERNS
-
-        shell_call_outputs_payloads: list[dict[str, Any]] = []
-        if shell_call_ids:
-            for call_id, shell_call in shell_call_ids.items():
-                action = shell_call.get("action")
-                if not action:
-                    continue
-                shell_call_output = self._execute_shell_operation(
-                    action,  # Pass action, not shell_call
-                    call_id,
-                    workspace_dir,
-                    allowed_paths,
-                    allowed_commands,
-                    denied_commands,
-                    enable_command_filtering,
-                    dangerous_patterns,
-                )
-                shell_call_outputs_payloads.append(shell_call_output.model_dump())
-
-        if shell_call_outputs_payloads:
-            existing_input = params.get("input", [])
-            if existing_input:
-                params["input"] = shell_call_outputs_payloads + existing_input
-            else:
-                params["input"] = shell_call_outputs_payloads
 
         # Initialize tools list
         tools_list = []
@@ -1104,7 +1057,7 @@ class OpenAIResponsesClient:
                 continue
 
             # ------------------------------------------------------------------
-            # 3)  Built-in tool calls
+            # 4) Built-in tool calls
             # ------------------------------------------------------------------
             if item_type == "shell_call":
                 tool_call_args = {
@@ -1143,7 +1096,7 @@ class OpenAIResponsesClient:
                 continue
 
             # ------------------------------------------------------------------
-            # 5) Fallback - store raw dict so information is not lost
+            # 5) Fallback - store raw dict so information isn't lost
             # ------------------------------------------------------------------
             content.append(item)
 

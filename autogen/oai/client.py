@@ -257,6 +257,7 @@ class OpenAIEntryDict(LLMConfigEntryDict, total=False):
     reasoning_effort: Literal["none", "low", "minimal", "medium", "high", "xhigh"] | None
     max_completion_tokens: int | None
 
+
 class OpenAILLMConfigEntry(LLMConfigEntry):
     api_type: Literal["openai"] = "openai"
 
