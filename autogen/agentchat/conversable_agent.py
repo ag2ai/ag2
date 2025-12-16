@@ -17,7 +17,7 @@ from collections import defaultdict
 from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from inspect import signature
+from inspect import iscoroutine, signature
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -3007,11 +3007,9 @@ class ConversableAgent(LLMAgent):
             str: human input.
         """
         iostream = iostream or IOStream.get_default()
-
         reply = iostream.input(prompt)
-
         # Process the human input through hooks
-        processed_reply = self._process_human_input(reply)
+        processed_reply = self._process_human_input("" if not isinstance(reply, str) and iscoroutine(reply) else reply)
         if processed_reply is None:
             raise ValueError("safeguard_human_inputs hook returned None")
 

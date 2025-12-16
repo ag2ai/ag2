@@ -654,6 +654,117 @@ def test_parse_params_with_verbosity_medium():
     assert result == params
 
 
+def test_parse_params_with_reasoning_effort_low():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "low",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params  # Original reasoning_effort should be removed
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "low"
+    assert params["other_param"] == "value"  # Other params should remain unchanged
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_medium():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "medium",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "medium"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_high():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "high",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "high"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_xhigh():
+    """Test _parse_params method transforms xhigh reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "xhigh",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "xhigh"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_both_verbosity_and_reasoning_effort():
+    """Test _parse_params method transforms both verbosity and reasoning_effort correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "verbosity": "high",
+        "reasoning_effort": "medium",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Both should be transformed
+    assert "verbosity" not in params
+    assert "reasoning_effort" not in params
+    assert "text" in params
+    assert params["text"]["verbosity"] == "high"
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "medium"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_create_passes_reasoning_effort_to_api(mocked_openai_client):
+    """Test that create() properly passes reasoning_effort to the API."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "messages": [{"role": "user", "content": "Solve this complex math problem"}],
+        "reasoning_effort": "high",
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Verify reasoning was transformed correctly
+    assert "reasoning_effort" not in kwargs
+    assert "reasoning" in kwargs
+    assert kwargs["reasoning"]["effort"] == "high"
+
+
 def test_message_retrieval_with_real_response_structure():
     """Test message_retrieval method with realistic response structure including reasoning."""
     client = OpenAIResponsesClient(MagicMock())
