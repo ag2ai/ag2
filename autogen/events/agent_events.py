@@ -242,6 +242,15 @@ def create_received_event_model(
     if role == "function":
         return FunctionResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
     if role == "tool":
+        # Handle multimodal content format - extract text if content is a list of dicts
+        content = event.get('content')
+        if isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict):
+            # Extract text from multimodal format [{'type': 'text', 'text': '...'}]
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get('type') == 'text':
+                    text_parts.append(item.get('text', ''))
+            event['content'] = ''.join(text_parts)
         return ToolResponseEvent(**event, sender=sender.name, recipient=recipient.name, uuid=uuid)
 
     # Role is neither function nor tool
