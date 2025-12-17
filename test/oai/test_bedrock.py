@@ -783,3 +783,178 @@ def test_validate_and_format_structured_output(bedrock_client: BedrockClient):
     parsed = json.loads(result)
     assert parsed["final_answer"] == "Final answer"
     assert len(parsed["steps"]) == 1
+
+# Test additionalModelRequestFields parsing
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_parsing_params_with_additional_model_request_fields(bedrock_client: BedrockClient):
+    """Test that additionalModelRequestFields are correctly parsed and added to additional_params."""
+    # Test with thinking configuration (main use case)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "temperature": 0.8,
+        "additionalModelRequestFields": {
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 1024,
+            },
+        },
+    })
+
+    assert base_params == {"temperature": 0.8}
+    assert additional_params == {
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        },
+    }
+
+    # Test with multiple fields in additionalModelRequestFields
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": {
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 512,
+            },
+            "custom_field": "custom_value",
+            "nested_config": {
+                "key1": "value1",
+                "key2": 42,
+            },
+        },
+    })
+
+    assert base_params == {}
+    assert additional_params == {
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 512,
+        },
+        "custom_field": "custom_value",
+        "nested_config": {
+            "key1": "value1",
+            "key2": 42,
+        },
+    }
+
+    # Test that config_only_fields are excluded from additional_params
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": {
+            "thinking": {"type": "enabled", "budget_tokens": 1024},
+            "api_type": "should_be_excluded",
+            "model": "should_be_excluded",
+            "aws_region": "should_be_excluded",
+            "messages": "should_be_excluded",
+            "tools": "should_be_excluded",
+            "response_format": "should_be_excluded",
+        },
+    })
+
+    assert "thinking" in additional_params
+    assert "api_type" not in additional_params
+    assert "model" not in additional_params
+    assert "aws_region" not in additional_params
+    assert "messages" not in additional_params
+    assert "tools" not in additional_params
+    assert "response_format" not in additional_params
+
+    # Test with empty additionalModelRequestFields dict
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": {},
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+    # Test that additionalModelRequestFields merges with other additional params like seed
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "seed": 42,
+        "top_k": 10,
+        "additionalModelRequestFields": {
+            "thinking": {"type": "enabled", "budget_tokens": 1024},
+        },
+    })
+
+    assert base_params == {}
+    assert additional_params == {
+        "seed": 42,
+        "top_k": 10,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 1024,
+        },
+    }
+
+    # Test with None additionalModelRequestFields (should be ignored)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": None,
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+    # Test with non-dict additionalModelRequestFields (should be ignored)
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": "not_a_dict",
+    })
+
+    assert base_params == {}
+    assert additional_params == {}
+
+
+# Test BedrockLLMConfigEntry with additionalModelRequestFields
+def test_bedrock_llm_config_entry_with_additional_model_request_fields():
+    """Test BedrockLLMConfigEntry accepts additionalModelRequestFields."""
+    thinking_config = {
+        "type": "enabled",
+        "budget_tokens": 1024,
+    }
+
+    bedrock_llm_config = BedrockLLMConfigEntry(
+        model="anthropic.claude-3-7-sonnet-20250219-v1:0",
+        aws_region="us-east-1",
+        additionalModelRequestFields={"thinking": thinking_config},
+        temperature=0.8,
+    )
+
+    expected = {
+        "api_type": "bedrock",
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "aws_region": "us-east-1",
+        "temperature": 0.8,
+        "tags": [],
+        "supports_system_prompts": True,
+        "additionalModelRequestFields": {"thinking": thinking_config},
+    }
+
+    actual = bedrock_llm_config.model_dump()
+    assert actual == expected
+
+    # Verify it works with LLMConfig
+    llm_config = LLMConfig(bedrock_llm_config)
+    config_list = llm_config.model_dump()["config_list"]
+    assert len(config_list) == 1
+    assert config_list[0]["additionalModelRequestFields"] == {"thinking": thinking_config}
+
+
+# Test edge case: additionalModelRequestFields with None value
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+def test_parsing_params_additional_model_request_fields_with_none_values(bedrock_client: BedrockClient):
+    """Test that None values in additionalModelRequestFields are handled correctly."""
+    base_params, additional_params = bedrock_client.parse_params({
+        "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "additionalModelRequestFields": {
+            "thinking": None,
+            "valid_field": "valid_value",
+        },
+    })
+
+    # None values should still be included (let Bedrock API handle validation)
+    assert "thinking" in additional_params
+    assert additional_params["thinking"] is None
+    assert additional_params["valid_field"] == "valid_value"
