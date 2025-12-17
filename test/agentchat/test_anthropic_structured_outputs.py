@@ -1005,18 +1005,21 @@ def test_groupchat_autopattern_tools_with_structured_output(credentials_anthropi
     )
 
     # Create user proxy for tool execution
+    # IMPORTANT: Must provide explicit user_agent to AutoPattern to avoid
+    # automatic creation of temp user with human_input_mode="ALWAYS"
     user_proxy = autogen.UserProxyAgent(
         name="User",
         human_input_mode="NEVER",
         code_execution_config=False,
     )
-    # user_proxy.register_function({"calculator": calculator})
+    user_proxy.register_function({"calculator": calculator})
 
     # Create AutoPattern for LLM-based speaker selection
     # AutoPattern requires llm_config for the group manager
     pattern = AutoPattern(
         initial_agent=analyst,
         agents=[analyst, calculator_agent],
+        user_agent=user_proxy,  # Provide explicit user_agent to prevent stdin reads
         group_manager_args={
             "llm_config": {
                 "config_list": credentials_anthropic_claude_sonnet.config_list,
