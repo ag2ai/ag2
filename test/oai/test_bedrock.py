@@ -1506,6 +1506,7 @@ class TestBedrockStructuredOutputIntegration:
             ]
             assert len(structured_output_tools) > 0, "Should have __structured_output tool call"
 
+
 # Test additionalModelRequestFields parsing
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params_with_additional_model_request_fields(bedrock_client: BedrockClient):
