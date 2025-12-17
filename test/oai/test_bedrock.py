@@ -784,6 +784,7 @@ def test_validate_and_format_structured_output(bedrock_client: BedrockClient):
     assert parsed["final_answer"] == "Final answer"
     assert len(parsed["steps"]) == 1
 
+
 # Test additionalModelRequestFields parsing
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 def test_parsing_params_with_additional_model_request_fields(bedrock_client: BedrockClient):

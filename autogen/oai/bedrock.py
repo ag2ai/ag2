@@ -68,6 +68,7 @@ class BedrockEntryDict(LLMConfigEntryDict, total=False):
     timeout: int | None
     additionalModelRequestFields: dict[str, Any] | None
 
+
 class BedrockLLMConfigEntry(LLMConfigEntry):
     api_type: Literal["bedrock"] = "bedrock"
 
