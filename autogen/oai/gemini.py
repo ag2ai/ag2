@@ -138,7 +138,7 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
         default=None,
         description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
     )
-    thinking_level: Literal["High", "Low"] | None = Field(
+    thinking_level: Literal["High", "Medium", "Low", "Minimal"] | None = Field(
         default=None, description="The level of thoughts tokens that the model should generate."
     )
     """A valid HTTP(S) proxy URL"""
@@ -947,9 +947,15 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     if use_vertexai:
         # Vertex AI pricing - based on Text input
-        # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
+        # https://cloud.google.com/vertex-ai/generative-ai/pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -959,6 +965,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             return total_cost_mil(0.3, 2.5)
@@ -1000,7 +1009,13 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -1011,6 +1026,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash

@@ -53,6 +53,33 @@ def test_gemini_llm_config_entry():
     }
 
 
+@pytest.mark.parametrize("thinking_level", ["High", "Medium", "Low", "Minimal"])
+def test_gemini_llm_config_entry_thinking_level(thinking_level):
+    """Test that GeminiLLMConfigEntry accepts all valid thinking_level values"""
+    gemini_llm_config = GeminiLLMConfigEntry(
+        model="gemini-2.5-flash",
+        api_key="dummy_api_key",
+        thinking_level=thinking_level,
+    )
+    actual = gemini_llm_config.model_dump()
+    assert actual["thinking_level"] == thinking_level
+
+
+def test_gemini_llm_config_entry_thinking_config():
+    """Test GeminiLLMConfigEntry with full thinking configuration"""
+    gemini_llm_config = GeminiLLMConfigEntry(
+        model="gemini-2.5-flash",
+        api_key="dummy_api_key",
+        include_thoughts=True,
+        thinking_budget=1024,
+        thinking_level="Medium",
+    )
+    actual = gemini_llm_config.model_dump()
+    assert actual["include_thoughts"] is True
+    assert actual["thinking_budget"] == 1024
+    assert actual["thinking_level"] == "Medium"
+
+
 @run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
 class TestGeminiClient:
     # Fixtures for mock data
@@ -776,6 +803,32 @@ class TestGeminiClient:
             (
                 {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
                 {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+            ),
+            # Test "Medium" thinking level
+            (
+                {"thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Medium"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Medium"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Medium"},
+            ),
+            (
+                {"thinking_budget": 512, "thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": 512, "thinking_level": "Medium"},
+            ),
+            # Test "Minimal" thinking level
+            (
+                {"thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Minimal"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Minimal"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Minimal"},
+            ),
+            (
+                {"thinking_budget": 128, "thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": 128, "thinking_level": "Minimal"},
             ),
         ],
     )
