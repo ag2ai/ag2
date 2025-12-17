@@ -790,11 +790,6 @@ class AnthropicClient:
 
     def _create_standard(self, params: dict[str, Any]) -> ChatCompletion:
         """Create a standard completion without structured outputs."""
-        # Convert tools to functions format if needed
-        if "tools" in params:
-            converted_functions = self.convert_tools_to_functions(params["tools"])
-            params["functions"] = params.get("functions", []) + converted_functions
-
         # Convert AG2 messages to Anthropic messages
         anthropic_messages = oai_messages_to_anthropic_messages(params)
 
@@ -910,11 +905,6 @@ class AnthropicClient:
         Returns:
             ChatCompletion with JSON output extracted from tags
         """
-        # Convert tools to functions format if needed
-        if "tools" in params:
-            converted_functions = self.convert_tools_to_functions(params["tools"])
-            params["functions"] = params.get("functions", []) + converted_functions
-
         # Add response format instructions to system message before message conversion
         self._add_response_format_to_system(params)
 
