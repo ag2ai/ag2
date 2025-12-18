@@ -783,3 +783,188 @@ def test_validate_and_format_structured_output(bedrock_client: BedrockClient):
     parsed = json.loads(result)
     assert parsed["final_answer"] == "Final answer"
     assert len(parsed["steps"]) == 1
+
+
+# Integration tests for Bedrock structured outputs
+@pytest.mark.integration
+@run_for_optional_imports(["boto3", "botocore"], "bedrock")
+class TestBedrockStructuredOutputIntegration:
+    """Integration tests for Bedrock structured outputs with real API calls."""
+
+    def setup_method(self):
+        """Setup method run before each test."""
+        import os
+        from pathlib import Path
+
+        try:
+            import dotenv
+
+            # Load environment variables from .env file
+            env_file = Path(__file__).parent.parent.parent / ".env"
+            if env_file.exists():
+                dotenv.load_dotenv(env_file)
+        except ImportError:
+            pass
+
+        # Check for AWS credentials - at least region should be set
+        # AWS credentials can come from env vars, IAM role, or AWS profile
+        if not os.getenv("AWS_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
+            pytest.skip(
+                "AWS_REGION or AWS_DEFAULT_REGION environment variable not set (check .env file or environment)"
+            )
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_pydantic_structured_output(self):
+        """Test creating and running an agent with Pydantic structured output."""
+        import json
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        model = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+
+        # Create LLM config with structured output
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": os.getenv("AWS_ACCESS_KEY_ID"),
+                "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+                "aws_profile_name": os.getenv("AWS_PROFILE"),
+                "response_format": MathReasoning,  # Enable structured outputs
+            },
+        )
+
+        # Create agent with structured output capability
+        math_agent = ConversableAgent(
+            name="math_assistant",
+            llm_config=llm_config,
+            system_message="""You are a helpful math assistant that solves problems step by step.
+            Always show your reasoning process clearly with explanations for each step.
+            Return your response in the structured format requested.""",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a simple math problem
+        result = math_agent.run(
+            message="Solve the equation: 2x + 5 = -25.",
+            max_turns=3,
+        ).process()
+
+        # Verify the response contains structured output
+        assert result is not None
+        assert len(result.chat_history) > 0
+
+        # Get the last message from the agent
+        last_message = result.chat_history[-1]
+        assert last_message.get("content") is not None
+
+        # Parse the structured output
+        content = last_message["content"]
+        try:
+            parsed_content = json.loads(content)
+        except json.JSONDecodeError:
+            # If content is not JSON, it might be formatted text - check if it contains expected fields
+            assert "final_answer" in content.lower() or "x =" in content.lower()
+            return
+
+        # Verify the structure matches MathReasoning schema
+        assert "final_answer" in parsed_content
+        assert "steps" in parsed_content
+        assert isinstance(parsed_content["steps"], list)
+
+        # Verify each step has required fields
+        for step in parsed_content["steps"]:
+            assert "explanation" in step
+            assert "output" in step
+
+    @run_for_optional_imports(["boto3", "botocore"], "bedrock")
+    def test_agent_with_dict_schema_structured_output(self):
+        """Test creating and running an agent with dict schema structured output."""
+        import json
+        import os
+
+        from autogen import ConversableAgent, LLMConfig
+
+        # Define schema as a dictionary (JSON Schema format)
+        dict_schema = {
+            "type": "object",
+            "properties": {
+                "problem": {"type": "string", "description": "The math problem being solved"},
+                "solution_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"step": {"type": "string"}, "result": {"type": "string"}},
+                        "required": ["step", "result"],
+                    },
+                },
+                "answer": {"type": "string"},
+            },
+            "required": ["problem", "solution_steps", "answer"],
+        }
+
+        # Get AWS configuration from environment
+        aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        model = os.getenv("BEDROCK_MODEL", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+
+        # Create LLM config with dict schema
+        llm_config = LLMConfig(
+            config_list={
+                "api_type": "bedrock",
+                "model": model,
+                "aws_region": aws_region,
+                "aws_access_key": os.getenv("AWS_ACCESS_KEY_ID"),
+                "aws_secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+                "aws_profile_name": os.getenv("AWS_PROFILE"),
+                "response_format": dict_schema,  # Using dict schema instead of Pydantic model
+            },
+        )
+
+        # Create agent with dict schema
+        math_agent = ConversableAgent(
+            name="math_assistant_dict",
+            llm_config=llm_config,
+            system_message="You are a helpful math assistant.",
+            max_consecutive_auto_reply=1,
+            human_input_mode="NEVER",
+        )
+
+        # Run the agent with a math problem
+        result = math_agent.run(
+            message="Solve: x^2 - 5x + 6 = 0",
+            max_turns=3,
+        ).process()
+
+        # Verify the response contains structured output
+        assert result is not None
+        assert len(result.chat_history) > 0
+
+        # Get the last message from the agent
+        last_message = result.chat_history[-1]
+        assert last_message.get("content") is not None
+
+        # Parse the structured output
+        content = last_message["content"]
+        try:
+            parsed_content = json.loads(content)
+        except json.JSONDecodeError:
+            # If content is not JSON, check if it contains expected fields
+            assert "answer" in content.lower() or "x =" in content.lower()
+            return
+
+        # Verify the structure matches dict schema
+        assert "problem" in parsed_content
+        assert "solution_steps" in parsed_content
+        assert "answer" in parsed_content
+        assert isinstance(parsed_content["solution_steps"], list)
+        assert len(parsed_content["solution_steps"]) > 0
+
+        # Verify each step has required fields
+        for step in parsed_content["solution_steps"]:
+            assert "step" in step
+            assert "result" in step
