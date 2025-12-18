@@ -94,78 +94,42 @@ Different tasks may require different models, and the `config_list` allows speci
 These will create a model client which assumes an OpenAI API (or compatible) endpoint. To use custom model clients, see [here](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_custom_model.ipynb).
 </Tip>
 
-### `OAI_CONFIG_LIST` pattern
+### Modern AG2 `config_list` pattern
 
-A common, useful pattern used is to define this `config_list` via JSON (specified as a file or an environment variable set to a JSON-formatted string) and then use the `from_json` method to load it:
+The current recommended pattern is to construct the `config_list` as a Python list in memory, typically with model info and API keys loaded from environment variables, without relying on `from_json` or external files. For example:
 
 ```python
-llm_config = autogen.LLMConfig.from_json(
-    env="OAI_CONFIG_LIST",  # Or path="path/to/config.json"
+import os
+from autogen import LLMConfig
+
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-5-mini",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        },
+        {
+            "api_type": "openai",
+            "model": "gpt-5",
+            "api_key": os.environ["OPENAI_API_KEY"]
+        }
+    ]
 )
-
-# Then, create the assistant agent with the config
-assistant = autogen.AssistantAgent(name="assistant", llm_config=llm_config)
 ```
 
-This can be helpful as it keeps all the configuration in one place across different projects or notebooks.
+You can use this list directly, and filter for specific models or tags as shown below.
 
-This function interprets the `env_or_file` argument as follows:
+### Filtering config_list
 
-- If `env_or_file` is an environment variable then:
-    - It will first try to load the file from the path specified in the environment variable.
-    - If there is no file, it will try to interpret the environment variable as a JSON string.
-- Otherwise, it will try to open the file at the path specified by `env_or_file`.
-
-### Why is it a list?
-
-Being a list allows you to define multiple models that can be used by the agent. This is useful for a few reasons:
-
-- If one model times out or fails, the agent can try another model.
-- Having a single global list of models and filtering it based on certain keys (e.g. name, tag) in order to pass select models into a certain agent (e.g. use cheaper GPT 4o-mini for agents solving easier tasks)
-- While the core agents, (e.g. conversable or assistant) do not have special logic around selecting configs, some of the specialized agents *may* have logic to select the best model based on the task at hand.
-
-### How does an agent decide which model to pick out of the list?
-
-An agent uses the very first model available in the "config_list" and makes LLM calls against this model. If the model fails (e.g. API throttling) the agent will retry the request against the 2nd model and so on until prompt completion is received (or throws an error if none of the models successfully completes the request). In general there's no implicit/hidden logic inside agents that is used to pick "the best model for the task". However, some specialized agents may attempt to choose "the best model for the task". It is developers responsibility to pick the right models and use them with agents.
-
-### Config list filtering
-
-As described above, the list can be filtered based on certain criteria. This is defined as a dictionary of key to filter on and values to filter by. For example, if you want to select a config with specific model(s), you can pass either a single string or a list of strings:
-
-```python
-# Single model (string)
-filter_dict = {"model": "gpt-5-nano"}
-
-# Multiple models (list)
-filter_dict = {"model": ["gpt-5-nano", "gpt-4.1"]}
-```
-
-This can then be applied to a config when constructing an `LLM_CONFIG` with the `where` method:
-
-```python
-llm_config = autogen.LLMConfig(path="OAI_CONFIG_LIST").where(**filter_dict)
-```
-
-Or, directly when loading the config list using `from_json`:
-
-```python
-llm_config = autogen.LLMConfig.from_json(path="OAI_CONFIG_LIST").where(**filter_dict)
-```
-
-#### Tags
-
-Model names can differ between OpenAI and Azure OpenAI, so tags offer an easy way to smooth over this inconsistency. Tags are a list of strings in the `config_list`, for example for the following `config_list`:
+The list can be filtered based on criteria such as model or tags by using the `where` method:
 
 ```python
 config_list = [
     {"api_type": "openai", "model": "my-gpt-4.1-deployment", "api_key": "", "tags": ["gpt4o", "openai"]},
     {"api_type": "openai", "model": "llama-7B", "base_url": "http://127.0.0.1:8080", "tags": ["llama", "local"]},
 ]
-```
 
-When filtering the `config_list`, you can pass a single tag or multiple tags. A config is selected if it has at least one of the specified tags:
-
-```python
 # Single tag
 filter_dict = {"tags": "llama"}
 llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
@@ -180,7 +144,7 @@ llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
 
 In AG2, a deepcopy is used on llm_config to ensure that the llm_config passed by user is not modified internally. You may get an error if the llm_config contains objects of a class that do not support deepcopy. To fix this, you need to implement a `__deepcopy__` method for the class.
 
-The below example shows how to implement a `__deepcopy__` method for http client and add a  proxy.
+The below example shows how to implement a `__deepcopy__` method for http client and add a proxy.
 
 ```python
 #!pip install httpx
@@ -367,3 +331,4 @@ llm_config = LLMConfig(
 - [`config_list_from_dotenv`](/docs/api-reference/autogen/config_list_from_dotenv): Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
 See [this notebook](/docs/use-cases/notebooks/notebooks/config_loader_utility_functions) for examples of using the above functions.
+ 
