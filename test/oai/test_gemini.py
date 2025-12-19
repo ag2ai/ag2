@@ -1081,3 +1081,233 @@ class TestGeminiClient:
             assert result == tools_list
         else:
             assert result != tools_list
+
+    def test_thought_signature_initialized_in_init(self, gemini_client):
+        """Test that thought signature mapping is initialized in __init__"""
+        assert hasattr(gemini_client, "tool_call_thought_signatures")
+        assert isinstance(gemini_client.tool_call_thought_signatures, dict)
+        assert len(gemini_client.tool_call_thought_signatures) == 0
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_thought_signature_captured_from_response(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that thought_signature is captured when parsing function call responses"""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # Create a mock function call part with thought_signature
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"location": "NYC"}
+
+        mock_part = MagicMock()
+        mock_part.function_call = mock_fn_call
+        mock_part.text = ""
+        mock_part.thought_signature = b"test_thought_signature_bytes"
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        response = gemini_client.create({
+            "model": "gemini-3-flash",
+            "messages": [{"content": "What's the weather in NYC?", "role": "user"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
+                    },
+                }
+            ],
+        })
+
+        # Verify thought_signature was captured
+        assert len(gemini_client.tool_call_thought_signatures) == 1
+        tool_call_id = response.choices[0].message.tool_calls[0].id
+        assert tool_call_id in gemini_client.tool_call_thought_signatures
+        assert gemini_client.tool_call_thought_signatures[tool_call_id] == b"test_thought_signature_bytes"
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.calculate_gemini_cost")
+    def test_thought_signature_retained_across_calls(self, mock_calculate_cost, mock_generative_client, gemini_client):
+        """Test that thought_signature is retained across multiple create() calls"""
+        mock_calculate_cost.return_value = 0.001
+
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        # First call: Model returns a function call with thought_signature
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "get_weather"
+        mock_fn_call.args = {"location": "NYC"}
+
+        mock_part_with_fn = MagicMock()
+        mock_part_with_fn.function_call = mock_fn_call
+        mock_part_with_fn.text = ""
+        mock_part_with_fn.thought_signature = b"signature_for_tool_call"
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 10
+        mock_usage_metadata.candidates_token_count = 5
+
+        mock_candidate_fn = MagicMock()
+        mock_candidate_fn.content.parts = [mock_part_with_fn]
+
+        mock_response_fn = MagicMock(spec=GenerateContentResponse)
+        mock_response_fn.usage_metadata = mock_usage_metadata
+        mock_response_fn.candidates = [mock_candidate_fn]
+
+        mock_chat.send_message.return_value = mock_response_fn
+
+        # First create call
+        response1 = gemini_client.create({
+            "model": "gemini-3-flash",
+            "messages": [{"content": "What's the weather?", "role": "user"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
+                    },
+                }
+            ],
+        })
+
+        tool_call_id = response1.choices[0].message.tool_calls[0].id
+
+        # Verify thought_signature was captured
+        assert tool_call_id in gemini_client.tool_call_thought_signatures
+        captured_signature = gemini_client.tool_call_thought_signatures[tool_call_id]
+        assert captured_signature == b"signature_for_tool_call"
+
+        # Second call: Send function result back (simulating the tool response flow)
+        mock_part_text = MagicMock()
+        mock_part_text.function_call = None
+        mock_part_text.text = "The weather in NYC is sunny."
+
+        mock_candidate_text = MagicMock()
+        mock_candidate_text.content.parts = [mock_part_text]
+
+        mock_response_text = MagicMock(spec=GenerateContentResponse)
+        mock_response_text.usage_metadata = mock_usage_metadata
+        mock_response_text.candidates = [mock_candidate_text]
+
+        mock_chat.send_message.return_value = mock_response_text
+
+        # Prepare messages that include the previous tool call and result
+        messages = [
+            {"content": "What's the weather?", "role": "user"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": tool_call_id,
+                        "function": {"name": "get_weather", "arguments": '{"location": "NYC"}'},
+                        "type": "function",
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": tool_call_id, "content": "Sunny, 72°F"},
+        ]
+
+        # Second create call - thought_signature should still be available
+        response2 = gemini_client.create({
+            "model": "gemini-3-flash",
+            "messages": messages,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
+                    },
+                }
+            ],
+        })
+
+        # Verify the thought_signature is still retained after second call
+        assert tool_call_id in gemini_client.tool_call_thought_signatures
+        assert gemini_client.tool_call_thought_signatures[tool_call_id] == b"signature_for_tool_call"
+
+    def test_thought_signature_included_in_reconstructed_parts(self, gemini_client):
+        """Test that thought_signature is included when reconstructing function call Parts"""
+        from google.genai.types import Part
+
+        # Manually set up a thought_signature mapping
+        tool_call_id = "test_tool_123"
+        test_signature = b"test_signature_bytes"
+        gemini_client.tool_call_thought_signatures[tool_call_id] = test_signature
+        gemini_client.tool_call_function_map[tool_call_id] = "test_function"
+
+        # Create a message with tool_calls that should be converted
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "test_function", "arguments": '{"arg1": "value1"}'},
+                    "type": "function",
+                }
+            ],
+        }
+
+        # Convert to Gemini content
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        assert len(parts) == 1
+
+        # Verify the Part has the thought_signature
+        part = parts[0]
+        assert isinstance(part, Part)
+        assert part.function_call is not None
+        assert part.function_call.name == "test_function"
+        assert part.thought_signature == test_signature
+
+    def test_thought_signature_none_when_not_present(self, gemini_client):
+        """Test that thought_signature is None when not available in mapping"""
+        from google.genai.types import Part
+
+        # Set up function map without thought_signature
+        tool_call_id = "tool_without_signature"
+        gemini_client.tool_call_function_map[tool_call_id] = "some_function"
+        # Note: not adding to tool_call_thought_signatures
+
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "function": {"name": "some_function", "arguments": "{}"},
+                    "type": "function",
+                }
+            ],
+        }
+
+        parts, part_type = gemini_client._oai_content_to_gemini_content(message)
+
+        assert part_type == "tool_call"
+        part = parts[0]
+        assert isinstance(part, Part)
+        # thought_signature should be None (not set, which is fine for non-Gemini-3 models)
+        assert part.thought_signature is None

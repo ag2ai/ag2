@@ -215,6 +215,11 @@ class GeminiClient:
         # Store the response format, if provided (for structured outputs)
         self._response_format: type[BaseModel] | None = None
 
+        # Maps the function call ids to function names so we can inject it into FunctionResponse messages
+        self.tool_call_function_map: dict[str, str] = {}
+        # Maps function call ids to thought signatures (required for Gemini 3 models)
+        self.tool_call_thought_signatures: dict[str, bytes] = {}
+
     def message_retrieval(self, response: ChatCompletion) -> list[ChatCompletionMessage]:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
@@ -314,9 +319,6 @@ class GeminiClient:
 
         autogen_tool_calls = []
 
-        # Maps the function call ids to function names so we can inject it into FunctionResponse messages
-        self.tool_call_function_map: dict[str, str] = {}
-
         # If response_format exists, we want structured outputs
         # Based on
         # https://ai.google.dev/gemini-api/docs/structured-output?lang=python#supply-schema-in-config
@@ -401,9 +403,10 @@ class GeminiClient:
             if fn_call := part.function_call:
                 # If we have a repeated function call, ignore it
                 if fn_call not in prev_function_calls:
+                    tool_call_id = str(random_id)
                     autogen_tool_calls.append(
                         ChatCompletionMessageToolCall(
-                            id=str(random_id),
+                            id=tool_call_id,
                             function={
                                 "name": fn_call.name,
                                 "arguments": (
@@ -413,6 +416,10 @@ class GeminiClient:
                             type="function",
                         )
                     )
+
+                    # Store thought_signature if present (required for Gemini 3 models)
+                    if hasattr(part, "thought_signature") and part.thought_signature:
+                        self.tool_call_thought_signatures[tool_call_id] = part.thought_signature
 
                     prev_function_calls.append(fn_call)
                     random_id += 1
@@ -528,12 +535,15 @@ class GeminiClient:
                         })
                     )
                 else:
+                    # Include thought_signature if available (required for Gemini 3 models)
+                    thought_sig = self.tool_call_thought_signatures.get(function_id)
                     rst.append(
                         Part(
                             function_call=FunctionCall(
                                 name=function_name,
                                 args=json.loads(tool_call["function"]["arguments"]),
-                            )
+                            ),
+                            thought_signature=thought_sig,
                         )
                     )
 
