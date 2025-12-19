@@ -81,6 +81,7 @@ with optional_import_block():
         GoogleSearch,
         Part,
         Schema,
+        ThinkingConfig,
         Tool,
         Type,
     )
@@ -129,6 +130,17 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_config: ToolConfig | None = None
     proxy: str | None = None
+    include_thoughts: bool | None = Field(
+        default=None,
+        description="Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought",
+    )
+    thinking_budget: int | None = Field(
+        default=None,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
+    )
+    thinking_level: Literal["High", "Medium", "Low", "Minimal"] | None = Field(
+        default=None, description="The level of thoughts tokens that the model should generate."
+    )
     """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
@@ -272,7 +284,14 @@ class GeminiClient:
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
         tool_config = params.get("tool_config")
-
+        include_thoughts = params.get("include_thoughts")
+        thinking_budget = params.get("thinking_budget")
+        thinking_level = params.get("thinking_level")
+        thinking_config = ThinkingConfig(
+            include_thoughts=include_thoughts,
+            thinking_budget=thinking_budget,
+            thinking_level=thinking_level,
+        )
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -336,6 +355,7 @@ class GeminiClient:
                 system_instruction=system_instruction,
                 tools=tools,
                 tool_config=tool_config,
+                thinking_config=thinking_config if thinking_config is not None else None,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
@@ -936,9 +956,15 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     if use_vertexai:
         # Vertex AI pricing - based on Text input
-        # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
+        # https://cloud.google.com/vertex-ai/generative-ai/pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -948,6 +974,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             return total_cost_mil(0.3, 2.5)
@@ -989,7 +1018,13 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -1000,6 +1035,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash

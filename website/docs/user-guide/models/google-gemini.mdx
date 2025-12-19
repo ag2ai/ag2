@@ -50,16 +50,16 @@ Sample OAI_CONFIG_LIST
 ```python
 [
     {
-        "model": "gemini-2.0-flash-lite",
+        "model": "gemini-2.5-flash",
         "api_key": "your Google's GenAI Key goes here",
         "api_type": "google"
     },
     {
-        "model": "gemini-2.0-flash",
+        "model": "gemini-2.5-pro",
         "api_type": "google"
     },
     {
-        "model": "gemini-1.5-pro",
+        "model": "gemini-3-pro-preview",
         "project_id": "your-awesome-google-cloud-project-id",
         "location": "us-west1",
         "google_application_credentials": "your-google-service-account-key.json",
@@ -82,10 +82,18 @@ from autogen import AssistantAgent, UserProxyAgent, LLMConfig
 from autogen.code_utils import content_str
 
 seed = 42  # for caching, use None for no caching
-llm_config_gemini = LLMConfig.from_json(
-    path="OAI_CONFIG_LIST",
-    seed=seed,
-).where(model="gemini-2.0-flash-lite")
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "project_id": "your-awesome-google-cloud-project-id",
+        "location": "us-west1",
+        "google_application_credentials": "your-google-service-account-key.json",
+        "api_key": api_key,
+        "thinking_level": "High",
+        "include_thoughts": True,
+    }
+)
 
 assistant = AssistantAgent(
     name="assistant",
@@ -95,7 +103,7 @@ assistant = AssistantAgent(
     "Do not say 'ALL DONE' in the same response as code."
     ),
     max_consecutive_auto_reply=3,
-    llm_config=llm_config_gemini,
+    llm_config=llm_config,
 )
 
 user_proxy = UserProxyAgent(
@@ -165,10 +173,18 @@ from autogen import UserProxyAgent, LLMConfig
 from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 
 seed = None # for caching
-llm_config_gemini_vision = LLMConfig.from_json(
-    path="OAI_CONFIG_LIST",
-    seed=seed,
-).where(model="gemini-2.0-flash")
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "project_id": "your-awesome-google-cloud-project-id",
+        "location": "us-west1",
+        "google_application_credentials": "your-google-service-account-key.json",
+        "api_key": api_key,
+        "thinking_budget": -1, # '-1' means AUTOMATIC Gemini adjusts based on complexity of tasks
+        "include_thoughts": True,
+    }
+)
 
 image_agent = MultimodalConversableAgent(
     "Gemini Vision",
@@ -210,4 +226,33 @@ The image appears to be a screenshot of a chat interface, likely from a customer
 In summary, the image depicts a typical chat interface used for customer support or interaction with AI models, focusing on clear communication and ease of use.
 
 --------------------------------------------------------------------------------
+```
+
+
+## Ag2 Gemini Client Now Supports ThinkingConfig
+
+ThinkConfig has three configuration:
+- `thinking budget`: Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.
+the ranges can be found here: [thinking budget ranges](https://ai.google.dev/gemini-api/docs/thinking#:~:text=The%20following%20are%20thinkingBudget%20configuration%20details%20for%20each%20model%20type.%20You%20can%20disable%20thinking%20by%20setting%20thinkingBudget%20to%200.%20Setting%20the%20thinkingBudget%20to%20%2D1%20turns%20on%20dynamic%20thinking%2C%20meaning%20the%20model%20will%20adjust%20the%20budget%20based%20on%20the%20complexity%20of%20the%20request.)
+- `thinking level`: The level of thoughts tokens that the model should generate.
+- `include_thoughts`: Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought and thoughts are available.
+
+```python
+# example configuration for ThinkingConfig Support
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "project_id": "your-awesome-google-cloud-project-id",
+        "location": "us-west1",
+        "google_application_credentials": "your-google-service-account-key.json",
+        "api_key": api_key,
+        # "thinking_budget": 10000,
+        "thinking_level": "High", # Use the thinkingLevel parameter with Gemini 3 Pro. While thinkingBudget is accepted for backwards compatibility, using it with Gemini 3 Pro is recommended
+        "include_thoughts": True,
+    }
+)
+
+agent = ConversableAgent(name="agent", description="you are a helpful assistant", llm_config=llm_config)
+response = agent.run(message=prompt, max_turns=2).process()
 ```
