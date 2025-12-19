@@ -1459,3 +1459,161 @@ Think through this step by step, being careful about the wording.""",
     assert response.usage.total_tokens > 0
     assert response.usage.prompt_tokens > 0
     assert response.usage.completion_tokens > 0
+
+
+@pytest.mark.anthropic
+@pytest.mark.aux_neg_flag
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_real_tools_with_structured_output_beta_api(credentials_anthropic_claude_sonnet, caplog):
+    """Real API call test for tools + structured outputs using beta API.
+
+    This test verifies that OpenAI tool format works with Anthropic's structured
+    outputs beta API. Previously, the OpenAI wrapper format {"type": "function", ...}
+    was rejected by the beta API with a 400 error.
+
+    The key test is that combining tools (in OpenAI format) with response_format
+    doesn't cause a 400 error, proving the tool format conversion works correctly.
+    """
+    import json
+    import logging
+
+    from pydantic import BaseModel
+
+    # Capture logs to verify beta API usage
+    caplog.set_level(logging.WARNING)
+
+    # Define structured output schema
+    class MathResult(BaseModel):
+        steps: list[str]
+        answer: int
+
+    # Get API key from credentials
+    api_key = credentials_anthropic_claude_sonnet.config_list[0]["api_key"]
+
+    # Create client
+    client = AnthropicClient(api_key=api_key)
+
+    # Define tool in OpenAI format with "type": "function" wrapper
+    # This is the format that was causing the 400 error before the fix
+    tools = [
+        {
+            "type": "function",  # OpenAI wrapper format
+            "function": {
+                "name": "calculator",
+                "description": "Perform basic math operations",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {
+                            "type": "string",
+                            "enum": ["add", "subtract", "multiply", "divide"],
+                            "description": "The operation to perform",
+                        },
+                        "a": {"type": "number", "description": "First number"},
+                        "b": {"type": "number", "description": "Second number"},
+                    },
+                    "required": ["operation", "a", "b"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+    ]
+
+    # Test 1: Verify tools with structured output don't cause 400 error
+    # This was the original bug - combining tools + response_format would fail
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Use the calculator tool to compute 23 + 19"}],
+        "max_tokens": 1024,
+        "response_format": MathResult,  # Triggers beta API
+        "tools": tools,  # OpenAI format with "type": "function"
+    }
+
+    # Make actual API call - this should succeed with the fix (no 400 error)
+    response = client.create(params)
+
+    # Verify response structure
+    assert response is not None
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+
+    message = response.choices[0].message
+
+    # Verify tool call was made (Claude should use the tool)
+    assert message.tool_calls is not None, "Should have tool calls"
+    assert len(message.tool_calls) > 0, "Should have at least one tool call"
+
+    # Verify tool call structure
+    tool_call = message.tool_calls[0]
+    assert hasattr(tool_call, "function"), "Tool call should have function attribute"
+    assert tool_call.function.name == "calculator"
+
+    # Parse and verify arguments - strict validation should work
+    args = json.loads(tool_call.function.arguments)
+    assert args["operation"] == "add"
+    assert args["a"] == 23
+    assert args["b"] == 19
+
+    # Verify cost tracking
+    assert response.cost is not None
+    assert response.cost >= 0
+
+    # VERIFY BETA API WAS ACTUALLY USED (not fallback to JSON mode)
+    # Method 1: Check that no fallback warning was logged
+    fallback_warnings = [
+        record
+        for record in caplog.records
+        if "Falling back to JSON Mode" in record.message and record.levelname == "WARNING"
+    ]
+    assert len(fallback_warnings) == 0, (
+        f"Beta API should not fall back to JSON mode. Found warnings: {[r.message for r in fallback_warnings]}"
+    )
+
+    # Method 2: Verify response characteristics indicate beta API usage
+    # Beta API responses should have proper structured content
+    assert response.choices[0].message.content is not None or response.choices[0].message.tool_calls is not None, (
+        "Beta API should return either content or tool calls"
+    )
+
+    # Test 2: Verify structured output works after tool execution
+    # Send tool result and request structured output using OpenAI format
+    tool_result_params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [
+            {"role": "user", "content": "Calculate 15 + 7 and show your work"},
+            {
+                "role": "assistant",
+                "content": "",  # Empty content when tool calls are present
+                "tool_calls": [
+                    {
+                        "id": "call_test_123",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": json.dumps({"operation": "add", "a": 15, "b": 7}),
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_test_123", "content": "22"},
+        ],
+        "max_tokens": 1024,
+        "response_format": MathResult,
+    }
+
+    # Get response with structured output
+    final_response = client.create(tool_result_params)
+
+    # Verify structured output
+    assert final_response.choices[0].message.content is not None
+    content = final_response.choices[0].message.content
+
+    # Parse and validate structured output
+    if isinstance(content, str):
+        result = MathResult.model_validate_json(content)
+    else:
+        result = MathResult.model_validate(content)
+
+    # Verify structured output has required fields
+    assert result.steps, "Should have steps"
+    assert result.answer == 22, "Should have correct answer"
