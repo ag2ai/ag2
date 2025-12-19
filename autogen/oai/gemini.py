@@ -81,6 +81,7 @@ with optional_import_block():
         GoogleSearch,
         Part,
         Schema,
+        ThinkingConfig,
         Tool,
         Type,
     )
@@ -129,6 +130,17 @@ class GeminiLLMConfigEntry(LLMConfigEntry):
     price: list[float] | None = Field(default=None, min_length=2, max_length=2)
     tool_config: ToolConfig | None = None
     proxy: str | None = None
+    include_thoughts: bool | None = Field(
+        default=None,
+        description="Indicates whether to include thoughts in the response. If true, thoughts are returned only if the model supports thought",
+    )
+    thinking_budget: int | None = Field(
+        default=None,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
+    )
+    thinking_level: Literal["High", "Medium", "Low", "Minimal"] | None = Field(
+        default=None, description="The level of thoughts tokens that the model should generate."
+    )
     """A valid HTTP(S) proxy URL"""
 
     def create_client(self):
@@ -203,7 +215,7 @@ class GeminiClient:
         # Store the response format, if provided (for structured outputs)
         self._response_format: type[BaseModel] | None = None
 
-    def message_retrieval(self, response) -> list:
+    def message_retrieval(self, response: ChatCompletion) -> list[ChatCompletionMessage]:
         """Retrieve and return a list of strings or a list of Choice.Message from the response.
 
         NOTE: if a list of Choice.Message is returned, it currently needs to contain the fields of OpenAI's ChatCompletion Message object,
@@ -211,11 +223,11 @@ class GeminiClient:
         """
         return [choice.message for choice in response.choices]
 
-    def cost(self, response) -> float:
+    def cost(self, response: ChatCompletion) -> float:
         return response.cost
 
     @staticmethod
-    def get_usage(response) -> dict:
+    def get_usage(response: ChatCompletion) -> dict[str, Any]:
         """Return usage summary of the response using RESPONSE_USAGE_KEYS."""
         # ...  # pragma: no cover
         return {
@@ -226,7 +238,7 @@ class GeminiClient:
             "model": response.model,
         }
 
-    def create(self, params: dict) -> ChatCompletion:
+    def create(self, params: dict[str, Any]) -> ChatCompletion:
         # When running in async context via run_in_executor from ConversableAgent.a_generate_oai_reply,
         # this method runs in a new thread that doesn't have an event loop by default. The Google Genai
         # client requires an event loop even for synchronous operations, so we need to ensure one exists.
@@ -272,7 +284,14 @@ class GeminiClient:
         response_validation = params.get("response_validation", True)
         tools = self._tools_to_gemini_tools(params["tools"]) if "tools" in params else None
         tool_config = params.get("tool_config")
-
+        include_thoughts = params.get("include_thoughts")
+        thinking_budget = params.get("thinking_budget")
+        thinking_level = params.get("thinking_level")
+        thinking_config = ThinkingConfig(
+            include_thoughts=include_thoughts,
+            thinking_budget=thinking_budget,
+            thinking_level=thinking_level,
+        )
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -336,6 +355,7 @@ class GeminiClient:
                 system_instruction=system_instruction,
                 tools=tools,
                 tool_config=tool_config,
+                thinking_config=thinking_config if thinking_config is not None else None,
                 **generation_config,
             )
             chat = client.chats.create(model=model_name, config=generate_content_config, history=gemini_messages[:-1])
@@ -452,7 +472,7 @@ class GeminiClient:
 
         return response_oai
 
-    def _extract_system_instruction(self, messages: list[dict]) -> str | None:
+    def _extract_system_instruction(self, messages: list[dict[str, Any]]) -> str | None:
         """Extract system instruction if provided."""
         if messages is None or len(messages) == 0 or messages[0].get("role") != "system":
             return None
@@ -559,7 +579,7 @@ class GeminiClient:
         else:
             raise Exception("Unable to convert content to Gemini format.")
 
-    def _concat_parts(self, parts: list[Part]) -> list:
+    def _concat_parts(self, parts: list[Part]) -> list[Any]:
         """Concatenate parts with the same type.
         If two adjacent parts both have the "text" attribute, then it will be joined into one part.
         """
@@ -588,7 +608,7 @@ class GeminiClient:
 
         return concatenated_parts
 
-    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _oai_messages_to_gemini_messages(self, messages: list[dict[str, Any]]) -> list[Content]:
         """Convert messages from OAI format to Gemini format.
         Make sure the "user" role and "model" role are interleaved.
         Also, make sure the last item is from the "user" role.
@@ -763,32 +783,36 @@ class GeminiClient:
             return [Tool(function_declarations=functions)]
 
     @staticmethod
-    def _create_gemini_function_declaration(tool: dict) -> FunctionDeclaration:
+    def _create_gemini_function_declaration(tool: dict[str, Any]) -> FunctionDeclaration:
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
         if len(tool["function"]["parameters"]["properties"]) != 0:
-            function_declaration.parameters = GeminiClient._create_gemini_function_parameters(
+            function_declaration.parameters = GeminiClient._create_gemini_function_declaration_schema(
                 copy.deepcopy(tool["function"]["parameters"])
             )
 
         return function_declaration
 
     @staticmethod
-    def _create_gemini_function_declaration_schema(json_data) -> Schema:
+    def _create_gemini_function_declaration_schema(json_data: dict[str, Any]) -> Schema:
         """Recursively creates Schema objects for FunctionDeclaration."""
-        param_schema = Schema()
-        param_type = json_data["type"]
+        # First resolve any $ref references in this node
+        json_data = resolve_json_references(json_data)
+        if "$defs" in json_data:
+            json_data = copy.deepcopy(json_data)
+            json_data.pop("$defs", None)
 
-        """
-        TYPE_UNSPECIFIED = 0
-        STRING = 1
-        INTEGER = 2
-        NUMBER = 3
-        OBJECT = 4
-        ARRAY = 5
-        BOOLEAN = 6
-        """
+        param_schema = Schema()
+
+        # Guard against missing type (can happen with unresolved refs or anyOf/oneOf)
+        if "type" not in json_data:
+            param_schema.type = Type.STRING
+            if "description" in json_data:
+                param_schema.description = json_data["description"]
+            return param_schema
+
+        param_type = json_data["type"]
 
         if param_type == "integer":
             param_schema.type = Type.INTEGER
@@ -803,7 +827,7 @@ class GeminiClient:
             if "items" in json_data:
                 param_schema.items = GeminiClient._create_gemini_function_declaration_schema(json_data["items"])
             else:
-                print("Warning: Array schema missing 'items' definition.")
+                logger.warning("Array schema missing 'items' definition.")
         elif param_type == "object":
             param_schema.type = Type.OBJECT
             param_schema.properties = {}
@@ -812,21 +836,26 @@ class GeminiClient:
                     param_schema.properties[prop_name] = GeminiClient._create_gemini_function_declaration_schema(
                         prop_data
                     )
-                else:
-                    print("Warning: Object schema missing 'properties' definition.")
-
+            else:
+                logger.warning("Object schema missing 'properties' definition.")
         elif param_type in ("null", "any"):
             param_schema.type = Type.STRING  # Treating these as strings for simplicity
         else:
-            print(f"Warning: Unsupported parameter type '{param_type}'.")
+            logger.warning(f"Unsupported parameter type '{param_type}'.")
 
         if "description" in json_data:
             param_schema.description = json_data["description"]
 
+        if "required" in json_data:
+            param_schema.required = json_data["required"]
+
+        if "enum" in json_data:
+            param_schema.enum = json_data["enum"]
+
         return param_schema
 
     @staticmethod
-    def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
+    def _create_gemini_function_parameters(function_parameter: dict[str, Any]) -> dict[str, Any]:
         """Convert function parameters to Gemini format, recursive"""
         function_parameter = GeminiClient._unwrap_references(function_parameter)
 
@@ -853,7 +882,7 @@ class GeminiClient:
         return function_parameter
 
     @staticmethod
-    def _to_vertexai_safety_settings(safety_settings):
+    def _to_vertexai_safety_settings(safety_settings: list[dict[str, Any]] | None) -> list[Any]:
         """Convert safety settings to VertexAI format if needed,
         like when specifying them in the OAI_CONFIG_LIST
         """
@@ -889,7 +918,7 @@ class GeminiClient:
 
 
 @require_optional_import(["PIL"], "gemini")
-def get_image_data(image_file: str, use_b64=True) -> bytes:
+def get_image_data(image_file: str, use_b64: bool = True) -> bytes:
     if image_file.startswith("http://") or image_file.startswith("https://"):
         response = requests.get(image_file)
         content = response.content
@@ -913,11 +942,11 @@ def _format_json_response(response: Any, original_answer: str) -> str:
 
 
 def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: int, model_name: str) -> float:
-    def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float):
+    def total_cost_mil(cost_per_mil_input: float, cost_per_mil_output: float) -> float:
         # Cost per million
         return cost_per_mil_input * input_tokens / 1e6 + cost_per_mil_output * output_tokens / 1e6
 
-    def total_cost_k(cost_per_k_input: float, cost_per_k_output: float):
+    def total_cost_k(cost_per_k_input: float, cost_per_k_output: float) -> float:
         # Cost per thousand
         return cost_per_k_input * input_tokens / 1e3 + cost_per_k_output * output_tokens / 1e3
 
@@ -927,9 +956,15 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
 
     if use_vertexai:
         # Vertex AI pricing - based on Text input
-        # https://cloud.google.com/vertex-ai/generative-ai/pricing#vertex-ai-pricing
+        # https://cloud.google.com/vertex-ai/generative-ai/pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -939,6 +974,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             return total_cost_mil(0.3, 2.5)
@@ -980,7 +1018,13 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
     else:
         # Non-Vertex AI pricing
 
-        if (
+        if model_name == "gemini-3-pro-preview":
+            if up_to_200k:
+                return total_cost_mil(2.0, 12)
+            else:
+                return total_cost_mil(4.0, 18)
+
+        elif (
             model_name == "gemini-2.5-pro"
             or "gemini-2.5-pro-preview-06-05" in model_name
             or "gemini-2.5-pro-preview-05-06" in model_name
@@ -991,6 +1035,9 @@ def calculate_gemini_cost(use_vertexai: bool, input_tokens: int, output_tokens: 
                 return total_cost_mil(1.25, 10)
             else:
                 return total_cost_mil(2.5, 15)
+
+        elif model_name == "gemini-3-flash-preview":
+            return total_cost_mil(0.5, 3.0)
 
         elif "gemini-2.5-flash" in model_name:
             # https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash
