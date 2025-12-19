@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import warnings
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -20,7 +21,7 @@ with optional_import_block() as result:
     from google.api_core.exceptions import InternalServerError
     from google.auth.credentials import Credentials
     from google.cloud.aiplatform.initializer import global_config as vertexai_global_config
-    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Tool
+    from google.genai.types import GenerateContentResponse, GoogleSearch, HttpOptions, Schema, Tool
     from vertexai.generative_models import GenerationResponse as VertexAIGenerationResponse
     from vertexai.generative_models import HarmBlockThreshold as VertexAIHarmBlockThreshold
     from vertexai.generative_models import HarmCategory as VertexAIHarmCategory
@@ -51,6 +52,33 @@ def test_gemini_llm_config_entry():
     assert LLMConfig(gemini_llm_config).model_dump() == {
         "config_list": [expected],
     }
+
+
+@pytest.mark.parametrize("thinking_level", ["High", "Medium", "Low", "Minimal"])
+def test_gemini_llm_config_entry_thinking_level(thinking_level):
+    """Test that GeminiLLMConfigEntry accepts all valid thinking_level values"""
+    gemini_llm_config = GeminiLLMConfigEntry(
+        model="gemini-2.5-flash",
+        api_key="dummy_api_key",
+        thinking_level=thinking_level,
+    )
+    actual = gemini_llm_config.model_dump()
+    assert actual["thinking_level"] == thinking_level
+
+
+def test_gemini_llm_config_entry_thinking_config():
+    """Test GeminiLLMConfigEntry with full thinking configuration"""
+    gemini_llm_config = GeminiLLMConfigEntry(
+        model="gemini-2.5-flash",
+        api_key="dummy_api_key",
+        include_thoughts=True,
+        thinking_budget=1024,
+        thinking_level="Medium",
+    )
+    actual = gemini_llm_config.model_dump()
+    assert actual["include_thoughts"] is True
+    assert actual["thinking_budget"] == 1024
+    assert actual["thinking_level"] == "Medium"
 
 
 @run_for_optional_imports(["vertexai", "PIL", "google.auth", "google.api", "google.cloud", "google.genai"], "gemini")
@@ -618,6 +646,99 @@ class TestGeminiClient:
 
         assert result == expected_result, result
 
+    def test_create_gemini_function_declaration_returns_schema(self) -> None:
+        """Test that _create_gemini_function_declaration returns proper Schema objects without Pydantic warnings."""
+        tool = {
+            "function": {
+                "name": "search_web",
+                "description": "Search the web for information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query"},
+                        "max_results": {"type": "integer", "description": "Maximum number of results"},
+                    },
+                    "required": ["query"],
+                },
+            }
+        }
+
+        func_decl = GeminiClient._create_gemini_function_declaration(tool)
+
+        # Verify the function declaration is correct
+        assert func_decl.name == "search_web"
+        assert func_decl.description == "Search the web for information"
+        assert isinstance(func_decl.parameters, Schema), "parameters should be a Schema object, not a dict"
+
+        # Verify no Pydantic serialization warnings are raised when serializing
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            func_decl.model_dump()
+
+            pydantic_warnings = [
+                warning
+                for warning in w
+                if "PydanticSerializationUnexpectedValue" in str(warning.message)
+                and "parameters" in str(warning.message)
+            ]
+            assert len(pydantic_warnings) == 0, (
+                f"Pydantic serialization warnings were raised for parameters field: {pydantic_warnings}"
+            )
+
+    def test_create_gemini_function_declaration_schema_handles_required_and_enum(self) -> None:
+        """Test that _create_gemini_function_declaration_schema handles required and enum fields."""
+        json_data = {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "The status",
+                    "enum": ["active", "inactive", "pending"],
+                },
+                "count": {"type": "integer", "description": "The count"},
+            },
+            "required": ["status"],
+        }
+
+        schema = GeminiClient._create_gemini_function_declaration_schema(json_data)
+
+        assert isinstance(schema, Schema)
+        assert schema.required == ["status"]
+        assert schema.properties["status"].enum == ["active", "inactive", "pending"]
+
+    def test_create_gemini_function_declaration_schema_with_nested_refs(self) -> None:
+        """Test that _create_gemini_function_declaration_schema handles nested $ref references."""
+        # This schema has a $ref inside a property that references a $defs entry
+        json_data = {
+            "type": "object",
+            "$defs": {
+                "SubItem": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "The name"},
+                    },
+                    "required": ["name"],
+                }
+            },
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "description": "List of items",
+                    "items": {"$ref": "#/$defs/SubItem"},
+                },
+            },
+            "required": ["items"],
+        }
+
+        # This should not raise KeyError: 'type'
+        schema = GeminiClient._create_gemini_function_declaration_schema(json_data)
+
+        assert isinstance(schema, Schema)
+        assert schema.required == ["items"]
+        assert schema.properties["items"].description == "List of items"
+        # The nested $ref should be resolved and have proper type
+        assert schema.properties["items"].items is not None
+
     @patch("autogen.oai.gemini.genai.Client")
     @patch("autogen.oai.gemini.GenerateContentConfig")
     def test_generation_config_with_seed(self, mock_generate_content_config, mock_generative_client, gemini_client):
@@ -664,6 +785,197 @@ class TestGeminiClient:
         assert call_kwargs["max_output_tokens"] == 100, "max_tokens should be mapped to max_output_tokens"
         assert call_kwargs["top_p"] == 0.9, "top_p parameter should be passed to generation config"
         assert call_kwargs["top_k"] == 5, "top_k parameter should be passed to generation config"
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_with_thinking_config(
+        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that thinking parameters are properly passed to generation config"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Thoughtful response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 12
+        mock_usage_metadata.candidates_token_count = 6
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            "include_thoughts": True,
+            "thinking_budget": 1024,
+            "thinking_level": "High",
+        })
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=True,
+            thinking_budget=1024,
+            thinking_level="High",
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "thinking_config should be passed to GenerateContentConfig"
+        )
+
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_with_default_thinking_config(
+        self, mock_thinking_config, mock_generate_content_config, mock_generative_client, gemini_client
+    ):
+        """Test that a default ThinkingConfig is created and passed when no thinking params are provided"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 5
+        mock_usage_metadata.candidates_token_count = 3
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        # Call create without thinking params
+        gemini_client.create({
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+        })
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=None,
+            thinking_budget=None,
+            thinking_level=None,
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "default thinking_config should still be passed to GenerateContentConfig"
+        )
+
+    @pytest.mark.parametrize(
+        "kwargs,expected",
+        [
+            ({"include_thoughts": True}, {"include_thoughts": True, "thinking_budget": None, "thinking_level": None}),
+            ({"thinking_budget": 256}, {"include_thoughts": None, "thinking_budget": 256, "thinking_level": None}),
+            ({"thinking_level": "High"}, {"include_thoughts": None, "thinking_budget": None, "thinking_level": "High"}),
+            (
+                {"include_thoughts": False, "thinking_budget": 512},
+                {"include_thoughts": False, "thinking_budget": 512, "thinking_level": None},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Low"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Low"},
+            ),
+            (
+                {"thinking_budget": 1024, "thinking_level": "High"},
+                {"include_thoughts": None, "thinking_budget": 1024, "thinking_level": "High"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+                {"include_thoughts": True, "thinking_budget": 2048, "thinking_level": "High"},
+            ),
+            # Test "Medium" thinking level
+            (
+                {"thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Medium"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Medium"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Medium"},
+            ),
+            (
+                {"thinking_budget": 512, "thinking_level": "Medium"},
+                {"include_thoughts": None, "thinking_budget": 512, "thinking_level": "Medium"},
+            ),
+            # Test "Minimal" thinking level
+            (
+                {"thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": None, "thinking_level": "Minimal"},
+            ),
+            (
+                {"include_thoughts": True, "thinking_level": "Minimal"},
+                {"include_thoughts": True, "thinking_budget": None, "thinking_level": "Minimal"},
+            ),
+            (
+                {"thinking_budget": 128, "thinking_level": "Minimal"},
+                {"include_thoughts": None, "thinking_budget": 128, "thinking_level": "Minimal"},
+            ),
+        ],
+    )
+    @patch("autogen.oai.gemini.genai.Client")
+    @patch("autogen.oai.gemini.GenerateContentConfig")
+    @patch("autogen.oai.gemini.ThinkingConfig")
+    def test_generation_config_thinking_param_variants(
+        self,
+        mock_thinking_config,
+        mock_generate_content_config,
+        mock_generative_client,
+        gemini_client,
+        kwargs,
+        expected,
+    ):
+        """Test individual and combined thinking params are passed through to ThinkingConfig and GenerateContentConfig"""
+        mock_chat = MagicMock()
+        mock_generative_client.return_value.chats.create.return_value = mock_chat
+
+        mock_text_part = MagicMock()
+        mock_text_part.text = "Response"
+        mock_text_part.function_call = None
+
+        mock_usage_metadata = MagicMock()
+        mock_usage_metadata.prompt_token_count = 5
+        mock_usage_metadata.candidates_token_count = 3
+
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_text_part]
+
+        mock_response = MagicMock(spec=GenerateContentResponse)
+        mock_response.usage_metadata = mock_usage_metadata
+        mock_response.candidates = [mock_candidate]
+
+        mock_chat.send_message.return_value = mock_response
+
+        params = {
+            "model": "gemini-pro",
+            "messages": [{"content": "Hello", "role": "user"}],
+            **kwargs,
+        }
+        gemini_client.create(params)
+
+        mock_thinking_config.assert_called_once_with(
+            include_thoughts=expected["include_thoughts"],
+            thinking_budget=expected["thinking_budget"],
+            thinking_level=expected["thinking_level"],
+        )
+
+        config_kwargs = mock_generate_content_config.call_args.kwargs
+        assert config_kwargs["thinking_config"] == mock_thinking_config.return_value, (
+            "thinking_config should be passed to GenerateContentConfig"
+        )
 
     @patch("autogen.oai.gemini.GenerativeModel")
     @patch("autogen.oai.gemini.GenerationConfig")
