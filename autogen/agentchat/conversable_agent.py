@@ -2444,7 +2444,9 @@ class ConversableAgent(LLMAgent):
         tool_returns = []
         for tool_call in message.get("tool_calls", []):
             function_call = tool_call.get("function", {})
-
+            function_name = function_call.get("name", "")
+            if function_name == "__structured_output":
+                return True, function_call.get("arguments", {})
             # Hook: Process tool input before execution
             processed_call = self._process_tool_input(function_call)
             if processed_call is None:
