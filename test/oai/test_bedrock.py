@@ -1259,6 +1259,7 @@ def test_create_structured_output_tool_complex_pydantic(bedrock_client: BedrockC
 
 
 @pytest.mark.skip
+@pytest.mark.integration
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
 class TestBedrockStructuredOutputIntegration:
     """Integration tests for Bedrock structured outputs with real API calls."""
