@@ -178,6 +178,82 @@ class BedrockClient:
 
         return schema
 
+    def _normalize_pydantic_schema_to_dict(self, schema: dict[str, Any] | type[BaseModel]) -> dict[str, Any]:
+        """
+        Convert a Pydantic model's JSON schema to a flat dict schema by resolving $ref references.
+
+        This function takes a Pydantic model or its JSON schema and converts it to a simple
+        dict schema format without $defs or $ref references, making it compatible with
+        APIs that don't support JSON Schema references.
+
+        Args:
+            schema: Either a Pydantic model class or a dict containing the JSON schema
+
+        Returns:
+            A normalized dict schema with all $ref references resolved and $defs removed
+
+        Example:
+            >>> from pydantic import BaseModel
+            >>> class Step(BaseModel):
+            ...     explanation: str
+            ...     output: str
+            >>> class MathReasoning(BaseModel):
+            ...     steps: list[Step]
+            ...     final_answer: str
+            >>>
+            >>> normalized = _normalize_pydantic_schema_to_dict(MathReasoning)
+            >>> # Returns schema without $defs or $ref
+        """
+        from pydantic import BaseModel
+
+        # If it's a Pydantic model, get its JSON schema
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            schema_dict = schema.model_json_schema()
+        elif isinstance(schema, dict):
+            schema_dict = schema.copy()
+        else:
+            raise ValueError(f"Schema must be a Pydantic model class or dict, got {type(schema)}")
+
+        # Extract $defs if present
+        defs = schema_dict.get("$defs", {}).copy()
+
+        def resolve_ref(ref: str, definitions: dict[str, Any]) -> dict[str, Any]:
+            """Resolve a $ref to its actual schema definition."""
+            if not ref.startswith("#/$defs/"):
+                raise ValueError(f"Unsupported $ref format: {ref}. Only '#/$defs/...' is supported.")
+            # Extract the definition name from "#/$defs/Name"
+            def_name = ref.split("/")[-1]
+            if def_name not in definitions:
+                raise ValueError(f"Definition '{def_name}' not found in $defs")
+            return definitions[def_name].copy()
+
+        def resolve_refs_recursive(obj: Any, definitions: dict[str, Any]) -> Any:
+            """Recursively resolve all $ref references in the schema."""
+            if isinstance(obj, dict):
+                # If this dict has a $ref, replace it with the actual definition
+                if "$ref" in obj:
+                    ref_def = resolve_ref(obj["$ref"], definitions)
+                    # Merge any additional properties from the current object (except $ref)
+                    merged = {**ref_def, **{k: v for k, v in obj.items() if k != "$ref"}}
+                    # Recursively resolve any refs in the merged definition
+                    return resolve_refs_recursive(merged, definitions)
+                else:
+                    # Process all values recursively
+                    return {k: resolve_refs_recursive(v, definitions) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [resolve_refs_recursive(item, definitions) for item in obj]
+            else:
+                return obj
+
+        # Resolve all references
+        normalized_schema = resolve_refs_recursive(schema_dict, defs)
+
+        # Remove $defs section as it's no longer needed
+        if "$defs" in normalized_schema:
+            del normalized_schema["$defs"]
+
+        return normalized_schema
+
     def _create_structured_output_tool(self, response_format: BaseModel | dict[str, Any]) -> dict[str, Any]:
         """Convert response_format into a Bedrock tool definition for structured outputs.
 
@@ -188,8 +264,8 @@ class BedrockClient:
             Tool definition compatible with format_tools().
         """
         schema = self._get_response_format_schema(response_format)
+        schema = self._normalize_pydantic_schema_to_dict(schema)
 
-        # Create tool definition matching the format expected by format_tools
         return {
             "type": "function",
             "function": {
@@ -243,7 +319,7 @@ class BedrockClient:
         Returns:
             Formatted string representation of structured output.
         """
-        if not self._response_format:
+        if self._response_format:
             return json.dumps(structured_data)
 
         try:
@@ -351,17 +427,13 @@ class BedrockClient:
         base_params, additional_params = self.parse_params(params)
 
         # Handle response_format for structured outputs
-        has_response_format = params.get("response_format") is not None
+        has_response_format = self._response_format is not None
         if has_response_format:
-            self._response_format = params["response_format"]
-            structured_output_tool = self._create_structured_output_tool(params["response_format"])
-
+            structured_output_tool = self._create_structured_output_tool(self._response_format)
             # Merge with user tools if any
             user_tools = params.get("tools", [])
             tool_config = self._merge_tools_with_structured_output(user_tools, structured_output_tool)
 
-            # Force the structured output tool
-            tool_config["toolChoice"] = {"tool": {"name": "__structured_output"}}
             has_tools = len(tool_config["tools"]) > 0
         else:
             has_tools = "tools" in params
