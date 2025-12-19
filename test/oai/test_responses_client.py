@@ -1278,15 +1278,22 @@ def test_apply_patch_operation_unknown_operation_type(mocked_openai_client):
 
 def test_apply_patch_operation_handles_exceptions(mocked_openai_client):
     """Test _apply_patch_operation handles exceptions gracefully."""
+    import platform
 
     client = OpenAIResponsesClient(mocked_openai_client)
 
     # Test with invalid workspace_dir to trigger exception
     operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+content"}
-    # Use a non-existent path to trigger an error
-    result = client._apply_patch_operation(
-        operation, "call_error", workspace_dir="/nonexistent/path/that/does/not/exist"
-    )
+    # Use a path that will fail on Windows, Linux, and macOS
+    system = platform.system()
+    if system == "Windows":
+        # Using < which will cause Path operations to fail
+        invalid_path = "C:\\invalid\\path\\that\\does\\not\\exist"
+    else:
+        # On Unix-like systems (Linux/macOS), use a path with null byte
+        invalid_path = "/nonexistent/path/that/does/not/exist"
+
+    result = client._apply_patch_operation(operation, "call_error", workspace_dir=invalid_path)
 
     assert result.call_id == "call_error"
     assert result.status == "failed"
