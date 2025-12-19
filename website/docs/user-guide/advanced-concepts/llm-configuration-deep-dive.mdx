@@ -12,7 +12,7 @@ In AG2, agents use LLMs as key components to understand and react. To configure 
 import os
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]})
+llm_config = LLMConfig(config_list=[{"api_type": "openai", "model": "gpt-5", "api_key": os.environ["OPENAI_API_KEY"]}])
 ```
 
 <Warning>
@@ -168,12 +168,12 @@ When filtering the `config_list`, you can pass a single tag or multiple tags. A 
 ```python
 # Single tag
 filter_dict = {"tags": "llama"}
-llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
 assert len(llm_config.config_list) == 1
 
 # Multiple tags
 filter_dict = {"tags": ["llama", "another_tag"]}
-llm_config = autogen.LLMConfig(*config_list).where(**filter_dict)
+llm_config = autogen.LLMConfig(config_list=config_list).where(**filter_dict)
 ```
 
 ### Adding http client in llm_config for proxy
@@ -192,11 +192,16 @@ class MyHttpClient(httpx.Client):
     def __deepcopy__(self, memo):
         return self
 
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "my-gpt-5-deployment",
-    "api_key": "",
-}, http_client=MyHttpClient(proxy="http://localhost:8030"))
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "my-gpt-5-deployment",
+            "api_key": "",
+        }
+    ],
+    http_client=MyHttpClient(proxy="http://localhost:8030")
+)
 ```
 
 ### Using Azure Active Directory (AAD) Authentication
@@ -277,14 +282,16 @@ Here is an example configuration:
 ```
 from autogen import LLMConfig
 
-llm_config = LLMConfig(config_list={
-    "model": "gpt-4",
-    "base_url": "YOUR_BASE_URL",
-    "api_type": "azure",
-    "api_version": "2025-01-01",
-    "max_tokens": 1000,
-    "azure_ad_token_provider": "DEFAULT"
-})
+llm_config = LLMConfig(config_list=[
+    {
+        "model": "gpt-4",
+        "base_url": "YOUR_BASE_URL",
+        "api_type": "azure",
+        "api_version": "2025-01-01",
+        "max_tokens": 1000,
+        "azure_ad_token_provider": "DEFAULT"
+    }
+])
 ```
 
 For more details, refer to the [Authenticate and authorize in Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai) and [How to configure Azure OpenAI Service with Microsoft Entra ID authentication](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity).
@@ -332,21 +339,23 @@ This is commonly used for things like `temperature`, or `timeout`.
 from autogen import LLMConfig
 
 llm_config = LLMConfig(
-    {
-        "model": "my-gpt-5-deployment",
-        "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
-        "api_type": "azure",
-        "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
-        "api_version": "2024-02-01",
-    },
-    {
-        "api_type": "openai",
-        "model": "llama-7B",
-        "base_url": "http://127.0.0.1:8080",
-        "api_type": "openai",
-    },
-    temperature = 0.9,
-    timeout = 300,
+    config_list=[
+        {
+            "model": "my-gpt-5-deployment",
+            "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
+            "api_type": "azure",
+            "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
+            "api_version": "2024-02-01",
+        },
+        {
+            "api_type": "openai",
+            "model": "llama-7B",
+            "base_url": "http://127.0.0.1:8080",
+            "api_type": "openai",
+        }
+    ],
+    temperature=0.9,
+    timeout=300,
 )
 ```
 
