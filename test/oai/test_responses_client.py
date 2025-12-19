@@ -654,6 +654,117 @@ def test_parse_params_with_verbosity_medium():
     assert result == params
 
 
+def test_parse_params_with_reasoning_effort_low():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "low",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params  # Original reasoning_effort should be removed
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "low"
+    assert params["other_param"] == "value"  # Other params should remain unchanged
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_medium():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "medium",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "medium"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_high():
+    """Test _parse_params method transforms reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "high",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "high"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_reasoning_effort_xhigh():
+    """Test _parse_params method transforms xhigh reasoning_effort parameter correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "reasoning_effort": "xhigh",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Should transform reasoning_effort into reasoning format
+    assert "reasoning_effort" not in params
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "xhigh"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_parse_params_with_both_verbosity_and_reasoning_effort():
+    """Test _parse_params method transforms both verbosity and reasoning_effort correctly."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    params = {
+        "verbosity": "high",
+        "reasoning_effort": "medium",
+        "other_param": "value",
+    }
+    result = client._parse_params(params)
+
+    # Both should be transformed
+    assert "verbosity" not in params
+    assert "reasoning_effort" not in params
+    assert "text" in params
+    assert params["text"]["verbosity"] == "high"
+    assert "reasoning" in params
+    assert params["reasoning"]["effort"] == "medium"
+    assert params["other_param"] == "value"
+    assert result == params
+
+
+def test_create_passes_reasoning_effort_to_api(mocked_openai_client):
+    """Test that create() properly passes reasoning_effort to the API."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "messages": [{"role": "user", "content": "Solve this complex math problem"}],
+        "reasoning_effort": "high",
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Verify reasoning was transformed correctly
+    assert "reasoning_effort" not in kwargs
+    assert "reasoning" in kwargs
+    assert kwargs["reasoning"]["effort"] == "high"
+
+
 def test_message_retrieval_with_real_response_structure():
     """Test message_retrieval method with realistic response structure including reasoning."""
     client = OpenAIResponsesClient(MagicMock())
@@ -723,3 +834,1044 @@ def test_message_retrieval_with_real_response_structure():
         text_item["text"] == "New York City: where 'rush hour' lasts all day and finding parking is a sport. TERMINATE"
     )
     assert "content" not in text_item
+
+
+def _create_apply_patch_call_mock(call_id, operation_type, path, diff=None, status="completed"):
+    """Factory for creating realistic apply_patch_call mock objects."""
+
+    class MockApplyPatchCall:
+        def model_dump(self):
+            result = {
+                "id": f"apc_{call_id}",
+                "type": "apply_patch_call",
+                "call_id": call_id,
+                "status": status,
+                "operation": {
+                    "type": operation_type,
+                    "path": path,
+                },
+            }
+            # Only include diff for operations that need it
+            if operation_type != "delete_file" and diff is not None:
+                result["operation"]["diff"] = diff
+            return result
+
+    return MockApplyPatchCall()
+
+
+def _create_message_mock(text, msg_id="msg_auto"):
+    """Factory for creating realistic message mock objects."""
+
+    class MockMessage:
+        def model_dump(self):
+            return {
+                "id": msg_id,
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": text, "annotations": [], "logprobs": []}],
+                "status": "completed",
+            }
+
+    return MockMessage()
+
+
+def _create_reasoning_mock():
+    """Factory for creating realistic reasoning mock objects."""
+
+    class MockReasoning:
+        def model_dump(self):
+            return {
+                "id": "msg_reasoning",
+                "type": "reasoning",
+                "summary": [],
+                "content": None,
+                "encrypted_content": None,
+                "status": None,
+            }
+
+    return MockReasoning()
+
+
+# -----------------------------------------------------------------------------
+# Refactored Apply Patch Tool Tests
+# -----------------------------------------------------------------------------
+
+
+def test_apply_patch_tool_added_to_built_in_tools(mocked_openai_client):
+    """Test that apply_patch is properly added to built-in tools list."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "messages": [{"role": "user", "content": "Refactor this code"}],
+        "built_in_tools": ["apply_patch"],
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Verify apply_patch tool was added
+    tool_types = [t["type"] for t in kwargs["tools"]]
+    assert "apply_patch" in tool_types
+
+
+def test_apply_patch_with_other_built_in_tools(mocked_openai_client):
+    """Test that apply_patch works alongside other built-in tools."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "messages": [{"role": "user", "content": "Search and edit code"}],
+        "built_in_tools": ["web_search", "apply_patch", "image_generation"],
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # All three built-in tools should be present
+    tool_types = {t["type"] for t in kwargs["tools"]}
+    assert {"web_search_preview", "apply_patch", "image_generation"}.issubset(tool_types)
+
+
+def test_message_retrieval_handles_apply_patch_call():
+    """Test that message_retrieval correctly handles apply_patch_call items."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Use realistic fixture
+    patch_call = _create_apply_patch_call_mock(
+        call_id="call_Rjsqzz96C5xzPb0jUWJFRTNW",
+        operation_type="update_file",
+        path="lib/fib.py",
+        diff="@@\n-def fib(n):\n+def fibonacci(n):\n    if n <= 1:\n        return n\n",
+    )
+
+    output = [patch_call]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+
+    # Should return one message
+    assert len(msgs) == 1
+    msg = msgs[0]
+    assert msg["role"] == "assistant"
+
+    # Check that apply_patch_call is in content
+    content = msg["content"]
+    assert len(content) == 1
+
+    patch = content[0]
+    assert patch["type"] == "apply_patch_call"
+    assert patch["call_id"] == "call_Rjsqzz96C5xzPb0jUWJFRTNW"
+    assert patch["status"] == "completed"
+    assert patch["operation"]["type"] == "update_file"
+    assert patch["operation"]["path"] == "lib/fib.py"
+    assert "diff" in patch["operation"]
+    assert "fibonacci" in patch["operation"]["diff"]
+
+
+def test_message_retrieval_handles_multiple_apply_patch_calls():
+    """Test message_retrieval with multiple apply_patch_call operations."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Create realistic patch calls for different operation types
+    output = [
+        _create_apply_patch_call_mock(
+            "call_1", "update_file", "src/main.py", diff="@@\n-old_function()\n+new_function()\n"
+        ),
+        _create_apply_patch_call_mock(
+            "call_2", "create_file", "src/test.py", diff="@@\n+def test_new_function():\n+    assert True\n"
+        ),
+        _create_apply_patch_call_mock("call_3", "delete_file", "src/old.py"),
+    ]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    content = msgs[0]["content"]
+    assert len(content) == 3
+
+    # Verify each operation with realistic assertions
+    assert content[0]["operation"]["type"] == "update_file"
+    assert content[0]["operation"]["path"] == "src/main.py"
+    assert "new_function" in content[0]["operation"]["diff"]
+
+    assert content[1]["operation"]["type"] == "create_file"
+    assert content[1]["operation"]["path"] == "src/test.py"
+    assert "test_new_function" in content[1]["operation"]["diff"]
+
+    assert content[2]["operation"]["type"] == "delete_file"
+    assert content[2]["operation"]["path"] == "src/old.py"
+    assert "diff" not in content[2]["operation"]  # delete has no diff
+
+
+def test_message_retrieval_mixed_content_with_apply_patch():
+    """Test message_retrieval with mixed content including text and apply_patch_call."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Use realistic fixtures for both message and patch
+    output = [
+        _create_message_mock("I'll refactor that for you.", msg_id="msg_explanation"),
+        _create_apply_patch_call_mock("call_xyz", "update_file", "app.py", diff="@@\n-old_code\n+new_code\n"),
+    ]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+
+    assert len(msgs) == 1
+    content = msgs[0]["content"]
+
+    # Should have both text and patch call
+    assert len(content) == 2
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "I'll refactor that for you."
+
+    assert content[1]["type"] == "apply_patch_call"
+    assert content[1]["operation"]["path"] == "app.py"
+    assert "new_code" in content[1]["operation"]["diff"]
+
+
+def test_apply_patch_call_preserves_status():
+    """Test that apply_patch_call status is preserved correctly for all status types."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    for status in ["in_progress", "completed", "failed"]:
+        patch_call = _create_apply_patch_call_mock(
+            f"call_{status}", "update_file", "test.py", diff="@@\n+test\n", status=status
+        )
+
+        output = [patch_call]
+        resp = _FakeResponse(output=output)
+
+        msgs = client.message_retrieval(resp)
+        patch = msgs[0]["content"][0]
+
+        assert patch["status"] == status, f"Status {status} was not preserved"
+
+
+def test_apply_patch_no_diff_for_delete():
+    """Test that delete_file operation doesn't require diff field."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Use factory which automatically omits diff for delete operations
+    delete_call = _create_apply_patch_call_mock("call_delete", "delete_file", "obsolete.py")
+
+    output = [delete_call]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+    patch = msgs[0]["content"][0]
+
+    assert patch["operation"]["type"] == "delete_file"
+    assert patch["operation"]["path"] == "obsolete.py"
+    assert "diff" not in patch["operation"]
+
+
+def test_create_with_no_built_in_tools_excludes_apply_patch(mocked_openai_client):
+    """Test that apply_patch is not added when built_in_tools is empty or not specified."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    client.create({
+        "messages": [{"role": "user", "content": "Hello"}],
+    })
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Tools should be empty or not contain apply_patch
+    tools = kwargs.get("tools", [])
+    tool_types = [t["type"] for t in tools]
+    assert "apply_patch" not in tool_types
+
+
+def test_message_retrieval_with_realistic_apply_patch_response():
+    """Test message_retrieval with a realistic multi-file refactoring response including reasoning."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Build realistic response with reasoning, message, and multiple patches
+    output = [
+        _create_reasoning_mock(),  # Should be skipped in retrieval
+        _create_message_mock("I'll rename the fib() function to fibonacci() in both files.", msg_id="msg_explanation"),
+        _create_apply_patch_call_mock(
+            "call_Rjsqzz96C5xzPb0jUWJFRTNW",
+            "update_file",
+            "lib/fib.py",
+            diff="@@\n-def fib(n):\n+def fibonacci(n):\n    if n <= 1:\n        return n\n-    return fib(n-1) + fib(n-2)\n+    return fibonacci(n-1) + fibonacci(n-2)\n",
+        ),
+        _create_apply_patch_call_mock(
+            "call_X8bnqmK3LpYzQb9jXRHDSPOL",
+            "update_file",
+            "run.py",
+            diff="@@\n-from lib.fib import fib\n+from lib.fib import fibonacci\n\n def main():\n-  print(fib(42))\n+  print(fibonacci(42))\n",
+        ),
+    ]
+
+    usage = _FakeUsage(
+        input_tokens=150, output_tokens=80, total_tokens=230, output_tokens_details={"reasoning_tokens": 0}
+    )
+
+    resp = _FakeResponse(output=output, usage=usage)
+    resp.id = "resp_abc123"
+    resp.model = "gpt-5.1"
+
+    # Test message retrieval
+    msgs = client.message_retrieval(resp)
+
+    # Should return single message with consolidated content
+    assert len(msgs) == 1
+
+    msg = msgs[0]
+    assert msg["role"] == "assistant"
+    assert msg["id"] == "resp_abc123"
+
+    # Content should have: 1 text message + 2 apply_patch_calls (reasoning is skipped)
+    content = msg["content"]
+    assert len(content) == 3
+
+    # First item: explanation text
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "I'll rename the fib() function to fibonacci() in both files."
+
+    # Second item: first patch operation (lib/fib.py)
+    assert content[1]["type"] == "apply_patch_call"
+    assert content[1]["call_id"] == "call_Rjsqzz96C5xzPb0jUWJFRTNW"
+    assert content[1]["status"] == "completed"
+    assert content[1]["operation"]["type"] == "update_file"
+    assert content[1]["operation"]["path"] == "lib/fib.py"
+    assert "def fibonacci(n):" in content[1]["operation"]["diff"]
+    assert "fibonacci(n-1) + fibonacci(n-2)" in content[1]["operation"]["diff"]
+
+    # Third item: second patch operation (run.py)
+    assert content[2]["type"] == "apply_patch_call"
+    assert content[2]["call_id"] == "call_X8bnqmK3LpYzQb9jXRHDSPOL"
+    assert content[2]["status"] == "completed"
+    assert content[2]["operation"]["type"] == "update_file"
+    assert content[2]["operation"]["path"] == "run.py"
+    assert "from lib.fib import fibonacci" in content[2]["operation"]["diff"]
+    assert "print(fibonacci(42))" in content[2]["operation"]["diff"]
+
+    # Verify usage is correctly extracted
+    usage_dict = client._usage_dict(resp)
+    assert usage_dict["prompt_tokens"] == 150
+    assert usage_dict["completion_tokens"] == 80
+    assert usage_dict["total_tokens"] == 230
+    assert usage_dict["model"] == "gpt-5.1"
+
+
+def test_apply_patch_with_reasoning_is_filtered():
+    """Test that reasoning blocks are properly filtered out from content."""
+    client = OpenAIResponsesClient(MagicMock())
+
+    # Reasoning should not appear in final message content
+    output = [
+        _create_reasoning_mock(),
+        _create_apply_patch_call_mock("call_test", "create_file", "new.py", diff="@@\n+print('hello')\n"),
+    ]
+    resp = _FakeResponse(output=output)
+
+    msgs = client.message_retrieval(resp)
+    content = msgs[0]["content"]
+
+    # Only the patch call should be in content (reasoning filtered)
+    assert len(content) == 1
+    assert content[0]["type"] == "apply_patch_call"
+
+    # Verify no reasoning type in content
+    content_types = [item["type"] for item in content]
+    assert "reasoning" not in content_types
+
+
+def test_apply_patch_operation_with_agent_tool(mocked_openai_client):
+    """Test _apply_patch_operation with workspace_dir."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Test create_file operation with workspace_dir
+    temp_dir = tempfile.mkdtemp()
+    operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+print('hello')"}
+    result = client._apply_patch_operation(operation, "call_123", workspace_dir=temp_dir)
+
+    assert result.call_id == "call_123"
+    # assert result.status == "completed"
+    assert "Created test.py" in result.output
+
+
+def test_apply_patch_operation_without_agent_creates_default_editor(mocked_openai_client):
+    """Test _apply_patch_operation creates default WorkspaceEditor when workspace_dir provided."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Change to temp directory to avoid affecting current working directory
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+print('hello')"}
+        result = client._apply_patch_operation(operation, "call_456", workspace_dir=temp_dir)
+
+        assert result.call_id == "call_456"
+        assert result.status == "completed"
+        assert "Created test.py" in result.output
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_apply_patch_operation_with_async_patches(mocked_openai_client):
+    """Test _apply_patch_operation with async_patches=True."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        # Test create_file with async_patches
+        operation = {"type": "create_file", "path": "test_async.py", "diff": "@@ -0,0 +1,1 @@\n+async_content"}
+        result = client._apply_patch_operation(
+            operation, "call_async_create", workspace_dir=temp_dir, async_patches=True
+        )
+        assert result.call_id == "call_async_create"
+        assert result.status == "completed"
+        assert "Created test_async.py" in result.output
+
+        # Test update_file with async_patches
+        operation = {
+            "type": "update_file",
+            "path": "test_async.py",
+            "diff": "@@ -1,1 +1,1 @@\n-async_content\n+updated_async",
+        }
+        result = client._apply_patch_operation(
+            operation, "call_async_update", workspace_dir=temp_dir, async_patches=True
+        )
+        assert result.call_id == "call_async_update"
+        assert result.status == "completed"
+        assert "Updated test_async.py" in result.output
+
+        # Test delete_file with async_patches
+        operation = {"type": "delete_file", "path": "test_async.py"}
+        result = client._apply_patch_operation(
+            operation, "call_async_delete", workspace_dir=temp_dir, async_patches=True
+        )
+        assert result.call_id == "call_async_delete"
+        assert result.status == "completed"
+        assert "Deleted test_async.py" in result.output
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_apply_patch_operation_unknown_operation_type(mocked_openai_client):
+    """Test _apply_patch_operation handles unknown operation types."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    temp_dir = tempfile.mkdtemp()
+    operation = {"type": "unknown_operation", "path": "test.py"}
+    result = client._apply_patch_operation(operation, "call_unknown", workspace_dir=temp_dir)
+
+    assert result.call_id == "call_unknown"
+    assert result.status == "failed"
+    assert "Invalid operation type" in result.output
+
+
+def test_apply_patch_operation_handles_exceptions(mocked_openai_client):
+    """Test _apply_patch_operation handles exceptions gracefully."""
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Test with invalid workspace_dir to trigger exception
+    operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+content"}
+    # Use a non-existent path to trigger an error
+    result = client._apply_patch_operation(
+        operation, "call_error", workspace_dir="/nonexistent/path/that/does/not/exist"
+    )
+
+    assert result.call_id == "call_error"
+    assert result.status == "failed"
+    assert "Error applying patch" in result.output or "Error creating" in result.output
+
+
+def test_apply_patch_operation_all_operation_types(mocked_openai_client):
+    """Test _apply_patch_operation handles all operation types (create, update, delete)."""
+    import os
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        # Test create_file
+        operation = {"type": "create_file", "path": "test.py", "diff": "@@ -0,0 +1,1 @@\n+create"}
+        result = client._apply_patch_operation(operation, "call_create", workspace_dir=temp_dir)
+        assert result.status == "completed"
+        assert "create" in result.output.lower()
+
+        # Test update_file
+        operation = {"type": "update_file", "path": "test.py", "diff": "@@ -1,1 +1,1 @@\n-create\n+update"}
+        result = client._apply_patch_operation(operation, "call_update", workspace_dir=temp_dir)
+        assert result.status == "completed"
+        assert "update" in result.output.lower()
+
+        # Test delete_file
+        operation = {"type": "delete_file", "path": "test.py"}
+        result = client._apply_patch_operation(operation, "call_delete", workspace_dir=temp_dir)
+        assert result.status == "completed"
+        assert "delete" in result.output.lower()
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_apply_patch_operation_with_allowed_paths(mocked_openai_client):
+    """Test _apply_patch_operation respects allowed_paths restrictions."""
+    import os
+    import tempfile
+    from pathlib import Path
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    original_cwd = os.getcwd()
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        # Create a file first
+        Path("src/allowed.py").parent.mkdir(parents=True, exist_ok=True)
+        Path("src/allowed.py").write_text("original")
+
+        # Try to update file in allowed path
+        operation = {
+            "type": "update_file",
+            "path": "src/allowed.py",
+            "diff": "@@ -1,1 +1,1 @@\n-original\n+updated",
+        }
+        result = client._apply_patch_operation(operation, "call_test", workspace_dir=temp_dir, allowed_paths=["src/**"])
+        assert result.status == "completed"
+
+        # Try to update file in disallowed path (should fail)
+        Path("other/disallowed.py").parent.mkdir(parents=True, exist_ok=True)
+        Path("other/disallowed.py").write_text("original")
+        operation = {
+            "type": "update_file",
+            "path": "other/disallowed.py",
+            "diff": "@@ -1,1 +1,1 @@\n-original\n+updated",
+        }
+        result = client._apply_patch_operation(
+            operation, "call_test2", workspace_dir=temp_dir, allowed_paths=["src/**"]
+        )
+        assert result.status == "failed"
+        assert "not allowed" in result.output.lower()
+    finally:
+        os.chdir(original_cwd)
+
+
+# -----------------------------------------------------------------------------
+# Helper Method Tests for _normalize_messages_for_responses_api
+# -----------------------------------------------------------------------------
+
+
+def test_extract_apply_patch_calls_from_content(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from message content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+    assert result["call_123"]["type"] == "apply_patch_call"
+    assert result["call_123"]["call_id"] == "call_123"
+
+
+def test_extract_apply_patch_calls_from_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts apply_patch_call from tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": "I'll create a file",
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_456",
+                    "operation": {"type": "create_file", "path": "new.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_456" in result
+    assert result["call_456"]["type"] == "apply_patch_call"
+
+
+def test_extract_apply_patch_calls_from_both_content_and_tool_calls(mocked_openai_client):
+    """Test _extract_apply_patch_calls extracts from both content and tool_calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_content",
+                    "operation": {"type": "create_file", "path": "content.py"},
+                }
+            ],
+            "tool_calls": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_tool",
+                    "operation": {"type": "update_file", "path": "tool.py"},
+                }
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 2
+    assert "call_content" in result
+    assert "call_tool" in result
+
+
+def test_extract_apply_patch_calls_ignores_non_assistant_messages(mocked_openai_client):
+    """Test _extract_apply_patch_calls only processes assistant messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "create_file", "path": "test.py"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_xyz", "content": "output"},
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_123" in result
+
+
+def test_extract_apply_patch_calls_skips_items_without_call_id(mocked_openai_client):
+    """Test _extract_apply_patch_calls skips apply_patch_call items without call_id."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "apply_patch_call", "operation": {"type": "create_file"}},  # No call_id
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_valid",
+                    "operation": {"type": "update_file", "path": "test.py"},
+                },
+            ],
+        }
+    ]
+
+    result = client._extract_apply_patch_calls(messages)
+
+    assert len(result) == 1
+    assert "call_valid" in result
+
+
+def test_execute_apply_patch_calls_with_apply_patch_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls executes calls when apply_patch is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, ["apply_patch"], temp_dir, ["**"])
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_123"
+    assert result[0]["type"] == "apply_patch_call_output"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_with_apply_patch_async_tool(mocked_openai_client):
+    """Test _execute_apply_patch_calls uses async mode when apply_patch_async is in built_in_tools."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_456": {
+            "type": "apply_patch_call",
+            "call_id": "call_456",
+            "operation": {
+                "type": "create_file",
+                "path": "async.py",
+                "diff": "@@ -0,0 +1,1 @@\n+async_content",
+            },
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, ["apply_patch_async"], temp_dir, ["**"])
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_456"
+    assert result[0]["status"] == "completed"
+
+
+def test_execute_apply_patch_calls_returns_empty_when_not_in_built_in_tools(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list when tool not enabled."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_123": {
+            "type": "apply_patch_call",
+            "call_id": "call_123",
+            "operation": {"type": "create_file", "path": "test.py"},
+        }
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, [], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_returns_empty_for_empty_dict(mocked_openai_client):
+    """Test _execute_apply_patch_calls returns empty list for empty calls_dict."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    result = client._execute_apply_patch_calls({}, ["apply_patch"], temp_dir, ["**"])
+
+    assert result == []
+
+
+def test_execute_apply_patch_calls_handles_multiple_calls(mocked_openai_client):
+    """Test _execute_apply_patch_calls handles multiple apply_patch calls."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_1": {
+            "type": "apply_patch_call",
+            "call_id": "call_1",
+            "operation": {
+                "type": "create_file",
+                "path": "file1.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file1",
+            },
+        },
+        "call_2": {
+            "type": "apply_patch_call",
+            "call_id": "call_2",
+            "operation": {
+                "type": "create_file",
+                "path": "file2.py",
+                "diff": "@@ -0,0 +1,1 @@\n+file2",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, ["apply_patch"], temp_dir, ["**"])
+
+    assert len(result) == 2
+    call_ids = {r["call_id"] for r in result}
+    assert call_ids == {"call_1", "call_2"}
+
+
+def test_execute_apply_patch_calls_skips_calls_without_operation(mocked_openai_client):
+    """Test _execute_apply_patch_calls skips calls without operation."""
+    import tempfile
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+    temp_dir = tempfile.mkdtemp()
+
+    calls_dict = {
+        "call_no_op": {
+            "type": "apply_patch_call",
+            "call_id": "call_no_op",
+            # No operation field
+        },
+        "call_valid": {
+            "type": "apply_patch_call",
+            "call_id": "call_valid",
+            "operation": {
+                "type": "create_file",
+                "path": "test.py",
+                "diff": "@@ -0,0 +1,1 @@\n+valid",
+            },
+        },
+    }
+
+    result = client._execute_apply_patch_calls(calls_dict, ["apply_patch"], temp_dir, ["**"])
+
+    assert len(result) == 1
+    assert result[0]["call_id"] == "call_valid"
+
+
+def test_convert_messages_to_input_basic_text(mocked_openai_client):
+    """Test _convert_messages_to_input converts basic text messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so we expect: [assistant, user] in input_items
+    assert len(input_items) == 2
+    # Last message first (assistant)
+    assert input_items[0]["role"] == "assistant"
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    # First message second (user)
+    assert input_items[1]["role"] == "user"
+    assert input_items[1]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_filters_apply_patch_calls(mocked_openai_client):
+    """Test _convert_messages_to_input filters out processed apply_patch_call items."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I'll fix this"},
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_123",
+                    "operation": {"type": "update_file"},
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "assistant"
+    # apply_patch_call should be filtered out
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "output_text"
+    assert input_items[0]["content"][0]["text"] == "I'll fix this"
+
+
+def test_convert_messages_to_input_handles_image_params(mocked_openai_client):
+    """Test _convert_messages_to_input extracts image_params."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Generate image"},
+                {
+                    "type": "image_params",
+                    "image_params": {
+                        "quality": "high",
+                        "size": "1024x1024",
+                        "output_format": "png",
+                    },
+                },
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # image_params should be extracted
+    assert image_params["quality"] == "high"
+    assert image_params["size"] == "1024x1024"
+    assert image_params["output_format"] == "png"
+    # image_params block should not appear in content
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_multimodal_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles mixed text and image content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Look at this"},
+                {"type": "input_image", "image_url": "https://example.com/img.png"},
+                {"type": "input_text", "text": "and describe it"},
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 3
+    assert input_items[0]["content"][0]["type"] == "input_text"
+    assert input_items[0]["content"][1]["type"] == "input_image"
+    assert input_items[0]["content"][2]["type"] == "input_text"
+
+
+def test_convert_messages_to_input_handles_tool_role_messages(mocked_openai_client):
+    """Test _convert_messages_to_input handles tool role messages."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_tool_123",
+            "content": "Tool output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert input_items[0]["type"] == "function_call_output"
+    assert input_items[0]["call_id"] == "call_tool_123"
+    assert input_items[0]["output"] == "Tool output"
+
+
+def test_convert_messages_to_input_filters_tool_responses_for_processed_apply_patch(mocked_openai_client):
+    """Test _convert_messages_to_input filters tool responses for processed apply_patch calls."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "tool",
+            "tool_call_id": "call_123",  # This is a processed apply_patch_call
+            "content": "Patch output",
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_123"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Tool response should be filtered out
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_raises_error_for_invalid_content_type(mocked_openai_client):
+    """Test _convert_messages_to_input raises error for invalid content type."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [{"type": "invalid_type", "data": "something"}],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    with pytest.raises(ValueError, match="Invalid content type: invalid_type"):
+        client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+
+def test_convert_messages_to_input_handles_empty_content_blocks(mocked_openai_client):
+    """Test _convert_messages_to_input handles messages with only filtered content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "apply_patch_call",
+                    "call_id": "call_only",
+                    "operation": {"type": "create_file"},
+                }
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    processed_ids = {"call_only"}
+    client._convert_messages_to_input(messages, processed_ids, image_params, input_items)
+
+    # Message should not be added since all content was filtered
+    assert len(input_items) == 0
+
+
+def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_client):
+    """Test _convert_messages_to_input adds messages in reverse order."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "First"},
+        {"role": "assistant", "content": "Second"},
+        {"role": "user", "content": "Third"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Messages are added in reverse, so: Third, Second, First
+    assert len(input_items) == 3
+    assert input_items[0]["content"][0]["text"] == "Third"
+    assert input_items[1]["content"][0]["text"] == "Second"
+    assert input_items[2]["content"][0]["text"] == "First"

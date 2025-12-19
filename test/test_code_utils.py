@@ -406,6 +406,128 @@ class TestContentStr:
         with pytest.raises(TypeError):
             content_str(content)
 
+    def test_apply_patch_call_create_file(self):
+        """Test apply_patch_call with create_file operation."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "create_file",
+                    "path": "test.py",
+                    "diff": "@@ -0,0 +1,1 @@\n+print('hello')",
+                },
+                "status": "completed",
+            }
+        ]
+        result = content_str(content)
+        assert (
+            result
+            == "<apply_patch_call: create_file on test.py (status: completed) diff: @@ -0,0 +1,1 @@\n+print('hello')>"
+        )
+
+    def test_apply_patch_call_update_file(self):
+        """Test apply_patch_call with update_file operation."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "update_file",
+                    "path": "src/main.py",
+                    "diff": "@@ -1,1 +1,2 @@\n def hello():\n+    print('world')",
+                },
+                "status": "completed",
+            }
+        ]
+        result = content_str(content)
+        assert "update_file" in result
+        assert "src/main.py" in result
+        assert "completed" in result
+
+    def test_apply_patch_call_delete_file(self):
+        """Test apply_patch_call with delete_file operation."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "delete_file",
+                    "path": "old_file.py",
+                },
+                "status": "completed",
+            }
+        ]
+        result = content_str(content)
+        assert result == "<apply_patch_call: delete_file on old_file.py (status: completed) diff: unknown_diff>"
+
+    def test_apply_patch_call_with_missing_fields(self):
+        """Test apply_patch_call with missing optional fields uses defaults."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {},
+            }
+        ]
+        result = content_str(content)
+        assert (
+            result
+            == "<apply_patch_call: unknown_operation on unknown_path (status: unknown_status) diff: unknown_diff>"
+        )
+
+    def test_apply_patch_call_with_partial_operation(self):
+        """Test apply_patch_call with partial operation data."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "create_file",
+                    "path": "new_file.py",
+                },
+                "status": "failed",
+            }
+        ]
+        result = content_str(content)
+        assert "create_file" in result
+        assert "new_file.py" in result
+        assert "failed" in result
+        assert "unknown_diff" in result
+
+    def test_apply_patch_call_mixed_with_text(self):
+        """Test apply_patch_call mixed with text content."""
+        content = [
+            {"type": "text", "text": "Creating file..."},
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "create_file",
+                    "path": "test.py",
+                    "diff": "@@ -0,0 +1,1 @@\n+code",
+                },
+                "status": "completed",
+            },
+            {"type": "text", "text": "File created successfully"},
+        ]
+        result = content_str(content)
+        assert "Creating file..." in result
+        assert "apply_patch_call" in result
+        assert "test.py" in result
+        assert "File created successfully" in result
+        assert result.count("\n") == 3  # Two newlines separating three items, plus one in the diff content
+
+    def test_apply_patch_call_with_empty_diff(self):
+        """Test apply_patch_call with empty diff string."""
+        content = [
+            {
+                "type": "apply_patch_call",
+                "operation": {
+                    "type": "delete_file",
+                    "path": "file.py",
+                    "diff": "",
+                },
+                "status": "completed",
+            }
+        ]
+        result = content_str(content)
+        assert result == "<apply_patch_call: delete_file on file.py (status: completed) diff: >"
+
 
 class TestGetPowerShellCommand:
     @patch("subprocess.run")

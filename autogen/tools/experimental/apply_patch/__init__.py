@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["__version__"]
+from .apply_patch_tool import ApplyPatchTool, PatchEditor, WorkspaceEditor
 
-__version__ = "0.10.2"
+__all__ = ["ApplyPatchTool", "PatchEditor", "WorkspaceEditor"]

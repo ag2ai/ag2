@@ -17,7 +17,7 @@ from collections import defaultdict
 from collections.abc import Callable, Container, Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from inspect import signature
+from inspect import iscoroutine, signature
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -597,7 +597,7 @@ class ConversableAgent(LLMAgent):
                 "config": copy.copy(config),
                 "init_config": config,
                 "reset_config": reset_config,
-                "ignore_async_in_sync_chat": ignore_async_in_sync_chat and inspect.iscoroutinefunction(reply_func),
+                "ignore_async_in_sync_chat": ignore_async_in_sync_chat and is_coroutine_callable(reply_func),
             },
         )
 
@@ -908,9 +908,7 @@ class ConversableAgent(LLMAgent):
         if use_async:
             if reply_func_from_nested_chats == "summary_from_nested_chats":
                 reply_func_from_nested_chats = self._a_summary_from_nested_chats
-            if not callable(reply_func_from_nested_chats) or not inspect.iscoroutinefunction(
-                reply_func_from_nested_chats
-            ):
+            if not callable(reply_func_from_nested_chats) or not is_coroutine_callable(reply_func_from_nested_chats):
                 raise ValueError("reply_func_from_nested_chats must be a callable and a coroutine")
 
             async def wrapped_reply_func(recipient, messages=None, sender=None, config=None):
@@ -1299,7 +1297,7 @@ class ConversableAgent(LLMAgent):
             f["reply_func"] for f in self._reply_func_list if not f.get("ignore_async_in_sync_chat", False)
         }
 
-        async_reply_functions = [f for f in reply_functions if inspect.iscoroutinefunction(f)]
+        async_reply_functions = [f for f in reply_functions if is_coroutine_callable(f)]
         if async_reply_functions:
             msg = (
                 "Async reply functions can only be used with ConversableAgent.a_initiate_chat(). The following async reply functions are found: "
@@ -2391,7 +2389,7 @@ class ConversableAgent(LLMAgent):
             call_id = message.get("id", None)
             func_call = message["function_call"]
             func = self._function_map.get(func_call.get("name", None), None)
-            if inspect.iscoroutinefunction(func):
+            if is_coroutine_callable(func):
                 coro = self.a_execute_function(func_call, call_id=call_id)
                 _, func_return = self._run_async_in_thread(coro)
             else:
@@ -2420,7 +2418,7 @@ class ConversableAgent(LLMAgent):
             func_call = message["function_call"]
             func_name = func_call.get("name", "")
             func = self._function_map.get(func_name, None)
-            if func and inspect.iscoroutinefunction(func):
+            if func and is_coroutine_callable(func):
                 _, func_return = await self.a_execute_function(func_call, call_id=call_id)
             else:
                 _, func_return = self.execute_function(func_call, call_id=call_id)
@@ -2875,7 +2873,7 @@ class ConversableAgent(LLMAgent):
             reply_func = reply_func_tuple["reply_func"]
             if reply_func in exclude:
                 continue
-            if inspect.iscoroutinefunction(reply_func):
+            if is_coroutine_callable(reply_func):
                 continue
             if self._match_trigger(reply_func_tuple["trigger"], sender):
                 final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
@@ -2950,7 +2948,7 @@ class ConversableAgent(LLMAgent):
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):
-                if inspect.iscoroutinefunction(reply_func):
+                if is_coroutine_callable(reply_func):
                     final, reply = await reply_func(
                         self,
                         messages=messages,
@@ -3009,11 +3007,9 @@ class ConversableAgent(LLMAgent):
             str: human input.
         """
         iostream = iostream or IOStream.get_default()
-
         reply = iostream.input(prompt)
-
         # Process the human input through hooks
-        processed_reply = self._process_human_input(reply)
+        processed_reply = self._process_human_input("" if not isinstance(reply, str) and iscoroutine(reply) else reply)
         if processed_reply is None:
             raise ValueError("safeguard_human_inputs hook returned None")
 
@@ -3171,6 +3167,12 @@ class ConversableAgent(LLMAgent):
                 )
                 try:
                     content = func(**arguments)
+                    if inspect.isawaitable(content):
+
+                        async def _await_result(awaitable):
+                            return await awaitable
+
+                        content = self._run_async_in_thread(_await_result(content))
                     is_exec_success = True
                 except Exception as e:
                     content = f"Error: {e}"
@@ -3238,7 +3240,7 @@ class ConversableAgent(LLMAgent):
                     ExecuteFunctionEvent(func_name=func_name, call_id=call_id, arguments=arguments, recipient=self)
                 )
                 try:
-                    if inspect.iscoroutinefunction(func):
+                    if is_coroutine_callable(func):
                         content = await func(**arguments)
                     else:
                         # Fallback to sync function if the function is not async
@@ -3555,7 +3557,7 @@ class ConversableAgent(LLMAgent):
                 log_function_use(self, func, kwargs, retval)
             return serialize_to_str(retval) if serialize else retval
 
-        wrapped_func = _a_wrapped_func if inspect.iscoroutinefunction(func) else _wrapped_func
+        wrapped_func = _a_wrapped_func if is_coroutine_callable(func) else _wrapped_func
 
         # needed for testing
         wrapped_func._origin = func
