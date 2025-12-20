@@ -72,6 +72,7 @@ class Cost(BaseModel):
             usage_excluding_cached_inference=CostBreakdown.from_raw(data.get("usage_excluding_cached_inference", {})),
         )
 
+
 @runtime_checkable
 class RunResponseProtocol(RunInfoProtocol, Protocol):
     @property
@@ -95,6 +96,7 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def process(self, processor: EventProcessorProtocol | None = None) -> None: ...
 
     def set_ui_tools(self, tools: list[Tool]) -> None: ...
+
 
 @runtime_checkable
 class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
