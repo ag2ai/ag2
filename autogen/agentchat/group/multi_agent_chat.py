@@ -196,8 +196,8 @@ def run_group_chat(
     mask_llm_config: LLMConfig | None = None,
 ) -> RunResponseProtocol:
     iostream = ThreadIOStream()
-    # todo: add agents
-    response = RunResponse(iostream, agents=[])
+    all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
+    response = RunResponse(iostream, agents=all_agents)
 
     def _initiate_group_chat(
         pattern: "Pattern" = pattern,
@@ -249,8 +249,8 @@ async def a_run_group_chat(
     mask_llm_config: LLMConfig | None = None,
 ) -> AsyncRunResponseProtocol:
     iostream = AsyncThreadIOStream()
-    # todo: add agents
-    response = AsyncRunResponse(iostream, agents=[])
+    all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
+    response = AsyncRunResponse(iostream, agents=all_agents)
 
     async def _initiate_group_chat(
         pattern: "Pattern" = pattern,
