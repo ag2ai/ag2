@@ -6,7 +6,9 @@
 # SPDX-License-Identifier: MIT
 # !/usr/bin/env python3 -m pytest
 
+import importlib
 import sys
+import warnings
 
 import pytest
 
@@ -60,6 +62,23 @@ def test_add_remove_print():
     # test remove print. Only remove prints without indentation
     code = "if 4 > 5:\n\tprint('True')"
     assert _remove_print(code) == code
+
+
+def test_math_user_proxy_agent_no_pydantic_deprecation_warning():
+    try:
+        from pydantic.warnings import PydanticDeprecatedSince20
+    except Exception:
+        pytest.skip("PydanticDeprecatedSince20 not available")
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always", PydanticDeprecatedSince20)
+        import autogen.agentchat.contrib.math_user_proxy_agent as module
+
+        importlib.reload(module)
+
+    assert not any(
+        issubclass(item.category, PydanticDeprecatedSince20) for item in record
+    )
 
 
 @pytest.mark.skipif(

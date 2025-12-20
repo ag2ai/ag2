@@ -10,7 +10,13 @@ from collections.abc import Callable
 from time import sleep
 from typing import Any, Literal
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel
+from pydantic.version import VERSION as PYDANTIC_VERSION
+
+if PYDANTIC_VERSION.startswith("2."):
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 from ...code_utils import UNKNOWN, execute_code, extract_code, infer_lang
 from ...import_utils import optional_import_block, require_optional_import
@@ -397,18 +403,32 @@ class WolframAlphaAPIWrapper(BaseModel):
     wolfram_client: Any  #: :meta private:
     wolfram_alpha_appid: str | None = None
 
-    @root_validator(skip_on_failure=True)
-    @classmethod
-    @require_optional_import("wolframalpha", "mathchat")
-    def validate_environment(cls, values: dict) -> dict:
-        """Validate that api key and python package exists in environment."""
-        wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
-        values["wolfram_alpha_appid"] = wolfram_alpha_appid
+    if PYDANTIC_VERSION.startswith("2."):
+        @model_validator(mode="before")  # type: ignore[misc]
+        @classmethod
+        @require_optional_import("wolframalpha", "mathchat")
+        def validate_environment(cls, values: dict) -> dict:
+            """Validate that api key and python package exists in environment."""
+            wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
+            values["wolfram_alpha_appid"] = wolfram_alpha_appid
 
-        client = wolframalpha.Client(wolfram_alpha_appid)
-        values["wolfram_client"] = client
+            client = wolframalpha.Client(wolfram_alpha_appid)
+            values["wolfram_client"] = client
 
-        return values
+            return values
+    else:
+        @root_validator(skip_on_failure=True)
+        @classmethod
+        @require_optional_import("wolframalpha", "mathchat")
+        def validate_environment(cls, values: dict) -> dict:
+            """Validate that api key and python package exists in environment."""
+            wolfram_alpha_appid = get_from_dict_or_env(values, "wolfram_alpha_appid", "WOLFRAM_ALPHA_APPID")
+            values["wolfram_alpha_appid"] = wolfram_alpha_appid
+
+            client = wolframalpha.Client(wolfram_alpha_appid)
+            values["wolfram_client"] = client
+
+            return values
 
     def run(self, query: str) -> tuple[str, bool]:
         """Run query through WolframAlpha and parse result."""
