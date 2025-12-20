@@ -121,7 +121,7 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
 
 
 class RunResponse:
-    def __init__(self, iostream: ThreadIOStream, agents: list[Agent]):
+    def __init__(self, iostream: ThreadIOStream, agents: Sequence[Agent]):
         self.iostream = iostream
         self.agents = agents
         self._summary: str | None = None
@@ -206,7 +206,7 @@ class RunResponse:
 
 
 class AsyncRunResponse:
-    def __init__(self, iostream: AsyncThreadIOStream, agents: list[Agent]):
+    def __init__(self, iostream: AsyncThreadIOStream, agents: Sequence[Agent]):
         self.iostream = iostream
         self.agents = agents
         self._summary: str | None = None
