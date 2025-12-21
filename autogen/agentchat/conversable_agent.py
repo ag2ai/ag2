@@ -2944,9 +2944,14 @@ class ConversableAgent(LLMAgent):
         # Message modifications do not affect the incoming messages or self._oai_messages.
         messages = self.process_all_messages_before_reply(messages)
 
+        # Get sync functions to skip (those with async equivalents)
+        sync_to_skip = self._get_sync_funcs_to_skip_in_async_chat()
+
         for reply_func_tuple in self._reply_func_list:
             reply_func = reply_func_tuple["reply_func"]
             if reply_func in exclude:
+                continue
+            if reply_func in sync_to_skip:
                 continue
 
             if self._match_trigger(reply_func_tuple["trigger"], sender):
@@ -2962,6 +2967,30 @@ class ConversableAgent(LLMAgent):
                 if final:
                     return reply
         return self._default_auto_reply
+
+    def _get_sync_funcs_to_skip_in_async_chat(self) -> set[Callable[..., Any]]:
+        """Get sync reply functions that should be skipped in async chat.
+
+        When an async reply function is registered with ignore_async_in_sync_chat=True,
+        it indicates that a sync equivalent exists. In async chat, we should skip the
+        sync version and use the async version instead.
+
+        Returns:
+            A set of sync reply functions that have async equivalents.
+        """
+        sync_to_skip: set[Callable[..., Any]] = set()
+        for reply_func_tuple in self._reply_func_list:
+            reply_func = reply_func_tuple["reply_func"]
+            if is_coroutine_callable(reply_func) and reply_func_tuple.get("ignore_async_in_sync_chat"):
+                func_name = reply_func.__name__
+                if func_name.startswith("a_"):
+                    sync_name = func_name[2:]  # Remove "a_" prefix
+                    for other_tuple in self._reply_func_list:
+                        other_func = other_tuple["reply_func"]
+                        if not is_coroutine_callable(other_func) and other_func.__name__ == sync_name:
+                            sync_to_skip.add(other_func)
+                            break
+        return sync_to_skip
 
     def _match_trigger(self, trigger: None | str | type | Agent | Callable | list, sender: Agent | None) -> bool:
         """Check if the sender matches the trigger.
