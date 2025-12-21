@@ -6,10 +6,24 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from a2a.types import AgentCapabilities, AgentCard, DataPart, TextPart  # type: ignore
+from a2a.types import AgentCapabilities, AgentCard, DataPart, Message, Role, TextPart  # type: ignore
 
 from autogen import ConversableAgent
 from autogen.a2a import A2aRemoteAgent, MockClient
+from autogen.a2a.errors import A2aClientError
+
+
+class NoEventClient:
+    async def send_message(self, message: Message):
+        if False:
+            yield
+
+    async def resubscribe(self, params):
+        if False:
+            yield
+
+    async def get_task(self, params):
+        raise AssertionError("get_task should not be called")
 
 
 @pytest.mark.asyncio
@@ -129,3 +143,43 @@ def test_build_agent_from_card() -> None:
     assert agent.name == "Test Agent"
     assert agent.url == "UNKNOWN"
     assert agent._agent_card == card
+
+
+@pytest.mark.asyncio
+async def test_streaming_raises_when_no_task_started() -> None:
+    card = AgentCard(
+        name="Test Agent",
+        description="A test agent",
+        url="http://test.example.com",
+        version="0.1.0",
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[],
+        supports_authenticated_extended_card=False,
+    )
+    agent = A2aRemoteAgent.from_card(card)
+    message = Message(message_id="msg_1", role=Role.user, parts=[])
+
+    with pytest.raises(A2aClientError, match="Failed to connect to the agent"):
+        await agent._ask_streaming(NoEventClient(), message)
+
+
+@pytest.mark.asyncio
+async def test_polling_raises_when_no_task_started() -> None:
+    card = AgentCard(
+        name="Test Agent",
+        description="A test agent",
+        url="http://test.example.com",
+        version="0.1.0",
+        default_input_modes=["text"],
+        default_output_modes=["text"],
+        capabilities=AgentCapabilities(streaming=False),
+        skills=[],
+        supports_authenticated_extended_card=False,
+    )
+    agent = A2aRemoteAgent.from_card(card)
+    message = Message(message_id="msg_2", role=Role.user, parts=[])
+
+    with pytest.raises(A2aClientError, match="Failed to connect to the agent"):
+        await agent._ask_polling(NoEventClient(), message)
