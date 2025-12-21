@@ -228,7 +228,6 @@ class A2aRemoteAgent(ConversableAgent):
                 raise A2aClientError("Failed to connect to the agent: agent card not found")
             raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
 
-        assert started_task is not None
         connection_attemps = 1
         while connection_attemps < self._max_reconnects:
             try:
@@ -268,7 +267,6 @@ class A2aRemoteAgent(ConversableAgent):
                 raise A2aClientError("Failed to connect to the agent: agent card not found")
             raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
 
-        assert started_task is not None
         connection_attemps = 1
         while connection_attemps < self._max_reconnects:
             try:
