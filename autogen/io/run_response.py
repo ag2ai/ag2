@@ -8,7 +8,7 @@
 import queue
 from asyncio import Queue as AsyncQueue
 from collections.abc import AsyncIterable, Iterable, Sequence
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -30,6 +30,7 @@ from .thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 Message = dict[str, Any]
 
 
+@runtime_checkable
 class RunInfoProtocol(Protocol):
     @property
     def uuid(self) -> UUID: ...
@@ -72,6 +73,7 @@ class Cost(BaseModel):
         )
 
 
+@runtime_checkable
 class RunResponseProtocol(RunInfoProtocol, Protocol):
     @property
     def events(self) -> Iterable[BaseEvent]: ...
@@ -96,6 +98,7 @@ class RunResponseProtocol(RunInfoProtocol, Protocol):
     def set_ui_tools(self, tools: list[Tool]) -> None: ...
 
 
+@runtime_checkable
 class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
     @property
     def events(self) -> AsyncIterable[BaseEvent]: ...
