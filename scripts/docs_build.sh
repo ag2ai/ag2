@@ -11,11 +11,11 @@ docs_generate() {
     cd website && \
         # Only add --force if argument is exactly "--force"
         if [ "$force" = "--force" ]; then
-            python3 ./generate_api_references.py --force
+            python ./generate_api_references.py --force
         else
-            python3 ./generate_api_references.py
+            python ./generate_api_references.py
         fi && \
-        python3 ./process_notebooks.py render
+        python ./process_notebooks.py render
 }
 
 docs_build() {
