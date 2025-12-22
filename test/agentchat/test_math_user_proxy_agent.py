@@ -76,9 +76,7 @@ def test_math_user_proxy_agent_no_pydantic_deprecation_warning():
 
         importlib.reload(module)
 
-    assert not any(
-        issubclass(item.category, PydanticDeprecatedSince20) for item in record
-    )
+    assert not any(issubclass(item.category, PydanticDeprecatedSince20) for item in record)
 
 
 @pytest.mark.skipif(

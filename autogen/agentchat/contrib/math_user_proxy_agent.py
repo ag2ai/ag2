@@ -404,6 +404,7 @@ class WolframAlphaAPIWrapper(BaseModel):
     wolfram_alpha_appid: str | None = None
 
     if PYDANTIC_VERSION.startswith("2."):
+
         @model_validator(mode="before")  # type: ignore[misc]
         @classmethod
         @require_optional_import("wolframalpha", "mathchat")
@@ -416,7 +417,9 @@ class WolframAlphaAPIWrapper(BaseModel):
             values["wolfram_client"] = client
 
             return values
+
     else:
+
         @root_validator(skip_on_failure=True)
         @classmethod
         @require_optional_import("wolframalpha", "mathchat")
