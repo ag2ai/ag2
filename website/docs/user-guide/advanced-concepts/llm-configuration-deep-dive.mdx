@@ -33,6 +33,7 @@ Different tasks may require different models, and the `config_list` allows speci
 
 <Tabs>
   <Tab title="OpenAI">
+
 - `api_type` (str, required): The model provider
 - `model` (str, required): The identifier of the model to be used, such as 'gpt-5', 'gpt-5-nano'.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
@@ -49,8 +50,9 @@ Different tasks may require different models, and the `config_list` allows speci
       }
     ]
     ```
-  </Tab>
-  <Tab title="Azure OpenAI">
+
+</Tab>
+<Tab title="Azure OpenAI">
 - `model` (str, required): The deployment to be used. The model corresponds to the deployment name on Azure OpenAI.
 - `api_key` (str, optional): The API key required for authenticating requests to the model's API endpoint.
 - `api_type`: `azure`
