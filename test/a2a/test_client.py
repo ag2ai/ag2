@@ -183,3 +183,25 @@ async def test_polling_raises_when_no_task_started() -> None:
 
     with pytest.raises(A2aClientError, match="Failed to connect to the agent"):
         await agent._ask_polling(NoEventClient(), message)
+
+
+@pytest.mark.asyncio
+async def test_streaming_raises_when_no_task_and_no_agent_card() -> None:
+    """Test that streaming raises appropriate error when agent_card is None."""
+    agent = A2aRemoteAgent(name="test", url="http://test.example.com")
+    agent._agent_card = None
+    message = Message(message_id="msg_3", role=Role.user, parts=[])
+
+    with pytest.raises(A2aClientError, match="agent card not found"):
+        await agent._ask_streaming(NoEventClient(), message)
+
+
+@pytest.mark.asyncio
+async def test_polling_raises_when_no_task_and_no_agent_card() -> None:
+    """Test that polling raises appropriate error when agent_card is None."""
+    agent = A2aRemoteAgent(name="test", url="http://test.example.com")
+    agent._agent_card = None
+    message = Message(message_id="msg_4", role=Role.user, parts=[])
+
+    with pytest.raises(A2aClientError, match="agent card not found"):
+        await agent._ask_polling(NoEventClient(), message)
