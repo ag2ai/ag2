@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Sequence
 from pprint import pformat
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 import httpx
