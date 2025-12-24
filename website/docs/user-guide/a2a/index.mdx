@@ -1,11 +1,9 @@
 ---
-title: "A2A (Agent-to-Agent) Communication"
+title: "A2A (Agent2Agent) Communication"
 description: "Learn how to enable agents to communicate across different processes and machines using the A2A protocol."
 ---
 
-# A2A (Agent-to-Agent) Communication
-
-The [A2A (Agent-to-Agent Protocol)](https://a2a-protocol.org/latest/){.external-link target="_blank"} communication system in AG2 enables agents to communicate across different processes, machines, applications, or even different frameworks and languages. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
+The <a href="https://a2a-protocol.org/latest/" className="external-link" target="_blank" rel="noopener noreferrer">A2A (Agent2Agent Protocol)</a> communication system in AG2 enables agents to communicate across different processes, machines, applications, or even different frameworks and languages. This powerful feature allows you to build distributed agent systems where agents can be deployed as separate services and interact with each other seamlessly.
 
 Consider using A2A when:
 
@@ -13,9 +11,10 @@ Consider using A2A when:
 * The agent is maintained by a **different team or organization**
 * You need to connect agents written in **different programming languages or agent frameworks**
 * You want to enforce a **strong, formal contract** (the A2A protocol) between your system's components
+* You need **Human in the Loop (HITL)** support for interactive workflows across distributed agents
 
 !!! note
-    We are using official [A2A python sdk](https://github.com/a2aproject/a2a-python){.external-link target="_blank"} to implement A2A in AG2.
+    We are using official <a href="https://github.com/a2aproject/a2a-python" className="external-link" target="_blank" rel="noopener noreferrer">A2A python sdk</a> to implement A2A in AG2.
 
     You can check their documentation for more details on how to use A2A in your own projects.
 
@@ -34,8 +33,6 @@ agent = ConversableAgent(
     name="python_coder",
     system_message="You are an expert Python developer...",
     llm_config=llm_config,
-    # set human_input_mode "NEVER" to avoid asking for human input on server side
-    human_input_mode="NEVER",
 )
 
 # Create A2A server
@@ -48,7 +45,7 @@ Now you can start it using any ASGI server, for example:
 uvicorn server:server
 ```
 
-To read more about how to configure an A2A server, please refer to [A2A Server Setup](./server){.internal-link} documentation.
+To read more about how to configure an A2A server, please refer to <a href="./server" className="internal-link">A2A Server Setup</a> documentation.
 
 ## Creating an A2A Client
 
@@ -89,13 +86,13 @@ await review_agent.a_initiate_chat(
 !!! warning
     `A2aRemoteAgent` supports only asynchronous methods - this is the limitation of the A2A client we use.
 
-To read more about how to use `A2aRemoteAgent`, please refer to [A2A Client Usage](./client){.internal-link} documentation.
+To read more about how to use `A2aRemoteAgent`, please refer to <a href="./client" className="internal-link">A2A Client Usage</a> documentation.
 
 ## Interoperability with other frameworks
 
-A2A is supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
+A2A is supported <a href="https://a2a-protocol.org/latest/community/#a2a-integrations" className="external-link" target="_blank" rel="noopener noreferrer">by other frameworks</a>, so you can use `A2aRemoteAgent` with them, too.
 
-As an example, you can easily connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents:
+As an example, you can easily connect your AG2 agents with <a href="https://ai.pydantic.dev/a2a/" className="external-link" target="_blank" rel="noopener noreferrer">Pydantic AI</a> agents:
 
 ```python title="server.py" linenums="1"
 from pydantic_ai import Agent

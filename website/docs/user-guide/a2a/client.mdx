@@ -3,8 +3,6 @@ title: "A2A Client Usage"
 description: "Learn how to connect to and interact with remote A2A agents from your local applications."
 ---
 
-# A2A Client Usage
-
 The A2A client allows you to connect to remote A2A agent servers and interact with them as if they were local agents. This guide covers everything you need to know about using A2A clients.
 
 !!! warning
@@ -71,6 +69,56 @@ async def review_code():
 asyncio.run(review_code())
 ```
 
+### Creating from AgentCard
+
+If you already have an `AgentCard` (e.g., fetched from a discovery service or another source), you can create an `A2aRemoteAgent` instance directly from it using the `from_card` classmethod. This avoids redundant fetching of the agent card and allows you to use pre-validated card information.
+
+```python linenums="1"
+from a2a.types import AgentCard, AgentCapabilities
+
+# Create or fetch an AgentCard
+card = AgentCard(
+    name="python_coder",
+    url="http://localhost:8000",
+    description="A Python coding assistant",
+    version="0.1.0",
+    default_input_modes=["text"],
+    default_output_modes=["text"],
+    capabilities=AgentCapabilities(streaming=True),
+    skills=[],
+    supports_authenticated_extended_card=False,
+)
+
+# Create the remote agent from the card
+remote_agent = A2aRemoteAgent.from_card(card)
+```
+
+## Human in the Loop (HITL) Support
+
+`A2aRemoteAgent` automatically handles Human in the Loop interactions when the remote agent requests human input. This happens transparently - you don't need to write any special code to handle HITL requests. The client will loop until the agent completes its task or the conversation terminates.
+
+```python linenums="1"
+from autogen.a2a import A2aRemoteAgent
+
+# Connect to a remote agent that may request human input
+remote_agent = A2aRemoteAgent(
+    url="http://localhost:8000",
+    name="approval_agent"
+)
+
+# The client will automatically handle any human input requests
+await local_agent.a_initiate_chat(
+    recipient=remote_agent,
+    message={
+        "role": "user",
+        "content": "Should I approve this budget proposal?",
+    }
+)
+# If the remote agent requests input, the user will be prompted automatically
+```
+
+The input prompt from the remote agent will be displayed to the user, and their response will be sent back to continue the conversation seamlessly.
+
 ## Advanced Usage
 
 ### Custom HTTP Client
@@ -128,9 +176,9 @@ remote_agent = A2aRemoteAgent(
 
 ## Interoperability with other frameworks
 
-A2A is also supported [by other frameworks](https://a2a-protocol.org/latest/community/#a2a-integrations){.external-link target="_blank"}, so you can use `A2aRemoteAgent` with them, too.
+A2A is also supported <a href="https://a2a-protocol.org/latest/community/#a2a-integrations" className="external-link" target="_blank" rel="noopener noreferrer">by other frameworks</a>, so you can use `A2aRemoteAgent` with them, too.
 
-As an example, you can connect your AG2 agents with [Pydantic AI](https://ai.pydantic.dev/a2a/){.external-link target="_blank"} agents. Here we create a Pydantic AI agent:
+As an example, you can connect your AG2 agents with <a href="https://ai.pydantic.dev/a2a/" className="external-link" target="_blank" rel="noopener noreferrer">Pydantic AI</a> agents. Here we create a Pydantic AI agent:
 
 ```python title="server.py" linenums="1"
 from pydantic_ai import Agent

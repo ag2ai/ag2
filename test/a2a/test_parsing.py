@@ -5,7 +5,7 @@
 from uuid import uuid4
 
 import pytest
-from a2a.types import Artifact, DataPart, Message, Part, Role, TextPart
+from a2a.types import Artifact, DataPart, Message, Part, Role, Task, TaskState, TaskStatus, TextPart
 
 from autogen.a2a.utils import (
     CLIENT_TOOLS_KEY,
@@ -16,6 +16,7 @@ from autogen.a2a.utils import (
     request_message_to_a2a,
     response_message_from_a2a_artifacts,
     response_message_from_a2a_message,
+    response_message_from_a2a_task,
     response_message_to_a2a,
 )
 from autogen.remote.protocol import RequestMessage, ResponseMessage
@@ -215,6 +216,96 @@ class TestResponseMessageFromA2AArtifacts:
             response_message_from_a2a_artifacts([artifact])
 
 
+class TestResponseMessageFromA2ATask:
+    def test_task_input_required_with_history(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.input_required),
+            history=[
+                Message(
+                    role=Role.agent,
+                    parts=[Part(root=TextPart(text="Hi, user! Please provide input"))],
+                    message_id=str(uuid4()),
+                )
+            ],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(
+            messages=[{"content": "Hi, user! Please provide input", "role": "assistant"}],
+            input_required="Hi, user! Please provide input",
+        )
+
+    def test_task_input_required_with_empty_history(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.input_required),
+            history=[],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(input_required="Please provide input:")
+
+    def test_task_completed_with_artifacts(self) -> None:
+        artifact = Artifact(
+            artifact_id=str(uuid4()),
+            name="result",
+            parts=[Part(root=TextPart(text="Task completed"))],
+        )
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[artifact],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(messages=[{"content": "Task completed"}])
+
+    def test_task_completed_with_no_artifacts(self) -> None:
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result is None
+
+    def test_task_completed_with_artifact_context(self) -> None:
+        artifact = Artifact(
+            artifact_id=str(uuid4()),
+            name="result",
+            parts=[Part(root=TextPart(text="Result with context"))],
+            metadata={CONTEXT_KEY: {"session": "xyz"}},
+        )
+        task = Task(
+            id=str(uuid4()),
+            context_id=str(uuid4()),
+            status=TaskStatus(state=TaskState.completed),
+            history=[],
+            artifacts=[artifact],
+        )
+
+        result = response_message_from_a2a_task(task)
+
+        assert result == ResponseMessage(
+            messages=[{"content": "Result with context"}],
+            context={"session": "xyz"},
+        )
+
+
 class TestResponseMessageFromA2AMessage:
     def test_empty_message(self) -> None:
         message = Message(
@@ -305,8 +396,9 @@ class TestResponseMessageFromA2AMessage:
 
 class TestResponseMessageToA2A:
     def test_none_response(self) -> None:
-        artifact, messages = response_message_to_a2a(None, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(None, "ctx-123", "task-456")
 
+        assert not input_required
         assert artifact == Artifact(
             name="result",
             parts=[],
@@ -320,7 +412,9 @@ class TestResponseMessageToA2A:
             messages=[{"content": "Hello"}],
             context={"key": "value"},
         )
-        artifact, messages = response_message_to_a2a(response, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
+
+        assert not input_required
 
         assert artifact == Artifact(
             name="result",
@@ -351,7 +445,9 @@ class TestResponseMessageToA2A:
                 {"content": "Message 3"},
             ]
         )
-        artifact, messages = response_message_to_a2a(response, "ctx-123", "task-456")
+        artifact, messages, input_required = response_message_to_a2a(response, "ctx-123", "task-456")
+
+        assert not input_required
 
         # Artifact should contain only the last message
         assert artifact == Artifact(
@@ -386,7 +482,7 @@ class TestRoundTripConversions:
         )
 
         # Convert to A2A and back
-        artifact, _ = response_message_to_a2a(original_response, "ctx-123", "task-456")
+        artifact, _, _ = response_message_to_a2a(original_response, "ctx-123", "task-456")
         converted_response = response_message_from_a2a_artifacts([artifact])
 
         assert converted_response == original_response

@@ -34,6 +34,8 @@ The `DefaultPattern` gives you complete control over the conversation flow throu
 
 With DefaultPattern, we need to explicitly define the handoffs between agents:
 
+![DefaultPattern chat](../assets/default_pattern_process.png)
+
 ```python hl_lines="10-22"
 # Configure the pattern
 pattern = DefaultPattern(
@@ -74,7 +76,7 @@ In this example, the `triage_agent` explicitly defines the handoffs to either th
     import os
     load_dotenv()
 
-    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -155,6 +157,8 @@ The AutoPattern uses an LLM to intelligently select the next speaker based on th
 
 Setting up the AutoPattern is simpler since it doesn't require explicit handoffs:
 
+![AutoPattern chat](../assets/autopattern_process.png)
+
 ```python
 pattern = AutoPattern(
     initial_agent=triage_agent,
@@ -178,7 +182,7 @@ In this pattern, the next speaker is determined by the LLM based on the conversa
     import os
     load_dotenv()
 
-    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -242,6 +246,8 @@ The RoundRobinPattern creates a predictable rotation where agents speak in the e
 
 Setting up the RoundRobinPattern focuses on the order of agents:
 
+![RoundRobinPattern chat](../assets/round_robin_process.png)
+
 ```python
 pattern = RoundRobinPattern(
     initial_agent=triage_agent,
@@ -289,7 +295,7 @@ general_agent.handoffs.set_after_work(RevertToUserTarget())
     import os
     load_dotenv()
 
-    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -343,6 +349,8 @@ The RandomPattern adds an element of unpredictability by randomly selecting the 
 
 Setting up the RandomPattern:
 
+![RandomPattern chat](../assets/randompattern_process.png)
+
 ```python
 pattern = RandomPattern(
     initial_agent=triage_agent,
@@ -364,7 +372,7 @@ pattern = RandomPattern(
     import os
     load_dotenv()
 
-    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",
@@ -419,6 +427,8 @@ The ManualPattern puts you in control by always reverting to the user agent afte
 
 Setting up the ManualPattern:
 
+![manualpattern chat](../assets/manualpattern_process.png)
+
 ```python
 pattern = ManualPattern(
     initial_agent=triage_agent,
@@ -440,7 +450,7 @@ pattern = ManualPattern(
     import os
     load_dotenv()
 
-    llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+    llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
     triage_agent = ConversableAgent(
         name="triage_agent",

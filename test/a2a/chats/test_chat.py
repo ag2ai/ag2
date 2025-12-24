@@ -45,6 +45,25 @@ async def test_simple_messaging(remote_agent: ConversableAgent, a2a_client: Http
 
 
 @pytest.mark.asyncio()
+async def test_empty_message_send(remote_agent: ConversableAgent, a2a_client: HttpxClientFactory) -> None:
+    # arrange
+    remote_agent_mirror = A2aRemoteAgent(url="http://memory", name="remote-mirror", client=a2a_client)
+
+    with TestAgent(remote_agent, ["Hi, I am remote agent!"]):
+        # act
+        _, message = await remote_agent_mirror.a_generate_remote_reply([
+            {"content": ""},
+        ])
+
+    # assert
+    assert message == {
+        "content": "Hi, I am remote agent!",
+        "name": "remote",
+        "role": "assistant",
+    }
+
+
+@pytest.mark.asyncio()
 async def test_conversation(remote_agent: ConversableAgent, a2a_client: HttpxClientFactory) -> None:
     # arrange
     remote_agent_mirror = A2aRemoteAgent(url="http://memory", name="remote-mirror", client=a2a_client)

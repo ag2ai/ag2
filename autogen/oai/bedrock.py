@@ -39,7 +39,7 @@ import warnings
 from typing import Any, Literal
 
 import requests
-from pydantic import Field, SecretStr, field_serializer
+from pydantic import BaseModel, Field, SecretStr, field_serializer
 from typing_extensions import Required, Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
@@ -97,6 +97,8 @@ class BedrockLLMConfigEntry(LLMConfigEntry):
 class BedrockClient:
     """Client for Amazon's Bedrock Converse API."""
 
+    RESPONSE_USAGE_KEYS: list[str] = ["prompt_tokens", "completion_tokens", "total_tokens", "cost", "model"]
+
     _retries = 5
 
     def __init__(self, **kwargs: Unpack[BedrockEntryDict]):
@@ -129,9 +131,9 @@ class BedrockClient:
             profile_name=self._aws_profile_name,
         )
 
-        if "response_format" in kwargs and kwargs["response_format"] is not None:
-            warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
-
+        # if "response_format" in kwargs and kwargs["response_format"] is not None:
+        #     warnings.warn("response_format is not supported for Bedrock, it will be ignored.", UserWarning)
+        self._response_format: BaseModel | dict[str, Any] | None = kwargs.get("response_format")
         # if haven't got any access_key or secret_key in environment variable or via arguments then
         if (
             self._aws_access_key is None
@@ -149,6 +151,199 @@ class BedrockClient:
                 profile_name=self._aws_profile_name,
             )
             self.bedrock_runtime = session.client(service_name="bedrock-runtime", config=bedrock_config)
+
+    def _get_response_format_schema(self, response_format: BaseModel | dict[str, Any]) -> dict[str, Any]:
+        """Extract and normalize JSON schema from response_format.
+
+        Args:
+            response_format: Either a Pydantic BaseModel subclass or a dict containing JSON schema.
+
+        Returns:
+            Normalized JSON schema dict.
+        """
+        schema = response_format.copy() if isinstance(response_format, dict) else response_format.model_json_schema()
+
+        # Ensure root is an object type
+        if "type" not in schema:
+            schema["type"] = "object"
+        elif schema.get("type") != "object":
+            # Wrap in object if not already
+            schema = {"type": "object", "properties": {"data": schema}, "required": ["data"]}
+
+        # Ensure properties and required exist
+        if "properties" not in schema:
+            schema["properties"] = {}
+        if "required" not in schema:
+            schema["required"] = []
+
+        return schema
+
+    def _normalize_pydantic_schema_to_dict(self, schema: dict[str, Any] | type[BaseModel]) -> dict[str, Any]:
+        """
+        Convert a Pydantic model's JSON schema to a flat dict schema by resolving $ref references.
+
+        This function takes a Pydantic model or its JSON schema and converts it to a simple
+        dict schema format without $defs or $ref references, making it compatible with
+        APIs that don't support JSON Schema references.
+
+        Args:
+            schema: Either a Pydantic model class or a dict containing the JSON schema
+
+        Returns:
+            A normalized dict schema with all $ref references resolved and $defs removed
+
+        Example:
+            >>> from pydantic import BaseModel
+            >>> class Step(BaseModel):
+            ...     explanation: str
+            ...     output: str
+            >>> class MathReasoning(BaseModel):
+            ...     steps: list[Step]
+            ...     final_answer: str
+            >>>
+            >>> normalized = _normalize_pydantic_schema_to_dict(MathReasoning)
+            >>> # Returns schema without $defs or $ref
+        """
+        from pydantic import BaseModel
+
+        # If it's a Pydantic model, get its JSON schema
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            schema_dict = schema.model_json_schema()
+        elif isinstance(schema, dict):
+            schema_dict = schema.copy()
+        else:
+            raise ValueError(f"Schema must be a Pydantic model class or dict, got {type(schema)}")
+
+        # Extract $defs if present
+        defs = schema_dict.get("$defs", {}).copy()
+
+        def resolve_ref(ref: str, definitions: dict[str, Any]) -> dict[str, Any]:
+            """Resolve a $ref to its actual schema definition."""
+            if not ref.startswith("#/$defs/"):
+                raise ValueError(f"Unsupported $ref format: {ref}. Only '#/$defs/...' is supported.")
+            # Extract the definition name from "#/$defs/Name"
+            def_name = ref.split("/")[-1]
+            if def_name not in definitions:
+                raise ValueError(f"Definition '{def_name}' not found in $defs")
+            return definitions[def_name].copy()
+
+        def resolve_refs_recursive(obj: Any, definitions: dict[str, Any]) -> Any:
+            """Recursively resolve all $ref references in the schema."""
+            if isinstance(obj, dict):
+                # If this dict has a $ref, replace it with the actual definition
+                if "$ref" in obj:
+                    ref_def = resolve_ref(obj["$ref"], definitions)
+                    # Merge any additional properties from the current object (except $ref)
+                    merged = {**ref_def, **{k: v for k, v in obj.items() if k != "$ref"}}
+                    # Recursively resolve any refs in the merged definition
+                    return resolve_refs_recursive(merged, definitions)
+                else:
+                    # Process all values recursively
+                    return {k: resolve_refs_recursive(v, definitions) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [resolve_refs_recursive(item, definitions) for item in obj]
+            else:
+                return obj
+
+        # Resolve all references
+        normalized_schema = resolve_refs_recursive(schema_dict, defs)
+
+        # Remove $defs section as it's no longer needed
+        if "$defs" in normalized_schema:
+            del normalized_schema["$defs"]
+
+        return normalized_schema
+
+    def _create_structured_output_tool(self, response_format: BaseModel | dict[str, Any]) -> dict[str, Any]:
+        """Convert response_format into a Bedrock tool definition for structured outputs.
+
+        Args:
+            response_format: Either a Pydantic BaseModel subclass or a dict containing JSON schema.
+
+        Returns:
+            Tool definition compatible with format_tools().
+        """
+        schema = self._get_response_format_schema(response_format)
+        schema = self._normalize_pydantic_schema_to_dict(schema)
+
+        return {
+            "type": "function",
+            "function": {
+                "name": "__structured_output",
+                "description": "Generate structured output matching the specified schema",
+                "parameters": schema,
+            },
+        }
+
+    def _merge_tools_with_structured_output(
+        self, user_tools: list[dict[str, Any]], structured_output_tool: dict[str, Any]
+    ) -> dict[Literal["tools"], list[dict[str, Any]]]:
+        """Merge user tools with structured output tool.
+
+        Args:
+            user_tools: List of user-defined tool definitions (can be empty).
+            structured_output_tool: The structured output tool from _create_structured_output_tool().
+
+        Returns:
+            Dict with "tools" key containing all tools in Bedrock format.
+        """
+        all_tools = list(user_tools) if user_tools else []
+        all_tools.append(structured_output_tool)
+        return format_tools(all_tools)
+
+    def _extract_structured_output_from_tool_call(
+        self, tool_calls: list[ChatCompletionMessageToolCall]
+    ) -> dict[str, Any] | None:
+        """Extract structured output data from tool call response.
+
+        Args:
+            tool_calls: List of tool calls from Bedrock response.
+
+        Returns:
+            Parsed JSON dict from __structured_output tool call, or None if not found.
+        """
+        for tool_call in tool_calls:
+            if tool_call.function.name == "__structured_output":
+                try:
+                    return json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Failed to parse structured output from tool call: {e!s}") from e
+        return None
+
+    def _validate_and_format_structured_output(self, structured_data: dict[str, Any]) -> str:
+        """Validate structured data against schema and format for response message.
+
+        Args:
+            structured_data: Parsed dict from tool call.
+
+        Returns:
+            Formatted string representation of structured output.
+        """
+        if self._response_format:
+            return json.dumps(structured_data)
+
+        try:
+            # Validate against schema
+            if isinstance(self._response_format, dict):
+                # For dict schemas, just return JSON
+                validated_data = structured_data
+            else:
+                # Pydantic model - validate
+                validated_data = self._response_format.model_validate(structured_data)
+
+            # Format the response
+            from .client_utils import FormatterProtocol
+
+            if isinstance(validated_data, FormatterProtocol):
+                return validated_data.format()
+            elif hasattr(validated_data, "model_dump_json"):
+                # Pydantic model
+                return validated_data.model_dump_json()
+            else:
+                return json.dumps(structured_data)
+
+        except Exception as e:
+            raise ValueError(f"Failed to validate structured output against schema: {e!s}") from e
 
     def message_retrieval(self, response):
         """Retrieve the messages from the response."""
@@ -231,13 +426,26 @@ class BedrockClient:
         # Parse the inference parameters
         base_params, additional_params = self.parse_params(params)
 
-        has_tools = "tools" in params
-        messages = oai_messages_to_bedrock_messages(params["messages"], has_tools, self._supports_system_prompts)
+        # Handle response_format for structured outputs
+        has_response_format = self._response_format is not None
+        if has_response_format:
+            structured_output_tool = self._create_structured_output_tool(self._response_format)
+            # Merge with user tools if any
+            user_tools = params.get("tools", [])
+            tool_config = self._merge_tools_with_structured_output(user_tools, structured_output_tool)
+
+            has_tools = len(tool_config["tools"]) > 0
+        else:
+            has_tools = "tools" in params
+            tool_config = format_tools(params["tools"] if has_tools else [])
+            has_tools = len(tool_config["tools"]) > 0
+
+        messages = oai_messages_to_bedrock_messages(
+            params["messages"], has_tools or has_response_format, self._supports_system_prompts
+        )
 
         if self._supports_system_prompts:
             system_messages = extract_system_messages(params["messages"])
-
-        tool_config = format_tools(params["tools"] if has_tools else [])
 
         request_args = {"messages": messages, "modelId": self._model_id}
 
@@ -263,11 +471,25 @@ class BedrockClient:
 
         tool_calls = format_tool_calls(response_message["content"]) if finish_reason == "tool_calls" else None
 
+        # Extract structured output if response_format was used
         text = ""
-        for content in response_message["content"]:
-            if "text" in content:
-                text = content["text"]
-                # NOTE: other types of output may be dealt with here
+        if has_response_format and finish_reason == "tool_calls" and tool_calls:
+            structured_data = self._extract_structured_output_from_tool_call(tool_calls)
+            if structured_data:
+                text = self._validate_and_format_structured_output(structured_data)
+            else:
+                # Fallback: extract text content if tool call extraction failed
+                for content in response_message["content"]:
+                    if "text" in content:
+                        text = content["text"]
+                        break
+        else:
+            # Normal text extraction
+            for content in response_message["content"]:
+                if "text" in content:
+                    text = content["text"]
+                    # NOTE: other types of output may be dealt with here
+                    break
 
         message = ChatCompletionMessage(role="assistant", content=text, tool_calls=tool_calls)
 
@@ -532,10 +754,34 @@ def format_tools(tools: list[dict[str, Any]]) -> dict[Literal["tools"], list[dic
             }
 
             for prop_name, prop_details in function["parameters"]["properties"].items():
-                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = {
-                    "type": prop_details["type"],
-                    "description": prop_details.get("description", ""),
-                }
+                if not isinstance(prop_details, dict):
+                    raise TypeError(f"Property '{prop_name}' schema must be a dict, got {type(prop_details)!r}")
+
+                prop_schema: dict[str, Any] = {"description": prop_details.get("description", "")}
+
+                for key in (
+                    "type",
+                    "enum",
+                    "default",
+                    "anyOf",
+                    "oneOf",
+                    "allOf",
+                    "items",
+                    "const",
+                    "format",
+                    "minimum",
+                    "maximum",
+                    "minItems",
+                    "maxItems",
+                    "minLength",
+                    "maxLength",
+                    "pattern",
+                    "additionalProperties",
+                ):
+                    if key in prop_details:
+                        prop_schema[key] = prop_details[key]
+
+                converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name] = prop_schema
                 if "enum" in prop_details:
                     converted_tool["toolSpec"]["inputSchema"]["json"]["properties"][prop_name]["enum"] = prop_details[
                         "enum"

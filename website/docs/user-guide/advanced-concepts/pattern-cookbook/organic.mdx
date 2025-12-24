@@ -78,6 +78,9 @@ sequenceDiagram
     Note over User, TW: Organic transitions
 ```
 
+![organic example](./assets/organic_example.png)
+
+
 ## Code
 
 <Tip>
@@ -93,7 +96,7 @@ import os
 load_dotenv()
 
 # Setup LLM configuration
-llm_config = llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
+llm_config = LLMConfig(config_list={"api_type": "openai", "model": "gpt-5-nano","api_key":os.getenv("OPENAI_API_KEY")})
 
 # Create specialized agents with descriptions that help the GROUP_MANAGER route appropriately
 project_manager = ConversableAgent(

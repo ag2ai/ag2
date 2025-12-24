@@ -64,7 +64,7 @@ dependencies = [
 
 [project.optional-dependencies]
 a2a = [
-    "a2a-sdk[http-server]>=0.3.7,<0.4",
+    "a2a-sdk[http-server]>=0.3.11,<0.4",
 ]
 
 flaml = [
@@ -95,8 +95,8 @@ jupyter-executor = [
 
 retrievechat = [
     "protobuf==6.32.0",
-    "chromadb==1.0.20",
-    "sentence_transformers<=5.1.0",
+    "chromadb>=1.3.0,<1.4",
+    "sentence_transformers>=3.0.0,<=5.1.0",
     "pypdf",
     "ipython",
     "beautifulsoup4",
@@ -221,8 +221,8 @@ interop =[
 ]
 
 autobuild = [
-    "chromadb",
-    "sentence_transformers<=5.1.0",
+    "chromadb>=1.3.0,<1.4",
+    "sentence_transformers>=3.0.0,<=5.1.0",
     "huggingface-hub"
 ]
 
@@ -234,7 +234,7 @@ lmm = ["replicate", "pillow"]
 graph = ["networkx", "matplotlib"]
 gemini = [
     "google-api-core",
-    "google-genai>=1.20.0",
+    "google-genai>=1.20.0,<1.60",
     "google-cloud-aiplatform",
     "google-auth",
     "pillow",
@@ -288,6 +288,7 @@ test = [
     "pytest-asyncio==1.1.0",
     "dirty-equals==0.9.0",
     "freezegun==1.5.5",
+    "aiofiles>=24.1.0,<26.0.0",
 ]
 
 docs = [
