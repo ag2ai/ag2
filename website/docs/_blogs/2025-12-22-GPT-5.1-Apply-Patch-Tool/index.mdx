@@ -9,12 +9,9 @@ AG2 now supports the **apply_patch** tool (from GPT-5.1 onward) through OpenAI's
 
 This article explores how to use apply_patch in AG2, with practical examples for automated code editing, project scaffolding, and multi-file refactoring.
 
-![AG2 × GPT-5.1 Apply Patch](img/ag2-apply-patch-banner.png)
-
-{/* more */}
 ## What is Apply Patch?
 
-The `apply_patch` tool is a built-in capability in GPT-5.1 that enables agents to perform structured file operations using unified diff format. Unlike traditional code generation approaches where agents output raw code blocks that you must manually integrate, apply_patch provides a standardized interface for file modifications that can be directly applied to your codebase.
+The `apply_patch` tool is a built-in capability in GPT-5.1 and above models that enables agents to perform structured file operations using unified diff format. Unlike traditional code generation approaches where agents output raw code blocks that you must manually integrate, apply_patch provides a standardized interface for file modifications that can be directly applied to your codebase.
 
 The tool handles three core operations:
 - **create_file**: Generate new files with specified content
@@ -66,7 +63,7 @@ GPT-5.1 automatically generates these diffs when using the apply_patch tool, ens
 
 ## Basic Setup and Configuration
 
-Getting started with apply_patch in AG2 is straightforward. You need GPT-5.1 access (currently in beta) and AG2 installed with OpenAI support.
+Getting started with apply_patch in AG2 is straightforward. You need GPT-5.1 or any model above 5.1 access (currently in beta) and AG2 installed with OpenAI support.
 
 ### Installation
 
@@ -76,7 +73,7 @@ pip install ag2[openai]
 
 ### Configuration
 
-Configure your LLM to use the Responses API with GPT-5.1 and enable the apply_patch tool:
+Configure your LLM to use the Responses API with GPT-5.1 or above models and enable the apply_patch tool:
 
 ```python
 import os
@@ -553,7 +550,9 @@ client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 If using async patches, ensure `aiofiles` is installed:
 
-pip install aiofiles### Getting Help
+pip install aiofiles
+
+### Getting Help
 
 For more information:
 - [AG2 Documentation](https://docs.ag2.ai)
