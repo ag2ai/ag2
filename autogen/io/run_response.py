@@ -25,6 +25,7 @@ from .processors import (
     ConsoleEventProcessor,
     EventProcessorProtocol,
 )
+from .step_controller import AsyncStepController, StepController
 from .thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 
 Message = dict[str, Any]
@@ -124,9 +125,15 @@ class AsyncRunResponseProtocol(RunInfoProtocol, Protocol):
 
 
 class RunResponse:
-    def __init__(self, iostream: ThreadIOStream, agents: Sequence[Agent]):
+    def __init__(
+        self,
+        iostream: ThreadIOStream,
+        agents: Sequence[Agent],
+        step_controller: StepController | None = None,
+    ):
         self.iostream = iostream
         self.agents = agents
+        self._step_controller = step_controller
         self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -207,11 +214,87 @@ class RunResponse:
         for agent in self.agents:
             agent.set_ui_tools(tools)
 
+    def step(self) -> BaseEvent | None:
+        """Get next event, blocking until available. Returns None on completion.
+
+        This method is only available when step_mode=True was passed to run().
+        It advances the execution by one step and returns the event.
+
+        When step_on is specified, only events matching those types are returned.
+        Other events are consumed but not returned to the caller.
+
+        Note that InputRequestEvent and ErrorEvent are always stepped.
+
+        Returns:
+            The next event, or None if the run has completed.
+
+        Raises:
+            RuntimeError: If step_mode was not enabled.
+        """
+        if self._step_controller is None:
+            raise RuntimeError("step() requires step_mode=True")
+
+        while True:
+            # Allow producer to send next event
+            self._step_controller.step()
+
+            # Wait for event
+            event = self.iostream._input_stream.get()
+
+            # Handle special events - always process these
+            if isinstance(event, RunCompletionEvent):
+                self._messages = event.content.history  # type: ignore[attr-defined]
+                self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                self._summary = event.content.summary  # type: ignore[attr-defined]
+                self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                self.cost = event.content.cost  # type: ignore[attr-defined]
+                self._step_controller.terminate()
+                return None
+
+            if isinstance(event, ErrorEvent):
+                self._step_controller.terminate()
+                raise event.content.error  # type: ignore[attr-defined]
+
+            if isinstance(event, InputRequestEvent):
+                event.content.respond = lambda response: self.iostream._output_stream.put(response)  # type: ignore[attr-defined]
+                return event  # type: ignore[no-any-return]
+
+            # If step_on filter is set, skip events not in the filter
+            if self._step_controller.should_block(event):
+                return event  # type: ignore[no-any-return]
+            # Otherwise, continue to get next event (skip this one)
+
+    def close(self) -> None:
+        """Terminate the step controller to allow background thread to exit.
+
+        This should be called when done with step mode, especially if an exception
+        occurs during the step loop. Using the context manager is recommended.
+        """
+        if self._step_controller:
+            self._step_controller.terminate()
+
+    def __enter__(self) -> "RunResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        self.close()
+
 
 class AsyncRunResponse:
-    def __init__(self, iostream: AsyncThreadIOStream, agents: Sequence[Agent]):
+    def __init__(
+        self,
+        iostream: AsyncThreadIOStream,
+        agents: Sequence[Agent],
+        step_controller: AsyncStepController | None = None,
+    ):
         self.iostream = iostream
         self.agents = agents
+        self._step_controller = step_controller
         self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -295,3 +378,75 @@ class AsyncRunResponse:
         """Set the UI tools for the agents."""
         for agent in self.agents:
             agent.set_ui_tools(tools)
+
+    async def step(self) -> BaseEvent | None:
+        """Get next event, blocking until available. Returns None on completion.
+
+        This method is only available when step_mode=True was passed to a_run().
+        It advances the execution by one step and returns the event.
+
+        When step_on is specified, only events matching those types are returned.
+        Other events are consumed but not returned to the caller.
+
+        Returns:
+            The next event, or None if the run has completed.
+
+        Raises:
+            RuntimeError: If step_mode was not enabled.
+        """
+        if self._step_controller is None:
+            raise RuntimeError("step() requires step_mode=True")
+
+        while True:
+            # Allow producer to send next event
+            self._step_controller.step()
+
+            # Wait for event
+            event = await self.iostream._input_stream.get()
+
+            # Handle special events - always process these
+            if isinstance(event, RunCompletionEvent):
+                self._messages = event.content.history  # type: ignore[attr-defined]
+                self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+                self._summary = event.content.summary  # type: ignore[attr-defined]
+                self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+                self.cost = event.content.cost  # type: ignore[attr-defined]
+                self._step_controller.terminate()
+                return None
+
+            if isinstance(event, ErrorEvent):
+                self._step_controller.terminate()
+                raise event.content.error  # type: ignore[attr-defined]
+
+            if isinstance(event, InputRequestEvent):
+
+                async def respond(response: str) -> None:
+                    await self.iostream._output_stream.put(response)
+
+                event.content.respond = respond  # type: ignore[attr-defined]
+                return event  # type: ignore[no-any-return]
+
+            # If step_on filter is set, skip events not in the filter
+            if self._step_controller.should_block(event):
+                return event  # type: ignore[no-any-return]
+            # Otherwise, continue to get next event (skip this one)
+
+    def close(self) -> None:
+        """Terminate the step controller to allow background task to exit.
+
+        This should be called when done with step mode, especially if an exception
+        occurs during the step loop. Using the async context manager is recommended.
+        """
+        if self._step_controller:
+            self._step_controller.terminate()
+
+    async def __aenter__(self) -> "AsyncRunResponse":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        self.close()

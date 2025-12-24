@@ -180,10 +180,10 @@ class HITLStream(AsyncIOStreamProtocol):
         self.input_prompt = prompt
         return ""
 
-    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+    async def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
         raise NotImplementedError("HITLStream does not support printing")
 
-    def send(self, message: BaseEvent) -> None:
+    async def send(self, message: BaseEvent) -> None:
         if isinstance(
             message,
             (

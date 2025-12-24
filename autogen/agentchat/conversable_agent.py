@@ -14,7 +14,7 @@ import re
 import threading
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Container, Generator, Iterable
+from collections.abc import Callable, Container, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from inspect import iscoroutine, signature
@@ -62,6 +62,7 @@ from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import AsyncIOStreamProtocol, AsyncInputStream, IOStream, IOStreamProtocol, InputStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ..io.step_controller import AsyncStepController, StepController
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
 from ..llm_config.client import ModelClient
@@ -1502,11 +1503,47 @@ class ConversableAgent(LLMAgent):
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
         msg_to: str | None = "agent",
+        step_mode: bool = False,
+        step_on: Sequence[type] | None = None,
         **kwargs: Any,
     ) -> RunResponseProtocol:
-        iostream = ThreadIOStream()
+        """Run a chat with an optional recipient agent, returning a response that can be
+        processed or stepped through.
+
+        This method starts a chat in a background thread and returns immediately with a
+        RunResponse object that provides access to events as they occur.
+
+        Args:
+            recipient: The recipient agent to chat with. If None, creates a temporary
+                executor agent for single-agent mode.
+            clear_history: Whether to clear the chat history with the agent. Default is True.
+            silent: Whether to suppress console output. Default is False.
+            cache: Cache client for this conversation. Default is None.
+            max_turns: Maximum number of conversation turns. One turn is one round trip.
+                If None, chat continues until termination condition is met.
+            summary_method: Method to summarize chat. Default is "last_msg".
+                Options: "last_msg", "reflection_with_llm", or a callable.
+            summary_args: Arguments passed to summary_method.
+            message: Initial message to send. Can be a string, dict, or callable.
+            executor_kwargs: Kwargs for executor agent (single-agent mode only).
+            tools: Tools to register with the executor (single-agent mode only).
+            user_input: Whether to enable user input mode. Default is False.
+            msg_to: Direction of initial message - "agent" or "user". Default is "agent".
+            step_mode: Enable step-by-step execution. When True, the chat pauses after
+                each event until step() is called. Default is False.
+            step_on: List of event types to pause on. If None, pauses on every event.
+                Example: [TextEvent, TerminationEvent] to only pause on text messages.
+            **kwargs: Additional arguments passed to initiate_chat.
+
+        Returns:
+            RunResponseProtocol
+        """
+        step_controller: StepController | None = None
+        if step_mode:
+            step_controller = StepController(step_on=step_on)
+        iostream = ThreadIOStream(step_controller=step_controller)
         agents = [self, recipient] if recipient else [self]
-        response = RunResponse(iostream, agents=agents)
+        response = RunResponse(iostream, agents=agents, step_controller=step_controller)
 
         if recipient is None:
 
@@ -1594,6 +1631,7 @@ class ConversableAgent(LLMAgent):
 
         threading.Thread(
             target=initiate_chat,
+            daemon=True,
         ).start()
 
         return response
@@ -1690,11 +1728,16 @@ class ConversableAgent(LLMAgent):
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
         msg_to: str | None = "agent",
+        step_mode: bool = False,
+        step_on: Sequence[type] | None = None,
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
-        iostream = AsyncThreadIOStream()
+        step_controller: AsyncStepController | None = None
+        if step_mode:
+            step_controller = AsyncStepController(step_on=step_on)
+        iostream = AsyncThreadIOStream(step_controller=step_controller)
         agents = [self, recipient] if recipient else [self]
-        response = AsyncRunResponse(iostream, agents=agents)
+        response = AsyncRunResponse(iostream, agents=agents, step_controller=step_controller)
 
         if recipient is None:
 
@@ -1730,7 +1773,7 @@ class ConversableAgent(LLMAgent):
                                 summary_method=summary_method,
                             )
 
-                        IOStream.get_default().send(
+                        await iostream.send(
                             RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
@@ -1739,7 +1782,7 @@ class ConversableAgent(LLMAgent):
                             )
                         )
                     except Exception as e:
-                        response.iostream.send(ErrorEvent(error=e))
+                        await iostream.send(ErrorEvent(error=e))
 
         else:
 
@@ -1766,7 +1809,7 @@ class ConversableAgent(LLMAgent):
                         if hasattr(recipient, "last_speaker"):
                             last_speaker = recipient.last_speaker
 
-                        IOStream.get_default().send(
+                        await iostream.send(
                             RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
@@ -1776,7 +1819,7 @@ class ConversableAgent(LLMAgent):
                         )
 
                     except Exception as e:
-                        response.iostream.send(ErrorEvent(error=e))
+                        await iostream.send(ErrorEvent(error=e))
 
         asyncio.create_task(initiate_chat())
 
@@ -2000,7 +2043,7 @@ class ConversableAgent(LLMAgent):
             except Exception as e:
                 response.iostream.send(ErrorEvent(error=e))
 
-        threading.Thread(target=_initiate_chats).start()
+        threading.Thread(target=_initiate_chats, daemon=True).start()
 
         return responses
 
@@ -2052,12 +2095,12 @@ class ConversableAgent(LLMAgent):
                         ]
 
                         if not chat_info.get("silent", False):
-                            IOStream.get_default().send(PostCarryoverProcessingEvent(chat_info=chat_info))
+                            await iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
 
                         sender = chat_info["sender"]
                         chat_res = await sender.a_initiate_chat(**chat_info)
 
-                        IOStream.get_default().send(
+                        await iostream.send(
                             RunCompletionEvent(
                                 history=chat_res.chat_history,
                                 summary=chat_res.summary,
@@ -2069,7 +2112,7 @@ class ConversableAgent(LLMAgent):
                         finished_chats.append(chat_res)
 
             except Exception as e:
-                response.iostream.send(ErrorEvent(error=e))
+                await iostream.send(ErrorEvent(error=e))
 
         asyncio.create_task(_a_initiate_chats())
 

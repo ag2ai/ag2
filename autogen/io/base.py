@@ -77,14 +77,38 @@ class AsyncInputStream(Protocol):
 
 @runtime_checkable
 @export_module("autogen.io")
+class AsyncOutputStream(Protocol):
+    async def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+        """Print data to the output stream.
+
+        Args:
+
+            objects (any): The data to print.
+            sep (str, optional): The separator between objects. Defaults to " ".
+            end (str, optional): The end of the output. Defaults to "\n".
+            flush (bool, optional): Whether to flush the output. Defaults to False.
+        """
+        ...  # pragma: no cover
+
+    async def send(self, message: BaseEvent) -> None:
+        """Send data to the output stream.
+
+        Args:
+            message (BaseEvent): BaseEvent from autogen.messages.base_message
+        """
+        ...
+
+
+@runtime_checkable
+@export_module("autogen.io")
 class IOStreamProtocol(InputStream, OutputStream, Protocol):
     """A protocol for input/output streams."""
 
 
 @runtime_checkable
 @export_module("autogen.io")
-class AsyncIOStreamProtocol(AsyncInputStream, OutputStream, Protocol):
-    """A protocol for input/output streams."""
+class AsyncIOStreamProtocol(AsyncInputStream, AsyncOutputStream, Protocol):
+    """A protocol for async input/output streams."""
 
 
 iostream_union = IOStreamProtocol | AsyncIOStreamProtocol

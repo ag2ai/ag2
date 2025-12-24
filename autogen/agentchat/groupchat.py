@@ -1375,7 +1375,7 @@ class GroupChatManager(ConversableAgent):
                 # select the next speaker
                 speaker = await groupchat.a_select_speaker(speaker, self)
                 if not silent:
-                    iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
+                    await iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
 
                 guardrails_activated = False
                 guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
@@ -1436,7 +1436,7 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            iostream.send(
+            await iostream.send(
                 TerminationEvent(
                     termination_reason=termination_reason, sender=self, recipient=speaker if speaker else None
                 )
@@ -1643,7 +1643,9 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            iostream.send(GroupChatResumeEvent(last_speaker_name=last_speaker_name, events=messages, silent=silent))
+            await iostream.send(
+                GroupChatResumeEvent(last_speaker_name=last_speaker_name, events=messages, silent=silent)
+            )
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False

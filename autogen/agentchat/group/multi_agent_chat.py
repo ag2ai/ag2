@@ -4,12 +4,14 @@
 
 import asyncio
 import threading
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from ...doc_utils import export_module
 from ...events.agent_events import ErrorEvent, RunCompletionEvent
 from ...io.base import IOStream
 from ...io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
+from ...io.step_controller import AsyncStepController, StepController
 from ...io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ...llm_config import LLMConfig
 from ..chat import ChatResult
@@ -194,10 +196,38 @@ def run_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    step_mode: bool = False,
+    step_on: Sequence[type] | None = None,
 ) -> RunResponseProtocol:
-    iostream = ThreadIOStream()
+    """Run a group chat with multiple agents using the specified pattern.
+
+    This method executes a multi-agent conversation in a background thread and returns
+    immediately with a RunResponse object that can be used to iterate over events.
+
+    Args:
+        pattern: The pattern that defines how agents interact (e.g., AutoPattern,
+            RoundRobinPattern, RandomPattern).
+        messages: The initial message(s) to start the conversation. Can be a string
+            or a list of message dictionaries.
+        max_rounds: Maximum number of conversation rounds. Defaults to 20.
+        safeguard_policy: Optional safeguard policy for content filtering.
+        safeguard_llm_config: Optional LLM config for safeguard evaluation.
+        mask_llm_config: Optional LLM config for content masking.
+        step_mode: If True, enables step-by-step execution where the background thread
+            blocks after each event until step() is called. Defaults to False.
+        step_on: List of event types to stop on when step_mode is True. If None,
+            stops on every event. Common types include TextEvent, ToolCallEvent,
+            GroupChatRunChatEvent, and TerminationEvent.
+
+    Returns:
+        RunResponseProtocol
+    """
+    step_controller: StepController | None = None
+    if step_mode:
+        step_controller = StepController(step_on=step_on)
+    iostream = ThreadIOStream(step_controller=step_controller)
     all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
-    response = RunResponse(iostream, agents=all_agents)
+    response = RunResponse(iostream, agents=all_agents, step_controller=step_controller)
 
     def _initiate_group_chat(
         pattern: "Pattern" = pattern,
@@ -247,10 +277,38 @@ async def a_run_group_chat(
     safeguard_policy: dict[str, Any] | str | None = None,
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
+    step_mode: bool = False,
+    step_on: Sequence[type] | None = None,
 ) -> AsyncRunResponseProtocol:
-    iostream = AsyncThreadIOStream()
+    """Async version of run_group_chat for running group chats in async contexts.
+
+    This method executes a multi-agent conversation as an async task and returns
+    immediately with an AsyncRunResponse object that can be used to iterate over events.
+
+    Args:
+        pattern: The pattern that defines how agents interact (e.g., AutoPattern,
+            RoundRobinPattern, RandomPattern).
+        messages: The initial message(s) to start the conversation. Can be a string
+            or a list of message dictionaries.
+        max_rounds: Maximum number of conversation rounds. Defaults to 20.
+        safeguard_policy: Optional safeguard policy for content filtering.
+        safeguard_llm_config: Optional LLM config for safeguard evaluation.
+        mask_llm_config: Optional LLM config for content masking.
+        step_mode: If True, enables step-by-step execution where the async task
+            blocks after each event until step() is called. Defaults to False.
+        step_on: List of event types to stop on when step_mode is True. If None,
+            stops on every event. Common types include TextEvent, ToolCallEvent,
+            GroupChatRunChatEvent, and TerminationEvent.
+
+    Returns:
+        AsyncRunResponseProtocol
+    """
+    step_controller: AsyncStepController | None = None
+    if step_mode:
+        step_controller = AsyncStepController(step_on=step_on)
+    iostream = AsyncThreadIOStream(step_controller=step_controller)
     all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
-    response = AsyncRunResponse(iostream, agents=all_agents)
+    response = AsyncRunResponse(iostream, agents=all_agents, step_controller=step_controller)
 
     async def _initiate_group_chat(
         pattern: "Pattern" = pattern,
@@ -273,7 +331,7 @@ async def a_run_group_chat(
                     mask_llm_config=mask_llm_config,
                 )
 
-                IOStream.get_default().send(
+                await iostream.send(
                     RunCompletionEvent(  # type: ignore[call-arg]
                         history=chat_result.chat_history,
                         summary=chat_result.summary,
@@ -283,7 +341,7 @@ async def a_run_group_chat(
                     )
                 )
             except Exception as e:
-                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+                await iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
     task = asyncio.create_task(_initiate_group_chat())
     # prevent the task from being garbage collected
