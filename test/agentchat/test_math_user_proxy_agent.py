@@ -116,8 +116,10 @@ def test_execute_one_wolfram_query():
 
     try:
         mathproxyagent.execute_one_wolfram_query(code)[0]
-    except ValueError:
-        print("Wolfram API key not found. Skip test.")
+    except (ValueError, ImportError):
+        # ValueError: Wolfram API key not found
+        # ImportError: wolframalpha package not installed
+        print("Wolfram API key not found or wolframalpha not installed. Skip test.")
 
 
 def test_generate_prompt():
