@@ -26,12 +26,15 @@ NOTE: Requires mistralai package version >= 1.0.1
 """
 
 import json
+import logging
 import os
 import time
 import warnings
 from typing import Any, Literal
 
 from typing_extensions import Unpack
+
+from autogen.oai.agent_config_handler import agent_config_parser
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -51,6 +54,8 @@ with optional_import_block():
         ToolMessage,
         UserMessage,
     )
+
+logger = logging.getLogger(__name__)
 
 
 class MistralEntryDict(LLMConfigEntryDict, total=False):
@@ -203,6 +208,9 @@ class MistralAIClient:
 
     @require_optional_import("mistralai", "mistral")
     def create(self, params: dict[str, Any]) -> ChatCompletion:
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         # 1. Parse parameters to Mistral.AI API's parameters
         mistral_params = self.parse_params(params)
 

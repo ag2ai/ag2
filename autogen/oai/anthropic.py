@@ -82,6 +82,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
+from autogen.oai.agent_config_handler import agent_config_parser
+
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -762,7 +764,10 @@ class AnthropicClient:
         Returns:
             ChatCompletion object compatible with OpenAI format
         """
+        agent = params.pop("agent", None)
         model = params.get("model")
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         response_format = params.get("response_format") or self._response_format
 
         # Route to appropriate implementation based on model and response_format

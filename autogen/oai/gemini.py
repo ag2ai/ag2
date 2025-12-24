@@ -57,6 +57,8 @@ import requests
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
+from autogen.oai.agent_config_handler import agent_config_parser
+
 from ..import_utils import optional_import_block, require_optional_import
 from ..json_utils import resolve_json_references
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -244,6 +246,9 @@ class GeminiClient:
         }
 
     def create(self, params: dict[str, Any]) -> ChatCompletion:
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         # When running in async context via run_in_executor from ConversableAgent.a_generate_oai_reply,
         # this method runs in a new thread that doesn't have an event loop by default. The Google Genai
         # client requires an event loop even for synchronous operations, so we need to ensure one exists.

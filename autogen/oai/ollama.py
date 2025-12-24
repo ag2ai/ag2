@@ -25,6 +25,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import logging
 import random
 import re
 import time
@@ -32,6 +33,8 @@ import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl
+
+from autogen.oai.agent_config_handler import agent_config_parser
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -42,6 +45,9 @@ with optional_import_block():
     import ollama
     from fix_busted_json import repair_json
     from ollama import Client
+
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaEntryDict(LLMConfigEntryDict, total=False):
@@ -227,6 +233,9 @@ class OllamaClient:
 
     @require_optional_import(["ollama", "fix_busted_json"], "ollama")
     def create(self, params: dict) -> ChatCompletion:
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         messages = params.get("messages", [])
 
         # Are tools involved in this conversation?

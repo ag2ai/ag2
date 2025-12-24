@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
+from autogen.oai.agent_config_handler import agent_config_parser
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry
@@ -555,6 +556,9 @@ class OpenAIResponsesClient:
         workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
         built_in_tools = params.pop("built_in_tools", [])
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
 
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id

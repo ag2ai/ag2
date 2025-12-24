@@ -27,6 +27,8 @@ from typing import (
     Union,
 )
 
+from pydantic import BaseModel
+
 from ..cache.cache import AbstractCache, Cache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -162,6 +164,7 @@ class ConversableAgent(LLMAgent):
         silent: bool | None = None,
         context_variables: Optional["ContextVariables"] = None,
         functions: list[Callable[..., Any]] | Callable[..., Any] = None,
+        response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
         update_agent_state_before_reply: list[Callable | UpdateSystemMessage]
         | Callable
         | UpdateSystemMessage
@@ -223,10 +226,10 @@ class ConversableAgent(LLMAgent):
         15) update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.\n
         16) handoffs (Handoffs): Handoffs object containing all handoff transition conditions.\n
         """
+        self.response_format = response_format if response_format is not None else None
         self.handoffs = handoffs if handoffs is not None else Handoffs()
         self.input_guardrails: list[Guardrail] = []
         self.output_guardrails: list[Guardrail] = []
-
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
         code_execution_config = (

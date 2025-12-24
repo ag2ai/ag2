@@ -1259,6 +1259,7 @@ class OpenAIWrapper:
                             return response
                         continue  # filter is not passed; try the next config
             try:
+                params = params["agent"] = self.agent
                 request_ts = get_current_ts()
                 response = client.create(params)
             except Exception as e:

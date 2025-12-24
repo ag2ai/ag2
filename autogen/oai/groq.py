@@ -24,6 +24,7 @@ Resources:
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import time
 import warnings
@@ -31,6 +32,8 @@ from typing import Any, Literal
 
 from pydantic import Field
 from typing_extensions import Unpack
+
+from autogen.oai.agent_config_handler import agent_config_parser
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
@@ -40,6 +43,7 @@ from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMes
 with optional_import_block():
     from groq import Groq, Stream
 
+logger = logging.getLogger(__name__)
 # Cost per thousand tokens - Input / Output (NOTE: Convert $/Million to $/K)
 GROQ_PRICING_1K = {
     "llama3-70b-8192": (0.00059, 0.00079),
@@ -166,6 +170,9 @@ class GroqClient:
 
     @require_optional_import("groq", "groq")
     def create(self, params: dict) -> ChatCompletion:
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         messages = params.get("messages", [])
 
         # Convert AG2 messages to Groq messages

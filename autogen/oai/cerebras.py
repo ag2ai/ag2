@@ -24,6 +24,7 @@ Resources:
 from __future__ import annotations
 
 import copy
+import logging
 import math
 import os
 import time
@@ -33,11 +34,14 @@ from typing import Any, Literal
 from pydantic import Field
 from typing_extensions import Unpack
 
+from autogen.oai.agent_config_handler import agent_config_parser
+
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from .client_utils import should_hide_tools, validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
+logger = logging.getLogger(__name__)
 with optional_import_block():
     from cerebras.cloud.sdk import Cerebras, Stream
 
@@ -146,6 +150,9 @@ class CerebrasClient:
 
     @require_optional_import("cerebras", "cerebras")
     def create(self, params: dict) -> ChatCompletion:
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         messages = params.get("messages", [])
 
         # Convert AG2 messages to Cerebras messages
