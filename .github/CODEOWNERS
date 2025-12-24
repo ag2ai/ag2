@@ -8,8 +8,8 @@
 /test/remote/ @Lancetnik
 /website/docs/user-guide/a2a/ @Lancetnik
 
-# MISC
-/website/docs/user-guide/misc/ @priyansh4320
+# observability
+/website/docs/user-guide/observability/ @priyansh4320
 
 # GPT 5.1 Apply Patch Tool
 /autogen/tools/experimental/apply_patch/ @priyansh4320
