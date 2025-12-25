@@ -1981,10 +1981,6 @@
          <lastmod>2025-12-25</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/faq/FAQ/</loc>
-         <lastmod>2025-12-25</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/home/quickstart/</loc>
          <lastmod>2025-12-25</lastmod>
     </url>
@@ -2613,6 +2609,10 @@
          <lastmod>2025-12-25</lastmod>
     </url>
     <url>
+         <loc>https://docs.ag2.ai/latest/docs/user-guide/FAQ/</loc>
+         <lastmod>2025-12-25</lastmod>
+    </url>
+    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/a2a/</loc>
          <lastmod>2025-12-25</lastmod>
     </url>
@@ -2853,10 +2853,6 @@
          <lastmod>2025-12-25</lastmod>
     </url>
     <url>
-         <loc>https://docs.ag2.ai/latest/docs/user-guide/misc/logging_events/</loc>
-         <lastmod>2025-12-25</lastmod>
-    </url>
-    <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/models/amazon-bedrock/</loc>
          <lastmod>2025-12-25</lastmod>
     </url>
@@ -2934,6 +2930,10 @@
     </url>
     <url>
          <loc>https://docs.ag2.ai/latest/docs/user-guide/models/litellm-proxy-server/watsonx/</loc>
+         <lastmod>2025-12-25</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.ag2.ai/latest/docs/user-guide/observability/logging_events/</loc>
          <lastmod>2025-12-25</lastmod>
     </url>
     <url>
