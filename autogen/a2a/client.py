@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Sequence
 from pprint import pformat
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -223,7 +223,12 @@ class A2aRemoteAgent(ConversableAgent):
                     raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                 raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        connection_attemps, started_task = 1, cast(Task, started_task)
+        if not started_task:
+            if not self._agent_card:
+                raise A2aClientError("Failed to connect to the agent: agent card not found")
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
+
+        connection_attemps = 1
         while connection_attemps < self._max_reconnects:
             try:
                 async for event in client.resubscribe(TaskIdParams(id=started_task.id)):
@@ -257,7 +262,12 @@ class A2aRemoteAgent(ConversableAgent):
                     raise A2aClientError("Failed to connect to the agent: agent card not found") from e
                 raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}") from e
 
-        connection_attemps, started_task = 1, cast(Task, started_task)
+        if not started_task:
+            if not self._agent_card:
+                raise A2aClientError("Failed to connect to the agent: agent card not found")
+            raise A2aClientError(f"Failed to connect to the agent: {pformat(self._agent_card.model_dump())}")
+
+        connection_attemps = 1
         while connection_attemps < self._max_reconnects:
             try:
                 task = await client.get_task(TaskQueryParams(id=started_task.id))
