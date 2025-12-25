@@ -9,6 +9,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 from ...agent import Agent
 from ..context_variables import ContextVariables
@@ -33,8 +34,7 @@ class FunctionTargetMessage(BaseModel):
     content: str
     msg_target: Agent
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class FunctionTargetResult(BaseModel):
