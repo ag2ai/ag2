@@ -79,7 +79,10 @@ def get_weekday(date_string: Annotated[str, "Format: YYYY-MM-DD"]) -> str:
     return date.strftime('%A')
 ```
 
-AG2 client offers support for following built_in_tools tools:
+### Client-specific built-in tools
+
+AG2's OpenAI Responses client offers support for the following tools through the `built_in_tools` parameter in `LLMConfig`:
+
 - web_search
 - image_generation
 - apply_patch
