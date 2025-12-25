@@ -19,6 +19,7 @@ from .context_variables import ContextVariables
 from .group_utils import cleanup_temp_user_messages
 
 if TYPE_CHECKING:
+    from ...events.base_event import BaseEvent
     from ..agent import Agent
     from .patterns.pattern import Pattern
 
@@ -197,7 +198,7 @@ def run_group_chat(
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
     step_mode: bool = False,
-    step_on: Sequence[type] | None = None,
+    step_on: Sequence[type["BaseEvent"]] | None = None,
 ) -> RunResponseProtocol:
     """Run a group chat with multiple agents using the specified pattern.
 
@@ -278,7 +279,7 @@ async def a_run_group_chat(
     safeguard_llm_config: LLMConfig | None = None,
     mask_llm_config: LLMConfig | None = None,
     step_mode: bool = False,
-    step_on: Sequence[type] | None = None,
+    step_on: Sequence[type["BaseEvent"]] | None = None,
 ) -> AsyncRunResponseProtocol:
     """Async version of run_group_chat for running group chats in async contexts.
 

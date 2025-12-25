@@ -364,14 +364,14 @@ with assistant.run(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `step_mode` | `bool` | `False` | Enable step-by-step execution |
-| `step_on` | `Sequence[type]` | `None` | Event types to stop on (None = all events) |
+| `step_on` | `Sequence[type[BaseEvent]]` | `None` | Event types to stop on (None = all events) |
 
 ### `run_group_chat()` Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `step_mode` | `bool` | `False` | Enable step-by-step execution |
-| `step_on` | `Sequence[type]` | `None` | Event types to stop on (None = all events) |
+| `step_on` | `Sequence[type[BaseEvent]]` | `None` | Event types to stop on (None = all events) |
 
 ### Async Support
 

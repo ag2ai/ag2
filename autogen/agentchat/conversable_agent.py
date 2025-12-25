@@ -83,6 +83,7 @@ from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
+    from ..events.base_event import BaseEvent
     from .group.on_condition import OnCondition
     from .group.on_context_condition import OnContextCondition
 __all__ = ("ConversableAgent",)
@@ -1504,7 +1505,7 @@ class ConversableAgent(LLMAgent):
         user_input: bool | None = False,
         msg_to: str | None = "agent",
         step_mode: bool = False,
-        step_on: Sequence[type] | None = None,
+        step_on: Sequence[type["BaseEvent"]] | None = None,
         **kwargs: Any,
     ) -> RunResponseProtocol:
         """Run a chat with an optional recipient agent, returning a response that can be
@@ -1729,7 +1730,7 @@ class ConversableAgent(LLMAgent):
         user_input: bool | None = False,
         msg_to: str | None = "agent",
         step_mode: bool = False,
-        step_on: Sequence[type] | None = None,
+        step_on: Sequence[type["BaseEvent"]] | None = None,
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
         step_controller: AsyncStepController | None = None
