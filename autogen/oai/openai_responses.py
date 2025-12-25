@@ -14,7 +14,8 @@ from pydantic import BaseModel
 
 from autogen.code_utils import content_str
 from autogen.import_utils import optional_import_block, require_optional_import
-from autogen.oai.agent_config_handler import agent_config_parser
+
+from .agent_config_handler import agent_config_parser
 
 if TYPE_CHECKING:
     from autogen.oai.client import ModelClient, OpenAI, OpenAILLMConfigEntry

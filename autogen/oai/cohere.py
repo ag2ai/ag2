@@ -39,11 +39,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
-from autogen.oai.agent_config_handler import agent_config_parser
 from autogen.oai.client_utils import FormatterProtocol, logging_formatter, validate_parameter
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():

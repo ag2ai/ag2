@@ -2,15 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from autogen.agentchat.conversable_agent import ConversableAgent
+if TYPE_CHECKING:
+    from autogen.agentchat.conversable_agent import ConversableAgent
 
 
-def agent_config_parser(agent: ConversableAgent) -> dict[str, Any]:
-    agent_config = []
-    if agent.response_format is not None:
+def agent_config_parser(agent: "ConversableAgent") -> dict[str, Any]:
+    agent_config: dict[str, Any] = []
+    if agent is not None and hasattr(agent, "response_format") and agent.response_format is not None:
         agent_config.append({
-            "response_format": agent.pop("response_format"),
+            "response_format": agent.response_format,
         })
     return agent_config

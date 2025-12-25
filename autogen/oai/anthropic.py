@@ -82,11 +82,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import Unpack
 
-from autogen.oai.agent_config_handler import agent_config_parser
-
 from ..code_utils import content_str
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 
 logger = logging.getLogger(__name__)
 from .client_utils import FormatterProtocol, validate_parameter

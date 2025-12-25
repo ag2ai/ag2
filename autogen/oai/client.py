@@ -33,6 +33,7 @@ from ..llm_config import ModelClient
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
 from ..logger.logger_utils import get_current_ts
 from ..runtime_logging import log_chat_completion, log_new_client, log_new_wrapper, logging_enabled
+from .agent_config_handler import agent_config_parser
 from .client_utils import FormatterProtocol, logging_formatter, merge_config_with_tools
 from .openai_utils import OAI_PRICE1K, get_key, is_valid_api_key
 
@@ -199,6 +200,10 @@ if not logger.handlers:
     _ch = logging.StreamHandler(stream=sys.stdout)
     _ch.setFormatter(logging_formatter)
     logger.addHandler(_ch)
+
+import logging
+
+logger = logging.getLogger("ag2.event.processor")
 
 LEGACY_DEFAULT_CACHE_SEED = 41
 LEGACY_CACHE_DIR = ".cache"
@@ -493,6 +498,9 @@ class OpenAIClient:
         Returns:
             The completion.
         """
+        agent = params.pop("agent", None)
+        agent_config = agent_config_parser(agent) if agent is not None else None
+        logger.info(f"Agent config: {agent_config}")
         iostream = IOStream.get_default()
 
         is_structured_output = self.response_format is not None or "response_format" in params
@@ -1176,7 +1184,8 @@ class OpenAIWrapper:
             cache = extra_kwargs.get("cache")
             filter_func = extra_kwargs.get("filter_func")
             context = extra_kwargs.get("context")
-            agent = extra_kwargs.get("agent")
+            agent = extra_kwargs.get("agent", None)
+
             price = extra_kwargs.get("price", None)
             if isinstance(price, list):
                 price = tuple(price)
@@ -1259,7 +1268,9 @@ class OpenAIWrapper:
                             return response
                         continue  # filter is not passed; try the next config
             try:
-                params = params["agent"] = self.agent
+                # Add agent to params if provided (for downstream use)
+                if agent is not None:
+                    params["agent"] = agent
                 request_ts = get_current_ts()
                 response = client.create(params)
             except Exception as e:
