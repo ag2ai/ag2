@@ -433,7 +433,7 @@ class BedrockClient:
         # Parse the inference parameters
         base_params, additional_params = self.parse_params(params)
 
-        # Handle response_format for structured outputs
+        # Handle response_format for structured outputs, check if agent_config has a response_format else fallback to self._response_format
         has_response_format = (
             agent_config["response_format"]
             if "response_format" in agent_config and agent_config["response_format"] is not None
