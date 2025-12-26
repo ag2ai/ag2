@@ -561,6 +561,16 @@ class OpenAIResponsesClient:
         agent_config = agent_config_parser(agent) if agent is not None else None
         logger.info(f"Agent config: {agent_config}")
 
+        self.response_format = (
+            agent_config["response_format"]
+            if "response_format" in agent_config and agent_config["response_format"] is not None
+            else self.response_format
+            if self.response_format is not None
+            else params.get("response_format")
+            if params.get("response_format") is not None
+            else None
+        )
+
         if self.previous_response_id is not None and "previous_response_id" not in params:
             params["previous_response_id"] = self.previous_response_id
 
