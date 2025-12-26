@@ -357,13 +357,6 @@ def run_group_chat_iter(
     Iterate over events as they occur. The background thread blocks after each
     event until you advance to the next iteration.
 
-    Example:
-        for event in run_group_chat_iter(pattern=pattern, messages="Hello"):
-            if isinstance(event, GroupChatRunChatEvent):
-                print(f"Speaker: {event.content.speaker}")
-            if should_abort(event):
-                break  # Cleanup happens automatically
-
     Args:
         pattern: The pattern that defines how agents interact (e.g., AutoPattern,
             RoundRobinPattern, RandomPattern).
@@ -430,13 +423,6 @@ def a_run_group_chat_iter(
 
     Iterate over events as they occur using async for. The background thread blocks
     after each event until you advance to the next iteration.
-
-    Example:
-        async for event in a_run_group_chat_iter(pattern=pattern, messages="Hello"):
-            if isinstance(event, GroupChatRunChatEvent):
-                print(f"Speaker: {event.content.speaker}")
-            if should_abort(event):
-                break  # Cleanup happens automatically
 
     Args:
         pattern: The pattern that defines how agents interact (e.g., AutoPattern,
