@@ -306,9 +306,7 @@ class GeminiClient:
             if agent_config is not None
             and "response_format" in agent_config
             and agent_config["response_format"] is not None
-            else params.get("response_format")
-            if params.get("response_format") is not None
-            else self._response_format
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
         generation_config = {
             gemini_term: params[autogen_term]

@@ -251,10 +251,10 @@ class CohereClient:
         cohere_params = self.parse_params(params)
         self._response_format = (
             agent_config["response_format"]
-            if "response_format" in agent_config and agent_config["response_format"] is not None
-            else params.get("response_format")
-            if params.get("response_format") is not None
-            else self._response_format
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config["response_format"] is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
         cohere_params["messages"] = messages
 

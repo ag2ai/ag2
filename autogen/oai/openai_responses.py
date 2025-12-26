@@ -563,7 +563,9 @@ class OpenAIResponsesClient:
 
         self.response_format = (
             agent_config["response_format"]
-            if "response_format" in agent_config and agent_config["response_format"] is not None
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config["response_format"] is not None
             else self.response_format
             if self.response_format is not None
             else params.get("response_format")

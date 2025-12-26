@@ -436,10 +436,10 @@ class BedrockClient:
         # Handle response_format for structured outputs, check if agent_config has a response_format else
         has_response_format = (
             agent_config["response_format"]
-            if "response_format" in agent_config and agent_config["response_format"] is not None
-            else self._response_format
-            if self._response_format is not None
-            else None
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config["response_format"] is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
         if has_response_format:
             structured_output_tool = self._create_structured_output_tool(has_response_format)
