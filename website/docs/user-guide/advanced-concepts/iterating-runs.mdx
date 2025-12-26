@@ -151,6 +151,9 @@ for event in run_group_chat_iter(
         print(f"\n=== {event.content.speaker}'s turn ===")
     elif isinstance(event, TextEvent):
         print(f"{event.content.content[:100]}...")
+    elif isinstance(event, InputRequestEvent):
+        user_input = input(event.content.prompt)
+        event.content.respond(user_input)
 ```
 
 ## Practical Use Cases
@@ -364,6 +367,7 @@ Run iteration provides precise control over agent execution:
 - **Custom events** - Create domain-specific checkpoints
 
 Use run iteration for:
+
 - Debugging agent conversations
 - Human-in-the-loop approval workflows
 - Aborting execution based on conditions
