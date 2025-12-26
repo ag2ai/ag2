@@ -155,7 +155,7 @@ class CohereClient:
         )
 
         # Handle structured output response format from Pydantic model
-        if self._response_format:
+        if self._response_format is not None:
             response_format = self._response_format
 
             # Check if it's a Pydantic model
@@ -254,7 +254,7 @@ class CohereClient:
             if "response_format" in agent_config and agent_config["response_format"] is not None
             else params.get("response_format")
             if params.get("response_format") is not None
-            else None
+            else self._response_format
         )
         cohere_params["messages"] = messages
 
