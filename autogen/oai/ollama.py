@@ -240,8 +240,6 @@ class OllamaClient:
         self._response_format = (
             agent_config["response_format"]
             if "response_format" in agent_config and agent_config["response_format"] is not None
-            else self._response_format
-            if self._response_format is not None
             else params.get("response_format")
             if params.get("response_format") is not None
             else None

@@ -301,6 +301,13 @@ class GeminiClient:
             thinking_budget=thinking_budget,
             thinking_level=thinking_level,
         )
+        self._response_format = (
+            agent_config["response_format"]
+            if "response_format" in agent_config and agent_config["response_format"] is not None
+            else params.get("response_format")
+            if params.get("response_format") is not None
+            else None
+        )
         generation_config = {
             gemini_term: params[autogen_term]
             for autogen_term, gemini_term in self.PARAMS_MAPPING.items()
@@ -326,16 +333,15 @@ class GeminiClient:
         # If response_format exists, we want structured outputs
         # Based on
         # https://ai.google.dev/gemini-api/docs/structured-output?lang=python#supply-schema-in-config
-        if params.get("response_format"):
-            self._response_format = params.get("response_format")
+        if self._response_format:
             generation_config["response_mime_type"] = "application/json"
 
-            response_format_schema_raw = params.get("response_format")
+            response_format_schema_raw = self._response_format
 
             if isinstance(response_format_schema_raw, dict):
                 response_schema = resolve_json_references(response_format_schema_raw)
             else:
-                response_schema = resolve_json_references(params.get("response_format").model_json_schema())
+                response_schema = resolve_json_references(self._response_format.model_json_schema())
             if "$defs" in response_schema:
                 response_schema.pop("$defs")
             generation_config["response_schema"] = response_schema
