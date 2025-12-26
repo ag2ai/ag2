@@ -1,9 +1,6 @@
 ---
 title: Event Logging Setup
-description: Configure AG2 event logging to customize output format and handlers
 ---
-
-import { CodeBlock } from '@site/src/components/CodeBlock';
 
 ## Overview
 
@@ -13,7 +10,7 @@ AG2 events now use Python's standard `logging` module, allowing you to configure
 
 Configure the logger before creating agents:
 
-<CodeBlock language="python">
+```python
 import logging
 import io
 
@@ -29,13 +26,13 @@ handler.setFormatter(logging.Formatter("%(message)s"))
 logger.handlers = [handler]
 logger.setLevel(logging.INFO)
 logger.propagate = False
-</CodeBlock>
+```
 
 ## Custom Formatters
 
 Use structured logging or JSON output:
 
-<CodeBlock language="python">
+```python
 import logging
 import json
 
@@ -55,14 +52,26 @@ handler.setFormatter(JSONFormatter())
 logger.handlers = [handler]
 logger.setLevel(logging.INFO)
 logger.propagate = False
-</CodeBlock>
+```
 
 ## Example: Capturing Event Output
 
-<CodeBlock language="python">
+```python
 import logging
 import io
-from autogen import AssistantAgent, UserProxyAgent
+import os
+from autogen import AssistantAgent, UserProxyAgent, LLMConfig
+
+# Setup LLM configuration
+llm_config = LLMConfig(
+    config_list=[
+        {
+            "api_type": "openai",
+            "model": "gpt-4",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    ]
+)
 
 # Setup logger to capture output
 logger = logging.getLogger("ag2.event.processor")
@@ -74,7 +83,7 @@ logger.setLevel(logging.INFO)
 logger.propagate = False
 
 # Create agents and run chat
-assistant = AssistantAgent("assistant", llm_config=your_llm_config)
+assistant = AssistantAgent("assistant", llm_config=llm_config)
 user_proxy = UserProxyAgent("user_proxy", human_input_mode="NEVER")
 
 user_proxy.initiate_chat(assistant, message="Hello!")
@@ -82,11 +91,11 @@ user_proxy.initiate_chat(assistant, message="Hello!")
 # Retrieve captured output
 output = log_stream.getvalue()
 print(output)  # Contains all event messages
-</CodeBlock>
+```
 
 ## Advanced: Custom Handler with Filters
 
-<CodeBlock language="python">
+```python
 import logging
 
 class EventFilter(logging.Filter):
@@ -101,7 +110,7 @@ handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
 logger.handlers = [handler]
 logger.setLevel(logging.INFO)
 logger.propagate = False
-</CodeBlock>
+```
 
 ## Benefits
 
