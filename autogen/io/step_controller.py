@@ -20,11 +20,11 @@ class StepController:
     sending each event until the consumer calls step() to acknowledge it.
 
     Args:
-        step_on: List of event types to stop on. If None, stops on every event.
+        yield_on: List of event types to yield on. If None, yields on every event.
     """
 
-    def __init__(self, step_on: Sequence[type["BaseEvent"]] | None = None):
-        self._step_on: tuple[type[BaseEvent], ...] | None = tuple(step_on) if step_on else None
+    def __init__(self, yield_on: Sequence[type["BaseEvent"]] | None = None):
+        self._yield_on: tuple[type[BaseEvent], ...] | None = tuple(yield_on) if yield_on else None
         self._step_event = threading.Event()
         self._terminated = False
 
@@ -32,11 +32,11 @@ class StepController:
         """Check if we should block on this event."""
         if self._terminated:
             return False
-        # If no filter, stop on every event
-        if self._step_on is None:
+        # If no filter, yield on every event
+        if self._yield_on is None:
             return True
-        # Otherwise, stop only on specified event types
-        return isinstance(event, self._step_on)
+        # Otherwise, yield only on specified event types
+        return isinstance(event, self._yield_on)
 
     def wait_for_step(self, event: "BaseEvent") -> None:
         """Called by producer after putting event. Blocks if should_block returns True."""
@@ -62,11 +62,11 @@ class AsyncStepController:
     sending each event until the consumer calls step() to acknowledge it.
 
     Args:
-        step_on: List of event types to stop on. If None, stops on every event.
+        yield_on: List of event types to yield on. If None, yields on every event.
     """
 
-    def __init__(self, step_on: Sequence[type["BaseEvent"]] | None = None):
-        self._step_on: tuple[type[BaseEvent], ...] | None = tuple(step_on) if step_on else None
+    def __init__(self, yield_on: Sequence[type["BaseEvent"]] | None = None):
+        self._yield_on: tuple[type[BaseEvent], ...] | None = tuple(yield_on) if yield_on else None
         self._step_event = asyncio.Event()
         self._terminated = False
 
@@ -74,9 +74,9 @@ class AsyncStepController:
         """Check if we should block on this event."""
         if self._terminated:
             return False
-        if self._step_on is None:
+        if self._yield_on is None:
             return True
-        return isinstance(event, self._step_on)
+        return isinstance(event, self._yield_on)
 
     async def wait_for_step(self, event: "BaseEvent") -> None:
         """Called by producer after putting event. Blocks if should_block returns True."""

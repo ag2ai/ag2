@@ -5,9 +5,10 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 
+import asyncio
 import queue
-from asyncio import Queue as AsyncQueue
-from collections.abc import AsyncIterable, Iterable, Sequence
+import threading
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable, Iterator, Sequence
 from typing import Any, Optional, Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
@@ -25,7 +26,7 @@ from .processors import (
     ConsoleEventProcessor,
     EventProcessorProtocol,
 )
-from .step_controller import AsyncStepController, StepController
+from .step_controller import StepController
 from .thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 
 Message = dict[str, Any]
@@ -129,11 +130,9 @@ class RunResponse:
         self,
         iostream: ThreadIOStream,
         agents: Sequence[Agent],
-        step_controller: StepController | None = None,
     ):
         self.iostream = iostream
         self.agents = agents
-        self._step_controller = step_controller
         self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -214,87 +213,15 @@ class RunResponse:
         for agent in self.agents:
             agent.set_ui_tools(tools)
 
-    def step(self) -> BaseEvent | None:
-        """Get next event, blocking until available. Returns None on completion.
-
-        This method is only available when step_mode=True was passed to run().
-        It advances the execution by one step and returns the event.
-
-        When step_on is specified, only events matching those types are returned.
-        Other events are consumed but not returned to the caller.
-
-        Note that InputRequestEvent and ErrorEvent are always stepped.
-
-        Returns:
-            The next event, or None if the run has completed.
-
-        Raises:
-            RuntimeError: If step_mode was not enabled.
-        """
-        if self._step_controller is None:
-            raise RuntimeError("step() requires step_mode=True")
-
-        while True:
-            # Allow producer to send next event
-            self._step_controller.step()
-
-            # Wait for event
-            event = self.iostream._input_stream.get()
-
-            # Handle special events - always process these
-            if isinstance(event, RunCompletionEvent):
-                self._messages = event.content.history  # type: ignore[attr-defined]
-                self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
-                self._summary = event.content.summary  # type: ignore[attr-defined]
-                self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
-                self.cost = event.content.cost  # type: ignore[attr-defined]
-                self._step_controller.terminate()
-                return None
-
-            if isinstance(event, ErrorEvent):
-                self._step_controller.terminate()
-                raise event.content.error  # type: ignore[attr-defined]
-
-            if isinstance(event, InputRequestEvent):
-                event.content.respond = lambda response: self.iostream._output_stream.put(response)  # type: ignore[attr-defined]
-                return event  # type: ignore[no-any-return]
-
-            # If step_on filter is set, skip events not in the filter
-            if self._step_controller.should_block(event):
-                return event  # type: ignore[no-any-return]
-            # Otherwise, continue to get next event (skip this one)
-
-    def close(self) -> None:
-        """Terminate the step controller to allow background thread to exit.
-
-        This should be called when done with step mode, especially if an exception
-        occurs during the step loop. Using the context manager is recommended.
-        """
-        if self._step_controller:
-            self._step_controller.terminate()
-
-    def __enter__(self) -> "RunResponse":
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: Any,
-    ) -> None:
-        self.close()
-
 
 class AsyncRunResponse:
     def __init__(
         self,
         iostream: AsyncThreadIOStream,
         agents: Sequence[Agent],
-        step_controller: AsyncStepController | None = None,
     ):
         self.iostream = iostream
         self.agents = agents
-        self._step_controller = step_controller
         self._summary: str | None = None
         self._messages: Sequence[LLMMessageType] = []
         self._uuid = uuid4()
@@ -302,7 +229,7 @@ class AsyncRunResponse:
         self._last_speaker: str | None = None
         self._cost: Cost | None = None
 
-    async def _queue_generator(self, q: AsyncQueue[Any]) -> AsyncIterable[BaseEvent]:  # type: ignore[type-arg]
+    async def _queue_generator(self, q: asyncio.Queue[Any]) -> AsyncIterable[BaseEvent]:  # type: ignore[type-arg]
         """A generator to yield items from the queue until the termination message is found."""
         while True:
             try:
@@ -379,74 +306,304 @@ class AsyncRunResponse:
         for agent in self.agents:
             agent.set_ui_tools(tools)
 
-    async def step(self) -> BaseEvent | None:
-        """Get next event, blocking until available. Returns None on completion.
 
-        This method is only available when step_mode=True was passed to a_run().
-        It advances the execution by one step and returns the event.
+class RunIterResponse:
+    """Iterator-based response for stepped execution.
 
-        When step_on is specified, only events matching those types are returned.
-        Other events are consumed but not returned to the caller.
+    This class provides an iterator interface for stepping through agent execution.
+    The background thread blocks after each event until you advance to the next iteration.
 
-        Returns:
-            The next event, or None if the run has completed.
+    Example:
+        for event in agent.run_iter(message="Hello"):
+            if isinstance(event, ToolCallEvent):
+                print(f"Tool call: {event.content}")
 
-        Raises:
-            RuntimeError: If step_mode was not enabled.
+    The generator's finally block ensures cleanup on break, exception, or normal completion.
+    """
+
+    def __init__(
+        self,
+        start_thread_func: Callable[[ThreadIOStream], "threading.Thread"],
+        yield_on: Sequence[type[BaseEvent]] | None,
+        agents: Sequence[Agent],
+    ):
+        """Initialize the iterator response.
+
+        Args:
+            start_thread_func: Function that creates and returns (but doesn't start) the background thread.
+                              Takes the iostream as argument.
+            yield_on: Event types to yield. If None, yields all events.
+            agents: List of agents involved in the chat.
         """
-        if self._step_controller is None:
-            raise RuntimeError("step() requires step_mode=True")
+        self._start_thread_func = start_thread_func
+        self._yield_on = yield_on
+        self._agents = agents
+        self._started = False
+        self._thread: threading.Thread | None = None
 
-        while True:
-            # Allow producer to send next event
-            self._step_controller.step()
+        # Set up step controller and iostream
+        self._step_controller = StepController(yield_on=yield_on)
+        self._iostream = ThreadIOStream(step_controller=self._step_controller)
 
-            # Wait for event
-            event = await self.iostream._input_stream.get()
+        # State populated after completion
+        self._summary: str | None = None
+        self._messages: Sequence[LLMMessageType] = []
+        self._context_variables: ContextVariables | None = None
+        self._last_speaker: str | None = None
+        self._cost: Cost | None = None
+        self._uuid = uuid4()
 
-            # Handle special events - always process these
-            if isinstance(event, RunCompletionEvent):
-                self._messages = event.content.history  # type: ignore[attr-defined]
-                self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
-                self._summary = event.content.summary  # type: ignore[attr-defined]
-                self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
-                self.cost = event.content.cost  # type: ignore[attr-defined]
-                self._step_controller.terminate()
-                return None
+    def __iter__(self) -> Iterator[BaseEvent]:
+        """Return the generator iterator."""
+        return self._generator()
 
-            if isinstance(event, ErrorEvent):
-                self._step_controller.terminate()
-                raise event.content.error  # type: ignore[attr-defined]
+    def _generator(self) -> Iterator[BaseEvent]:
+        """Generate events from the background thread.
 
-            if isinstance(event, InputRequestEvent):
-
-                async def respond(response: str) -> None:
-                    await self.iostream._output_stream.put(response)
-
-                event.content.respond = respond  # type: ignore[attr-defined]
-                return event  # type: ignore[no-any-return]
-
-            # If step_on filter is set, skip events not in the filter
-            if self._step_controller.should_block(event):
-                return event  # type: ignore[no-any-return]
-            # Otherwise, continue to get next event (skip this one)
-
-    def close(self) -> None:
-        """Terminate the step controller to allow background task to exit.
-
-        This should be called when done with step mode, especially if an exception
-        occurs during the step loop. Using the async context manager is recommended.
+        Lazily starts the thread on first iteration.
+        Cleanup happens in finally block on break, exception, or completion.
         """
-        if self._step_controller:
+        # Lazy start - only start thread on first iteration
+        if not self._started:
+            self._thread = self._start_thread_func(self._iostream)
+            self._thread.start()
+            self._started = True
+
+        try:
+            while True:
+                # Signal producer to continue (unblock wait_for_step)
+                self._step_controller.step()
+
+                # Wait for next event
+                event = self._iostream._input_stream.get()
+
+                # Handle completion
+                if isinstance(event, RunCompletionEvent):
+                    self._extract_completion_data(event)
+                    return  # StopIteration
+
+                # Handle errors
+                if isinstance(event, ErrorEvent):
+                    raise event.content.error  # type: ignore[attr-defined]
+
+                # Handle input requests - always yield these
+                if isinstance(event, InputRequestEvent):
+                    event.content.respond = lambda response: self._iostream._output_stream.put(response)  # type: ignore[attr-defined]
+                    yield event
+                    continue
+
+                # Filter based on yield_on - yield if should_block returns True
+                if self._step_controller.should_block(event):
+                    yield event
+        finally:
+            # Cleanup - always terminate the step controller
             self._step_controller.terminate()
 
-    async def __aenter__(self) -> "AsyncRunResponse":
-        return self
+    def _extract_completion_data(self, event: RunCompletionEvent) -> None:
+        """Extract data from completion event."""
+        self._messages = event.content.history  # type: ignore[attr-defined]
+        self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+        self._summary = event.content.summary  # type: ignore[attr-defined]
+        self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+        if isinstance(event.content.cost, dict):  # type: ignore[attr-defined]
+            self._cost = Cost.from_raw(event.content.cost)  # type: ignore[attr-defined]
+        else:
+            self._cost = event.content.cost  # type: ignore[attr-defined]
 
-    async def __aexit__(
+    @property
+    def iostream(self) -> ThreadIOStream:
+        """The IO stream for this response."""
+        return self._iostream
+
+    @property
+    def agents(self) -> Sequence[Agent]:
+        """The agents involved in this chat."""
+        return self._agents
+
+    @property
+    def summary(self) -> str | None:
+        """The summary of the chat (available after iteration completes)."""
+        return self._summary
+
+    @property
+    def messages(self) -> Sequence[LLMMessageType]:
+        """The message history (available after iteration completes)."""
+        return self._messages
+
+    @property
+    def context_variables(self) -> ContextVariables | None:
+        """The context variables (available after iteration completes)."""
+        return self._context_variables
+
+    @property
+    def last_speaker(self) -> str | None:
+        """The last speaker (available after iteration completes)."""
+        return self._last_speaker
+
+    @property
+    def cost(self) -> Cost | None:
+        """The cost information (available after iteration completes)."""
+        return self._cost
+
+    @property
+    def uuid(self) -> UUID:
+        """Unique identifier for this run."""
+        return self._uuid
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agents."""
+        for agent in self._agents:
+            agent.set_ui_tools(tools)
+
+
+class AsyncRunIterResponse:
+    """Async iterator-based response for stepped execution.
+
+    This class provides an async iterator interface for stepping through agent execution.
+    The background thread blocks after each event until you advance to the next iteration.
+
+    Example:
+        async for event in agent.a_run_iter(message="Hello"):
+            if isinstance(event, ToolCallEvent):
+                print(f"Tool call: {event.content}")
+
+    The generator's finally block ensures cleanup on break, exception, or normal completion.
+
+    Note: This uses threads internally (same as sync RunIterResponse) to avoid making
+    iostream.send() async, which would require runtime type checks in calling code.
+    """
+
+    def __init__(
         self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: Any,
-    ) -> None:
-        self.close()
+        start_thread_func: Callable[[ThreadIOStream], threading.Thread],
+        yield_on: Sequence[type[BaseEvent]] | None,
+        agents: Sequence[Agent],
+    ):
+        """Initialize the async iterator response.
+
+        Args:
+            start_thread_func: Function that creates and returns (but doesn't start) the background thread.
+                              Takes the iostream as argument.
+            yield_on: Event types to yield. If None, yields all events.
+            agents: List of agents involved in the chat.
+        """
+        self._start_thread_func = start_thread_func
+        self._yield_on = yield_on
+        self._agents = agents
+        self._started = False
+        self._thread: threading.Thread | None = None
+
+        # Set up step controller and iostream (sync versions, like RunIterResponse)
+        self._step_controller = StepController(yield_on=yield_on)
+        self._iostream = ThreadIOStream(step_controller=self._step_controller)
+
+        # State populated after completion
+        self._summary: str | None = None
+        self._messages: Sequence[LLMMessageType] = []
+        self._context_variables: ContextVariables | None = None
+        self._last_speaker: str | None = None
+        self._cost: Cost | None = None
+        self._uuid = uuid4()
+
+    def __aiter__(self) -> AsyncIterator[BaseEvent]:
+        """Return the async generator iterator."""
+        return self._generator()
+
+    async def _generator(self) -> AsyncIterator[BaseEvent]:
+        """Generate events from the background thread.
+
+        Lazily starts the thread on first iteration.
+        Cleanup happens in finally block on break, exception, or completion.
+        """
+        # Lazy start - only start thread on first iteration
+        if not self._started:
+            self._thread = self._start_thread_func(self._iostream)
+            self._thread.start()
+            self._started = True
+
+        try:
+            loop = asyncio.get_running_loop()
+            while True:
+                # Signal producer to continue (unblock wait_for_step)
+                self._step_controller.step()
+
+                # Wait for next event without blocking the event loop
+                event = await loop.run_in_executor(None, self._iostream._input_stream.get)
+
+                # Handle completion
+                if isinstance(event, RunCompletionEvent):
+                    self._extract_completion_data(event)
+                    return  # StopAsyncIteration
+
+                # Handle errors
+                if isinstance(event, ErrorEvent):
+                    raise event.content.error  # type: ignore[attr-defined]
+
+                # Handle input requests - always yield these
+                if isinstance(event, InputRequestEvent):
+                    event.content.respond = lambda response: self._iostream._output_stream.put(response)  # type: ignore[attr-defined]
+                    yield event
+                    continue
+
+                # Filter based on yield_on - yield if should_block returns True
+                if self._step_controller.should_block(event):
+                    yield event
+        finally:
+            # Cleanup - always terminate the step controller
+            self._step_controller.terminate()
+
+    def _extract_completion_data(self, event: RunCompletionEvent) -> None:
+        """Extract data from completion event."""
+        self._messages = event.content.history  # type: ignore[attr-defined]
+        self._last_speaker = event.content.last_speaker  # type: ignore[attr-defined]
+        self._summary = event.content.summary  # type: ignore[attr-defined]
+        self._context_variables = event.content.context_variables  # type: ignore[attr-defined]
+        if isinstance(event.content.cost, dict):  # type: ignore[attr-defined]
+            self._cost = Cost.from_raw(event.content.cost)  # type: ignore[attr-defined]
+        else:
+            self._cost = event.content.cost  # type: ignore[attr-defined]
+
+    @property
+    def iostream(self) -> ThreadIOStream:
+        """The IO stream for this response."""
+        return self._iostream
+
+    @property
+    def agents(self) -> Sequence[Agent]:
+        """The agents involved in this chat."""
+        return self._agents
+
+    @property
+    def summary(self) -> str | None:
+        """The summary of the chat (available after iteration completes)."""
+        return self._summary
+
+    @property
+    def messages(self) -> Sequence[LLMMessageType]:
+        """The message history (available after iteration completes)."""
+        return self._messages
+
+    @property
+    def context_variables(self) -> ContextVariables | None:
+        """The context variables (available after iteration completes)."""
+        return self._context_variables
+
+    @property
+    def last_speaker(self) -> str | None:
+        """The last speaker (available after iteration completes)."""
+        return self._last_speaker
+
+    @property
+    def cost(self) -> Cost | None:
+        """The cost information (available after iteration completes)."""
+        return self._cost
+
+    @property
+    def uuid(self) -> UUID:
+        """Unique identifier for this run."""
+        return self._uuid
+
+    def set_ui_tools(self, tools: list[Tool]) -> None:
+        """Set the UI tools for the agents."""
+        for agent in self._agents:
+            agent.set_ui_tools(tools)

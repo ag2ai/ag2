@@ -4,7 +4,6 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import asyncio
 import copy
 import json
 import logging
@@ -1376,11 +1375,7 @@ class GroupChatManager(ConversableAgent):
                 # select the next speaker
                 speaker = await groupchat.a_select_speaker(speaker, self)
                 if not silent:
-                    event = GroupChatRunChatEvent(speaker=speaker, silent=silent)
-                    if asyncio.iscoroutinefunction(iostream.send):
-                        await iostream.send(event)
-                    else:
-                        iostream.send(event)
+                    iostream.send(GroupChatRunChatEvent(speaker=speaker, silent=silent))
 
                 guardrails_activated = False
                 guardrails_reply = groupchat._run_input_guardrails(speaker, speaker._oai_messages[self])
@@ -1441,13 +1436,11 @@ class GroupChatManager(ConversableAgent):
                 a.previous_cache = None
 
         if termination_reason:
-            event = TerminationEvent(
-                termination_reason=termination_reason, sender=self, recipient=speaker if speaker else None
+            iostream.send(
+                TerminationEvent(
+                    termination_reason=termination_reason, sender=self, recipient=speaker if speaker else None
+                )
             )
-            if asyncio.iscoroutinefunction(iostream.send):
-                await iostream.send(event)
-            else:
-                iostream.send(event)
 
         return True, None
 
@@ -1650,11 +1643,7 @@ class GroupChatManager(ConversableAgent):
 
         if not silent:
             iostream = IOStream.get_default()
-            event = GroupChatResumeEvent(last_speaker_name=last_speaker_name, events=messages, silent=silent)
-            if asyncio.iscoroutinefunction(iostream.send):
-                await iostream.send(event)
-            else:
-                iostream.send(event)
+            iostream.send(GroupChatResumeEvent(last_speaker_name=last_speaker_name, events=messages, silent=silent))
 
         # Update group chat settings for resuming
         self._groupchat.send_introductions = False

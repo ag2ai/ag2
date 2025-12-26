@@ -4,7 +4,7 @@
 
 import queue
 from asyncio import Queue as AsyncQueue
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from autogen.io.base import AsyncIOStreamProtocol, IOStreamProtocol
 
@@ -12,11 +12,11 @@ from ..events.agent_events import InputRequestEvent
 from ..events.print_event import PrintEvent
 
 if TYPE_CHECKING:
-    from .step_controller import AsyncStepController, StepController
+    from .step_controller import StepController
 
 
 class ThreadIOStream:
-    def __init__(self, step_controller: Optional["StepController"] = None) -> None:
+    def __init__(self, step_controller: "StepController | None" = None) -> None:
         self._input_stream: queue.Queue = queue.Queue()  # type: ignore[type-arg]
         self._output_stream: queue.Queue = queue.Queue()  # type: ignore[type-arg]
         self._step_controller = step_controller
@@ -31,8 +31,8 @@ class ThreadIOStream:
 
     def send(self, message: Any) -> None:
         self._input_stream.put(message)
-        # Block if step controller says so (based on event type)
-        if self._step_controller:
+        # If step controller is present, wait for step (blocks producer until consumer advances)
+        if self._step_controller is not None:
             self._step_controller.wait_for_step(message)
 
     @property
@@ -41,24 +41,20 @@ class ThreadIOStream:
 
 
 class AsyncThreadIOStream:
-    def __init__(self, step_controller: Optional["AsyncStepController"] = None) -> None:
+    def __init__(self) -> None:
         self._input_stream: AsyncQueue = AsyncQueue()  # type: ignore[type-arg]
         self._output_stream: AsyncQueue = AsyncQueue()  # type: ignore[type-arg]
-        self._step_controller = step_controller
 
     async def input(self, prompt: str = "", *, password: bool = False) -> str:
-        await self.send(InputRequestEvent(prompt=prompt, password=password))  # type: ignore[call-arg]
+        self.send(InputRequestEvent(prompt=prompt, password=password))  # type: ignore[call-arg]
         return await self._output_stream.get()  # type: ignore[no-any-return]
 
-    async def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n", flush: bool = False) -> None:
         print_message = PrintEvent(*objects, sep=sep, end=end)
-        await self.send(print_message)
+        self.send(print_message)
 
-    async def send(self, message: Any) -> None:
+    def send(self, message: Any) -> None:
         self._input_stream.put_nowait(message)
-        # Block if step controller says so (based on event type)
-        if self._step_controller:
-            await self._step_controller.wait_for_step(message)
 
     @property
     def input_stream(self) -> AsyncQueue[Any]:

@@ -61,8 +61,14 @@ from ..events.agent_events import (
 from ..exception_utils import InvalidCarryOverTypeError, SenderRequiredError
 from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import AsyncIOStreamProtocol, AsyncInputStream, IOStream, IOStreamProtocol, InputStream
-from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
-from ..io.step_controller import AsyncStepController, StepController
+from ..io.run_response import (
+    AsyncRunIterResponse,
+    AsyncRunResponse,
+    AsyncRunResponseProtocol,
+    RunIterResponse,
+    RunResponse,
+    RunResponseProtocol,
+)
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
 from ..llm_config import LLMConfig
 from ..llm_config.client import ModelClient
@@ -1504,15 +1510,15 @@ class ConversableAgent(LLMAgent):
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
         msg_to: str | None = "agent",
-        step_mode: bool = False,
-        step_on: Sequence[type["BaseEvent"]] | None = None,
         **kwargs: Any,
     ) -> RunResponseProtocol:
         """Run a chat with an optional recipient agent, returning a response that can be
-        processed or stepped through.
+        processed or iterated over.
 
         This method starts a chat in a background thread and returns immediately with a
         RunResponse object that provides access to events as they occur.
+
+        For step-by-step execution with control over each event, use run_iter() instead.
 
         Args:
             recipient: The recipient agent to chat with. If None, creates a temporary
@@ -1530,21 +1536,14 @@ class ConversableAgent(LLMAgent):
             tools: Tools to register with the executor (single-agent mode only).
             user_input: Whether to enable user input mode. Default is False.
             msg_to: Direction of initial message - "agent" or "user". Default is "agent".
-            step_mode: Enable step-by-step execution. When True, the chat pauses after
-                each event until step() is called. Default is False.
-            step_on: List of event types to pause on. If None, pauses on every event.
-                Example: [TextEvent, TerminationEvent] to only pause on text messages.
             **kwargs: Additional arguments passed to initiate_chat.
 
         Returns:
             RunResponseProtocol
         """
-        step_controller: StepController | None = None
-        if step_mode:
-            step_controller = StepController(step_on=step_on)
-        iostream = ThreadIOStream(step_controller=step_controller)
+        iostream = ThreadIOStream()
         agents = [self, recipient] if recipient else [self]
-        response = RunResponse(iostream, agents=agents, step_controller=step_controller)
+        response = RunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1636,6 +1635,144 @@ class ConversableAgent(LLMAgent):
         ).start()
 
         return response
+
+    def run_iter(
+        self,
+        recipient: Optional["ConversableAgent"] = None,
+        clear_history: bool = True,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
+        yield_on: Sequence[type["BaseEvent"]] | None = None,
+        **kwargs: Any,
+    ) -> RunIterResponse:
+        """Run a chat with iterator-based stepped execution.
+
+        Iterate over events as they occur. The background thread blocks after each
+        event until you advance to the next iteration.
+
+        Example:
+            for event in agent.run_iter(message="Hello"):
+                if isinstance(event, TextEvent):
+                    print(event.content.content)
+                if should_abort(event):
+                    break  # Cleanup happens automatically
+
+        Args:
+            recipient: The recipient agent to chat with. If None, creates a temporary
+                executor agent for single-agent mode.
+            clear_history: Whether to clear the chat history with the agent. Default is True.
+            silent: Whether to suppress console output. Default is False.
+            cache: Cache client for this conversation. Default is None.
+            max_turns: Maximum number of conversation turns. One turn is one round trip.
+                If None, chat continues until termination condition is met.
+            summary_method: Method to summarize chat. Default is "last_msg".
+                Options: "last_msg", "reflection_with_llm", or a callable.
+            summary_args: Arguments passed to summary_method.
+            message: Initial message to send. Can be a string, dict, or callable.
+            executor_kwargs: Kwargs for executor agent (single-agent mode only).
+            tools: Tools to register with the executor (single-agent mode only).
+            user_input: Whether to enable user input mode. Default is False.
+            msg_to: Direction of initial message - "agent" or "user". Default is "agent".
+            yield_on: List of event types to yield. If None, yields all events.
+                Example: [TextEvent, TerminationEvent] to only yield text messages.
+            **kwargs: Additional arguments passed to initiate_chat.
+
+        Returns:
+            RunIterResponse: An iterator that yields events as they occur.
+        """
+        agents = [self, recipient] if recipient else [self]
+
+        def create_thread(iostream: ThreadIOStream) -> threading.Thread:
+            if recipient is None:
+
+                def initiate_chat() -> None:
+                    with (
+                        IOStream.set_default(iostream),
+                        self._create_or_get_executor(
+                            executor_kwargs=executor_kwargs,
+                            tools=tools,
+                            agent_name="user",
+                            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                        ) as executor,
+                    ):
+                        try:
+                            if msg_to == "agent":
+                                chat_result = executor.initiate_chat(
+                                    self,
+                                    message=message,
+                                    clear_history=clear_history,
+                                    max_turns=max_turns,
+                                    summary_method=summary_method,
+                                )
+                            else:
+                                chat_result = self.initiate_chat(
+                                    executor,
+                                    message=message,
+                                    clear_history=clear_history,
+                                    max_turns=max_turns,
+                                    summary_method=summary_method,
+                                )
+
+                            IOStream.get_default().send(
+                                RunCompletionEvent(
+                                    history=chat_result.chat_history,
+                                    summary=chat_result.summary,
+                                    cost=chat_result.cost,
+                                    last_speaker=self.name,
+                                )
+                            )
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+
+            else:
+
+                def initiate_chat() -> None:
+                    with IOStream.set_default(iostream):  # type: ignore[arg-type]
+                        try:
+                            chat_result = self.initiate_chat(
+                                recipient,
+                                clear_history=clear_history,
+                                silent=silent,
+                                cache=cache,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                                summary_args=summary_args,
+                                message=message,
+                                **kwargs,
+                            )
+
+                            _last_speaker = (
+                                recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                            )
+                            if hasattr(recipient, "last_speaker"):
+                                _last_speaker = recipient.last_speaker
+
+                            IOStream.get_default().send(
+                                RunCompletionEvent(
+                                    history=chat_result.chat_history,
+                                    summary=chat_result.summary,
+                                    cost=chat_result.cost,
+                                    last_speaker=_last_speaker.name,
+                                )
+                            )
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+
+            return threading.Thread(target=initiate_chat, daemon=True)
+
+        return RunIterResponse(
+            start_thread_func=create_thread,
+            yield_on=yield_on,
+            agents=agents,
+        )
 
     async def a_initiate_chat(
         self,
@@ -1729,16 +1866,15 @@ class ConversableAgent(LLMAgent):
         tools: Tool | Iterable[Tool] | None = None,
         user_input: bool | None = False,
         msg_to: str | None = "agent",
-        step_mode: bool = False,
-        step_on: Sequence[type["BaseEvent"]] | None = None,
         **kwargs: Any,
     ) -> AsyncRunResponseProtocol:
-        step_controller: AsyncStepController | None = None
-        if step_mode:
-            step_controller = AsyncStepController(step_on=step_on)
-        iostream = AsyncThreadIOStream(step_controller=step_controller)
+        """Async version of run().
+
+        For step-by-step execution with control over each event, use a_run_iter() instead.
+        """
+        iostream = AsyncThreadIOStream()
         agents = [self, recipient] if recipient else [self]
-        response = AsyncRunResponse(iostream, agents=agents, step_controller=step_controller)
+        response = AsyncRunResponse(iostream, agents=agents)
 
         if recipient is None:
 
@@ -1774,7 +1910,7 @@ class ConversableAgent(LLMAgent):
                                 summary_method=summary_method,
                             )
 
-                        await iostream.send(
+                        iostream.send(
                             RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
@@ -1783,7 +1919,7 @@ class ConversableAgent(LLMAgent):
                             )
                         )
                     except Exception as e:
-                        await iostream.send(ErrorEvent(error=e))
+                        iostream.send(ErrorEvent(error=e))
 
         else:
 
@@ -1810,7 +1946,7 @@ class ConversableAgent(LLMAgent):
                         if hasattr(recipient, "last_speaker"):
                             last_speaker = recipient.last_speaker
 
-                        await iostream.send(
+                        iostream.send(
                             RunCompletionEvent(
                                 history=chat_result.chat_history,
                                 summary=chat_result.summary,
@@ -1820,11 +1956,154 @@ class ConversableAgent(LLMAgent):
                         )
 
                     except Exception as e:
-                        await iostream.send(ErrorEvent(error=e))
+                        iostream.send(ErrorEvent(error=e))
 
         asyncio.create_task(initiate_chat())
 
         return response
+
+    def a_run_iter(
+        self,
+        recipient: Optional["ConversableAgent"] = None,
+        clear_history: bool = True,
+        silent: bool | None = False,
+        cache: AbstractCache | None = None,
+        max_turns: int | None = None,
+        summary_method: str | Callable[..., Any] | None = DEFAULT_SUMMARY_METHOD,
+        summary_args: dict[str, Any] | None = {},
+        message: dict[str, Any] | str | Callable[..., Any] | None = None,
+        executor_kwargs: dict[str, Any] | None = None,
+        tools: Tool | Iterable[Tool] | None = None,
+        user_input: bool | None = False,
+        msg_to: str | None = "agent",
+        yield_on: Sequence[type["BaseEvent"]] | None = None,
+        **kwargs: Any,
+    ) -> AsyncRunIterResponse:
+        """Async version of run_iter() for async contexts.
+
+        Iterate over events as they occur using async for. The background thread blocks
+        after each event until you advance to the next iteration.
+
+        Example:
+            async for event in agent.a_run_iter(message="Hello"):
+                if isinstance(event, TextEvent):
+                    print(event.content.content)
+                if should_abort(event):
+                    break  # Cleanup happens automatically
+
+        Args:
+            recipient: The recipient agent to chat with. If None, creates a temporary
+                executor agent for single-agent mode.
+            clear_history: Whether to clear the chat history with the agent. Default is True.
+            silent: Whether to suppress console output. Default is False.
+            cache: Cache client for this conversation. Default is None.
+            max_turns: Maximum number of conversation turns. One turn is one round trip.
+                If None, chat continues until termination condition is met.
+            summary_method: Method to summarize chat. Default is "last_msg".
+                Options: "last_msg", "reflection_with_llm", or a callable.
+            summary_args: Arguments passed to summary_method.
+            message: Initial message to send. Can be a string, dict, or callable.
+            executor_kwargs: Kwargs for executor agent (single-agent mode only).
+            tools: Tools to register with the executor (single-agent mode only).
+            user_input: Whether to enable user input mode. Default is False.
+            msg_to: Direction of initial message - "agent" or "user". Default is "agent".
+            yield_on: List of event types to yield. If None, yields all events.
+                Example: [TextEvent, TerminationEvent] to only yield text messages.
+            **kwargs: Additional arguments passed to initiate_chat.
+
+        Returns:
+            AsyncRunIterResponse: An async iterator that yields events as they occur.
+        """
+        agents = [self, recipient] if recipient else [self]
+
+        def create_thread(iostream: ThreadIOStream) -> threading.Thread:
+            if recipient is None:
+
+                async def async_initiate_chat() -> None:
+                    with (
+                        IOStream.set_default(iostream),
+                        self._create_or_get_executor(
+                            executor_kwargs=executor_kwargs,
+                            tools=tools,
+                            agent_name="user",
+                            agent_human_input_mode="ALWAYS" if user_input else "NEVER",
+                        ) as executor,
+                    ):
+                        if msg_to == "agent":
+                            chat_result = await executor.a_initiate_chat(
+                                self,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+                        else:
+                            chat_result = await self.a_initiate_chat(
+                                executor,
+                                message=message,
+                                clear_history=clear_history,
+                                max_turns=max_turns,
+                                summary_method=summary_method,
+                            )
+
+                        iostream.send(
+                            RunCompletionEvent(
+                                history=chat_result.chat_history,
+                                summary=chat_result.summary,
+                                cost=chat_result.cost,
+                                last_speaker=self.name,
+                            )
+                        )
+
+                def run_in_thread() -> None:
+                    with IOStream.set_default(iostream):
+                        try:
+                            asyncio.run(async_initiate_chat())
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+
+            else:
+
+                async def async_initiate_chat() -> None:
+                    chat_result = await self.a_initiate_chat(
+                        recipient,
+                        clear_history=clear_history,
+                        silent=silent,
+                        cache=cache,
+                        max_turns=max_turns,
+                        summary_method=summary_method,
+                        summary_args=summary_args,
+                        message=message,
+                        **kwargs,
+                    )
+
+                    last_speaker = recipient if chat_result.chat_history[-1]["name"] == recipient.name else self
+                    if hasattr(recipient, "last_speaker"):
+                        last_speaker = recipient.last_speaker
+
+                    iostream.send(
+                        RunCompletionEvent(
+                            history=chat_result.chat_history,
+                            summary=chat_result.summary,
+                            cost=chat_result.cost,
+                            last_speaker=last_speaker.name,
+                        )
+                    )
+
+                def run_in_thread() -> None:
+                    with IOStream.set_default(iostream):
+                        try:
+                            asyncio.run(async_initiate_chat())
+                        except Exception as e:
+                            iostream.send(ErrorEvent(error=e))
+
+            return threading.Thread(target=run_in_thread, daemon=True)
+
+        return AsyncRunIterResponse(
+            start_thread_func=create_thread,
+            yield_on=yield_on,
+            agents=agents,
+        )
 
     def _summarize_chat(
         self,
@@ -2096,12 +2375,12 @@ class ConversableAgent(LLMAgent):
                         ]
 
                         if not chat_info.get("silent", False):
-                            await iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
+                            iostream.send(PostCarryoverProcessingEvent(chat_info=chat_info))
 
                         sender = chat_info["sender"]
                         chat_res = await sender.a_initiate_chat(**chat_info)
 
-                        await iostream.send(
+                        iostream.send(
                             RunCompletionEvent(
                                 history=chat_res.chat_history,
                                 summary=chat_res.summary,
@@ -2113,7 +2392,7 @@ class ConversableAgent(LLMAgent):
                         finished_chats.append(chat_res)
 
             except Exception as e:
-                await iostream.send(ErrorEvent(error=e))
+                iostream.send(ErrorEvent(error=e))
 
         asyncio.create_task(_a_initiate_chats())
 

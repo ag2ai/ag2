@@ -1151,7 +1151,7 @@ async def a_run_swarm(
                     exclude_transit_message=exclude_transit_message,
                 )
 
-                await iostream.send(
+                IOStream.get_default().send(
                     RunCompletionEvent(  # type: ignore[call-arg]
                         history=chat_result.chat_history,
                         summary=chat_result.summary,
@@ -1161,7 +1161,7 @@ async def a_run_swarm(
                     )
                 )
             except Exception as e:
-                await iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
+                response.iostream.send(ErrorEvent(error=e))  # type: ignore[call-arg]
 
     task = asyncio.create_task(stream_run())
     # prevent the task from being garbage collected
