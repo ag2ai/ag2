@@ -769,8 +769,10 @@ class AnthropicClient:
         logger.info(f"Agent config: {agent_config}")
         response_format = (
             agent_config["response_format"]
-            if "response_format" in agent_config and agent_config["response_format"] is not None
-            else params.get("response_format", self._response_format if self.response_format is not None else None)
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config["response_format"] is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
         # Route to appropriate implementation based on model and response_format
         if response_format:
