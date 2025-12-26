@@ -302,10 +302,10 @@ class GeminiClient:
             thinking_level=thinking_level,
         )
         self._response_format = (
-            agent_config["response_format"]
+            agent_config.get("response_format")
             if agent_config is not None
             and "response_format" in agent_config
-            and agent_config["response_format"] is not None
+            and agent_config.get("response_format") is not None
             else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
         generation_config = {
