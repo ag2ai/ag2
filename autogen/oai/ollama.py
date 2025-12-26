@@ -238,10 +238,10 @@ class OllamaClient:
         messages = params.get("messages", [])
 
         self._response_format = (
-            agent_config["response_format"]
+            agent_config.get("response_format")
             if agent_config is not None
             and "response_format" in agent_config
-            and agent_config["response_format"] is not None
+            and agent_config.get("response_format") is not None
             else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
 
@@ -525,7 +525,14 @@ class OllamaClient:
             del ollama_messages[-1]
 
         # Ensure the last message is a user / system message, if not, add a user message
-        if ollama_messages[-1]["role"] != "user" and ollama_messages[-1]["role"] != "system":
+        if (
+            len(ollama_messages) > 0
+            and ollama_messages[-1]["role"] != "user"
+            and ollama_messages[-1]["role"] != "system"
+        ):
+            ollama_messages.append({"role": "user", "content": "Please continue."})
+        elif len(ollama_messages) == 0:
+            # If no messages, add a default user message
             ollama_messages.append({"role": "user", "content": "Please continue."})
 
         return ollama_messages
@@ -554,7 +561,12 @@ class OllamaClient:
 
 def _format_json_response(response: Any, original_answer: str) -> str:
     """Formats the JSON response for structured outputs using the format method if it exists."""
-    return response.format() if isinstance(response, FormatterProtocol) else original_answer
+    if isinstance(response, str):
+        return response
+    elif isinstance(response, FormatterProtocol):
+        return response.format()
+    else:
+        return original_answer
 
 
 @require_optional_import("fix_busted_json", "ollama")
