@@ -22,6 +22,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from autogen.agentchat.conversable_agent import ConversableAgent
+
 logger = logging.getLogger(__name__)
 
 
@@ -604,74 +606,401 @@ def test_transform_schema_preserves_nested_structures():
     assert transformed["additionalProperties"] is True
 
 
+def create_mock_anthropic_response():
+    """Helper function to create a mock Anthropic Message response."""
+    return Message(
+        id="msg_123",
+        content=[
+            TextBlock(
+                text='{"steps": [], "final_answer": "test"}',
+                type="text",
+            )
+        ],
+        model="claude-sonnet-4-5",
+        role="assistant",
+        stop_reason="end_turn",
+        type="message",
+        usage={"input_tokens": 10, "output_tokens": 25},
+    )
+
+
+# ==============================================================================
+# Unit Tests for Agent Config Response Format
+# ==============================================================================
+
+
 @run_for_optional_imports(["anthropic"], "anthropic")
-def test_create_routes_to_native_or_json_mode(anthropic_client, monkeypatch):
-    """Test that create() method routes to correct implementation."""
+def test_create_with_agent_config_response_format(anthropic_client, monkeypatch):
+    """Test that agent_config response_format takes precedence over params response_format."""
 
-    native_called = False
-    json_mode_called = False
-    standard_called = False
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
 
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = MathReasoning
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods to prevent real API calls
     def mock_create_with_native(params):
-        nonlocal native_called
-        native_called = True
         return create_mock_anthropic_response()
 
     def mock_create_with_json_mode(params):
-        nonlocal json_mode_called
-        json_mode_called = True
         return create_mock_anthropic_response()
 
-    def mock_create_standard(params):
-        nonlocal standard_called
-        standard_called = True
-        return create_mock_anthropic_response()
-
-    # Mock the internal methods
     monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
     monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
-    monkeypatch.setattr(anthropic_client, "_create_standard", mock_create_standard)
+    # Ensure we take the native path
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
 
-    # Test 1: Sonnet 4.5 with response_format -> native
-    anthropic_client._response_format = BaseModel
-    params = {"model": "claude-sonnet-4-5", "messages": [], "max_tokens": 100}
+    # Call create to set _response_format from agent_config
     anthropic_client.create(params)
-    assert native_called, "Should use native structured output for Sonnet 4.5"
 
-    # Reset flags
-    native_called = json_mode_called = standard_called = False
+    # Verify agent_config response_format was used (MathReasoning, not the dict in params)
+    assert anthropic_client._response_format == MathReasoning
+    # Verify it's MathReasoning schema, not the simple dict from params
+    assert hasattr(anthropic_client._response_format, "model_json_schema")
+    schema = anthropic_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "name" not in schema["properties"]  # Not the simple dict from params
 
-    # Test 2: Haiku with response_format -> JSON Mode
-    params = {"model": "claude-3-haiku-20240307", "messages": [], "max_tokens": 100}
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_agent_config_response_format_overrides_client_format(anthropic_client, monkeypatch):
+    """Test that agent_config response_format takes precedence over client._response_format (from llm_config)."""
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (simulating it being set from llm_config)
+    anthropic_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = MathReasoning
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from agent_config
     anthropic_client.create(params)
-    assert json_mode_called, "Should use JSON Mode for older models"
 
-    # Reset flags
-    native_called = json_mode_called = standard_called = False
+    # Verify agent_config response_format was used (MathReasoning), not client._response_format
+    assert anthropic_client._response_format == MathReasoning
+    assert hasattr(anthropic_client._response_format, "model_json_schema")
+    schema = anthropic_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "age" not in schema["properties"]  # Not the client._response_format schema
 
-    # Test 3: No response_format -> standard
-    anthropic_client._response_format = None
-    params = {"model": "claude-sonnet-4-5", "messages": [], "max_tokens": 100}
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_agent_config_response_format_overrides_params_and_client_format(anthropic_client, monkeypatch):
+    """Test that agent_config response_format takes precedence over both params and client._response_format."""
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (from llm_config)
+    anthropic_client._response_format = {"type": "object", "properties": {"age": {"type": "integer"}}}
+
+    # Create real agent with different response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = MathReasoning
+
+    # Both params and client have response_format, but agent should override both
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from agent_config
     anthropic_client.create(params)
-    assert standard_called, "Should use standard create without response_format"
+
+    # Verify it's MathReasoning
+    assert anthropic_client._response_format == MathReasoning
+    schema = anthropic_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "age" not in schema["properties"]  # Not client._response_format
+    assert "name" not in schema["properties"]  # Not params response_format
 
 
-def create_mock_anthropic_response():
-    """Helper to create mock Anthropic response."""
-    with optional_import_block() as result:
-        from anthropic.types import Message, TextBlock
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_agent_no_response_format_falls_back_to_params(anthropic_client, monkeypatch):
+    """Test that when agent has no response_format, it falls back to params response_format."""
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
 
-    if result.is_successful:
-        return Message(
-            id="msg_test123",
-            content=[TextBlock(text='{"test": "response"}', type="text")],
-            model="claude-sonnet-4-5",
-            role="assistant",
-            stop_reason="end_turn",
-            type="message",
-            usage={"input_tokens": 10, "output_tokens": 20},
-        )
-    return None
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from params
+    anthropic_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert anthropic_client._response_format == dict_schema
+    assert isinstance(anthropic_client._response_format, dict)
+    assert "name" in anthropic_client._response_format["properties"]
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_agent_no_response_format_falls_back_to_client_format(anthropic_client, monkeypatch):
+    """Test that when agent has no response_format and params has none, it falls back to client._response_format."""
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Set client response_format (from llm_config)
+    anthropic_client._response_format = MathReasoning
+
+    # Create real agent without response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    # Don't set response_format - it should not exist or be None
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from client._response_format
+    anthropic_client.create(params)
+
+    # Verify it's MathReasoning (has steps and final_answer), not the age schema
+    assert anthropic_client._response_format == MathReasoning
+    schema = anthropic_client._response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_with_agent_response_format_none_ignores_agent(anthropic_client, monkeypatch):
+    """Test that when agent.response_format is None, it's ignored and falls back to params."""
+    # Create real agent with response_format=None
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = None
+
+    dict_schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from params (agent.response_format=None should be ignored)
+    anthropic_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert anthropic_client._response_format == dict_schema
+    assert isinstance(anthropic_client._response_format, dict)
+    assert "name" in anthropic_client._response_format["properties"]
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_create_without_agent_uses_params_response_format(anthropic_client, monkeypatch):
+    """Test that when no agent is provided, params response_format is used (existing behavior)."""
+    dict_schema = {
+        "type": "object",
+        "properties": {"email": {"type": "string"}},
+        "required": ["email"],
+    }
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": dict_schema,
+        # No agent parameter
+        "max_tokens": 100,
+    }
+
+    # Mock both native and JSON mode methods
+    def mock_create_with_native(params):
+        return create_mock_anthropic_response()
+
+    def mock_create_with_json_mode(params):
+        return create_mock_anthropic_response()
+
+    monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+    monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+    # Call create to set _response_format from params
+    anthropic_client.create(params)
+
+    # Verify it's the dict_schema from params
+    assert anthropic_client._response_format == dict_schema
+    assert isinstance(anthropic_client._response_format, dict)
+    assert "email" in anthropic_client._response_format["properties"]
+
+
+@run_for_optional_imports(["anthropic"], "anthropic")
+def test_agent_config_parser_called_with_agent(anthropic_client, monkeypatch):
+    """Test that agent_config_parser is called when agent is provided."""
+    from unittest.mock import patch
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.response_format = MathReasoning
+
+    params = {
+        "model": "claude-sonnet-4-5",
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent": agent,
+        "max_tokens": 100,
+    }
+
+    # Mock agent_config_parser
+    with patch("autogen.oai.anthropic.agent_config_parser") as mock_parser:
+        mock_parser.return_value = {"response_format": MathReasoning}
+
+        # Mock both native and JSON mode methods
+        def mock_create_with_native(params):
+            return create_mock_anthropic_response()
+
+        def mock_create_with_json_mode(params):
+            return create_mock_anthropic_response()
+
+        monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_create_with_native)
+        monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_create_with_json_mode)
+        monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+        monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
+
+        # Call create
+        anthropic_client.create(params)
+
+        # Verify agent_config_parser was called with the agent
+        mock_parser.assert_called_once_with(agent)
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
@@ -741,24 +1070,27 @@ def test_json_mode_fallback_on_native_failure(anthropic_client, monkeypatch):
     """Test graceful fallback to JSON Mode if native fails."""
 
     def mock_native_failure(params):
-        raise Exception("Beta API not available")
+        from anthropic import BadRequestError
+
+        raise BadRequestError(message="Beta API not available", response=None, body=None)
 
     def mock_json_mode_success(params):
         return create_mock_anthropic_response()
 
     monkeypatch.setattr(anthropic_client, "_create_with_native_structured_output", mock_native_failure)
     monkeypatch.setattr(anthropic_client, "_create_with_json_mode", mock_json_mode_success)
+    # Ensure we take the native path
+    monkeypatch.setattr("autogen.oai.anthropic.has_beta_messages_api", lambda: True)
+    monkeypatch.setattr("autogen.oai.anthropic.supports_native_structured_outputs", lambda model: True)
 
     anthropic_client._response_format = BaseModel
 
-    # Should fallback gracefully
+    # Should fallback gracefully - should NOT raise, should return JSON mode response
     params = {"model": "claude-sonnet-4-5", "messages": [], "max_tokens": 100}
 
-    # Note: This test verifies the fallback logic exists in the implementation
-    # The actual implementation should catch exceptions and fallback
-    with pytest.raises(Exception):
-        # Currently will raise; implementation should add fallback logic
-        anthropic_client.create(params)
+    # Should fallback gracefully without raising
+    result = anthropic_client.create(params)
+    assert result is not None  # Should return the JSON mode response
 
 
 @run_for_optional_imports(["anthropic"], "anthropic")
