@@ -9,9 +9,7 @@ if TYPE_CHECKING:
 
 
 def agent_config_parser(agent: "ConversableAgent") -> dict[str, Any]:
-    agent_config: dict[str, Any] = []
+    agent_config: dict[str, Any] = {}
     if hasattr(agent, "response_format") and agent.response_format is not None:
-        agent_config.append({
-            "response_format": agent.response_format,
-        })
+        agent_config["response_format"] = agent.response_format
     return agent_config
