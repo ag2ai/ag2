@@ -8,6 +8,9 @@
 /test/remote/ @Lancetnik
 /website/docs/user-guide/a2a/ @Lancetnik
 
+# Observability
+/website/docs/user-guide/observability/ @priyansh4320
+
 # GPT Apply Patch Tool & Shell Tool
 /autogen/tools/experimental/apply_patch/ @priyansh4320
 /autogen/tools/experimental/shell/ @priyansh4320
