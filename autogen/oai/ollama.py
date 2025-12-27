@@ -481,18 +481,21 @@ class OllamaClient:
         # Convert tool call and tool result messages to normal text messages for Ollama
         for i, message in enumerate(ollama_messages):
             if "tool_calls" in message:
-                # Recommended tool calls
-                content = "Run the following function(s):"
+                # The model should only see tool results
+                ollama_messages[i] = None
                 for tool_call in message["tool_calls"]:
-                    content = content + "\n" + str(tool_call)
-                ollama_messages[i] = {"role": "assistant", "content": content}
+                    tool_call_meta = str(tool_call)
             if "tool_call_id" in message:
                 # Executed tool results
-                message["result"] = message["content"]
+                # add tool meta to tool message result
+                message["result"] = tool_call_meta + message["content"]
                 del message["content"]
                 del message["role"]
                 content = "The following function was run: " + str(message)
                 ollama_messages[i] = {"role": "user", "content": content}
+
+        # Remove None entries (removed tool call messages in manual mode)
+        ollama_messages = [msg for msg in ollama_messages if msg is not None]
 
         # As we are changing messages, let's merge if they have two user messages on the end and the last one is tool call step instructions
         if (
