@@ -11,7 +11,7 @@ import logging
 import pytest
 
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.anthropic import AnthropicClient, AnthropicLLMConfigEntry, _calculate_cost
 
 with optional_import_block() as result:
@@ -644,13 +644,13 @@ def test_create_with_agent_config_response_format(anthropic_client, monkeypatch)
 
     # Create real agent with response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "claude-sonnet-4-5",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
         "max_tokens": 100,
     }
 
@@ -698,12 +698,12 @@ def test_create_with_agent_config_response_format_overrides_client_format(anthro
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "claude-sonnet-4-5",
         "messages": [{"role": "user", "content": "Test message"}],
-        "agent": agent,
+        "agent_config": agent.agent_config,
         "max_tokens": 100,
     }
 
@@ -749,14 +749,14 @@ def test_create_with_agent_config_response_format_overrides_params_and_client_fo
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Both params and client have response_format, but agent should override both
     params = {
         "model": "claude-sonnet-4-5",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
         "max_tokens": 100,
     }
 
@@ -971,7 +971,7 @@ def test_agent_config_parser_called_with_agent(anthropic_client, monkeypatch):
 
     # Create real agent
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "claude-sonnet-4-5",

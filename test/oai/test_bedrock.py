@@ -11,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.bedrock import BedrockClient, BedrockLLMConfigEntry, oai_messages_to_bedrock_messages
 from autogen.oai.oai_models import ChatCompletionMessageToolCall
 
@@ -1514,7 +1514,7 @@ def test_create_with_agent_config_response_format(bedrock_client: BedrockClient)
     """Test that agent_config response_format takes precedence over params response_format."""
     # Create real agent with response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock bedrock_runtime
     mock_bedrock_runtime = MagicMock()
@@ -1548,7 +1548,7 @@ def test_create_with_agent_config_response_format(bedrock_client: BedrockClient)
         "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
@@ -1584,7 +1584,7 @@ def test_create_with_agent_config_response_format_overrides_client_format(bedroc
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock bedrock_runtime
     mock_bedrock_runtime = MagicMock()
@@ -1617,7 +1617,7 @@ def test_create_with_agent_config_response_format_overrides_client_format(bedroc
     params = {
         "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
@@ -1650,7 +1650,7 @@ def test_create_with_agent_config_response_format_overrides_params_and_client_fo
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock bedrock_runtime
     mock_bedrock_runtime = MagicMock()
@@ -1685,7 +1685,7 @@ def test_create_with_agent_config_response_format_overrides_params_and_client_fo
         "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
@@ -1716,7 +1716,7 @@ def test_create_with_agent_config_response_format_and_user_tools(bedrock_client:
     """Test that agent_config response_format works correctly with user-provided tools."""
     # Create real agent with response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock bedrock_runtime
     mock_bedrock_runtime = MagicMock()
@@ -1765,7 +1765,7 @@ def test_create_with_agent_config_response_format_and_user_tools(bedrock_client:
         "messages": [{"role": "user", "content": "Get weather and format response"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
         "tools": user_tools,
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
@@ -1899,7 +1899,7 @@ def test_create_with_agent_no_response_format_falls_back_to_client_format(bedroc
     params = {
         "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
@@ -2055,7 +2055,7 @@ def test_agent_config_parser_called_with_agent(mock_parser, bedrock_client: Bedr
     """Test that agent_config_parser is called when agent is provided."""
     # Create real agent
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock agent_config_parser to return expected format
     mock_parser.return_value = {"response_format": MathReasoning}
@@ -2090,13 +2090,13 @@ def test_agent_config_parser_called_with_agent(mock_parser, bedrock_client: Bedr
     params = {
         "messages": [{"role": "user", "content": "Solve 2x + 5 = -25"}],
         "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     response = bedrock_client.create(params)
 
-    # Verify agent_config_parser was called with the agent
-    mock_parser.assert_called_once_with(agent)
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)
 
 
 @run_for_optional_imports(["boto3", "botocore"], "bedrock")
