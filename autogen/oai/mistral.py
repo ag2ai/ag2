@@ -207,8 +207,8 @@ class MistralAIClient:
 
     @require_optional_import("mistralai", "mistral")
     def create(self, params: dict[str, Any]) -> ChatCompletion:
-        agent = params.pop("agent", None)
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
         # 1. Parse parameters to Mistral.AI API's parameters
         mistral_params = self.parse_params(params)

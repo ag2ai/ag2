@@ -763,9 +763,9 @@ class AnthropicClient:
         Returns:
             ChatCompletion object compatible with OpenAI format
         """
-        agent = params.pop("agent", None)
+        agent_config = params.pop("agent_config", None)
         model = params.get("model")
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
         response_format = (
             agent_config.get("response_format")

@@ -27,8 +27,6 @@ from typing import (
     Union,
 )
 
-from pydantic import BaseModel
-
 from ..cache.cache import AbstractCache, Cache
 from ..code_utils import (
     PYTHON_VARIANTS,
@@ -65,7 +63,7 @@ from ..fast_depends.utils import is_coroutine_callable
 from ..io.base import AsyncIOStreamProtocol, AsyncInputStream, IOStream, IOStreamProtocol, InputStream
 from ..io.run_response import AsyncRunResponse, AsyncRunResponseProtocol, RunResponse, RunResponseProtocol
 from ..io.thread_io_stream import AsyncThreadIOStream, ThreadIOStream
-from ..llm_config import LLMConfig
+from ..llm_config import AgentConfig, LLMConfig
 from ..llm_config.client import ModelClient
 from ..oai.client import OpenAIWrapper
 from ..runtime_logging import log_event, log_function_use, log_new_agent, logging_enabled
@@ -164,7 +162,7 @@ class ConversableAgent(LLMAgent):
         silent: bool | None = None,
         context_variables: Optional["ContextVariables"] = None,
         functions: list[Callable[..., Any]] | Callable[..., Any] = None,
-        response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None,
+        agent_config: AgentConfig | None = None,
         update_agent_state_before_reply: list[Callable | UpdateSystemMessage]
         | Callable
         | UpdateSystemMessage
@@ -226,7 +224,8 @@ class ConversableAgent(LLMAgent):
         15) update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.\n
         16) handoffs (Handoffs): Handoffs object containing all handoff transition conditions.\n
         """
-        self.response_format = response_format if response_format is not None else None
+        # self.response_format = response_format if response_format is not None else None
+        self.agent_config = agent_config if agent_config is not None else None
         self.handoffs = handoffs if handoffs is not None else Handoffs()
         self.input_guardrails: list[Guardrail] = []
         self.output_guardrails: list[Guardrail] = []

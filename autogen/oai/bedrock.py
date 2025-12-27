@@ -425,8 +425,8 @@ class BedrockClient:
     def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
-        agent = params.pop("agent", None)
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
         self.parse_custom_params(params)
 

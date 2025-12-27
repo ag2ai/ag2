@@ -498,8 +498,8 @@ class OpenAIClient:
         Returns:
             The completion.
         """
-        agent = params.pop("agent", None)
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
         iostream = IOStream.get_default()
 
@@ -1270,7 +1270,7 @@ class OpenAIWrapper:
             try:
                 # Add agent to params if provided (for downstream use)
                 if agent is not None:
-                    params["agent"] = agent
+                    params["agent_config"] = agent.agent_config
                 request_ts = get_current_ts()
                 response = client.create(params)
             except Exception as e:

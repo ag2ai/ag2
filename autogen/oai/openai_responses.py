@@ -557,8 +557,8 @@ class OpenAIResponsesClient:
         workspace_dir = params.pop("workspace_dir", os.getcwd())
         allowed_paths = params.pop("allowed_paths", ["**"])
         built_in_tools = params.pop("built_in_tools", [])
-        agent = params.pop("agent", None)
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
 
         self.response_format = (

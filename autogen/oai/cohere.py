@@ -240,12 +240,12 @@ class CohereClient:
 
     @require_optional_import("cohere", "cohere")
     def create(self, params: dict) -> ChatCompletion:
-        agent = params.pop("agent", None)
+        agent_config = params.pop("agent_config", None)
         messages = params.get("messages", [])
         client_name = params.get("client_name") or "AG2"
         cohere_tool_names = set()
         tool_calls_modified_ids = set()
-        agent_config = agent_config_parser(agent) if agent is not None else None
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
         logger.info(f"Agent config: {agent_config}")
         # Parse parameters to the Cohere API's parameters
         cohere_params = self.parse_params(params)

@@ -5,11 +5,11 @@
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from autogen.agentchat.conversable_agent import ConversableAgent
+    from autogen.llm_config import AgentConfig
 
 
-def agent_config_parser(agent: "ConversableAgent") -> dict[str, Any]:
-    agent_config: dict[str, Any] = {}
-    if hasattr(agent, "response_format") and agent.response_format is not None:
-        agent_config["response_format"] = agent.response_format
-    return agent_config
+def agent_config_parser(agent_config: AgentConfig) -> dict[str, Any]:
+    _agent_config: dict[str, Any] = {}
+    if hasattr(agent_config, "response_format") and agent_config.response_format is not None:
+        _agent_config["response_format"] = agent_config.response_format
+    return _agent_config
