@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.import_utils import optional_import_block, run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.gemini import GeminiClient, GeminiLLMConfigEntry
 
 with optional_import_block() as result:
@@ -501,13 +501,13 @@ def test_create_with_agent_config_response_format():
 
     # Create real agent with response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -565,12 +565,12 @@ def test_create_with_agent_config_response_format_overrides_client_format():
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -627,14 +627,14 @@ def test_create_with_agent_config_response_format_overrides_params_and_client_fo
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Both params and client have response_format, but agent should override both
     params = {
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -691,7 +691,7 @@ def test_create_with_agent_no_response_format_falls_back_to_params():
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": dict_schema,
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from params
@@ -750,7 +750,7 @@ def test_create_with_agent_no_response_format_falls_back_to_client_format():
     params = {
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from client._response_format
@@ -805,7 +805,7 @@ def test_create_with_agent_response_format_none_ignores_agent():
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
         "response_format": dict_schema,
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from params (agent.response_format=None should be ignored)
@@ -907,7 +907,7 @@ def test_agent_config_parser_called_with_agent(mock_parser):
 
     # Create real agent
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock agent_config_parser to return expected format
     mock_parser.return_value = {"response_format": MathReasoning}
@@ -915,7 +915,7 @@ def test_agent_config_parser_called_with_agent(mock_parser):
     params = {
         "model": "gemini-pro",
         "messages": [{"role": "user", "content": "Test message"}],
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create
@@ -942,8 +942,8 @@ def test_agent_config_parser_called_with_agent(mock_parser):
 
         gemini_client.create(params)
 
-    # Verify agent_config_parser was called with the agent
-    mock_parser.assert_called_once_with(agent)
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)
 
     @pytest.fixture
     def nested_function_parameters(self) -> dict[str, Any]:
