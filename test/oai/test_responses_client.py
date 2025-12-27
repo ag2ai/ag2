@@ -18,6 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.llm_config import AgentConfig
 from autogen.oai.openai_responses import OpenAIResponsesClient, calculate_openai_image_cost
 
 # Try to import ImageGenerationCall for proper mocking
@@ -1884,3 +1886,83 @@ def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_clie
     assert input_items[0]["content"][0]["text"] == "Third"
     assert input_items[1]["content"][0]["text"] == "Second"
     assert input_items[2]["content"][0]["text"] == "First"
+
+
+# -----------------------------------------------------------------------------
+# Agent Config Tests
+# -----------------------------------------------------------------------------
+
+
+def test_create_with_agent_config_response_format(mocked_openai_client):
+    """Test that agent_config response_format takes precedence over params response_format."""
+    from pydantic import BaseModel
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent with response_format
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    params = {
+        "messages": [{"role": "user", "content": "Test message"}],
+        "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
+        "agent_config": agent.agent_config,
+    }
+
+    # Call create - this will set response_format from agent_config
+    client.create(params)
+
+    # Verify agent_config response_format was used (MathReasoning, not the dict in params)
+    assert client.response_format == MathReasoning
+    # Verify it's MathReasoning schema, not the simple dict from params
+    assert hasattr(client.response_format, "model_json_schema")
+    schema = client.response_format.model_json_schema()
+    assert "steps" in schema["properties"]
+    assert "final_answer" in schema["properties"]
+    assert "name" not in schema["properties"]  # Not the simple dict from params
+
+
+def test_agent_config_parser_called_with_agent_config(mocked_openai_client):
+    """Test that agent_config_parser is called when agent_config is provided."""
+    from unittest.mock import patch
+
+    from pydantic import BaseModel
+
+    # Define test Pydantic model
+    class Step(BaseModel):
+        explanation: str
+        output: str
+
+    class MathReasoning(BaseModel):
+        steps: list[Step]
+        final_answer: str
+
+    # Create real agent
+    agent = ConversableAgent(name="test_agent", llm_config=False)
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
+
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    params = {
+        "messages": [{"role": "user", "content": "Test message"}],
+        "agent_config": agent.agent_config,
+    }
+
+    # Mock agent_config_parser
+    with patch("autogen.oai.openai_responses.agent_config_parser") as mock_parser:
+        mock_parser.return_value = {"response_format": MathReasoning}
+
+        # Call create - this will call OpenAIResponsesClient.create which calls agent_config_parser
+        client.create(params)
+
+        # Verify agent_config_parser was called with agent.agent_config
+        mock_parser.assert_called_once_with(agent.agent_config)
