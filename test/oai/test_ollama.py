@@ -11,7 +11,7 @@ import pytest
 from pydantic import BaseModel
 
 from autogen.import_utils import run_for_optional_imports
-from autogen.llm_config import LLMConfig
+from autogen.llm_config import AgentConfig, LLMConfig
 from autogen.oai.ollama import OllamaClient, OllamaLLMConfigEntry, response_to_tool_call
 
 
@@ -503,13 +503,13 @@ def test_create_with_agent_config_response_format(ollama_client):
     """Test that agent_config response_format takes precedence over params response_format."""
     # Create real agent with response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -542,12 +542,12 @@ def test_create_with_agent_config_response_format_overrides_client_format(ollama
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     params = {
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -578,14 +578,14 @@ def test_create_with_agent_config_response_format_overrides_params_and_client_fo
 
     # Create real agent with different response_format
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Both params and client have response_format, but agent should override both
     params = {
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
         "response_format": {"type": "object", "properties": {"name": {"type": "string"}}},  # Different from agent
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from agent_config
@@ -626,7 +626,7 @@ def test_create_with_agent_no_response_format_falls_back_to_params(ollama_client
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
         "response_format": dict_schema,
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from params
@@ -662,7 +662,7 @@ def test_create_with_agent_no_response_format_falls_back_to_client_format(ollama
     params = {
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from client._response_format
@@ -701,7 +701,7 @@ def test_create_with_agent_response_format_none_ignores_agent(ollama_client):
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
         "response_format": dict_schema,
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create to set _response_format from params (agent.response_format=None should be ignored)
@@ -762,7 +762,7 @@ def test_agent_config_parser_called_with_agent(mock_parser, ollama_client):
     """Test that agent_config_parser is called when agent is provided."""
     # Create real agent
     agent = ConversableAgent(name="test_agent", llm_config=False)
-    agent.response_format = MathReasoning
+    agent.agent_config = AgentConfig(response_format=MathReasoning)
 
     # Mock agent_config_parser to return expected format
     mock_parser.return_value = {"response_format": MathReasoning}
@@ -770,7 +770,7 @@ def test_agent_config_parser_called_with_agent(mock_parser, ollama_client):
     params = {
         "model": "llama3.1:8b",
         "messages": [{"role": "user", "content": "Test message"}],  # Add this
-        "agent": agent,
+        "agent_config": agent.agent_config,
     }
 
     # Call create
@@ -783,5 +783,5 @@ def test_agent_config_parser_called_with_agent(mock_parser, ollama_client):
         }
         ollama_client.create(params)
 
-    # Verify agent_config_parser was called with the agent
-    mock_parser.assert_called_once_with(agent)
+    # Verify agent_config_parser was called with agent.agent_config
+    mock_parser.assert_called_once_with(agent.agent_config)
