@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 import time
@@ -44,12 +45,15 @@ from typing_extensions import Required, Unpack
 
 from ..import_utils import optional_import_block, require_optional_import
 from ..llm_config.entry import LLMConfigEntry, LLMConfigEntryDict
+from .agent_config_handler import agent_config_parser
 from .client_utils import validate_parameter
 from .oai_models import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageToolCall, Choice, CompletionUsage
 
 with optional_import_block():
     import boto3
     from botocore.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class BedrockEntryDict(LLMConfigEntryDict, total=False):
@@ -421,15 +425,25 @@ class BedrockClient:
     def create(self, params) -> ChatCompletion:
         """Run Amazon Bedrock inference and return AG2 response"""
         # Set custom client class settings
+        agent_config = params.pop("agent_config", None)
+        agent_config = agent_config_parser(agent_config) if agent_config is not None else None
+        logger.info(f"Agent config: {agent_config}")
         self.parse_custom_params(params)
 
         # Parse the inference parameters
         base_params, additional_params = self.parse_params(params)
 
-        # Handle response_format for structured outputs
-        has_response_format = self._response_format is not None
+        # Handle response_format for structured outputs, check if agent_config has a response_format else
+        has_response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else params.get("response_format", self._response_format if self._response_format is not None else None)
+        )
         if has_response_format:
-            structured_output_tool = self._create_structured_output_tool(self._response_format)
+            self._response_format = has_response_format
+            structured_output_tool = self._create_structured_output_tool(has_response_format)
             # Merge with user tools if any
             user_tools = params.get("tools", [])
             tool_config = self._merge_tools_with_structured_output(user_tools, structured_output_tool)

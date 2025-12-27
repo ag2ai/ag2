@@ -52,6 +52,11 @@ ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 
 
 @export_module("autogen")
+class AgentConfig(BaseModel):
+    response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
+
+
+@export_module("autogen")
 class LLMConfig(metaclass=MetaLLMConfig):
     _current_llm_config: ContextVar["LLMConfig"] = ContextVar("current_llm_config")
     config_list: list[ConfigEntries]
