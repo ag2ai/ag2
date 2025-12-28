@@ -76,6 +76,7 @@ Example:
     {
         "api_type": "bedrock",
         "model": "amazon.titan-text-premier-v1:0",
+        "api_key": BEDROCK_API_KEY,
         "aws_region": "us-east-1"
         "aws_access_key": "",
         "aws_secret_key": "",
@@ -85,6 +86,7 @@ Example:
     {
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "api_key": BEDROCK_API_KEY,
         "aws_region": "us-east-1"
         "aws_access_key": "",
         "aws_secret_key": "",
@@ -97,6 +99,7 @@ Example:
     {
         "api_type": "bedrock",
         "model": "mistral.mixtral-8x7b-instruct-v0:1",
+        "api_key": BEDROCK_API_KEY,
         "aws_region": "us-east-1"
         "aws_access_key": "",
         "aws_secret_key": "",
@@ -126,6 +129,7 @@ import autogen
 llm_config_bedrock = autogen.LLMConfig(config_list={
         "api_type": "bedrock",
         "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "api_key": BEDROCK_API_KEY,
         "aws_region": "us-east-1",
         "aws_access_key": "[FILL THIS IN]",
         "aws_secret_key": "[FILL THIS IN]",

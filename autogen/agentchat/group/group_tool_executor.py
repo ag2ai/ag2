@@ -277,6 +277,10 @@ class GroupToolExecutor(ConversableAgent):
                 # 1. add context_variables to the tool call arguments
                 tool_call = message_copy["tool_calls"][index]
 
+                function_name = tool_call.get("function", {}).get("name", "")
+                if function_name == "__structured_output":
+                    return True, tool_call.get("function", {}).get("arguments", {})
+
                 # Ensure we are only executing the one tool at a time
                 message_copy["tool_calls"] = [tool_call]
 

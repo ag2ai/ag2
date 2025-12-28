@@ -867,7 +867,7 @@ class GroupChat:
         """
         # Validate the speaker name selected
         if messages and (name := messages[-1].get("content")):
-            mentions = self._mentioned_agents(name.strip(), agents)
+            mentions = self._mentioned_agents(name.strip() if isinstance(name, str) else name, agents)
         else:
             mentions = []
         no_of_mentions = len(mentions)

@@ -226,8 +226,8 @@ def run_group_chat(
         RunResponseProtocol: Response object for tracking the async execution.
     """
     iostream = ThreadIOStream()
-    # todo: add agents
-    response = RunResponse(iostream, agents=[])
+    all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
+    response = RunResponse(iostream, agents=all_agents)
 
     def _initiate_group_chat(
         pattern: "Pattern" = pattern,
@@ -299,8 +299,8 @@ async def a_run_group_chat(
         AsyncRunResponseProtocol: Response object for tracking the async execution.
     """
     iostream = AsyncThreadIOStream()
-    # todo: add agents
-    response = AsyncRunResponse(iostream, agents=[])
+    all_agents = pattern.agents + ([pattern.user_agent] if pattern.user_agent else [])
+    response = AsyncRunResponse(iostream, agents=all_agents)
 
     async def _initiate_group_chat(
         pattern: "Pattern" = pattern,
