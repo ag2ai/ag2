@@ -54,6 +54,12 @@ ConfigItem: TypeAlias = LLMConfigEntry | ConfigEntries | dict[str, Any]
 @export_module("autogen")
 class AgentConfig(BaseModel):
     response_format: str | dict[str, Any] | BaseModel | type[BaseModel] | None = None
+    api_type: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
 
 
 @export_module("autogen")

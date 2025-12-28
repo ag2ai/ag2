@@ -260,7 +260,7 @@ class ConversableAgent(LLMAgent):
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive/#adding-http-client-in-llm_config-for-proxy"
                 ) from e
-
+        llm_config = self._interoperate_llm_config(llm_config) if agent_config.api_type is not None else llm_config
         self.llm_config = self._validate_llm_config(llm_config)
         self.client = self._create_client(self.llm_config)
         self._validate_name(name)
@@ -439,6 +439,15 @@ class ConversableAgent(LLMAgent):
         # Register the function
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
+    def _interoperate_llm_config(self, llm_config: LLMConfig | Literal[False]) -> LLMConfig | Literal[False]:
+        if self.agent_config is not None and self.agent_config.api_type is not None:
+            for config in llm_config.config_list:
+                if isinstance(config, dict):
+                    config["api_type"] = self.agent_config.api_type
+                elif hasattr(config, "api_type"):
+                    config.api_type = self.agent_config.api_type
+        return llm_config
+
     def _register_update_agent_state_before_reply(
         self, functions: list[Callable[..., Any]] | Callable[..., Any] | None
     ):
@@ -503,6 +512,7 @@ class ConversableAgent(LLMAgent):
 
     @classmethod
     def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:
+        logger.info(f"LLM Config: {llm_config.config_list[0].api_type}")
         return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
@@ -2150,6 +2160,7 @@ class ConversableAgent(LLMAgent):
         **kwargs: Any,
     ) -> tuple[bool, str | dict[str, Any] | None]:
         """Generate a reply using autogen.oai."""
+        logger.info(f"Messages: {self.client}")
         client = self.client if config is None else config
         if client is None:
             return False, None
