@@ -3,7 +3,7 @@ import json
 
 from pydantic import BaseModel
 
-from autogen import ConversableAgent, LLMConfig
+from autogen import ConversableAgent, AgentConfig
 
 # 1. Define our lesson plan structure, a lesson with a number of objectives
 class LearningObjective(BaseModel):
@@ -15,12 +15,12 @@ class LessonPlan(BaseModel):
     learning_objectives: list[LearningObjective]
     script: str
 
-# 2. Add our lesson plan structure to the LLM configuration
-llm_config = LLMConfig(config_list={
-    "api_type": "openai",
-    "model": "gpt-5-nano",
-    "response_format": LessonPlan,
-})
+# 2. Use AgentConfig to enable structured output for the agent
+agent_config = AgentConfig(
+    api_type="openai",
+    response_format=LessonPlan,  # Use your output schema here
+    model="gpt-5-nano",
+)
 
 # 3. The agent's system message doesn't need any formatting instructions
 system_message = """You are a classroom lesson agent.
@@ -30,7 +30,7 @@ Given a topic, write a lesson plan for a fourth grade class.
 my_agent = ConversableAgent(
     name="lesson_agent",
     system_message=system_message,
-    llm_config=llm_config,
+    agent_config=agent_config,  # <--- canonical approach for structured output
 )
 
 # 4. Chat directly with our agent

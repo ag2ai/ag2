@@ -141,6 +141,37 @@ Open `coding/plot.png` to see the generated plot.
   </Tip>
 </div>
 
+#### Using AgentConfig for Agent-Specific Configuration (New)
+
+AG2 now supports an official `AgentConfig` class (from `autogen.llm_config`) for advanced per-agent configuration, such as specifying structured output schemas or agent-level API settings. `AgentConfig` can be passed to agents via the `agent_config` argument to enable schema-based results and other features, and is often preferred for more complex use cases, including setting up structured outputs.
+
+```python
+import os
+from autogen import AssistantAgent, UserProxyAgent, AgentConfig
+from pydantic import BaseModel
+
+# Example: Define a structured output schema for the assistant reply
+class JokeOutputSchema(BaseModel):
+    joke: str
+    explanation: str
+
+assistant_config = AgentConfig(
+    response_format=JokeOutputSchema,
+    api_type="openai",
+)
+
+assistant = AssistantAgent("assistant", agent_config=assistant_config)
+user_proxy = UserProxyAgent("user_proxy", code_execution_config=False)
+
+# Start the chat
+user_proxy.initiate_chat(
+    assistant,
+    message="Tell me a joke about NVDA and TESLA stock prices.",
+)
+```
+
+You can pass either `llm_config` (using `LLMConfig`) or `agent_config` (using `AgentConfig`) to agents, depending on your needs. Use `AgentConfig` when you want per-agent structured output or need to control how a particular agent interacts with the LLM API.
+
 #### Multi-Agent Conversation Framework
 
 AG2 enables the next-gen LLM applications with a generic multi-agent conversation framework. It offers customizable and conversable agents which integrate LLMs, tools, and humans.
@@ -171,3 +202,4 @@ If you like our project, please give it a [star](https://github.com/ag2ai/ag2) o
   height="30"
   title="GitHub"
 ></iframe>
+ 
