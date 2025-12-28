@@ -71,4 +71,26 @@ result, _, _ = initiate_group_chat(
     messages="Today, let's introduce our kids to the solar system.",
     max_rounds=10,
 )
+
 ```
+
+## Isolating Agent Views (Advanced)
+
+By default, all agents in a group chat receive all messages from other agents, allowing them to see the full conversation context. However, you can enable **isolated agent views** by setting `isolate_agent_views=True` in `initiate_group_chat()` or `run_group_chat()`, or in the group pattern configuration. When this option is enabled:
+
+- **Agents only see their own messages**: Each agent maintains only their own message history and does not receive messages broadcast from other agents.
+- **Messages are still stored centrally**: All messages are still stored in `groupchat.messages` for the GroupChatManager's view and orchestration.
+- **Useful for privacy**: This is useful when you want agents to work independently without seeing each other's messages, such as in scenarios where agents need to maintain separate contexts or when privacy between agents is important.
+
+Example:
+
+```python
+result, _, _ = initiate_group_chat(
+    pattern=agent_pattern,
+    messages="Today, let's introduce our kids to the solar system.",
+    max_rounds=10,
+    isolate_agent_views=True  # Each agent will only see their own messages
+)
+```
+
+Note: When using isolated agent views, agents won't have access to the full conversation context, which may impact their ability to respond appropriately. Use this feature when you specifically need agent isolation.

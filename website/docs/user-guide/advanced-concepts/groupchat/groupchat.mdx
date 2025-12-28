@@ -5,15 +5,17 @@ sidebarTitle: Overview
 
 So far we have only seen conversation patterns that involve two agents or a sequence of two-agent chats. AutoGen provides a more general conversation pattern called group chat, which involves more than two agents.
 
-The core idea of group chat is that all agents contribute to a single conversation thread and share the same context.
+The core idea of group chat is that by default, all agents contribute to a single conversation thread and share the same context—each agent receives all messages from the group.
 
-This is useful for tasks that require collaboration among multiple agents.
+However, group chat now also supports _isolated agent views_ via the `isolate_agent_views` parameter. If enabled, agents only maintain their own message history (seeing only their own sent and received messages), and do not have access to messages from other agents; messages are still stored centrally for the manager, but not broadcast. This can be used for scenarios requiring agent privacy or strict context separation.
 
-The figure below illustrates how group chat works.
+This is useful for both collaborative tasks (shared context) and independent tasks (isolated context) among multiple agents.
+
+The figure below illustrates the default (shared context) group chat operation:
 
 ![group_chat](../assets/group-chat.png)
 
-A group chat is orchestrated by a special agent type `GroupChatManager`. In the first step of the group chat, the Group Chat Manager selects an agent to speak. Then, the selected agent speaks and the message is sent back to the Group Chat Manager, who **broadcasts** the message to all other agents in the group.
+A group chat is orchestrated by a special agent type `GroupChatManager`. In the first step of the group chat, the Group Chat Manager selects an agent to speak. Then, the selected agent speaks and the message is sent back to the Group Chat Manager, who **broadcasts** the message to all other agents in the group—unless `isolate_agent_views=True`, in which case each agent keeps only their own history.
 
 This process repeats until the conversation stops.
 
@@ -341,4 +343,42 @@ import Example from "/snippets/python-examples/groupchat.mdx";
     --------------------------------------------------------------------------------
     ```
 
+---
+
+### Isolating Agent Views
+
+By default, all agents in a group chat receive all messages from other agents, allowing them to see the full conversation context. However, you can enable **isolated agent views** by setting `isolate_agent_views=True` when constructing `GroupChat` or calling group chat orchestration functions (such as `initiate_group_chat` or `run_group_chat`).
+
+When `isolate_agent_views=True`:
+- **Agents only see their own messages**: Each agent maintains only their own message history and does not receive messages broadcast from other agents.
+- **Messages are still stored centrally**: All messages are still stored in `groupchat.messages` for the GroupChatManager's view and coordination.
+- **Useful for privacy**: This is useful when you want agents to work independently without seeing each other's messages, such as in scenarios where agents need to maintain separate contexts or when privacy between agents is important.
+
+Example usage:
+
+```python
+group_chat = GroupChat(
+    agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    messages=[],
+    max_round=6,
+    isolate_agent_views=True,  # Agents will only see their own messages
+)
+```
+
+or
+
+```python
+result, ctx, last_agent = initiate_group_chat(
+    pattern=pattern,
+    messages="Initial request",
+    isolate_agent_views=True,  # Agents will only see their own messages
+)
+```
+
+**Note:** When using isolated agent views, agents won't have access to the full conversation context, which may impact their ability to respond appropriately. Use this feature when you specifically need agent isolation.
+
+---
+
 Now, let's look at how this is done in a Swarm.
+ 
+  
