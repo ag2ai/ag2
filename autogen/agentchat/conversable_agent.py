@@ -86,7 +86,7 @@ if TYPE_CHECKING:
     from .group.on_context_condition import OnContextCondition
 __all__ = ("ConversableAgent",)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ag2.event.processor")
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -260,7 +260,11 @@ class ConversableAgent(LLMAgent):
                     "Please implement __deepcopy__ method for each value class in llm_config to support deepcopy."
                     " Refer to the docs for more details: https://docs.ag2.ai/docs/user-guide/advanced-concepts/llm-configuration-deep-dive/#adding-http-client-in-llm_config-for-proxy"
                 ) from e
-        llm_config = self._interoperate_llm_config(llm_config) if agent_config.api_type is not None else llm_config
+        llm_config = (
+            self._interoperate_llm_config(llm_config if isinstance(llm_config, LLMConfig) else None)
+            if agent_config is not None and agent_config.api_type is not None
+            else llm_config
+        )
         self.llm_config = self._validate_llm_config(llm_config)
         self.client = self._create_client(self.llm_config)
         self._validate_name(name)
@@ -439,7 +443,7 @@ class ConversableAgent(LLMAgent):
         # Register the function
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
-    def _interoperate_llm_config(self, llm_config: LLMConfig | Literal[False]) -> LLMConfig | Literal[False]:
+    def _interoperate_llm_config(self, llm_config: LLMConfig) -> LLMConfig | None:
         if self.agent_config is not None and self.agent_config.api_type is not None:
             for config in llm_config.config_list:
                 if isinstance(config, dict):
@@ -512,7 +516,6 @@ class ConversableAgent(LLMAgent):
 
     @classmethod
     def _create_client(cls, llm_config: LLMConfig | Literal[False]) -> OpenAIWrapper | None:
-        logger.info(f"LLM Config: {llm_config.config_list[0].api_type}")
         return None if llm_config is False else OpenAIWrapper(**llm_config)
 
     @staticmethod
