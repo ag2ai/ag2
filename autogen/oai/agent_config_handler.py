@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 def agent_config_parser(agent_config: "AgentConfig") -> dict[str, Any]:
+    """Parse the agent_config to a dictionary"""
     _agent_config: dict[str, Any] = {}
     if hasattr(agent_config, "response_format") and agent_config.response_format is not None:
         _agent_config["response_format"] = agent_config.response_format

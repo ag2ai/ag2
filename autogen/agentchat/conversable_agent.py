@@ -444,6 +444,7 @@ class ConversableAgent(LLMAgent):
         self.register_for_llm(name=name, description=description, silent_override=True)(func)
 
     def _interoperate_llm_config(self, llm_config: LLMConfig) -> LLMConfig | None:
+        """Interoperate the llm_config with the agent_config"""
         if self.agent_config is not None and self.agent_config.api_type is not None:
             for config in llm_config.config_list:
                 if isinstance(config, dict):
