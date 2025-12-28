@@ -500,10 +500,18 @@ class OpenAIClient:
         """
         agent_config = params.pop("agent_config", None)
         agent_config = agent_config_parser(agent_config) if agent_config is not None else None
-        logger.info(f"Agent config: {agent_config}")
         iostream = IOStream.get_default()
-
-        is_structured_output = self.response_format is not None or "response_format" in params
+        self.response_format = (
+            agent_config.get("response_format")
+            if agent_config is not None
+            and "response_format" in agent_config
+            and agent_config.get("response_format") is not None
+            else params.get("response_format")
+        )
+        params["response_format"] = self.response_format
+        is_structured_output = (
+            self.response_format is not None or "response_format" in params or agent_config is not None
+        )
 
         if is_structured_output:
 

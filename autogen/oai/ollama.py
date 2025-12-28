@@ -244,7 +244,7 @@ class OllamaClient:
             and agent_config.get("response_format") is not None
             else params.get("response_format", self._response_format if self._response_format is not None else None)
         )
-
+        params["response_format"] = self._response_format
         # Are tools involved in this conversation?
         self._tools_in_conversation = "tools" in params
 
