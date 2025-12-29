@@ -434,10 +434,14 @@ class OpenAIResponsesClient:
                 if isinstance(content, list):
                     for c in content:
                         if c.get("type") in ["input_text", "text", "output_text"]:
+                            text_value = c.get("text")
+                            # Skip content blocks with null/None text values
+                            if text_value is None:
+                                continue
                             if c.get("type") == "output_text" or role == "assistant":
-                                blocks.append({"type": "output_text", "text": c.get("text")})
+                                blocks.append({"type": "output_text", "text": text_value})
                             else:
-                                blocks.append({"type": "input_text", "text": c.get("text")})
+                                blocks.append({"type": "input_text", "text": text_value})
                         elif c.get("type") == "input_image":
                             blocks.append({"type": "input_image", "image_url": c.get("image_url")})
                         elif c.get("type") == "image_params":
@@ -450,7 +454,8 @@ class OpenAIResponsesClient:
                             continue
                         else:
                             raise ValueError(f"Invalid content type: {c.get('type')}")
-                else:
+                elif content is not None:
+                    # Only add text content blocks when content is not None
                     blocks.append({"type": content_type, "text": content})
 
                 # Only append if we have valid content blocks

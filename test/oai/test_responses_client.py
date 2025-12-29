@@ -1884,3 +1884,367 @@ def test_convert_messages_to_input_preserves_order_in_reverse(mocked_openai_clie
     assert input_items[0]["content"][0]["text"] == "Third"
     assert input_items[1]["content"][0]["text"] == "Second"
     assert input_items[2]["content"][0]["text"] == "First"
+
+
+def test_convert_messages_to_input_handles_null_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles messages with None content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Calculate 2+2"},
+        {"role": "assistant", "content": None},  # Tool call response has null content
+        {"role": "tool", "tool_call_id": "call_123", "content": "4"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Should have 2 items: tool response and user message (assistant with None content is skipped)
+    assert len(input_items) == 2
+
+    # Verify no content blocks have null text
+    for item in input_items:
+        if "content" in item:
+            for block in item["content"]:
+                if "text" in block:
+                    assert block["text"] is not None, "Text should not be None"
+
+
+def test_convert_messages_to_input_filters_null_text_in_list_content(mocked_openai_client):
+    """Test _convert_messages_to_input filters out content blocks with null text values."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "output_text", "text": None},  # Should be filtered
+                {"type": "output_text", "text": "Valid text"},  # Should be kept
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 1
+    assert input_items[0]["content"][0]["text"] == "Valid text"
+
+
+def test_convert_messages_to_input_skips_message_with_all_null_text_blocks(mocked_openai_client):
+    """Test _convert_messages_to_input skips messages where all text blocks are null."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "output_text", "text": None},  # All blocks have null text
+                {"type": "text", "text": None},
+            ],
+        },
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Only the user message should be present
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "user"
+
+
+def test_convert_messages_to_input_mixed_null_and_valid_content(mocked_openai_client):
+    """Test _convert_messages_to_input handles mixed null and valid content correctly."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": None},  # Should be filtered
+                {"type": "input_text", "text": "Question 1"},  # Should be kept
+                {"type": "input_text", "text": None},  # Should be filtered
+                {"type": "input_text", "text": "Question 2"},  # Should be kept
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 2
+    assert input_items[0]["content"][0]["text"] == "Question 1"
+    assert input_items[0]["content"][1]["text"] == "Question 2"
+
+
+def test_create_handles_tool_call_message_with_null_content(mocked_openai_client):
+    """Test that create() handles tool calling with null content end-to-end."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Simulate the message flow that caused the original bug
+    messages = [
+        {"role": "user", "content": "What is 42 + 58?"},
+        {
+            "role": "assistant",
+            "content": None,  # Assistant message with tool call has null content
+            "tool_calls": [
+                {
+                    "id": "call_abc123",
+                    "function": {"name": "calculator", "arguments": '{"a": 42, "b": 58}'},
+                    "type": "function_call",
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_abc123", "content": "100"},
+    ]
+
+    client.create({"messages": messages})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Verify the input was created
+    assert "input" in kwargs
+
+    # Verify no content blocks have null text
+    for item in kwargs["input"]:
+        if "content" in item and isinstance(item["content"], list):
+            for block in item["content"]:
+                if "text" in block:
+                    assert block["text"] is not None, f"Found null text in block: {block}"
+
+
+def test_create_handles_multiple_tool_calls_with_null_content(mocked_openai_client):
+    """Test create() handles multiple sequential tool calls with null content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Calculate (10 + 5) * 2"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "call_1", "function": {"name": "add", "arguments": '{"a":10,"b":5}'}}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "15"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "call_2", "function": {"name": "multiply", "arguments": '{"a":15,"b":2}'}}],
+        },
+        {"role": "tool", "tool_call_id": "call_2", "content": "30"},
+    ]
+
+    client.create({"messages": messages})
+
+    kwargs = mocked_openai_client.responses.create.call_args.kwargs
+
+    # Verify no null text content in any input item
+    for item in kwargs["input"]:
+        if "content" in item and isinstance(item["content"], list):
+            for block in item["content"]:
+                if "text" in block:
+                    assert block["text"] is not None
+
+
+def test_convert_messages_null_content_with_valid_image(mocked_openai_client):
+    """Test that null text content is filtered but valid image content is preserved."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": None},  # Should be filtered
+                {"type": "input_image", "image_url": "https://example.com/image.png"},  # Should be kept
+                {"type": "input_text", "text": "Describe this image"},  # Should be kept
+            ],
+        }
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    assert len(input_items) == 1
+    assert len(input_items[0]["content"]) == 2
+    assert input_items[0]["content"][0]["type"] == "input_image"
+    assert input_items[0]["content"][1]["type"] == "input_text"
+    assert input_items[0]["content"][1]["text"] == "Describe this image"
+
+
+def test_tool_call_flow_with_previous_response_id(mocked_openai_client):
+    """Test complete tool call flow with previous_response_id correctly handles null content."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    # Simulate first API call returning a tool call
+    first_response = MagicMock()
+    first_response.id = "resp_first"
+    first_response.output = [
+        {"type": "function_call", "call_id": "call_123", "name": "calculator", "arguments": '{"a": 1, "b": 2}'}
+    ]
+    first_response.usage = MagicMock(input_tokens=10, output_tokens=5, total_tokens=15)
+    mocked_openai_client.responses.create.return_value = first_response
+
+    # First call - user asks a question
+    client.create({"messages": [{"role": "user", "content": "Add 1 and 2"}]})
+
+    # Verify previous_response_id is stored
+    assert client.previous_response_id == "resp_first"
+
+    # Now simulate the message flow after tool execution
+    messages = [
+        {"role": "user", "content": "Add 1 and 2"},
+        {
+            "role": "assistant",
+            "id": "resp_first",
+            "content": None,  # Bug trigger: null content from tool call response
+            "tool_calls": [{"id": "call_123", "function": {"name": "calculator", "arguments": '{"a":1,"b":2}'}}],
+        },
+        {"role": "tool", "tool_call_id": "call_123", "content": "3"},
+    ]
+
+    # Second response
+    second_response = MagicMock()
+    second_response.id = "resp_second"
+    second_response.output = [{"type": "message", "content": [{"type": "output_text", "text": "The sum is 3"}]}]
+    second_response.usage = MagicMock(input_tokens=15, output_tokens=8, total_tokens=23)
+    mocked_openai_client.responses.create.return_value = second_response
+
+    # This should NOT raise an error about null text
+    client.create({"messages": messages})
+
+    # Verify the input was correctly constructed
+    call_kwargs = mocked_openai_client.responses.create.call_args.kwargs
+    assert "input" in call_kwargs
+
+    # Verify no null text values in any content block
+    for item in call_kwargs["input"]:
+        if "content" in item and isinstance(item["content"], list):
+            for block in item["content"]:
+                if "text" in block:
+                    assert block["text"] is not None, f"Found null text: {block}"
+
+
+def test_tool_call_message_skipped_when_content_is_none(mocked_openai_client):
+    """Test that assistant messages with only tool calls (content=None) are correctly handled."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Calculate something"},
+        {
+            "role": "assistant",
+            "content": None,  # Only tool calls, no text content
+            "tool_calls": [{"id": "call_1", "function": {"name": "calc", "arguments": "{}"}}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "42"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Should have: tool output + user message (assistant with None content is not included)
+    assert len(input_items) == 2
+
+    # Verify the items are correct
+    types = [item.get("type") or item.get("role") for item in input_items]
+    assert "function_call_output" in types
+    assert "user" in types
+
+    # There should be no assistant role in input_items
+    roles = [item.get("role") for item in input_items if item.get("role")]
+    assert "assistant" not in roles
+
+
+def test_assistant_with_text_and_tool_calls_preserves_text(mocked_openai_client):
+    """Test that assistant messages with both text and tool calls preserve the text."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Calculate something"},
+        {
+            "role": "assistant",
+            "content": "Let me calculate that for you.",  # Has text content
+            "tool_calls": [{"id": "call_1", "function": {"name": "calc", "arguments": "{}"}}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "42"},
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Should have: tool output + assistant message + user message
+    assert len(input_items) == 3
+
+    # Find the assistant message
+    assistant_items = [item for item in input_items if item.get("role") == "assistant"]
+    assert len(assistant_items) == 1
+    assert assistant_items[0]["content"][0]["text"] == "Let me calculate that for you."
+
+
+def test_list_content_with_all_null_text_skips_message(mocked_openai_client):
+    """Test that messages where all text blocks have null are skipped entirely."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "output_text", "text": None},
+                {"type": "text", "text": None},
+            ],
+        },
+    ]
+
+    input_items = []
+    image_params = {}
+    client._convert_messages_to_input(messages, set(), image_params, input_items)
+
+    # Only user message should be present
+    assert len(input_items) == 1
+    assert input_items[0]["role"] == "user"
+
+
+def test_normalize_messages_handles_tool_call_flow(mocked_openai_client):
+    """Test _normalize_messages_for_responses_api handles complete tool call flow."""
+    client = OpenAIResponsesClient(mocked_openai_client)
+
+    messages = [
+        {"role": "user", "content": "What is 2+2?"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "call_abc", "function": {"name": "add", "arguments": '{"a":2,"b":2}'}}],
+        },
+        {"role": "tool", "tool_call_id": "call_abc", "content": "4"},
+    ]
+
+    input_items = client._normalize_messages_for_responses_api(
+        messages=messages,
+        built_in_tools=[],
+        workspace_dir=".",
+        allowed_paths=["**"],
+        previous_apply_patch_calls={},
+        image_generation_tool_params={},
+    )
+
+    # Verify no null text in any content block
+    for item in input_items:
+        if "content" in item and isinstance(item["content"], list):
+            for block in item["content"]:
+                if "text" in block:
+                    assert block["text"] is not None, f"Found null text in normalized output: {block}"
+
+    # Verify tool result is properly formatted
+    tool_outputs = [item for item in input_items if item.get("type") == "function_call_output"]
+    assert len(tool_outputs) == 1
+    assert tool_outputs[0]["call_id"] == "call_abc"
+    assert tool_outputs[0]["output"] == "4"
