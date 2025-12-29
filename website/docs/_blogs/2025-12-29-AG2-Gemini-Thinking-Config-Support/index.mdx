@@ -10,6 +10,8 @@ AG2 v0.10.3 introduces native support for Google Gemini's Thinking Configuration
 
 This article explores how to leverage Gemini Thinking Configuration in AG2 for enhanced reasoning capabilities, with practical examples for different use cases and model variants.
 
+{/* more */}
+
 Google Gemini models support advanced reasoning features that allow them to "think" through problems before providing answers. This internal reasoning process can significantly improve performance on complex tasks, but until now, controlling this behavior in AG2 required custom configurations or workarounds.
 
 AG2 v0.10.3's native ThinkingConfig support solves this by providing direct access to Gemini's thinking parameters through the standard `LLMConfig` interface, making it easy to:
@@ -101,7 +103,8 @@ agent = ConversableAgent(
     llm_config=llm_config
 )
 
-response = agent.run(message="Solve this complex problem...", max_turns=2).process()
+response = agent.run(message="Solve this complex problem...", max_turns=2)
+response.process()
 ```
 
 This pattern ensures:
@@ -233,9 +236,11 @@ agent = ConversableAgent(
     llm_config=llm_config
 )
 
-response = agent.run(message=prompt, max_turns=2, user_input=True).process()This configuration enables:
+response = agent.run(message=prompt, max_turns=2, user_input=True)
+response.process()
 ```
 
+This configuration enables:
 - Deep reasoning for complex problems
 - Transparent thought process
 - Better accuracy on multi-step logical tasks
@@ -244,8 +249,8 @@ response = agent.run(message=prompt, max_turns=2, user_input=True).process()This
 
 For Gemini 2.5 models, use `thinking_budget` for precise control:
 
-# Allocate specific budget for thinking
 ```python
+# Allocate specific budget for thinking
 budget = 4096
 
 llm_config = LLMConfig(
@@ -267,7 +272,8 @@ response = agent.run(
     message="Analyze this complex data set and provide insights",
     max_turns=2,
     user_input=True
-).process()
+)
+response.process()
 ```
 
 This pattern is useful when:
@@ -336,7 +342,8 @@ research_assistant = ConversableAgent(
 result = research_assistant.run(
     message="Research the latest developments in transformer architectures and summarize key findings",
     max_turns=3,
-).process()
+)
+result.process()
 ```
 
 When `include_thoughts=True`, the agent's response will contain:
@@ -349,8 +356,8 @@ This helps you understand how the agent approaches the problem.
 
 For scenarios where cost matters more than deep reasoning:
 
-# Minimal thinking for cost optimization
 ```python
+# Minimal thinking for cost optimization
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-flash-preview",
@@ -367,8 +374,11 @@ agent = ConversableAgent(
     llm_config=llm_config
 )
 
-response = agent.run(message="Answer this straightforward question", max_turns=1).process()## Advanced Patterns
+response = agent.run(message="Answer this straightforward question", max_turns=1)
+response.process()
 ```
+
+## Advanced Patterns
 ### Pattern 1: Model-Aware Configuration
 
 Handle different models with appropriate parameters:
@@ -462,8 +472,11 @@ class ThinkingAgentRouter:
 # Use the router
 router = ThinkingAgentRouter(api_key)
 agent = router.route("Analyze the complex relationship between these concepts")
-result = agent.run(message="Your query here", max_turns=2).process()### Pattern 3: A/B Testing Thinking Configurations
+result = agent.run(message="Your query here", max_turns=2)
+result.process()
 ```
+
+### Pattern 3: A/B Testing Thinking Configurations
 
 Compare performance across different thinking configurations:
 
@@ -491,7 +504,8 @@ def compare_thinking_levels(query: str, api_key: str):
             llm_config=llm_config
         )
 
-        result = agent.run(message=query, max_turns=2).process()
+        result = agent.run(message=query, max_turns=2)
+        result.process()
         results[level] = result
 
     return results
@@ -544,8 +558,8 @@ llm_config = LLMConfig(
 
 Use `include_thoughts=True` when you need to understand the reasoning process:
 
-# ✅ Good: Include thoughts for complex tasks
 ```python
+# ✅ Good: Include thoughts for complex tasks
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
@@ -572,8 +586,8 @@ llm_config = LLMConfig(
 
 Adjust thinking level based on your use case:
 
-# ✅ Good: High thinking for complex tasks
 ```python
+# ✅ Good: High thinking for complex tasks
 complex_task_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
@@ -621,8 +635,8 @@ llm_config = LLMConfig(
 )
 ```
 
-# ❌ Bad: Budget might be outside model limits
 ```python
+# ❌ Bad: Budget might be outside model limits
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
@@ -637,8 +651,8 @@ llm_config = LLMConfig(
 
 Balance thinking depth with cost considerations:
 
-# Production: Balanced approach
 ```python
+# Production: Balanced approach
 production_config = LLMConfig(
     config_list={
         "model": "gemini-3-flash-preview",
@@ -665,8 +679,8 @@ debug_config = LLMConfig(
 
 Use one or the other, not both:
 
-# ✅ Good: Use thinking_level only
 ```python
+# ✅ Good: Use thinking_level only
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
@@ -693,10 +707,10 @@ llm_config = LLMConfig(
 
 **1. `thinking_level` Not Supported Error**
 
-`thinking_level` is only supported by Gemini 3 models. If you see an error with Gemini 2.5, use `thinking_budget` instead:
-hon
-# ✅ Correct: Use thinking_budget for Gemini 2.5
+`thinking_level` is only supported by Gemini 3 models and above. If you see an error with Gemini 2.5, use `thinking_budget` instead:
+
 ```python
+# ✅ Correct: Use thinking_budget for Gemini 2.5
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
@@ -706,6 +720,8 @@ llm_config = LLMConfig(
     }
 )
 ```
+
+```python
 # ❌ Incorrect: thinking_level not supported by Gemini 2.5
 llm_config = LLMConfig(
     config_list={
@@ -721,8 +737,8 @@ llm_config = LLMConfig(
 
 Ensure you use valid level values for your model:
 
-# ✅ Correct: Valid levels for gemini-3-flash-preview
 ```python
+# ✅ Correct: Valid levels for gemini-3-flash-preview
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-flash-preview",
@@ -747,13 +763,13 @@ llm_config = LLMConfig(
 
 Check model-specific budget ranges:
 
-# Check documentation for valid ranges
-# Typical ranges:
-# - gemini-2.5-flash: 0-8192 (check docs for exact range)
-# - gemini-2.5-pro: 0-16384 (check docs for exact range)
+## Check documentation for valid ranges
+### Typical ranges:
+ - gemini-2.5-flash: 0-8192 (check docs for exact range)
+ - gemini-2.5-pro: 0-16384 (check docs for exact range)
 
-# ✅ Correct: Use valid budget range
 ```python
+# ✅ Correct: Use valid budget range
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-2.5-flash",
@@ -778,9 +794,8 @@ llm_config = LLMConfig(
 
 Ensure `include_thoughts=True` and the model actually used thinking:
 
-# ✅ Correct: Enable include_thoughts
-
 ```python
+# ✅ Correct: Enable include_thoughts
 llm_config = LLMConfig(
     config_list={
         "model": "gemini-3-pro-preview",
@@ -792,8 +807,11 @@ llm_config = LLMConfig(
 )
 ```
 
-# Note: Thoughts only appear if the model actually used thinking
-# Simple queries may not generate thoughts even with include_thoughts=True**5. Suboptimal Performance with thinking_budget on Gemini 3**
+### Note: Thoughts only appear if the model actually used thinking
+
+Simple queries may not generate thoughts even with include_thoughts=True
+
+**5. Suboptimal Performance with thinking_budget on Gemini 3**
 
 Prefer `thinking_level` for Gemini 3 models:
 
@@ -882,17 +900,18 @@ llm_config = LLMConfig(
        llm_config=llm_config
    )
 
-   response = agent.run(message="Your query here", max_turns=2).process()
+   response = agent.run(message="Your query here", max_turns=2)
+   response.process()
 ```
 
 5. **Review the documentation**: [Google Gemini Models](https://docs.ag2.ai/latest/docs/user-guide/models/google-gemini)
 
-6. **Try the example notebook**: [Gemini Thinking Config Example](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
+6. **Try the example notebook**: [Gemini Thinking Config Example](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
 
 ## Additional Resources
 
 - [AG2 Google Gemini Documentation](https://docs.ag2.ai/latest/docs/user-guide/models/google-gemini)
-- [Gemini Thinking Config Example Notebook](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
+- [Gemini Thinking Config Example Notebook](https://github.com/ag2ai/ag2/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
 - [Google Gemini Thinking Guide](https://ai.google.dev/gemini-api/docs/thinking)
 - [AG2 Agent Chat Documentation](https://docs.ag2.ai/latest/docs/user-guide/agent-chat)
 - [AG2 LLM Configuration Guide](https://docs.ag2.ai/latest/docs/user-guide/llm-config)
