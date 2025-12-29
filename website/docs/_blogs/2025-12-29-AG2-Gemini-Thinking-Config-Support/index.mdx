@@ -1,0 +1,842 @@
+---
+title: "AG2 Gemini Thinking Configuration: Enhanced Reasoning Control with ThinkingConfig"
+
+authors: [priyansh4320]
+
+tags: [Google Gemini, Thinking Config, Reasoning, LLM Configuration, Agent Chat]
+---
+
+AG2 v0.10.3 introduces native support for Google Gemini's Thinking Configuration, enabling fine-grained control over how Gemini models approach complex reasoning tasks. With `thinking_budget`, `thinking_level`, and `include_thoughts` parameters, you can now customize the depth and transparency of your agent's reasoning process, making it ideal for complex problem-solving, research tasks, and scenarios where you need insight into the model's internal reasoning.
+
+This article explores how to leverage Gemini Thinking Configuration in AG2 for enhanced reasoning capabilities, with practical examples for different use cases and model variants.
+
+{/* more */}
+
+Google Gemini models support advanced reasoning features that allow them to "think" through problems before providing answers. This internal reasoning process can significantly improve performance on complex tasks, but until now, controlling this behavior in AG2 required custom configurations or workarounds.
+
+AG2 v0.10.3's native ThinkingConfig support solves this by providing direct access to Gemini's thinking parameters through the standard `LLMConfig` interface, making it easy to:
+
+- Control the amount of reasoning tokens allocated to complex problems
+- Adjust thinking intensity for different task complexities
+- Reveal the model's internal reasoning process when needed
+- Optimize cost and performance based on your specific use case
+
+**Key Features:**
+
+- **`thinking_budget`**: Control the exact number of tokens allocated for reasoning (Gemini 2.5 series)
+- **`thinking_level`**: Set thinking intensity levels - High, Medium, Low, or Minimal (Gemini 3 series)
+- **`include_thoughts`**: Choose whether to include thought summaries in responses for transparency
+- **Model-Specific Support**: Automatic handling of different parameter sets for Gemini 2.5 and Gemini 3 models
+- **Seamless Integration**: Configure through standard `LLMConfig` - no special setup required
+
+**Why This Matters:**
+
+Understanding and controlling how AI models reason is crucial for building trustworthy, efficient agent systems. Gemini's thinking configuration allows you to balance between thorough reasoning (better accuracy on complex tasks) and efficiency (faster responses, lower costs). AG2's integration makes this accessible without complex API wrangling.
+
+**When to Use Thinking Configuration:**
+
+Use Thinking Configuration when you need:
+
+- **Complex Problem Solving**: Tasks requiring multi-step reasoning, logic puzzles, or analytical thinking
+- **Research and Analysis**: Deep research tasks where thorough thinking improves quality
+- **Debugging and Transparency**: Understanding how your agent approaches problems
+- **Cost Optimization**: Fine-tuning reasoning depth based on task complexity
+- **Performance Tuning**: Balancing response quality against latency and token usage
+
+Don't use thinking configuration for simple, straightforward tasks where the overhead isn't beneficial, or when you need minimal latency above all else.
+
+## Understanding Thinking Configuration
+
+Gemini's Thinking Configuration consists of three main parameters that control different aspects of the model's reasoning process:
+
+### Key Parameters
+
+**1. `thinking_budget`** (Gemini 2.5 series)
+   - Controls the exact number of tokens allocated for internal reasoning
+   - Values: `0` (DISABLED), `-1` (AUTOMATIC), or a positive integer
+   - Model-dependent ranges apply - check [Gemini documentation](https://ai.google.dev/gemini-api/docs/thinking) for specific limits
+   - Use with: `gemini-2.5-flash`, `gemini-2.5-pro`, and other Gemini 2.5 models
+
+**2. `thinking_level`** (Gemini 3 series, recommended)
+   - Controls thinking intensity as a qualitative setting
+   - Values: `"High"`, `"Medium"`, `"Low"`, or `"Minimal"` (model-dependent)
+   - More intuitive than budget-based control
+   - Use with: `gemini-3-pro-preview`, `gemini-3-flash-preview`
+   - Note: `thinking_level` is preferred over `thinking_budget` for Gemini 3 models
+
+**3. `include_thoughts`**
+   - Controls whether thought summaries are included in the response
+   - Values: `True` or `False`
+   - When `True`, you see the model's internal reasoning process
+   - Useful for debugging, transparency, and understanding agent behavior
+   - Works with both Gemini 2.5 and Gemini 3 models
+
+**Model Compatibility:**
+
+- **Gemini 2.5 series**: Use `thinking_budget` (with optional `include_thoughts`)
+- **Gemini 3 series**: Use `thinking_level` (recommended) or `thinking_budget` (backwards compatible, but suboptimal)
+- **All models**: Support `include_thoughts` for transparency
+
+## Basic Setup
+
+The simplest way to use Thinking Configuration is to add the parameters to your `LLMConfig`:
+
+from autogen import ConversableAgent, LLMConfig
+import os
+
+api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
+
+# Basic configuration with thinking_level (Gemini 3)
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Enable high-intensity thinking
+        "include_thoughts": True,   # Include thought summaries
+    }
+)
+
+agent = ConversableAgent(
+    name="agent",
+    description="you are a helpful assistant",
+    llm_config=llm_config
+)
+
+response = agent.run(message="Solve this complex problem...", max_turns=2).process()This pattern ensures:
+- Thinking is enabled and configured
+- Thought summaries are included for transparency
+- No additional setup required beyond standard LLMConfig
+
+## Configuring Thinking Parameters
+
+### Using `thinking_level` (Gemini 3 - Recommended)
+
+For Gemini 3 models, `thinking_level` provides intuitive control over reasoning intensity:
+on
+# High thinking intensity (default for gemini-3-pro-preview)
+llm_config_high = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Allow extensive thinking
+        "include_thoughts": True,
+    }
+)
+
+# Medium thinking intensity (gemini-3-flash-preview)
+llm_config_medium = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Medium",  # Balanced thinking
+        "include_thoughts": True,
+    }
+)
+
+# Low thinking intensity
+llm_config_low = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Low",  # Minimal thinking overhead
+        "include_thoughts": False,  # Hide thoughts for cleaner output
+    }
+)
+
+# Minimal thinking (nearly disabled, similar to no thinking)
+llm_config_minimal = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Minimal",  # Minimal reasoning
+    }
+)
+**Available levels by model:**
+- `gemini-3-pro-preview`: `"High"`, `"Low"` (High is default)
+- `gemini-3-flash-preview`: `"High"`, `"Medium"`, `"Low"`, `"Minimal"`
+
+### Using `thinking_budget` (Gemini 2.5)
+
+For Gemini 2.5 models, use `thinking_budget` to control reasoning tokens:
+```python
+# Automatic thinking budget (model decides)
+llm_config_auto = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": -1,  # AUTOMATIC - model adjusts based on complexity
+    }
+)
+
+# Specific budget (4096 tokens)
+llm_config_budget = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Allocate 4096 tokens for thinking
+    }
+)
+
+# Disabled thinking
+llm_config_disabled = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 0,  # DISABLED - no thinking tokens
+    }
+)
+```
+
+**Budget ranges are model-dependent.** Check the [Gemini Thinking Documentation](https://ai.google.dev/gemini-api/docs/thinking) for specific limits for each model.
+
+## Practical Examples
+
+### Example 1: Complex Problem Solving with High Thinking
+
+For complex reasoning tasks, enable high thinking intensity:
+
+from autogen import ConversableAgent, LLMConfig
+import os
+
+api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
+
+prompt = """You are playing the 20 question game. You know that what you are looking for
+is an aquatic mammal that doesn't live in the sea, is venomous and that's
+smaller than a cat. What could that be and how could you make sure?"""
+
+# Configure for complex reasoning
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Allow extensive reasoning
+        "include_thoughts": True,   # See the reasoning process
+    }
+)
+
+agent = ConversableAgent(
+    name="reasoning_agent",
+    description="you are a helpful assistant that solves complex problems",
+    llm_config=llm_config
+)
+
+response = agent.run(message=prompt, max_turns=2, user_input=True).process()This configuration enables:
+- Deep reasoning for complex problems
+- Transparent thought process
+- Better accuracy on multi-step logical tasks
+
+### Example 2: Budget-Based Control (Gemini 2.5)
+
+For Gemini 2.5 models, use `thinking_budget` for precise control:
+
+# Allocate specific budget for thinking
+budget = 4096
+
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": budget,  # Fixed token budget
+    }
+)
+
+agent = ConversableAgent(
+    name="agent",
+    description="you are a helpful assistant",
+    llm_config=llm_config
+)
+
+response = agent.run(
+    message="Analyze this complex data set and provide insights",
+    max_turns=2,
+    user_input=True
+).process()
+
+This pattern is useful when:
+- You need predictable token usage
+- Working with Gemini 2.5 series models
+- Budget constraints are important
+
+### Example 3: Adjusting Thinking Level Dynamically
+
+You can adjust thinking level based on task complexity:
+python
+def create_agent_for_task(task_complexity: str, api_key: str):
+    """Create agent with appropriate thinking level based on task complexity."""
+
+    # Map complexity to thinking level
+    thinking_levels = {
+        "simple": "Low",
+        "moderate": "Medium",
+        "complex": "High",
+    }
+
+    level = thinking_levels.get(task_complexity, "Medium")
+
+    llm_config = LLMConfig(
+        config_list={
+            "model": "gemini-3-flash-preview",
+            "api_type": "google",
+            "api_key": api_key,
+            "thinking_level": level,
+            "include_thoughts": task_complexity == "complex",  # Show thoughts for complex tasks
+        }
+    )
+
+    return ConversableAgent(
+        name="adaptive_agent",
+        description="you are a helpful assistant",
+        llm_config=llm_config
+    )
+
+# Use for different complexity levels
+simple_agent = create_agent_for_task("simple", api_key)
+complex_agent = create_agent_for_task("complex", api_key)
+
+### Example 4: Research Assistant with Thought Transparency
+
+For research tasks, enable thinking and include thoughts for transparency:
+
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",
+        "include_thoughts": True,  # Show reasoning process
+    }
+)
+
+research_assistant = ConversableAgent(
+    name="research_assistant",
+    system_message="You are a research assistant. Think through problems carefully and show your reasoning.",
+    llm_config=llm_config,
+    human_input_mode="NEVER",
+)
+
+result = research_assistant.run(
+    message="Research the latest developments in transformer architectures and summarize key findings",
+    max_turns=3,
+).process()When `include_thoughts=True`, the agent's response will contain:
+1. The thought summary (internal reasoning)
+2. The final answer
+
+This helps you understand how the agent approaches the problem.
+
+### Example 5: Cost-Optimized Configuration
+
+For scenarios where cost matters more than deep reasoning:
+
+# Minimal thinking for cost optimization
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Minimal",  # Minimize thinking tokens
+        "include_thoughts": False,     # Don't include thought summaries
+    }
+)
+
+agent = ConversableAgent(
+    name="efficient_agent",
+    description="you are a helpful assistant",
+    llm_config=llm_config
+)
+
+response = agent.run(message="Answer this straightforward question", max_turns=1).process()## Advanced Patterns
+
+### Pattern 1: Model-Aware Configuration
+
+Handle different models with appropriate parameters:
+
+def create_thinking_config(model_name: str, api_key: str, thinking_intensity: str = "medium"):
+    """Create appropriate thinking config based on model."""
+
+    base_config = {
+        "api_type": "google",
+        "api_key": api_key,
+    }
+
+    if "3" in model_name:
+        # Gemini 3: use thinking_level
+        thinking_map = {
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "minimal": "Minimal",
+        }
+        base_config.update({
+            "model": model_name,
+            "thinking_level": thinking_map.get(thinking_intensity, "Medium"),
+        })
+    elif "2.5" in model_name:
+        # Gemini 2.5: use thinking_budget
+        budget_map = {
+            "low": 2048,
+            "medium": 4096,
+            "high": 8192,
+            "minimal": 0,
+        }
+        base_config.update({
+            "model": model_name,
+            "thinking_budget": budget_map.get(thinking_intensity, 4096),
+        })
+    else:
+        # Fallback: no thinking config
+        base_config["model"] = model_name
+
+    return LLMConfig(config_list=base_config)
+
+# Use for different models
+config_3_pro = create_thinking_config("gemini-3-pro-preview", api_key, "high")
+config_2_5_flash = create_thinking_config("gemini-2.5-flash", api_key, "medium")
+
+### Pattern 2: Thinking-Aware Task Routing
+
+Route tasks to agents based on required thinking depth:
+n
+class ThinkingAgentRouter:
+    """Route tasks to agents with appropriate thinking configurations."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.agents = {
+            "simple": self._create_agent("Low", False),
+            "moderate": self._create_agent("Medium", False),
+            "complex": self._create_agent("High", True),
+        }
+
+    def _create_agent(self, level: str, include_thoughts: bool):
+        llm_config = LLMConfig(
+            config_list={
+                "model": "gemini-3-flash-preview",
+                "api_type": "google",
+                "api_key": self.api_key,
+                "thinking_level": level,
+                "include_thoughts": include_thoughts,
+            }
+        )
+        return ConversableAgent(
+            name=f"agent_{level.lower()}",
+            description="you are a helpful assistant",
+            llm_config=llm_config
+        )
+
+    def route(self, query: str) -> ConversableAgent:
+        """Route query to appropriate agent based on complexity."""
+        query_lower = query.lower()
+
+        # Simple heuristics for routing
+        if any(word in query_lower for word in ["analyze", "explain why", "reason", "complex"]):
+            return self.agents["complex"]
+        elif any(word in query_lower for word in ["compare", "evaluate", "discuss"]):
+            return self.agents["moderate"]
+        else:
+            return self.agents["simple"]
+
+# Use the router
+router = ThinkingAgentRouter(api_key)
+agent = router.route("Analyze the complex relationship between these concepts")
+result = agent.run(message="Your query here", max_turns=2).process()### Pattern 3: A/B Testing Thinking Configurations
+
+Compare performance across different thinking configurations:
+thon
+def compare_thinking_levels(query: str, api_key: str):
+    """Compare responses across different thinking levels."""
+
+    levels = ["Low", "Medium", "High"]
+    results = {}
+
+    for level in levels:
+        llm_config = LLMConfig(
+            config_list={
+                "model": "gemini-3-flash-preview",
+                "api_type": "google",
+                "api_key": api_key,
+                "thinking_level": level,
+                "include_thoughts": True,  # Include thoughts for comparison
+            }
+        )
+
+        agent = ConversableAgent(
+            name=f"agent_{level.lower()}",
+            description="you are a helpful assistant",
+            llm_config=llm_config
+        )
+
+        result = agent.run(message=query, max_turns=2).process()
+        results[level] = result
+
+    return results
+
+# Compare configurations
+comparison = compare_thinking_levels(
+    "Solve this complex logic puzzle: ...",
+    api_key
+)
+
+## Best Practices
+
+### 1. Choose the Right Parameter for Your Model
+
+Use `thinking_level` for Gemini 3 models and `thinking_budget` for Gemini 2.5:
+n
+# ✅ Good: thinking_level for Gemini 3
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Recommended for Gemini 3
+    }
+)
+
+# ✅ Good: thinking_budget for Gemini 2.5
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Appropriate for Gemini 2.5
+    }
+)
+
+# ⚠️ Avoid: thinking_budget with Gemini 3 (backwards compatible but suboptimal)
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Works but not recommended
+    }
+)
+
+### 2. Enable Thoughts for Debugging and Transparency
+
+Use `include_thoughts=True` when you need to understand the reasoning process:
+
+# ✅ Good: Include thoughts for complex tasks
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",
+        "include_thoughts": True,  # See reasoning process
+    }
+)
+
+# ✅ Good: Hide thoughts for production/simple tasks
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Low",
+        "include_thoughts": False,  # Cleaner output
+    }
+)### 3. Match Thinking Intensity to Task Complexity
+
+Adjust thinking level based on your use case:
+
+# ✅ Good: High thinking for complex tasks
+complex_task_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Complex reasoning needed
+    }
+)
+
+# ✅ Good: Low thinking for simple tasks
+simple_task_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Low",  # Simple task, save tokens
+    }
+)
+
+### 4. Use Appropriate Budget Values
+
+When using `thinking_budget`, stay within model-specific ranges:
+n
+# ✅ Good: Use -1 for automatic budget
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": -1,  # Let model decide
+    }
+)
+
+# ✅ Good: Use reasonable budget values
+# Check model documentation for specific ranges
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Typical range: 1024-8192
+    }
+)
+
+# ❌ Bad: Budget might be outside model limits
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 999999,  # Likely exceeds model limits
+    }
+)### 5. Consider Cost vs. Quality Trade-offs
+
+Balance thinking depth with cost considerations:
+
+# Production: Balanced approach
+production_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "Medium",  # Balance quality and cost
+        "include_thoughts": False,    # Reduce output tokens
+    }
+)
+
+# Development/Debugging: Full transparency
+debug_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",     # Maximum quality
+        "include_thoughts": True,      # Full transparency
+    }
+)
+### 6. Don't Mix thinking_level and thinking_budget
+
+Use one or the other, not both:
+
+# ✅ Good: Use thinking_level only
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",
+    }
+)
+
+# ❌ Bad: Don't mix both
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",
+        "thinking_budget": 4096,  # Conflicting parameters
+    }
+)
+
+## Troubleshooting
+
+### Common Issues
+
+**1. `thinking_level` Not Supported Error**
+
+`thinking_level` is only supported by Gemini 3 models. If you see an error with Gemini 2.5, use `thinking_budget` instead:
+hon
+# ✅ Correct: Use thinking_budget for Gemini 2.5
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Correct parameter
+    }
+)
+
+# ❌ Incorrect: thinking_level not supported by Gemini 2.5
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Will cause error
+    }
+)**2. Invalid thinking_level Value**
+
+Ensure you use valid level values for your model:
+
+# ✅ Correct: Valid levels for gemini-3-flash-preview
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-flash-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Valid: High, Medium, Low, Minimal
+    }
+)
+
+# ❌ Incorrect: Invalid level
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "VeryHigh",  # Invalid value
+    }
+)**3. thinking_budget Out of Range**
+
+Check model-specific budget ranges:
+
+# Check documentation for valid ranges
+# Typical ranges:
+# - gemini-2.5-flash: 0-8192 (check docs for exact range)
+# - gemini-2.5-pro: 0-16384 (check docs for exact range)
+
+# ✅ Correct: Use valid budget range
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 4096,  # Within typical range
+    }
+)
+
+# ❌ Incorrect: Budget may be outside valid range
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-2.5-flash",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 50000,  # Likely exceeds model limit
+    }
+)**4. Thoughts Not Appearing in Response**
+
+Ensure `include_thoughts=True` and the model actually used thinking:
+
+# ✅ Correct: Enable include_thoughts
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",
+        "include_thoughts": True,  # Must be True to see thoughts
+    }
+)
+
+# Note: Thoughts only appear if the model actually used thinking
+# Simple queries may not generate thoughts even with include_thoughts=True**5. Suboptimal Performance with thinking_budget on Gemini 3**
+
+Prefer `thinking_level` for Gemini 3 models:
+on
+# ✅ Recommended: Use thinking_level for Gemini 3
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_level": "High",  # Recommended approach
+    }
+)
+
+# ⚠️ Avoid: thinking_budget works but is suboptimal
+llm_config = LLMConfig(
+    config_list={
+        "model": "gemini-3-pro-preview",
+        "api_type": "google",
+        "api_key": api_key,
+        "thinking_budget": 8192,  # Works but not optimal
+    }
+)
+## Benefits Summary
+
+- **Enhanced Reasoning**: Enable deeper thinking for complex problem-solving tasks
+
+- **Transparency**: See the model's internal reasoning process with `include_thoughts`
+
+- **Flexibility**: Choose between budget-based (Gemini 2.5) and level-based (Gemini 3) control
+
+- **Cost Optimization**: Balance thinking depth with token usage based on task needs
+
+- **Model-Specific Support**: Automatic handling of different parameter sets for different model series
+
+- **Easy Integration**: Configure through standard `LLMConfig` - no special APIs required
+
+- **Production Ready**: Fine-tune reasoning for different use cases and deployment scenarios
+
+## Getting Started
+
+1. **Install AG2 with Gemini support**:
+ash
+   pip install ag2[gemini]
+   2. **Set up your API key**:
+
+   import os
+   api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
+   3. **Configure thinking parameters**:
+hon
+   from autogen import ConversableAgent, LLMConfig
+
+   # For Gemini 3 (recommended)
+   llm_config = LLMConfig(
+       config_list={
+           "model": "gemini-3-pro-preview",
+           "api_type": "google",
+           "api_key": api_key,
+           "thinking_level": "High",
+           "include_thoughts": True,
+       }
+   )
+
+   # For Gemini 2.5
+   llm_config = LLMConfig(
+       config_list={
+           "model": "gemini-2.5-flash",
+           "api_type": "google",
+           "api_key": api_key,
+           "thinking_budget": 4096,
+       }
+   )
+   4. **Create and use your agent**:
+ython
+   agent = ConversableAgent(
+       name="agent",
+       description="you are a helpful assistant",
+       llm_config=llm_config
+   )
+
+   response = agent.run(message="Your query here", max_turns=2).process()
+   5. **Review the documentation**: [Google Gemini Models](https://docs.ag2.ai/latest/docs/user-guide/models/google-gemini)
+
+6. **Try the example notebook**: [Gemini Thinking Config Example](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
+
+## Additional Resources
+
+- [AG2 Google Gemini Documentation](https://docs.ag2.ai/latest/docs/user-guide/models/google-gemini)
+- [Gemini Thinking Config Example Notebook](https://github.com/microsoft/autogen/blob/main/notebook/agentchat_gemini_thinking_config_example.ipynb)
+- [Google Gemini Thinking Guide](https://ai.google.dev/gemini-api/docs/thinking)
+- [AG2 Agent Chat Documentation](https://docs.ag2.ai/latest/docs/user-guide/agent-chat)
+- [AG2 LLM Configuration Guide](https://docs.ag2.ai/latest/docs/user-guide/llm-config)
+
+---
+
+AG2's native Thinking Configuration support transforms how you leverage Gemini's advanced reasoning capabilities. By providing intuitive control over thinking depth and transparency through standard configuration, it makes sophisticated reasoning accessible for complex problem-solving, research tasks, and transparent AI systems. Start experimenting with thinking configuration today and unlock the full potential of Gemini's reasoning capabilities in your agent workflows.
