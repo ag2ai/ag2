@@ -1,10 +1,14 @@
+from collections.abc import Sequence
 from typing import Any, Optional
 
+from a2a.utils.telemetry import SpanKind
 from opentelemetry import trace
+from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.resources import Attributes, Resource
 from opentelemetry.sdk.trace import Tracer, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import Decision, Sampler, SamplingResult
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from autogen import ConversableAgent
@@ -24,9 +28,30 @@ INSTRUMENTING_LIBRARY_VERSION = AG2_VERSION
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
 
 
+class DropNoiseSampler(Sampler):
+    def should_sample(
+        self,
+        parent_context: Optional["Context"],
+        trace_id: int,
+        name: str,
+        kind: SpanKind | None = None,
+        attributes: Attributes = None,
+        links: Sequence["trace.Link"] | None = None,
+        trace_state: trace.TraceState | None = None,
+    ) -> "SamplingResult":
+        decision = Decision.RECORD_ONLY if name.startswith("a2a.") else Decision.RECORD_AND_SAMPLE
+        return SamplingResult(decision, attributes=None, trace_state=trace_state)
+
+    def get_description(self) -> str:
+        return "Drop a2a.server noisy spans"
+
+
 def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4317") -> Tracer:
     resource = Resource.create(attributes={"service.name": service_name})
-    tracer_provider = TracerProvider(resource=resource)
+    tracer_provider = TracerProvider(
+        resource=resource,
+        # sampler=DropNoiseSampler(),
+    )
     exporter = OTLPSpanExporter(endpoint=endpoint)
     processor = BatchSpanProcessor(exporter)
     tracer_provider.add_span_processor(processor)
@@ -46,7 +71,7 @@ def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentSer
     class OTELMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             span_context = _TRACE_PROPAGATOR.extract(request.headers)
-            with tracer.start_as_current_span("a2a-request", context=span_context):
+            with tracer.start_as_current_span("a2a-execution", context=span_context):
                 return await call_next(request)
 
     server.add_middleware(OTELMiddleware)
