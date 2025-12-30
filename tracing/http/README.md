@@ -71,4 +71,3 @@ Service A will call Service B. Both services are instrumented, and the trace con
 - **Service B**: FastAPI service listening on port 8001.
 - **Tempo**: Distributed tracing backend.
 - **Grafana**: Visualization tool.
-
