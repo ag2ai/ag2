@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from autogen import ConversableAgent
-from autogen.a2a.agent_executor import AutogenAgentExecutor
+from autogen.a2a import A2aAgentServer
 from autogen.agentchat import Agent
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
@@ -24,7 +24,7 @@ INSTRUMENTING_LIBRARY_VERSION = AG2_VERSION
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
 
 
-def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4317") -> tuple[Tracer, TracerProvider]:
+def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4317") -> Tracer:
     resource = Resource.create(attributes={"service.name": service_name})
     tracer_provider = TracerProvider(resource=resource)
     exporter = OTLPSpanExporter(endpoint=endpoint)
@@ -36,12 +36,23 @@ def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4
         instrumenting_module_name=INSTRUMENTING_MODULE_NAME,
         instrumenting_library_version=INSTRUMENTING_LIBRARY_VERSION,
         schema_url=OTEL_SCHEMA,
-    ), tracer_provider
+    )
 
 
-def instrument_a2a_executor(executor: AutogenAgentExecutor, tracer: Tracer) -> AutogenAgentExecutor:
-    instrument_agent(executor.agent.agent, tracer)
-    return executor
+def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentServer:
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+
+    class OTELMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            span_context = _TRACE_PROPAGATOR.extract(request.headers)
+            with tracer.start_as_current_span("a2a-request", context=span_context):
+                return await call_next(request)
+
+    server.add_middleware(OTELMiddleware)
+
+    instrument_agent(server.agent, tracer)
+    return server
 
 
 def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
@@ -189,7 +200,6 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
         def httpx_client_factory_traced():
             httpx_client = old_httpx_client_factory()
             _TRACE_PROPAGATOR.inject(httpx_client.headers)
-            print(httpx_client.headers)
             return httpx_client
 
         agent._httpx_client_factory = httpx_client_factory_traced

@@ -69,7 +69,7 @@ async def generate_code(prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    tracer, _ = setup_instrumentation("local-agents")
+    tracer = setup_instrumentation("local-agents")
     instrument_agent(review_agent, tracer)
     instrument_agent(code_agent, tracer)
 

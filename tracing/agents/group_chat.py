@@ -47,7 +47,7 @@ pattern = AutoPattern(
 
 
 async def main():
-    tracer, _ = setup_instrumentation("local-group-chat")
+    tracer = setup_instrumentation("local-group-chat")
     instrument_pattern(pattern, tracer)
 
     result, _, _ = await a_initiate_group_chat(

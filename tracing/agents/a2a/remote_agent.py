@@ -1,12 +1,8 @@
 import os
 
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from opentelemetry.instrumentation.starlette import StarletteInstrumentor
-
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aAgentServer
-from autogen.instrumentation import instrument_a2a_executor, setup_instrumentation
+from autogen.instrumentation import instrument_a2a_server, setup_instrumentation
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -21,29 +17,9 @@ tech_agent = ConversableAgent(
 )
 
 server = A2aAgentServer(tech_agent, url="http://localhost:8010/")
-
-tracer, tracer_provider = setup_instrumentation("remote-tech-agent")
-# executor = instrument_a2a_executor(server.executor, tracer)
-
-app = server.build(
-    request_handler=DefaultRequestHandler(
-        agent_executor=server.executor,
-        task_store=InMemoryTaskStore(),
-    ),
-)
-
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-
-
-class OTELMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        print(request.headers)
-        return await call_next(request)
-
-
-# StarletteInstrumentor.instrument_app(app, tracer_provider=tracer_provider)
-app.add_middleware(OTELMiddleware)
+tracer = setup_instrumentation("remote-tech-agent")
+server = instrument_a2a_server(server, tracer)
+app = server.build()
 
 if __name__ == "__main__":
     import uvicorn

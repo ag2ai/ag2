@@ -46,15 +46,14 @@ pattern = AutoPattern(
 
 
 async def main():
-    tracer, _ = setup_instrumentation("distributed-group-chat")
+    tracer = setup_instrumentation("distributed-group-chat")
     instrument_pattern(pattern, tracer)
 
-    result, _, _ = await a_initiate_group_chat(
+    _, _, _ = await a_initiate_group_chat(
         pattern=pattern,
         messages="",
         max_rounds=10,
     )
-    print(result)
 
 
 asyncio.run(main())
