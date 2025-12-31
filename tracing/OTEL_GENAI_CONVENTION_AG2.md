@@ -19,7 +19,7 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | `server.address` | ✅ | | URL of the remote agent server (standard OTEL attribute) |
 | `error.type` | ✅ | | Error class if operation failed (standard OTEL attribute) |
 | **AG2 Span Type** ||||
-| `ag2.span.type` | | ✅ | AG2-specific span classification (`conversation`, `agent`, `tool`, `llm`, `handoff`) |
+| `ag2.span.type` | | ✅ | AG2-specific span classification (`conversation`, `agent`, `tool`, `llm`, `handoff`, `speaker_selection`) |
 | **Message Attributes** ||||
 | `gen_ai.input.messages` | ✅ | | Input messages to the agent (JSON array) |
 | `gen_ai.output.messages` | ✅ | | Output messages from the agent (JSON array) |
@@ -39,6 +39,9 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | `gen_ai.tool.call.id` | ✅ | | Unique identifier for the tool call |
 | `gen_ai.tool.call.arguments` | ✅ | | Arguments passed to the tool (opt-in, may contain sensitive data) |
 | `gen_ai.tool.call.result` | ✅ | | Result returned by the tool (opt-in, may contain sensitive data) |
+| **Speaker Selection Attributes** ||||
+| `ag2.speaker_selection.candidates` | | ✅ | JSON list of candidate agent names for speaker selection |
+| `ag2.speaker_selection.selected` | | ✅ | Name of the agent selected as next speaker |
 
 ## Span Types
 
@@ -49,6 +52,7 @@ AG2 uses the following span types (via `ag2.span.type`):
 | `conversation` | `conversation` | Top-level chat initiation (`a_initiate_chat`, `a_run_chat`) |
 | `agent` | `invoke_agent` | Agent reply generation (`a_generate_reply`, `a_generate_remote_reply`) |
 | `tool` | `execute_tool` | Tool/function execution (`execute_function`, `a_execute_function`) |
+| `speaker_selection` | `speaker_selection` | Group chat speaker selection (`a_auto_select_speaker`, `_auto_select_speaker`) |
 | `llm` | `chat` | LLM invocation (TODO) |
 | `handoff` | `handoff` | Agent handoff (TODO) |
 

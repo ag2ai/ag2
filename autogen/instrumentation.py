@@ -43,6 +43,7 @@ class SpanType(Enum):
     LLM = "llm"  # LLM Invocation (TODO)
     TOOL = "tool"  # Tool Execution (execute_tool)
     HANDOFF = "handoff"  # Handoff (TODO)
+    SPEAKER_SELECTION = "speaker_selection"  # Group Chat Speaker Selection
 
 
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
@@ -142,6 +143,15 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
             instrument_agent(agent, tracer)
 
         instrument_agent(manager, tracer)
+        instrument_groupchat(groupchat, tracer)
+
+        # IMPORTANT: register_reply() in GroupChatManager.__init__ creates a shallow copy of groupchat
+        # (via copy.copy). We need to also instrument that copy which is stored in manager._reply_func_list
+        # so that we can trace the "auto" speaker selection internal chats.
+        for reply_func_entry in manager._reply_func_list:
+            config = reply_func_entry.get("config")
+            if isinstance(config, GroupChat) and config is not groupchat:
+                instrument_groupchat(config, tracer)
 
         return (
             agents,
@@ -162,6 +172,88 @@ def instrument_pattern(pattern: Pattern, tracer: Tracer) -> Pattern:
     pattern.prepare_group_chat = prepare_group_chat_traced
 
     return pattern
+
+
+def instrument_groupchat(groupchat: GroupChat, tracer: Tracer) -> GroupChat:
+    """Instrument GroupChat's speaker selection to trace internal agent chats."""
+
+    # Wrap _create_internal_agents to instrument temporary agents for auto speaker selection
+    old_create_internal_agents = groupchat._create_internal_agents
+
+    def create_internal_agents_traced(
+        agents: list[Agent],
+        max_attempts: int,
+        messages: list[dict[str, Any]],
+        validate_speaker_name: Any,
+        selector: ConversableAgent | None = None,
+    ) -> tuple[ConversableAgent, ConversableAgent]:
+        checking_agent, speaker_selection_agent = old_create_internal_agents(
+            agents, max_attempts, messages, validate_speaker_name, selector
+        )
+        # Instrument the temporary agents so their chats are traced
+        instrument_agent(checking_agent, tracer)
+        instrument_agent(speaker_selection_agent, tracer)
+        return checking_agent, speaker_selection_agent
+
+    groupchat._create_internal_agents = create_internal_agents_traced
+
+    # Wrap a_auto_select_speaker with a parent span
+    old_a_auto_select_speaker = groupchat.a_auto_select_speaker
+
+    async def a_auto_select_speaker_traced(
+        last_speaker: Agent,
+        selector: ConversableAgent,
+        messages: list[dict[str, Any]] | None,
+        agents: list[Agent] | None,
+    ) -> Agent:
+        with tracer.start_as_current_span("speaker_selection") as span:
+            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
+            span.set_attribute("gen_ai.operation.name", "speaker_selection")
+
+            # Record candidate agents
+            candidate_agents = agents if agents is not None else groupchat.agents
+            span.set_attribute(
+                "ag2.speaker_selection.candidates",
+                json.dumps([a.name for a in candidate_agents]),
+            )
+
+            result = await old_a_auto_select_speaker(last_speaker, selector, messages, agents)
+
+            # Record selected speaker
+            span.set_attribute("ag2.speaker_selection.selected", result.name)
+            return result
+
+    groupchat.a_auto_select_speaker = a_auto_select_speaker_traced
+
+    # Wrap _auto_select_speaker (sync version) with a parent span
+    old_auto_select_speaker = groupchat._auto_select_speaker
+
+    def auto_select_speaker_traced(
+        last_speaker: Agent,
+        selector: ConversableAgent,
+        messages: list[dict[str, Any]] | None,
+        agents: list[Agent] | None,
+    ) -> Agent:
+        with tracer.start_as_current_span("speaker_selection") as span:
+            span.set_attribute("ag2.span.type", SpanType.SPEAKER_SELECTION.value)
+            span.set_attribute("gen_ai.operation.name", "speaker_selection")
+
+            # Record candidate agents
+            candidate_agents = agents if agents is not None else groupchat.agents
+            span.set_attribute(
+                "ag2.speaker_selection.candidates",
+                json.dumps([a.name for a in candidate_agents]),
+            )
+
+            result = old_auto_select_speaker(last_speaker, selector, messages, agents)
+
+            # Record selected speaker
+            span.set_attribute("ag2.speaker_selection.selected", result.name)
+            return result
+
+    groupchat._auto_select_speaker = auto_select_speaker_traced
+
+    return groupchat
 
 
 def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
