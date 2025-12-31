@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Annotated
 
 from autogen import ConversableAgent, LLMConfig
 from autogen.agentchat import a_initiate_group_chat
@@ -20,10 +21,18 @@ triage_agent = ConversableAgent(
     llm_config=llm_config,
 )
 
+
+def record_tech_fault(fault: Annotated[str, "Description of the fault"]) -> str:
+    """Mocks the recording of a technical fault."""
+    # raise Exception("Simulated failure in get_weather function")  # Simulate a failure for testing, will add error.type to span with "ExecutionError" as value
+    return f"Successfully recorded fault into the system: {fault}"
+
+
 tech_agent = ConversableAgent(
     name="tech_agent",
-    system_message="""You solve technical problems like software bugs
-    and hardware issues.""",
+    system_message="""You solve technical problems like software bugs and hardware issues.
+You must always record faults into the fault management system using the record_tech_fault tool.""",
+    functions=[record_tech_fault],
     llm_config=llm_config,
 )
 
@@ -47,7 +56,7 @@ pattern = AutoPattern(
 
 
 async def main():
-    tracer = setup_instrumentation("local-group-chat")
+    tracer = setup_instrumentation("local-group-chat", "http://127.0.0.1:14317")
     instrument_pattern(pattern, tracer)
 
     result, _, _ = await a_initiate_group_chat(

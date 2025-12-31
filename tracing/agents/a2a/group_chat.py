@@ -1,11 +1,15 @@
 import asyncio
 import os
 
+from dotenv import load_dotenv
+
 from autogen import ConversableAgent, LLMConfig
 from autogen.a2a import A2aRemoteAgent
 from autogen.agentchat import a_initiate_group_chat
 from autogen.agentchat.group.patterns import AutoPattern
 from autogen.instrumentation import instrument_pattern, setup_instrumentation
+
+load_dotenv()
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -22,7 +26,7 @@ triage_agent = ConversableAgent(
 )
 
 tech_agent = A2aRemoteAgent(
-    "http://localhost:8010/",
+    "http://localhost:18123/",
     name="tech_agent",
 )
 
@@ -46,7 +50,7 @@ pattern = AutoPattern(
 
 
 async def main():
-    tracer = setup_instrumentation("distributed-group-chat")
+    tracer = setup_instrumentation("distributed-group-chat", "http://127.0.0.1:14317")
     instrument_pattern(pattern, tracer)
 
     _, _, _ = await a_initiate_group_chat(

@@ -1,8 +1,12 @@
 import asyncio
 import os
 
+from dotenv import load_dotenv
+
 from autogen import ConversableAgent, LLMConfig
 from autogen.instrumentation import instrument_agent, setup_instrumentation
+
+load_dotenv()
 
 llm_config = LLMConfig(
     model="gpt-4o-mini",
@@ -67,9 +71,8 @@ async def generate_code(prompt: str) -> str:
     return "\n".join(lines[1:-1])
 
 
-
 if __name__ == "__main__":
-    tracer = setup_instrumentation("local-agents")
+    tracer = setup_instrumentation("local-agents", "http://127.0.0.1:14317")
     instrument_agent(review_agent, tracer)
     instrument_agent(code_agent, tracer)
 
