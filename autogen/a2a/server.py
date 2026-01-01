@@ -225,7 +225,7 @@ class A2aAgentServer:
         ).build()
 
         for middleware, kwargs in self.middlewares:
-            app.add_middleware(middleware, **kwargs)
+            app.add_middleware(middleware, **kwargs)  # type: ignore[arg-type]
 
         return app
 
