@@ -6,7 +6,8 @@
 # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
 
 import json
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from enum import Enum
 from typing import Any, Optional
 
@@ -19,10 +20,14 @@ from opentelemetry.sdk.trace import Tracer, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import Decision, Sampler, SamplingResult
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from autogen import ConversableAgent
 from autogen.a2a import A2aAgentServer
 from autogen.agentchat import Agent
+from autogen.agentchat import chat as chat_module
+from autogen.agentchat import conversable_agent as conversable_agent_module
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
 from autogen.agentchat.group.patterns.pattern import Pattern
@@ -39,6 +44,7 @@ INSTRUMENTING_LIBRARY_VERSION = AG2_VERSION
 # Span types for AG2 instrumentation
 class SpanType(Enum):
     CONVERSATION = "conversation"  # Initiate Chat / Run Chat
+    MULTI_CONVERSATION = "multi_conversation"  # Initiate Chats (sequential/parallel)
     AGENT = "agent"  # Agent's Generate Reply (invoke_agent)
     LLM = "llm"  # LLM Invocation (TODO)
     TOOL = "tool"  # Tool Execution (execute_tool)
@@ -88,9 +94,6 @@ def setup_instrumentation(service_name: str, endpoint: str = "http://127.0.0.1:4
 
 
 def instrument_a2a_server(server: A2aAgentServer, tracer: Tracer) -> A2aAgentServer:
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.requests import Request
-
     class OTELMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             span_context = _TRACE_PROPAGATOR.extract(request.headers)
@@ -621,9 +624,6 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
     # Instrument `_create_or_get_executor` to auto-instrument dynamically created executors
     if hasattr(agent, "_create_or_get_executor"):
-        from collections.abc import Generator
-        from contextlib import contextmanager
-
         old_create_or_get_executor = agent._create_or_get_executor
 
         @contextmanager
@@ -724,26 +724,25 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                     # Call original method
                     is_final, result = original_code_exec_func(self_agent, messages, sender, config)
 
-                    if is_final and result:
-                        # Parse the result to extract exit code and output
-                        # Result format: "exitcode: X (status)\nCode output: ..."
-                        if result.startswith("exitcode:"):
-                            parts = result.split("\n", 1)
-                            exitcode_part = parts[0]  # "exitcode: X (status)"
-                            try:
-                                exit_code = int(exitcode_part.split(":")[1].split("(")[0].strip())
-                                span.set_attribute("ag2.code_execution.exit_code", exit_code)
-                                if exit_code != 0:
-                                    span.set_attribute("error.type", "CodeExecutionError")
-                            except (ValueError, IndexError):
-                                pass
+                    # Parse the result to extract exit code and output
+                    # Result format: "exitcode: X (status)\nCode output: ..."
+                    if is_final and result and result.startswith("exitcode:"):
+                        parts = result.split("\n", 1)
+                        exitcode_part = parts[0]  # "exitcode: X (status)"
+                        try:
+                            exit_code = int(exitcode_part.split(":")[1].split("(")[0].strip())
+                            span.set_attribute("ag2.code_execution.exit_code", exit_code)
+                            if exit_code != 0:
+                                span.set_attribute("error.type", "CodeExecutionError")
+                        except (ValueError, IndexError):
+                            pass
 
-                            if len(parts) > 1:
-                                output = parts[1].replace("Code output: ", "", 1).strip()
-                                # Truncate output if too long
-                                if len(output) > 4096:
-                                    output = output[:4096] + "... (truncated)"
-                                span.set_attribute("ag2.code_execution.output", output)
+                        if len(parts) > 1:
+                            output = parts[1].replace("Code output: ", "", 1).strip()
+                            # Truncate output if too long
+                            if len(output) > 4096:
+                                output = output[:4096] + "... (truncated)"
+                            span.set_attribute("ag2.code_execution.output", output)
 
                     return is_final, result
 
@@ -751,3 +750,91 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
             agent._reply_func_list[original_code_exec_index]["reply_func"] = generate_code_execution_reply_traced
 
     return agent
+
+
+def instrument_chats(tracer: Tracer) -> None:
+    """Instrument the standalone initiate_chats and a_initiate_chats functions.
+
+    This adds a parent span that groups all sequential/parallel chats together,
+    making it easy to trace multi-agent workflows.
+
+    Usage:
+        from autogen.instrumentation import instrument_chats, setup_instrumentation
+
+        tracer = setup_instrumentation("my-service")
+        instrument_chats(tracer)
+
+        # Now initiate_chats calls will be traced with a parent span
+        from autogen import initiate_chats
+        results = initiate_chats(chat_queue)
+    """
+    # Instrument sync initiate_chats
+    old_initiate_chats = chat_module.initiate_chats
+
+    def initiate_chats_traced(chat_queue: list[dict[str, Any]]) -> list:
+        with tracer.start_as_current_span("initiate_chats") as span:
+            span.set_attribute("ag2.span.type", SpanType.MULTI_CONVERSATION.value)
+            span.set_attribute("gen_ai.operation.name", "initiate_chats")
+            span.set_attribute("ag2.chats.count", len(chat_queue))
+            span.set_attribute("ag2.chats.mode", "sequential")
+
+            # Capture recipient names
+            recipients = [
+                chat_info.get("recipient", {}).name
+                if hasattr(chat_info.get("recipient"), "name")
+                else str(chat_info.get("recipient"))
+                for chat_info in chat_queue
+            ]
+            span.set_attribute("ag2.chats.recipients", json.dumps(recipients))
+
+            results = old_initiate_chats(chat_queue)
+
+            # Capture summaries
+            summaries = [r.summary for r in results if hasattr(r, "summary")]
+            span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
+
+            return results
+
+    # Patch in all locations where initiate_chats may have been imported
+    chat_module.initiate_chats = initiate_chats_traced
+    conversable_agent_module.initiate_chats = initiate_chats_traced
+
+    # Instrument async a_initiate_chats
+    old_a_initiate_chats = chat_module.a_initiate_chats
+
+    async def a_initiate_chats_traced(chat_queue: list[dict[str, Any]]) -> dict:
+        with tracer.start_as_current_span("initiate_chats") as span:
+            span.set_attribute("ag2.span.type", SpanType.MULTI_CONVERSATION.value)
+            span.set_attribute("gen_ai.operation.name", "initiate_chats")
+            span.set_attribute("ag2.chats.count", len(chat_queue))
+            span.set_attribute("ag2.chats.mode", "parallel")
+
+            # Capture recipient names
+            recipients = [
+                chat_info.get("recipient", {}).name
+                if hasattr(chat_info.get("recipient"), "name")
+                else str(chat_info.get("recipient"))
+                for chat_info in chat_queue
+            ]
+            span.set_attribute("ag2.chats.recipients", json.dumps(recipients))
+
+            # Capture prerequisites if any
+            has_prerequisites = any("prerequisites" in chat_info for chat_info in chat_queue)
+            if has_prerequisites:
+                prerequisites = {
+                    chat_info.get("chat_id", i): chat_info.get("prerequisites", [])
+                    for i, chat_info in enumerate(chat_queue)
+                }
+                span.set_attribute("ag2.chats.prerequisites", json.dumps(prerequisites))
+
+            results = await old_a_initiate_chats(chat_queue)
+
+            # Capture summaries (results is a dict for async version)
+            summaries = [r.summary for r in results.values() if hasattr(r, "summary")]
+            span.set_attribute("ag2.chats.summaries", json.dumps(summaries))
+
+            return results
+
+    # Patch in all locations where a_initiate_chats may have been imported
+    chat_module.a_initiate_chats = a_initiate_chats_traced
+    conversable_agent_module.a_initiate_chats = a_initiate_chats_traced

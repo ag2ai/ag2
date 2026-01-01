@@ -10,13 +10,14 @@ AG2 tracing uses **OpenTelemetry** to provide distributed tracing of multi-agent
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Trace Hierarchy                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  conversation (initiate_chat / a_initiate_chat / a_run_chat)    │
-│    ├── invoke_agent (generate_reply / a_generate_reply)         │
-│    │     ├── execute_tool (execute_function)                    │
-│    │     ├── execute_code (code execution)                      │
-│    │     └── speaker_selection (a_auto_select_speaker)          │
-│    │           └── invoke_agent (internal speaker selector)     │
-│    └── await_human_input (get_human_input)                      │
+│  initiate_chats (multi-chat workflow)                           │
+│    └── conversation (initiate_chat / a_initiate_chat)           │
+│          ├── invoke_agent (generate_reply / a_generate_reply)   │
+│          │     ├── execute_tool (execute_function)              │
+│          │     ├── execute_code (code execution)                │
+│          │     └── speaker_selection (a_auto_select_speaker)    │
+│          │           └── invoke_agent (internal speaker)        │
+│          └── await_human_input (get_human_input)                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,7 +60,24 @@ from autogen.instrumentation import instrument_pattern
 instrument_pattern(pattern, tracer)
 ```
 
-### 4. A2A Server Instrumentation (`instrument_a2a_server`)
+### 4. Multi-Chat Instrumentation (`instrument_chats`)
+For sequential/parallel multi-chat workflows using `initiate_chats` or `a_initiate_chats`:
+
+```python
+from autogen.instrumentation import instrument_chats
+
+instrument_chats(tracer)
+
+# Now initiate_chats calls are traced with a parent span
+results = agent.initiate_chats([
+    {"recipient": agent1, "message": "...", "max_turns": 1},
+    {"recipient": agent2, "message": "...", "max_turns": 1},
+])
+```
+
+This creates a parent `initiate_chats` span that groups all child conversation spans together.
+
+### 5. A2A Server Instrumentation (`instrument_a2a_server`)
 For remote agents using A2A protocol, adds middleware to extract trace context from incoming requests:
 
 ```python
@@ -72,6 +90,7 @@ instrument_a2a_server(server, tracer)
 
 | Span Type | Operation | Instrumented Method |
 |-----------|-----------|---------------------|
+| `multi_conversation` | `initiate_chats` | `initiate_chats`, `a_initiate_chats` |
 | `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `run_chat`, `a_run_chat`, `a_resume` |
 | `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
 | `tool` | `execute_tool` | `execute_function`, `a_execute_function` |
@@ -96,6 +115,7 @@ See [OTEL_GENAI_CONVENTION_AG2.md](./OTEL_GENAI_CONVENTION_AG2.md) for the full 
 - `ag2.speaker_selection.candidates` / `ag2.speaker_selection.selected`
 - `ag2.human_input.prompt` / `ag2.human_input.response` - Human-in-the-loop input
 - `ag2.code_execution.exit_code` / `ag2.code_execution.output` - Code execution results
+- `ag2.chats.count`, `ag2.chats.mode`, `ag2.chats.recipients`, `ag2.chats.summaries` - Multi-chat workflow
 - `gen_ai.conversation.turns`, `gen_ai.usage.cost`
 
 ## Message Format
@@ -134,6 +154,9 @@ docker-compose up -d
 ```bash
 # Sync two-agent conversation using initiate_chat()
 python -m tracing.agents.local_initiate_chat
+
+# Sequential multi-chat using initiate_chats()
+python -m tracing.agents.local_initiate_chats
 
 # Async two-agent conversation using a_initiate_chat()
 python -m tracing.agents.local_agents

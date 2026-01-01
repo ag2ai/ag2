@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from contextlib import suppress
 from typing import Any
 
 
@@ -29,10 +30,8 @@ def message_to_otel(message: dict[str, Any]) -> dict[str, Any]:
             arguments = func.get("arguments", "{}")
             # Parse arguments if it's a JSON string
             if isinstance(arguments, str):
-                try:
+                with suppress(json.JSONDecodeError):
                     arguments = json.loads(arguments)
-                except json.JSONDecodeError:
-                    pass  # Keep as string if not valid JSON
 
             parts.append({
                 "type": "tool_call",

@@ -48,6 +48,12 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | **Code Execution Attributes** ||||
 | `ag2.code_execution.exit_code` | | ✅ | Exit code from code execution (0 = success) |
 | `ag2.code_execution.output` | | ✅ | Output from code execution (truncated if > 4KB) |
+| **Multi-Chat Attributes** ||||
+| `ag2.chats.count` | | ✅ | Number of chats in initiate_chats workflow |
+| `ag2.chats.mode` | | ✅ | Execution mode (`sequential` or `parallel`) |
+| `ag2.chats.recipients` | | ✅ | JSON list of recipient agent names |
+| `ag2.chats.summaries` | | ✅ | JSON list of chat summaries after completion |
+| `ag2.chats.prerequisites` | | ✅ | JSON map of chat dependencies (async parallel mode) |
 
 ## Span Types
 
@@ -55,6 +61,7 @@ AG2 uses the following span types (via `ag2.span.type`):
 
 | Span Type | `gen_ai.operation.name` | Description |
 |-----------|-------------------------|-------------|
+| `multi_conversation` | `initiate_chats` | Multi-chat workflow (`initiate_chats`, `a_initiate_chats`) |
 | `conversation` | `conversation` | Top-level chat initiation (`initiate_chat`, `a_initiate_chat`, `a_run_chat`) |
 | `agent` | `invoke_agent` | Agent reply generation (`generate_reply`, `a_generate_reply`, `a_generate_remote_reply`) |
 | `tool` | `execute_tool` | Tool/function execution (`execute_function`, `a_execute_function`) |
