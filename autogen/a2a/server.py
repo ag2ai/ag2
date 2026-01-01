@@ -153,7 +153,7 @@ class A2aAgentServer:
 
         self.card_modifier = card_modifier
         self.extended_card_modifier = extended_card_modifier
-        self.middlewares: list[tuple["BaseHTTPMiddleware", dict[str, Any]]] = []
+        self.middlewares: list[tuple[BaseHTTPMiddleware, dict[str, Any]]] = []
 
     def add_middleware(self, middleware: "BaseHTTPMiddleware", **kwargs: Any) -> None:
         """Add a middleware to the A2A server."""

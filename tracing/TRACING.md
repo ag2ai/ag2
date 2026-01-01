@@ -1,0 +1,190 @@
+# AG2 Tracing & Telemetry
+
+This directory contains the development playground for AG2's OpenTelemetry instrumentation. The production implementation lives in `autogen/instrumentation.py` and `autogen/tracing/utils.py`.
+
+## Architecture Overview
+
+AG2 tracing uses **OpenTelemetry** to provide distributed tracing of multi-agent conversations. The approach follows the [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) with AG2-specific extensions.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Trace Hierarchy                          │
+├─────────────────────────────────────────────────────────────────┤
+│  conversation (initiate_chat / a_initiate_chat / a_run_chat)    │
+│    ├── invoke_agent (generate_reply / a_generate_reply)         │
+│    │     ├── execute_tool (execute_function)                    │
+│    │     ├── execute_code (code execution)                      │
+│    │     └── speaker_selection (a_auto_select_speaker)          │
+│    │           └── invoke_agent (internal speaker selector)     │
+│    └── await_human_input (get_human_input)                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Key Components
+
+### 1. Setup (`setup_instrumentation`)
+Creates and configures the OpenTelemetry tracer with OTLP exporter:
+
+```python
+from autogen.instrumentation import setup_instrumentation
+
+tracer = setup_instrumentation(
+    service_name="my-agent-service",
+    endpoint="http://127.0.0.1:4317"  # OTLP gRPC endpoint
+)
+```
+
+### 2. Agent Instrumentation (`instrument_agent`)
+Wraps agent methods to emit spans:
+
+- `generate_reply` / `a_generate_reply` → `invoke_agent` span
+- `initiate_chat` / `a_initiate_chat` → `conversation` span
+- `execute_function` / `a_execute_function` → `execute_tool` span
+- `a_generate_remote_reply` → `invoke_agent` span (with trace propagation)
+- `get_human_input` / `a_get_human_input` → `await_human_input` span (captures HITL wait time)
+- `_generate_code_execution_reply_using_executor` → `execute_code` span
+
+```python
+from autogen.instrumentation import instrument_agent
+
+instrument_agent(my_agent, tracer)
+```
+
+### 3. Pattern Instrumentation (`instrument_pattern`)
+For group chats, instruments the pattern which auto-instruments all agents and the GroupChatManager:
+
+```python
+from autogen.instrumentation import instrument_pattern
+
+instrument_pattern(pattern, tracer)
+```
+
+### 4. A2A Server Instrumentation (`instrument_a2a_server`)
+For remote agents using A2A protocol, adds middleware to extract trace context from incoming requests:
+
+```python
+from autogen.instrumentation import instrument_a2a_server
+
+instrument_a2a_server(server, tracer)
+```
+
+## Span Types
+
+| Span Type | Operation | Instrumented Method |
+|-----------|-----------|---------------------|
+| `conversation` | `conversation` | `initiate_chat`, `a_initiate_chat`, `a_run_chat`, `a_resume` |
+| `agent` | `invoke_agent` | `generate_reply`, `a_generate_reply`, `a_generate_remote_reply` |
+| `tool` | `execute_tool` | `execute_function`, `a_execute_function` |
+| `speaker_selection` | `speaker_selection` | `a_auto_select_speaker` |
+| `human_input` | `await_human_input` | `get_human_input`, `a_get_human_input` |
+| `code_execution` | `execute_code` | `_generate_code_execution_reply_using_executor` |
+
+## Semantic Conventions
+
+See [OTEL_GENAI_CONVENTION_AG2.md](./OTEL_GENAI_CONVENTION_AG2.md) for the full attribute reference.
+
+### Standard OTEL GenAI Attributes
+- `gen_ai.operation.name` - Operation type
+- `gen_ai.agent.name` - Agent name
+- `gen_ai.input.messages` / `gen_ai.output.messages` - Message payloads
+- `gen_ai.tool.name`, `gen_ai.tool.call.id`, etc.
+
+### AG2 Custom Attributes
+- `ag2.span.type` - AG2 span classification
+- `ag2.speaker_selection.candidates` / `ag2.speaker_selection.selected`
+- `ag2.human_input.prompt` / `ag2.human_input.response` - Human-in-the-loop input
+- `ag2.code_execution.exit_code` / `ag2.code_execution.output` - Code execution results
+- `gen_ai.conversation.turns`, `gen_ai.usage.cost`
+
+## Message Format
+
+Messages are converted from AG2/OpenAI format to OTEL GenAI format:
+
+```python
+# AG2 format
+{"role": "user", "content": "Hello", "name": "user_proxy"}
+
+# OTEL format
+{"role": "user", "parts": [{"type": "text", "content": "Hello"}]}
+```
+
+See `autogen/tracing/utils.py` for conversion functions.
+
+## Local Development
+
+### Prerequisites
+```bash
+pip install -r requirements.txt
+```
+
+### Start Tempo + Grafana
+```bash
+cd tracing
+docker-compose up -d
+```
+
+- **Grafana**: http://localhost:3333 (anonymous auth enabled)
+- **Tempo OTLP gRPC**: localhost:14317
+- **Tempo OTLP HTTP**: localhost:14318
+
+### Run Examples
+
+```bash
+# Simple two-agent conversation
+python -m tracing.agents.local_agents
+
+# Group chat with tools
+python -m tracing.agents.group_chat
+
+# Local tools example
+python -m tracing.agents.local_tools
+
+# Human-in-the-loop example
+python -m tracing.agents.local_hitl
+
+# Code execution example
+python -m tracing.agents.local_code_execution
+```
+
+### View Traces
+1. Open Grafana at http://localhost:3333
+2. Go to Explore → Select Tempo data source
+3. Search by service name or trace ID
+
+## Distributed Tracing (A2A)
+
+For remote agents using A2A protocol, trace context is automatically propagated via W3C Trace Context headers:
+
+1. **Client side**: `instrument_agent` wraps the httpx client factory to inject `traceparent` header
+2. **Server side**: `instrument_a2a_server` adds middleware to extract trace context from incoming requests
+
+This allows traces to span across multiple services/processes.
+
+## Implementation Notes
+
+### Monkey-Patching Approach
+Instrumentation works by replacing agent methods with traced wrappers. The original method is captured and called within a span context:
+
+```python
+old_method = agent.some_method
+
+def traced_method(*args, **kwargs):
+    with tracer.start_as_current_span("span_name") as span:
+        span.set_attribute("key", "value")
+        return old_method(*args, **kwargs)
+
+agent.some_method = traced_method
+```
+
+### GroupChat Considerations
+GroupChatManager creates a shallow copy of GroupChat during initialization. The instrumentation handles this by also instrumenting the copy stored in `manager._reply_func_list`.
+
+### Async Support
+All instrumentation supports both sync and async methods where applicable.
+
+## Future Work
+
+- [ ] LLM invocation spans (`gen_ai.operation.name: chat`)
+- [ ] Handoff spans
+- [ ] Configurable attribute capture (opt-in/opt-out for sensitive data)
+- [ ] Span events for streaming responses

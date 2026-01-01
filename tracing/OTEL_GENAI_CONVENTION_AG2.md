@@ -42,6 +42,12 @@ This document lists all `gen_ai.*` and related attributes used in AG2's instrume
 | **Speaker Selection Attributes** ||||
 | `ag2.speaker_selection.candidates` | | ✅ | JSON list of candidate agent names for speaker selection |
 | `ag2.speaker_selection.selected` | | ✅ | Name of the agent selected as next speaker |
+| **Human Input Attributes** ||||
+| `ag2.human_input.prompt` | | ✅ | Prompt shown to the human for input |
+| `ag2.human_input.response` | | ✅ | Human's response (opt-in, may contain sensitive data) |
+| **Code Execution Attributes** ||||
+| `ag2.code_execution.exit_code` | | ✅ | Exit code from code execution (0 = success) |
+| `ag2.code_execution.output` | | ✅ | Output from code execution (truncated if > 4KB) |
 
 ## Span Types
 
@@ -49,10 +55,12 @@ AG2 uses the following span types (via `ag2.span.type`):
 
 | Span Type | `gen_ai.operation.name` | Description |
 |-----------|-------------------------|-------------|
-| `conversation` | `conversation` | Top-level chat initiation (`a_initiate_chat`, `a_run_chat`) |
-| `agent` | `invoke_agent` | Agent reply generation (`a_generate_reply`, `a_generate_remote_reply`) |
+| `conversation` | `conversation` | Top-level chat initiation (`initiate_chat`, `a_initiate_chat`, `a_run_chat`) |
+| `agent` | `invoke_agent` | Agent reply generation (`generate_reply`, `a_generate_reply`, `a_generate_remote_reply`) |
 | `tool` | `execute_tool` | Tool/function execution (`execute_function`, `a_execute_function`) |
 | `speaker_selection` | `speaker_selection` | Group chat speaker selection (`a_auto_select_speaker`, `_auto_select_speaker`) |
+| `human_input` | `await_human_input` | Human-in-the-loop input (`get_human_input`, `a_get_human_input`) |
+| `code_execution` | `execute_code` | Code block execution (`_generate_code_execution_reply_using_executor`) |
 | `llm` | `chat` | LLM invocation (TODO) |
 | `handoff` | `handoff` | Agent handoff (TODO) |
 

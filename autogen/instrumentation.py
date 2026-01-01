@@ -44,6 +44,8 @@ class SpanType(Enum):
     TOOL = "tool"  # Tool Execution (execute_tool)
     HANDOFF = "handoff"  # Handoff (TODO)
     SPEAKER_SELECTION = "speaker_selection"  # Group Chat Speaker Selection
+    HUMAN_INPUT = "human_input"  # Human-in-the-loop input (await_human_input)
+    CODE_EXECUTION = "code_execution"  # Code execution (execute_code_blocks)
 
 
 _TRACE_PROPAGATOR = TraceContextTextMapPropagator()
@@ -286,6 +288,34 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
 
     agent.a_generate_reply = a_generate_traced_reply
 
+    # Instrument `generate_reply` (sync) as an invoke_agent span
+    if hasattr(agent, "generate_reply"):
+        old_generate_reply = agent.generate_reply
+
+        def generate_traced_reply(
+            messages: list[dict[str, Any]] | None = None,
+            *args: Any,
+            **kwargs: Any,
+        ) -> Any:
+            with tracer.start_as_current_span(f"invoke_agent {agent.name}") as span:
+                span.set_attribute("ag2.span.type", SpanType.AGENT.value)
+                span.set_attribute("gen_ai.operation.name", "invoke_agent")
+                span.set_attribute("gen_ai.agent.name", agent.name)
+
+                if messages:
+                    otel_input = messages_to_otel(messages)
+                    span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
+
+                reply = old_generate_reply(messages, *args, **kwargs)
+
+                if reply is not None:
+                    otel_output = reply_to_otel_message(reply)
+                    span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
+
+                return reply
+
+        agent.generate_reply = generate_traced_reply
+
     # Instrument `a_initiate_chat` as a conversation span
     if hasattr(agent, "a_initiate_chat"):
         old_a_initiate_chat = agent.a_initiate_chat
@@ -341,6 +371,59 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 return result
 
         agent.a_initiate_chat = a_initiate_traced_chat
+
+    # Instrument `initiate_chat` (sync) as a conversation span
+    if hasattr(agent, "initiate_chat"):
+        old_initiate_chat = agent.initiate_chat
+
+        def initiate_traced_chat(
+            *args: Any,
+            max_turns: int | None = None,
+            message: str | dict[str, Any] | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            with tracer.start_as_current_span(f"conversation {agent.name}") as span:
+                span.set_attribute("ag2.span.type", SpanType.CONVERSATION.value)
+                span.set_attribute("gen_ai.operation.name", "conversation")
+                span.set_attribute("gen_ai.agent.name", agent.name)
+
+                if max_turns:
+                    span.set_attribute("gen_ai.conversation.max_turns", max_turns)
+
+                if message is not None:
+                    if isinstance(message, str):
+                        input_msg = {"role": "user", "content": message}
+                    elif isinstance(message, dict):
+                        input_msg = {"role": message.get("role", "user"), **message}
+                    else:
+                        input_msg = None
+
+                    if input_msg:
+                        otel_input = messages_to_otel([input_msg])
+                        span.set_attribute("gen_ai.input.messages", json.dumps(otel_input))
+
+                result = old_initiate_chat(*args, max_turns=max_turns, message=message, **kwargs)
+
+                span.set_attribute("gen_ai.conversation.turns", len(result.chat_history))
+
+                if result.chat_history:
+                    otel_output = messages_to_otel(result.chat_history)
+                    span.set_attribute("gen_ai.output.messages", json.dumps(otel_output))
+
+                usage_including_cached_inference = result.cost["usage_including_cached_inference"]
+                total_cost = usage_including_cached_inference.pop("total_cost")
+                span.set_attribute("gen_ai.usage.cost", total_cost)
+
+                usage = aggregate_usage(usage_including_cached_inference)
+                if usage:
+                    model, input_tokens, output_tokens = usage
+                    span.set_attribute("gen_ai.response.model", model)
+                    span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+                    span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+
+                return result
+
+        agent.initiate_chat = initiate_traced_chat
 
     # Instrument `a_resume` as a resumed conversation span
     if hasattr(agent, "a_resume"):
@@ -530,5 +613,110 @@ def instrument_agent(agent: Agent, tracer: Tracer) -> Agent:
                 yield executor
 
         agent._create_or_get_executor = create_or_get_executor_traced
+
+    # Instrument `get_human_input` as an await_human_input span
+    if hasattr(agent, "get_human_input"):
+        old_get_human_input = agent.get_human_input
+
+        def get_human_input_traced(
+            prompt: str,
+            *args: Any,
+            **kwargs: Any,
+        ) -> str:
+            with tracer.start_as_current_span(f"await_human_input {agent.name}") as span:
+                span.set_attribute("ag2.span.type", SpanType.HUMAN_INPUT.value)
+                span.set_attribute("gen_ai.operation.name", "await_human_input")
+                span.set_attribute("gen_ai.agent.name", agent.name)
+                span.set_attribute("ag2.human_input.prompt", prompt)
+
+                response = old_get_human_input(prompt, *args, **kwargs)
+
+                # Opt-in: capture response (may contain sensitive data)
+                span.set_attribute("ag2.human_input.response", response)
+                return response
+
+        agent.get_human_input = get_human_input_traced
+
+    # Instrument `a_get_human_input` as an async await_human_input span
+    if hasattr(agent, "a_get_human_input"):
+        old_a_get_human_input = agent.a_get_human_input
+
+        async def a_get_human_input_traced(
+            prompt: str,
+            *args: Any,
+            **kwargs: Any,
+        ) -> str:
+            with tracer.start_as_current_span(f"await_human_input {agent.name}") as span:
+                span.set_attribute("ag2.span.type", SpanType.HUMAN_INPUT.value)
+                span.set_attribute("gen_ai.operation.name", "await_human_input")
+                span.set_attribute("gen_ai.agent.name", agent.name)
+                span.set_attribute("ag2.human_input.prompt", prompt)
+
+                response = await old_a_get_human_input(prompt, *args, **kwargs)
+
+                span.set_attribute("ag2.human_input.response", response)
+                return response
+
+        agent.a_get_human_input = a_get_human_input_traced
+
+    # Instrument `_generate_code_execution_reply_using_executor` as execute_code span
+    # NOTE: The method is registered in _reply_func_list during __init__, so we need to
+    # update both the method AND the registered callback
+    if hasattr(agent, "_reply_func_list"):
+        # Find the original reply func in _reply_func_list
+        original_code_exec_func = None
+        original_code_exec_index = None
+        for i, reply_func_tuple in enumerate(agent._reply_func_list):
+            func_name = getattr(reply_func_tuple.get("reply_func"), "__name__", None)
+            if func_name == "_generate_code_execution_reply_using_executor":
+                original_code_exec_func = reply_func_tuple["reply_func"]
+                original_code_exec_index = i
+                break
+
+        if original_code_exec_func is not None:
+            # Create traced wrapper that accepts self as first arg (like unbound method)
+            def generate_code_execution_reply_traced(
+                self_agent: Any,
+                messages: list[dict[str, Any]] | None = None,
+                sender: Agent | None = None,
+                config: dict[str, Any] | None = None,
+            ) -> tuple[bool, str | None]:
+                # Check if code execution is disabled
+                if self_agent._code_execution_config is False:
+                    return False, None
+
+                with tracer.start_as_current_span(f"execute_code {self_agent.name}") as span:
+                    span.set_attribute("ag2.span.type", SpanType.CODE_EXECUTION.value)
+                    span.set_attribute("gen_ai.operation.name", "execute_code")
+                    span.set_attribute("gen_ai.agent.name", self_agent.name)
+
+                    # Call original method
+                    is_final, result = original_code_exec_func(self_agent, messages, sender, config)
+
+                    if is_final and result:
+                        # Parse the result to extract exit code and output
+                        # Result format: "exitcode: X (status)\nCode output: ..."
+                        if result.startswith("exitcode:"):
+                            parts = result.split("\n", 1)
+                            exitcode_part = parts[0]  # "exitcode: X (status)"
+                            try:
+                                exit_code = int(exitcode_part.split(":")[1].split("(")[0].strip())
+                                span.set_attribute("ag2.code_execution.exit_code", exit_code)
+                                if exit_code != 0:
+                                    span.set_attribute("error.type", "CodeExecutionError")
+                            except (ValueError, IndexError):
+                                pass
+
+                            if len(parts) > 1:
+                                output = parts[1].replace("Code output: ", "", 1).strip()
+                                # Truncate output if too long
+                                if len(output) > 4096:
+                                    output = output[:4096] + "... (truncated)"
+                                span.set_attribute("ag2.code_execution.output", output)
+
+                    return is_final, result
+
+            # Update _reply_func_list to use the traced function
+            agent._reply_func_list[original_code_exec_index]["reply_func"] = generate_code_execution_reply_traced
 
     return agent
